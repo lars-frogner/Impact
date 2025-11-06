@@ -100,7 +100,7 @@ pub fn input_and_output_types_for_new_node(
 ) -> (MetaNodeInputDataTypes, EdgeDataType) {
     let mut input_data_types = MetaNodeInputDataTypes::new();
 
-    for port_kind in kind.child_port_kinds().iter().flatten() {
+    for port_kind in kind.child_port_kinds() {
         let data_type = match port_kind {
             MetaChildPortKind::SingleSDF => EdgeDataType::Concrete(ConcreteEdgeDataType::SingleSDF),
             MetaChildPortKind::SDFGroup => EdgeDataType::Concrete(ConcreteEdgeDataType::SDFGroup),
@@ -167,7 +167,7 @@ pub fn update_edge_data_types(
 
                 let mut input_data_types = MetaNodeInputDataTypes::new();
 
-                for (slot, port_kind) in node_kind.child_port_kinds().iter().flatten().enumerate() {
+                for (slot, port_kind) in node_kind.child_port_kinds().enumerate() {
                     let data_type = match port_kind {
                         MetaChildPortKind::SingleSDF => {
                             EdgeDataType::Concrete(ConcreteEdgeDataType::SingleSDF)

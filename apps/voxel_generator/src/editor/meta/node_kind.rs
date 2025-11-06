@@ -61,8 +61,9 @@ pub enum MetaNodeKindGroup {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MetaChildPortKind {
+    #[default]
     SingleSDF,
     SDFGroup,
     SinglePlacement,
@@ -71,13 +72,16 @@ pub enum MetaChildPortKind {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MetaParentPortKind {
+    #[default]
     SingleSDF,
     SDFGroup,
     SinglePlacement,
     PlacementGroup,
-    SameAsInput { slot: usize },
+    SameAsInput {
+        slot: usize,
+    },
 }
 
 const MAX_CHILD_PORTS: usize = 2;
@@ -861,7 +865,7 @@ impl MetaNodeKind {
         }
     }
 
-    pub const fn child_port_kinds(&self) -> MetaChildPortKinds {
+    const fn raw_child_port_kinds(&self) -> MetaChildPortKinds {
         match self {
             Self::Output => single_child_port_kind(MetaChildPortKind::SingleSDF),
             Self::Box => MetaBoxSDF::CHILD_PORT_KINDS,
@@ -884,8 +888,12 @@ impl MetaNodeKind {
         }
     }
 
+    pub fn child_port_kinds(&self) -> impl Iterator<Item = MetaChildPortKind> {
+        self.raw_child_port_kinds().into_iter().flatten()
+    }
+
     pub const fn n_child_slots(&self) -> usize {
-        match self.child_port_kinds() {
+        match self.raw_child_port_kinds() {
             [None, None] => 0,
             [Some(_), None] | [None, Some(_)] => 1,
             [Some(_), Some(_)] => 2,

@@ -2,12 +2,14 @@ use super::{
     MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaNodeLink, MetaPort,
     build::BuildScratch,
     data_type::{DataTypeScratch, update_edge_data_types},
+    show_port,
 };
 use crate::editor::{
     MAX_ZOOM, MIN_ZOOM, MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     meta::{
-        MetaPaletteColor, ResolvedMetaPort,
+        CollapsedMetaSubtree, CollapsedMetaSubtreeChildPort, CollapsedMetaSubtreeParentPort,
+        MetaPaletteColor,
         data_type::EdgeDataType,
         io::{IOMetaNodeGraph, IOMetaNodeGraphRef},
     },
@@ -17,10 +19,10 @@ use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context as _, Result};
 use impact::{
     egui::{
-        Color32, Context, CursorIcon, Id, Key, PointerButton, Pos2, Rect, Sense, Vec2, Window,
-        epaint::PathStroke, pos2, vec2,
+        Color32, Context, CursorIcon, Id, Key, Painter, PointerButton, Pos2, Rect, Sense, Ui, Vec2,
+        Window, epaint::PathStroke, pos2, vec2,
     },
-    impact_containers::{BitVector, KeyIndexMapper},
+    impact_containers::{BitVector, HashMap, HashSet, KeyIndexMapper},
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -45,14 +47,22 @@ const STATUS_DOT_IN_SYNC_HOVER_TEXT: &str = "The graph is in sync";
 const STATUS_DOT_DIRTY_HOVER_TEXT: &str = "The graph is out of sync";
 const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not valid";
 
+const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(60.0, 30.0);
+
+// TODO
+// Omit output node in saved graph and support loading multiple graphs.
+// Support collapsing subtree and show representative node with custom name and exposed ports
+
 #[derive(Clone, Debug)]
 pub struct MetaGraphCanvas {
     pub pan_zoom_state: PanZoomState,
     pub nodes: BTreeMap<MetaNodeID, MetaNode>,
+    pub collapsed_roots: HashSet<MetaNodeID>,
     pub selected_node_id: Option<MetaNodeID>,
     pub pending_edge: Option<PendingEdge>,
     pub is_panning: bool,
     pub dragging_node_id: Option<MetaNodeID>,
+    collapsed_view: CollapsedView,
     node_id_counter: MetaNodeID,
 }
 
@@ -60,7 +70,7 @@ pub struct MetaGraphCanvas {
 pub struct MetaCanvasScratch {
     node_rects: BTreeMap<MetaNodeID, Rect>,
     subtree_node_ids: Vec<MetaNodeID>,
-    index_map: KeyIndexMapper<MetaNodeID>,
+    layout_lut: MetaLayoutLookupTable,
     search: SearchScratch,
     data_type: DataTypeScratch,
     layout: LayoutScratch,
@@ -78,16 +88,31 @@ pub struct CanvasShowResult {
     pub connectivity_may_have_changed: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PendingEdge {
     pub from_node: MetaNodeID,
     pub from_port: MetaPort,
+    pub from_position: Pos2,
 }
 
+#[derive(Clone, Debug)]
+struct CollapsedView {
+    visible_subtree_roots: HashSet<MetaNodeID>,
+    subtrees_by_root: HashMap<MetaNodeID, CollapsedMetaSubtree>,
+    member_to_root: HashMap<MetaNodeID, MetaNodeID>,
+}
+
+#[derive(Debug)]
 struct LayoutableMetaGraph<'a> {
-    index_map: &'a KeyIndexMapper<MetaNodeID>,
-    nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
-    rects: &'a mut BTreeMap<MetaNodeID, Rect>,
+    lut: &'a MetaLayoutLookupTable,
+    visible_node_rects: &'a mut BTreeMap<MetaNodeID, Rect>,
+}
+
+#[derive(Clone, Debug)]
+struct MetaLayoutLookupTable {
+    visible_node_index_map: KeyIndexMapper<MetaNodeID>,
+    child_idx_offsets_and_counts: Vec<(usize, usize)>,
+    all_child_indices: Vec<usize>,
 }
 
 impl MetaGraphCanvas {
@@ -95,10 +120,12 @@ impl MetaGraphCanvas {
         Self {
             pan_zoom_state: PanZoomState::default(),
             nodes: BTreeMap::new(),
+            collapsed_roots: HashSet::default(),
             selected_node_id: None,
             pending_edge: None,
             is_panning: false,
             dragging_node_id: None,
+            collapsed_view: CollapsedView::new(),
             node_id_counter: 0,
         }
     }
@@ -122,73 +149,6 @@ impl MetaGraphCanvas {
         match port {
             MetaPort::Parent { slot, .. } => node.links_to_parents.get(slot).is_some(),
             MetaPort::Child { slot, .. } => node.links_to_children.get(slot).is_some(),
-        }
-    }
-
-    fn node_can_reach_other(
-        &self,
-        scratch: &mut SearchScratch,
-        node_id: MetaNodeID,
-        other_node_id: MetaNodeID,
-    ) -> bool {
-        let stack = &mut scratch.stack;
-        let seen = &mut scratch.seen;
-
-        stack.clear();
-        stack.push(node_id);
-
-        seen.resize_and_unset_all(self.node_id_counter as usize);
-
-        while let Some(node_id) = stack.pop() {
-            if seen.set_bit(node_id as usize) {
-                continue;
-            }
-            if node_id == other_node_id {
-                return true;
-            }
-            if let Some(node) = self.nodes.get(&node_id) {
-                for child_node_id in node
-                    .links_to_children
-                    .iter()
-                    .filter_map(|link| link.map(|link| link.to_node))
-                {
-                    stack.push(child_node_id);
-                }
-            }
-        }
-        false
-    }
-
-    fn obtain_subtree(
-        &self,
-        scratch: &mut SearchScratch,
-        subtree_node_ids: &mut Vec<MetaNodeID>,
-        node_id: MetaNodeID,
-    ) {
-        let stack = &mut scratch.stack;
-        let seen = &mut scratch.seen;
-
-        subtree_node_ids.clear();
-
-        stack.clear();
-        stack.push(node_id);
-
-        seen.resize_and_unset_all(self.node_id_counter as usize);
-
-        while let Some(node_id) = stack.pop() {
-            if seen.set_bit(node_id as usize) {
-                continue;
-            }
-            subtree_node_ids.push(node_id);
-            if let Some(node) = self.nodes.get(&node_id) {
-                for child_node_id in node
-                    .links_to_children
-                    .iter()
-                    .filter_map(|link| link.map(|link| link.to_node))
-                {
-                    stack.push(child_node_id);
-                }
-            }
         }
     }
 
@@ -331,7 +291,13 @@ impl MetaGraphCanvas {
         }
 
         // If they are already connected, attaching would create a cycle
-        if self.node_can_reach_other(search_scratch, child_node_id, parent_node_id) {
+        if node_can_reach_other(
+            search_scratch,
+            &self.nodes,
+            self.node_id_counter as usize,
+            child_node_id,
+            parent_node_id,
+        ) {
             return false;
         }
 
@@ -453,6 +419,18 @@ impl MetaGraphCanvas {
         Some(parent_link_to_child)
     }
 
+    pub fn node_is_collapsed_root(&self, node_id: MetaNodeID) -> bool {
+        self.collapsed_roots.contains(&node_id)
+    }
+
+    pub fn set_node_collapsed(&mut self, node_id: MetaNodeID, collapsed: bool) {
+        if collapsed {
+            self.collapsed_roots.insert(node_id);
+        } else {
+            self.collapsed_roots.remove(&node_id);
+        }
+    }
+
     fn link_to_parent_exists_with_invalid_data_type(
         &mut self,
         child_node_id: MetaNodeID,
@@ -519,6 +497,35 @@ impl MetaGraphCanvas {
     ) -> CanvasShowResult {
         let mut connectivity_may_have_changed = false;
 
+        self.collapsed_view.rebuild(
+            scratch,
+            &self.nodes,
+            self.node_id_counter as usize,
+            &self.collapsed_roots,
+        );
+
+        if let Some(selected_node_id) = self.selected_node_id
+            && self
+                .collapsed_view
+                .node_is_non_root_member_of_collapsed_subtree(selected_node_id)
+        {
+            self.selected_node_id = None;
+        }
+        if let Some(dragging_node_id) = self.dragging_node_id
+            && self
+                .collapsed_view
+                .node_is_non_root_member_of_collapsed_subtree(dragging_node_id)
+        {
+            self.dragging_node_id = None;
+        }
+        if let Some(pending_edge) = self.pending_edge
+            && self
+                .collapsed_view
+                .node_is_non_root_member_of_collapsed_subtree(pending_edge.from_node)
+        {
+            self.pending_edge = None;
+        }
+
         Window::new("SDF graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
@@ -560,15 +567,27 @@ impl MetaGraphCanvas {
                 }
 
                 scratch.node_rects.clear();
+                // `world_node_rects` will NOT be one-to-one with `self.nodes`,
+                // since only nodes not hidden in collapsed subtrees will get a
+                // rectangle
                 let world_node_rects = &mut scratch.node_rects;
 
                 for (&node_id, node) in &mut self.nodes {
-                    node.data.prepare_text(ui, self.pan_zoom_state.zoom);
+                    if self
+                        .collapsed_view
+                        .node_is_visible_collapsed_subtree_root(node_id)
+                    {
+                        let subtree = self.collapsed_view.subtree(node_id);
+                        world_node_rects
+                            .insert(node_id, Rect::from_center_size(node.position, subtree.size));
+                    } else if !self.collapsed_view.node_is_in_collapsed_subtree(node_id) {
+                        node.data.prepare_text(ui, self.pan_zoom_state.zoom);
 
-                    world_node_rects.insert(
-                        node_id,
-                        Rect::from_min_size(node.position, node.data.compute_size()),
-                    );
+                        world_node_rects.insert(
+                            node_id,
+                            Rect::from_center_size(node.position, node.data.compute_size()),
+                        );
+                    }
                 }
 
                 // Handle pending new node
@@ -577,30 +596,41 @@ impl MetaGraphCanvas {
                     data.prepare_text(ui, self.pan_zoom_state.zoom);
                     let node_size = data.compute_size();
 
-                    let position = if let Some(selected_node) = self
-                        .selected_node_id
-                        .and_then(|node_id| self.nodes.get(&node_id))
+                    let position = if let Some(selected_node_id) = self.selected_node_id
+                        && let Some(selected_node) = self.nodes.get(&node_id)
                     {
-                        let selected_node_rect = world_node_rects.values().last().unwrap();
+                        let selected_node_rect = &world_node_rects[&selected_node_id];
                         selected_node.position
                             + vec2(
-                                0.5 * (selected_node_rect.width() - node_size.x),
-                                selected_node_rect.height() + NEW_NODE_GAP,
-                            )
-                    } else if let Some(last_node) = self.nodes.values().last() {
-                        let last_node_rect = world_node_rects.values().last().unwrap();
-                        last_node.position
-                            + vec2(
-                                0.5 * (last_node_rect.width() - node_size.x),
-                                last_node_rect.height() + NEW_NODE_GAP,
+                                -0.5 * node_size.x,
+                                0.5 * selected_node_rect.height() + NEW_NODE_GAP,
                             )
                     } else {
-                        self.pan_zoom_state
-                            .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top())
-                            + vec2(-0.5 * node_size.x, 0.0)
+                        let mut position = None;
+                        for (last_node_id, last_node) in self.nodes.iter().rev() {
+                            if let Some(last_node_rect) = world_node_rects.get(last_node_id) {
+                                position = Some(
+                                    last_node.position
+                                        + vec2(
+                                            -0.5 * node_size.x,
+                                            0.5 * last_node_rect.height() + NEW_NODE_GAP,
+                                        ),
+                                );
+                                break;
+                            }
+                        }
+                        match position {
+                            Some(position) => position,
+                            None => {
+                                self.pan_zoom_state.screen_pos_to_world_space(
+                                    canvas_origin,
+                                    canvas_rect.center_top(),
+                                ) + vec2(0.0, 0.5 * node_size.y)
+                            }
+                        }
                     };
 
-                    let mut world_node_rect = Rect::from_min_size(position, node_size);
+                    let mut world_node_rect = Rect::from_center_size(position, node_size);
 
                     let mut node = MetaNode::new(position, data);
 
@@ -648,8 +678,9 @@ impl MetaGraphCanvas {
                         .map_or_else(Pos2::default, Rect::center_top);
 
                     let mut layoutable_graph = LayoutableMetaGraph::new(
-                        &mut scratch.index_map,
+                        &mut scratch.layout_lut,
                         &self.nodes,
+                        &self.collapsed_view,
                         world_node_rects,
                     );
                     layout_vertical(
@@ -662,22 +693,26 @@ impl MetaGraphCanvas {
 
                     for (node, node_rect) in self.nodes.values_mut().zip(world_node_rects.values())
                     {
-                        node.position = node_rect.min;
+                        node.position = node_rect.center();
                     }
+                }
+
+                if self.is_panning {
+                    self.dragging_node_id = None;
                 }
 
                 let mut drag_delta = None;
 
-                for ((&node_id, node), &world_node_rect) in
-                    self.nodes.iter_mut().zip(world_node_rects.values())
-                {
+                for (&node_id, node) in self.nodes.iter_mut() {
+                    let Some(world_node_rect) = world_node_rects.get(&node_id).copied() else {
+                        continue;
+                    };
+
                     let node_rect = self
                         .pan_zoom_state
                         .world_rect_to_screen_space(canvas_origin, world_node_rect);
 
-                    if self.is_panning {
-                        self.dragging_node_id = None;
-                    } else {
+                    if !self.is_panning {
                         let node_response = ui.interact(
                             node_rect,
                             Id::new(("meta_node", node_id)),
@@ -711,16 +746,29 @@ impl MetaGraphCanvas {
 
                     let is_selected = self.selected_node_id == Some(node_id);
 
-                    node.data
-                        .paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
+                    if self
+                        .collapsed_view
+                        .node_is_visible_collapsed_subtree_root(node_id)
+                    {
+                        let subtree = self.collapsed_view.subtree(node_id);
+                        subtree.paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
+                    } else {
+                        node.data
+                            .paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
+                    }
                 }
 
                 if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
-                    let drag_subtree = ui.input(|i| i.modifiers.shift);
+                    let drag_subtree = self
+                        .collapsed_view
+                        .node_is_visible_collapsed_subtree_root(node_id)
+                        || ui.input(|i| i.modifiers.shift);
 
                     if drag_subtree {
-                        self.obtain_subtree(
+                        obtain_subtree(
                             &mut scratch.search,
+                            &self.nodes,
+                            self.node_id_counter as usize,
                             &mut scratch.subtree_node_ids,
                             node_id,
                         );
@@ -742,8 +790,12 @@ impl MetaGraphCanvas {
 
                 // Draw edges
 
+                // Start with edges fully outside any collapsed subtree
                 for (&child_node_id, child_node) in &self.nodes {
-                    let child_node_rect = &node_rects[&child_node_id];
+                    let Some(child_rect) = node_rects.get(&child_node_id) else {
+                        // Child is part of a collapsed subtree, so skip it
+                        continue;
+                    };
 
                     for (parent_slot_on_child, child_link_to_parent) in
                         child_node.links_to_parents.iter().enumerate()
@@ -758,38 +810,94 @@ impl MetaGraphCanvas {
                         let Some(parent_node) = self.nodes.get(&parent_node_id) else {
                             continue;
                         };
-
-                        let input_data_type = parent_node.input_data_types[child_slot_on_parent];
-                        let output_data_type = child_node.output_data_type;
-                        let edge_color = if EdgeDataType::connection_allowed(
-                            input_data_type,
-                            output_data_type,
-                        ) {
-                            input_data_type.color().standard
-                        } else {
-                            MetaPaletteColor::red().standard
+                        let Some(parent_rect) = node_rects.get(&parent_node_id) else {
+                            // Parent is part of a collapsed subtree, so skip it
+                            continue;
                         };
 
-                        let parent_rect = &node_rects[&parent_node_id];
-
-                        let child_pos = MetaPort::child_center(
+                        draw_edge(
+                            &painter,
                             parent_rect,
                             child_slot_on_parent,
                             parent_node.links_to_children.len(),
-                        );
-
-                        let parent_pos = MetaPort::parent_center(
-                            child_node_rect,
+                            child_rect,
                             parent_slot_on_child,
                             child_node.links_to_parents.len(),
+                            parent_node.input_data_types[child_slot_on_parent],
+                            child_node.output_data_type,
+                            self.pan_zoom_state.zoom,
                         );
+                    }
+                }
 
-                        let edge_shape = create_bezier_edge(
-                            child_pos,
-                            parent_pos,
-                            PathStroke::new(EDGE_WIDTH * self.pan_zoom_state.zoom, edge_color),
+                // Now draw all edges starting or ending in a collapsed subtree
+                for &root_node_id in self.collapsed_view.visible_collapsed_subtree_roots() {
+                    let subtree = self.collapsed_view.subtree(root_node_id);
+                    let subtree_rect = &node_rects[&root_node_id];
+
+                    for (parent_slot_on_subtree, subtree_parent_port) in
+                        subtree.exposed_parent_ports.iter().enumerate()
+                    {
+                        let Some(MetaNodeLink {
+                            to_node: parent_node_id,
+                            to_slot: child_slot_on_parent,
+                        }) = subtree_parent_port.link
+                        else {
+                            continue;
+                        };
+                        // The parent is guaranteed to not be part of any
+                        // collapsed subtree, because if it was, this subtree
+                        // would not be visible
+                        let Some(parent_node) = self.nodes.get(&parent_node_id) else {
+                            continue;
+                        };
+                        let parent_rect = &node_rects[&parent_node_id];
+
+                        draw_edge(
+                            &painter,
+                            parent_rect,
+                            child_slot_on_parent,
+                            parent_node.links_to_children.len(),
+                            subtree_rect,
+                            parent_slot_on_subtree,
+                            subtree.exposed_parent_ports.len(),
+                            parent_node.input_data_types[child_slot_on_parent],
+                            subtree_parent_port.output_data_type,
+                            self.pan_zoom_state.zoom,
                         );
-                        painter.add(edge_shape);
+                    }
+
+                    for (child_slot_on_subtree, subtree_child_port) in
+                        subtree.exposed_child_ports.iter().enumerate()
+                    {
+                        let Some(MetaNodeLink {
+                            to_node: child_node_id,
+                            to_slot: parent_slot_on_child,
+                        }) = subtree_child_port.link
+                        else {
+                            continue;
+                        };
+                        // The child is guaranteed to not be part of any
+                        // collapsed subtree, because if it was, it would also
+                        // be part of this subtree, in which case the link would
+                        // have been ignored
+                        let Some(child_node) = self.nodes.get(&child_node_id) else {
+                            continue;
+                        };
+                        let child_rect = &node_rects[&child_node_id];
+
+                        draw_edge(
+                            &painter,
+                            subtree_rect,
+                            child_slot_on_subtree,
+                            subtree.exposed_child_ports.len(),
+                            child_rect,
+                            parent_slot_on_child,
+                            child_node.links_to_parents.len(),
+                            subtree_child_port.input_data_type,
+                            child_node.output_data_type,
+                            self.pan_zoom_state.zoom,
+                        );
                     }
                 }
 
@@ -798,174 +906,107 @@ impl MetaGraphCanvas {
                 let mut pending_edge_port_color = Color32::BLACK;
 
                 for (&node_id, node_rect) in node_rects {
-                    let node = self.node(node_id);
-                    for ResolvedMetaPort { port, data_type } in node.resolved_ports() {
-                        let mut enabled = true;
+                    if self
+                        .collapsed_view
+                        .node_is_visible_collapsed_subtree_root(node_id)
+                    {
+                        let subtree = self.collapsed_view.subtree(node_id);
+                        let exposed_parent_ports = subtree.exposed_parent_ports.clone();
+                        let exposed_child_ports = subtree.exposed_child_ports.clone();
+                        let parent_port_count = exposed_parent_ports.len();
+                        let child_port_count = exposed_child_ports.len();
 
-                        if let Some(pending_edge) = &self.pending_edge {
-                            // Ports we can attach the pending edge to are
-                            // enabled and highlighted
-                            match (pending_edge.from_port, port) {
-                                (
-                                    MetaPort::Parent {
-                                        slot: parent_slot_on_child,
-                                        ..
-                                    },
-                                    MetaPort::Child {
-                                        slot: child_slot_on_parent,
-                                        ..
-                                    },
-                                ) => {
-                                    let child_node_id = pending_edge.from_node;
-                                    let parent_node_id = node_id;
-                                    enabled = self.can_attach(
-                                        &mut scratch.search,
-                                        parent_node_id,
-                                        child_slot_on_parent,
-                                        child_node_id,
-                                        parent_slot_on_child,
-                                    );
-                                }
-                                (
-                                    MetaPort::Child {
-                                        slot: child_slot_on_parent,
-                                        ..
-                                    },
-                                    MetaPort::Parent {
-                                        slot: parent_slot_on_child,
-                                        ..
-                                    },
-                                ) => {
-                                    let parent_node_id = pending_edge.from_node;
-                                    let child_node_id = node_id;
-                                    enabled = self.can_attach(
-                                        &mut scratch.search,
-                                        parent_node_id,
-                                        child_slot_on_parent,
-                                        child_node_id,
-                                        parent_slot_on_child,
-                                    );
-                                }
-                                _ => {
-                                    // Mismatched ports are disabled
-                                    enabled = false;
-                                }
-                            }
+                        for (slot, parent_port) in exposed_parent_ports.into_iter().enumerate() {
+                            let port = MetaPort::Parent {
+                                kind: parent_port.kind,
+                                slot: parent_port.slot_on_node,
+                            };
+                            let position =
+                                MetaPort::parent_center(node_rect, slot, parent_port_count);
+
+                            self.handle_port(
+                                &mut scratch.search,
+                                &mut connectivity_may_have_changed,
+                                ui,
+                                &painter,
+                                &mut pending_edge_port_color,
+                                parent_port.on_node,
+                                port,
+                                parent_port.output_data_type,
+                                position,
+                            );
                         }
 
-                        let pending_edge_is_from_this_port =
-                            self.pending_edge.as_ref().is_some_and(|edge| {
-                                edge.from_node == node_id && edge.from_port == port
-                            });
+                        for (slot, child_port) in exposed_child_ports.into_iter().enumerate() {
+                            let port = MetaPort::Child {
+                                kind: child_port.kind,
+                                slot: child_port.slot_on_node,
+                            };
+                            let position =
+                                MetaPort::child_center(node_rect, slot, child_port_count);
 
-                        let port_shape = data_type.port_shape();
+                            self.handle_port(
+                                &mut scratch.search,
+                                &mut connectivity_may_have_changed,
+                                ui,
+                                &painter,
+                                &mut pending_edge_port_color,
+                                child_port.on_node,
+                                port,
+                                child_port.input_data_type,
+                                position,
+                            );
+                        }
+                    } else {
+                        let node = self.node(node_id);
 
-                        let port_color = if enabled || pending_edge_is_from_this_port {
-                            data_type.color().standard
-                        } else {
-                            data_type.color().darker
-                        };
+                        let node_kind = node.data.kind;
+                        let output_data_type = node.output_data_type;
+                        let input_data_types = node.input_data_types.clone();
+                        let parent_port_count = node.links_to_parents.len();
+                        let child_port_count = node.links_to_children.len();
 
-                        let port_label = data_type.port_label();
+                        for slot in 0..parent_port_count {
+                            let port = MetaPort::Parent {
+                                kind: node_kind.parent_port_kind(),
+                                slot,
+                            };
+                            let position =
+                                MetaPort::parent_center(node_rect, slot, parent_port_count);
 
-                        if pending_edge_is_from_this_port {
-                            pending_edge_port_color = port_color;
+                            self.handle_port(
+                                &mut scratch.search,
+                                &mut connectivity_may_have_changed,
+                                ui,
+                                &painter,
+                                &mut pending_edge_port_color,
+                                node_id,
+                                port,
+                                output_data_type,
+                                position,
+                            );
                         }
 
-                        let response = port.show(
-                            ui,
-                            &painter,
-                            node_id,
-                            node_rect,
-                            enabled,
-                            self.pan_zoom_state.zoom,
-                            self.cursor_should_be_hidden(),
-                            port_shape,
-                            port_color,
-                            port_label,
-                        );
+                        for (slot, (kind, data_type)) in node_kind
+                            .child_port_kinds()
+                            .zip(input_data_types)
+                            .enumerate()
+                        {
+                            let port = MetaPort::Child { kind, slot };
+                            let position =
+                                MetaPort::child_center(node_rect, slot, child_port_count);
 
-                        if response.clicked() {
-                            // Detach if there is a node attached to the port
-                            if self.pending_edge.is_none()
-                                && self.node_has_link_at_port(node_id, port)
-                            {
-                                match port {
-                                    MetaPort::Parent { slot, .. } => {
-                                        self.detach_parent_of(node_id, slot);
-                                    }
-                                    MetaPort::Child { slot, .. } => {
-                                        self.detach_child_of(node_id, slot);
-                                    }
-                                }
-
-                                // Create a pending edge from the clicked port
-                                self.pending_edge = Some(PendingEdge {
-                                    from_node: node_id,
-                                    from_port: port,
-                                });
-
-                                connectivity_may_have_changed = true;
-
-                                continue;
-                            }
-
-                            if let Some(pending_edge) = &self.pending_edge {
-                                match (pending_edge.from_port, port) {
-                                    (
-                                        MetaPort::Parent {
-                                            slot: parent_slot_on_child,
-                                            ..
-                                        },
-                                        MetaPort::Child {
-                                            slot: child_slot_on_parent,
-                                            ..
-                                        },
-                                    ) => {
-                                        let child_node_id = pending_edge.from_node;
-                                        let parent_node_id = node_id;
-                                        if self.try_attach(
-                                            &mut scratch.search,
-                                            parent_node_id,
-                                            child_slot_on_parent,
-                                            child_node_id,
-                                            parent_slot_on_child,
-                                        ) {
-                                            self.pending_edge = None;
-                                            connectivity_may_have_changed = true;
-                                        }
-                                    }
-                                    (
-                                        MetaPort::Child {
-                                            slot: child_slot_on_parent,
-                                            ..
-                                        },
-                                        MetaPort::Parent {
-                                            slot: parent_slot_on_child,
-                                            ..
-                                        },
-                                    ) => {
-                                        let parent_node_id = pending_edge.from_node;
-                                        let child_node_id = node_id;
-                                        if self.try_attach(
-                                            &mut scratch.search,
-                                            parent_node_id,
-                                            child_slot_on_parent,
-                                            child_node_id,
-                                            parent_slot_on_child,
-                                        ) {
-                                            self.pending_edge = None;
-                                            connectivity_may_have_changed = true;
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            } else {
-                                self.pending_edge = Some(PendingEdge {
-                                    from_node: node_id,
-                                    from_port: port,
-                                });
-                            }
+                            self.handle_port(
+                                &mut scratch.search,
+                                &mut connectivity_may_have_changed,
+                                ui,
+                                &painter,
+                                &mut pending_edge_port_color,
+                                node_id,
+                                port,
+                                data_type,
+                                position,
+                            );
                         }
                     }
                 }
@@ -973,12 +1014,9 @@ impl MetaGraphCanvas {
                 // Draw pending edge
 
                 if let Some(pending_edge) = &self.pending_edge
-                    && let (Some(node_rect), Some(mouse_pos)) = (
-                        node_rects.get(&pending_edge.from_node),
-                        ui.input(|i| i.pointer.hover_pos()),
-                    )
+                    && let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos())
                 {
-                    let from = pending_edge.from_port.center(node_rect);
+                    let from = pending_edge.from_position;
                     let to = mouse_pos;
                     let (child_pos, parent_pos) =
                         if let MetaPort::Parent { .. } = pending_edge.from_port {
@@ -1031,6 +1069,187 @@ impl MetaGraphCanvas {
 
         CanvasShowResult {
             connectivity_may_have_changed,
+        }
+    }
+
+    fn handle_port(
+        &mut self,
+        search_scratch: &mut SearchScratch,
+        connectivity_may_have_changed: &mut bool,
+        ui: &mut Ui,
+        painter: &Painter,
+        pending_edge_port_color: &mut Color32,
+        on_node: MetaNodeID,
+        port: MetaPort,
+        data_type: EdgeDataType,
+        port_position: Pos2,
+    ) {
+        let mut enabled = true;
+
+        if let Some(pending_edge) = &self.pending_edge {
+            // Ports we can attach the pending edge to are
+            // enabled and highlighted
+            match (pending_edge.from_port, port) {
+                (
+                    MetaPort::Parent {
+                        slot: parent_slot_on_child,
+                        ..
+                    },
+                    MetaPort::Child {
+                        slot: child_slot_on_parent,
+                        ..
+                    },
+                ) => {
+                    let child_node_id = pending_edge.from_node;
+                    let parent_node_id = on_node;
+                    enabled = self.can_attach(
+                        search_scratch,
+                        parent_node_id,
+                        child_slot_on_parent,
+                        child_node_id,
+                        parent_slot_on_child,
+                    );
+                }
+                (
+                    MetaPort::Child {
+                        slot: child_slot_on_parent,
+                        ..
+                    },
+                    MetaPort::Parent {
+                        slot: parent_slot_on_child,
+                        ..
+                    },
+                ) => {
+                    let parent_node_id = pending_edge.from_node;
+                    let child_node_id = on_node;
+                    enabled = self.can_attach(
+                        search_scratch,
+                        parent_node_id,
+                        child_slot_on_parent,
+                        child_node_id,
+                        parent_slot_on_child,
+                    );
+                }
+                _ => {
+                    // Mismatched ports are disabled
+                    enabled = false;
+                }
+            }
+        }
+
+        let pending_edge_is_from_this_port = self
+            .pending_edge
+            .as_ref()
+            .is_some_and(|edge| edge.from_node == on_node && edge.from_port == port);
+
+        let port_shape = data_type.port_shape();
+
+        let port_color = if enabled || pending_edge_is_from_this_port {
+            data_type.color().standard
+        } else {
+            data_type.color().darker
+        };
+
+        let port_label = data_type.port_label();
+
+        if pending_edge_is_from_this_port {
+            *pending_edge_port_color = port_color;
+        }
+
+        let response = show_port(
+            ui,
+            painter,
+            port.id(on_node),
+            port_position,
+            enabled,
+            self.pan_zoom_state.zoom,
+            self.cursor_should_be_hidden(),
+            port_shape,
+            port_color,
+            port_label,
+        );
+
+        if response.clicked() {
+            // Detach if there is a node attached to the port
+            if self.pending_edge.is_none() && self.node_has_link_at_port(on_node, port) {
+                match port {
+                    MetaPort::Parent { slot, .. } => {
+                        self.detach_parent_of(on_node, slot);
+                    }
+                    MetaPort::Child { slot, .. } => {
+                        self.detach_child_of(on_node, slot);
+                    }
+                }
+
+                // Create a pending edge from the clicked port
+                self.pending_edge = Some(PendingEdge {
+                    from_node: on_node,
+                    from_port: port,
+                    from_position: port_position,
+                });
+
+                *connectivity_may_have_changed = true;
+
+                return;
+            }
+
+            if let Some(pending_edge) = &self.pending_edge {
+                match (pending_edge.from_port, port) {
+                    (
+                        MetaPort::Parent {
+                            slot: parent_slot_on_child,
+                            ..
+                        },
+                        MetaPort::Child {
+                            slot: child_slot_on_parent,
+                            ..
+                        },
+                    ) => {
+                        let child_node_id = pending_edge.from_node;
+                        let parent_node_id = on_node;
+                        if self.try_attach(
+                            search_scratch,
+                            parent_node_id,
+                            child_slot_on_parent,
+                            child_node_id,
+                            parent_slot_on_child,
+                        ) {
+                            self.pending_edge = None;
+                            *connectivity_may_have_changed = true;
+                        }
+                    }
+                    (
+                        MetaPort::Child {
+                            slot: child_slot_on_parent,
+                            ..
+                        },
+                        MetaPort::Parent {
+                            slot: parent_slot_on_child,
+                            ..
+                        },
+                    ) => {
+                        let parent_node_id = pending_edge.from_node;
+                        let child_node_id = on_node;
+                        if self.try_attach(
+                            search_scratch,
+                            parent_node_id,
+                            child_slot_on_parent,
+                            child_node_id,
+                            parent_slot_on_child,
+                        ) {
+                            self.pending_edge = None;
+                            *connectivity_may_have_changed = true;
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                self.pending_edge = Some(PendingEdge {
+                    from_node: on_node,
+                    from_port: port,
+                    from_position: port_position,
+                });
+            }
         }
     }
 
@@ -1089,7 +1308,7 @@ impl MetaCanvasScratch {
         Self {
             node_rects: BTreeMap::new(),
             subtree_node_ids: Vec::new(),
-            index_map: KeyIndexMapper::new(),
+            layout_lut: MetaLayoutLookupTable::new(),
             search: SearchScratch::new(),
             data_type: DataTypeScratch::new(),
             layout: LayoutScratch::new(),
@@ -1107,41 +1326,332 @@ impl SearchScratch {
     }
 }
 
+impl CollapsedView {
+    fn new() -> Self {
+        Self {
+            visible_subtree_roots: HashSet::default(),
+            subtrees_by_root: HashMap::default(),
+            member_to_root: HashMap::default(),
+        }
+    }
+
+    fn rebuild(
+        &mut self,
+        scratch: &mut MetaCanvasScratch,
+        nodes: &BTreeMap<MetaNodeID, MetaNode>,
+        node_id_counter: usize,
+        collapsed_roots: &HashSet<MetaNodeID>,
+    ) {
+        self.member_to_root.clear();
+        self.visible_subtree_roots.clone_from(collapsed_roots);
+
+        for &root_node_id in collapsed_roots {
+            // If the root has already been established as a member of a
+            // subtree, that subtree encompasses this one, so this one will be
+            // hidden.
+            if self.member_to_root.contains_key(&root_node_id) {
+                continue;
+            }
+
+            // It could also be that the root is a membor of a subtree we have
+            // not processed yet. If that is the case, the work we do for this
+            // subtree will simply get overwritten.
+
+            obtain_subtree(
+                &mut scratch.search,
+                nodes,
+                node_id_counter,
+                &mut scratch.subtree_node_ids,
+                root_node_id,
+            );
+
+            for node_id in &scratch.subtree_node_ids[1..] {
+                // If any of the non-root subtree members are also collapsed
+                // roots, their subtrees should not be visible since they are
+                // part of this collapsed subtree
+                if collapsed_roots.contains(node_id) {
+                    self.visible_subtree_roots.remove(node_id);
+                }
+            }
+
+            // Sort for consistent slot order and binary search
+            scratch.subtree_node_ids.sort();
+
+            let subtree = self
+                .subtrees_by_root
+                .entry(root_node_id)
+                .and_modify(CollapsedMetaSubtree::clear)
+                .or_default();
+
+            subtree.size = MIN_COLLAPSED_PROXY_NODE_SIZE;
+
+            for &node_id in &scratch.subtree_node_ids {
+                // Since we skip subtrees if we have established that they are
+                // encompassed by a larger subtree and overwrite otherwise,
+                // `member_to_root` will always end up with the most top-level
+                // root
+                self.member_to_root.insert(node_id, root_node_id);
+
+                let node = &nodes[&node_id];
+
+                for (slot, &link) in node.links_to_parents.iter().enumerate() {
+                    if let Some(link) = link {
+                        if scratch
+                            .subtree_node_ids
+                            .binary_search(&link.to_node)
+                            .is_err()
+                        {
+                            // The link is to a node outside this subtree, so
+                            // the port should be included among the subtree's
+                            // exposed ports and the link should be preserved.
+                            // The link could be to a node that is part of
+                            // another subtree, but in that case the current
+                            // subtree is part of that subtree and thus will not
+                            // be rendered at all.
+                            subtree
+                                .exposed_parent_ports
+                                .push(CollapsedMetaSubtreeParentPort {
+                                    on_node: node_id,
+                                    slot_on_node: slot,
+                                    kind: node.data.kind.parent_port_kind(),
+                                    output_data_type: node.output_data_type,
+                                    link: Some(link),
+                                });
+                        }
+                    } else {
+                        // This is an open port, so it should be included among
+                        // the subtree's exposed ports
+                        subtree
+                            .exposed_parent_ports
+                            .push(CollapsedMetaSubtreeParentPort {
+                                on_node: node_id,
+                                slot_on_node: slot,
+                                kind: node.data.kind.parent_port_kind(),
+                                output_data_type: node.output_data_type,
+                                link: None,
+                            });
+                    }
+                }
+
+                for (slot, ((&link, &data_type), port_kind)) in node
+                    .links_to_children
+                    .iter()
+                    .zip(&node.input_data_types)
+                    .zip(node.data.kind.child_port_kinds())
+                    .enumerate()
+                {
+                    // There can't be a link to a child outside the subtree,
+                    // since all children by definition are part of the subtree
+
+                    if link.is_none() {
+                        // This is an open port, so it should be included among
+                        // the subtree's exposed ports
+                        subtree
+                            .exposed_child_ports
+                            .push(CollapsedMetaSubtreeChildPort {
+                                on_node: node_id,
+                                slot_on_node: slot,
+                                kind: port_kind,
+                                input_data_type: data_type,
+                                link: None,
+                            });
+                    }
+                }
+            }
+        }
+    }
+
+    fn subtree(&self, root_node_id: MetaNodeID) -> &CollapsedMetaSubtree {
+        &self.subtrees_by_root[&root_node_id]
+    }
+
+    fn visible_collapsed_subtree_roots(&self) -> &HashSet<MetaNodeID> {
+        &self.visible_subtree_roots
+    }
+
+    fn node_is_visible_collapsed_subtree_root(&self, node_id: MetaNodeID) -> bool {
+        self.visible_subtree_roots.contains(&node_id)
+    }
+
+    fn node_is_in_collapsed_subtree(&self, node_id: MetaNodeID) -> bool {
+        self.member_to_root.contains_key(&node_id)
+    }
+
+    fn node_is_non_root_member_of_collapsed_subtree(&self, node_id: MetaNodeID) -> bool {
+        self.node_is_in_collapsed_subtree(node_id)
+            && !self.node_is_visible_collapsed_subtree_root(node_id)
+    }
+
+    fn root_if_in_collapsed_subtree(&self, node_id: MetaNodeID) -> Option<MetaNodeID> {
+        self.member_to_root.get(&node_id).copied()
+    }
+}
+
 impl<'a> LayoutableMetaGraph<'a> {
     fn new(
-        index_map: &'a mut KeyIndexMapper<MetaNodeID>,
-        nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
-        rects: &'a mut BTreeMap<MetaNodeID, Rect>,
+        lut: &'a mut MetaLayoutLookupTable,
+        all_nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
+        collapsed_view: &'a CollapsedView,
+        visible_node_rects: &'a mut BTreeMap<MetaNodeID, Rect>,
     ) -> Self {
-        index_map.clear();
-        index_map.reserve(nodes.len());
-        for node_id in nodes.keys() {
-            index_map.push_key(*node_id);
-        }
+        lut.build(
+            all_nodes,
+            collapsed_view,
+            visible_node_rects.keys().copied(),
+        );
         Self {
-            index_map: &*index_map,
-            nodes,
-            rects,
+            lut: &*lut,
+            visible_node_rects,
         }
     }
 }
 
 impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
     fn n_nodes(&self) -> usize {
-        self.nodes.len()
+        self.visible_node_rects.len()
     }
 
     fn child_indices(&self, node_idx: usize) -> impl Iterator<Item = usize> {
-        let node_id = self.index_map.key_at_idx(node_idx);
-        self.nodes[&node_id]
-            .links_to_children
-            .iter()
-            .filter_map(|link| link.map(|link| self.index_map.idx(link.to_node)))
+        self.lut.child_indices(node_idx)
     }
 
     fn node_rect_mut(&mut self, node_idx: usize) -> &mut Rect {
-        let node_id = self.index_map.key_at_idx(node_idx);
-        self.rects.get_mut(&node_id).unwrap()
+        let node_id = self.lut.visible_node_index_map.key_at_idx(node_idx);
+        self.visible_node_rects.get_mut(&node_id).unwrap()
+    }
+}
+
+impl MetaLayoutLookupTable {
+    fn new() -> Self {
+        Self {
+            visible_node_index_map: KeyIndexMapper::new(),
+            child_idx_offsets_and_counts: Vec::new(),
+            all_child_indices: Vec::new(),
+        }
+    }
+
+    fn build(
+        &mut self,
+        all_nodes: &BTreeMap<MetaNodeID, MetaNode>,
+        collapsed_view: &CollapsedView,
+        visible_node_ids: impl IntoIterator<Item = MetaNodeID>,
+    ) {
+        self.visible_node_index_map.clear();
+        self.child_idx_offsets_and_counts.clear();
+        self.all_child_indices.clear();
+
+        for node_id in visible_node_ids {
+            self.visible_node_index_map.push_key(node_id);
+        }
+
+        let mut offset = 0;
+
+        for node_id in self.visible_node_index_map.key_at_each_idx() {
+            if collapsed_view.node_is_visible_collapsed_subtree_root(node_id) {
+                let subtree = collapsed_view.subtree(node_id);
+
+                for child_node_idx in subtree.exposed_child_ports.iter().filter_map(|port| {
+                    port.link
+                        .map(|link| self.visible_node_index_map.idx(link.to_node))
+                }) {
+                    self.all_child_indices.push(child_node_idx);
+                }
+            } else {
+                let node = &all_nodes[&node_id];
+
+                for child_node_idx in node.links_to_children.iter().filter_map(|link| {
+                    link.map(|link| {
+                        let to_node = collapsed_view
+                            .root_if_in_collapsed_subtree(link.to_node)
+                            .unwrap_or(link.to_node);
+
+                        self.visible_node_index_map.idx(to_node)
+                    })
+                }) {
+                    self.all_child_indices.push(child_node_idx);
+                }
+            };
+
+            let count = self.all_child_indices.len() - offset;
+            self.child_idx_offsets_and_counts.push((offset, count));
+            offset += count;
+        }
+    }
+
+    fn child_indices(&self, node_idx: usize) -> impl Iterator<Item = usize> {
+        let (offset, count) = self.child_idx_offsets_and_counts[node_idx];
+        self.all_child_indices[offset..offset + count]
+            .iter()
+            .copied()
+    }
+}
+
+fn node_can_reach_other(
+    scratch: &mut SearchScratch,
+    nodes: &BTreeMap<MetaNodeID, MetaNode>,
+    node_id_counter: usize,
+    node_id: MetaNodeID,
+    other_node_id: MetaNodeID,
+) -> bool {
+    let stack = &mut scratch.stack;
+    let seen = &mut scratch.seen;
+
+    stack.clear();
+    stack.push(node_id);
+
+    seen.resize_and_unset_all(node_id_counter);
+
+    while let Some(node_id) = stack.pop() {
+        if seen.set_bit(node_id as usize) {
+            continue;
+        }
+        if node_id == other_node_id {
+            return true;
+        }
+        if let Some(node) = nodes.get(&node_id) {
+            for child_node_id in node
+                .links_to_children
+                .iter()
+                .filter_map(|link| link.map(|link| link.to_node))
+            {
+                stack.push(child_node_id);
+            }
+        }
+    }
+    false
+}
+
+fn obtain_subtree(
+    scratch: &mut SearchScratch,
+    nodes: &BTreeMap<MetaNodeID, MetaNode>,
+    node_id_counter: usize,
+    subtree_node_ids: &mut Vec<MetaNodeID>,
+    node_id: MetaNodeID,
+) {
+    let stack = &mut scratch.stack;
+    let seen = &mut scratch.seen;
+
+    subtree_node_ids.clear();
+
+    stack.clear();
+    stack.push(node_id);
+
+    seen.resize_and_unset_all(node_id_counter);
+
+    while let Some(node_id) = stack.pop() {
+        if seen.set_bit(node_id as usize) {
+            continue;
+        }
+        subtree_node_ids.push(node_id);
+        if let Some(node) = nodes.get(&node_id) {
+            for child_node_id in node
+                .links_to_children
+                .iter()
+                .filter_map(|link| link.map(|link| link.to_node))
+            {
+                stack.push(child_node_id);
+            }
+        }
     }
 }
 
@@ -1164,4 +1674,36 @@ fn translate_node(
     let final_delta = delta + resolve_delta;
     node.position += final_delta;
     *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(final_delta);
+}
+
+fn draw_edge(
+    painter: &Painter,
+    parent_rect: &Rect,
+    child_slot_on_parent: usize,
+    parent_child_port_count: usize,
+    child_rect: &Rect,
+    parent_slot_on_child: usize,
+    child_parent_port_count: usize,
+    input_data_type: EdgeDataType,
+    output_data_type: EdgeDataType,
+    zoom: f32,
+) {
+    let edge_color = if EdgeDataType::connection_allowed(input_data_type, output_data_type) {
+        input_data_type.color().standard
+    } else {
+        MetaPaletteColor::red().standard
+    };
+
+    let child_pos =
+        MetaPort::child_center(parent_rect, child_slot_on_parent, parent_child_port_count);
+
+    let parent_pos =
+        MetaPort::parent_center(child_rect, parent_slot_on_child, child_parent_port_count);
+
+    let edge_shape = create_bezier_edge(
+        child_pos,
+        parent_pos,
+        PathStroke::new(EDGE_WIDTH * zoom, edge_color),
+    );
+    painter.add(edge_shape);
 }
