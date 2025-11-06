@@ -43,15 +43,15 @@ pub struct MetaNode {
     pub data: MetaNodeData,
     pub links_to_parents: MetaNodeParentLinks,
     pub links_to_children: MetaNodeChildLinks,
-    pub input_data_types: MetaNodeInputDataTypes,
     pub output_data_type: EdgeDataType,
+    pub input_data_types: MetaNodeInputDataTypes,
 }
 
 type MetaNodeParentLinks = TinyVec<[Option<MetaNodeLink>; 2]>;
 type MetaNodeChildLinks = TinyVec<[Option<MetaNodeLink>; 2]>;
 type MetaNodeInputDataTypes = TinyVec<[EdgeDataType; 2]>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MetaNodeLink {
     pub to_node: MetaNodeID,
     pub to_slot: usize,
@@ -73,19 +73,11 @@ pub enum MetaPort {
     Parent {
         kind: MetaParentPortKind,
         slot: usize,
-        of: usize,
     },
     Child {
         kind: MetaChildPortKind,
         slot: usize,
-        of: usize,
     },
-}
-
-#[derive(Clone, Debug)]
-pub struct ResolvedMetaPort {
-    port: MetaPort,
-    data_type: EdgeDataType,
 }
 
 #[allow(dead_code)]
@@ -144,6 +136,34 @@ pub struct MetaFloatRangeParam {
     pub speed: f32,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct CollapsedMetaSubtree {
+    pub size: Vec2,
+    pub exposed_parent_ports: CollapsedMetaSubtreeParentPorts,
+    pub exposed_child_ports: CollapsedMetaSubtreeChildPorts,
+}
+
+type CollapsedMetaSubtreeParentPorts = TinyVec<[CollapsedMetaSubtreeParentPort; 4]>;
+type CollapsedMetaSubtreeChildPorts = TinyVec<[CollapsedMetaSubtreeChildPort; 4]>;
+
+#[derive(Clone, Debug, Default)]
+pub struct CollapsedMetaSubtreeParentPort {
+    on_node: MetaNodeID,
+    slot_on_node: usize,
+    kind: MetaParentPortKind,
+    output_data_type: EdgeDataType,
+    link: Option<MetaNodeLink>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CollapsedMetaSubtreeChildPort {
+    on_node: MetaNodeID,
+    slot_on_node: usize,
+    kind: MetaChildPortKind,
+    input_data_type: EdgeDataType,
+    link: Option<MetaNodeLink>,
+}
+
 impl MetaNode {
     fn new(position: Pos2, data: MetaNodeData) -> Self {
         let kind = data.kind;
@@ -174,8 +194,8 @@ impl MetaNode {
             data,
             links_to_parents,
             links_to_children,
-            input_data_types,
             output_data_type,
+            input_data_types,
         }
     }
 
@@ -196,40 +216,6 @@ impl MetaNode {
                 link.is_none()
                     && EdgeDataType::connection_allowed(*input_data_type, output_data_type)
             })
-    }
-
-    fn resolved_ports(&self) -> impl Iterator<Item = ResolvedMetaPort> + use<> {
-        let parent_port_count = self.links_to_parents.len();
-        let node_kind = self.data.kind;
-        let output_data_type = self.output_data_type;
-        let input_data_types = self.input_data_types.clone();
-
-        (0..parent_port_count)
-            .map(move |slot| {
-                let port = MetaPort::Parent {
-                    kind: node_kind.parent_port_kind(),
-                    slot,
-                    of: parent_port_count,
-                };
-                let data_type = output_data_type;
-                ResolvedMetaPort { port, data_type }
-            })
-            .chain(
-                node_kind
-                    .child_port_kinds()
-                    .into_iter()
-                    .flatten()
-                    .zip(input_data_types)
-                    .enumerate()
-                    .map(move |(slot, (kind, data_type))| {
-                        let port = MetaPort::Child {
-                            kind,
-                            slot,
-                            of: node_kind.n_child_slots(),
-                        };
-                        ResolvedMetaPort { port, data_type }
-                    }),
-            )
     }
 }
 
@@ -415,69 +401,11 @@ impl MetaPort {
         )
     }
 
-    fn center(&self, node_rect: &Rect) -> Pos2 {
-        match *self {
-            Self::Parent { slot, of, .. } => Self::parent_center(node_rect, slot, of),
-            Self::Child { slot, of, .. } => Self::child_center(node_rect, slot, of),
-        }
-    }
-
     fn id(&self, node_id: MetaNodeID) -> Id {
         match *self {
             Self::Parent { slot, .. } => Id::new(("parent_port", slot, node_id)),
             Self::Child { slot, .. } => Id::new(("child_port", slot, node_id)),
         }
-    }
-
-    fn show(
-        &self,
-        ui: &mut Ui,
-        painter: &Painter,
-        node_id: MetaNodeID,
-        node_rect: &Rect,
-        enabled: bool,
-        zoom: f32,
-        cursor_hidden: bool,
-        shape: MetaPortShape,
-        color: Color32,
-        label: &str,
-    ) -> Response {
-        let center = self.center(node_rect);
-
-        let port_hit_diameter = 2.0 * PORT_HIT_RADIUS * zoom;
-        let hit_rect = Rect::from_center_size(center, vec2(port_hit_diameter, port_hit_diameter));
-
-        let sense = if enabled {
-            Sense::click()
-        } else {
-            Sense::hover()
-        };
-        let mut response = ui.interact(hit_rect, self.id(node_id), sense);
-
-        response = response.on_hover_text(label);
-
-        if enabled && !cursor_hidden {
-            response = response.on_hover_cursor(CursorIcon::PointingHand);
-        }
-
-        let port_radius = if enabled && response.hovered() {
-            PORT_HOVER_RADIUS * zoom
-        } else {
-            PORT_RADIUS * zoom
-        };
-
-        match shape {
-            MetaPortShape::Circle => {
-                painter.circle_filled(center, port_radius, color);
-            }
-            MetaPortShape::Square => {
-                let rect_size = 2.0 * port_radius;
-                let rect = Rect::from_center_size(center, vec2(rect_size, rect_size));
-                painter.rect_filled(rect, 2.0, color);
-            }
-        }
-
-        response
     }
 }
 
@@ -777,6 +705,31 @@ impl MetaFloatRangeParam {
     }
 }
 
+impl CollapsedMetaSubtree {
+    fn clear(&mut self) {
+        self.size = Vec2::ZERO;
+        self.exposed_parent_ports.clear();
+        self.exposed_child_ports.clear();
+    }
+
+    fn paint(&self, painter: &Painter, node_rect: Rect, zoom: f32, is_selected: bool) {
+        // Draw node background and outline
+
+        let (stroke_width, stroke_color) = if is_selected {
+            (SELECTED_NODE_BOUNDARY_WIDTH, SELECTED_NODE_BOUNDARY_COLOR)
+        } else {
+            (NODE_BOUNDARY_WIDTH, NODE_BOUNDARY_COLOR)
+        };
+        let stroke = Stroke {
+            width: stroke_width * zoom,
+            color: stroke_color,
+        };
+        let corner_radius = NODE_CORNER_RADIUS * zoom;
+        painter.rect_filled(node_rect, corner_radius, NODE_FILL_COLOR);
+        painter.rect_stroke(node_rect, corner_radius, stroke, StrokeKind::Inside);
+    }
+}
+
 fn run_drag_values_for_range<Num: Numeric>(
     ui: &mut Ui,
     low_value: &mut Num,
@@ -817,4 +770,52 @@ fn run_drag_values_for_range<Num: Numeric>(
 
 fn prepare_text(ui: &Ui, text: String, font_id: FontId, color: Color32) -> Arc<Galley> {
     ui.fonts(|f| f.layout_no_wrap(text, font_id, color))
+}
+
+fn show_port(
+    ui: &mut Ui,
+    painter: &Painter,
+    unique_port_id: Id,
+    position: Pos2,
+    enabled: bool,
+    zoom: f32,
+    cursor_hidden: bool,
+    shape: MetaPortShape,
+    color: Color32,
+    label: &str,
+) -> Response {
+    let port_hit_diameter = 2.0 * PORT_HIT_RADIUS * zoom;
+    let hit_rect = Rect::from_center_size(position, vec2(port_hit_diameter, port_hit_diameter));
+
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
+    let mut response = ui.interact(hit_rect, unique_port_id, sense);
+
+    response = response.on_hover_text(label);
+
+    if enabled && !cursor_hidden {
+        response = response.on_hover_cursor(CursorIcon::PointingHand);
+    }
+
+    let port_radius = if enabled && response.hovered() {
+        PORT_HOVER_RADIUS * zoom
+    } else {
+        PORT_RADIUS * zoom
+    };
+
+    match shape {
+        MetaPortShape::Circle => {
+            painter.circle_filled(position, port_radius, color);
+        }
+        MetaPortShape::Square => {
+            let rect_size = 2.0 * port_radius;
+            let rect = Rect::from_center_size(position, vec2(rect_size, rect_size));
+            painter.rect_filled(rect, 2.0, color);
+        }
+    }
+
+    response
 }

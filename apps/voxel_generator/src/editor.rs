@@ -306,11 +306,28 @@ impl CustomPanels for Editor {
 
             if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
                 option_group(ui, "modification", |ui| {
+                    let mut is_collapsed = self
+                        .meta_graph_canvas
+                        .node_is_collapsed_root(selected_node_id);
+                    let was_collapsed = is_collapsed;
+
+                    option_checkbox(
+                        ui,
+                        &mut is_collapsed,
+                        LabelAndHoverText::label_only("Collapsed"),
+                    );
+
+                    if is_collapsed != was_collapsed {
+                        self.meta_graph_canvas
+                            .set_node_collapsed(selected_node_id, is_collapsed);
+                    }
+
                     let mut selected_node = self
                         .meta_graph_canvas
                         .nodes
                         .get_mut(&selected_node_id)
                         .unwrap();
+
                     let mut kind = selected_node.data.kind;
 
                     if !selected_node.data.kind.is_output() {
