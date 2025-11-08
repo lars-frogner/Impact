@@ -6,7 +6,7 @@ mod util;
 use allocator_api2::alloc::Allocator;
 use atomic::canvas::AtomicGraphCanvas;
 use impact::{
-    egui::{Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, Ui, Vec2},
+    egui::{Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, TextEdit, Ui, Vec2},
     engine::Engine,
 };
 use impact_dev_ui::{
@@ -29,11 +29,13 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::editor::meta::canvas::PendingNodeOperations;
+use crate::editor::meta::canvas::{PendingNodeNameUpdate, PendingNodeOperations};
 
 const SCROLL_SENSITIVITY: f32 = 4e-3;
 const MIN_ZOOM: f32 = 0.3;
 const MAX_ZOOM: f32 = 3.0;
+
+const NODE_NAME_TEXT_EDIT_WIDTH: f32 = 100.0;
 
 const PARENT_PORT_COUNT_OPTIONS: [(usize, &str); 8] = [
     (1, "1"),
@@ -215,12 +217,10 @@ impl CustomPanels for Editor {
 
         let mut pending_node_operations = PendingNodeOperations::default();
 
-        let zoom = self.meta_graph_canvas.zoom();
-
         if self.meta_graph_canvas.nodes.is_empty() {
             pending_node_operations.addition = Some(PendingNodeAddition {
                 node_id: self.meta_graph_canvas.next_node_id(),
-                data: MetaNodeData::new(MetaNodeKind::Output),
+                data: MetaNodeData::new_default(MetaNodeKind::Output),
             });
         }
 
@@ -299,7 +299,7 @@ impl CustomPanels for Editor {
                                 {
                                     pending_node_operations.addition = Some(PendingNodeAddition {
                                         node_id: self.meta_graph_canvas.next_node_id(),
-                                        data: MetaNodeData::new(kind_option),
+                                        data: MetaNodeData::new_default(kind_option),
                                     });
                                 }
                             },
@@ -334,51 +334,77 @@ impl CustomPanels for Editor {
                                 });
                         }
 
-                        let mut kind = selected_node.data.kind;
-
-                        labeled_option(ui, LabelAndHoverText::label_only("Kind"), |ui| {
-                            ComboBox::from_id_salt("selected_kind")
-                                .selected_text(selected_node.data.kind.label())
-                                .show_ui(ui, |ui| {
-                                    for kind_option in MetaNodeKind::all_non_root() {
-                                        ui.selectable_value(
-                                            &mut kind,
-                                            kind_option,
-                                            kind_option.label(),
-                                        );
-                                    }
-                                })
-                        });
-
-                        if kind != selected_node.data.kind {
-                            pending_node_operations.kind_change = Some(PendingNodeKindChange {
-                                node_id: selected_node_id,
-                                kind,
+                        if is_collapsed {
+                            labeled_option(ui, LabelAndHoverText::label_only("Name"), |ui| {
+                                if TextEdit::singleline(&mut selected_node.data.name)
+                                    .desired_width(NODE_NAME_TEXT_EDIT_WIDTH)
+                                    .show(ui)
+                                    .response
+                                    .changed()
+                                {
+                                    pending_node_operations.name_update =
+                                        Some(PendingNodeNameUpdate {
+                                            node_id: selected_node_id,
+                                        });
+                                }
                             });
-                        }
+                        } else {
+                            let mut kind = selected_node.data.kind;
 
-                        let mut parent_port_count = selected_node.links_to_parents.len();
+                            labeled_option(ui, LabelAndHoverText::label_only("Kind"), |ui| {
+                                ComboBox::from_id_salt("selected_kind")
+                                    .selected_text(selected_node.data.kind.label())
+                                    .show_ui(ui, |ui| {
+                                        for kind_option in MetaNodeKind::all_non_root() {
+                                            ui.selectable_value(
+                                                &mut kind,
+                                                kind_option,
+                                                kind_option.label(),
+                                            );
+                                        }
+                                    })
+                            });
 
-                        labeled_option(ui, LabelAndHoverText::label_only("Parent ports"), |ui| {
-                            ComboBox::from_id_salt("parent_port_count")
-                                .selected_text(PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1)
-                                .show_ui(ui, |ui| {
-                                    for (option, label) in PARENT_PORT_COUNT_OPTIONS {
-                                        ui.selectable_value(&mut parent_port_count, option, label);
-                                    }
-                                })
-                        });
-
-                        if parent_port_count != selected_node.links_to_parents.len() {
-                            pending_node_operations.parent_port_count_change =
-                                Some(PendingNodeParentPortCountChange {
+                            if kind != selected_node.data.kind {
+                                pending_node_operations.kind_change = Some(PendingNodeKindChange {
                                     node_id: selected_node_id,
-                                    parent_port_count,
+                                    kind,
                                 });
+                            }
+
+                            let mut parent_port_count = selected_node.links_to_parents.len();
+
+                            labeled_option(
+                                ui,
+                                LabelAndHoverText::label_only("Parent ports"),
+                                |ui| {
+                                    ComboBox::from_id_salt("parent_port_count")
+                                        .selected_text(
+                                            PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
+                                        )
+                                        .show_ui(ui, |ui| {
+                                            for (option, label) in PARENT_PORT_COUNT_OPTIONS {
+                                                ui.selectable_value(
+                                                    &mut parent_port_count,
+                                                    option,
+                                                    label,
+                                                );
+                                            }
+                                        })
+                                },
+                            );
+
+                            if parent_port_count != selected_node.links_to_parents.len() {
+                                pending_node_operations.parent_port_count_change =
+                                    Some(PendingNodeParentPortCountChange {
+                                        node_id: selected_node_id,
+                                        parent_port_count,
+                                    });
+                            }
                         }
                     }
 
-                    if selected_node.data.run_controls(ui, zoom) {
+                    if !is_collapsed && selected_node.data.run_controls(ui) {
                         changes.insert(MetaGraphChanges::PARAMS_CHANGED);
                     }
                 });

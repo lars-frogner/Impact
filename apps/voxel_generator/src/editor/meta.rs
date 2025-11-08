@@ -23,13 +23,18 @@ const NODE_BOUNDARY_WIDTH: f32 = 1.0;
 const SELECTED_NODE_BOUNDARY_WIDTH: f32 = 2.0;
 const NODE_BOUNDARY_COLOR: Color32 = Color32::from_gray(200);
 const SELECTED_NODE_BOUNDARY_COLOR: Color32 = Color32::WHITE;
+const NODE_STACK_SILHOUETTE_OFFSET: f32 = 5.0;
+const NODE_STACK_SILHOUETTE_BOUNDARY_COLOR: Color32 = Color32::from_gray(100);
+const SELECTED_NODE_STACK_SILHOUETTE_BOUNDARY_COLOR: Color32 = Color32::from_gray(180);
 
 const NODE_TEXT_COLOR: Color32 = Color32::WHITE;
 const NODE_HEADER_FONT_SIZE: f32 = 14.0;
 const NODE_PARAMS_FONT_SIZE: f32 = 12.0;
+const NODE_NAME_FONT_SIZE: f32 = 16.0;
 const NODE_HEADER_SPACING: f32 = 8.0;
 const NODE_PARAM_SPACING: f32 = 4.0;
-const NODE_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
+const NODE_STANDARD_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
+const NODE_COLLAPSED_TEXT_PADDING: Vec2 = vec2(14.0, 14.0);
 
 const PORT_RADIUS: f32 = 6.0;
 const PORT_HOVER_RADIUS: f32 = 7.0;
@@ -59,11 +64,13 @@ pub struct MetaNodeLink {
 
 #[derive(Clone, Debug)]
 pub struct MetaNodeData {
+    pub name: String,
     pub kind: MetaNodeKind,
     pub params: MetaNodeParams,
     prepared_text_zoom: Option<f32>,
     header_galley: Option<Arc<Galley>>,
     param_galleys: TinyVec<[Option<Arc<Galley>>; 12]>,
+    name_galley: Option<Arc<Galley>>,
 }
 
 type MetaNodeParams = TinyVec<[MetaNodeParam; 12]>;
@@ -231,18 +238,20 @@ impl MetaNode {
 }
 
 impl MetaNodeData {
-    pub fn new(kind: MetaNodeKind) -> Self {
-        Self::new_with_params(kind, kind.params())
-    }
-
-    pub fn new_with_params(kind: MetaNodeKind, params: MetaNodeParams) -> Self {
+    pub fn new(name: String, kind: MetaNodeKind, params: MetaNodeParams) -> Self {
         Self {
+            name,
             kind,
             params,
             prepared_text_zoom: None,
             header_galley: None,
             param_galleys: TinyVec::new(),
+            name_galley: None,
         }
+    }
+
+    pub fn new_default(kind: MetaNodeKind) -> Self {
+        Self::new(String::new(), kind, kind.params())
     }
 
     fn header_font(zoom: f32) -> FontId {
@@ -253,8 +262,16 @@ impl MetaNodeData {
         FontId::proportional(NODE_PARAMS_FONT_SIZE * zoom)
     }
 
-    fn text_padding(zoom: f32) -> Vec2 {
-        NODE_TEXT_PADDING * zoom
+    fn name_font(zoom: f32) -> FontId {
+        FontId::proportional(NODE_NAME_FONT_SIZE * zoom)
+    }
+
+    fn standard_text_padding(zoom: f32) -> Vec2 {
+        NODE_STANDARD_TEXT_PADDING * zoom
+    }
+
+    fn collapsed_text_padding(zoom: f32) -> Vec2 {
+        NODE_COLLAPSED_TEXT_PADDING * zoom
     }
 
     fn header_spacing(zoom: f32) -> f32 {
@@ -266,7 +283,7 @@ impl MetaNodeData {
     }
 
     /// Returns `true` if any of the parameters changed.
-    pub fn run_controls(&mut self, ui: &mut Ui, zoom: f32) -> bool {
+    pub fn run_controls(&mut self, ui: &mut Ui) -> bool {
         let mut any_param_changed = false;
         for (idx, param) in self.params.iter_mut().enumerate() {
             if param.show_controls(ui).changed() {
@@ -283,9 +300,6 @@ impl MetaNodeData {
                     ));
                 }
             };
-        }
-        if any_param_changed {
-            self.prepare_text(ui, zoom);
         }
         any_param_changed
     }
@@ -316,6 +330,24 @@ impl MetaNodeData {
                     NODE_TEXT_COLOR,
                 ))
             }));
+
+        self.name_galley = Some(prepare_text(
+            ui,
+            self.name.clone(),
+            Self::name_font(zoom),
+            NODE_TEXT_COLOR,
+        ));
+    }
+
+    pub fn reprepare_name_text(&mut self, ui: &Ui) {
+        if let Some(zoom) = self.prepared_text_zoom {
+            self.name_galley.replace(prepare_text(
+                ui,
+                self.name.clone(),
+                Self::name_font(zoom),
+                NODE_TEXT_COLOR,
+            ));
+        }
     }
 
     fn prepared_header_text(&self) -> &Arc<Galley> {
@@ -326,7 +358,11 @@ impl MetaNodeData {
         self.param_galleys.iter().map(|g| g.as_ref().unwrap())
     }
 
-    fn compute_size(&self) -> Vec2 {
+    fn prepared_name_text(&self) -> &Arc<Galley> {
+        self.name_galley.as_ref().unwrap()
+    }
+
+    fn compute_standard_size(&self) -> Vec2 {
         let unzooming_factor = self.prepared_text_zoom.unwrap().recip();
 
         let header_text_size = self.prepared_header_text().size() * unzooming_factor;
@@ -346,13 +382,32 @@ impl MetaNodeData {
         }
 
         let screen_node_size =
-            vec2(max_text_width, total_text_height) + 2.0 * Self::text_padding(1.0);
+            vec2(max_text_width, total_text_height) + 2.0 * Self::standard_text_padding(1.0);
 
         screen_node_size
     }
 
-    fn paint(&self, painter: &Painter, node_rect: Rect, zoom: f32, is_selected: bool) {
+    fn compute_collapsed_size(&self) -> Vec2 {
+        let unzooming_factor = self.prepared_text_zoom.unwrap().recip();
+
+        let name_text_size = self.prepared_name_text().size() * unzooming_factor;
+
+        let screen_node_size = name_text_size + 2.0 * Self::collapsed_text_padding(1.0);
+
+        screen_node_size
+    }
+
+    fn paint(
+        &self,
+        painter: &Painter,
+        node_rect: Rect,
+        zoom: f32,
+        is_selected: bool,
+        is_collapsed: bool,
+    ) {
         // Draw node background and outline
+
+        let corner_radius = NODE_CORNER_RADIUS * zoom;
 
         let (stroke_width, stroke_color) = if is_selected {
             (SELECTED_NODE_BOUNDARY_WIDTH, SELECTED_NODE_BOUNDARY_COLOR)
@@ -363,16 +418,38 @@ impl MetaNodeData {
             width: stroke_width * zoom,
             color: stroke_color,
         };
-        let corner_radius = NODE_CORNER_RADIUS * zoom;
+
+        if is_collapsed {
+            // Stacked-card silhouette
+            let back_offset = -NODE_STACK_SILHOUETTE_OFFSET * zoom;
+            let back_rect = node_rect.translate(Vec2::splat(back_offset));
+
+            let back_stroke_color = if is_selected {
+                SELECTED_NODE_STACK_SILHOUETTE_BOUNDARY_COLOR
+            } else {
+                NODE_STACK_SILHOUETTE_BOUNDARY_COLOR
+            };
+            let back_stroke = Stroke {
+                width: stroke.width,
+                color: back_stroke_color,
+            };
+            painter.rect_filled(back_rect, corner_radius, NODE_FILL_COLOR);
+            painter.rect_stroke(back_rect, corner_radius, back_stroke, StrokeKind::Inside);
+        }
+
         painter.rect_filled(node_rect, corner_radius, NODE_FILL_COLOR);
         painter.rect_stroke(node_rect, corner_radius, stroke, StrokeKind::Inside);
 
         // Draw node text
-        self.paint_text(painter, &node_rect, zoom);
+        if is_collapsed {
+            self.paint_collapsed_text(painter, &node_rect, zoom);
+        } else {
+            self.paint_standard_text(painter, &node_rect, zoom);
+        }
     }
 
-    fn paint_text(&self, painter: &Painter, node_rect: &Rect, zoom: f32) {
-        let padding = Self::text_padding(zoom);
+    fn paint_standard_text(&self, painter: &Painter, node_rect: &Rect, zoom: f32) {
+        let padding = Self::standard_text_padding(zoom);
 
         let header_text = self.prepared_header_text();
         let header_pos = pos2(
@@ -390,6 +467,17 @@ impl MetaNodeData {
             painter.galley(cursor, param_text.clone(), NODE_TEXT_COLOR);
             cursor.y += param_text.size().y + Self::param_spacing(zoom);
         }
+    }
+
+    fn paint_collapsed_text(&self, painter: &Painter, node_rect: &Rect, zoom: f32) {
+        let padding = Self::collapsed_text_padding(zoom);
+
+        let name_text = self.prepared_name_text();
+        let name_pos = pos2(
+            node_rect.center().x - 0.5 * name_text.size().x,
+            node_rect.top() + padding.y,
+        );
+        painter.galley(name_pos, name_text.clone(), NODE_TEXT_COLOR);
     }
 
     fn change_kind(&mut self, new_kind: MetaNodeKind) {
@@ -735,23 +823,6 @@ impl CollapsedMetaSubtree {
                 MetaPort::child_center(node_rect, slot, self.exposed_child_ports.len())
             }
         }
-    }
-
-    fn paint(&self, painter: &Painter, node_rect: Rect, zoom: f32, is_selected: bool) {
-        // Draw node background and outline
-
-        let (stroke_width, stroke_color) = if is_selected {
-            (SELECTED_NODE_BOUNDARY_WIDTH, SELECTED_NODE_BOUNDARY_COLOR)
-        } else {
-            (NODE_BOUNDARY_WIDTH, NODE_BOUNDARY_COLOR)
-        };
-        let stroke = Stroke {
-            width: stroke_width * zoom,
-            color: stroke_color,
-        };
-        let corner_radius = NODE_CORNER_RADIUS * zoom;
-        painter.rect_filled(node_rect, corner_radius, NODE_FILL_COLOR);
-        painter.rect_stroke(node_rect, corner_radius, stroke, StrokeKind::Inside);
     }
 }
 
