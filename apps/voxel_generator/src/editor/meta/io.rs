@@ -26,6 +26,7 @@ pub struct IOMetaNodeGraphRef<'a> {
 pub struct IOMetaNode {
     pub id: MetaNodeID,
     pub position: (f32, f32),
+    pub name: String,
     pub kind: MetaNodeKind,
     pub params: IOMetaNodeParams,
     pub links_to_parents: MetaNodeParentLinks,
@@ -47,6 +48,7 @@ impl<'a> From<(&'a MetaNodeID, &'a MetaNode)> for IOMetaNode {
         Self {
             id: *id,
             position: (node.position.x, node.position.y),
+            name: node.data.name.clone(),
             kind: node.data.kind,
             params: node.data.params.iter().map(IOMetaNodeParam::from).collect(),
             links_to_parents: node.links_to_parents.clone(),
@@ -105,7 +107,7 @@ impl TryFrom<IOMetaNode> for MetaNode {
             }
         }
 
-        let data = MetaNodeData::new_with_params(node.kind, params);
+        let data = MetaNodeData::new(node.name, node.kind, params);
 
         if node.links_to_parents.is_empty() && !node.kind.is_output() {
             bail!("Non-output nodes must have at least one parent link");

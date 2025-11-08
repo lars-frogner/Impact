@@ -48,7 +48,7 @@ const STATUS_DOT_IN_SYNC_HOVER_TEXT: &str = "The graph is in sync";
 const STATUS_DOT_DIRTY_HOVER_TEXT: &str = "The graph is out of sync";
 const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not valid";
 
-const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(60.0, 30.0);
+const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(80.0, 0.0);
 
 // TODO
 // Omit output node in saved graph and support loading multiple graphs.
@@ -86,15 +86,16 @@ struct SearchScratch {
 }
 
 bitflags! {
-    pub struct MetaGraphChanges: u8 {
+    pub struct MetaGraphChanges: u16 {
         const NODE_ADDED                = 1 << 0;
         const NODE_REMOVED              = 1 << 1;
         const NODE_ATTACHED             = 1 << 2;
         const NODE_DETACHED             = 1 << 3;
         const PARAMS_CHANGED            = 1 << 4;
-        const KIND_CHANGED              = 1 << 5;
-        const PARENT_PORT_COUNT_CHANGED = 1 << 6;
-        const COLLAPSED_STATE_CHANGED   = 1 << 7;
+        const NAME_CHANGED              = 1 << 5;
+        const KIND_CHANGED              = 1 << 6;
+        const PARENT_PORT_COUNT_CHANGED = 1 << 7;
+        const COLLAPSED_STATE_CHANGED   = 1 << 8;
     }
 }
 
@@ -108,6 +109,7 @@ pub struct PendingEdge {
 pub struct PendingNodeOperations {
     pub addition: Option<PendingNodeAddition>,
     pub removal: Option<PendingNodeRemoval>,
+    pub name_update: Option<PendingNodeNameUpdate>,
     pub kind_change: Option<PendingNodeKindChange>,
     pub parent_port_count_change: Option<PendingNodeParentPortCountChange>,
     pub collapsed_state_change: Option<PendingNodeCollapsedStateChange>,
@@ -121,6 +123,11 @@ pub struct PendingNodeAddition {
 
 #[derive(Debug, Clone)]
 pub struct PendingNodeRemoval {
+    pub node_id: MetaNodeID,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingNodeNameUpdate {
     pub node_id: MetaNodeID,
 }
 
@@ -175,10 +182,6 @@ impl MetaGraphCanvas {
             collapse_index: CollapseIndex::new(),
             node_id_counter: 0,
         }
-    }
-
-    pub fn zoom(&self) -> f32 {
-        self.pan_zoom_state.zoom
     }
 
     fn cursor_should_be_hidden(&self) -> bool {
@@ -681,6 +684,19 @@ impl MetaGraphCanvas {
                     self.pending_edge = None;
                 }
 
+                // Handle name update
+                if let Some(PendingNodeNameUpdate { node_id }) = pending_node_operations.name_update
+                {
+                    self.node_mut(node_id).data.reprepare_name_text(ui);
+                    if self
+                        .collapse_index
+                        .node_is_visible_collapsed_subtree_root(node_id)
+                    {
+                        self.collapse_index
+                            .update_subtree_node_size(&self.nodes, node_id);
+                    }
+                }
+
                 // Handle change in kind
 
                 if let Some(PendingNodeKindChange { node_id, kind }) =
@@ -722,7 +738,7 @@ impl MetaGraphCanvas {
                     {
                         self.collapse_index.subtree(node_id).size
                     } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
-                        node.data.compute_size()
+                        node.data.compute_standard_size()
                     } else {
                         continue;
                     };
@@ -745,7 +761,7 @@ impl MetaGraphCanvas {
                     pending_node_operations.addition
                 {
                     data.prepare_text(ui, self.pan_zoom_state.zoom);
-                    let node_size = data.compute_size();
+                    let node_size = data.compute_standard_size();
 
                     let position = if let Some(selected_node_id) = self.selected_node_id
                         && let Some(selected_node) = self.nodes.get(&node_id)
@@ -883,16 +899,17 @@ impl MetaGraphCanvas {
 
                     let is_selected = self.selected_node_id == Some(node_id);
 
-                    if self
+                    let is_collapsed = self
                         .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id)
-                    {
-                        let subtree = self.collapse_index.subtree(node_id);
-                        subtree.paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
-                    } else {
-                        node.data
-                            .paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
-                    }
+                        .node_is_visible_collapsed_subtree_root(node_id);
+
+                    node.data.paint(
+                        &painter,
+                        node_rect,
+                        self.pan_zoom_state.zoom,
+                        is_selected,
+                        is_collapsed,
+                    );
                 }
 
                 if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
@@ -1283,7 +1300,7 @@ impl MetaGraphCanvas {
                         {
                             self.collapse_index.subtree(node_id).size
                         } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
-                            node.data.compute_size()
+                            node.data.compute_standard_size()
                         } else {
                             continue;
                         };
@@ -1303,6 +1320,7 @@ impl MetaGraphCanvas {
                                 | MetaGraphChanges::NODE_REMOVED
                                 | MetaGraphChanges::NODE_ATTACHED
                                 | MetaGraphChanges::PARAMS_CHANGED
+                                | MetaGraphChanges::NAME_CHANGED
                                 | MetaGraphChanges::KIND_CHANGED
                                 | MetaGraphChanges::COLLAPSED_STATE_CHANGED,
                         ))
@@ -1664,7 +1682,10 @@ impl CollapseIndex {
                 .and_modify(CollapsedMetaSubtree::clear)
                 .or_default();
 
-            subtree.size = MIN_COLLAPSED_PROXY_NODE_SIZE;
+            subtree.size = nodes[&root_node_id]
+                .data
+                .compute_collapsed_size()
+                .max(MIN_COLLAPSED_PROXY_NODE_SIZE);
 
             for &node_id in &scratch.subtree_node_ids {
                 // Since we skip subtrees if we have established that they are
@@ -1744,6 +1765,17 @@ impl CollapseIndex {
 
     fn subtree(&self, root_node_id: MetaNodeID) -> &CollapsedMetaSubtree {
         &self.subtrees_by_root[&root_node_id]
+    }
+
+    fn update_subtree_node_size(
+        &mut self,
+        nodes: &BTreeMap<MetaNodeID, MetaNode>,
+        root_node_id: MetaNodeID,
+    ) {
+        self.subtrees_by_root.get_mut(&root_node_id).unwrap().size = nodes[&root_node_id]
+            .data
+            .compute_collapsed_size()
+            .max(MIN_COLLAPSED_PROXY_NODE_SIZE);
     }
 
     fn visible_collapsed_subtree_roots(&self) -> &HashSet<MetaNodeID> {
