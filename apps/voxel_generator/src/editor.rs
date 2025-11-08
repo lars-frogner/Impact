@@ -20,8 +20,8 @@ use meta::{
     MetaNodeData, build,
     canvas::{
         MetaCanvasScratch, MetaGraphCanvas, MetaGraphChanges, PendingNodeAddition,
-        PendingNodeCollapsedStateChange, PendingNodeKindChange, PendingNodeParentPortCountChange,
-        PendingNodeRemoval,
+        PendingNodeCollapsedStateChange, PendingNodeKindChange, PendingNodeNameUpdate,
+        PendingNodeOperations, PendingNodeParentPortCountChange, PendingNodeRemoval,
     },
     node_kind::{MetaNodeKind, MetaNodeKindGroup},
 };
@@ -29,10 +29,8 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::editor::meta::canvas::{PendingNodeNameUpdate, PendingNodeOperations};
-
 const SCROLL_SENSITIVITY: f32 = 4e-3;
-const MIN_ZOOM: f32 = 0.3;
+const MIN_ZOOM: f32 = 0.1;
 const MAX_ZOOM: f32 = 3.0;
 
 const NODE_NAME_TEXT_EDIT_WIDTH: f32 = 100.0;

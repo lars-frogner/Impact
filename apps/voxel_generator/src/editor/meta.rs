@@ -5,6 +5,7 @@ pub mod io;
 pub mod node_kind;
 
 use data_type::{EdgeDataType, input_and_output_types_for_new_node};
+use impact::egui::Label;
 use impact::egui::{
     Color32, CursorIcon, DragValue, FontId, Galley, Id, Painter, Pos2, Rect, Response, Sense,
     Stroke, StrokeKind, Ui, Vec2, emath::Numeric, pos2, vec2,
@@ -878,7 +879,7 @@ fn show_port(
     cursor_hidden: bool,
     shape: MetaPortShape,
     color: Color32,
-    label: &str,
+    get_label: impl FnOnce() -> Label,
 ) -> Response {
     let port_hit_diameter = 2.0 * PORT_HIT_RADIUS * zoom;
     let hit_rect = Rect::from_center_size(position, vec2(port_hit_diameter, port_hit_diameter));
@@ -890,7 +891,10 @@ fn show_port(
     };
     let mut response = ui.interact(hit_rect, unique_port_id, sense);
 
-    response = response.on_hover_text(label);
+    response = response.on_hover_ui(|ui| {
+        ui.set_max_width(ui.spacing().tooltip_width);
+        ui.add(get_label());
+    });
 
     if enabled && !cursor_hidden {
         response = response.on_hover_cursor(CursorIcon::PointingHand);

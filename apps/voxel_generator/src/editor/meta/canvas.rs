@@ -20,8 +20,8 @@ use anyhow::{Context as _, Result};
 use bitflags::bitflags;
 use impact::{
     egui::{
-        Color32, Context, CursorIcon, Id, Key, Painter, PointerButton, Pos2, Rect, Sense, Ui, Vec2,
-        Window, epaint::PathStroke, pos2, vec2,
+        Color32, Context, CursorIcon, Id, Key, Label, Painter, PointerButton, Pos2, Rect, Sense,
+        Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
     },
     impact_containers::{BitVector, HashMap, HashSet, KeyIndexMapper},
 };
@@ -764,13 +764,13 @@ impl MetaGraphCanvas {
                     let node_size = data.compute_standard_size();
 
                     let position = if let Some(selected_node_id) = self.selected_node_id
-                        && let Some(selected_node) = self.nodes.get(&node_id)
+                        && let Some(selected_node) = self.nodes.get(&selected_node_id)
                     {
                         let selected_node_rect = &scratch.world_node_rects[&selected_node_id];
                         selected_node.position
                             + vec2(
-                                -0.5 * node_size.x,
-                                0.5 * selected_node_rect.height() + NEW_NODE_GAP,
+                                0.0,
+                                0.5 * (selected_node_rect.height() + node_size.y) + NEW_NODE_GAP,
                             )
                     } else {
                         let mut position = None;
@@ -780,8 +780,9 @@ impl MetaGraphCanvas {
                                 position = Some(
                                     last_node.position
                                         + vec2(
-                                            -0.5 * node_size.x,
-                                            0.5 * last_node_rect.height() + NEW_NODE_GAP,
+                                            0.0,
+                                            0.5 * (last_node_rect.height() + node_size.y)
+                                                + NEW_NODE_GAP,
                                         ),
                                 );
                                 break;
@@ -878,7 +879,7 @@ impl MetaGraphCanvas {
                             self.selected_node_id = Some(node_id);
                         }
 
-                        // Handle node dragging
+                        // Obtain dragging delta
 
                         if node_response.drag_started_by(PointerButton::Primary) {
                             self.dragging_node_id = Some(node_id);
@@ -912,38 +913,6 @@ impl MetaGraphCanvas {
                     );
                 }
 
-                if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
-                    let drag_subtree = self
-                        .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id)
-                        || ui.input(|i| i.modifiers.shift);
-
-                    if drag_subtree {
-                        obtain_subtree(
-                            &mut scratch.search,
-                            &self.nodes,
-                            self.node_id_counter as usize,
-                            &mut scratch.subtree_node_ids,
-                            node_id,
-                        );
-                        for &node_id in &scratch.subtree_node_ids {
-                            translate_node(
-                                &mut self.nodes,
-                                &mut scratch.world_node_rects,
-                                node_id,
-                                delta,
-                            );
-                        }
-                    } else {
-                        translate_node(
-                            &mut self.nodes,
-                            &mut scratch.world_node_rects,
-                            node_id,
-                            delta,
-                        );
-                    }
-                }
-
                 // Draw edges
 
                 // Start with edges fully outside any collapsed subtree
@@ -958,7 +927,9 @@ impl MetaGraphCanvas {
                         // Child is part of a collapsed subtree, so skip it
                         continue;
                     }
-                    let child_rect = &scratch.screen_node_rects[&child_node_id];
+                    let Some(child_rect) = scratch.screen_node_rects.get(&child_node_id) else {
+                        continue;
+                    };
 
                     for (parent_slot_on_child, child_link_to_parent) in
                         child_node.links_to_parents.iter().enumerate()
@@ -983,7 +954,10 @@ impl MetaGraphCanvas {
                             // Parent is part of a collapsed subtree, so skip it
                             continue;
                         }
-                        let parent_rect = &scratch.screen_node_rects[&parent_node_id];
+                        let Some(parent_rect) = scratch.screen_node_rects.get(&parent_node_id)
+                        else {
+                            continue;
+                        };
 
                         draw_edge(
                             &painter,
@@ -1096,6 +1070,8 @@ impl MetaGraphCanvas {
                         let child_port_count = exposed_child_ports.len();
 
                         for (slot, parent_port) in exposed_parent_ports.into_iter().enumerate() {
+                            let node_kind = self.node(parent_port.on_node).data.kind;
+
                             let port = MetaPort::Parent {
                                 kind: parent_port.kind,
                                 slot: parent_port.slot_on_node,
@@ -1109,6 +1085,7 @@ impl MetaGraphCanvas {
                                 &painter,
                                 &mut pending_edge_port_color,
                                 parent_port.on_node,
+                                Some(node_kind),
                                 port,
                                 parent_port.output_data_type,
                                 position,
@@ -1117,6 +1094,8 @@ impl MetaGraphCanvas {
                         }
 
                         for (slot, child_port) in exposed_child_ports.into_iter().enumerate() {
+                            let node_kind = self.node(child_port.on_node).data.kind;
+
                             let port = MetaPort::Child {
                                 kind: child_port.kind,
                                 slot: child_port.slot_on_node,
@@ -1130,6 +1109,7 @@ impl MetaGraphCanvas {
                                 &painter,
                                 &mut pending_edge_port_color,
                                 child_port.on_node,
+                                Some(node_kind),
                                 port,
                                 child_port.input_data_type,
                                 position,
@@ -1159,6 +1139,7 @@ impl MetaGraphCanvas {
                                 &painter,
                                 &mut pending_edge_port_color,
                                 node_id,
+                                None,
                                 port,
                                 output_data_type,
                                 position,
@@ -1181,6 +1162,7 @@ impl MetaGraphCanvas {
                                 &painter,
                                 &mut pending_edge_port_color,
                                 node_id,
+                                None,
                                 port,
                                 data_type,
                                 position,
@@ -1311,6 +1293,64 @@ impl MetaGraphCanvas {
                     }
                 }
 
+                // Handle node dragging
+
+                if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
+                    let drag_subtree = self
+                        .collapse_index
+                        .node_is_visible_collapsed_subtree_root(node_id)
+                        || ui.input(|i| i.modifiers.shift);
+
+                    if drag_subtree {
+                        obtain_subtree(
+                            &mut scratch.search,
+                            &self.nodes,
+                            self.node_id_counter as usize,
+                            &mut scratch.subtree_node_ids,
+                            node_id,
+                        );
+                        for &node_id in &scratch.subtree_node_ids {
+                            translate_node(
+                                &mut self.nodes,
+                                &mut scratch.world_node_rects,
+                                node_id,
+                                delta,
+                            );
+                        }
+                    } else {
+                        translate_node(
+                            &mut self.nodes,
+                            &mut scratch.world_node_rects,
+                            node_id,
+                            delta,
+                        );
+                    }
+                }
+
+                // Resolve overlaps when uncollapsing subtree without auto
+                // layout
+
+                if let Some(PendingNodeCollapsedStateChange { node_id, collapsed }) =
+                    pending_node_operations.collapsed_state_change
+                    && !auto_layout
+                    && !collapsed
+                {
+                    obtain_subtree(
+                        &mut scratch.search,
+                        &self.nodes,
+                        self.node_id_counter as usize,
+                        &mut scratch.subtree_node_ids,
+                        node_id,
+                    );
+                    for &node_id in &scratch.subtree_node_ids {
+                        resolve_overlap_for_node(
+                            &mut self.nodes,
+                            &mut scratch.world_node_rects,
+                            node_id,
+                        );
+                    }
+                }
+
                 // Perform layout
 
                 if layout_requested
@@ -1358,6 +1398,7 @@ impl MetaGraphCanvas {
         painter: &Painter,
         pending_edge_port_color: &mut Color32,
         on_node: MetaNodeID,
+        node_kind_for_label: Option<MetaNodeKind>,
         port: MetaPort,
         data_type: EdgeDataType,
         port_position: Pos2,
@@ -1429,7 +1470,21 @@ impl MetaGraphCanvas {
             data_type.color().darker
         };
 
-        let port_label = data_type.port_label();
+        let get_label = || {
+            if let Some(kind) = node_kind_for_label {
+                let (inout, slot, tofrom) = match port {
+                    MetaPort::Parent { slot, .. } => ("Output", slot, "from"),
+                    MetaPort::Child { slot, .. } => ("Input", slot, "to"),
+                };
+                Label::new(format!(
+                    "{inout} {slot} {tofrom} {} ({})",
+                    kind.label(),
+                    data_type.port_label(),
+                ))
+            } else {
+                Label::new(data_type.port_label())
+            }
+        };
 
         if pending_edge_is_from_this_port {
             *pending_edge_port_color = port_color;
@@ -1445,7 +1500,7 @@ impl MetaGraphCanvas {
             self.cursor_should_be_hidden(),
             port_shape,
             port_color,
-            port_label,
+            get_label,
         );
 
         if response.clicked() {
@@ -1974,19 +2029,41 @@ fn translate_node(
     node_id: MetaNodeID,
     delta: Vec2,
 ) {
-    let (Some(node), Some(node_rect)) = (nodes.get_mut(&node_id), node_rects.get(&node_id)) else {
+    let Some(node) = nodes.get_mut(&node_id) else {
         return;
     };
-    let moved_node_rect = node_rect.translate(delta);
+    if let Some(node_rect) = node_rects.get(&node_id) {
+        let moved_node_rect = node_rect.translate(delta);
+        let resolve_delta = compute_delta_to_resolve_overlaps(
+            || node_rects.iter().map(|(id, rect)| (*id, *rect)),
+            node_id,
+            moved_node_rect,
+            MIN_NODE_SEPARATION,
+        );
+        let final_delta = delta + resolve_delta;
+        node.position += final_delta;
+        *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(final_delta);
+    } else {
+        node.position += delta;
+    }
+}
+
+fn resolve_overlap_for_node(
+    nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
+    node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    node_id: MetaNodeID,
+) {
+    let (Some(node), Some(&node_rect)) = (nodes.get_mut(&node_id), node_rects.get(&node_id)) else {
+        return;
+    };
     let resolve_delta = compute_delta_to_resolve_overlaps(
         || node_rects.iter().map(|(id, rect)| (*id, *rect)),
         node_id,
-        moved_node_rect,
+        node_rect,
         MIN_NODE_SEPARATION,
     );
-    let final_delta = delta + resolve_delta;
-    node.position += final_delta;
-    *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(final_delta);
+    node.position += resolve_delta;
+    *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(resolve_delta);
 }
 
 fn draw_edge(
