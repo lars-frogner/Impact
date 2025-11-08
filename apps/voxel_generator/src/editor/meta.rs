@@ -199,6 +199,17 @@ impl MetaNode {
         }
     }
 
+    fn port_position(&self, node_rect: &Rect, port: MetaPort) -> Pos2 {
+        match port {
+            MetaPort::Parent { slot, .. } => {
+                MetaPort::parent_center(node_rect, slot, self.links_to_parents.len())
+            }
+            MetaPort::Child { slot, .. } => {
+                MetaPort::child_center(node_rect, slot, self.links_to_children.len())
+            }
+        }
+    }
+
     fn change_kind(&mut self, new_kind: MetaNodeKind) {
         self.data.change_kind(new_kind);
         self.links_to_children
@@ -255,7 +266,7 @@ impl MetaNodeData {
     }
 
     /// Returns `true` if any of the parameters changed.
-    pub fn run_controls(&mut self, ui: &mut Ui) -> bool {
+    pub fn run_controls(&mut self, ui: &mut Ui, zoom: f32) -> bool {
         let mut any_param_changed = false;
         for (idx, param) in self.params.iter_mut().enumerate() {
             if param.show_controls(ui).changed() {
@@ -273,10 +284,13 @@ impl MetaNodeData {
                 }
             };
         }
+        if any_param_changed {
+            self.prepare_text(ui, zoom);
+        }
         any_param_changed
     }
 
-    fn prepare_text(&mut self, ui: &Ui, zoom: f32) {
+    pub fn prepare_text(&mut self, ui: &Ui, zoom: f32) {
         if self
             .prepared_text_zoom
             .is_some_and(|prepared_text_zoom| prepared_text_zoom == zoom)
@@ -710,6 +724,17 @@ impl CollapsedMetaSubtree {
         self.size = Vec2::ZERO;
         self.exposed_parent_ports.clear();
         self.exposed_child_ports.clear();
+    }
+
+    fn port_position(&self, node_rect: &Rect, port: MetaPort) -> Pos2 {
+        match port {
+            MetaPort::Parent { slot, .. } => {
+                MetaPort::parent_center(node_rect, slot, self.exposed_parent_ports.len())
+            }
+            MetaPort::Child { slot, .. } => {
+                MetaPort::child_center(node_rect, slot, self.exposed_child_ports.len())
+            }
+        }
     }
 
     fn paint(&self, painter: &Painter, node_rect: Rect, zoom: f32, is_selected: bool) {
