@@ -18,12 +18,18 @@ use impact_dev_ui::{
 use impact_voxel::generation::SDFVoxelGenerator;
 use meta::{
     MetaNodeData, build,
-    canvas::{MetaCanvasScratch, MetaGraphCanvas},
+    canvas::{
+        MetaCanvasScratch, MetaGraphCanvas, MetaGraphChanges, PendingNodeAddition,
+        PendingNodeCollapsedStateChange, PendingNodeKindChange, PendingNodeParentPortCountChange,
+        PendingNodeRemoval,
+    },
     node_kind::{MetaNodeKind, MetaNodeKindGroup},
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+use crate::editor::meta::canvas::PendingNodeOperations;
 
 const SCROLL_SENSITIVITY: f32 = 4e-3;
 const MIN_ZOOM: f32 = 0.3;
@@ -204,20 +210,19 @@ impl CustomPanels for Editor {
             return;
         }
 
-        let mut connectivity_may_have_changed = false;
+        let mut changes = MetaGraphChanges::empty();
         let mut layout_requested = false;
-        let mut params_changed = false;
-        let mut kind_changed = false;
-        let mut node_removed = false;
 
-        let mut pending_new_node = if self.meta_graph_canvas.nodes.is_empty() {
-            Some((
-                self.meta_graph_canvas.next_node_id(),
-                MetaNodeData::new(MetaNodeKind::Output),
-            ))
-        } else {
-            None
-        };
+        let mut pending_node_operations = PendingNodeOperations::default();
+
+        let zoom = self.meta_graph_canvas.zoom();
+
+        if self.meta_graph_canvas.nodes.is_empty() {
+            pending_node_operations.addition = Some(PendingNodeAddition {
+                node_id: self.meta_graph_canvas.next_node_id(),
+                data: MetaNodeData::new(MetaNodeKind::Output),
+            });
+        }
 
         option_panel(ctx, config, "Editor panel", |ui| {
             if let Some(path) = &self.last_graph_path {
@@ -283,19 +288,19 @@ impl CustomPanels for Editor {
                         }
                         labeled_option(
                             ui,
-                            LabelAndHoverText {
-                                label: kind_option.label(),
-                                hover_text: "",
-                            },
+                            LabelAndHoverText::label_only(kind_option.label()),
                             |ui| {
                                 if ui
-                                    .add_enabled(pending_new_node.is_none(), Button::new("Add"))
+                                    .add_enabled(
+                                        pending_node_operations.addition.is_none(),
+                                        Button::new("Add"),
+                                    )
                                     .clicked()
                                 {
-                                    pending_new_node = Some((
-                                        self.meta_graph_canvas.next_node_id(),
-                                        MetaNodeData::new(kind_option),
-                                    ));
+                                    pending_node_operations.addition = Some(PendingNodeAddition {
+                                        node_id: self.meta_graph_canvas.next_node_id(),
+                                        data: MetaNodeData::new(kind_option),
+                                    });
                                 }
                             },
                         );
@@ -305,153 +310,113 @@ impl CustomPanels for Editor {
             });
 
             if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
+                let mut is_collapsed = self
+                    .meta_graph_canvas
+                    .node_is_collapsed_root(selected_node_id);
+
+                let selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
+
                 option_group(ui, "modification", |ui| {
-                    let mut is_collapsed = self
-                        .meta_graph_canvas
-                        .node_is_collapsed_root(selected_node_id);
-                    let was_collapsed = is_collapsed;
-
-                    option_checkbox(
-                        ui,
-                        &mut is_collapsed,
-                        LabelAndHoverText::label_only("Collapsed"),
-                    );
-
-                    if is_collapsed != was_collapsed {
-                        self.meta_graph_canvas
-                            .set_node_collapsed(selected_node_id, is_collapsed);
-                    }
-
-                    let mut selected_node = self
-                        .meta_graph_canvas
-                        .nodes
-                        .get_mut(&selected_node_id)
-                        .unwrap();
-
-                    let mut kind = selected_node.data.kind;
-
                     if !selected_node.data.kind.is_output() {
-                        labeled_option(
+                        let was_collapsed = is_collapsed;
+
+                        option_checkbox(
                             ui,
-                            LabelAndHoverText {
-                                label: "Kind",
-                                hover_text: "",
-                            },
-                            |ui| {
-                                ComboBox::from_id_salt("selected_kind")
-                                    .selected_text(selected_node.data.kind.label())
-                                    .show_ui(ui, |ui| {
-                                        for kind_option in MetaNodeKind::all_non_root() {
-                                            ui.selectable_value(
-                                                &mut kind,
-                                                kind_option,
-                                                kind_option.label(),
-                                            );
-                                        }
-                                    })
-                            },
+                            &mut is_collapsed,
+                            LabelAndHoverText::label_only("Collapsed"),
                         );
-                    }
 
-                    if kind != selected_node.data.kind {
-                        self.meta_graph_canvas.change_node_kind(
-                            &mut self.meta_canvas_scratch,
-                            selected_node_id,
-                            kind,
-                        );
-                        selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
-                        kind_changed = true;
-                        connectivity_may_have_changed = true;
-                    }
+                        if is_collapsed != was_collapsed {
+                            pending_node_operations.collapsed_state_change =
+                                Some(PendingNodeCollapsedStateChange {
+                                    node_id: selected_node_id,
+                                    collapsed: is_collapsed,
+                                });
+                        }
 
-                    if !selected_node.data.kind.is_output() {
+                        let mut kind = selected_node.data.kind;
+
+                        labeled_option(ui, LabelAndHoverText::label_only("Kind"), |ui| {
+                            ComboBox::from_id_salt("selected_kind")
+                                .selected_text(selected_node.data.kind.label())
+                                .show_ui(ui, |ui| {
+                                    for kind_option in MetaNodeKind::all_non_root() {
+                                        ui.selectable_value(
+                                            &mut kind,
+                                            kind_option,
+                                            kind_option.label(),
+                                        );
+                                    }
+                                })
+                        });
+
+                        if kind != selected_node.data.kind {
+                            pending_node_operations.kind_change = Some(PendingNodeKindChange {
+                                node_id: selected_node_id,
+                                kind,
+                            });
+                        }
+
                         let mut parent_port_count = selected_node.links_to_parents.len();
-                        labeled_option(
-                            ui,
-                            LabelAndHoverText {
-                                label: "Parent ports",
-                                hover_text: "",
-                            },
-                            |ui| {
-                                ComboBox::from_id_salt("parent_port_count")
-                                    .selected_text(
-                                        PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
-                                    )
-                                    .show_ui(ui, |ui| {
-                                        for (option, label) in PARENT_PORT_COUNT_OPTIONS {
-                                            ui.selectable_value(
-                                                &mut parent_port_count,
-                                                option,
-                                                label,
-                                            );
-                                        }
-                                    })
-                            },
-                        );
+
+                        labeled_option(ui, LabelAndHoverText::label_only("Parent ports"), |ui| {
+                            ComboBox::from_id_salt("parent_port_count")
+                                .selected_text(PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1)
+                                .show_ui(ui, |ui| {
+                                    for (option, label) in PARENT_PORT_COUNT_OPTIONS {
+                                        ui.selectable_value(&mut parent_port_count, option, label);
+                                    }
+                                })
+                        });
 
                         if parent_port_count != selected_node.links_to_parents.len() {
-                            self.meta_graph_canvas.change_parent_port_count(
-                                &mut self.meta_canvas_scratch,
-                                selected_node_id,
-                                parent_port_count,
-                            );
-                            selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
-                            connectivity_may_have_changed = true;
+                            pending_node_operations.parent_port_count_change =
+                                Some(PendingNodeParentPortCountChange {
+                                    node_id: selected_node_id,
+                                    parent_port_count,
+                                });
                         }
                     }
 
-                    if selected_node.data.run_controls(ui) {
-                        params_changed = true;
+                    if selected_node.data.run_controls(ui, zoom) {
+                        changes.insert(MetaGraphChanges::PARAMS_CHANGED);
                     }
                 });
-            }
 
-            if let Some(selected_node_id) = self.meta_graph_canvas.selected_node_id {
-                let selected_node = self.meta_graph_canvas.nodes.get(&selected_node_id).unwrap();
                 if !selected_node.data.kind.is_output() {
                     option_group(ui, "deletion", |ui| {
                         if ui.button("Delete node").clicked() {
-                            self.meta_graph_canvas.remove_node(selected_node_id);
-                            node_removed = true;
-                            connectivity_may_have_changed = true;
+                            pending_node_operations.removal = Some(PendingNodeRemoval {
+                                node_id: selected_node_id,
+                            });
                         }
                         ui.end_row();
                     });
                 }
             }
 
-            let node_added = pending_new_node.is_some();
-
-            let perform_layout = layout_requested
-                || (self.config.auto_layout
-                    && (node_added
-                        || node_removed
-                        || params_changed
-                        || connectivity_may_have_changed));
-
-            let canvas_result = self.meta_graph_canvas.show(
+            self.meta_graph_canvas.show(
                 &mut self.meta_canvas_scratch,
                 ctx,
                 self.graph_status,
-                pending_new_node,
-                perform_layout,
+                pending_node_operations,
+                layout_requested,
                 self.config.auto_attach,
                 self.config.auto_layout,
+                &mut changes,
             );
 
             if self.config.show_atomic_graph {
                 self.atomic_graph_canvas.show(arena, ctx, layout_requested);
             }
 
-            connectivity_may_have_changed =
-                connectivity_may_have_changed || canvas_result.connectivity_may_have_changed;
-
-            if node_added || node_removed || (connectivity_may_have_changed && !kind_changed) {
-                self.meta_graph_canvas
-                    .update_edge_data_types(&mut self.meta_canvas_scratch);
-            }
-
-            self.graph_dirty = self.graph_dirty || connectivity_may_have_changed || params_changed;
+            self.graph_dirty = self.graph_dirty
+                || changes.intersects(
+                    MetaGraphChanges::NODE_ATTACHED
+                        | MetaGraphChanges::NODE_DETACHED
+                        | MetaGraphChanges::KIND_CHANGED
+                        | MetaGraphChanges::PARAMS_CHANGED,
+                );
 
             if self.config.auto_generate && self.graph_dirty {
                 self.rebuild_generator = true;
@@ -525,7 +490,7 @@ impl PanZoomState {
         }
     }
 
-    pub fn handle_scroll(&mut self, ui: &Ui, canvas_rect: Rect) {
+    pub fn handle_scroll(&mut self, ui: &Ui, canvas_rect: Rect) -> bool {
         if ui.rect_contains_pointer(canvas_rect)
             && let Some(scroll) = ui.input(|i| {
                 let delta = i.smooth_scroll_delta.y;
@@ -540,6 +505,9 @@ impl PanZoomState {
 
             self.pan += mouse_world_pos_before.to_vec2() * (self.zoom - new_zoom);
             self.zoom = new_zoom;
+            true
+        } else {
+            false
         }
     }
 }

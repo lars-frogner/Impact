@@ -17,6 +17,7 @@ use crate::editor::{
 };
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context as _, Result};
+use bitflags::bitflags;
 use impact::{
     egui::{
         Color32, Context, CursorIcon, Id, Key, Painter, PointerButton, Pos2, Rect, Sense, Ui, Vec2,
@@ -62,13 +63,14 @@ pub struct MetaGraphCanvas {
     pub pending_edge: Option<PendingEdge>,
     pub is_panning: bool,
     pub dragging_node_id: Option<MetaNodeID>,
-    collapsed_view: CollapsedView,
+    collapse_index: CollapseIndex,
     node_id_counter: MetaNodeID,
 }
 
 #[derive(Clone, Debug)]
 pub struct MetaCanvasScratch {
-    node_rects: BTreeMap<MetaNodeID, Rect>,
+    world_node_rects: BTreeMap<MetaNodeID, Rect>,
+    screen_node_rects: BTreeMap<MetaNodeID, Rect>,
     subtree_node_ids: Vec<MetaNodeID>,
     layout_lut: MetaLayoutLookupTable,
     search: SearchScratch,
@@ -83,20 +85,65 @@ struct SearchScratch {
     seen: BitVector,
 }
 
-#[derive(Clone, Debug)]
-pub struct CanvasShowResult {
-    pub connectivity_may_have_changed: bool,
+bitflags! {
+    pub struct MetaGraphChanges: u8 {
+        const NODE_ADDED                = 1 << 0;
+        const NODE_REMOVED              = 1 << 1;
+        const NODE_ATTACHED             = 1 << 2;
+        const NODE_DETACHED             = 1 << 3;
+        const PARAMS_CHANGED            = 1 << 4;
+        const KIND_CHANGED              = 1 << 5;
+        const PARENT_PORT_COUNT_CHANGED = 1 << 6;
+        const COLLAPSED_STATE_CHANGED   = 1 << 7;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct PendingEdge {
     pub from_node: MetaNodeID,
     pub from_port: MetaPort,
-    pub from_position: Pos2,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PendingNodeOperations {
+    pub addition: Option<PendingNodeAddition>,
+    pub removal: Option<PendingNodeRemoval>,
+    pub kind_change: Option<PendingNodeKindChange>,
+    pub parent_port_count_change: Option<PendingNodeParentPortCountChange>,
+    pub collapsed_state_change: Option<PendingNodeCollapsedStateChange>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingNodeAddition {
+    pub node_id: MetaNodeID,
+    pub data: MetaNodeData,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingNodeRemoval {
+    pub node_id: MetaNodeID,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingNodeKindChange {
+    pub node_id: MetaNodeID,
+    pub kind: MetaNodeKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingNodeParentPortCountChange {
+    pub node_id: MetaNodeID,
+    pub parent_port_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingNodeCollapsedStateChange {
+    pub node_id: MetaNodeID,
+    pub collapsed: bool,
 }
 
 #[derive(Clone, Debug)]
-struct CollapsedView {
+struct CollapseIndex {
     visible_subtree_roots: HashSet<MetaNodeID>,
     subtrees_by_root: HashMap<MetaNodeID, CollapsedMetaSubtree>,
     member_to_root: HashMap<MetaNodeID, MetaNodeID>,
@@ -125,9 +172,13 @@ impl MetaGraphCanvas {
             pending_edge: None,
             is_panning: false,
             dragging_node_id: None,
-            collapsed_view: CollapsedView::new(),
+            collapse_index: CollapseIndex::new(),
             node_id_counter: 0,
         }
+    }
+
+    pub fn zoom(&self) -> f32 {
+        self.pan_zoom_state.zoom
     }
 
     fn cursor_should_be_hidden(&self) -> bool {
@@ -158,7 +209,32 @@ impl MetaGraphCanvas {
         node_id
     }
 
-    pub fn remove_node(&mut self, node_id: MetaNodeID) {
+    fn remove_node(
+        &mut self,
+        scratch: &mut MetaCanvasScratch,
+        node_id: MetaNodeID,
+        changes: &mut MetaGraphChanges,
+    ) {
+        if self
+            .collapse_index
+            .node_is_visible_collapsed_subtree_root(node_id)
+        {
+            obtain_subtree(
+                &mut scratch.search,
+                &self.nodes,
+                self.node_id_counter as usize,
+                &mut scratch.subtree_node_ids,
+                node_id,
+            );
+            for &node_id_to_remove in &scratch.subtree_node_ids {
+                self.remove_single_node(node_id_to_remove, changes);
+            }
+        } else {
+            self.remove_single_node(node_id, changes);
+        }
+    }
+
+    fn remove_single_node(&mut self, node_id: MetaNodeID, changes: &mut MetaGraphChanges) {
         // Never delete root node
         if self
             .nodes
@@ -177,16 +253,19 @@ impl MetaGraphCanvas {
         });
 
         for slot in 0..n_parent_slots {
-            self.detach_parent_of(node_id, slot);
+            self.detach_parent_of(node_id, slot, changes);
         }
 
         for slot in 0..n_child_slots {
-            self.detach_child_of(node_id, slot);
+            self.detach_child_of(node_id, slot, changes);
         }
 
         self.nodes.remove(&node_id);
+        changes.insert(MetaGraphChanges::NODE_REMOVED);
 
-        self.clear_pending_edge_if_from(node_id);
+        if self.collapsed_roots.remove(&node_id) {
+            changes.insert(MetaGraphChanges::COLLAPSED_STATE_CHANGED);
+        }
     }
 
     pub fn change_node_kind(
@@ -194,9 +273,10 @@ impl MetaGraphCanvas {
         scratch: &mut MetaCanvasScratch,
         node_id: MetaNodeID,
         new_kind: MetaNodeKind,
-    ) {
+        changes: &mut MetaGraphChanges,
+    ) -> bool {
         let Some(node) = self.nodes.get(&node_id) else {
-            return;
+            return false;
         };
 
         let n_parent_slots = node.links_to_parents.len();
@@ -205,11 +285,12 @@ impl MetaGraphCanvas {
 
         if n_new_child_slots < n_old_child_slots {
             for slot in n_new_child_slots..n_old_child_slots {
-                self.detach_child_of(node_id, slot);
+                self.detach_child_of(node_id, slot, changes);
             }
         }
 
         self.node_mut(node_id).change_kind(new_kind);
+        changes.insert(MetaGraphChanges::KIND_CHANGED);
 
         // Since we have changed the kind, some existing links may no longer be
         // valid. But we need to update the data types based on the new node
@@ -220,14 +301,16 @@ impl MetaGraphCanvas {
         // incompatible
         for slot in 0..n_new_child_slots {
             if self.link_to_child_exists_with_invalid_data_type(node_id, slot) {
-                self.detach_child_of(node_id, slot);
+                self.detach_child_of(node_id, slot, changes);
             }
         }
         for slot in 0..n_parent_slots {
             if self.link_to_parent_exists_with_invalid_data_type(node_id, slot) {
-                self.detach_parent_of(node_id, slot);
+                self.detach_parent_of(node_id, slot, changes);
             }
         }
+
+        true
     }
 
     pub fn change_parent_port_count(
@@ -235,6 +318,7 @@ impl MetaGraphCanvas {
         scratch: &mut MetaCanvasScratch,
         node_id: MetaNodeID,
         new_count: usize,
+        changes: &mut MetaGraphChanges,
     ) {
         let Some(node) = self.nodes.get_mut(&node_id) else {
             return;
@@ -244,12 +328,13 @@ impl MetaGraphCanvas {
 
         if new_count > old_count {
             node.links_to_parents.resize(new_count, None);
+            changes.insert(MetaGraphChanges::PARENT_PORT_COUNT_CHANGED);
         } else if new_count < old_count {
             for slot in new_count..old_count {
                 if let Some(MetaNodeLink {
                     to_node: parent_node_id,
                     to_slot: child_slot_on_parent,
-                }) = self.detach_parent_of(node_id, slot)
+                }) = self.detach_parent_of(node_id, slot, changes)
                 {
                     for slot in 0..new_count {
                         if self.node(node_id).links_to_parents[slot].is_none() {
@@ -259,22 +344,14 @@ impl MetaGraphCanvas {
                                 child_slot_on_parent,
                                 node_id,
                                 slot,
+                                changes,
                             );
                         }
                     }
                 };
             }
             self.node_mut(node_id).links_to_parents.truncate(new_count);
-        }
-    }
-
-    fn clear_pending_edge_if_from(&mut self, node_id: MetaNodeID) {
-        if self
-            .pending_edge
-            .as_ref()
-            .is_some_and(|pending_edge| pending_edge.from_node == node_id)
-        {
-            self.pending_edge = None;
+            changes.insert(MetaGraphChanges::PARENT_PORT_COUNT_CHANGED);
         }
     }
 
@@ -331,6 +408,7 @@ impl MetaGraphCanvas {
         child_slot_on_parent: usize,
         child_node_id: MetaNodeID,
         parent_slot_on_child: usize,
+        changes: &mut MetaGraphChanges,
     ) -> bool {
         if !self.can_attach(
             search_scratch,
@@ -342,20 +420,22 @@ impl MetaGraphCanvas {
             return false;
         }
 
-        self.detach_parent_of(child_node_id, parent_slot_on_child);
+        self.detach_parent_of(child_node_id, parent_slot_on_child, changes);
         if let Some(child_node) = self.nodes.get_mut(&child_node_id) {
             child_node.links_to_parents[parent_slot_on_child] = Some(MetaNodeLink {
                 to_node: parent_node_id,
                 to_slot: child_slot_on_parent,
             });
+            changes.insert(MetaGraphChanges::NODE_ATTACHED);
         }
 
-        self.detach_child_of(parent_node_id, child_slot_on_parent);
+        self.detach_child_of(parent_node_id, child_slot_on_parent, changes);
         if let Some(parent_node) = self.nodes.get_mut(&parent_node_id) {
             parent_node.links_to_children[child_slot_on_parent] = Some(MetaNodeLink {
                 to_node: child_node_id,
                 to_slot: parent_slot_on_child,
             });
+            changes.insert(MetaGraphChanges::NODE_ATTACHED);
         }
 
         true
@@ -367,6 +447,7 @@ impl MetaGraphCanvas {
         &mut self,
         child_node_id: MetaNodeID,
         parent_slot_on_child: usize,
+        changes: &mut MetaGraphChanges,
     ) -> Option<MetaNodeLink> {
         let child_node = self.nodes.get_mut(&child_node_id)?;
 
@@ -374,6 +455,22 @@ impl MetaGraphCanvas {
             .links_to_parents
             .get_mut(parent_slot_on_child)
             .and_then(|link| link.take())?;
+
+        changes.insert(MetaGraphChanges::NODE_DETACHED);
+
+        if self.pending_edge.is_some_and(|edge| {
+            matches!(
+                edge.from_port,
+                MetaPort::Parent { slot,.. } if slot == parent_slot_on_child
+                    && edge.from_node == child_node_id
+            ) || matches!(
+                edge.from_port,
+                MetaPort::Child { slot,.. } if slot == child_link_to_parent.to_slot
+                    && edge.from_node == child_link_to_parent.to_node
+            )
+        }) {
+            self.pending_edge = None;
+        }
 
         if let Some(parent_link_to_child) = self
             .nodes
@@ -385,6 +482,7 @@ impl MetaGraphCanvas {
             })
         {
             *parent_link_to_child = None;
+            changes.insert(MetaGraphChanges::NODE_DETACHED);
         }
 
         Some(child_link_to_parent)
@@ -396,6 +494,7 @@ impl MetaGraphCanvas {
         &mut self,
         parent_node_id: MetaNodeID,
         child_slot_on_parent: usize,
+        changes: &mut MetaGraphChanges,
     ) -> Option<MetaNodeLink> {
         let parent_node = self.nodes.get_mut(&parent_node_id)?;
 
@@ -403,6 +502,22 @@ impl MetaGraphCanvas {
             .links_to_children
             .get_mut(child_slot_on_parent)
             .and_then(|link| link.take())?;
+
+        changes.insert(MetaGraphChanges::NODE_DETACHED);
+
+        if self.pending_edge.is_some_and(|edge| {
+            matches!(
+                edge.from_port,
+                MetaPort::Parent { slot,.. } if slot == parent_link_to_child.to_slot
+                    && edge.from_node == parent_link_to_child.to_node
+            ) || matches!(
+                edge.from_port,
+                MetaPort::Child { slot,.. } if slot == child_slot_on_parent
+                    && edge.from_node == parent_node_id
+            )
+        }) {
+            self.pending_edge = None;
+        }
 
         if let Some(child_link_to_parent) = self
             .nodes
@@ -414,6 +529,7 @@ impl MetaGraphCanvas {
             })
         {
             *child_link_to_parent = None;
+            changes.insert(MetaGraphChanges::NODE_DETACHED);
         }
 
         Some(parent_link_to_child)
@@ -423,11 +539,18 @@ impl MetaGraphCanvas {
         self.collapsed_roots.contains(&node_id)
     }
 
-    pub fn set_node_collapsed(&mut self, node_id: MetaNodeID, collapsed: bool) {
+    pub fn set_node_collapsed(
+        &mut self,
+        node_id: MetaNodeID,
+        collapsed: bool,
+        changes: &mut MetaGraphChanges,
+    ) {
         if collapsed {
-            self.collapsed_roots.insert(node_id);
-        } else {
-            self.collapsed_roots.remove(&node_id);
+            if self.collapsed_roots.insert(node_id) {
+                changes.insert(MetaGraphChanges::COLLAPSED_STATE_CHANGED);
+            }
+        } else if self.collapsed_roots.remove(&node_id) {
+            changes.insert(MetaGraphChanges::COLLAPSED_STATE_CHANGED);
         }
     }
 
@@ -490,37 +613,29 @@ impl MetaGraphCanvas {
         scratch: &mut MetaCanvasScratch,
         ctx: &Context,
         graph_status: MetaGraphStatus,
-        pending_new_node: Option<(MetaNodeID, MetaNodeData)>,
-        mut perform_layout: bool,
+        pending_node_operations: PendingNodeOperations,
+        layout_requested: bool,
         auto_attach: bool,
         auto_layout: bool,
-    ) -> CanvasShowResult {
-        let mut connectivity_may_have_changed = false;
-
-        self.collapsed_view.rebuild(
-            scratch,
-            &self.nodes,
-            self.node_id_counter as usize,
-            &self.collapsed_roots,
-        );
-
+        changes: &mut MetaGraphChanges,
+    ) {
         if let Some(selected_node_id) = self.selected_node_id
             && self
-                .collapsed_view
+                .collapse_index
                 .node_is_non_root_member_of_collapsed_subtree(selected_node_id)
         {
             self.selected_node_id = None;
         }
         if let Some(dragging_node_id) = self.dragging_node_id
             && self
-                .collapsed_view
+                .collapse_index
                 .node_is_non_root_member_of_collapsed_subtree(dragging_node_id)
         {
             self.dragging_node_id = None;
         }
         if let Some(pending_edge) = self.pending_edge
             && self
-                .collapsed_view
+                .collapse_index
                 .node_is_non_root_member_of_collapsed_subtree(pending_edge.from_node)
         {
             self.pending_edge = None;
@@ -542,7 +657,11 @@ impl MetaGraphCanvas {
                 self.pan_zoom_state
                     .handle_drag(ui, canvas_rect, &mut self.is_panning);
 
-                self.pan_zoom_state.handle_scroll(ui, canvas_rect);
+                if self.pan_zoom_state.handle_scroll(ui, canvas_rect) {
+                    for node in self.nodes.values_mut() {
+                        node.data.prepare_text(ui, self.pan_zoom_state.zoom);
+                    }
+                }
 
                 if canvas_response.clicked() {
                     if self.pending_edge.is_some() {
@@ -552,54 +671,86 @@ impl MetaGraphCanvas {
                     }
                 }
 
-                // Handle cancellation of pending edge or node deletion with keyboard
-
-                if ui.input(|i| i.key_pressed(Key::Delete)) {
-                    if self.pending_edge.is_some() {
-                        self.pending_edge = None;
-                    } else if let Some(selected_id) = self.selected_node_id {
-                        self.remove_node(selected_id);
-                        if auto_layout {
-                            perform_layout = true;
-                        }
-                        connectivity_may_have_changed = true;
-                    }
+                if ui.input(|i| {
+                    i.pointer.button_pressed(PointerButton::Secondary)
+                        && i.pointer
+                            .interact_pos()
+                            .is_some_and(|p| canvas_rect.contains(p))
+                }) && self.pending_edge.is_some()
+                {
+                    self.pending_edge = None;
                 }
 
-                scratch.node_rects.clear();
+                // Handle change in kind
+
+                if let Some(PendingNodeKindChange { node_id, kind }) =
+                    pending_node_operations.kind_change
+                    && self.change_node_kind(scratch, node_id, kind, changes)
+                {
+                    let zoom = self.pan_zoom_state.zoom;
+                    self.node_mut(node_id).data.prepare_text(ui, zoom);
+                }
+
+                // Handle change in parent port count
+
+                if let Some(PendingNodeParentPortCountChange {
+                    node_id,
+                    parent_port_count,
+                }) = pending_node_operations.parent_port_count_change
+                {
+                    self.change_parent_port_count(scratch, node_id, parent_port_count, changes);
+                }
+
+                // Handle change in collapsed state
+
+                if let Some(PendingNodeCollapsedStateChange { node_id, collapsed }) =
+                    pending_node_operations.collapsed_state_change
+                {
+                    self.set_node_collapsed(node_id, collapsed, changes);
+                }
+
                 // `world_node_rects` will NOT be one-to-one with `self.nodes`,
                 // since only nodes not hidden in collapsed subtrees will get a
                 // rectangle
-                let world_node_rects = &mut scratch.node_rects;
+                scratch.world_node_rects.clear();
+                scratch.screen_node_rects.clear();
 
-                for (&node_id, node) in &mut self.nodes {
-                    if self
-                        .collapsed_view
+                for (&node_id, node) in &self.nodes {
+                    let node_size = if self
+                        .collapse_index
                         .node_is_visible_collapsed_subtree_root(node_id)
                     {
-                        let subtree = self.collapsed_view.subtree(node_id);
-                        world_node_rects
-                            .insert(node_id, Rect::from_center_size(node.position, subtree.size));
-                    } else if !self.collapsed_view.node_is_in_collapsed_subtree(node_id) {
-                        node.data.prepare_text(ui, self.pan_zoom_state.zoom);
+                        self.collapse_index.subtree(node_id).size
+                    } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
+                        node.data.compute_size()
+                    } else {
+                        continue;
+                    };
 
-                        world_node_rects.insert(
-                            node_id,
-                            Rect::from_center_size(node.position, node.data.compute_size()),
-                        );
-                    }
+                    let world_rect = Rect::from_center_size(node.position, node_size);
+
+                    let screen_rect = self
+                        .pan_zoom_state
+                        .world_rect_to_screen_space(canvas_origin, world_rect);
+
+                    scratch.world_node_rects.insert(node_id, world_rect);
+                    scratch.screen_node_rects.insert(node_id, screen_rect);
                 }
 
                 // Handle pending new node
 
-                if let Some((node_id, mut data)) = pending_new_node {
+                let mut hidden_added_node_id = None;
+
+                if let Some(PendingNodeAddition { node_id, mut data }) =
+                    pending_node_operations.addition
+                {
                     data.prepare_text(ui, self.pan_zoom_state.zoom);
                     let node_size = data.compute_size();
 
                     let position = if let Some(selected_node_id) = self.selected_node_id
                         && let Some(selected_node) = self.nodes.get(&node_id)
                     {
-                        let selected_node_rect = &world_node_rects[&selected_node_id];
+                        let selected_node_rect = &scratch.world_node_rects[&selected_node_id];
                         selected_node.position
                             + vec2(
                                 -0.5 * node_size.x,
@@ -608,7 +759,8 @@ impl MetaGraphCanvas {
                     } else {
                         let mut position = None;
                         for (last_node_id, last_node) in self.nodes.iter().rev() {
-                            if let Some(last_node_rect) = world_node_rects.get(last_node_id) {
+                            if let Some(last_node_rect) = scratch.world_node_rects.get(last_node_id)
+                            {
                                 position = Some(
                                     last_node.position
                                         + vec2(
@@ -635,7 +787,12 @@ impl MetaGraphCanvas {
                     let mut node = MetaNode::new(position, data);
 
                     let resolve_delta = compute_delta_to_resolve_overlaps(
-                        || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
+                        || {
+                            scratch
+                                .world_node_rects
+                                .iter()
+                                .map(|(id, rect)| (*id, *rect))
+                        },
                         node_id,
                         world_node_rect,
                         MIN_NODE_SEPARATION,
@@ -648,7 +805,9 @@ impl MetaGraphCanvas {
                     let is_leaf = node.data.kind.n_child_slots() == 0;
 
                     self.nodes.insert(node_id, node);
-                    world_node_rects.insert(node_id, world_node_rect);
+                    scratch.world_node_rects.insert(node_id, world_node_rect);
+
+                    changes.insert(MetaGraphChanges::NODE_ADDED);
 
                     if auto_attach
                         && let Some(selected_node_id) = self.selected_node_id
@@ -656,44 +815,23 @@ impl MetaGraphCanvas {
                             self.nodes.get(&selected_node_id).and_then(|selected_node| {
                                 selected_node.first_free_child_slot_accepting_type(output_data_type)
                             })
-                        && self.try_attach(
+                    {
+                        self.try_attach(
                             &mut scratch.search,
                             selected_node_id,
                             free_child_slot,
                             node_id,
                             0,
-                        )
-                    {
-                        connectivity_may_have_changed = true;
+                            changes,
+                        );
                     }
 
                     if !is_leaf || self.selected_node_id.is_none() {
                         self.selected_node_id = Some(node_id);
                     }
-                }
 
-                if perform_layout {
-                    let origin = world_node_rects
-                        .get(&0)
-                        .map_or_else(Pos2::default, Rect::center_top);
-
-                    let mut layoutable_graph = LayoutableMetaGraph::new(
-                        &mut scratch.layout_lut,
-                        &self.nodes,
-                        &self.collapsed_view,
-                        world_node_rects,
-                    );
-                    layout_vertical(
-                        &mut scratch.layout,
-                        &mut layoutable_graph,
-                        origin,
-                        AUTO_LAYOUT_HORIZONTAL_GAP,
-                        AUTO_LAYOUT_VERTICAL_GAP,
-                    );
-
-                    for (node, node_rect) in self.nodes.values_mut().zip(world_node_rects.values())
-                    {
-                        node.position = node_rect.center();
+                    if auto_layout {
+                        hidden_added_node_id = Some(node_id);
                     }
                 }
 
@@ -704,13 +842,12 @@ impl MetaGraphCanvas {
                 let mut drag_delta = None;
 
                 for (&node_id, node) in self.nodes.iter_mut() {
-                    let Some(world_node_rect) = world_node_rects.get(&node_id).copied() else {
+                    if hidden_added_node_id == Some(node_id) {
+                        continue;
+                    }
+                    let Some(node_rect) = scratch.screen_node_rects.get(&node_id).copied() else {
                         continue;
                     };
-
-                    let node_rect = self
-                        .pan_zoom_state
-                        .world_rect_to_screen_space(canvas_origin, world_node_rect);
 
                     if !self.is_panning {
                         let node_response = ui.interact(
@@ -747,10 +884,10 @@ impl MetaGraphCanvas {
                     let is_selected = self.selected_node_id == Some(node_id);
 
                     if self
-                        .collapsed_view
+                        .collapse_index
                         .node_is_visible_collapsed_subtree_root(node_id)
                     {
-                        let subtree = self.collapsed_view.subtree(node_id);
+                        let subtree = self.collapse_index.subtree(node_id);
                         subtree.paint(&painter, node_rect, self.pan_zoom_state.zoom, is_selected);
                     } else {
                         node.data
@@ -760,7 +897,7 @@ impl MetaGraphCanvas {
 
                 if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
                     let drag_subtree = self
-                        .collapsed_view
+                        .collapse_index
                         .node_is_visible_collapsed_subtree_root(node_id)
                         || ui.input(|i| i.modifiers.shift);
 
@@ -773,29 +910,38 @@ impl MetaGraphCanvas {
                             node_id,
                         );
                         for &node_id in &scratch.subtree_node_ids {
-                            translate_node(&mut self.nodes, world_node_rects, node_id, delta);
+                            translate_node(
+                                &mut self.nodes,
+                                &mut scratch.world_node_rects,
+                                node_id,
+                                delta,
+                            );
                         }
                     } else {
-                        translate_node(&mut self.nodes, world_node_rects, node_id, delta);
+                        translate_node(
+                            &mut self.nodes,
+                            &mut scratch.world_node_rects,
+                            node_id,
+                            delta,
+                        );
                     }
                 }
-
-                // We will only need node rects in screen space from now
-                for node_rect in world_node_rects.values_mut() {
-                    *node_rect = self
-                        .pan_zoom_state
-                        .world_rect_to_screen_space(canvas_origin, *node_rect);
-                }
-                let node_rects = &scratch.node_rects;
 
                 // Draw edges
 
                 // Start with edges fully outside any collapsed subtree
                 for (&child_node_id, child_node) in &self.nodes {
-                    let Some(child_rect) = node_rects.get(&child_node_id) else {
+                    if hidden_added_node_id == Some(child_node_id) {
+                        continue;
+                    }
+                    if self
+                        .collapse_index
+                        .node_is_in_collapsed_subtree(child_node_id)
+                    {
                         // Child is part of a collapsed subtree, so skip it
                         continue;
-                    };
+                    }
+                    let child_rect = &scratch.screen_node_rects[&child_node_id];
 
                     for (parent_slot_on_child, child_link_to_parent) in
                         child_node.links_to_parents.iter().enumerate()
@@ -807,13 +953,20 @@ impl MetaGraphCanvas {
                         else {
                             continue;
                         };
+                        if hidden_added_node_id == Some(parent_node_id) {
+                            continue;
+                        }
                         let Some(parent_node) = self.nodes.get(&parent_node_id) else {
                             continue;
                         };
-                        let Some(parent_rect) = node_rects.get(&parent_node_id) else {
+                        if self
+                            .collapse_index
+                            .node_is_in_collapsed_subtree(parent_node_id)
+                        {
                             // Parent is part of a collapsed subtree, so skip it
                             continue;
-                        };
+                        }
+                        let parent_rect = &scratch.screen_node_rects[&parent_node_id];
 
                         draw_edge(
                             &painter,
@@ -831,9 +984,9 @@ impl MetaGraphCanvas {
                 }
 
                 // Now draw all edges starting or ending in a collapsed subtree
-                for &root_node_id in self.collapsed_view.visible_collapsed_subtree_roots() {
-                    let subtree = self.collapsed_view.subtree(root_node_id);
-                    let subtree_rect = &node_rects[&root_node_id];
+                for &root_node_id in self.collapse_index.visible_collapsed_subtree_roots() {
+                    let subtree = self.collapse_index.subtree(root_node_id);
+                    let subtree_rect = &scratch.screen_node_rects[&root_node_id];
 
                     for (parent_slot_on_subtree, subtree_parent_port) in
                         subtree.exposed_parent_ports.iter().enumerate()
@@ -845,13 +998,16 @@ impl MetaGraphCanvas {
                         else {
                             continue;
                         };
+                        if hidden_added_node_id == Some(parent_node_id) {
+                            continue;
+                        }
                         // The parent is guaranteed to not be part of any
                         // collapsed subtree, because if it was, this subtree
                         // would not be visible
                         let Some(parent_node) = self.nodes.get(&parent_node_id) else {
                             continue;
                         };
-                        let parent_rect = &node_rects[&parent_node_id];
+                        let parent_rect = &scratch.screen_node_rects[&parent_node_id];
 
                         draw_edge(
                             &painter,
@@ -877,6 +1033,9 @@ impl MetaGraphCanvas {
                         else {
                             continue;
                         };
+                        if hidden_added_node_id == Some(child_node_id) {
+                            continue;
+                        }
                         // The child is guaranteed to not be part of any
                         // collapsed subtree, because if it was, it would also
                         // be part of this subtree, in which case the link would
@@ -884,7 +1043,7 @@ impl MetaGraphCanvas {
                         let Some(child_node) = self.nodes.get(&child_node_id) else {
                             continue;
                         };
-                        let child_rect = &node_rects[&child_node_id];
+                        let child_rect = &scratch.screen_node_rects[&child_node_id];
 
                         draw_edge(
                             &painter,
@@ -905,12 +1064,15 @@ impl MetaGraphCanvas {
 
                 let mut pending_edge_port_color = Color32::BLACK;
 
-                for (&node_id, node_rect) in node_rects {
+                for (&node_id, node_rect) in &scratch.screen_node_rects {
+                    if hidden_added_node_id == Some(node_id) {
+                        continue;
+                    }
                     if self
-                        .collapsed_view
+                        .collapse_index
                         .node_is_visible_collapsed_subtree_root(node_id)
                     {
-                        let subtree = self.collapsed_view.subtree(node_id);
+                        let subtree = self.collapse_index.subtree(node_id);
                         let exposed_parent_ports = subtree.exposed_parent_ports.clone();
                         let exposed_child_ports = subtree.exposed_child_ports.clone();
                         let parent_port_count = exposed_parent_ports.len();
@@ -926,7 +1088,6 @@ impl MetaGraphCanvas {
 
                             self.handle_port(
                                 &mut scratch.search,
-                                &mut connectivity_may_have_changed,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -934,6 +1095,7 @@ impl MetaGraphCanvas {
                                 port,
                                 parent_port.output_data_type,
                                 position,
+                                changes,
                             );
                         }
 
@@ -947,7 +1109,6 @@ impl MetaGraphCanvas {
 
                             self.handle_port(
                                 &mut scratch.search,
-                                &mut connectivity_may_have_changed,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -955,6 +1116,7 @@ impl MetaGraphCanvas {
                                 port,
                                 child_port.input_data_type,
                                 position,
+                                changes,
                             );
                         }
                     } else {
@@ -976,7 +1138,6 @@ impl MetaGraphCanvas {
 
                             self.handle_port(
                                 &mut scratch.search,
-                                &mut connectivity_may_have_changed,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -984,6 +1145,7 @@ impl MetaGraphCanvas {
                                 port,
                                 output_data_type,
                                 position,
+                                changes,
                             );
                         }
 
@@ -998,7 +1160,6 @@ impl MetaGraphCanvas {
 
                             self.handle_port(
                                 &mut scratch.search,
-                                &mut connectivity_may_have_changed,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -1006,6 +1167,7 @@ impl MetaGraphCanvas {
                                 port,
                                 data_type,
                                 position,
+                                changes,
                             );
                         }
                     }
@@ -1015,15 +1177,29 @@ impl MetaGraphCanvas {
 
                 if let Some(pending_edge) = &self.pending_edge
                     && let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos())
+                    && let Some(node) = self.nodes.get(&pending_edge.from_node)
+                    && let Some(node_rect) = scratch.screen_node_rects.get(&pending_edge.from_node)
                 {
-                    let from = pending_edge.from_position;
+                    let from = if self
+                        .collapse_index
+                        .node_is_visible_collapsed_subtree_root(pending_edge.from_node)
+                    {
+                        self.collapse_index
+                            .subtree(pending_edge.from_node)
+                            .port_position(node_rect, pending_edge.from_port)
+                    } else {
+                        node.port_position(node_rect, pending_edge.from_port)
+                    };
+
                     let to = mouse_pos;
+
                     let (child_pos, parent_pos) =
                         if let MetaPort::Parent { .. } = pending_edge.from_port {
                             (to, from)
                         } else {
                             (from, to)
                         };
+
                     let edge_shape = create_bezier_edge(
                         child_pos,
                         parent_pos,
@@ -1033,7 +1209,7 @@ impl MetaGraphCanvas {
                         ),
                     );
                     painter.add(edge_shape);
-                }
+                };
 
                 // Draw status dot
 
@@ -1065,17 +1241,101 @@ impl MetaGraphCanvas {
                 if self.cursor_should_be_hidden() {
                     ui.output_mut(|o| o.cursor_icon = CursorIcon::None);
                 }
-            });
 
-        CanvasShowResult {
-            connectivity_may_have_changed,
-        }
+                // Handle node deletion
+
+                if let Some(PendingNodeRemoval { node_id }) = pending_node_operations.removal {
+                    self.remove_node(scratch, node_id, changes);
+                }
+                if let Some(node_id) = self.selected_node_id
+                    && ui.input(|i| i.key_pressed(Key::Delete))
+                {
+                    self.remove_node(scratch, node_id, changes);
+                }
+
+                // Update data types
+
+                if changes.intersects(
+                    MetaGraphChanges::NODE_ATTACHED
+                        | MetaGraphChanges::NODE_DETACHED
+                        | MetaGraphChanges::KIND_CHANGED,
+                ) {
+                    self.update_edge_data_types(scratch);
+                }
+
+                // Update collapsed view
+
+                if changes.intersects(
+                    MetaGraphChanges::NODE_REMOVED
+                        | MetaGraphChanges::NODE_ATTACHED
+                        | MetaGraphChanges::NODE_DETACHED
+                        | MetaGraphChanges::KIND_CHANGED
+                        | MetaGraphChanges::PARENT_PORT_COUNT_CHANGED
+                        | MetaGraphChanges::COLLAPSED_STATE_CHANGED,
+                ) {
+                    self.rebuild_collapse_index(scratch);
+
+                    scratch.world_node_rects.clear();
+                    for (&node_id, node) in &self.nodes {
+                        let node_size = if self
+                            .collapse_index
+                            .node_is_visible_collapsed_subtree_root(node_id)
+                        {
+                            self.collapse_index.subtree(node_id).size
+                        } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
+                            node.data.compute_size()
+                        } else {
+                            continue;
+                        };
+
+                        let world_rect = Rect::from_center_size(node.position, node_size);
+
+                        scratch.world_node_rects.insert(node_id, world_rect);
+                    }
+                }
+
+                // Perform layout
+
+                if layout_requested
+                    || (auto_layout
+                        && changes.intersects(
+                            MetaGraphChanges::NODE_ADDED
+                                | MetaGraphChanges::NODE_REMOVED
+                                | MetaGraphChanges::NODE_ATTACHED
+                                | MetaGraphChanges::PARAMS_CHANGED
+                                | MetaGraphChanges::KIND_CHANGED
+                                | MetaGraphChanges::COLLAPSED_STATE_CHANGED,
+                        ))
+                {
+                    let origin = scratch
+                        .world_node_rects
+                        .get(&0)
+                        .map_or_else(Pos2::default, Rect::center_top);
+
+                    let mut layoutable_graph = LayoutableMetaGraph::new(
+                        &mut scratch.layout_lut,
+                        &self.nodes,
+                        &self.collapse_index,
+                        &mut scratch.world_node_rects,
+                    );
+                    layout_vertical(
+                        &mut scratch.layout,
+                        &mut layoutable_graph,
+                        origin,
+                        AUTO_LAYOUT_HORIZONTAL_GAP,
+                        AUTO_LAYOUT_VERTICAL_GAP,
+                    );
+
+                    for (&node_id, node_rect) in &scratch.world_node_rects {
+                        self.node_mut(node_id).position = node_rect.center();
+                    }
+                }
+            });
     }
 
     fn handle_port(
         &mut self,
         search_scratch: &mut SearchScratch,
-        connectivity_may_have_changed: &mut bool,
         ui: &mut Ui,
         painter: &Painter,
         pending_edge_port_color: &mut Color32,
@@ -1083,6 +1343,7 @@ impl MetaGraphCanvas {
         port: MetaPort,
         data_type: EdgeDataType,
         port_position: Pos2,
+        changes: &mut MetaGraphChanges,
     ) {
         let mut enabled = true;
 
@@ -1174,10 +1435,10 @@ impl MetaGraphCanvas {
             if self.pending_edge.is_none() && self.node_has_link_at_port(on_node, port) {
                 match port {
                     MetaPort::Parent { slot, .. } => {
-                        self.detach_parent_of(on_node, slot);
+                        self.detach_parent_of(on_node, slot, changes);
                     }
                     MetaPort::Child { slot, .. } => {
-                        self.detach_child_of(on_node, slot);
+                        self.detach_child_of(on_node, slot, changes);
                     }
                 }
 
@@ -1185,10 +1446,7 @@ impl MetaGraphCanvas {
                 self.pending_edge = Some(PendingEdge {
                     from_node: on_node,
                     from_port: port,
-                    from_position: port_position,
                 });
-
-                *connectivity_may_have_changed = true;
 
                 return;
             }
@@ -1213,9 +1471,9 @@ impl MetaGraphCanvas {
                             child_slot_on_parent,
                             child_node_id,
                             parent_slot_on_child,
+                            changes,
                         ) {
                             self.pending_edge = None;
-                            *connectivity_may_have_changed = true;
                         }
                     }
                     (
@@ -1236,9 +1494,9 @@ impl MetaGraphCanvas {
                             child_slot_on_parent,
                             child_node_id,
                             parent_slot_on_child,
+                            changes,
                         ) {
                             self.pending_edge = None;
-                            *connectivity_may_have_changed = true;
                         }
                     }
                     _ => {}
@@ -1247,14 +1505,36 @@ impl MetaGraphCanvas {
                 self.pending_edge = Some(PendingEdge {
                     from_node: on_node,
                     from_port: port,
-                    from_position: port_position,
                 });
+            }
+        }
+
+        // Right-click to detach existing edge
+        if response.clicked_by(PointerButton::Secondary)
+            && self.node_has_link_at_port(on_node, port)
+        {
+            match port {
+                MetaPort::Parent { slot, .. } => {
+                    self.detach_parent_of(on_node, slot, changes);
+                }
+                MetaPort::Child { slot, .. } => {
+                    self.detach_child_of(on_node, slot, changes);
+                }
             }
         }
     }
 
     pub fn update_edge_data_types(&mut self, scratch: &mut MetaCanvasScratch) {
         update_edge_data_types(&mut scratch.data_type, &mut self.nodes);
+    }
+
+    pub fn rebuild_collapse_index(&mut self, scratch: &mut MetaCanvasScratch) {
+        self.collapse_index.rebuild(
+            scratch,
+            &self.nodes,
+            self.node_id_counter as usize,
+            &self.collapsed_roots,
+        );
     }
 
     pub fn save_graph<A: Allocator>(&self, arena: A, output_path: &Path) -> Result<()> {
@@ -1306,7 +1586,8 @@ impl MetaGraphCanvas {
 impl MetaCanvasScratch {
     pub fn new() -> Self {
         Self {
-            node_rects: BTreeMap::new(),
+            world_node_rects: BTreeMap::new(),
+            screen_node_rects: BTreeMap::new(),
             subtree_node_ids: Vec::new(),
             layout_lut: MetaLayoutLookupTable::new(),
             search: SearchScratch::new(),
@@ -1326,7 +1607,7 @@ impl SearchScratch {
     }
 }
 
-impl CollapsedView {
+impl CollapseIndex {
     fn new() -> Self {
         Self {
             visible_subtree_roots: HashSet::default(),
@@ -1491,12 +1772,12 @@ impl<'a> LayoutableMetaGraph<'a> {
     fn new(
         lut: &'a mut MetaLayoutLookupTable,
         all_nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
-        collapsed_view: &'a CollapsedView,
+        collapsed_index: &'a CollapseIndex,
         visible_node_rects: &'a mut BTreeMap<MetaNodeID, Rect>,
     ) -> Self {
         lut.build(
             all_nodes,
-            collapsed_view,
+            collapsed_index,
             visible_node_rects.keys().copied(),
         );
         Self {
@@ -1533,7 +1814,7 @@ impl MetaLayoutLookupTable {
     fn build(
         &mut self,
         all_nodes: &BTreeMap<MetaNodeID, MetaNode>,
-        collapsed_view: &CollapsedView,
+        collapsed_index: &CollapseIndex,
         visible_node_ids: impl IntoIterator<Item = MetaNodeID>,
     ) {
         self.visible_node_index_map.clear();
@@ -1547,8 +1828,8 @@ impl MetaLayoutLookupTable {
         let mut offset = 0;
 
         for node_id in self.visible_node_index_map.key_at_each_idx() {
-            if collapsed_view.node_is_visible_collapsed_subtree_root(node_id) {
-                let subtree = collapsed_view.subtree(node_id);
+            if collapsed_index.node_is_visible_collapsed_subtree_root(node_id) {
+                let subtree = collapsed_index.subtree(node_id);
 
                 for child_node_idx in subtree.exposed_child_ports.iter().filter_map(|port| {
                     port.link
@@ -1561,7 +1842,7 @@ impl MetaLayoutLookupTable {
 
                 for child_node_idx in node.links_to_children.iter().filter_map(|link| {
                     link.map(|link| {
-                        let to_node = collapsed_view
+                        let to_node = collapsed_index
                             .root_if_in_collapsed_subtree(link.to_node)
                             .unwrap_or(link.to_node);
 

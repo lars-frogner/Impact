@@ -3,7 +3,7 @@
         show_editor: true,
     ),
     window: (
-        initial_size: (1920, 1200)
+        initial_size: (3200, 1800)
     ),
     ui_config_path: "ui_config.ron",
     engine_config_path: "engine_config.ron",
