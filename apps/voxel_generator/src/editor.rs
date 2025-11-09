@@ -6,7 +6,10 @@ mod util;
 use allocator_api2::alloc::Allocator;
 use atomic::canvas::AtomicGraphCanvas;
 use impact::{
-    egui::{Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, TextEdit, Ui, Vec2},
+    egui::{
+        Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, Response, TextEdit, Ui,
+        Vec2,
+    },
     engine::Engine,
 };
 use impact_dev_ui::{
@@ -547,27 +550,30 @@ impl PanZoomState {
         )
     }
 
-    pub fn handle_drag(&mut self, ui: &Ui, canvas_rect: Rect, is_panning: &mut bool) {
-        // Begin pan if secondary was pressed inside canvas
-        if ui.input(|i| {
-            i.pointer.button_pressed(PointerButton::Secondary)
-                && i.pointer
-                    .interact_pos()
-                    .is_some_and(|p| canvas_rect.contains(p))
-        }) {
+    pub fn handle_drag(&mut self, ui: &Ui, is_panning: &mut bool, canvas_response: &Response) {
+        // Start pan if either button begins a drag on the canvas
+        if canvas_response.drag_started_by(PointerButton::Primary)
+            || canvas_response.drag_started_by(PointerButton::Secondary)
+        {
             *is_panning = true;
         }
 
-        // End pan on release (or if no longer down)
+        // End pan on release or when neither is held
         if ui.input(|i| {
-            i.pointer.button_released(PointerButton::Secondary)
-                || !i.pointer.button_down(PointerButton::Secondary)
+            i.pointer.button_released(PointerButton::Primary)
+                || i.pointer.button_released(PointerButton::Secondary)
+                || (!i.pointer.button_down(PointerButton::Primary)
+                    && !i.pointer.button_down(PointerButton::Secondary))
         }) {
             *is_panning = false;
         }
 
-        if *is_panning {
-            let screen_delta = ui.input(|i| i.pointer.delta());
+        // Apply pan while dragging with either button
+        if *is_panning
+            && (canvas_response.dragged_by(PointerButton::Primary)
+                || canvas_response.dragged_by(PointerButton::Secondary))
+        {
+            let screen_delta = canvas_response.drag_delta();
             self.pan += screen_delta;
         }
     }

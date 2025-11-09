@@ -83,14 +83,15 @@ impl AtomicGraphCanvas {
             .vscroll(false)
             .hscroll(false)
             .show(ctx, |ui| {
-                let (canvas_rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
+                let (canvas_rect, canvas_response) =
+                    ui.allocate_exact_size(ui.available_size(), Sense::drag());
 
                 let canvas_origin = canvas_rect.min;
 
                 let painter = ui.painter_at(canvas_rect);
 
                 self.pan_zoom_state
-                    .handle_drag(ui, canvas_rect, &mut self.is_panning);
+                    .handle_drag(ui, &mut self.is_panning, &canvas_response);
 
                 self.pan_zoom_state.handle_scroll(ui, canvas_rect);
 

@@ -62,7 +62,7 @@ pub struct MetaGraphCanvas {
     pub selected_node_id: Option<MetaNodeID>,
     pub pending_edge: Option<PendingEdge>,
     pub is_panning: bool,
-    pub dragging_node_id: Option<MetaNodeID>,
+    pub dragging_node: Option<DraggingNode>,
     collapse_index: CollapseIndex,
     node_id_counter: MetaNodeID,
 }
@@ -103,6 +103,12 @@ bitflags! {
 pub struct PendingEdge {
     pub from_node: MetaNodeID,
     pub from_port: MetaPort,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DraggingNode {
+    pub node_id: MetaNodeID,
+    pub by_button: PointerButton,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -187,14 +193,14 @@ impl MetaGraphCanvas {
             selected_node_id: None,
             pending_edge: None,
             is_panning: false,
-            dragging_node_id: None,
+            dragging_node: None,
             collapse_index: CollapseIndex::new(),
             node_id_counter: 0,
         }
     }
 
     fn cursor_should_be_hidden(&self) -> bool {
-        self.is_panning || self.dragging_node_id.is_some()
+        self.is_panning || self.dragging_node.is_some()
     }
 
     pub fn node(&self, node_id: MetaNodeID) -> &MetaNode {
@@ -638,12 +644,12 @@ impl MetaGraphCanvas {
         {
             self.selected_node_id = None;
         }
-        if let Some(dragging_node_id) = self.dragging_node_id
+        if let Some(DraggingNode { node_id, .. }) = self.dragging_node
             && self
                 .collapse_index
-                .node_is_non_root_member_of_collapsed_subtree(dragging_node_id)
+                .node_is_non_root_member_of_collapsed_subtree(node_id)
         {
-            self.dragging_node_id = None;
+            self.dragging_node = None;
         }
         if let Some(pending_edge) = self.pending_edge
             && self
@@ -667,7 +673,7 @@ impl MetaGraphCanvas {
                 let painter = ui.painter_at(canvas_rect);
 
                 self.pan_zoom_state
-                    .handle_drag(ui, canvas_rect, &mut self.is_panning);
+                    .handle_drag(ui, &mut self.is_panning, &canvas_response);
 
                 if self.pan_zoom_state.handle_scroll(ui, canvas_rect) {
                     for node in self.nodes.values_mut() {
@@ -681,16 +687,9 @@ impl MetaGraphCanvas {
                     } else if self.selected_node_id.is_some() {
                         self.selected_node_id = None;
                     }
-                }
-
-                if ui.input(|i| {
-                    i.pointer.button_pressed(PointerButton::Secondary)
-                        && i.pointer
-                            .interact_pos()
-                            .is_some_and(|p| canvas_rect.contains(p))
-                }) && self.pending_edge.is_some()
-                {
-                    self.pending_edge = None;
+                    if self.pending_edge.is_some() {
+                        self.pending_edge = None;
+                    }
                 }
 
                 // Handle name update
@@ -851,7 +850,7 @@ impl MetaGraphCanvas {
                 }
 
                 if self.is_panning {
-                    self.dragging_node_id = None;
+                    self.dragging_node = None;
                 }
 
                 let mut drag_delta = None;
@@ -879,20 +878,25 @@ impl MetaGraphCanvas {
 
                         // Obtain dragging delta
 
-                        if node_response.drag_started_by(PointerButton::Primary) {
-                            self.dragging_node_id = Some(node_id);
-                        }
-                        if node_response.drag_stopped_by(PointerButton::Primary)
-                            && self.dragging_node_id == Some(node_id)
-                        {
-                            self.dragging_node_id = None;
-                        }
+                        for by_button in [PointerButton::Primary, PointerButton::Secondary] {
+                            if node_response.drag_started_by(by_button) {
+                                self.dragging_node = Some(DraggingNode { node_id, by_button });
+                            }
 
-                        if node_response.dragged_by(PointerButton::Primary) {
-                            drag_delta = Some(
-                                self.pan_zoom_state
-                                    .screen_vec_to_world_space(node_response.drag_delta()),
-                            );
+                            if node_response.drag_stopped_by(by_button)
+                                && self.dragging_node == Some(DraggingNode { node_id, by_button })
+                            {
+                                self.dragging_node = None;
+                            }
+
+                            if node_response.dragged_by(by_button)
+                                && self.dragging_node == Some(DraggingNode { node_id, by_button })
+                            {
+                                drag_delta = Some(
+                                    self.pan_zoom_state
+                                        .screen_vec_to_world_space(node_response.drag_delta()),
+                                );
+                            }
                         }
                     }
 
@@ -1277,11 +1281,13 @@ impl MetaGraphCanvas {
 
                 // Handle node dragging
 
-                if let (Some(node_id), Some(delta)) = (self.dragging_node_id, drag_delta) {
+                if let (Some(DraggingNode { node_id, by_button }), Some(delta)) =
+                    (self.dragging_node, drag_delta)
+                {
                     let drag_subtree = self
                         .collapse_index
                         .node_is_visible_collapsed_subtree_root(node_id)
-                        || ui.input(|i| i.modifiers.shift);
+                        || by_button == PointerButton::Secondary;
 
                     if drag_subtree {
                         obtain_subtree(
@@ -1852,7 +1858,7 @@ impl MetaGraphCanvas {
         self.selected_node_id = None;
         self.pending_edge = None;
         self.is_panning = false;
-        self.dragging_node_id = None;
+        self.dragging_node = None;
 
         self.rebuild_collapse_index(scratch);
         self.update_edge_data_types(scratch);
