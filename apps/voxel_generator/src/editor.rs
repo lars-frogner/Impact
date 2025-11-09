@@ -17,7 +17,7 @@ use impact_dev_ui::{
 };
 use impact_voxel::generation::SDFVoxelGenerator;
 use meta::{
-    MetaNodeData, build,
+    MetaNodeData, MetaNodeID, build,
     canvas::{
         MetaCanvasScratch, MetaGraphCanvas, MetaGraphChanges, PendingNodeAddition,
         PendingNodeCollapsedStateChange, PendingNodeKindChange, PendingNodeNameUpdate,
@@ -146,17 +146,17 @@ impl Editor {
             .unwrap_or_else(build::default_sdf_voxel_generator)
     }
 
-    fn load_graph_from_file(&mut self) {
+    fn load_graph_from_file(&mut self, ui: &Ui) {
         if let Some(path) = FileDialog::new()
-            .add_filter("Graph (*.ron)", &["ron"])
+            .add_filter("Graph (*.graph.ron)", &["graph.ron"])
             .set_title("Load graph")
             .pick_file()
         {
-            if let Err(err) = self
-                .meta_graph_canvas
-                .load_graph(&mut self.meta_canvas_scratch, &path)
+            if let Err(err) =
+                self.meta_graph_canvas
+                    .load_graph(&mut self.meta_canvas_scratch, ui, &path)
             {
-                eprintln!("Failed to load graph: {err}");
+                impact_log::error!("Failed to load graph from {}: {err:#}", path.display());
             } else {
                 self.graph_dirty = true;
                 self.rebuild_generator = true;
@@ -166,9 +166,28 @@ impl Editor {
         }
     }
 
+    fn load_subtree_from_file(&mut self, ui: &Ui) {
+        if let Some(path) = FileDialog::new()
+            .add_filter("Subtree (*.subtree.ron)", &["subtree.ron"])
+            .set_title("Load subtree")
+            .pick_file()
+        {
+            if let Err(err) = self.meta_graph_canvas.load_subtree(
+                &mut self.meta_canvas_scratch,
+                ui,
+                &path,
+                self.config.auto_layout,
+            ) {
+                impact_log::error!("Failed to load subtree from {}: {err:#}", path.display());
+            } else {
+                impact_log::info!("Loaded subtree from {}", path.display());
+            }
+        }
+    }
+
     fn save_graph_to_file<A: Allocator>(&mut self, arena: A) {
         if let Some(path) = FileDialog::new()
-            .add_filter("Graph (*.ron)", &["ron"])
+            .add_filter("Graph (*.graph.ron)", &["graph.ron"])
             .set_title("Save graph as")
             .save_file()
         {
@@ -187,6 +206,34 @@ impl Editor {
                 impact_log::error!("Failed to save graph to {}: {err:#}", path.path_string);
             } else {
                 impact_log::info!("Saved graph to {}", path.path_string);
+            }
+        }
+    }
+
+    fn save_subtree_to_file<A: Allocator>(&mut self, arena: A, root_node_id: MetaNodeID) {
+        let file_name = self
+            .meta_graph_canvas
+            .nodes
+            .get(&root_node_id)
+            .map_or_else(String::new, |node| {
+                format!("{}.subtree.ron", file_stem_from_name(&node.data.name))
+            });
+
+        if let Some(path) = FileDialog::new()
+            .add_filter("Subtree (*.subtree.ron)", &["subtree.ron"])
+            .set_title("Save subtree as")
+            .set_file_name(file_name)
+            .save_file()
+        {
+            if let Err(err) = self.meta_graph_canvas.save_subtree(
+                arena,
+                &mut self.meta_canvas_scratch,
+                root_node_id,
+                &path,
+            ) {
+                impact_log::error!("Failed to save subtree to {}: {err:#}", path.display());
+            } else {
+                impact_log::info!("Saved subtree to {}", path.display());
             }
         }
     }
@@ -225,17 +272,17 @@ impl CustomPanels for Editor {
         option_panel(ctx, config, "Editor panel", |ui| {
             if let Some(path) = &self.last_graph_path {
                 option_group(ui, "file", |ui| {
-                    ui.label(&path.file_stem_string)
+                    ui.label(path.file_stem_string.trim_end_matches(".graph"))
                         .on_hover_cursor(CursorIcon::Help)
                         .on_hover_text(&path.path_string);
                 });
             }
-            option_group(ui, "file_io", |ui| {
-                if ui.button("Load…").clicked() {
-                    self.load_graph_from_file();
+            option_group(ui, "graph_io", |ui| {
+                if ui.button("Load...").clicked() {
+                    self.load_graph_from_file(ui);
                 }
 
-                if ui.button("Save As…").clicked() {
+                if ui.button("Save As...").clicked() {
                     self.save_graph_to_file(arena);
                 }
 
@@ -279,6 +326,12 @@ impl CustomPanels for Editor {
             });
 
             option_group(ui, "creation", |ui| {
+                labeled_option(ui, LabelAndHoverText::label_only("Subtree"), |ui| {
+                    if ui.button("Load...").clicked() {
+                        self.load_subtree_from_file(ui);
+                    }
+                });
+
                 for kind_group in MetaNodeKindGroup::all_non_root() {
                     for kind_option in MetaNodeKind::all_non_root() {
                         if kind_option.group() != kind_group {
@@ -303,7 +356,6 @@ impl CustomPanels for Editor {
                             },
                         );
                     }
-                    ui.end_row();
                 }
             });
 
@@ -312,9 +364,9 @@ impl CustomPanels for Editor {
                     .meta_graph_canvas
                     .node_is_collapsed_root(selected_node_id);
 
-                let selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
-
                 option_group(ui, "modification", |ui| {
+                    let mut selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
+
                     if !selected_node.data.kind.is_output() {
                         let was_collapsed = is_collapsed;
 
@@ -346,6 +398,10 @@ impl CustomPanels for Editor {
                                         });
                                 }
                             });
+                            if ui.button("Save As...").clicked() {
+                                self.save_subtree_to_file(arena, selected_node_id);
+                                selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
+                            }
                         } else {
                             let mut kind = selected_node.data.kind;
 
@@ -406,6 +462,8 @@ impl CustomPanels for Editor {
                         changes.insert(MetaGraphChanges::PARAMS_CHANGED);
                     }
                 });
+
+                let selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
 
                 if !selected_node.data.kind.is_output() {
                     option_group(ui, "deletion", |ui| {
@@ -555,4 +613,27 @@ impl GraphPath {
             file_stem_string,
         }
     }
+}
+
+fn file_stem_from_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut in_ws = false;
+
+    for ch in name.trim().chars() {
+        if ch.is_whitespace() {
+            if !in_ws {
+                out.push('_');
+                in_ws = true;
+            }
+            continue;
+        } else {
+            in_ws = false;
+        }
+
+        if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+            out.push(ch.to_ascii_lowercase());
+        }
+    }
+
+    out
 }

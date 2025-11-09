@@ -1,25 +1,27 @@
-use crate::editor::meta::MetaNodeID;
-
 use super::{
-    MetaFloatParam, MetaFloatRangeParam, MetaNode, MetaNodeChildLinks, MetaNodeData, MetaNodeParam,
-    MetaNodeParentLinks, MetaUIntParam, MetaUIntRangeParam, node_kind::MetaNodeKind,
+    MetaFloatParam, MetaFloatRangeParam, MetaNode, MetaNodeChildLinks, MetaNodeData, MetaNodeID,
+    MetaNodeParam, MetaNodeParentLinks, MetaUIntParam, MetaUIntRangeParam, node_kind::MetaNodeKind,
 };
 use anyhow::{Error, bail};
 use serde::{Deserialize, Serialize};
 use tinyvec::TinyVec;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct IOMetaNodeGraph {
-    pub pan: [f32; 2],
-    pub zoom: f32,
+pub struct IOMetaGraph {
+    pub kind: IOMetaGraphKind,
     pub nodes: Vec<IOMetaNode>,
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct IOMetaNodeGraphRef<'a> {
-    pub pan: [f32; 2],
-    pub zoom: f32,
+pub struct IOMetaGraphRef<'a> {
+    pub kind: IOMetaGraphKind,
     pub nodes: &'a [IOMetaNode],
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum IOMetaGraphKind {
+    Full { pan: [f32; 2], zoom: f32 },
+    Subtree { root_node_id: MetaNodeID },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -41,6 +43,29 @@ pub enum IOMetaNodeParam {
     Float(f32),
     UIntRange { low: u32, high: u32 },
     FloatRange { low: f32, high: f32 },
+}
+
+impl IOMetaGraphKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Full { .. } => "full graph",
+            Self::Subtree { .. } => "subtree",
+        }
+    }
+}
+
+impl IOMetaNode {
+    pub fn offset_ids(&mut self, offset: MetaNodeID) {
+        self.id += offset;
+
+        self.links_to_parents
+            .iter_mut()
+            .chain(self.links_to_children.iter_mut())
+            .flatten()
+            .for_each(|link| {
+                link.to_node += offset;
+            });
+    }
 }
 
 impl<'a> From<(&'a MetaNodeID, &'a MetaNode)> for IOMetaNode {
