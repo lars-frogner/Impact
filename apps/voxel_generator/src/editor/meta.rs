@@ -29,10 +29,10 @@ const NODE_STACK_SILHOUETTE_BOUNDARY_COLOR: Color32 = Color32::from_gray(100);
 const SELECTED_NODE_STACK_SILHOUETTE_BOUNDARY_COLOR: Color32 = Color32::from_gray(180);
 
 const NODE_TEXT_COLOR: Color32 = Color32::WHITE;
-const NODE_HEADER_FONT_SIZE: f32 = 14.0;
+const NODE_TYPE_FONT_SIZE: f32 = 14.0;
 const NODE_PARAMS_FONT_SIZE: f32 = 12.0;
 const NODE_NAME_FONT_SIZE: f32 = 16.0;
-const NODE_HEADER_SPACING: f32 = 8.0;
+const NODE_TYPE_SPACING: f32 = 8.0;
 const NODE_PARAM_SPACING: f32 = 4.0;
 const NODE_STANDARD_TEXT_PADDING: Vec2 = vec2(12.0, 12.0);
 const NODE_COLLAPSED_TEXT_PADDING: Vec2 = vec2(14.0, 14.0);
@@ -69,7 +69,7 @@ pub struct MetaNodeData {
     pub kind: MetaNodeKind,
     pub params: MetaNodeParams,
     prepared_text_zoom: Option<f32>,
-    header_galley: Option<Arc<Galley>>,
+    type_galley: Option<Arc<Galley>>,
     param_galleys: TinyVec<[Option<Arc<Galley>>; 12]>,
     name_galley: Option<Arc<Galley>>,
 }
@@ -245,7 +245,7 @@ impl MetaNodeData {
             kind,
             params,
             prepared_text_zoom: None,
-            header_galley: None,
+            type_galley: None,
             param_galleys: TinyVec::new(),
             name_galley: None,
         }
@@ -255,8 +255,8 @@ impl MetaNodeData {
         Self::new(String::new(), kind, kind.params())
     }
 
-    fn header_font(zoom: f32) -> FontId {
-        FontId::proportional(NODE_HEADER_FONT_SIZE * zoom)
+    fn type_font(zoom: f32) -> FontId {
+        FontId::proportional(NODE_TYPE_FONT_SIZE * zoom)
     }
 
     fn params_font(zoom: f32) -> FontId {
@@ -275,8 +275,8 @@ impl MetaNodeData {
         NODE_COLLAPSED_TEXT_PADDING * zoom
     }
 
-    fn header_spacing(zoom: f32) -> f32 {
-        NODE_HEADER_SPACING * zoom
+    fn type_spacing(zoom: f32) -> f32 {
+        NODE_TYPE_SPACING * zoom
     }
 
     fn param_spacing(zoom: f32) -> f32 {
@@ -314,10 +314,10 @@ impl MetaNodeData {
         }
         self.prepared_text_zoom = Some(zoom);
 
-        self.header_galley = Some(prepare_text(
+        self.type_galley = Some(prepare_text(
             ui,
             self.kind.label().to_string(),
-            Self::header_font(zoom),
+            Self::type_font(zoom),
             NODE_TEXT_COLOR,
         ));
 
@@ -351,8 +351,8 @@ impl MetaNodeData {
         }
     }
 
-    fn prepared_header_text(&self) -> &Arc<Galley> {
-        self.header_galley.as_ref().unwrap()
+    fn prepared_type_text(&self) -> &Arc<Galley> {
+        self.type_galley.as_ref().unwrap()
     }
 
     fn prepared_param_texts(&self) -> impl Iterator<Item = &Arc<Galley>> {
@@ -366,10 +366,10 @@ impl MetaNodeData {
     fn compute_standard_size(&self) -> Vec2 {
         let unzooming_factor = self.prepared_text_zoom.unwrap().recip();
 
-        let header_text_size = self.prepared_header_text().size() * unzooming_factor;
+        let type_text_size = self.prepared_type_text().size() * unzooming_factor;
 
-        let mut max_text_width = header_text_size.x;
-        let mut total_text_height = header_text_size.y;
+        let mut max_text_width = type_text_size.x;
+        let mut total_text_height = type_text_size.y;
 
         for param_text in self.prepared_param_texts() {
             let param_text_size = param_text.size() * unzooming_factor;
@@ -378,7 +378,7 @@ impl MetaNodeData {
         }
 
         if !self.params.is_empty() {
-            total_text_height += Self::header_spacing(1.0)
+            total_text_height += Self::type_spacing(1.0)
                 + Self::param_spacing(1.0) * ((self.params.len() - 1) as f32);
         }
 
@@ -452,16 +452,16 @@ impl MetaNodeData {
     fn paint_standard_text(&self, painter: &Painter, node_rect: &Rect, zoom: f32) {
         let padding = Self::standard_text_padding(zoom);
 
-        let header_text = self.prepared_header_text();
-        let header_pos = pos2(
-            node_rect.center().x - 0.5 * header_text.size().x,
+        let type_text = self.prepared_type_text();
+        let type_pos = pos2(
+            node_rect.center().x - 0.5 * type_text.size().x,
             node_rect.top() + padding.y,
         );
-        painter.galley(header_pos, header_text.clone(), NODE_TEXT_COLOR);
+        painter.galley(type_pos, type_text.clone(), NODE_TEXT_COLOR);
 
         let mut cursor = pos2(
             node_rect.left() + padding.x,
-            header_pos.y + header_text.size().y + Self::header_spacing(zoom),
+            type_pos.y + type_text.size().y + Self::type_spacing(zoom),
         );
 
         for param_text in self.prepared_param_texts() {

@@ -11,12 +11,12 @@ use crate::editor::{
         CollapsedMetaSubtree, CollapsedMetaSubtreeChildPort, CollapsedMetaSubtreeParentPort,
         MetaPaletteColor,
         data_type::EdgeDataType,
-        io::{IOMetaNodeGraph, IOMetaNodeGraphRef},
+        io::{IOMetaGraph, IOMetaGraphKind, IOMetaGraphRef},
     },
     util::create_bezier_edge,
 };
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use bitflags::bitflags;
 use impact::{
     egui::{
@@ -52,7 +52,6 @@ const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(80.0, 0.0);
 
 // TODO
 // Omit output node in saved graph and support loading multiple graphs.
-// Support collapsing subtree and show representative node with custom name and exposed ports
 
 #[derive(Clone, Debug)]
 pub struct MetaGraphCanvas {
@@ -225,7 +224,7 @@ impl MetaGraphCanvas {
             obtain_subtree(
                 &mut scratch.search,
                 &self.nodes,
-                self.node_id_counter as usize,
+                self.node_id_counter,
                 &mut scratch.subtree_node_ids,
                 node_id,
             );
@@ -374,7 +373,7 @@ impl MetaGraphCanvas {
         if node_can_reach_other(
             search_scratch,
             &self.nodes,
-            self.node_id_counter as usize,
+            self.node_id_counter,
             child_node_id,
             parent_node_id,
         ) {
@@ -725,33 +724,14 @@ impl MetaGraphCanvas {
                     self.set_node_collapsed(node_id, collapsed, changes);
                 }
 
-                // `world_node_rects` will NOT be one-to-one with `self.nodes`,
-                // since only nodes not hidden in collapsed subtrees will get a
-                // rectangle
-                scratch.world_node_rects.clear();
-                scratch.screen_node_rects.clear();
-
-                for (&node_id, node) in &self.nodes {
-                    let node_size = if self
-                        .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id)
-                    {
-                        self.collapse_index.subtree(node_id).size
-                    } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
-                        node.data.compute_standard_size()
-                    } else {
-                        continue;
-                    };
-
-                    let world_rect = Rect::from_center_size(node.position, node_size);
-
-                    let screen_rect = self
-                        .pan_zoom_state
-                        .world_rect_to_screen_space(canvas_origin, world_rect);
-
-                    scratch.world_node_rects.insert(node_id, world_rect);
-                    scratch.screen_node_rects.insert(node_id, screen_rect);
-                }
+                // `world_node_rects` and `screen_node_rects` will NOT be
+                // one-to-one with `self.nodes`, since only nodes not hidden in
+                // collapsed subtrees will get a rectangle
+                self.compute_world_and_screen_node_rects(
+                    canvas_origin,
+                    &mut scratch.world_node_rects,
+                    &mut scratch.screen_node_rects,
+                );
 
                 // Handle pending new node
 
@@ -763,41 +743,13 @@ impl MetaGraphCanvas {
                     data.prepare_text(ui, self.pan_zoom_state.zoom);
                     let node_size = data.compute_standard_size();
 
-                    let position = if let Some(selected_node_id) = self.selected_node_id
-                        && let Some(selected_node) = self.nodes.get(&selected_node_id)
-                    {
-                        let selected_node_rect = &scratch.world_node_rects[&selected_node_id];
-                        selected_node.position
-                            + vec2(
-                                0.0,
-                                0.5 * (selected_node_rect.height() + node_size.y) + NEW_NODE_GAP,
-                            )
-                    } else {
-                        let mut position = None;
-                        for (last_node_id, last_node) in self.nodes.iter().rev() {
-                            if let Some(last_node_rect) = scratch.world_node_rects.get(last_node_id)
-                            {
-                                position = Some(
-                                    last_node.position
-                                        + vec2(
-                                            0.0,
-                                            0.5 * (last_node_rect.height() + node_size.y)
-                                                + NEW_NODE_GAP,
-                                        ),
-                                );
-                                break;
-                            }
-                        }
-                        match position {
-                            Some(position) => position,
-                            None => {
-                                self.pan_zoom_state.screen_pos_to_world_space(
-                                    canvas_origin,
-                                    canvas_rect.center_top(),
-                                ) + vec2(0.0, 0.5 * node_size.y)
-                            }
-                        }
-                    };
+                    let position = self
+                        .determine_position_for_new_node(&scratch.world_node_rects, node_size)
+                        .unwrap_or_else(|| {
+                            self.pan_zoom_state
+                                .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top())
+                                + vec2(0.0, 0.5 * node_size.y)
+                        });
 
                     let mut world_node_rect = Rect::from_center_size(position, node_size);
 
@@ -1274,23 +1226,7 @@ impl MetaGraphCanvas {
                 ) {
                     self.rebuild_collapse_index(scratch);
 
-                    scratch.world_node_rects.clear();
-                    for (&node_id, node) in &self.nodes {
-                        let node_size = if self
-                            .collapse_index
-                            .node_is_visible_collapsed_subtree_root(node_id)
-                        {
-                            self.collapse_index.subtree(node_id).size
-                        } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
-                            node.data.compute_standard_size()
-                        } else {
-                            continue;
-                        };
-
-                        let world_rect = Rect::from_center_size(node.position, node_size);
-
-                        scratch.world_node_rects.insert(node_id, world_rect);
-                    }
+                    self.compute_world_node_rects(&mut scratch.world_node_rects);
                 }
 
                 // Handle node dragging
@@ -1305,7 +1241,7 @@ impl MetaGraphCanvas {
                         obtain_subtree(
                             &mut scratch.search,
                             &self.nodes,
-                            self.node_id_counter as usize,
+                            self.node_id_counter,
                             &mut scratch.subtree_node_ids,
                             node_id,
                         );
@@ -1338,7 +1274,7 @@ impl MetaGraphCanvas {
                     obtain_subtree(
                         &mut scratch.search,
                         &self.nodes,
-                        self.node_id_counter as usize,
+                        self.node_id_counter,
                         &mut scratch.subtree_node_ids,
                         node_id,
                     );
@@ -1365,30 +1301,87 @@ impl MetaGraphCanvas {
                                 | MetaGraphChanges::COLLAPSED_STATE_CHANGED,
                         ))
                 {
-                    let origin = scratch
-                        .world_node_rects
-                        .get(&0)
-                        .map_or_else(Pos2::default, Rect::center_top);
-
-                    let mut layoutable_graph = LayoutableMetaGraph::new(
-                        &mut scratch.layout_lut,
-                        &self.nodes,
-                        &self.collapse_index,
-                        &mut scratch.world_node_rects,
-                    );
-                    layout_vertical(
-                        &mut scratch.layout,
-                        &mut layoutable_graph,
-                        origin,
-                        AUTO_LAYOUT_HORIZONTAL_GAP,
-                        AUTO_LAYOUT_VERTICAL_GAP,
-                    );
-
-                    for (&node_id, node_rect) in &scratch.world_node_rects {
-                        self.node_mut(node_id).position = node_rect.center();
-                    }
+                    self.perform_layout(scratch);
                 }
             });
+    }
+
+    fn compute_world_node_rects(&self, world_node_rects: &mut BTreeMap<MetaNodeID, Rect>) {
+        world_node_rects.clear();
+        for (&node_id, node) in &self.nodes {
+            if let Some(world_rect) = self.compute_world_node_rect(node_id, node) {
+                world_node_rects.insert(node_id, world_rect);
+            }
+        }
+    }
+
+    fn compute_world_and_screen_node_rects(
+        &self,
+        canvas_origin: Pos2,
+        world_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+        screen_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    ) {
+        world_node_rects.clear();
+        screen_node_rects.clear();
+        for (&node_id, node) in &self.nodes {
+            if let Some(world_rect) = self.compute_world_node_rect(node_id, node) {
+                let screen_rect = self
+                    .pan_zoom_state
+                    .world_rect_to_screen_space(canvas_origin, world_rect);
+
+                world_node_rects.insert(node_id, world_rect);
+                screen_node_rects.insert(node_id, screen_rect);
+            }
+        }
+    }
+
+    fn compute_world_node_rect(&self, node_id: MetaNodeID, node: &MetaNode) -> Option<Rect> {
+        let node_size = if self
+            .collapse_index
+            .node_is_visible_collapsed_subtree_root(node_id)
+        {
+            self.collapse_index.subtree(node_id).size
+        } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
+            node.data.compute_standard_size()
+        } else {
+            return None;
+        };
+
+        Some(Rect::from_center_size(node.position, node_size))
+    }
+
+    fn determine_position_for_new_node(
+        &self,
+        world_node_rects: &BTreeMap<MetaNodeID, Rect>,
+        node_size: Vec2,
+    ) -> Option<Pos2> {
+        if let Some(selected_node_id) = self.selected_node_id
+            && let Some(selected_node) = self.nodes.get(&selected_node_id)
+        {
+            let selected_node_rect = &world_node_rects[&selected_node_id];
+            Some(
+                selected_node.position
+                    + vec2(
+                        0.0,
+                        0.5 * (selected_node_rect.height() + node_size.y) + NEW_NODE_GAP,
+                    ),
+            )
+        } else {
+            let mut position = None;
+            for (last_node_id, last_node) in self.nodes.iter().rev() {
+                if let Some(last_node_rect) = world_node_rects.get(last_node_id) {
+                    position = Some(
+                        last_node.position
+                            + vec2(
+                                0.0,
+                                0.5 * (last_node_rect.height() + node_size.y) + NEW_NODE_GAP,
+                            ),
+                    );
+                    break;
+                }
+            }
+            position
+        }
     }
 
     fn handle_port(
@@ -1597,6 +1590,31 @@ impl MetaGraphCanvas {
         }
     }
 
+    fn perform_layout(&mut self, scratch: &mut MetaCanvasScratch) {
+        let origin = scratch
+            .world_node_rects
+            .get(&0)
+            .map_or_else(Pos2::default, Rect::center_top);
+
+        let mut layoutable_graph = LayoutableMetaGraph::new(
+            &mut scratch.layout_lut,
+            &self.nodes,
+            &self.collapse_index,
+            &mut scratch.world_node_rects,
+        );
+        layout_vertical(
+            &mut scratch.layout,
+            &mut layoutable_graph,
+            origin,
+            AUTO_LAYOUT_HORIZONTAL_GAP,
+            AUTO_LAYOUT_VERTICAL_GAP,
+        );
+
+        for (&node_id, node_rect) in &scratch.world_node_rects {
+            self.node_mut(node_id).position = node_rect.center();
+        }
+    }
+
     pub fn update_edge_data_types(&mut self, scratch: &mut MetaCanvasScratch) {
         update_edge_data_types(&mut scratch.data_type, &mut self.nodes);
     }
@@ -1605,7 +1623,7 @@ impl MetaGraphCanvas {
         self.collapse_index.rebuild(
             scratch,
             &self.nodes,
-            self.node_id_counter as usize,
+            self.node_id_counter,
             &self.collapsed_roots,
         );
     }
@@ -1614,43 +1632,188 @@ impl MetaGraphCanvas {
         let mut nodes = AVec::with_capacity_in(self.nodes.len(), arena);
         nodes.extend(self.nodes.iter().map(Into::into));
 
-        let graph = IOMetaNodeGraphRef {
-            pan: self.pan_zoom_state.pan.into(),
-            zoom: self.pan_zoom_state.zoom,
+        let graph = IOMetaGraphRef {
+            kind: IOMetaGraphKind::Full {
+                pan: self.pan_zoom_state.pan.into(),
+                zoom: self.pan_zoom_state.zoom,
+            },
             nodes: nodes.as_slice(),
         };
 
         impact_io::write_ron_file(&graph, output_path)
     }
 
-    pub fn load_graph(&mut self, scratch: &mut MetaCanvasScratch, path: &Path) -> Result<()> {
-        let graph: IOMetaNodeGraph =
+    pub fn save_subtree<A: Allocator>(
+        &self,
+        arena: A,
+        scratch: &mut MetaCanvasScratch,
+        root_node_id: MetaNodeID,
+        output_path: &Path,
+    ) -> Result<()> {
+        obtain_subtree(
+            &mut scratch.search,
+            &self.nodes,
+            self.node_id_counter,
+            &mut scratch.subtree_node_ids,
+            root_node_id,
+        );
+
+        if scratch.subtree_node_ids.is_empty() {
+            bail!("Missing root node {root_node_id} when saving subtree");
+        }
+
+        let mut nodes = AVec::with_capacity_in(scratch.subtree_node_ids.len(), arena);
+
+        nodes.extend(
+            scratch
+                .subtree_node_ids
+                .iter()
+                .map(|node_id| (node_id, &self.nodes[node_id]).into()),
+        );
+
+        let graph = IOMetaGraphRef {
+            kind: IOMetaGraphKind::Subtree { root_node_id },
+            nodes: nodes.as_slice(),
+        };
+
+        impact_io::write_ron_file(&graph, output_path)
+    }
+
+    pub fn load_graph(
+        &mut self,
+        scratch: &mut MetaCanvasScratch,
+        ui: &Ui,
+        path: &Path,
+    ) -> Result<()> {
+        let graph: IOMetaGraph =
             impact_io::parse_ron_file(path).context("Failed to parse graph file")?;
+
+        let IOMetaGraphKind::Full { pan, zoom } = graph.kind else {
+            bail!(
+                "Graph file contains a {}, not a full graph",
+                graph.kind.label()
+            );
+        };
+
+        let pan_zoom_state = PanZoomState::new(pan.into(), zoom.clamp(MIN_ZOOM, MAX_ZOOM));
 
         let mut nodes = BTreeMap::new();
         let mut node_id_counter = 0;
 
         for io_node in graph.nodes {
-            let id = io_node.id;
-            let node = io_node
+            let node_id = io_node.id;
+
+            let mut node: MetaNode = io_node
                 .try_into()
-                .with_context(|| format!("Invalid node in graph file (node ID {id})"))?;
-            nodes.insert(id, node);
-            node_id_counter = node_id_counter.max(id + 1);
+                .with_context(|| format!("Invalid node in graph file (node ID {node_id})"))?;
+
+            node.data.prepare_text(ui, pan_zoom_state.zoom);
+
+            nodes.insert(node_id, node);
+
+            node_id_counter = node_id_counter.max(node_id + 1);
         }
 
         self.nodes = nodes;
         self.node_id_counter = node_id_counter;
 
-        self.pan_zoom_state =
-            PanZoomState::new(graph.pan.into(), graph.zoom.clamp(MIN_ZOOM, MAX_ZOOM));
+        self.pan_zoom_state = PanZoomState::new(pan.into(), zoom.clamp(MIN_ZOOM, MAX_ZOOM));
 
         self.selected_node_id = None;
         self.pending_edge = None;
         self.is_panning = false;
         self.dragging_node_id = None;
 
+        self.rebuild_collapse_index(scratch);
         self.update_edge_data_types(scratch);
+
+        Ok(())
+    }
+
+    pub fn load_subtree(
+        &mut self,
+        scratch: &mut MetaCanvasScratch,
+        ui: &Ui,
+        path: &Path,
+        auto_layout: bool,
+    ) -> Result<()> {
+        let subtree: IOMetaGraph =
+            impact_io::parse_ron_file(path).context("Failed to parse subtree file")?;
+
+        let IOMetaGraphKind::Subtree {
+            root_node_id: orig_root_node_id,
+        } = subtree.kind
+        else {
+            bail!(
+                "Graph file contains a {}, not a subtree",
+                subtree.kind.label()
+            );
+        };
+
+        let id_offset = self.node_id_counter;
+
+        let mut subtree_nodes = BTreeMap::new();
+        let mut node_id_counter = 0;
+
+        scratch.subtree_node_ids.clear();
+
+        for mut io_node in subtree.nodes {
+            let orig_node_id = io_node.id;
+
+            io_node.offset_ids(id_offset);
+            let node_id = io_node.id;
+
+            let mut node: MetaNode = io_node.try_into().with_context(|| {
+                format!("Invalid node in subtree file (node ID {orig_node_id})")
+            })?;
+
+            node.data.prepare_text(ui, self.pan_zoom_state.zoom);
+
+            subtree_nodes.insert(node_id, node);
+            scratch.subtree_node_ids.push(node_id);
+
+            node_id_counter = node_id_counter.max(node_id + 1);
+        }
+
+        let root_node_id = orig_root_node_id + id_offset;
+        if !subtree_nodes.contains_key(&root_node_id) {
+            bail!("Subtree does not contain the root node (ID {orig_root_node_id}");
+        }
+
+        self.nodes.extend(subtree_nodes);
+        self.node_id_counter = self.node_id_counter.max(node_id_counter);
+
+        self.collapsed_roots.insert(root_node_id);
+
+        self.rebuild_collapse_index(scratch);
+        self.update_edge_data_types(scratch);
+
+        self.compute_world_node_rects(&mut scratch.world_node_rects);
+
+        if auto_layout {
+            self.perform_layout(scratch);
+        } else {
+            let root_node_size = scratch.world_node_rects[&root_node_id].size();
+            let root_node_position = self
+                .determine_position_for_new_node(&scratch.world_node_rects, root_node_size)
+                .unwrap();
+
+            let orig_root_node_position = self.nodes[&root_node_id].position;
+            let delta = root_node_position - orig_root_node_position;
+
+            translate_node(
+                &mut self.nodes,
+                &mut scratch.world_node_rects,
+                root_node_id,
+                delta,
+            );
+
+            let final_delta = self.nodes[&root_node_id].position - orig_root_node_position;
+
+            for node_id in &scratch.subtree_node_ids[1..] {
+                self.nodes.get_mut(node_id).unwrap().position += final_delta;
+            }
+        }
 
         Ok(())
     }
@@ -1693,7 +1856,7 @@ impl CollapseIndex {
         &mut self,
         scratch: &mut MetaCanvasScratch,
         nodes: &BTreeMap<MetaNodeID, MetaNode>,
-        node_id_counter: usize,
+        node_id_counter: MetaNodeID,
         collapsed_roots: &HashSet<MetaNodeID>,
     ) {
         self.member_to_root.clear();
@@ -1957,7 +2120,7 @@ impl MetaLayoutLookupTable {
 fn node_can_reach_other(
     scratch: &mut SearchScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
-    node_id_counter: usize,
+    node_id_counter: MetaNodeID,
     node_id: MetaNodeID,
     other_node_id: MetaNodeID,
 ) -> bool {
@@ -1967,7 +2130,7 @@ fn node_can_reach_other(
     stack.clear();
     stack.push(node_id);
 
-    seen.resize_and_unset_all(node_id_counter);
+    seen.resize_and_unset_all(node_id_counter as usize);
 
     while let Some(node_id) = stack.pop() {
         if seen.set_bit(node_id as usize) {
@@ -1992,7 +2155,7 @@ fn node_can_reach_other(
 fn obtain_subtree(
     scratch: &mut SearchScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
-    node_id_counter: usize,
+    node_id_counter: MetaNodeID,
     subtree_node_ids: &mut Vec<MetaNodeID>,
     node_id: MetaNodeID,
 ) {
@@ -2004,7 +2167,7 @@ fn obtain_subtree(
     stack.clear();
     stack.push(node_id);
 
-    seen.resize_and_unset_all(node_id_counter);
+    seen.resize_and_unset_all(node_id_counter as usize);
 
     while let Some(node_id) = stack.pop() {
         if seen.set_bit(node_id as usize) {
@@ -2025,24 +2188,24 @@ fn obtain_subtree(
 
 fn translate_node(
     nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
-    node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    world_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
     node_id: MetaNodeID,
     delta: Vec2,
 ) {
     let Some(node) = nodes.get_mut(&node_id) else {
         return;
     };
-    if let Some(node_rect) = node_rects.get(&node_id) {
+    if let Some(node_rect) = world_node_rects.get(&node_id) {
         let moved_node_rect = node_rect.translate(delta);
         let resolve_delta = compute_delta_to_resolve_overlaps(
-            || node_rects.iter().map(|(id, rect)| (*id, *rect)),
+            || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
             node_id,
             moved_node_rect,
             MIN_NODE_SEPARATION,
         );
         let final_delta = delta + resolve_delta;
         node.position += final_delta;
-        *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(final_delta);
+        *world_node_rects.get_mut(&node_id).unwrap() = node_rect.translate(final_delta);
     } else {
         node.position += delta;
     }
@@ -2050,20 +2213,21 @@ fn translate_node(
 
 fn resolve_overlap_for_node(
     nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
-    node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    world_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
     node_id: MetaNodeID,
 ) {
-    let (Some(node), Some(&node_rect)) = (nodes.get_mut(&node_id), node_rects.get(&node_id)) else {
+    let (Some(node), Some(&node_rect)) = (nodes.get_mut(&node_id), world_node_rects.get(&node_id))
+    else {
         return;
     };
     let resolve_delta = compute_delta_to_resolve_overlaps(
-        || node_rects.iter().map(|(id, rect)| (*id, *rect)),
+        || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
         node_id,
         node_rect,
         MIN_NODE_SEPARATION,
     );
     node.position += resolve_delta;
-    *node_rects.get_mut(&node_id).unwrap() = node_rect.translate(resolve_delta);
+    *world_node_rects.get_mut(&node_id).unwrap() = node_rect.translate(resolve_delta);
 }
 
 fn draw_edge(
