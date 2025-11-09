@@ -641,7 +641,7 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
             MetaFloatParam::new(LabelAndHoverText::label_only("Jitter fraction"), 0.0)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
-                .with_speed(0.0005)
+                .with_speed(0.001)
                 .into(),
         );
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
@@ -751,7 +751,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
             MetaFloatParam::new(LabelAndHoverText::label_only("Probability"), 1.0)
                 .with_min_value(0.0)
                 .with_max_value(1.0)
-                .with_speed(0.0005)
+                .with_speed(0.001)
                 .into(),
         );
         params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
