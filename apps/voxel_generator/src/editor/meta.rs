@@ -224,6 +224,16 @@ impl MetaNode {
             .resize(new_kind.n_child_slots(), None);
     }
 
+    fn first_free_parent_slot_accepting_type(
+        &self,
+        input_data_type: EdgeDataType,
+    ) -> Option<usize> {
+        self.links_to_parents.iter().position(|link| {
+            link.is_none()
+                && EdgeDataType::connection_allowed(input_data_type, self.output_data_type)
+        })
+    }
+
     fn first_free_child_slot_accepting_type(
         &self,
         output_data_type: EdgeDataType,

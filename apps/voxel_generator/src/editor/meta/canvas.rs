@@ -20,18 +20,19 @@ use anyhow::{Context as _, Result, bail};
 use bitflags::bitflags;
 use impact::{
     egui::{
-        Color32, Context, CursorIcon, Id, Key, Label, Painter, PointerButton, Pos2, Rect, Sense,
-        Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
+        Align, Color32, Context, CursorIcon, Direction, Id, Key, Label, Painter, PointerButton,
+        Pos2, Rect, Sense, Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
     },
     impact_containers::{BitVector, HashMap, HashSet, KeyIndexMapper},
 };
 use std::{collections::BTreeMap, path::Path};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(200.0, 22.0);
-const CANVAS_DEFAULT_SIZE: Vec2 = vec2(400.0, 600.0);
+const CANVAS_DEFAULT_SIZE: Vec2 = vec2(600.0, 700.0);
 
 const MIN_NODE_SEPARATION: f32 = 8.0;
 const NEW_NODE_GAP: f32 = 40.0;
+const OUTPUT_NODE_TOP_CLEARING: f32 = 10.0;
 
 const AUTO_LAYOUT_HORIZONTAL_GAP: f32 = 32.0;
 const AUTO_LAYOUT_VERTICAL_GAP: f32 = 40.0;
@@ -166,6 +167,15 @@ struct MetaLayoutLookupTable {
     visible_node_index_map: KeyIndexMapper<MetaNodeID>,
     child_idx_offsets_and_counts: Vec<(usize, usize)>,
     all_child_indices: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
+struct AutoAttachInfo {
+    attach_as_child: bool,
+    parent_node_id: MetaNodeID,
+    child_slot_on_parent: usize,
+    child_node_id: MetaNodeID,
+    parent_slot_on_child: usize,
 }
 
 impl MetaGraphCanvas {
@@ -744,33 +754,67 @@ impl MetaGraphCanvas {
                     let node_size = data.compute_standard_size();
 
                     let position = self
-                        .determine_position_for_new_node(&scratch.world_node_rects, node_size)
-                        .unwrap_or_else(|| {
-                            self.pan_zoom_state
-                                .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top())
-                                + vec2(0.0, 0.5 * node_size.y)
-                        });
-
-                    let mut world_node_rect = Rect::from_center_size(position, node_size);
+                        .default_new_node_position(&scratch.world_node_rects, node_size)
+                        .unwrap_or_else(|| self.output_node_position(&canvas_rect, node_size));
 
                     let mut node = MetaNode::new(position, data);
+                    let mut world_node_rect = Rect::from_center_size(position, node_size);
 
-                    let resolve_delta = compute_delta_to_resolve_overlaps(
-                        || {
-                            scratch
-                                .world_node_rects
-                                .iter()
-                                .map(|(id, rect)| (*id, *rect))
-                        },
-                        node_id,
-                        world_node_rect,
-                        MIN_NODE_SEPARATION,
-                    );
+                    let auto_attach_info = self.determine_auto_attach_info(node_id, &node);
 
-                    world_node_rect = world_node_rect.translate(resolve_delta);
-                    node.position += resolve_delta;
+                    if !auto_layout {
+                        if let Some(AutoAttachInfo {
+                            attach_as_child,
+                            parent_node_id,
+                            child_node_id,
+                            ..
+                        }) = &auto_attach_info
+                        {
+                            let new_position = if *attach_as_child {
+                                self.position_relative_to_node(
+                                    &scratch.world_node_rects,
+                                    node_size,
+                                    *parent_node_id,
+                                    Direction::TopDown,
+                                    Align::Center,
+                                    Align::Center,
+                                    NEW_NODE_GAP,
+                                )
+                            } else {
+                                self.position_relative_to_node(
+                                    &scratch.world_node_rects,
+                                    node_size,
+                                    *child_node_id,
+                                    Direction::BottomUp,
+                                    Align::Center,
+                                    Align::Center,
+                                    NEW_NODE_GAP,
+                                )
+                            }
+                            .unwrap();
 
-                    let output_data_type = node.output_data_type;
+                            let delta = new_position - node.position;
+                            node.position += delta;
+                            world_node_rect = world_node_rect.translate(delta);
+                        }
+
+                        let resolve_delta = compute_delta_to_resolve_overlaps(
+                            || {
+                                scratch
+                                    .world_node_rects
+                                    .iter()
+                                    .map(|(id, rect)| (*id, *rect))
+                            },
+                            node_id,
+                            world_node_rect,
+                            MIN_NODE_SEPARATION,
+                        );
+
+                        node.position += resolve_delta;
+                        world_node_rect = world_node_rect.translate(resolve_delta);
+                    }
+
+                    let is_output = node.data.kind.is_output();
                     let is_leaf = node.data.kind.n_child_slots() == 0;
 
                     self.nodes.insert(node_id, node);
@@ -779,23 +823,25 @@ impl MetaGraphCanvas {
                     changes.insert(MetaGraphChanges::NODE_ADDED);
 
                     if auto_attach
-                        && let Some(selected_node_id) = self.selected_node_id
-                        && let Some(free_child_slot) =
-                            self.nodes.get(&selected_node_id).and_then(|selected_node| {
-                                selected_node.first_free_child_slot_accepting_type(output_data_type)
-                            })
+                        && let Some(AutoAttachInfo {
+                            parent_node_id,
+                            child_slot_on_parent,
+                            child_node_id,
+                            parent_slot_on_child,
+                            ..
+                        }) = auto_attach_info
                     {
                         self.try_attach(
                             &mut scratch.search,
-                            selected_node_id,
-                            free_child_slot,
-                            node_id,
-                            0,
+                            parent_node_id,
+                            child_slot_on_parent,
+                            child_node_id,
+                            parent_slot_on_child,
                             changes,
                         );
                     }
 
-                    if !is_leaf || self.selected_node_id.is_none() {
+                    if !is_output && (!is_leaf || self.selected_node_id.is_none()) {
                         self.selected_node_id = Some(node_id);
                     }
 
@@ -1350,38 +1396,122 @@ impl MetaGraphCanvas {
         Some(Rect::from_center_size(node.position, node_size))
     }
 
-    fn determine_position_for_new_node(
+    fn position_relative_to_node(
+        &self,
+        world_node_rects: &BTreeMap<MetaNodeID, Rect>,
+        node_size: Vec2,
+        reference_node_id: MetaNodeID,
+        direction: Direction,
+        x_alignment: Align,
+        y_alignment: Align,
+        gap: f32,
+    ) -> Option<Pos2> {
+        let reference_node = self.nodes.get(&reference_node_id)?;
+        let reference_node_rect = world_node_rects.get(&reference_node_id)?;
+
+        let ref_pos = reference_node.position;
+        let ref_size = reference_node_rect.size();
+
+        let base_position = match direction {
+            Direction::LeftToRight => {
+                let x_offset = 0.5 * (ref_size.x + node_size.x) + gap;
+                ref_pos + vec2(x_offset, 0.0)
+            }
+            Direction::RightToLeft => {
+                let x_offset = 0.5 * (ref_size.x + node_size.x) + gap;
+                ref_pos - vec2(x_offset, 0.0)
+            }
+            Direction::TopDown => {
+                let y_offset = 0.5 * (ref_size.y + node_size.y) + gap;
+                ref_pos + vec2(0.0, y_offset)
+            }
+            Direction::BottomUp => {
+                let y_offset = 0.5 * (ref_size.y + node_size.y) + gap;
+                ref_pos - vec2(0.0, y_offset)
+            }
+        };
+
+        let alignment_offset = match direction {
+            Direction::LeftToRight | Direction::RightToLeft => {
+                let y_offset = match y_alignment {
+                    Align::Min => -0.5 * (ref_size.y - node_size.y),
+                    Align::Center => 0.0,
+                    Align::Max => 0.5 * (ref_size.y - node_size.y),
+                };
+                vec2(0.0, y_offset)
+            }
+            Direction::TopDown | Direction::BottomUp => {
+                let x_offset = match x_alignment {
+                    Align::Min => -0.5 * (ref_size.x - node_size.x),
+                    Align::Center => 0.0,
+                    Align::Max => 0.5 * (ref_size.x - node_size.x),
+                };
+                vec2(x_offset, 0.0)
+            }
+        };
+
+        Some(base_position + alignment_offset)
+    }
+
+    fn default_new_node_position(
         &self,
         world_node_rects: &BTreeMap<MetaNodeID, Rect>,
         node_size: Vec2,
     ) -> Option<Pos2> {
-        if let Some(selected_node_id) = self.selected_node_id
-            && let Some(selected_node) = self.nodes.get(&selected_node_id)
-        {
-            let selected_node_rect = &world_node_rects[&selected_node_id];
-            Some(
-                selected_node.position
-                    + vec2(
-                        0.0,
-                        0.5 * (selected_node_rect.height() + node_size.y) + NEW_NODE_GAP,
-                    ),
+        self.nodes.keys().next().and_then(|&output_node_id| {
+            self.position_relative_to_node(
+                world_node_rects,
+                node_size,
+                output_node_id,
+                Direction::LeftToRight,
+                Align::Center,
+                Align::Min,
+                NEW_NODE_GAP,
             )
+        })
+    }
+
+    fn output_node_position(&self, canvas_rect: &Rect, node_size: Vec2) -> Pos2 {
+        self.pan_zoom_state.screen_pos_to_world_space(
+            canvas_rect.min,
+            canvas_rect.center_top() + vec2(0.0, OUTPUT_NODE_TOP_CLEARING),
+        ) + vec2(0.0, 0.5 * node_size.y)
+    }
+
+    fn determine_auto_attach_info(
+        &self,
+        node_id: MetaNodeID,
+        node: &MetaNode,
+    ) -> Option<AutoAttachInfo> {
+        let selected_node_id = self.selected_node_id?;
+        let selected_node = self.nodes.get(&selected_node_id)?;
+
+        if let Some(free_child_slot) =
+            selected_node.first_free_child_slot_accepting_type(node.output_data_type)
+        {
+            return Some(AutoAttachInfo {
+                attach_as_child: true,
+                parent_node_id: selected_node_id,
+                child_slot_on_parent: free_child_slot,
+                child_node_id: node_id,
+                parent_slot_on_child: 0,
+            });
         } else {
-            let mut position = None;
-            for (last_node_id, last_node) in self.nodes.iter().rev() {
-                if let Some(last_node_rect) = world_node_rects.get(last_node_id) {
-                    position = Some(
-                        last_node.position
-                            + vec2(
-                                0.0,
-                                0.5 * (last_node_rect.height() + node_size.y) + NEW_NODE_GAP,
-                            ),
-                    );
-                    break;
+            for (child_slot, &input_data_type) in node.input_data_types.iter().enumerate() {
+                if let Some(free_parent_slot) =
+                    selected_node.first_free_parent_slot_accepting_type(input_data_type)
+                {
+                    return Some(AutoAttachInfo {
+                        attach_as_child: false,
+                        parent_node_id: node_id,
+                        child_slot_on_parent: child_slot,
+                        child_node_id: selected_node_id,
+                        parent_slot_on_child: free_parent_slot,
+                    });
                 }
             }
-            position
         }
+        None
     }
 
     fn handle_port(
@@ -1795,7 +1925,7 @@ impl MetaGraphCanvas {
         } else {
             let root_node_size = scratch.world_node_rects[&root_node_id].size();
             let root_node_position = self
-                .determine_position_for_new_node(&scratch.world_node_rects, root_node_size)
+                .default_new_node_position(&scratch.world_node_rects, root_node_size)
                 .unwrap();
 
             let orig_root_node_position = self.nodes[&root_node_id].position;
