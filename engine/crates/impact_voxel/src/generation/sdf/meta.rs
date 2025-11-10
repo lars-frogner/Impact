@@ -13,6 +13,7 @@ use anyhow::{Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::FixedQueue;
 use impact_geometry::rotation_between_axes;
+use impact_math::splitmix;
 use nalgebra::{
     Point3, Similarity, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
 };
@@ -26,7 +27,7 @@ use std::{array, borrow::Cow, ops::RangeInclusive};
 
 #[derive(Clone, Debug)]
 pub struct MetaSDFGraph<A: Allocator = Global> {
-    seed: u32,
+    seed: u64,
     nodes: AVec<MetaSDFNode, A>,
 }
 
@@ -287,14 +288,14 @@ pub struct MetaStochasticSelection {
 type NodeRng = Pcg64Mcg;
 
 impl<A: Allocator> MetaSDFGraph<A> {
-    pub fn new_in(alloc: A, seed: u32) -> Self {
+    pub fn new_in(alloc: A, seed: u64) -> Self {
         Self {
             seed,
             nodes: AVec::new_in(alloc),
         }
     }
 
-    pub fn with_capacity_in(capacity: usize, alloc: A, seed: u32) -> Self {
+    pub fn with_capacity_in(capacity: usize, alloc: A, seed: u64) -> Self {
         Self {
             seed,
             nodes: AVec::with_capacity_in(capacity, alloc),
@@ -317,13 +318,14 @@ impl<A: Allocator> MetaSDFGraph<A> {
             return Ok(graph);
         }
 
-        let mut rng = create_rng(self.seed);
-
         let mut outputs = AVec::new_in(arena);
         outputs.resize(self.nodes.len(), MetaSDFNodeOutput::<AR>::SingleSDF(None));
 
         let mut states = AVec::new_in(arena);
         states.resize(self.nodes.len(), MetaNodeBuildState::Unvisited);
+
+        let mut stable_seeds = AVec::new_in(arena);
+        stable_seeds.resize(self.nodes.len(), 0u64);
 
         let mut operation_stack = AVec::with_capacity_in(3 * self.nodes.len(), arena);
 
@@ -339,8 +341,6 @@ impl<A: Allocator> MetaSDFGraph<A> {
                         .get_mut(node_idx)
                         .ok_or_else(|| anyhow!("Missing meta SDF node {node_id}"))?;
 
-                    operation_stack.push(BuildOperation::Process(node_id));
-
                     match *state {
                         MetaNodeBuildState::Resolved => {
                             // Already resolved via a different parent
@@ -351,6 +351,8 @@ impl<A: Allocator> MetaSDFGraph<A> {
                         }
                         MetaNodeBuildState::Unvisited => {
                             *state = MetaNodeBuildState::ChildrenBeingVisited;
+
+                            operation_stack.push(BuildOperation::Process(node_id));
 
                             match &self.nodes[node_idx] {
                                 MetaSDFNode::Box(_)
@@ -413,15 +415,17 @@ impl<A: Allocator> MetaSDFGraph<A> {
                 }
                 BuildOperation::Process(node_id) => {
                     let node_idx = node_id as usize;
-                    let node = &self.nodes[node_idx];
                     let state = &mut states[node_idx];
+                    *state = MetaNodeBuildState::Resolved;
 
-                    if *state != MetaNodeBuildState::Resolved {
-                        *state = MetaNodeBuildState::Resolved;
+                    let node = &self.nodes[node_idx];
 
-                        outputs[node_idx] =
-                            node.resolve(arena, &mut graph, &outputs, rng.random())?;
-                    }
+                    let stable_seed = node.obtain_stable_seed(&stable_seeds);
+                    stable_seeds[node_idx] = stable_seed;
+
+                    let seed = splitmix::random_u64_from_two_states(self.seed, stable_seed);
+
+                    outputs[node_idx] = node.resolve(arena, &mut graph, &outputs, seed)?;
                 }
             }
         }
@@ -703,45 +707,135 @@ impl MetaSDFNode {
         })
     }
 
+    /// Combines a node type tag, node seed parameter (for applicable nodes) and
+    /// the stable seeds of the child nodes to obtain a stable seed that will
+    /// only change due to changes in the seeding, types or topology of the
+    /// node's subtree.
+    fn obtain_stable_seed(&self, stable_seeds: &[u64]) -> u64 {
+        let combine_seeded_leaf =
+            |tag, seed: &u32| splitmix::random_u64_from_two_states(tag, (*seed).into());
+
+        let combine_unary = |tag, child_id: &MetaSDFNodeID| {
+            splitmix::random_u64_from_two_states(tag, stable_seeds[*child_id as usize])
+        };
+
+        let combine_seeded_unary = |tag, seed: &u32, child_id: &MetaSDFNodeID| {
+            splitmix::random_u64_from_three_states(
+                tag,
+                (*seed).into(),
+                stable_seeds[*child_id as usize],
+            )
+        };
+
+        let combine_binary = |tag, child_1_id: &MetaSDFNodeID, child_2_id: &MetaSDFNodeID| {
+            splitmix::random_u64_from_three_states(
+                tag,
+                stable_seeds[*child_1_id as usize],
+                stable_seeds[*child_2_id as usize],
+            )
+        };
+
+        let combine_binary_commutative =
+            |tag, child_1_id: &MetaSDFNodeID, child_2_id: &MetaSDFNodeID| {
+                let s1 = stable_seeds[*child_1_id as usize];
+                let s2 = stable_seeds[*child_2_id as usize];
+                let (lo, hi) = if s1 <= s2 { (s1, s2) } else { (s2, s1) };
+                splitmix::random_u64_from_three_states(tag, lo, hi)
+            };
+
+        match self {
+            Self::Box(MetaBoxSDF { seed, .. }) => combine_seeded_leaf(0x01, seed),
+            Self::Sphere(MetaSphereSDF { seed, .. }) => combine_seeded_leaf(0x02, seed),
+            Self::GradientNoise(MetaGradientNoiseSDF { seed, .. }) => {
+                combine_seeded_leaf(0x03, seed)
+            }
+            Self::Translation(MetaSDFTranslation { seed, child_id, .. }) => {
+                combine_seeded_unary(0x10, seed, child_id)
+            }
+            Self::Rotation(MetaSDFRotation { seed, child_id, .. }) => {
+                combine_seeded_unary(0x11, seed, child_id)
+            }
+            Self::Scaling(MetaSDFScaling { seed, child_id, .. }) => {
+                combine_seeded_unary(0x12, seed, child_id)
+            }
+            Self::MultifractalNoise(MetaMultifractalNoiseSDFModifier {
+                seed, child_id, ..
+            }) => combine_seeded_unary(0x20, seed, child_id),
+            Self::MultiscaleSphere(MetaMultiscaleSphereSDFModifier { seed, child_id, .. }) => {
+                combine_seeded_unary(0x21, seed, child_id)
+            }
+            Self::Union(MetaSDFUnion {
+                child_1_id,
+                child_2_id,
+                ..
+            }) => combine_binary_commutative(0x30, child_1_id, child_2_id),
+            Self::Subtraction(MetaSDFSubtraction {
+                child_1_id,
+                child_2_id,
+                ..
+            }) => combine_binary(0x31, child_1_id, child_2_id),
+            Self::Intersection(MetaSDFIntersection {
+                child_1_id,
+                child_2_id,
+                ..
+            }) => combine_binary_commutative(0x32, child_1_id, child_2_id),
+            Self::GroupUnion(MetaSDFGroupUnion { child_id, .. }) => combine_unary(0x33, child_id),
+            Self::StratifiedPlacement(MetaStratifiedPlacement { seed, .. }) => {
+                combine_seeded_leaf(0x40, seed)
+            }
+            Self::TranslationToSurface(MetaTranslationToSurface {
+                surface_sdf_id,
+                subject_id,
+            }) => combine_binary(0x50, surface_sdf_id, subject_id),
+            Self::RotationToGradient(MetaRotationToGradient {
+                gradient_sdf_id,
+                subject_id,
+            }) => combine_binary(0x51, gradient_sdf_id, subject_id),
+            Self::Scattering(MetaSDFScattering {
+                sdf_id,
+                placement_id,
+            }) => combine_binary(0x52, sdf_id, placement_id),
+            Self::StochasticSelection(MetaStochasticSelection { seed, child_id, .. }) => {
+                combine_seeded_unary(0x60, seed, child_id)
+            }
+        }
+    }
+
     fn resolve<A>(
         &self,
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>>
     where
         A: Allocator + Copy,
     {
         match self {
-            Self::Box(node) => Ok(node.resolve(graph, seed_offset)),
-            Self::Sphere(node) => Ok(node.resolve(graph, seed_offset)),
-            Self::GradientNoise(node) => Ok(node.resolve(graph, seed_offset)),
-            Self::Translation(node) => node.resolve(arena, graph, outputs, seed_offset),
-            Self::Rotation(node) => node.resolve(arena, graph, outputs, seed_offset),
-            Self::Scaling(node) => node.resolve(arena, graph, outputs, seed_offset),
-            Self::MultifractalNoise(node) => node.resolve(arena, graph, outputs, seed_offset),
-            Self::MultiscaleSphere(node) => node.resolve(arena, graph, outputs, seed_offset),
+            Self::Box(node) => Ok(node.resolve(graph, seed)),
+            Self::Sphere(node) => Ok(node.resolve(graph, seed)),
+            Self::GradientNoise(node) => Ok(node.resolve(graph, seed)),
+            Self::Translation(node) => node.resolve(arena, graph, outputs, seed),
+            Self::Rotation(node) => node.resolve(arena, graph, outputs, seed),
+            Self::Scaling(node) => node.resolve(arena, graph, outputs, seed),
+            Self::MultifractalNoise(node) => node.resolve(arena, graph, outputs, seed),
+            Self::MultiscaleSphere(node) => node.resolve(arena, graph, outputs, seed),
             Self::Union(node) => node.resolve(graph, outputs),
             Self::Subtraction(node) => node.resolve(graph, outputs),
             Self::Intersection(node) => node.resolve(graph, outputs),
             Self::GroupUnion(node) => node.resolve(arena, graph, outputs),
-            Self::StratifiedPlacement(node) => Ok(node.resolve(arena, seed_offset)),
+            Self::StratifiedPlacement(node) => Ok(node.resolve(arena, seed)),
             Self::TranslationToSurface(node) => node.resolve(arena, graph, outputs),
             Self::RotationToGradient(node) => node.resolve(arena, graph, outputs),
             Self::Scattering(node) => node.resolve(arena, graph, outputs),
-            Self::StochasticSelection(node) => Ok(node.resolve(arena, graph, outputs, seed_offset)),
+            Self::StochasticSelection(node) => Ok(node.resolve(arena, graph, outputs, seed)),
         }
     }
 }
 
 impl MetaBoxSDF {
-    fn resolve<A: Allocator>(
-        &self,
-        graph: &mut SDFGraph<A>,
-        seed_offset: u32,
-    ) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed_offset + self.seed);
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
+        let mut rng = create_rng(seed);
         let extents = self.extents.map(|range| range.pick_value(&mut rng));
         let node_id = graph.add_node(SDFNode::new_box(extents));
         MetaSDFNodeOutput::SingleSDF(Some(node_id))
@@ -749,12 +843,8 @@ impl MetaBoxSDF {
 }
 
 impl MetaSphereSDF {
-    fn resolve<A: Allocator>(
-        &self,
-        graph: &mut SDFGraph<A>,
-        seed_offset: u32,
-    ) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed_offset + self.seed);
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
+        let mut rng = create_rng(seed);
         let radius = self.radius.pick_value(&mut rng);
         let node_id = graph.add_node(SDFNode::new_sphere(radius));
         MetaSDFNodeOutput::SingleSDF(Some(node_id))
@@ -762,12 +852,8 @@ impl MetaSphereSDF {
 }
 
 impl MetaGradientNoiseSDF {
-    fn resolve<A: Allocator>(
-        &self,
-        graph: &mut SDFGraph<A>,
-        seed_offset: u32,
-    ) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed_offset + self.seed);
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
+        let mut rng = create_rng(seed);
         let extents = self.extents.map(|range| range.pick_value(&mut rng));
         let noise_frequency = self.noise_frequency.pick_value(&mut rng);
         let noise_threshold = self.noise_threshold.pick_value(&mut rng);
@@ -788,13 +874,13 @@ impl MetaSDFTranslation {
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
             graph,
             "Translation",
-            seed_offset + self.seed,
+            seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
                 let translation = self.translation.map(|range| range.pick_value(rng));
@@ -810,13 +896,13 @@ impl MetaSDFRotation {
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
             graph,
             "Rotation",
-            seed_offset + self.seed,
+            seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
                 let roll = self.roll.pick_value(rng);
@@ -837,13 +923,13 @@ impl MetaSDFScaling {
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
             graph,
             "Scaling",
-            seed_offset + self.seed,
+            seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
                 let scaling = self.scaling.pick_value(rng);
@@ -859,13 +945,13 @@ impl MetaMultifractalNoiseSDFModifier {
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
             graph,
             "MultifractalNoise",
-            seed_offset + self.seed,
+            seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
                 let octaves = self.octaves.pick_value(rng);
@@ -894,13 +980,13 @@ impl MetaMultiscaleSphereSDFModifier {
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_sdf_op(
             arena,
             graph,
             "MultiscaleSphere",
-            seed_offset + self.seed,
+            seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
                 let octaves = self.octaves.pick_value(rng);
@@ -1087,8 +1173,8 @@ impl MetaSDFGroupUnion {
 }
 
 impl MetaStratifiedPlacement {
-    fn resolve<A: Allocator>(&self, arena: A, seed_offset: u32) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed_offset + self.seed);
+    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> MetaSDFNodeOutput<A> {
+        let mut rng = create_rng(seed);
         let shape = self.shape.map(|range| range.pick_value(&mut rng));
         let cell_extents = self.cell_extents.map(|range| range.pick_value(&mut rng));
         let points_per_grid_cell = self.points_per_grid_cell.pick_value(&mut rng);
@@ -1492,12 +1578,12 @@ impl MetaStochasticSelection {
         arena: A,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
-        seed_offset: u32,
+        seed: u64,
     ) -> MetaSDFNodeOutput<A>
     where
         A: Allocator + Copy,
     {
-        let mut rng = create_rng(seed_offset + self.seed);
+        let mut rng = create_rng(seed);
 
         let mut single_is_selected =
             || *self.pick_count.start() > 0 && rng.random_range(0.0..1.0) < self.pick_probability;
@@ -1542,15 +1628,15 @@ impl MetaStochasticSelection {
     }
 }
 
-fn create_rng(seed: u32) -> NodeRng {
-    NodeRng::seed_from_u64(u64::from(seed))
+fn create_rng(seed: u64) -> NodeRng {
+    NodeRng::seed_from_u64(seed)
 }
 
 fn resolve_unary_sdf_op<A: Allocator>(
     arena: A,
     graph: &mut SDFGraph<A>,
     name: &str,
-    seed: u32,
+    seed: u64,
     child_output: &MetaSDFNodeOutput<A>,
     create_atomic_node: impl Fn(&mut NodeRng, SDFNodeID) -> SDFNode,
 ) -> Result<MetaSDFNodeOutput<A>> {
@@ -1580,7 +1666,7 @@ fn resolve_unary_sdf_op<A: Allocator>(
 fn unary_sdf_group_op<A: Allocator>(
     arena: A,
     graph: &mut SDFGraph<A>,
-    seed: u32,
+    seed: u64,
     input_node_ids: &[SDFNodeID],
     create_output_node: impl Fn(&mut NodeRng, SDFNodeID) -> SDFNode,
 ) -> AVec<SDFNodeID, A> {

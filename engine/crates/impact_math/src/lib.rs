@@ -8,6 +8,7 @@ mod bounds;
 mod halton;
 mod hash;
 mod num;
+pub mod splitmix;
 
 pub use angle::{Angle, Degrees, Radians};
 pub use bounds::{Bounds, InclusiveBounds, UpperExclusiveBounds};

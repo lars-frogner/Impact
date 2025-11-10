@@ -87,7 +87,7 @@ where
     let root_node_id = output_node.links_to_children[0]?.to_node;
     let root_node = &nodes[&root_node_id];
 
-    let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena, seed);
+    let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena, seed.into());
 
     scratch.id_map.clear();
 
