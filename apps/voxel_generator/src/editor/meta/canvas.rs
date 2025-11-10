@@ -862,6 +862,7 @@ impl MetaGraphCanvas {
                     self.dragging_node = None;
                 }
 
+                let mut node_to_toggle_collapsed_state_for = None;
                 let mut drag_delta = None;
 
                 for (&node_id, node) in self.nodes.iter_mut() {
@@ -883,6 +884,12 @@ impl MetaGraphCanvas {
 
                         if node_response.clicked() && self.pending_edge.is_none() {
                             self.selected_node_id = Some(node_id);
+                        }
+
+                        // Detect double-click for toggling collapsed state
+
+                        if !node.data.kind.is_output() && node_response.double_clicked() {
+                            node_to_toggle_collapsed_state_for = Some(node_id);
                         }
 
                         // Obtain dragging delta
@@ -921,6 +928,16 @@ impl MetaGraphCanvas {
                         self.pan_zoom_state.zoom,
                         is_selected,
                         is_collapsed,
+                    );
+                }
+
+                // Toggle collapsed state of double-clicked node
+
+                if let Some(node_id) = node_to_toggle_collapsed_state_for {
+                    self.set_node_collapsed(
+                        node_id,
+                        !self.collapsed_nodes.contains(&node_id),
+                        changes,
                     );
                 }
 
