@@ -149,6 +149,12 @@ impl Editor {
             .unwrap_or_else(build::default_sdf_voxel_generator)
     }
 
+    fn reset_canvas(&mut self) {
+        self.meta_graph_canvas.reset();
+        self.last_graph_path = None;
+        self.rebuild_generator = true;
+    }
+
     fn load_graph_from_file(&mut self, ui: &Ui) {
         if let Some(path) = FileDialog::new()
             .add_filter("Graph (*.graph.ron)", &["graph.ron"])
@@ -295,6 +301,18 @@ impl CustomPanels for Editor {
                 {
                     self.save_graph_to_last_path(arena);
                 };
+
+                ui.horizontal(|ui| {
+                    if ui.button("Clear").clicked() {
+                        self.reset_canvas();
+                        pending_node_operations.addition = Some(PendingNodeAddition {
+                            node_id: self.meta_graph_canvas.next_node_id(),
+                            data: MetaNodeData::new_default(MetaNodeKind::Output),
+                        });
+                    }
+                    ui.add_space(2.0);
+                });
+                ui.end_row();
             });
 
             option_group(ui, "main", |ui| {
@@ -401,10 +419,6 @@ impl CustomPanels for Editor {
                                         });
                                 }
                             });
-                            if ui.button("Save As...").clicked() {
-                                self.save_subtree_to_file(arena, selected_node_id);
-                                selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
-                            }
                         } else {
                             let mut kind = selected_node.data.kind;
 
@@ -428,36 +442,34 @@ impl CustomPanels for Editor {
                                     kind,
                                 });
                             }
+                        }
 
-                            let mut parent_port_count = selected_node.links_to_parents.len();
+                        let mut parent_port_count = selected_node.links_to_parents.len();
 
-                            labeled_option(
-                                ui,
-                                LabelAndHoverText::label_only("Parent ports"),
-                                |ui| {
-                                    ComboBox::from_id_salt("parent_port_count")
-                                        .selected_text(
-                                            PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
-                                        )
-                                        .show_ui(ui, |ui| {
-                                            for (option, label) in PARENT_PORT_COUNT_OPTIONS {
-                                                ui.selectable_value(
-                                                    &mut parent_port_count,
-                                                    option,
-                                                    label,
-                                                );
-                                            }
-                                        })
-                                },
-                            );
+                        labeled_option(ui, LabelAndHoverText::label_only("Parent ports"), |ui| {
+                            ComboBox::from_id_salt("parent_port_count")
+                                .selected_text(PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1)
+                                .show_ui(ui, |ui| {
+                                    for (option, label) in PARENT_PORT_COUNT_OPTIONS {
+                                        ui.selectable_value(&mut parent_port_count, option, label);
+                                    }
+                                })
+                        });
 
-                            if parent_port_count != selected_node.links_to_parents.len() {
-                                pending_node_operations.parent_port_count_change =
-                                    Some(PendingNodeParentPortCountChange {
-                                        node_id: selected_node_id,
-                                        parent_port_count,
-                                    });
+                        if parent_port_count != selected_node.links_to_parents.len() {
+                            pending_node_operations.parent_port_count_change =
+                                Some(PendingNodeParentPortCountChange {
+                                    node_id: selected_node_id,
+                                    parent_port_count,
+                                });
+                        }
+
+                        if is_collapsed {
+                            if ui.button("Save As...").clicked() {
+                                self.save_subtree_to_file(arena, selected_node_id);
+                                selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
                             }
+                            ui.end_row();
                         }
                     }
 

@@ -27,7 +27,7 @@ use impact::{
 };
 use std::{collections::BTreeMap, path::Path};
 
-const CANVAS_DEFAULT_POS: Pos2 = pos2(200.0, 22.0);
+const CANVAS_DEFAULT_POS: Pos2 = pos2(250.0, 25.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(600.0, 700.0);
 
 const MIN_NODE_SEPARATION: f32 = 8.0;
@@ -194,6 +194,18 @@ impl MetaGraphCanvas {
             collapse_index: CollapseIndex::new(),
             node_id_counter: 0,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.pan_zoom_state = PanZoomState::default();
+        self.nodes.clear();
+        self.collapsed_nodes.clear();
+        self.selected_node_id = None;
+        self.pending_edge = None;
+        self.is_panning = false;
+        self.dragging_node = None;
+        self.collapse_index.reset();
+        self.node_id_counter = 0;
     }
 
     fn cursor_should_be_hidden(&self) -> bool {
@@ -1987,6 +1999,12 @@ impl CollapseIndex {
             subtrees_by_root: HashMap::default(),
             member_to_root: HashMap::default(),
         }
+    }
+
+    fn reset(&mut self) {
+        self.visible_subtree_roots.clear();
+        self.subtrees_by_root.clear();
+        self.member_to_root.clear();
     }
 
     fn rebuild(
