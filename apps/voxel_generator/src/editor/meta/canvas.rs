@@ -51,9 +51,6 @@ const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not valid";
 
 const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(80.0, 0.0);
 
-// TODO
-// Omit output node in saved graph and support loading multiple graphs.
-
 #[derive(Clone, Debug)]
 pub struct MetaGraphCanvas {
     pub pan_zoom_state: PanZoomState,
