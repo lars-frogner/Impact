@@ -55,7 +55,7 @@ const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(80.0, 0.0);
 pub struct MetaGraphCanvas {
     pub pan_zoom_state: PanZoomState,
     pub nodes: BTreeMap<MetaNodeID, MetaNode>,
-    pub collapsed_roots: HashSet<MetaNodeID>,
+    pub collapsed_nodes: HashSet<MetaNodeID>,
     pub selected_node_id: Option<MetaNodeID>,
     pub pending_edge: Option<PendingEdge>,
     pub is_panning: bool,
@@ -186,7 +186,7 @@ impl MetaGraphCanvas {
         Self {
             pan_zoom_state: PanZoomState::default(),
             nodes: BTreeMap::new(),
-            collapsed_roots: HashSet::default(),
+            collapsed_nodes: HashSet::default(),
             selected_node_id: None,
             pending_edge: None,
             is_panning: false,
@@ -278,7 +278,7 @@ impl MetaGraphCanvas {
         self.nodes.remove(&node_id);
         changes.insert(MetaGraphChanges::NODE_REMOVED);
 
-        if self.collapsed_roots.remove(&node_id) {
+        if self.collapsed_nodes.remove(&node_id) {
             changes.insert(MetaGraphChanges::COLLAPSED_STATE_CHANGED);
         }
     }
@@ -551,7 +551,7 @@ impl MetaGraphCanvas {
     }
 
     pub fn node_is_collapsed_root(&self, node_id: MetaNodeID) -> bool {
-        self.collapsed_roots.contains(&node_id)
+        self.collapsed_nodes.contains(&node_id)
     }
 
     pub fn set_node_collapsed(
@@ -561,10 +561,10 @@ impl MetaGraphCanvas {
         changes: &mut MetaGraphChanges,
     ) {
         if collapsed {
-            if self.collapsed_roots.insert(node_id) {
+            if self.collapsed_nodes.insert(node_id) {
                 changes.insert(MetaGraphChanges::COLLAPSED_STATE_CHANGED);
             }
-        } else if self.collapsed_roots.remove(&node_id) {
+        } else if self.collapsed_nodes.remove(&node_id) {
             changes.insert(MetaGraphChanges::COLLAPSED_STATE_CHANGED);
         }
     }
@@ -1757,7 +1757,7 @@ impl MetaGraphCanvas {
             scratch,
             &self.nodes,
             self.node_id_counter,
-            &self.collapsed_roots,
+            &self.collapsed_nodes,
         );
     }
 
@@ -1771,6 +1771,7 @@ impl MetaGraphCanvas {
                 zoom: self.pan_zoom_state.zoom,
             },
             nodes: nodes.as_slice(),
+            collapsed_nodes: &self.collapsed_nodes,
         };
 
         impact_io::write_ron_file(&graph, output_path)
@@ -1807,6 +1808,7 @@ impl MetaGraphCanvas {
         let graph = IOMetaGraphRef {
             kind: IOMetaGraphKind::Subtree { root_node_id },
             nodes: nodes.as_slice(),
+            collapsed_nodes: &HashSet::default(),
         };
 
         impact_io::write_ron_file(&graph, output_path)
@@ -1850,6 +1852,8 @@ impl MetaGraphCanvas {
         self.nodes = nodes;
         self.node_id_counter = node_id_counter;
 
+        self.collapsed_nodes = graph.collapsed_nodes;
+
         self.pan_zoom_state = PanZoomState::new(pan.into(), zoom.clamp(MIN_ZOOM, MAX_ZOOM));
 
         self.selected_node_id = None;
@@ -1857,8 +1861,8 @@ impl MetaGraphCanvas {
         self.is_panning = false;
         self.dragging_node = None;
 
-        self.rebuild_collapse_index(scratch);
         self.update_edge_data_types(scratch);
+        self.rebuild_collapse_index(scratch);
 
         Ok(())
     }
@@ -1916,10 +1920,10 @@ impl MetaGraphCanvas {
         self.nodes.extend(subtree_nodes);
         self.node_id_counter = self.node_id_counter.max(node_id_counter);
 
-        self.collapsed_roots.insert(root_node_id);
+        self.collapsed_nodes.insert(root_node_id);
 
-        self.rebuild_collapse_index(scratch);
         self.update_edge_data_types(scratch);
+        self.rebuild_collapse_index(scratch);
 
         self.compute_world_node_rects(&mut scratch.world_node_rects);
 
@@ -1990,12 +1994,12 @@ impl CollapseIndex {
         scratch: &mut MetaCanvasScratch,
         nodes: &BTreeMap<MetaNodeID, MetaNode>,
         node_id_counter: MetaNodeID,
-        collapsed_roots: &HashSet<MetaNodeID>,
+        collapsed_nodes: &HashSet<MetaNodeID>,
     ) {
         self.member_to_root.clear();
-        self.visible_subtree_roots.clone_from(collapsed_roots);
+        self.visible_subtree_roots.clone_from(collapsed_nodes);
 
-        for &root_node_id in collapsed_roots {
+        for &root_node_id in collapsed_nodes {
             // If the root has already been established as a member of a
             // subtree, that subtree encompasses this one, so this one will be
             // hidden.
@@ -2019,7 +2023,7 @@ impl CollapseIndex {
                 // If any of the non-root subtree members are also collapsed
                 // roots, their subtrees should not be visible since they are
                 // part of this collapsed subtree
-                if collapsed_roots.contains(node_id) {
+                if collapsed_nodes.contains(node_id) {
                     self.visible_subtree_roots.remove(node_id);
                 }
             }

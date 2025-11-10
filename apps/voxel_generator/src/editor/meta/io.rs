@@ -3,6 +3,7 @@ use super::{
     MetaNodeParam, MetaNodeParentLinks, MetaUIntParam, MetaUIntRangeParam, node_kind::MetaNodeKind,
 };
 use anyhow::{Error, bail};
+use impact::impact_containers::HashSet;
 use serde::{Deserialize, Serialize};
 use tinyvec::TinyVec;
 
@@ -10,12 +11,14 @@ use tinyvec::TinyVec;
 pub struct IOMetaGraph {
     pub kind: IOMetaGraphKind,
     pub nodes: Vec<IOMetaNode>,
+    pub collapsed_nodes: HashSet<MetaNodeID>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct IOMetaGraphRef<'a> {
     pub kind: IOMetaGraphKind,
     pub nodes: &'a [IOMetaNode],
+    pub collapsed_nodes: &'a HashSet<MetaNodeID>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
