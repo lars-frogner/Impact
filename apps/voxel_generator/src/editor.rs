@@ -54,7 +54,7 @@ pub struct Editor {
     meta_graph_canvas: MetaGraphCanvas,
     meta_canvas_scratch: MetaCanvasScratch,
     atomic_graph_canvas: AtomicGraphCanvas,
-    graph_dirty: bool,
+    graph_needs_compilation: bool,
     rebuild_generator: bool,
     graph_status: MetaGraphStatus,
     last_graph_path: Option<GraphPath>,
@@ -97,7 +97,7 @@ impl Editor {
             meta_graph_canvas: MetaGraphCanvas::new(),
             meta_canvas_scratch: MetaCanvasScratch::new(),
             atomic_graph_canvas: AtomicGraphCanvas::new(),
-            graph_dirty: false,
+            graph_needs_compilation: false,
             rebuild_generator: false,
             graph_status: MetaGraphStatus::Invalid,
             last_graph_path: None,
@@ -109,7 +109,7 @@ impl Editor {
     where
         A: Allocator + Copy,
     {
-        if !(self.graph_dirty || self.rebuild_generator) {
+        if !(self.graph_needs_compilation || self.rebuild_generator) {
             return None;
         }
 
@@ -118,7 +118,7 @@ impl Editor {
             &mut self.meta_canvas_scratch.build,
             &self.meta_graph_canvas.nodes,
         ) else {
-            self.graph_dirty = false;
+            self.graph_needs_compilation = false;
             self.rebuild_generator = false;
             self.graph_status = MetaGraphStatus::Invalid;
             return None;
@@ -126,12 +126,13 @@ impl Editor {
 
         self.atomic_graph_canvas.update_nodes(&compiled_graph.graph);
 
+        self.graph_needs_compilation = false;
+
         if !self.rebuild_generator {
             self.graph_status = MetaGraphStatus::Dirty;
             return None;
         }
 
-        self.graph_dirty = false;
         self.rebuild_generator = false;
 
         let generator = build::build_sdf_voxel_generator(arena, compiled_graph);
@@ -167,7 +168,7 @@ impl Editor {
             {
                 impact_log::error!("Failed to load graph from {}: {err:#}", path.display());
             } else {
-                self.graph_dirty = true;
+                self.graph_needs_compilation = true;
                 self.rebuild_generator = true;
                 impact_log::info!("Loaded graph from {}", path.display());
                 self.last_graph_path = Some(GraphPath::new(path));
@@ -507,7 +508,7 @@ impl CustomPanels for Editor {
                 self.atomic_graph_canvas.show(arena, ctx, layout_requested);
             }
 
-            self.graph_dirty = self.graph_dirty
+            self.graph_needs_compilation = self.graph_needs_compilation
                 || changes.intersects(
                     MetaGraphChanges::NODE_ATTACHED
                         | MetaGraphChanges::NODE_DETACHED
@@ -515,7 +516,7 @@ impl CustomPanels for Editor {
                         | MetaGraphChanges::PARAMS_CHANGED,
                 );
 
-            if self.config.auto_generate && self.graph_dirty {
+            if self.config.auto_generate && self.graph_needs_compilation {
                 self.rebuild_generator = true;
             }
         });
