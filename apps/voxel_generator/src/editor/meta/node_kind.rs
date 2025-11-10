@@ -747,6 +747,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
+        params.push(MetaUIntRangeParam::new(LabelAndHoverText::label_only("Count"), 1, 1).into());
         params.push(
             MetaFloatParam::new(LabelAndHoverText::label_only("Probability"), 1.0)
                 .with_min_value(0.0)
@@ -763,13 +764,15 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 2);
+        assert_eq!(params.len(), 3);
         let child_id = unary_child(id_map, children)?;
-        let probability = params[0].float();
-        let seed = params[1].uint();
+        let pick_count = params[0].uint_range();
+        let pick_probability = params[1].float();
+        let seed = params[2].uint();
         Some(MetaSDFNode::new_stochastic_selection(
             child_id,
-            probability,
+            pick_count.min..=pick_count.max,
+            pick_probability,
             seed,
         ))
     }

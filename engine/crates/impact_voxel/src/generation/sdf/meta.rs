@@ -19,9 +19,10 @@ use nalgebra::{
 use rand::{
     Rng, SeedableRng,
     distr::{Distribution, Uniform},
+    seq::IndexedRandom,
 };
 use rand_pcg::Pcg64Mcg;
-use std::{array, borrow::Cow};
+use std::{array, borrow::Cow, ops::RangeInclusive};
 
 #[derive(Clone, Debug)]
 pub struct MetaSDFGraph<A: Allocator = Global> {
@@ -91,15 +92,15 @@ enum MetaSDFNodeOutput<A: Allocator> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
 pub struct DiscreteParamRange {
-    min: u32,
-    max: u32,
+    pub min: u32,
+    pub max: u32,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug)]
 pub struct ContParamRange {
-    min: f32,
-    max: f32,
+    pub min: f32,
+    pub max: f32,
 }
 
 /// Output: `SingleSDF`
@@ -278,7 +279,8 @@ pub struct MetaSDFScattering {
 #[derive(Clone, Debug)]
 pub struct MetaStochasticSelection {
     child_id: MetaSDFNodeID,
-    probability: f32,
+    pick_count: RangeInclusive<u32>,
+    pick_probability: f32,
     seed: u32,
 }
 
@@ -685,12 +687,18 @@ impl MetaSDFNode {
         })
     }
 
-    pub fn new_stochastic_selection(child_id: MetaSDFNodeID, probability: f32, seed: u32) -> Self {
-        assert!(probability >= 0.0);
-        assert!(probability <= 1.0);
+    pub fn new_stochastic_selection(
+        child_id: MetaSDFNodeID,
+        pick_count: RangeInclusive<u32>,
+        pick_probability: f32,
+        seed: u32,
+    ) -> Self {
+        assert!(pick_probability >= 0.0);
+        assert!(pick_probability <= 1.0);
         Self::StochasticSelection(MetaStochasticSelection {
             child_id,
-            probability,
+            pick_count,
+            pick_probability,
             seed,
         })
     }
@@ -1490,23 +1498,26 @@ impl MetaStochasticSelection {
         A: Allocator + Copy,
     {
         let mut rng = create_rng(seed_offset + self.seed);
-        let mut is_selected = || rng.random_range(0.0..1.0) < self.probability;
+
+        let mut single_is_selected =
+            || *self.pick_count.start() > 0 && rng.random_range(0.0..1.0) < self.pick_probability;
 
         match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::SingleSDF(None) => MetaSDFNodeOutput::SingleSDF(None),
             MetaSDFNodeOutput::SinglePlacement(None) => MetaSDFNodeOutput::SinglePlacement(None),
             MetaSDFNodeOutput::SingleSDF(Some(input_node_id)) => {
-                let output_node_id = is_selected().then_some(*input_node_id);
+                let output_node_id = single_is_selected().then_some(*input_node_id);
                 MetaSDFNodeOutput::SingleSDF(output_node_id)
             }
             MetaSDFNodeOutput::SinglePlacement(Some(input_placement)) => {
-                let output_placement = is_selected().then_some(*input_placement);
+                let output_placement = single_is_selected().then_some(*input_placement);
                 MetaSDFNodeOutput::SinglePlacement(output_placement)
             }
             MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
                 let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
-                for &input_node_id in input_node_ids {
-                    if is_selected() {
+                let count = rng.random_range(self.pick_count.clone());
+                for &input_node_id in input_node_ids.choose_multiple(&mut rng, count as usize) {
+                    if rng.random_range(0.0..1.0) < self.pick_probability {
                         output_node_ids.push(input_node_id);
                         // The current root node will be the last of the input
                         // node IDs. That might not be included in the
@@ -1519,8 +1530,9 @@ impl MetaStochasticSelection {
             }
             MetaSDFNodeOutput::PlacementGroup(input_placements) => {
                 let mut output_placements = AVec::with_capacity_in(input_placements.len(), arena);
-                for input_placement in input_placements {
-                    if is_selected() {
+                let count = rng.random_range(self.pick_count.clone());
+                for input_placement in input_placements.choose_multiple(&mut rng, count as usize) {
+                    if rng.random_range(0.0..1.0) < self.pick_probability {
                         output_placements.push(*input_placement);
                     }
                 }
