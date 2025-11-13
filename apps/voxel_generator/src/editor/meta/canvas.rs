@@ -1633,7 +1633,7 @@ impl MetaGraphCanvas {
                 };
                 Label::new(format!(
                     "{inout} {slot} {tofrom} {} ({})",
-                    kind.label(),
+                    kind.label().label,
                     data_type.port_label(),
                 ))
             } else {

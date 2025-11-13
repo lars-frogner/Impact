@@ -320,7 +320,10 @@ impl CustomPanels for Editor {
                 option_checkbox(
                     ui,
                     &mut self.config.auto_generate,
-                    LabelAndHoverText::label_only("Auto generate"),
+                    LabelAndHoverText {
+                        label: "Auto generate",
+                        hover_text: "Automatically generate the new voxel object whenever the graph changes to a valid state.",
+                    },
                 );
                 if ui.button("Generate now").clicked() {
                     self.rebuild_generator = true;
@@ -329,12 +332,18 @@ impl CustomPanels for Editor {
                 option_checkbox(
                     ui,
                     &mut self.config.auto_attach,
-                    LabelAndHoverText::label_only("Auto attach"),
+                    LabelAndHoverText {
+                        label: "Auto attach",
+                        hover_text: "Automatically attach the newly added node to the selected node if compatible.",
+                    },
                 );
                 option_checkbox(
                     ui,
                     &mut self.config.auto_layout,
-                    LabelAndHoverText::label_only("Auto layout"),
+                    LabelAndHoverText {
+                        label: "Auto layout",
+                        hover_text: "Automatically arrange nodes in horizontal layers based on the current connectivity.",
+                    },
                 );
                 if ui.button("Layout now").clicked() {
                     layout_requested = true;
@@ -343,40 +352,46 @@ impl CustomPanels for Editor {
                 option_checkbox(
                     ui,
                     &mut self.config.show_atomic_graph,
-                    LabelAndHoverText::label_only("Show compiled graph"),
+                    LabelAndHoverText {
+                        label: "Show compiled graph",
+                        hover_text: "Display the compiled atomic SDF graph in addition of the high-level editable meta graph.",
+                    },
                 );
             });
 
             option_group(ui, "creation", |ui| {
-                labeled_option(ui, LabelAndHoverText::label_only("Subtree"), |ui| {
-                    if ui.button("Load...").clicked() {
-                        self.load_subtree_from_file(ui);
-                    }
-                });
+                labeled_option(
+                    ui,
+                    LabelAndHoverText {
+                        label: "Subtree",
+                        hover_text: "A subtree that has been saved to a file",
+                    },
+                    |ui| {
+                        if ui.button("Load...").clicked() {
+                            self.load_subtree_from_file(ui);
+                        }
+                    },
+                );
 
                 for kind_group in MetaNodeKindGroup::all_non_root() {
                     for kind_option in MetaNodeKind::all_non_root() {
                         if kind_option.group() != kind_group {
                             continue;
                         }
-                        labeled_option(
-                            ui,
-                            LabelAndHoverText::label_only(kind_option.label()),
-                            |ui| {
-                                if ui
-                                    .add_enabled(
-                                        pending_node_operations.addition.is_none(),
-                                        Button::new("Add"),
-                                    )
-                                    .clicked()
-                                {
-                                    pending_node_operations.addition = Some(PendingNodeAddition {
-                                        node_id: self.meta_graph_canvas.next_node_id(),
-                                        data: MetaNodeData::new_default(kind_option),
-                                    });
-                                }
-                            },
-                        );
+                        labeled_option(ui, kind_option.label(), |ui| {
+                            if ui
+                                .add_enabled(
+                                    pending_node_operations.addition.is_none(),
+                                    Button::new("Add"),
+                                )
+                                .clicked()
+                            {
+                                pending_node_operations.addition = Some(PendingNodeAddition {
+                                    node_id: self.meta_graph_canvas.next_node_id(),
+                                    data: MetaNodeData::new_default(kind_option),
+                                });
+                            }
+                        });
                     }
                 }
             });
@@ -395,7 +410,10 @@ impl CustomPanels for Editor {
                         option_checkbox(
                             ui,
                             &mut is_collapsed,
-                            LabelAndHoverText::label_only("Collapsed"),
+                            LabelAndHoverText {
+                                label: "Collapsed",
+                                hover_text: "Whether the subtree starting at this node is collapsed into a single representative node",
+                            },
                         );
 
                         if is_collapsed != was_collapsed {
@@ -407,35 +425,49 @@ impl CustomPanels for Editor {
                         }
 
                         if is_collapsed {
-                            labeled_option(ui, LabelAndHoverText::label_only("Name"), |ui| {
-                                if TextEdit::singleline(&mut selected_node.data.name)
-                                    .desired_width(NODE_NAME_TEXT_EDIT_WIDTH)
-                                    .show(ui)
-                                    .response
-                                    .changed()
-                                {
-                                    pending_node_operations.name_update =
-                                        Some(PendingNodeNameUpdate {
-                                            node_id: selected_node_id,
-                                        });
-                                }
-                            });
+                            labeled_option(
+                                ui,
+                                LabelAndHoverText {
+                                    label: "Name",
+                                    hover_text: "The name of this collapsed subtree",
+                                },
+                                |ui| {
+                                    if TextEdit::singleline(&mut selected_node.data.name)
+                                        .desired_width(NODE_NAME_TEXT_EDIT_WIDTH)
+                                        .show(ui)
+                                        .response
+                                        .changed()
+                                    {
+                                        pending_node_operations.name_update =
+                                            Some(PendingNodeNameUpdate {
+                                                node_id: selected_node_id,
+                                            });
+                                    }
+                                },
+                            );
                         } else {
                             let mut kind = selected_node.data.kind;
 
-                            labeled_option(ui, LabelAndHoverText::label_only("Kind"), |ui| {
-                                ComboBox::from_id_salt("selected_kind")
-                                    .selected_text(selected_node.data.kind.label())
-                                    .show_ui(ui, |ui| {
-                                        for kind_option in MetaNodeKind::all_non_root() {
-                                            ui.selectable_value(
-                                                &mut kind,
-                                                kind_option,
-                                                kind_option.label(),
-                                            );
-                                        }
-                                    })
-                            });
+                            labeled_option(
+                                ui,
+                                LabelAndHoverText {
+                                    label: "Kind",
+                                    hover_text: "The kind of this node",
+                                },
+                                |ui| {
+                                    ComboBox::from_id_salt("selected_kind")
+                                        .selected_text(selected_node.data.kind.label().label)
+                                        .show_ui(ui, |ui| {
+                                            for kind_option in MetaNodeKind::all_non_root() {
+                                                ui.selectable_value(
+                                                    &mut kind,
+                                                    kind_option,
+                                                    kind_option.label().label,
+                                                );
+                                            }
+                                        })
+                                },
+                            );
 
                             if kind != selected_node.data.kind {
                                 pending_node_operations.kind_change = Some(PendingNodeKindChange {
@@ -447,15 +479,28 @@ impl CustomPanels for Editor {
 
                         let mut parent_port_count = selected_node.links_to_parents.len();
 
-                        labeled_option(ui, LabelAndHoverText::label_only("Parent ports"), |ui| {
-                            ComboBox::from_id_salt("parent_port_count")
-                                .selected_text(PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1)
-                                .show_ui(ui, |ui| {
-                                    for (option, label) in PARENT_PORT_COUNT_OPTIONS {
-                                        ui.selectable_value(&mut parent_port_count, option, label);
-                                    }
-                                })
-                        });
+                        labeled_option(
+                            ui,
+                            LabelAndHoverText {
+                                label: "Parent ports",
+                                hover_text: "The number of parent ports to enable for this node",
+                            },
+                            |ui| {
+                                ComboBox::from_id_salt("parent_port_count")
+                                    .selected_text(
+                                        PARENT_PORT_COUNT_OPTIONS[parent_port_count - 1].1,
+                                    )
+                                    .show_ui(ui, |ui| {
+                                        for (option, label) in PARENT_PORT_COUNT_OPTIONS {
+                                            ui.selectable_value(
+                                                &mut parent_port_count,
+                                                option,
+                                                label,
+                                            );
+                                        }
+                                    })
+                            },
+                        );
 
                         if parent_port_count != selected_node.links_to_parents.len() {
                             pending_node_operations.parent_port_count_change =

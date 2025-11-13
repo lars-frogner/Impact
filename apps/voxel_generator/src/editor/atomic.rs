@@ -5,7 +5,6 @@ pub mod node_kind;
 use impact::egui::{
     Color32, FontId, Galley, Painter, Pos2, Rect, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
 };
-use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::SDFNodeID;
 use node_kind::AtomicNodeKind;
 use std::sync::Arc;
@@ -68,13 +67,13 @@ pub enum AtomicNodeParam {
 
 #[derive(Clone, Debug)]
 pub struct AtomicUIntParam {
-    pub text: LabelAndHoverText,
+    pub text: &'static str,
     pub value: u32,
 }
 
 #[derive(Clone, Debug)]
 pub struct AtomicFloatParam {
-    pub text: LabelAndHoverText,
+    pub text: &'static str,
     pub value: f32,
 }
 
@@ -343,30 +342,27 @@ impl From<AtomicFloatParam> for AtomicNodeParam {
 
 impl Default for AtomicNodeParam {
     fn default() -> Self {
-        Self::UInt(AtomicUIntParam {
-            text: LabelAndHoverText::label_only(""),
-            value: 0,
-        })
+        Self::UInt(AtomicUIntParam { text: "", value: 0 })
     }
 }
 
 impl AtomicUIntParam {
-    const fn new(text: LabelAndHoverText, value: u32) -> Self {
+    const fn new(text: &'static str, value: u32) -> Self {
         Self { text, value }
     }
 
     fn text_to_display(&self) -> String {
-        format!("{} = {}", self.text.label, self.value)
+        format!("{} = {}", self.text, self.value)
     }
 }
 
 impl AtomicFloatParam {
-    const fn new(text: LabelAndHoverText, value: f32) -> Self {
+    const fn new(text: &'static str, value: f32) -> Self {
         Self { text, value }
     }
 
     fn text_to_display(&self) -> String {
-        format!("{} = {}", self.text.label, self.value)
+        format!("{} = {}", self.text, self.value)
     }
 }
 
