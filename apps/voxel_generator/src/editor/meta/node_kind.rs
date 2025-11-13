@@ -1,15 +1,16 @@
 use super::{
-    MetaFloatParam, MetaFloatRangeParam, MetaNodeID, MetaNodeLink, MetaNodeParam, MetaNodeParams,
-    MetaUIntParam, MetaUIntRangeParam,
+    MetaEnumParam, MetaFloatParam, MetaFloatRangeParam, MetaNodeID, MetaNodeLink, MetaNodeParam,
+    MetaNodeParams, MetaUIntParam, MetaUIntRangeParam,
 };
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
-    MetaBoxSDF, MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier,
-    MetaMultiscaleSphereSDFModifier, MetaRotationToGradient, MetaSDFGroupUnion,
-    MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling,
-    MetaSDFScattering, MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF,
-    MetaStochasticSelection, MetaStratifiedPlacement, MetaTranslationToSurface,
+    CompositionMode, MetaBoxSDF, MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier,
+    MetaMultiscaleSphereSDFModifier, MetaPlacementRotation, MetaPlacementScaling,
+    MetaPlacementTranslation, MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFIntersection,
+    MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling, MetaSDFScattering,
+    MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF, MetaStochasticSelection,
+    MetaStratifiedPlacement, MetaTranslationToSurface,
 };
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +44,9 @@ pub enum MetaNodeKind {
     Intersection,
     GroupUnion,
     StratifiedPlacement,
+    PlacementTranslation,
+    PlacementRotation,
+    PlacementScaling,
     TranslationToSurface,
     RotationToGradient,
     Scattering,
@@ -57,7 +61,7 @@ pub enum MetaNodeKindGroup {
     Modification,
     Combination,
     Placement,
-    Masking,
+    Filtering,
 }
 
 #[allow(dead_code)]
@@ -669,6 +673,167 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
     }
 }
 
+impl SpecificMetaNodeKind for MetaPlacementTranslation {
+    const LABEL: &'static str = "Placement translation";
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::PlacementGroup);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText::label_only("Composition"),
+                ["Pre", "Post"].into(),
+                "Pre",
+            )
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In x"), 0.0)
+                .with_speed(0.05)
+                .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In y"), 0.0)
+                .with_speed(0.05)
+                .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In z"), 0.0)
+                .with_speed(0.05)
+                .into(),
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 5);
+        let child_id = unary_child(id_map, children)?;
+        let composition = CompositionMode::try_from_str(params[0].enum_value()).unwrap();
+        let translation = [
+            params[1].float_range(),
+            params[2].float_range(),
+            params[3].float_range(),
+        ];
+        let seed = params[4].uint();
+        Some(MetaSDFNode::new_placement_translation(
+            child_id,
+            composition,
+            translation,
+            seed,
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaPlacementRotation {
+    const LABEL: &'static str = "Placement rotation";
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::PlacementGroup);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText::label_only("Composition"),
+                ["Pre", "Post"].into(),
+                "Pre",
+            )
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Roll"), 0.0)
+                .with_speed(0.002)
+                .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Pitch"), 0.0)
+                .with_speed(0.002)
+                .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Yaw"), 0.0)
+                .with_speed(0.002)
+                .into(),
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 5);
+        let child_id = unary_child(id_map, children)?;
+        let composition = CompositionMode::try_from_str(params[0].enum_value()).unwrap();
+        let roll = params[1].float_range();
+        let pitch = params[2].float_range();
+        let yaw = params[3].float_range();
+        let seed = params[4].uint();
+        Some(MetaSDFNode::new_placement_rotation(
+            child_id,
+            composition,
+            roll,
+            pitch,
+            yaw,
+            seed,
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaPlacementScaling {
+    const LABEL: &'static str = "Placement scaling";
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::PlacementGroup);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText::label_only("Composition"),
+                ["Pre", "Post"].into(),
+                "Pre",
+            )
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Factor"), 1.0)
+                .with_min_value(1e-3)
+                .with_speed(0.005)
+                .into(),
+        );
+        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 3);
+        let child_id = unary_child(id_map, children)?;
+        let composition = CompositionMode::try_from_str(params[0].enum_value()).unwrap();
+        let scaling = params[1].float_range();
+        let seed = params[2].uint();
+        Some(MetaSDFNode::new_placement_scaling(
+            child_id,
+            composition,
+            scaling,
+            seed,
+        ))
+    }
+}
+
 impl SpecificMetaNodeKind for MetaTranslationToSurface {
     const LABEL: &'static str = "Translation to surface";
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
@@ -779,7 +944,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 }
 
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 17] {
+    pub const fn all_non_root() -> [Self; 20] {
         [
             Self::Box,
             Self::Sphere,
@@ -794,6 +959,9 @@ impl MetaNodeKind {
             Self::Intersection,
             Self::GroupUnion,
             Self::StratifiedPlacement,
+            Self::PlacementTranslation,
+            Self::PlacementRotation,
+            Self::PlacementScaling,
             Self::TranslationToSurface,
             Self::RotationToGradient,
             Self::Scattering,
@@ -815,10 +983,13 @@ impl MetaNodeKind {
                 MetaNodeKindGroup::Combination
             }
             Self::StratifiedPlacement
+            | Self::PlacementTranslation
+            | Self::PlacementRotation
+            | Self::PlacementScaling
             | Self::TranslationToSurface
             | Self::RotationToGradient
             | Self::Scattering => MetaNodeKindGroup::Placement,
-            Self::StochasticSelection => MetaNodeKindGroup::Masking,
+            Self::StochasticSelection => MetaNodeKindGroup::Filtering,
         }
     }
 
@@ -838,6 +1009,9 @@ impl MetaNodeKind {
             Self::Intersection => MetaSDFIntersection::LABEL,
             Self::GroupUnion => MetaSDFGroupUnion::LABEL,
             Self::StratifiedPlacement => MetaStratifiedPlacement::LABEL,
+            Self::PlacementTranslation => MetaPlacementTranslation::LABEL,
+            Self::PlacementRotation => MetaPlacementRotation::LABEL,
+            Self::PlacementScaling => MetaPlacementScaling::LABEL,
             Self::TranslationToSurface => MetaTranslationToSurface::LABEL,
             Self::RotationToGradient => MetaRotationToGradient::LABEL,
             Self::Scattering => MetaSDFScattering::LABEL,
@@ -861,6 +1035,9 @@ impl MetaNodeKind {
             Self::Intersection => MetaSDFIntersection::PARENT_PORT_KIND,
             Self::GroupUnion => MetaSDFGroupUnion::PARENT_PORT_KIND,
             Self::StratifiedPlacement => MetaStratifiedPlacement::PARENT_PORT_KIND,
+            Self::PlacementTranslation => MetaPlacementTranslation::PARENT_PORT_KIND,
+            Self::PlacementRotation => MetaPlacementRotation::PARENT_PORT_KIND,
+            Self::PlacementScaling => MetaPlacementScaling::PARENT_PORT_KIND,
             Self::TranslationToSurface => MetaTranslationToSurface::PARENT_PORT_KIND,
             Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
             Self::Scattering => MetaSDFScattering::PARENT_PORT_KIND,
@@ -884,6 +1061,9 @@ impl MetaNodeKind {
             Self::Intersection => MetaSDFIntersection::CHILD_PORT_KINDS,
             Self::GroupUnion => MetaSDFGroupUnion::CHILD_PORT_KINDS,
             Self::StratifiedPlacement => MetaStratifiedPlacement::CHILD_PORT_KINDS,
+            Self::PlacementTranslation => MetaPlacementTranslation::CHILD_PORT_KINDS,
+            Self::PlacementRotation => MetaPlacementRotation::CHILD_PORT_KINDS,
+            Self::PlacementScaling => MetaPlacementScaling::CHILD_PORT_KINDS,
             Self::TranslationToSurface => MetaTranslationToSurface::CHILD_PORT_KINDS,
             Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
             Self::Scattering => MetaSDFScattering::CHILD_PORT_KINDS,
@@ -919,6 +1099,9 @@ impl MetaNodeKind {
             Self::Intersection => MetaSDFIntersection::params(),
             Self::GroupUnion => MetaSDFGroupUnion::params(),
             Self::StratifiedPlacement => MetaStratifiedPlacement::params(),
+            Self::PlacementTranslation => MetaPlacementTranslation::params(),
+            Self::PlacementRotation => MetaPlacementRotation::params(),
+            Self::PlacementScaling => MetaPlacementScaling::params(),
             Self::TranslationToSurface => MetaTranslationToSurface::params(),
             Self::RotationToGradient => MetaRotationToGradient::params(),
             Self::Scattering => MetaSDFScattering::params(),
@@ -951,6 +1134,9 @@ impl MetaNodeKind {
             Self::Intersection => MetaSDFIntersection::build(id_map, children, params),
             Self::GroupUnion => MetaSDFGroupUnion::build(id_map, children, params),
             Self::StratifiedPlacement => MetaStratifiedPlacement::build(id_map, children, params),
+            Self::PlacementTranslation => MetaPlacementTranslation::build(id_map, children, params),
+            Self::PlacementRotation => MetaPlacementRotation::build(id_map, children, params),
+            Self::PlacementScaling => MetaPlacementScaling::build(id_map, children, params),
             Self::TranslationToSurface => MetaTranslationToSurface::build(id_map, children, params),
             Self::RotationToGradient => MetaRotationToGradient::build(id_map, children, params),
             Self::Scattering => MetaSDFScattering::build(id_map, children, params),
@@ -967,7 +1153,7 @@ impl MetaNodeKindGroup {
             Self::Modification,
             Self::Combination,
             Self::Placement,
-            Self::Masking,
+            Self::Filtering,
         ]
     }
 }

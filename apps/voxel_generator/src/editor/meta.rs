@@ -5,11 +5,11 @@ pub mod io;
 pub mod node_kind;
 
 use data_type::{EdgeDataType, input_and_output_types_for_new_node};
-use impact::egui::Label;
 use impact::egui::{
     Color32, CursorIcon, DragValue, FontId, Galley, Id, Painter, Pos2, Rect, Response, Sense,
     Stroke, StrokeKind, Ui, Vec2, emath::Numeric, pos2, vec2,
 };
+use impact::egui::{ComboBox, Label};
 use impact_dev_ui::option_panels::{LabelAndHoverText, labeled_option, option_drag_value};
 use impact_voxel::generation::sdf::meta::{ContParamRange, DiscreteParamRange};
 use node_kind::MetaNodeKind;
@@ -104,11 +104,21 @@ pub enum MetaPortShape {
 
 #[derive(Clone, Debug)]
 pub enum MetaNodeParam {
+    Enum(MetaEnumParam),
     UInt(MetaUIntParam),
     Float(MetaFloatParam),
     UIntRange(MetaUIntRangeParam),
     FloatRange(MetaFloatRangeParam),
 }
+
+#[derive(Clone, Debug)]
+pub struct MetaEnumParam {
+    pub text: LabelAndHoverText,
+    pub variants: EnumParamVariants,
+    pub value: &'static str,
+}
+
+pub type EnumParamVariants = TinyVec<[&'static str; 2]>;
 
 #[derive(Clone, Debug)]
 pub struct MetaUIntParam {
@@ -559,6 +569,7 @@ impl MetaPaletteColor {
 impl MetaNodeParam {
     pub fn show_controls(&mut self, ui: &mut Ui) -> Response {
         match self {
+            Self::Enum(param) => param.show_controls(ui),
             Self::UInt(param) => param.show_controls(ui),
             Self::Float(param) => param.show_controls(ui),
             Self::UIntRange(param) => param.show_controls(ui),
@@ -568,11 +579,24 @@ impl MetaNodeParam {
 
     fn text_to_display(&self) -> String {
         match self {
+            Self::Enum(param) => param.text_to_display(),
             Self::UInt(param) => param.text_to_display(),
             Self::Float(param) => param.text_to_display(),
             Self::UIntRange(param) => param.text_to_display(),
             Self::FloatRange(param) => param.text_to_display(),
         }
+    }
+
+    fn as_enum_value(&self) -> Option<&'static str> {
+        if let Self::Enum(param) = self {
+            Some(param.value)
+        } else {
+            None
+        }
+    }
+
+    fn enum_value(&self) -> &'static str {
+        self.as_enum_value().unwrap()
     }
 
     fn as_uint(&self) -> Option<u32> {
@@ -624,6 +648,12 @@ impl MetaNodeParam {
     }
 }
 
+impl From<MetaEnumParam> for MetaNodeParam {
+    fn from(param: MetaEnumParam) -> Self {
+        Self::Enum(param)
+    }
+}
+
 impl From<MetaUIntParam> for MetaNodeParam {
     fn from(param: MetaUIntParam) -> Self {
         Self::UInt(param)
@@ -655,6 +685,34 @@ impl Default for MetaNodeParam {
             value: 0,
             speed: 0.0,
         })
+    }
+}
+
+impl MetaEnumParam {
+    fn new(text: LabelAndHoverText, variants: EnumParamVariants, value: &'static str) -> Self {
+        assert!(variants.contains(&value));
+        Self {
+            text,
+            variants,
+            value,
+        }
+    }
+
+    fn show_controls(&mut self, ui: &mut Ui) -> Response {
+        labeled_option(ui, LabelAndHoverText::label_only("Kind"), |ui| {
+            ComboBox::from_id_salt(("meta_enum_param", self.text.label))
+                .selected_text(self.value)
+                .show_ui(ui, |ui| {
+                    for &variant in &self.variants {
+                        ui.selectable_value(&mut self.value, variant, variant);
+                    }
+                })
+        })
+        .response
+    }
+
+    fn text_to_display(&self) -> String {
+        format!("{} = {}", self.text.label, self.value)
     }
 }
 
