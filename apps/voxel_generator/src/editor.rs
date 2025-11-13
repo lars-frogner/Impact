@@ -320,7 +320,10 @@ impl CustomPanels for Editor {
                 option_checkbox(
                     ui,
                     &mut self.config.auto_generate,
-                    LabelAndHoverText::label_only("Auto generate"),
+                    LabelAndHoverText {
+                        label: "Auto generate",
+                        hover_text: "Automatically generate the new voxel object whenever the graph changes to a valid state.",
+                    },
                 );
                 if ui.button("Generate now").clicked() {
                     self.rebuild_generator = true;
@@ -329,12 +332,18 @@ impl CustomPanels for Editor {
                 option_checkbox(
                     ui,
                     &mut self.config.auto_attach,
-                    LabelAndHoverText::label_only("Auto attach"),
+                    LabelAndHoverText {
+                        label: "Auto attach",
+                        hover_text: "Automatically attach the newly added node to the selected node if compatible.",
+                    },
                 );
                 option_checkbox(
                     ui,
                     &mut self.config.auto_layout,
-                    LabelAndHoverText::label_only("Auto layout"),
+                    LabelAndHoverText {
+                        label: "Auto layout",
+                        hover_text: "Automatically arrange nodes in horizontal layers based on the current connectivity.",
+                    },
                 );
                 if ui.button("Layout now").clicked() {
                     layout_requested = true;
@@ -343,7 +352,10 @@ impl CustomPanels for Editor {
                 option_checkbox(
                     ui,
                     &mut self.config.show_atomic_graph,
-                    LabelAndHoverText::label_only("Show compiled graph"),
+                    LabelAndHoverText {
+                        label: "Show compiled graph",
+                        hover_text: "Display the compiled atomic SDF graph in addition of the high-level editable meta graph.",
+                    },
                 );
             });
 

@@ -103,21 +103,48 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent x"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Extent x",
+                    hover_text: "Extent of the box along the x-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent y"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Extent y",
+                    hover_text: "Extent of the box along the y-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent z"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Extent z",
+                    hover_text: "Extent of the box along the z-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting an extent within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -145,11 +172,26 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Radius"), 31.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Radius",
+                    hover_text: "Radius of the sphere, in voxels.",
+                },
+                31.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a radius within the specified range.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -173,35 +215,74 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent x"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Extent x",
+                    hover_text: "Extent of the noise field along the x-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent y"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Extent y",
+                    hover_text: "Extent of the noise field along the y-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Extent z"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Extent z",
+                    hover_text: "Extent of the noise field along the z-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Frequency"), 0.05)
-                .with_min_value(0.0)
-                .with_max_value(1.0)
-                .with_speed(0.0002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Frequency",
+                    hover_text: "Spatial frequency of the noise pattern, in inverse voxels.",
+                },
+                0.05,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.0002)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Threshold"), 0.0)
-                .with_min_value(-1.0)
-                .with_max_value(1.0)
-                .with_speed(0.001)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Threshold",
+                    hover_text: "Minimum noise value (they range from -1 to 1) for a voxel to be considered inside the object.",
+                },
+                0.0,
+            )
+            .with_min_value(-1.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for generating noise and selecting parameter values within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -237,21 +318,48 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In x"), 0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "In x",
+                    hover_text: "Translation distance along the x-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In y"), 0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "In y",
+                    hover_text: "Translation distance along the y-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In z"), 0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "In z",
+                    hover_text: "Translation distance along the z-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a translation within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -281,21 +389,48 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Roll"), 0.0)
-                .with_speed(0.002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Roll",
+                    hover_text: "Rotation angle around the z-axis, in radians.",
+                },
+                0.0,
+            )
+            .with_speed(0.002)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Pitch"), 0.0)
-                .with_speed(0.002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Pitch",
+                    hover_text: "Rotation angle around the y-axis, in radians.",
+                },
+                0.0,
+            )
+            .with_speed(0.002)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Yaw"), 0.0)
-                .with_speed(0.002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Yaw",
+                    hover_text: "Rotation angle around the x-axis, in radians.",
+                },
+                0.0,
+            )
+            .with_speed(0.002)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a rotation within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -323,12 +458,27 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Factor"), 1.0)
-                .with_min_value(1e-3)
-                .with_speed(0.005)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Factor",
+                    hover_text: "Uniform scale factor.",
+                },
+                1.0,
+            )
+            .with_min_value(1e-3)
+            .with_speed(0.005)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a scale factor within the specified range.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -354,26 +504,47 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaUIntRangeParam::new_single_value(LabelAndHoverText::label_only("Octaves"), 1)
-                .into(),
-        );
-        params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Frequency"), 0.02)
-                .with_min_value(0.0)
-                .with_max_value(1.0)
-                .with_speed(0.0002)
-                .into(),
-        );
-        params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Lacunarity"), 2.0)
-                .with_min_value(1.0)
-                .with_max_value(10.0)
-                .with_speed(0.001)
-                .into(),
+            MetaUIntRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Octaves",
+                    hover_text: "Number of noise octaves (patterns of increasing frequency) to combine.",
+                },
+                1,
+            )
+            .into(),
         );
         params.push(
             MetaFloatRangeParam::new_single_value(
-                LabelAndHoverText::label_only("Persistence"),
+                LabelAndHoverText {
+                    label: "Frequency",
+                    hover_text: "Spatial frequency of the noise pattern in the first octave, in inverse voxels.",
+                },
+                0.02,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.0002)
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Lacunarity",
+                    hover_text: "Noise frequency multiplier between successive octaves.",
+                },
+                2.0,
+            )
+            .with_min_value(1.0)
+            .with_max_value(10.0)
+            .with_speed(0.001)
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Persistence",
+                    hover_text: "Noise amplitude multiplier between successive octaves.",
+                },
                 0.5,
             )
             .with_min_value(0.0)
@@ -382,12 +553,27 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
             .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Amplitude"), 5.0)
-                .with_min_value(0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Amplitude",
+                    hover_text: "Noise amplitude (max displacement) in the first octave, in voxels.",
+                },
+                5.0,
+            )
+            .with_min_value(0.0)
+            .with_speed(0.05)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for generating noise and selecting parameter values within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -425,18 +611,33 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaUIntRangeParam::new_single_value(LabelAndHoverText::label_only("Octaves"), 0)
-                .into(),
-        );
-        params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Max scale"), 10.0)
-                .with_min_value(0.0)
-                .with_speed(0.01)
-                .into(),
+            MetaUIntRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Octaves",
+                    hover_text: "Number of sphere scales to combine for detail variation.",
+                },
+                0,
+            )
+            .into(),
         );
         params.push(
             MetaFloatRangeParam::new_single_value(
-                LabelAndHoverText::label_only("Persistence"),
+                LabelAndHoverText {
+                    label: "Max scale",
+                    hover_text: "Maximum scale of variation in the multiscale pattern, in voxels.",
+                },
+                10.0,
+            )
+            .with_min_value(0.0)
+            .with_speed(0.01)
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Persistence",
+                    hover_text: "Scale multiplier between successive octaves.",
+                },
                 0.5,
             )
             .with_min_value(0.0)
@@ -445,14 +646,23 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
             .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Inflation"), 1.0)
-                .with_min_value(0.0)
-                .with_speed(0.005)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Inflation",
+                    hover_text: "Amount to expand the pattern being modified before intersecting with spheres, in factors of the max scale.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .with_speed(0.005)
+            .into(),
         );
         params.push(
             MetaFloatRangeParam::new_single_value(
-                LabelAndHoverText::label_only("Intersection smoothness"),
+                LabelAndHoverText {
+                    label: "Intersection smoothness",
+                    hover_text: "Smoothness factor for intersecting spheres with the inflated version of the pattern being modified.",
+                },
                 1.0,
             )
             .with_min_value(0.0)
@@ -461,14 +671,26 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
         );
         params.push(
             MetaFloatRangeParam::new_single_value(
-                LabelAndHoverText::label_only("Union smoothness"),
+                LabelAndHoverText {
+                    label: "Union smoothness",
+                    hover_text: "Smoothness factor for combining the intersected sphere pattern with the original pattern.",
+                },
                 0.3,
             )
             .with_min_value(0.0)
             .with_speed(0.001)
             .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for generating random sphere radii as well as selecting parameter values within the specified ranges..",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -508,9 +730,15 @@ impl SpecificMetaNodeKind for MetaSDFUnion {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Smoothness",
+                    hover_text: "Smoothness factor for blending the two shapes together.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params
     }
@@ -536,9 +764,15 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Smoothness",
+                    hover_text: "Smoothness factor for blending the subtraction operation.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params
     }
@@ -566,9 +800,15 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Smoothness",
+                    hover_text: "Smoothness factor for blending the intersection operation.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params
     }
@@ -596,9 +836,15 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Smoothness"), 1.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Smoothness",
+                    hover_text: "Smoothness factor for blending all the shapes in the group together.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
         params
     }
@@ -622,33 +868,102 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size x"), 1).into());
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size y"), 1).into());
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Size z"), 1).into());
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent x"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Size x",
+                    hover_text: "Number of grid cells along the x-axis.",
+                },
+                1,
+            )
+            .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent y"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Size y",
+                    hover_text: "Number of grid cells along the y-axis.",
+                },
+                1,
+            )
+            .into(),
         );
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Cell extent z"), 62.0)
-                .with_min_value(0.0)
-                .into(),
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Size z",
+                    hover_text: "Number of grid cells along the z-axis.",
+                },
+                1,
+            )
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Points per cell"), 1).into());
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Jitter fraction"), 0.0)
-                .with_min_value(0.0)
-                .with_max_value(1.0)
-                .with_speed(0.001)
-                .into(),
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Cell extent x",
+                    hover_text: "Extent of a grid cell along the x-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Cell extent y",
+                    hover_text: "Extent of a grid cell along the y-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
+        );
+        params.push(
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Cell extent z",
+                    hover_text: "Extent of a grid cell along the z-axis, in voxels.",
+                },
+                62.0,
+            )
+            .with_min_value(0.0)
+            .into(),
+        );
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Points per cell",
+                    hover_text: "Number of placements generated within each grid cell.",
+                },
+                1,
+            )
+            .into(),
+        );
+        params.push(
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Jitter fraction",
+                    hover_text: "Fraction of a grid cell to randomly displace the placements.",
+                },
+                0.0,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+            .into(),
+        );
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for random jittering.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -683,28 +998,58 @@ impl SpecificMetaNodeKind for MetaPlacementTranslation {
         let mut params = MetaNodeParams::new();
         params.push(
             MetaEnumParam::new(
-                LabelAndHoverText::label_only("Composition"),
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the translation before ('Pre') or after ('Post') the transforms of the input placements.",
+                },
                 ["Pre", "Post"].into(),
                 "Pre",
             )
             .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In x"), 0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "In x",
+                    hover_text: "Translation distance along the x-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In y"), 0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "In y",
+                    hover_text: "Translation distance along the y-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("In z"), 0.0)
-                .with_speed(0.05)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "In z",
+                    hover_text: "Translation distance along the z-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a translation within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -741,28 +1086,58 @@ impl SpecificMetaNodeKind for MetaPlacementRotation {
         let mut params = MetaNodeParams::new();
         params.push(
             MetaEnumParam::new(
-                LabelAndHoverText::label_only("Composition"),
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the rotation before ('Pre') or after ('Post') the transforms of the input placements.",
+                },
                 ["Pre", "Post"].into(),
                 "Pre",
             )
             .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Roll"), 0.0)
-                .with_speed(0.002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Roll",
+                    hover_text: "Rotation angle around the z-axis, in radians.",
+                },
+                0.0,
+            )
+            .with_speed(0.002)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Pitch"), 0.0)
-                .with_speed(0.002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Pitch",
+                    hover_text: "Rotation angle around the y-axis, in radians.",
+                },
+                0.0,
+            )
+            .with_speed(0.002)
+            .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Yaw"), 0.0)
-                .with_speed(0.002)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Yaw",
+                    hover_text: "Rotation angle around the x-axis, in radians.",
+                },
+                0.0,
+            )
+            .with_speed(0.002)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a rotation within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -799,19 +1174,37 @@ impl SpecificMetaNodeKind for MetaPlacementScaling {
         let mut params = MetaNodeParams::new();
         params.push(
             MetaEnumParam::new(
-                LabelAndHoverText::label_only("Composition"),
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the scaling before ('Pre') or after ('Post') the transforms of the input placements.",
+                },
                 ["Pre", "Post"].into(),
                 "Pre",
             )
             .into(),
         );
         params.push(
-            MetaFloatRangeParam::new_single_value(LabelAndHoverText::label_only("Factor"), 1.0)
-                .with_min_value(1e-3)
-                .with_speed(0.005)
-                .into(),
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Factor",
+                    hover_text: "Uniform scale factor.",
+                },
+                1.0,
+            )
+            .with_min_value(1e-3)
+            .with_speed(0.005)
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a scale factor within the specified range.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -912,15 +1305,40 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
-        params.push(MetaUIntRangeParam::new(LabelAndHoverText::label_only("Count"), 1, 1).into());
         params.push(
-            MetaFloatParam::new(LabelAndHoverText::label_only("Probability"), 1.0)
-                .with_min_value(0.0)
-                .with_max_value(1.0)
-                .with_speed(0.001)
-                .into(),
+            MetaUIntRangeParam::new(
+                LabelAndHoverText {
+                    label: "Count",
+                    hover_text: "Minimum and maximum number of items to select initially.",
+                },
+                1,
+                1,
+            )
+            .into(),
         );
-        params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+        params.push(
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Probability",
+                    hover_text: "Probability that each of the initially selected items will be kept in the final selection.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+            .into(),
+        );
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for random selection.",
+                },
+                0,
+            )
+            .into(),
+        );
         params
     }
 
@@ -1183,14 +1601,26 @@ fn output_node_params() -> MetaNodeParams {
     let mut params = MetaNodeParams::new();
     params.push(
         MetaFloatParam::new(
-            LabelAndHoverText::label_only("Voxel extent"),
+            LabelAndHoverText {
+                label: "Voxel extent",
+                hover_text: "The size of each voxel in the generated voxel grid.",
+            },
             DEFAULT_VOXEL_EXTENT,
         )
         .with_min_value(MIN_VOXEL_EXTENT)
         .with_speed(0.01)
         .into(),
     );
-    params.push(MetaUIntParam::new(LabelAndHoverText::label_only("Seed"), 0).into());
+    params.push(
+        MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Global seed offset added to the seed of all nodes.",
+            },
+            0,
+        )
+        .into(),
+    );
     params
 }
 
