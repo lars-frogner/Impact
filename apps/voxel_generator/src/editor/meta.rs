@@ -336,7 +336,7 @@ impl MetaNodeData {
 
         self.type_galley = Some(prepare_text(
             ui,
-            self.kind.label().to_string(),
+            self.kind.label().label.to_string(),
             Self::type_font(zoom),
             NODE_TEXT_COLOR,
         ));
@@ -699,7 +699,7 @@ impl MetaEnumParam {
     }
 
     fn show_controls(&mut self, ui: &mut Ui) -> Response {
-        labeled_option(ui, LabelAndHoverText::label_only("Kind"), |ui| {
+        labeled_option(ui, self.text.clone(), |ui| {
             ComboBox::from_id_salt(("meta_enum_param", self.text.label))
                 .selected_text(self.value)
                 .show_ui(ui, |ui| {
