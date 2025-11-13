@@ -1744,7 +1744,7 @@ fn zero_domain() -> AxisAlignedBox<f32> {
 }
 
 fn domain_padding_for_smoothness(smoothness: f32) -> f32 {
-    0.25 * smoothness
+    smoothness // `smoothness / 4` is too low and leads to artifacts
 }
 
 #[inline]
