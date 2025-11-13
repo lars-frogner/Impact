@@ -405,9 +405,9 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                     subject_id: child_2_id,
                                 }) => {
                                     operation_stack
-                                        .push(BuildOperation::VisitChildren(*child_1_id));
-                                    operation_stack
                                         .push(BuildOperation::VisitChildren(*child_2_id));
+                                    operation_stack
+                                        .push(BuildOperation::VisitChildren(*child_1_id));
                                 }
                             }
                         }

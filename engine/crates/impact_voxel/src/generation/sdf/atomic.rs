@@ -29,7 +29,9 @@ use twox_hash::XxHash32;
 /// typically care about.
 #[derive(Clone, Debug)]
 pub struct SDFGenerator<A: Allocator = Global> {
-    /// Nodes in reverse depth-first order. The last node is the root.
+    /// Nodes in reverse depth-first order, with multi-parent subgraphs
+    /// duplicated for each parent in order to unroll the DAG into a tree. The
+    /// last node is the root.
     nodes: AVec<ProcessedSDFNode, A>,
     required_forward_stack_size: usize,
     domain: AxisAlignedBox<f32>,
@@ -279,18 +281,22 @@ impl<A: Allocator> SDFGenerator<A> {
                         .get_mut(node_idx)
                         .ok_or_else(|| anyhow!("Missing SDF node {node_id}"))?;
 
-                    operation_stack.push(BuildOperation::Process(node_id));
-
                     match *state {
-                        NodeBuildState::DomainDetermined => {
-                            // Domain already determined via a different parent
-                        }
                         NodeBuildState::ChildrenBeingVisited => {
                             // We got back to the same node while visiting its children
                             bail!("Detected cycle in SDF generator node graph")
                         }
-                        NodeBuildState::Unvisited => {
-                            *state = NodeBuildState::ChildrenBeingVisited;
+                        NodeBuildState::Unvisited | NodeBuildState::DomainDetermined => {
+                            // Only enter the`ChildrenBeingVisited` state the
+                            // first time we visit the children of this node. If
+                            // we re-enter this subgraph through a different
+                            // parent once the domain has been determined, we
+                            // have already checked for cycles.
+                            if *state == NodeBuildState::Unvisited {
+                                *state = NodeBuildState::ChildrenBeingVisited;
+                            }
+
+                            operation_stack.push(BuildOperation::Process(node_id));
 
                             match &nodes[node_idx] {
                                 SDFNode::Box(_)
@@ -324,10 +330,16 @@ impl<A: Allocator> SDFGenerator<A> {
                                     child_2_id,
                                     ..
                                 }) => {
-                                    operation_stack
-                                        .push(BuildOperation::VisitChildren(*child_1_id));
+                                    // Push visits in reverse order so that
+                                    // child 1 is processed and added to the
+                                    // node list before child 2. This must be
+                                    // consistent with how we look up the first
+                                    // and second operand (child) when doing
+                                    // non-commutative binary ops (subtraction).
                                     operation_stack
                                         .push(BuildOperation::VisitChildren(*child_2_id));
+                                    operation_stack
+                                        .push(BuildOperation::VisitChildren(*child_1_id));
                                 }
                             }
                         }
@@ -444,7 +456,7 @@ impl<A: Allocator> SDFGenerator<A> {
                     });
 
                     // Keep track of where the top of an operation stack would
-                    // be during a traversal from children to parents
+                    // be during an unrolled traversal from children to parents
                     match node {
                         SDFNode::Box(_) | SDFNode::Sphere(_) | SDFNode::GradientNoise(_) => {
                             stack_top += 1;
@@ -576,7 +588,7 @@ impl<A: Allocator> SDFGenerator<A> {
                     // domain_padding_for_smoothness(smoothness)` from the child
                     // surface, because the smoothing operation can offset the
                     // distance field by up to that amount
-                    let margin_for_child = margin + smoothness;
+                    let margin_for_child = margin + domain_padding_for_smoothness(smoothness);
                     margin_stack[stack_top] = margin_for_child;
                     margin_stack[stack_top + 1] = margin_for_child;
 
