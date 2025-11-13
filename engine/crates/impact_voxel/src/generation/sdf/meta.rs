@@ -56,11 +56,14 @@ pub enum MetaSDFNode {
 
     // Placement
     StratifiedPlacement(MetaStratifiedPlacement),
+    PlacementTranslation(MetaPlacementTranslation),
+    PlacementRotation(MetaPlacementRotation),
+    PlacementScaling(MetaPlacementScaling),
     TranslationToSurface(MetaTranslationToSurface),
     RotationToGradient(MetaRotationToGradient),
     Scattering(MetaSDFScattering),
 
-    // Masking
+    // Filtering
     StochasticSelection(MetaStochasticSelection),
 }
 
@@ -244,6 +247,41 @@ pub struct MetaStratifiedPlacement {
     seed: u32,
 }
 
+/// Input: `PlacementGroup` or `SinglePlacement`
+/// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct MetaPlacementTranslation {
+    child_id: MetaSDFNodeID,
+    composition: CompositionMode,
+    translation: [ContParamRange; 3],
+    seed: u32,
+}
+
+/// Input: `PlacementGroup` or `SinglePlacement`
+/// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct MetaPlacementRotation {
+    child_id: MetaSDFNodeID,
+    composition: CompositionMode,
+    roll: ContParamRange,
+    pitch: ContParamRange,
+    yaw: ContParamRange,
+    seed: u32,
+}
+
+/// Input: `PlacementGroup` or `SinglePlacement`
+/// Output: Same as input
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct MetaPlacementScaling {
+    child_id: MetaSDFNodeID,
+    composition: CompositionMode,
+    scaling: ContParamRange,
+    seed: u32,
+}
+
 /// Input 1: `SingleSDF`
 /// Input 2: Any
 /// Output: Same as input 2
@@ -283,6 +321,18 @@ pub struct MetaStochasticSelection {
     pick_count: RangeInclusive<u32>,
     pick_probability: f32,
     seed: u32,
+}
+
+/// How to combine the current transformation with the input transformation.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompositionMode {
+    /// Apply the current transformation to the subject *before* applying the
+    /// input transformation.
+    Pre,
+    /// Apply the current transformation to the subject *after* applying the
+    /// input transformation.
+    Post,
 }
 
 type NodeRng = Pcg64Mcg;
@@ -371,6 +421,18 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                     MetaMultiscaleSphereSDFModifier { child_id, .. },
                                 )
                                 | MetaSDFNode::GroupUnion(MetaSDFGroupUnion { child_id, .. })
+                                | MetaSDFNode::PlacementTranslation(MetaPlacementTranslation {
+                                    child_id,
+                                    ..
+                                })
+                                | MetaSDFNode::PlacementRotation(MetaPlacementRotation {
+                                    child_id,
+                                    ..
+                                })
+                                | MetaSDFNode::PlacementScaling(MetaPlacementScaling {
+                                    child_id,
+                                    ..
+                                })
                                 | MetaSDFNode::StochasticSelection(MetaStochasticSelection {
                                     child_id,
                                     ..
@@ -664,6 +726,52 @@ impl MetaSDFNode {
         })
     }
 
+    pub fn new_placement_translation(
+        child_id: MetaSDFNodeID,
+        composition: CompositionMode,
+        translation: [ContParamRange; 3],
+        seed: u32,
+    ) -> Self {
+        Self::PlacementTranslation(MetaPlacementTranslation {
+            child_id,
+            composition,
+            translation,
+            seed,
+        })
+    }
+
+    pub fn new_placement_rotation(
+        child_id: MetaSDFNodeID,
+        composition: CompositionMode,
+        roll: ContParamRange,
+        pitch: ContParamRange,
+        yaw: ContParamRange,
+        seed: u32,
+    ) -> Self {
+        Self::PlacementRotation(MetaPlacementRotation {
+            child_id,
+            composition,
+            roll,
+            pitch,
+            yaw,
+            seed,
+        })
+    }
+
+    pub fn new_placement_scaling(
+        child_id: MetaSDFNodeID,
+        composition: CompositionMode,
+        scaling: ContParamRange,
+        seed: u32,
+    ) -> Self {
+        Self::PlacementScaling(MetaPlacementScaling {
+            child_id,
+            composition,
+            scaling,
+            seed,
+        })
+    }
+
     pub fn new_translation_to_surface(
         surface_sdf_id: MetaSDFNodeID,
         subject_id: MetaSDFNodeID,
@@ -783,20 +891,29 @@ impl MetaSDFNode {
             Self::StratifiedPlacement(MetaStratifiedPlacement { seed, .. }) => {
                 combine_seeded_leaf(0x40, seed)
             }
+            Self::PlacementTranslation(MetaPlacementTranslation { seed, child_id, .. }) => {
+                combine_seeded_unary(0x50, seed, child_id)
+            }
+            Self::PlacementRotation(MetaPlacementRotation { seed, child_id, .. }) => {
+                combine_seeded_unary(0x51, seed, child_id)
+            }
+            Self::PlacementScaling(MetaPlacementScaling { seed, child_id, .. }) => {
+                combine_seeded_unary(0x52, seed, child_id)
+            }
             Self::TranslationToSurface(MetaTranslationToSurface {
                 surface_sdf_id,
                 subject_id,
-            }) => combine_binary(0x50, surface_sdf_id, subject_id),
+            }) => combine_binary(0x60, surface_sdf_id, subject_id),
             Self::RotationToGradient(MetaRotationToGradient {
                 gradient_sdf_id,
                 subject_id,
-            }) => combine_binary(0x51, gradient_sdf_id, subject_id),
+            }) => combine_binary(0x61, gradient_sdf_id, subject_id),
             Self::Scattering(MetaSDFScattering {
                 sdf_id,
                 placement_id,
-            }) => combine_binary(0x52, sdf_id, placement_id),
+            }) => combine_binary(0x70, sdf_id, placement_id),
             Self::StochasticSelection(MetaStochasticSelection { seed, child_id, .. }) => {
-                combine_seeded_unary(0x60, seed, child_id)
+                combine_seeded_unary(0x80, seed, child_id)
             }
         }
     }
@@ -825,6 +942,9 @@ impl MetaSDFNode {
             Self::Intersection(node) => node.resolve(graph, outputs),
             Self::GroupUnion(node) => node.resolve(arena, graph, outputs),
             Self::StratifiedPlacement(node) => Ok(node.resolve(arena, seed)),
+            Self::PlacementTranslation(node) => node.resolve(arena, outputs, seed),
+            Self::PlacementRotation(node) => node.resolve(arena, outputs, seed),
+            Self::PlacementScaling(node) => node.resolve(arena, outputs, seed),
             Self::TranslationToSurface(node) => node.resolve(arena, graph, outputs),
             Self::RotationToGradient(node) => node.resolve(arena, graph, outputs),
             Self::Scattering(node) => node.resolve(arena, graph, outputs),
@@ -1221,6 +1341,88 @@ impl MetaStratifiedPlacement {
         }
 
         MetaSDFNodeOutput::PlacementGroup(placements)
+    }
+}
+
+impl MetaPlacementTranslation {
+    fn resolve<A>(
+        &self,
+        arena: A,
+        outputs: &[MetaSDFNodeOutput<A>],
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        resolve_unary_placement_op(
+            arena,
+            "PlacementTranslation",
+            seed,
+            &outputs[self.child_id as usize],
+            |rng, input_placement| {
+                let translation: Translation3<f32> =
+                    self.translation.map(|range| range.pick_value(rng)).into();
+                match self.composition {
+                    CompositionMode::Pre => input_placement * translation,
+                    CompositionMode::Post => translation * input_placement,
+                }
+            },
+        )
+    }
+}
+
+impl MetaPlacementRotation {
+    fn resolve<A>(
+        &self,
+        arena: A,
+        outputs: &[MetaSDFNodeOutput<A>],
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        resolve_unary_placement_op(
+            arena,
+            "PlacementRotation",
+            seed,
+            &outputs[self.child_id as usize],
+            |rng, input_placement| {
+                let roll = self.roll.pick_value(rng);
+                let pitch = self.pitch.pick_value(rng);
+                let yaw = self.yaw.pick_value(rng);
+                let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
+                match self.composition {
+                    CompositionMode::Pre => input_placement * rotation,
+                    CompositionMode::Post => rotation * input_placement,
+                }
+            },
+        )
+    }
+}
+
+impl MetaPlacementScaling {
+    fn resolve<A>(
+        &self,
+        arena: A,
+        outputs: &[MetaSDFNodeOutput<A>],
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        resolve_unary_placement_op(
+            arena,
+            "PlacementScaling",
+            seed,
+            &outputs[self.child_id as usize],
+            |rng, input_placement| {
+                let scaling = self.scaling.pick_value(rng);
+                match self.composition {
+                    CompositionMode::Pre => input_placement.prepend_scaling(scaling),
+                    CompositionMode::Post => input_placement.append_scaling(scaling),
+                }
+            },
+        )
     }
 }
 
@@ -1628,6 +1830,16 @@ impl MetaStochasticSelection {
     }
 }
 
+impl CompositionMode {
+    pub fn try_from_str(variant: &str) -> Result<Self> {
+        match variant {
+            "Pre" => Ok(Self::Pre),
+            "Post" => Ok(Self::Post),
+            invalid => Err(anyhow!("Invalid CompositionMode variant: {invalid}")),
+        }
+    }
+}
+
 fn create_rng(seed: u64) -> NodeRng {
     NodeRng::seed_from_u64(seed)
 }
@@ -1676,6 +1888,50 @@ fn unary_sdf_group_op<A: Allocator>(
         output_node_ids.push(graph.add_node(create_output_node(&mut rng, *input_node_id)));
     }
     output_node_ids
+}
+
+fn resolve_unary_placement_op<A: Allocator>(
+    arena: A,
+    name: &str,
+    seed: u64,
+    child_output: &MetaSDFNodeOutput<A>,
+    create_placement: impl Fn(&mut NodeRng, &Similarity3<f32>) -> Similarity3<f32>,
+) -> Result<MetaSDFNodeOutput<A>> {
+    match child_output {
+        MetaSDFNodeOutput::SinglePlacement(None) => Ok(MetaSDFNodeOutput::SinglePlacement(None)),
+        MetaSDFNodeOutput::SinglePlacement(Some(input_placement)) => {
+            let mut rng = create_rng(seed);
+            let output_placement = create_placement(&mut rng, input_placement);
+            Ok(MetaSDFNodeOutput::SinglePlacement(Some(output_placement)))
+        }
+        MetaSDFNodeOutput::PlacementGroup(input_placements) => {
+            let output_placements =
+                unary_placement_group_op(arena, seed, input_placements, |rng, input_placement| {
+                    create_placement(rng, input_placement)
+                });
+            Ok(MetaSDFNodeOutput::PlacementGroup(output_placements))
+        }
+        child_output => {
+            bail!(
+                "{name} node expects SinglePlacement or PlacementGroup input, got {}",
+                child_output.label()
+            );
+        }
+    }
+}
+
+fn unary_placement_group_op<A: Allocator>(
+    arena: A,
+    seed: u64,
+    input_placements: &[Similarity3<f32>],
+    create_placement: impl Fn(&mut NodeRng, &Similarity3<f32>) -> Similarity3<f32>,
+) -> AVec<Similarity3<f32>, A> {
+    let mut rng = create_rng(seed);
+    let mut output_placements = AVec::with_capacity_in(input_placements.len(), arena);
+    for input_placement in input_placements {
+        output_placements.push(create_placement(&mut rng, input_placement));
+    }
+    output_placements
 }
 
 fn emit_balanced_binary_tree<A, N>(

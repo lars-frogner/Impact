@@ -237,7 +237,7 @@ fn generate_next_voxel_object<A>(
     editor: &mut Editor,
 ) -> Option<(MeshedChunkedVoxelObject, ModelTransform)>
 where
-    A: Allocator + Copy,
+    A: Allocator + Copy + std::fmt::Debug,
 {
     let generator = editor.build_next_voxel_sdf_generator(arena)?;
     Some((
@@ -251,7 +251,7 @@ fn generate_next_voxel_object_or_default<A>(
     editor: &mut Editor,
 ) -> (MeshedChunkedVoxelObject, ModelTransform)
 where
-    A: Allocator + Copy,
+    A: Allocator + Copy + std::fmt::Debug,
 {
     let generator = editor.build_next_voxel_sdf_generator_or_default(arena);
     (

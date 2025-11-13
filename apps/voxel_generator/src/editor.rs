@@ -107,7 +107,7 @@ impl Editor {
 
     pub fn build_next_voxel_sdf_generator<A>(&mut self, arena: A) -> Option<SDFVoxelGenerator>
     where
-        A: Allocator + Copy,
+        A: Allocator + Copy + std::fmt::Debug,
     {
         if !(self.graph_needs_compilation || self.rebuild_generator) {
             return None;
@@ -144,7 +144,7 @@ impl Editor {
 
     pub fn build_next_voxel_sdf_generator_or_default<A>(&mut self, arena: A) -> SDFVoxelGenerator
     where
-        A: Allocator + Copy,
+        A: Allocator + Copy + std::fmt::Debug,
     {
         self.build_next_voxel_sdf_generator(arena)
             .unwrap_or_else(build::default_sdf_voxel_generator)

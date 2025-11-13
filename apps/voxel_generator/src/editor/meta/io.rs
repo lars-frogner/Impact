@@ -1,6 +1,7 @@
 use super::{
-    MetaFloatParam, MetaFloatRangeParam, MetaNode, MetaNodeChildLinks, MetaNodeData, MetaNodeID,
-    MetaNodeParam, MetaNodeParentLinks, MetaUIntParam, MetaUIntRangeParam, node_kind::MetaNodeKind,
+    MetaEnumParam, MetaFloatParam, MetaFloatRangeParam, MetaNode, MetaNodeChildLinks, MetaNodeData,
+    MetaNodeID, MetaNodeParam, MetaNodeParentLinks, MetaUIntParam, MetaUIntRangeParam,
+    node_kind::MetaNodeKind,
 };
 use anyhow::{Error, bail};
 use impact::impact_containers::HashSet;
@@ -42,10 +43,20 @@ type IOMetaNodeParams = TinyVec<[IOMetaNodeParam; 12]>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum IOMetaNodeParam {
+    Enum {
+        variants: TinyVec<[String; 2]>,
+        value: String,
+    },
     UInt(u32),
     Float(f32),
-    UIntRange { low: u32, high: u32 },
-    FloatRange { low: f32, high: f32 },
+    UIntRange {
+        low: u32,
+        high: u32,
+    },
+    FloatRange {
+        low: f32,
+        high: f32,
+    },
 }
 
 impl IOMetaGraphKind {
@@ -156,6 +167,12 @@ impl TryFrom<IOMetaNode> for MetaNode {
 impl<'a> From<&'a MetaNodeParam> for IOMetaNodeParam {
     fn from(param: &'a MetaNodeParam) -> Self {
         match param {
+            MetaNodeParam::Enum(MetaEnumParam {
+                variants, value, ..
+            }) => Self::Enum {
+                variants: variants.iter().map(|v| (*v).to_string()).collect(),
+                value: (*value).to_string(),
+            },
             MetaNodeParam::UInt(MetaUIntParam { value, .. }) => Self::UInt(*value),
             MetaNodeParam::Float(MetaFloatParam { value, .. }) => Self::Float(*value),
             MetaNodeParam::UIntRange(MetaUIntRangeParam {
