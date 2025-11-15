@@ -176,21 +176,21 @@ impl Editor {
         }
     }
 
-    fn load_subtree_from_file(&mut self, ui: &Ui) {
+    fn load_subgraph_from_file(&mut self, ui: &Ui) {
         if let Some(path) = FileDialog::new()
-            .add_filter("Subtree (*.subtree.ron)", &["subtree.ron"])
-            .set_title("Load subtree")
+            .add_filter("Subgraph (*.subgraph.ron)", &["subgraph.ron"])
+            .set_title("Load subgraph")
             .pick_file()
         {
-            if let Err(err) = self.meta_graph_canvas.load_subtree(
+            if let Err(err) = self.meta_graph_canvas.load_subgraph(
                 &mut self.meta_canvas_scratch,
                 ui,
                 &path,
                 self.config.auto_layout,
             ) {
-                impact_log::error!("Failed to load subtree from {}: {err:#}", path.display());
+                impact_log::error!("Failed to load subgraph from {}: {err:#}", path.display());
             } else {
-                impact_log::info!("Loaded subtree from {}", path.display());
+                impact_log::info!("Loaded subgraph from {}", path.display());
             }
         }
     }
@@ -220,30 +220,30 @@ impl Editor {
         }
     }
 
-    fn save_subtree_to_file<A: Allocator>(&mut self, arena: A, root_node_id: MetaNodeID) {
+    fn save_subgraph_to_file<A: Allocator>(&mut self, arena: A, root_node_id: MetaNodeID) {
         let file_name = self
             .meta_graph_canvas
             .nodes
             .get(&root_node_id)
             .map_or_else(String::new, |node| {
-                format!("{}.subtree.ron", file_stem_from_name(&node.data.name))
+                format!("{}.subgraph.ron", file_stem_from_name(&node.data.name))
             });
 
         if let Some(path) = FileDialog::new()
-            .add_filter("Subtree (*.subtree.ron)", &["subtree.ron"])
-            .set_title("Save subtree as")
+            .add_filter("Subgraph (*.subgraph.ron)", &["subgraph.ron"])
+            .set_title("Save subgraph as")
             .set_file_name(file_name)
             .save_file()
         {
-            if let Err(err) = self.meta_graph_canvas.save_subtree(
+            if let Err(err) = self.meta_graph_canvas.save_subgraph(
                 arena,
                 &mut self.meta_canvas_scratch,
                 root_node_id,
                 &path,
             ) {
-                impact_log::error!("Failed to save subtree to {}: {err:#}", path.display());
+                impact_log::error!("Failed to save subgraph to {}: {err:#}", path.display());
             } else {
-                impact_log::info!("Saved subtree to {}", path.display());
+                impact_log::info!("Saved subgraph to {}", path.display());
             }
         }
     }
@@ -363,12 +363,12 @@ impl CustomPanels for Editor {
                 labeled_option(
                     ui,
                     LabelAndHoverText {
-                        label: "Subtree",
-                        hover_text: "A subtree that has been saved to a file",
+                        label: "Subgraph",
+                        hover_text: "A subgraph that has been saved to a file",
                     },
                     |ui| {
                         if ui.button("Load...").clicked() {
-                            self.load_subtree_from_file(ui);
+                            self.load_subgraph_from_file(ui);
                         }
                     },
                 );
@@ -412,7 +412,7 @@ impl CustomPanels for Editor {
                             &mut is_collapsed,
                             LabelAndHoverText {
                                 label: "Collapsed",
-                                hover_text: "Whether the subtree starting at this node is collapsed into a single representative node",
+                                hover_text: "Whether the subgraph starting at this node is collapsed into a single representative node",
                             },
                         );
 
@@ -429,7 +429,7 @@ impl CustomPanels for Editor {
                                 ui,
                                 LabelAndHoverText {
                                     label: "Name",
-                                    hover_text: "The name of this collapsed subtree",
+                                    hover_text: "The name of this collapsed subgraph",
                                 },
                                 |ui| {
                                     if TextEdit::singleline(&mut selected_node.data.name)
@@ -512,7 +512,7 @@ impl CustomPanels for Editor {
 
                         if is_collapsed {
                             if ui.button("Save As...").clicked() {
-                                self.save_subtree_to_file(arena, selected_node_id);
+                                self.save_subgraph_to_file(arena, selected_node_id);
                                 selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
                             }
                             ui.end_row();

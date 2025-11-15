@@ -25,7 +25,7 @@ pub struct IOMetaGraphRef<'a> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum IOMetaGraphKind {
     Full { pan: [f32; 2], zoom: f32 },
-    Subtree { root_node_id: MetaNodeID },
+    Subgraph { root_node_id: MetaNodeID },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -63,7 +63,7 @@ impl IOMetaGraphKind {
     pub fn label(&self) -> &'static str {
         match self {
             Self::Full { .. } => "full graph",
-            Self::Subtree { .. } => "subtree",
+            Self::Subgraph { .. } => "subgraph",
         }
     }
 }

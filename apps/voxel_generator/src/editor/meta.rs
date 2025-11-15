@@ -155,17 +155,17 @@ pub struct MetaFloatRangeParam {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct CollapsedMetaSubtree {
+pub struct CollapsedMetaSubgraph {
     pub size: Vec2,
-    pub exposed_parent_ports: CollapsedMetaSubtreeParentPorts,
-    pub exposed_child_ports: CollapsedMetaSubtreeChildPorts,
+    pub exposed_parent_ports: CollapsedMetaSubgraphParentPorts,
+    pub exposed_child_ports: CollapsedMetaSubgraphChildPorts,
 }
 
-type CollapsedMetaSubtreeParentPorts = TinyVec<[CollapsedMetaSubtreeParentPort; 4]>;
-type CollapsedMetaSubtreeChildPorts = TinyVec<[CollapsedMetaSubtreeChildPort; 4]>;
+type CollapsedMetaSubgraphParentPorts = TinyVec<[CollapsedMetaSubgraphParentPort; 4]>;
+type CollapsedMetaSubgraphChildPorts = TinyVec<[CollapsedMetaSubgraphChildPort; 4]>;
 
 #[derive(Clone, Debug, Default)]
-pub struct CollapsedMetaSubtreeParentPort {
+pub struct CollapsedMetaSubgraphParentPort {
     on_node: MetaNodeID,
     slot_on_node: usize,
     kind: MetaParentPortKind,
@@ -174,7 +174,7 @@ pub struct CollapsedMetaSubtreeParentPort {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct CollapsedMetaSubtreeChildPort {
+pub struct CollapsedMetaSubgraphChildPort {
     on_node: MetaNodeID,
     slot_on_node: usize,
     kind: MetaChildPortKind,
@@ -876,7 +876,7 @@ impl MetaFloatRangeParam {
     }
 }
 
-impl CollapsedMetaSubtree {
+impl CollapsedMetaSubgraph {
     fn clear(&mut self) {
         self.size = Vec2::ZERO;
         self.exposed_parent_ports.clear();

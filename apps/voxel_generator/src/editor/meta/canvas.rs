@@ -8,7 +8,7 @@ use crate::editor::{
     MAX_ZOOM, MIN_ZOOM, MetaGraphStatus, PanZoomState,
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     meta::{
-        CollapsedMetaSubtree, CollapsedMetaSubtreeChildPort, CollapsedMetaSubtreeParentPort,
+        CollapsedMetaSubgraph, CollapsedMetaSubgraphChildPort, CollapsedMetaSubgraphParentPort,
         MetaPaletteColor,
         data_type::EdgeDataType,
         io::{IOMetaGraph, IOMetaGraphKind, IOMetaGraphRef},
@@ -68,7 +68,7 @@ pub struct MetaGraphCanvas {
 pub struct MetaCanvasScratch {
     world_node_rects: BTreeMap<MetaNodeID, Rect>,
     screen_node_rects: BTreeMap<MetaNodeID, Rect>,
-    subtree_node_ids: Vec<MetaNodeID>,
+    subgraph_node_ids: Vec<MetaNodeID>,
     layout_lut: MetaLayoutLookupTable,
     search: SearchScratch,
     data_type: DataTypeScratch,
@@ -154,8 +154,8 @@ pub struct PendingNodeCollapsedStateChange {
 
 #[derive(Clone, Debug)]
 struct CollapseIndex {
-    visible_subtree_roots: HashSet<MetaNodeID>,
-    subtrees_by_root: HashMap<MetaNodeID, CollapsedMetaSubtree>,
+    visible_subgraph_roots: HashSet<MetaNodeID>,
+    subgraphs_by_root: HashMap<MetaNodeID, CollapsedMetaSubgraph>,
     member_to_root: HashMap<MetaNodeID, MetaNodeID>,
 }
 
@@ -244,16 +244,16 @@ impl MetaGraphCanvas {
     ) {
         if self
             .collapse_index
-            .node_is_visible_collapsed_subtree_root(node_id)
+            .node_is_visible_collapsed_subgraph_root(node_id)
         {
-            obtain_subtree(
+            obtain_subgraph(
                 &mut scratch.search,
                 &self.nodes,
                 self.node_id_counter,
-                &mut scratch.subtree_node_ids,
+                &mut scratch.subgraph_node_ids,
                 node_id,
             );
-            for &node_id_to_remove in &scratch.subtree_node_ids {
+            for &node_id_to_remove in &scratch.subgraph_node_ids {
                 self.remove_single_node(node_id_to_remove, changes);
             }
         } else {
@@ -649,21 +649,21 @@ impl MetaGraphCanvas {
         if let Some(selected_node_id) = self.selected_node_id
             && self
                 .collapse_index
-                .node_is_non_root_member_of_collapsed_subtree(selected_node_id)
+                .node_is_non_root_member_of_collapsed_subgraph(selected_node_id)
         {
             self.selected_node_id = None;
         }
         if let Some(DraggingNode { node_id, .. }) = self.dragging_node
             && self
                 .collapse_index
-                .node_is_non_root_member_of_collapsed_subtree(node_id)
+                .node_is_non_root_member_of_collapsed_subgraph(node_id)
         {
             self.dragging_node = None;
         }
         if let Some(pending_edge) = self.pending_edge
             && self
                 .collapse_index
-                .node_is_non_root_member_of_collapsed_subtree(pending_edge.from_node)
+                .node_is_non_root_member_of_collapsed_subgraph(pending_edge.from_node)
         {
             self.pending_edge = None;
         }
@@ -707,10 +707,10 @@ impl MetaGraphCanvas {
                     self.node_mut(node_id).data.reprepare_name_text(ui);
                     if self
                         .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id)
+                        .node_is_visible_collapsed_subgraph_root(node_id)
                     {
                         self.collapse_index
-                            .update_subtree_node_size(&self.nodes, node_id);
+                            .update_subgraph_node_size(&self.nodes, node_id);
                     }
                 }
 
@@ -744,7 +744,7 @@ impl MetaGraphCanvas {
 
                 // `world_node_rects` and `screen_node_rects` will NOT be
                 // one-to-one with `self.nodes`, since only nodes not hidden in
-                // collapsed subtrees will get a rectangle
+                // collapsed subgraphs will get a rectangle
                 self.compute_world_and_screen_node_rects(
                     canvas_origin,
                     &mut scratch.world_node_rects,
@@ -920,7 +920,7 @@ impl MetaGraphCanvas {
 
                     let is_collapsed = self
                         .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id);
+                        .node_is_visible_collapsed_subgraph_root(node_id);
 
                     node.data.paint(
                         &painter,
@@ -943,16 +943,16 @@ impl MetaGraphCanvas {
 
                 // Draw edges
 
-                // Start with edges fully outside any collapsed subtree
+                // Start with edges fully outside any collapsed subgraph
                 for (&child_node_id, child_node) in &self.nodes {
                     if hidden_added_node_id == Some(child_node_id) {
                         continue;
                     }
                     if self
                         .collapse_index
-                        .node_is_in_collapsed_subtree(child_node_id)
+                        .node_is_in_collapsed_subgraph(child_node_id)
                     {
-                        // Child is part of a collapsed subtree, so skip it
+                        // Child is part of a collapsed subgraph, so skip it
                         continue;
                     }
                     let Some(child_rect) = scratch.screen_node_rects.get(&child_node_id) else {
@@ -977,9 +977,9 @@ impl MetaGraphCanvas {
                         };
                         if self
                             .collapse_index
-                            .node_is_in_collapsed_subtree(parent_node_id)
+                            .node_is_in_collapsed_subgraph(parent_node_id)
                         {
-                            // Parent is part of a collapsed subtree, so skip it
+                            // Parent is part of a collapsed subgraph, so skip it
                             continue;
                         }
                         let Some(parent_rect) = scratch.screen_node_rects.get(&parent_node_id)
@@ -1002,18 +1002,18 @@ impl MetaGraphCanvas {
                     }
                 }
 
-                // Now draw all edges starting or ending in a collapsed subtree
-                for &root_node_id in self.collapse_index.visible_collapsed_subtree_roots() {
-                    let subtree = self.collapse_index.subtree(root_node_id);
-                    let subtree_rect = &scratch.screen_node_rects[&root_node_id];
+                // Now draw all edges starting or ending in a collapsed subgraph
+                for &root_node_id in self.collapse_index.visible_collapsed_subgraph_roots() {
+                    let subgraph = self.collapse_index.subgraph(root_node_id);
+                    let subgraph_rect = &scratch.screen_node_rects[&root_node_id];
 
-                    for (parent_slot_on_subtree, subtree_parent_port) in
-                        subtree.exposed_parent_ports.iter().enumerate()
+                    for (parent_slot_on_subgraph, subgraph_parent_port) in
+                        subgraph.exposed_parent_ports.iter().enumerate()
                     {
                         let Some(MetaNodeLink {
                             to_node: parent_node_id,
                             to_slot: child_slot_on_parent,
-                        }) = subtree_parent_port.link
+                        }) = subgraph_parent_port.link
                         else {
                             continue;
                         };
@@ -1021,7 +1021,7 @@ impl MetaGraphCanvas {
                             continue;
                         }
                         // The parent is guaranteed to not be part of any
-                        // collapsed subtree, because if it was, this subtree
+                        // collapsed subgraph, because if it was, this subgraph
                         // would not be visible
                         let Some(parent_node) = self.nodes.get(&parent_node_id) else {
                             continue;
@@ -1033,22 +1033,22 @@ impl MetaGraphCanvas {
                             parent_rect,
                             child_slot_on_parent,
                             parent_node.links_to_children.len(),
-                            subtree_rect,
-                            parent_slot_on_subtree,
-                            subtree.exposed_parent_ports.len(),
+                            subgraph_rect,
+                            parent_slot_on_subgraph,
+                            subgraph.exposed_parent_ports.len(),
                             parent_node.input_data_types[child_slot_on_parent],
-                            subtree_parent_port.output_data_type,
+                            subgraph_parent_port.output_data_type,
                             self.pan_zoom_state.zoom,
                         );
                     }
 
-                    for (child_slot_on_subtree, subtree_child_port) in
-                        subtree.exposed_child_ports.iter().enumerate()
+                    for (child_slot_on_subgraph, subgraph_child_port) in
+                        subgraph.exposed_child_ports.iter().enumerate()
                     {
                         let Some(MetaNodeLink {
                             to_node: child_node_id,
                             to_slot: parent_slot_on_child,
-                        }) = subtree_child_port.link
+                        }) = subgraph_child_port.link
                         else {
                             continue;
                         };
@@ -1056,8 +1056,8 @@ impl MetaGraphCanvas {
                             continue;
                         }
                         // The child is guaranteed to not be part of any
-                        // collapsed subtree, because if it was, it would also
-                        // be part of this subtree, in which case the link would
+                        // collapsed subgraph, because if it was, it would also
+                        // be part of this subgraph, in which case the link would
                         // have been ignored
                         let Some(child_node) = self.nodes.get(&child_node_id) else {
                             continue;
@@ -1066,13 +1066,13 @@ impl MetaGraphCanvas {
 
                         draw_edge(
                             &painter,
-                            subtree_rect,
-                            child_slot_on_subtree,
-                            subtree.exposed_child_ports.len(),
+                            subgraph_rect,
+                            child_slot_on_subgraph,
+                            subgraph.exposed_child_ports.len(),
                             child_rect,
                             parent_slot_on_child,
                             child_node.links_to_parents.len(),
-                            subtree_child_port.input_data_type,
+                            subgraph_child_port.input_data_type,
                             child_node.output_data_type,
                             self.pan_zoom_state.zoom,
                         );
@@ -1089,11 +1089,11 @@ impl MetaGraphCanvas {
                     }
                     if self
                         .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id)
+                        .node_is_visible_collapsed_subgraph_root(node_id)
                     {
-                        let subtree = self.collapse_index.subtree(node_id);
-                        let exposed_parent_ports = subtree.exposed_parent_ports.clone();
-                        let exposed_child_ports = subtree.exposed_child_ports.clone();
+                        let subgraph = self.collapse_index.subgraph(node_id);
+                        let exposed_parent_ports = subgraph.exposed_parent_ports.clone();
+                        let exposed_child_ports = subgraph.exposed_child_ports.clone();
                         let parent_port_count = exposed_parent_ports.len();
                         let child_port_count = exposed_child_ports.len();
 
@@ -1209,10 +1209,10 @@ impl MetaGraphCanvas {
                 {
                     let from = if self
                         .collapse_index
-                        .node_is_visible_collapsed_subtree_root(pending_edge.from_node)
+                        .node_is_visible_collapsed_subgraph_root(pending_edge.from_node)
                     {
                         self.collapse_index
-                            .subtree(pending_edge.from_node)
+                            .subgraph(pending_edge.from_node)
                             .port_position(node_rect, pending_edge.from_port)
                     } else {
                         node.port_position(node_rect, pending_edge.from_port)
@@ -1310,20 +1310,20 @@ impl MetaGraphCanvas {
                 if let (Some(DraggingNode { node_id, by_button }), Some(delta)) =
                     (self.dragging_node, drag_delta)
                 {
-                    let drag_subtree = self
+                    let drag_subgraph = self
                         .collapse_index
-                        .node_is_visible_collapsed_subtree_root(node_id)
+                        .node_is_visible_collapsed_subgraph_root(node_id)
                         || by_button == PointerButton::Secondary;
 
-                    if drag_subtree {
-                        obtain_subtree(
+                    if drag_subgraph {
+                        obtain_subgraph(
                             &mut scratch.search,
                             &self.nodes,
                             self.node_id_counter,
-                            &mut scratch.subtree_node_ids,
+                            &mut scratch.subgraph_node_ids,
                             node_id,
                         );
-                        for &node_id in &scratch.subtree_node_ids {
+                        for &node_id in &scratch.subgraph_node_ids {
                             translate_node(
                                 &mut self.nodes,
                                 &mut scratch.world_node_rects,
@@ -1341,7 +1341,7 @@ impl MetaGraphCanvas {
                     }
                 }
 
-                // Resolve overlaps when uncollapsing subtree without auto
+                // Resolve overlaps when uncollapsing subgraph without auto
                 // layout
 
                 if let Some(PendingNodeCollapsedStateChange { node_id, collapsed }) =
@@ -1349,14 +1349,14 @@ impl MetaGraphCanvas {
                     && !auto_layout
                     && !collapsed
                 {
-                    obtain_subtree(
+                    obtain_subgraph(
                         &mut scratch.search,
                         &self.nodes,
                         self.node_id_counter,
-                        &mut scratch.subtree_node_ids,
+                        &mut scratch.subgraph_node_ids,
                         node_id,
                     );
-                    for &node_id in &scratch.subtree_node_ids {
+                    for &node_id in &scratch.subgraph_node_ids {
                         resolve_overlap_for_node(
                             &mut self.nodes,
                             &mut scratch.world_node_rects,
@@ -1416,10 +1416,10 @@ impl MetaGraphCanvas {
     fn compute_world_node_rect(&self, node_id: MetaNodeID, node: &MetaNode) -> Option<Rect> {
         let node_size = if self
             .collapse_index
-            .node_is_visible_collapsed_subtree_root(node_id)
+            .node_is_visible_collapsed_subgraph_root(node_id)
         {
-            self.collapse_index.subtree(node_id).size
-        } else if !self.collapse_index.node_is_in_collapsed_subtree(node_id) {
+            self.collapse_index.subgraph(node_id).size
+        } else if !self.collapse_index.node_is_in_collapsed_subgraph(node_id) {
             node.data.compute_standard_size()
         } else {
             return None;
@@ -1806,36 +1806,36 @@ impl MetaGraphCanvas {
         impact_io::write_ron_file(&graph, output_path)
     }
 
-    pub fn save_subtree<A: Allocator>(
+    pub fn save_subgraph<A: Allocator>(
         &self,
         arena: A,
         scratch: &mut MetaCanvasScratch,
         root_node_id: MetaNodeID,
         output_path: &Path,
     ) -> Result<()> {
-        obtain_subtree(
+        obtain_subgraph(
             &mut scratch.search,
             &self.nodes,
             self.node_id_counter,
-            &mut scratch.subtree_node_ids,
+            &mut scratch.subgraph_node_ids,
             root_node_id,
         );
 
-        if scratch.subtree_node_ids.is_empty() {
-            bail!("Missing root node {root_node_id} when saving subtree");
+        if scratch.subgraph_node_ids.is_empty() {
+            bail!("Missing root node {root_node_id} when saving subgraph");
         }
 
-        let mut nodes = AVec::with_capacity_in(scratch.subtree_node_ids.len(), arena);
+        let mut nodes = AVec::with_capacity_in(scratch.subgraph_node_ids.len(), arena);
 
         nodes.extend(
             scratch
-                .subtree_node_ids
+                .subgraph_node_ids
                 .iter()
                 .map(|node_id| (node_id, &self.nodes[node_id]).into()),
         );
 
         let graph = IOMetaGraphRef {
-            kind: IOMetaGraphKind::Subtree { root_node_id },
+            kind: IOMetaGraphKind::Subgraph { root_node_id },
             nodes: nodes.as_slice(),
             collapsed_nodes: &HashSet::default(),
         };
@@ -1896,57 +1896,57 @@ impl MetaGraphCanvas {
         Ok(())
     }
 
-    pub fn load_subtree(
+    pub fn load_subgraph(
         &mut self,
         scratch: &mut MetaCanvasScratch,
         ui: &Ui,
         path: &Path,
         auto_layout: bool,
     ) -> Result<()> {
-        let subtree: IOMetaGraph =
-            impact_io::parse_ron_file(path).context("Failed to parse subtree file")?;
+        let subgraph: IOMetaGraph =
+            impact_io::parse_ron_file(path).context("Failed to parse subgraph file")?;
 
-        let IOMetaGraphKind::Subtree {
+        let IOMetaGraphKind::Subgraph {
             root_node_id: orig_root_node_id,
-        } = subtree.kind
+        } = subgraph.kind
         else {
             bail!(
-                "Graph file contains a {}, not a subtree",
-                subtree.kind.label()
+                "Graph file contains a {}, not a subgraph",
+                subgraph.kind.label()
             );
         };
 
         let id_offset = self.node_id_counter;
 
-        let mut subtree_nodes = BTreeMap::new();
+        let mut subgraph_nodes = BTreeMap::new();
         let mut node_id_counter = 0;
 
-        scratch.subtree_node_ids.clear();
+        scratch.subgraph_node_ids.clear();
 
-        for mut io_node in subtree.nodes {
+        for mut io_node in subgraph.nodes {
             let orig_node_id = io_node.id;
 
             io_node.offset_ids(id_offset);
             let node_id = io_node.id;
 
             let mut node: MetaNode = io_node.try_into().with_context(|| {
-                format!("Invalid node in subtree file (node ID {orig_node_id})")
+                format!("Invalid node in subgraph file (node ID {orig_node_id})")
             })?;
 
             node.data.prepare_text(ui, self.pan_zoom_state.zoom);
 
-            subtree_nodes.insert(node_id, node);
-            scratch.subtree_node_ids.push(node_id);
+            subgraph_nodes.insert(node_id, node);
+            scratch.subgraph_node_ids.push(node_id);
 
             node_id_counter = node_id_counter.max(node_id + 1);
         }
 
         let root_node_id = orig_root_node_id + id_offset;
-        if !subtree_nodes.contains_key(&root_node_id) {
-            bail!("Subtree does not contain the root node (ID {orig_root_node_id}");
+        if !subgraph_nodes.contains_key(&root_node_id) {
+            bail!("Subgraph does not contain the root node (ID {orig_root_node_id}");
         }
 
-        self.nodes.extend(subtree_nodes);
+        self.nodes.extend(subgraph_nodes);
         self.node_id_counter = self.node_id_counter.max(node_id_counter);
 
         self.collapsed_nodes.insert(root_node_id);
@@ -1976,7 +1976,7 @@ impl MetaGraphCanvas {
 
             let final_delta = self.nodes[&root_node_id].position - orig_root_node_position;
 
-            for node_id in &scratch.subtree_node_ids[1..] {
+            for node_id in &scratch.subgraph_node_ids[1..] {
                 self.nodes.get_mut(node_id).unwrap().position += final_delta;
             }
         }
@@ -1990,7 +1990,7 @@ impl MetaCanvasScratch {
         Self {
             world_node_rects: BTreeMap::new(),
             screen_node_rects: BTreeMap::new(),
-            subtree_node_ids: Vec::new(),
+            subgraph_node_ids: Vec::new(),
             layout_lut: MetaLayoutLookupTable::new(),
             search: SearchScratch::new(),
             data_type: DataTypeScratch::new(),
@@ -2012,15 +2012,15 @@ impl SearchScratch {
 impl CollapseIndex {
     fn new() -> Self {
         Self {
-            visible_subtree_roots: HashSet::default(),
-            subtrees_by_root: HashMap::default(),
+            visible_subgraph_roots: HashSet::default(),
+            subgraphs_by_root: HashMap::default(),
             member_to_root: HashMap::default(),
         }
     }
 
     fn reset(&mut self) {
-        self.visible_subtree_roots.clear();
-        self.subtrees_by_root.clear();
+        self.visible_subgraph_roots.clear();
+        self.subgraphs_by_root.clear();
         self.member_to_root.clear();
     }
 
@@ -2032,54 +2032,54 @@ impl CollapseIndex {
         collapsed_nodes: &HashSet<MetaNodeID>,
     ) {
         self.member_to_root.clear();
-        self.visible_subtree_roots.clone_from(collapsed_nodes);
+        self.visible_subgraph_roots.clone_from(collapsed_nodes);
 
         for &root_node_id in collapsed_nodes {
             // If the root has already been established as a member of a
-            // subtree, that subtree encompasses this one, so this one will be
+            // subgraph, that subgraph encompasses this one, so this one will be
             // hidden.
             if self.member_to_root.contains_key(&root_node_id) {
                 continue;
             }
 
-            // It could also be that the root is a membor of a subtree we have
+            // It could also be that the root is a membor of a subgraph we have
             // not processed yet. If that is the case, the work we do for this
-            // subtree will simply get overwritten.
+            // subgraph will simply get overwritten.
 
-            obtain_subtree(
+            obtain_subgraph(
                 &mut scratch.search,
                 nodes,
                 node_id_counter,
-                &mut scratch.subtree_node_ids,
+                &mut scratch.subgraph_node_ids,
                 root_node_id,
             );
 
-            for node_id in &scratch.subtree_node_ids[1..] {
-                // If any of the non-root subtree members are also collapsed
-                // roots, their subtrees should not be visible since they are
-                // part of this collapsed subtree
+            for node_id in &scratch.subgraph_node_ids[1..] {
+                // If any of the non-root subgraph members are also collapsed
+                // roots, their subgraphs should not be visible since they are
+                // part of this collapsed subgraph
                 if collapsed_nodes.contains(node_id) {
-                    self.visible_subtree_roots.remove(node_id);
+                    self.visible_subgraph_roots.remove(node_id);
                 }
             }
 
             // Sort for consistent slot order and binary search
-            scratch.subtree_node_ids.sort();
+            scratch.subgraph_node_ids.sort();
 
-            let subtree = self
-                .subtrees_by_root
+            let subgraph = self
+                .subgraphs_by_root
                 .entry(root_node_id)
-                .and_modify(CollapsedMetaSubtree::clear)
+                .and_modify(CollapsedMetaSubgraph::clear)
                 .or_default();
 
-            subtree.size = nodes[&root_node_id]
+            subgraph.size = nodes[&root_node_id]
                 .data
                 .compute_collapsed_size()
                 .max(MIN_COLLAPSED_PROXY_NODE_SIZE);
 
-            for &node_id in &scratch.subtree_node_ids {
-                // Since we skip subtrees if we have established that they are
-                // encompassed by a larger subtree and overwrite otherwise,
+            for &node_id in &scratch.subgraph_node_ids {
+                // Since we skip subgraphs if we have established that they are
+                // encompassed by a larger subgraph and overwrite otherwise,
                 // `member_to_root` will always end up with the most top-level
                 // root
                 self.member_to_root.insert(node_id, root_node_id);
@@ -2089,20 +2089,20 @@ impl CollapseIndex {
                 for (slot, &link) in node.links_to_parents.iter().enumerate() {
                     if let Some(link) = link {
                         if scratch
-                            .subtree_node_ids
+                            .subgraph_node_ids
                             .binary_search(&link.to_node)
                             .is_err()
                         {
-                            // The link is to a node outside this subtree, so
-                            // the port should be included among the subtree's
+                            // The link is to a node outside this subgraph, so
+                            // the port should be included among the subgraph's
                             // exposed ports and the link should be preserved.
                             // The link could be to a node that is part of
-                            // another subtree, but in that case the current
-                            // subtree is part of that subtree and thus will not
+                            // another subgraph, but in that case the current
+                            // subgraph is part of that subgraph and thus will not
                             // be rendered at all.
-                            subtree
+                            subgraph
                                 .exposed_parent_ports
-                                .push(CollapsedMetaSubtreeParentPort {
+                                .push(CollapsedMetaSubgraphParentPort {
                                     on_node: node_id,
                                     slot_on_node: slot,
                                     kind: node.data.kind.parent_port_kind(),
@@ -2112,10 +2112,10 @@ impl CollapseIndex {
                         }
                     } else {
                         // This is an open port, so it should be included among
-                        // the subtree's exposed ports
-                        subtree
+                        // the subgraph's exposed ports
+                        subgraph
                             .exposed_parent_ports
-                            .push(CollapsedMetaSubtreeParentPort {
+                            .push(CollapsedMetaSubgraphParentPort {
                                 on_node: node_id,
                                 slot_on_node: slot,
                                 kind: node.data.kind.parent_port_kind(),
@@ -2132,15 +2132,15 @@ impl CollapseIndex {
                     .zip(node.data.kind.child_port_kinds())
                     .enumerate()
                 {
-                    // There can't be a link to a child outside the subtree,
-                    // since all children by definition are part of the subtree
+                    // There can't be a link to a child outside the subgraph,
+                    // since all children by definition are part of the subgraph
 
                     if link.is_none() {
                         // This is an open port, so it should be included among
-                        // the subtree's exposed ports
-                        subtree
+                        // the subgraph's exposed ports
+                        subgraph
                             .exposed_child_ports
-                            .push(CollapsedMetaSubtreeChildPort {
+                            .push(CollapsedMetaSubgraphChildPort {
                                 on_node: node_id,
                                 slot_on_node: slot,
                                 kind: port_kind,
@@ -2153,39 +2153,39 @@ impl CollapseIndex {
         }
     }
 
-    fn subtree(&self, root_node_id: MetaNodeID) -> &CollapsedMetaSubtree {
-        &self.subtrees_by_root[&root_node_id]
+    fn subgraph(&self, root_node_id: MetaNodeID) -> &CollapsedMetaSubgraph {
+        &self.subgraphs_by_root[&root_node_id]
     }
 
-    fn update_subtree_node_size(
+    fn update_subgraph_node_size(
         &mut self,
         nodes: &BTreeMap<MetaNodeID, MetaNode>,
         root_node_id: MetaNodeID,
     ) {
-        self.subtrees_by_root.get_mut(&root_node_id).unwrap().size = nodes[&root_node_id]
+        self.subgraphs_by_root.get_mut(&root_node_id).unwrap().size = nodes[&root_node_id]
             .data
             .compute_collapsed_size()
             .max(MIN_COLLAPSED_PROXY_NODE_SIZE);
     }
 
-    fn visible_collapsed_subtree_roots(&self) -> &HashSet<MetaNodeID> {
-        &self.visible_subtree_roots
+    fn visible_collapsed_subgraph_roots(&self) -> &HashSet<MetaNodeID> {
+        &self.visible_subgraph_roots
     }
 
-    fn node_is_visible_collapsed_subtree_root(&self, node_id: MetaNodeID) -> bool {
-        self.visible_subtree_roots.contains(&node_id)
+    fn node_is_visible_collapsed_subgraph_root(&self, node_id: MetaNodeID) -> bool {
+        self.visible_subgraph_roots.contains(&node_id)
     }
 
-    fn node_is_in_collapsed_subtree(&self, node_id: MetaNodeID) -> bool {
+    fn node_is_in_collapsed_subgraph(&self, node_id: MetaNodeID) -> bool {
         self.member_to_root.contains_key(&node_id)
     }
 
-    fn node_is_non_root_member_of_collapsed_subtree(&self, node_id: MetaNodeID) -> bool {
-        self.node_is_in_collapsed_subtree(node_id)
-            && !self.node_is_visible_collapsed_subtree_root(node_id)
+    fn node_is_non_root_member_of_collapsed_subgraph(&self, node_id: MetaNodeID) -> bool {
+        self.node_is_in_collapsed_subgraph(node_id)
+            && !self.node_is_visible_collapsed_subgraph_root(node_id)
     }
 
-    fn root_if_in_collapsed_subtree(&self, node_id: MetaNodeID) -> Option<MetaNodeID> {
+    fn root_if_in_collapsed_subgraph(&self, node_id: MetaNodeID) -> Option<MetaNodeID> {
         self.member_to_root.get(&node_id).copied()
     }
 }
@@ -2250,10 +2250,10 @@ impl MetaLayoutLookupTable {
         let mut offset = 0;
 
         for node_id in self.visible_node_index_map.key_at_each_idx() {
-            if collapsed_index.node_is_visible_collapsed_subtree_root(node_id) {
-                let subtree = collapsed_index.subtree(node_id);
+            if collapsed_index.node_is_visible_collapsed_subgraph_root(node_id) {
+                let subgraph = collapsed_index.subgraph(node_id);
 
-                for child_node_idx in subtree.exposed_child_ports.iter().filter_map(|port| {
+                for child_node_idx in subgraph.exposed_child_ports.iter().filter_map(|port| {
                     port.link
                         .map(|link| self.visible_node_index_map.idx(link.to_node))
                 }) {
@@ -2265,7 +2265,7 @@ impl MetaLayoutLookupTable {
                 for child_node_idx in node.links_to_children.iter().filter_map(|link| {
                     link.map(|link| {
                         let to_node = collapsed_index
-                            .root_if_in_collapsed_subtree(link.to_node)
+                            .root_if_in_collapsed_subgraph(link.to_node)
                             .unwrap_or(link.to_node);
 
                         self.visible_node_index_map.idx(to_node)
@@ -2324,17 +2324,17 @@ fn node_can_reach_other(
     false
 }
 
-fn obtain_subtree(
+fn obtain_subgraph(
     scratch: &mut SearchScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
     node_id_counter: MetaNodeID,
-    subtree_node_ids: &mut Vec<MetaNodeID>,
+    subgraph_node_ids: &mut Vec<MetaNodeID>,
     node_id: MetaNodeID,
 ) {
     let stack = &mut scratch.stack;
     let seen = &mut scratch.seen;
 
-    subtree_node_ids.clear();
+    subgraph_node_ids.clear();
 
     stack.clear();
     stack.push(node_id);
@@ -2345,7 +2345,7 @@ fn obtain_subtree(
         if seen.set_bit(node_id as usize) {
             continue;
         }
-        subtree_node_ids.push(node_id);
+        subgraph_node_ids.push(node_id);
         if let Some(node) = nodes.get(&node_id) {
             for child_node_id in node
                 .links_to_children
