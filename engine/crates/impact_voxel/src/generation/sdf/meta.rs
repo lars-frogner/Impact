@@ -107,219 +107,349 @@ pub struct ContParamRange {
     pub max: f32,
 }
 
+/// A box-shaped SDF.
+///
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaBoxSDF {
+    /// Extent of the box along each axis, in voxels.
     extents: [ContParamRange; 3],
+    /// Seed for selecting an extent within the specified ranges.
     seed: u32,
 }
 
+/// A sphere-shaped SDF.
+///
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSphereSDF {
+    /// Radius of the sphere, in voxels.
     radius: ContParamRange,
+    /// Seed for selecting a radius within the specified range.
     seed: u32,
 }
 
+/// An SDF generated from thresholding a gradient noise field.
+///
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaGradientNoiseSDF {
+    /// Extent of the noise field along each axis, in voxels.
     extents: [ContParamRange; 3],
+    /// Spatial frequency of the noise pattern, in inverse voxels.
     noise_frequency: ContParamRange,
+    /// Minimum noise value (they range from -1 to 1) for a voxel to be
+    /// considered inside the object.
     noise_threshold: ContParamRange,
+    /// Seed for generating noise and selecting parameter values within the
+    /// specified ranges.
     seed: u32,
 }
 
+/// Translation of one or more SDFs.
+///
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFTranslation {
+    /// ID of the child SDF node to transform.
     child_id: MetaSDFNodeID,
+    /// Translation distance along each axis, in voxels.
     translation: [ContParamRange; 3],
+    /// Seed for selecting a translation within the specified ranges.
     seed: u32,
 }
 
+/// Rotation of one or more SDFs.
+///
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFRotation {
+    /// ID of the child SDF node to transform.
     child_id: MetaSDFNodeID,
+    /// Rotation angle around the z-axis, in radians.
     roll: ContParamRange,
+    /// Rotation angle around the y-axis, in radians.
     pitch: ContParamRange,
+    /// Rotation angle around the x-axis, in radians.
     yaw: ContParamRange,
+    /// Seed for selecting a rotation within the specified ranges.
     seed: u32,
 }
 
+/// Uniform scaling of one or more SDFs.
+///
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFScaling {
+    /// ID of the child SDF node to transform.
     child_id: MetaSDFNodeID,
+    /// Uniform scale factor.
     scaling: ContParamRange,
+    /// Seed for selecting a scale factor within the specified range.
     seed: u32,
 }
 
+/// Perturbation of one or more SDFs using a multifractal noise field.
+///
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaMultifractalNoiseSDFModifier {
+    /// ID of the child SDF node to modify.
     child_id: MetaSDFNodeID,
+    /// Number of noise octaves (patterns of increasing frequency) to combine.
     octaves: DiscreteParamRange,
+    /// Spatial frequency of the noise pattern in the first octave, in inverse
+    /// voxels.
     frequency: ContParamRange,
+    /// Noise frequency multiplier between successive octaves.
     lacunarity: ContParamRange,
+    /// Noise amplitude multiplier between successive octaves.
     persistence: ContParamRange,
+    /// Noise amplitude (max displacement) in the first octave, in voxels.
     amplitude: ContParamRange,
+    /// Seed for generating noise and selecting parameter values within the
+    /// specified ranges.
     seed: u32,
 }
 
+/// Perturbation of one or more SDFs by intersecting and combining with grids
+/// of spheres on multiple scales.
+///
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaMultiscaleSphereSDFModifier {
+    /// ID of the child SDF node to modify.
     child_id: MetaSDFNodeID,
+    /// Number of sphere scales to combine for detail variation.
     octaves: DiscreteParamRange,
+    /// Maximum scale of variation in the multiscale pattern, in voxels.
     max_scale: ContParamRange,
+    /// Scale multiplier between successive octaves.
     persistence: ContParamRange,
+    /// Amount to expand the pattern being modified before intersecting with
+    /// spheres, in factors of the max scale.
     inflation: ContParamRange,
+    /// Smoothness factor for intersecting spheres with the inflated version of
+    /// the pattern being modified.
     intersection_smoothness: ContParamRange,
+    /// Smoothness factor for combining the intersected sphere pattern with the
+    /// original pattern.
     union_smoothness: ContParamRange,
+    /// Seed for generating random sphere radii as well as selecting parameter
+    /// values within the specified ranges.
     seed: u32,
 }
 
+/// Smooth union of two SDFs.
+///
 /// Input 1: `SingleSDF`
 /// Input 2: `SingleSDF`
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFUnion {
+    /// ID of the first SDF node to combine.
     child_1_id: MetaSDFNodeID,
+    /// ID of the second SDF node to combine.
     child_2_id: MetaSDFNodeID,
+    /// Smoothness factor for blending the two shapes together.
     smoothness: f32,
 }
 
+/// Smooth subtraction of the second SDF from the first.
+///
 /// Input 1: `SingleSDF`
 /// Input 2: `SingleSDF`
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFSubtraction {
+    /// ID of the SDF node to subtract from.
     child_1_id: MetaSDFNodeID,
+    /// ID of the SDF node to subtract.
     child_2_id: MetaSDFNodeID,
+    /// Smoothness factor for blending the subtraction operation.
     smoothness: f32,
 }
 
+/// Smooth intersection of two SDFs.
+///
 /// Input 1: `SingleSDF`
 /// Input 2: `SingleSDF`
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFIntersection {
+    /// ID of the first SDF node to intersect.
     child_1_id: MetaSDFNodeID,
+    /// ID of the second SDF node to intersect.
     child_2_id: MetaSDFNodeID,
+    /// Smoothness factor for blending the intersection operation.
     smoothness: f32,
 }
 
+/// Smooth union of all SDFs in a group.
+///
 /// Input: `SDFGroup` or `SingleSDF`
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFGroupUnion {
+    /// ID of the SDF group node to union.
     child_id: MetaSDFNodeID,
+    /// Smoothness factor for blending all the shapes in the group together.
     smoothness: f32,
 }
 
+/// Placements generated by stratified sampling of points on a grid.
+///
 /// Output: `PlacementGroup`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaStratifiedPlacement {
+    /// Number of grid cells along each axis.
     shape: [DiscreteParamRange; 3],
+    /// Extent of a grid cell along each axis, in voxels.
     cell_extents: [ContParamRange; 3],
+    /// Number of placements generated within each grid cell.
     points_per_grid_cell: DiscreteParamRange,
+    /// Fraction of a grid cell to randomly displace the placements.
     jitter_fraction: ContParamRange,
+    /// Seed for random jittering.
     seed: u32,
 }
 
+/// Translation of one or more placements.
+///
 /// Input: `PlacementGroup` or `SinglePlacement`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaPlacementTranslation {
+    /// ID of the child placement node to transform.
     child_id: MetaSDFNodeID,
+    /// Whether to apply the translation before ('Pre') or after ('Post') the
+    /// transforms of the input placements.
     composition: CompositionMode,
+    /// Translation distance along each axis, in voxels.
     translation: [ContParamRange; 3],
+    /// Seed for selecting a translation within the specified ranges.
     seed: u32,
 }
 
+/// Rotation of one or more placements.
+///
 /// Input: `PlacementGroup` or `SinglePlacement`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaPlacementRotation {
+    /// ID of the child placement node to transform.
     child_id: MetaSDFNodeID,
+    /// Whether to apply the rotation before ('Pre') or after ('Post') the
+    /// transforms of the input placements.
     composition: CompositionMode,
+    /// Rotation angle around the z-axis, in radians.
     roll: ContParamRange,
+    /// Rotation angle around the y-axis, in radians.
     pitch: ContParamRange,
+    /// Rotation angle around the x-axis, in radians.
     yaw: ContParamRange,
+    /// Seed for selecting a rotation within the specified ranges.
     seed: u32,
 }
 
+/// Uniform scaling of one or more placements.
+///
 /// Input: `PlacementGroup` or `SinglePlacement`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaPlacementScaling {
+    /// ID of the child placement node to transform.
     child_id: MetaSDFNodeID,
+    /// Whether to apply the scaling before ('Pre') or after ('Post') the
+    /// transforms of the input placements.
     composition: CompositionMode,
+    /// Uniform scale factor.
     scaling: ContParamRange,
+    /// Seed for selecting a scale factor within the specified range.
     seed: u32,
 }
 
+/// Translation of the SDFs or placements in the second input to the surface of
+/// the SDF in the first input.
+///
 /// Input 1: `SingleSDF`
 /// Input 2: Any
 /// Output: Same as input 2
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaTranslationToSurface {
+    /// ID of the SDF node whose surface to translate to.
     surface_sdf_id: MetaSDFNodeID,
+    /// ID of the node containing SDFs or placements to translate.
     subject_id: MetaSDFNodeID,
 }
 
+/// Rotation of the SDFs or placements in the second input to make their
+/// y-axis align with the gradient of the SDF in the first input.
+///
 /// Input 1: `SingleSDF`
 /// Input 2: Any
 /// Output: Same as input 2
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaRotationToGradient {
+    /// ID of the SDF node whose gradient to align with.
     gradient_sdf_id: MetaSDFNodeID,
+    /// ID of the node containing SDFs or placements to rotate.
     subject_id: MetaSDFNodeID,
 }
 
+/// Application of the placements in the second input to the SDFs in the first
+/// input (yields all combinations).
+///
 /// Input 1: `SDFGroup` or `SingleSDF`
 /// Input 2: `PlacementGroup` or `SinglePlacement`
 /// Output: `SDFGroup`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaSDFScattering {
+    /// ID of the SDF or SDF group node to scatter.
     sdf_id: MetaSDFNodeID,
+    /// ID of the placement or placement group node containing positions.
     placement_id: MetaSDFNodeID,
 }
 
-/// Input: Any
+/// Random selection of SDFs or placements from a group.
+///
+/// Input: `SDFGroup` or `PlacementGroup`
 /// Output: Same as input
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaStochasticSelection {
+    /// ID of the child group node to select from.
     child_id: MetaSDFNodeID,
+    /// Minimum and maximum number of items to select initially.
     pick_count: RangeInclusive<u32>,
+    /// Probability that each of the initially selected items will be kept in
+    /// the final selection.
     pick_probability: f32,
+    /// Seed for random selection.
     seed: u32,
 }
 
