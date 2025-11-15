@@ -6,11 +6,11 @@ use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
     CompositionMode, MetaBoxSDF, MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier,
-    MetaMultiscaleSphereSDFModifier, MetaPlacementRotation, MetaPlacementScaling,
-    MetaPlacementTranslation, MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFIntersection,
-    MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling, MetaSDFScattering,
+    MetaMultiscaleSphereSDFModifier, MetaRotationToGradient, MetaSDFGroupUnion,
+    MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling,
     MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF, MetaStochasticSelection,
-    MetaStratifiedPlacement, MetaTranslationToSurface,
+    MetaStratifiedGridTransforms, MetaTransformApplication, MetaTransformRotation,
+    MetaTransformScaling, MetaTransformTranslation, MetaTranslationToSurface,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,36 +31,36 @@ trait SpecificMetaNodeKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MetaNodeKind {
     Output,
-    Box,
-    Sphere,
-    GradientNoise,
-    Translation,
-    Rotation,
-    Scaling,
-    MultifractalNoise,
-    MultiscaleSphere,
-    Union,
-    Subtraction,
-    Intersection,
-    GroupUnion,
-    StratifiedPlacement,
-    PlacementTranslation,
-    PlacementRotation,
-    PlacementScaling,
+    BoxSDF,
+    SphereSDF,
+    GradientNoiseSDF,
+    SDFTranslation,
+    SDFRotation,
+    SDFScaling,
+    MultifractalNoiseSDFModifier,
+    MultiscaleSphereSDFModifier,
+    SDFUnion,
+    SDFSubtraction,
+    SDFIntersection,
+    SDFGroupUnion,
+    StratifiedGridTransforms,
+    TransformTranslation,
+    TransformRotation,
+    TransformScaling,
     TranslationToSurface,
     RotationToGradient,
-    Scattering,
+    TransformApplication,
     StochasticSelection,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MetaNodeKindGroup {
     Root,
-    Primitive,
+    SDFPrimitive,
+    SDFTransform,
+    SDFModification,
+    SDFCombination,
     Transform,
-    Modification,
-    Combination,
-    Placement,
     Filtering,
 }
 
@@ -70,8 +70,8 @@ pub enum MetaChildPortKind {
     #[default]
     SingleSDF,
     SDFGroup,
-    SinglePlacement,
-    PlacementGroup,
+    SingleTransform,
+    TransformGroup,
     Any,
 }
 
@@ -81,8 +81,8 @@ pub enum MetaParentPortKind {
     #[default]
     SingleSDF,
     SDFGroup,
-    SinglePlacement,
-    PlacementGroup,
+    SingleTransform,
+    TransformGroup,
     SameAsInput {
         slot: usize,
     },
@@ -97,8 +97,8 @@ pub const MIN_VOXEL_EXTENT: f32 = 0.005;
 
 impl SpecificMetaNodeKind for MetaBoxSDF {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Box",
-        hover_text: "A box-shaped SDF",
+        label: "Box SDF",
+        hover_text: "A box-shaped SDF.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
@@ -163,14 +163,14 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
             params[2].float_range(),
         ];
         let seed = params[3].uint();
-        Some(MetaSDFNode::new_box(extents, seed))
+        Some(MetaSDFNode::new_box_sdf(extents, seed))
     }
 }
 
 impl SpecificMetaNodeKind for MetaSphereSDF {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Sphere",
-        hover_text: "A sphere-shaped SDF",
+        label: "Sphere SDF",
+        hover_text: "A sphere-shaped SDF.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
@@ -209,14 +209,14 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
         assert_eq!(params.len(), 2);
         let radius = params[0].float_range();
         let seed = params[1].uint();
-        Some(MetaSDFNode::new_sphere(radius, seed))
+        Some(MetaSDFNode::new_sphere_sdf(radius, seed))
     }
 }
 
 impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Gradient noise",
-        hover_text: "An SDF generated from thresholding a gradient noise field",
+        label: "Gradient noise SDF",
+        hover_text: "An SDF generated from thresholding a gradient noise field.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
@@ -309,7 +309,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
         let noise_frequency = params[3].float_range();
         let noise_threshold = params[4].float_range();
         let seed = params[5].uint();
-        Some(MetaSDFNode::new_gradient_noise(
+        Some(MetaSDFNode::new_gradient_noise_sdf(
             extents,
             noise_frequency,
             noise_threshold,
@@ -320,8 +320,8 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
 
 impl SpecificMetaNodeKind for MetaSDFTranslation {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Translation",
-        hover_text: "Translation of one or more SDFs",
+        label: "SDF translation",
+        hover_text: "Translation of one or more SDFs.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -388,14 +388,18 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
             params[2].float_range(),
         ];
         let seed = params[3].uint();
-        Some(MetaSDFNode::new_translation(child_id, translation, seed))
+        Some(MetaSDFNode::new_sdf_translation(
+            child_id,
+            translation,
+            seed,
+        ))
     }
 }
 
 impl SpecificMetaNodeKind for MetaSDFRotation {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Rotation",
-        hover_text: "Rotation of one or more SDFs",
+        label: "SDF rotation",
+        hover_text: "Rotation of one or more SDFs.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -460,14 +464,16 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
         let pitch = params[1].float_range();
         let yaw = params[2].float_range();
         let seed = params[3].uint();
-        Some(MetaSDFNode::new_rotation(child_id, roll, pitch, yaw, seed))
+        Some(MetaSDFNode::new_sdf_rotation(
+            child_id, roll, pitch, yaw, seed,
+        ))
     }
 }
 
 impl SpecificMetaNodeKind for MetaSDFScaling {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Scaling",
-        hover_text: "Uniform scaling of one or more SDFs",
+        label: "SDF scaling",
+        hover_text: "Uniform scaling of one or more SDFs.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -509,14 +515,14 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
         let child_id = unary_child(id_map, children)?;
         let scaling = params[0].float_range();
         let seed = params[1].uint();
-        Some(MetaSDFNode::new_scaling(child_id, scaling, seed))
+        Some(MetaSDFNode::new_sdf_scaling(child_id, scaling, seed))
     }
 }
 
 impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Multifractal noise",
-        hover_text: "Perturbation of one or more SDFs using a multifractal noise field",
+        label: "Multifractal noise SDF modifier",
+        hover_text: "Perturbation of one or more SDFs using a multifractal noise field.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -625,8 +631,8 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
 
 impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Multiscale sphere",
-        hover_text: "Perturbation of one or more SDFs by intersecting and combining with grids of spheres on multiple scales",
+        label: "Multiscale sphere SDF modifier",
+        hover_text: "Perturbation of one or more SDFs by intersecting and combining with grids of spheres on multiple scales.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -747,8 +753,8 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
 
 impl SpecificMetaNodeKind for MetaSDFUnion {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Union",
-        hover_text: "Smooth union of two SDFs",
+        label: "SDF union",
+        hover_text: "Smooth union of two SDFs.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -778,14 +784,16 @@ impl SpecificMetaNodeKind for MetaSDFUnion {
         assert_eq!(params.len(), 1);
         let (child_1_id, child_2_id) = binary_children(id_map, children)?;
         let smoothness = params[0].float();
-        Some(MetaSDFNode::new_union(child_1_id, child_2_id, smoothness))
+        Some(MetaSDFNode::new_sdf_union(
+            child_1_id, child_2_id, smoothness,
+        ))
     }
 }
 
 impl SpecificMetaNodeKind for MetaSDFSubtraction {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Subtraction",
-        hover_text: "Smooth subtraction of the second SDF from the first",
+        label: "SDF subtraction",
+        hover_text: "Smooth subtraction of the second SDF from the first.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -815,7 +823,7 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
         assert_eq!(params.len(), 1);
         let (child_1_id, child_2_id) = binary_children(id_map, children)?;
         let smoothness = params[0].float();
-        Some(MetaSDFNode::new_subtraction(
+        Some(MetaSDFNode::new_sdf_subtraction(
             child_1_id, child_2_id, smoothness,
         ))
     }
@@ -823,8 +831,8 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
 
 impl SpecificMetaNodeKind for MetaSDFIntersection {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Intersection",
-        hover_text: "Smooth intersection of two SDFs",
+        label: "SDF intersection",
+        hover_text: "Smooth intersection of two SDFs.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -854,7 +862,7 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
         assert_eq!(params.len(), 1);
         let (child_1_id, child_2_id) = binary_children(id_map, children)?;
         let smoothness = params[0].float();
-        Some(MetaSDFNode::new_intersection(
+        Some(MetaSDFNode::new_sdf_intersection(
             child_1_id, child_2_id, smoothness,
         ))
     }
@@ -862,8 +870,8 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
 
 impl SpecificMetaNodeKind for MetaSDFGroupUnion {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Group union",
-        hover_text: "Smooth union of a all SDFs in a group",
+        label: "SDF group union",
+        hover_text: "Smooth union of a all SDFs in a group.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -893,16 +901,16 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
         assert_eq!(params.len(), 1);
         let child_id = unary_child(id_map, children)?;
         let smoothness = params[0].float();
-        Some(MetaSDFNode::new_group_union(child_id, smoothness))
+        Some(MetaSDFNode::new_sdf_group_union(child_id, smoothness))
     }
 }
 
-impl SpecificMetaNodeKind for MetaStratifiedPlacement {
+impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Stratified placement",
-        hover_text: "Placements generated by stratified sampling of points on a grid",
+        label: "Stratified grid transforms",
+        hover_text: "Translations from a grid origin generated by stratified sampling of points on the grid.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::PlacementGroup;
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::TransformGroup;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
@@ -974,7 +982,7 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
             MetaUIntParam::new(
                 LabelAndHoverText {
                     label: "Points per cell",
-                    hover_text: "Number of placements generated within each grid cell.",
+                    hover_text: "Number of points generated within each grid cell.",
                 },
                 1,
             )
@@ -984,7 +992,7 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
             MetaFloatParam::new(
                 LabelAndHoverText {
                     label: "Jitter fraction",
-                    hover_text: "Fraction of a grid cell to randomly displace the placements.",
+                    hover_text: "Fraction of a grid cell to randomly displace the points.",
                 },
                 0.0,
             )
@@ -1017,7 +1025,7 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
         let points_per_grid_cell = params[6].uint();
         let jitter_fraction = params[7].float();
         let seed = params[8].uint();
-        Some(MetaSDFNode::new_stratified_placement(
+        Some(MetaSDFNode::new_stratified_grid_translations(
             shape.map(Into::into),
             cell_extents.map(Into::into),
             points_per_grid_cell.into(),
@@ -1027,14 +1035,14 @@ impl SpecificMetaNodeKind for MetaStratifiedPlacement {
     }
 }
 
-impl SpecificMetaNodeKind for MetaPlacementTranslation {
+impl SpecificMetaNodeKind for MetaTransformTranslation {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Placement translation",
-        hover_text: "Translation of one or more placements",
+        label: "Transform translation",
+        hover_text: "Translation of one or more transforms.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::PlacementGroup);
+        single_child_port_kind(MetaChildPortKind::TransformGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -1042,7 +1050,7 @@ impl SpecificMetaNodeKind for MetaPlacementTranslation {
             MetaEnumParam::new(
                 LabelAndHoverText {
                     label: "Composition",
-                    hover_text: "Whether to apply the translation before ('Pre') or after ('Post') the transforms of the input placements.",
+                    hover_text: "Whether to apply the translation before ('Pre') or after ('Post') the input transforms.",
                 },
                 ["Pre", "Post"].into(),
                 "Pre",
@@ -1109,7 +1117,7 @@ impl SpecificMetaNodeKind for MetaPlacementTranslation {
             params[3].float_range(),
         ];
         let seed = params[4].uint();
-        Some(MetaSDFNode::new_placement_translation(
+        Some(MetaSDFNode::new_transform_translation(
             child_id,
             composition,
             translation,
@@ -1118,14 +1126,14 @@ impl SpecificMetaNodeKind for MetaPlacementTranslation {
     }
 }
 
-impl SpecificMetaNodeKind for MetaPlacementRotation {
+impl SpecificMetaNodeKind for MetaTransformRotation {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Placement rotation",
-        hover_text: "Rotation of one or more placements",
+        label: "Transform rotation",
+        hover_text: "Rotation of one or more transforms.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::PlacementGroup);
+        single_child_port_kind(MetaChildPortKind::TransformGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -1133,7 +1141,7 @@ impl SpecificMetaNodeKind for MetaPlacementRotation {
             MetaEnumParam::new(
                 LabelAndHoverText {
                     label: "Composition",
-                    hover_text: "Whether to apply the rotation before ('Pre') or after ('Post') the transforms of the input placements.",
+                    hover_text: "Whether to apply the rotation before ('Pre') or after ('Post') the input transforms.",
                 },
                 ["Pre", "Post"].into(),
                 "Pre",
@@ -1198,7 +1206,7 @@ impl SpecificMetaNodeKind for MetaPlacementRotation {
         let pitch = params[2].float_range();
         let yaw = params[3].float_range();
         let seed = params[4].uint();
-        Some(MetaSDFNode::new_placement_rotation(
+        Some(MetaSDFNode::new_transform_rotation(
             child_id,
             composition,
             roll,
@@ -1209,14 +1217,14 @@ impl SpecificMetaNodeKind for MetaPlacementRotation {
     }
 }
 
-impl SpecificMetaNodeKind for MetaPlacementScaling {
+impl SpecificMetaNodeKind for MetaTransformScaling {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Placement scaling",
-        hover_text: "Uniform scaling of one or more placements",
+        label: "Transform scaling",
+        hover_text: "Uniform scaling of one or more transforms.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::PlacementGroup);
+        single_child_port_kind(MetaChildPortKind::TransformGroup);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -1224,7 +1232,7 @@ impl SpecificMetaNodeKind for MetaPlacementScaling {
             MetaEnumParam::new(
                 LabelAndHoverText {
                     label: "Composition",
-                    hover_text: "Whether to apply the scaling before ('Pre') or after ('Post') the transforms of the input placements.",
+                    hover_text: "Whether to apply the scaling before ('Pre') or after ('Post') the input transforms.",
                 },
                 ["Pre", "Post"].into(),
                 "Pre",
@@ -1266,7 +1274,7 @@ impl SpecificMetaNodeKind for MetaPlacementScaling {
         let composition = CompositionMode::try_from_str(params[0].enum_value()).unwrap();
         let scaling = params[1].float_range();
         let seed = params[2].uint();
-        Some(MetaSDFNode::new_placement_scaling(
+        Some(MetaSDFNode::new_transform_scaling(
             child_id,
             composition,
             scaling,
@@ -1278,7 +1286,7 @@ impl SpecificMetaNodeKind for MetaPlacementScaling {
 impl SpecificMetaNodeKind for MetaTranslationToSurface {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
         label: "Translation to surface",
-        hover_text: "Translation of the SDFs or placements in the second input to the surface of the SDF in the first input",
+        hover_text: "Translation of the SDFs or transforms in the second input to the surface of the SDF in the first input.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -1305,7 +1313,7 @@ impl SpecificMetaNodeKind for MetaTranslationToSurface {
 impl SpecificMetaNodeKind for MetaRotationToGradient {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
         label: "Rotation to gradient",
-        hover_text: "Rotation of the SDFs or placements in the second input to make their y-axis align with the gradient of the SDF in the first input",
+        hover_text: "Rotation of the SDFs or transforms in the second input to make their y-axis align with the gradient of the SDF in the first input.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -1329,15 +1337,15 @@ impl SpecificMetaNodeKind for MetaRotationToGradient {
     }
 }
 
-impl SpecificMetaNodeKind for MetaSDFScattering {
+impl SpecificMetaNodeKind for MetaTransformApplication {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Scattering",
-        hover_text: "Application of the placements in the second input to the SDFs in the first input (yields all combinations)",
+        label: "Transform application",
+        hover_text: "Application of the transforms in the second input to the SDFs in the first input (yields all combinations).",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SDFGroup;
     const CHILD_PORT_KINDS: MetaChildPortKinds = two_child_port_kinds(
         MetaChildPortKind::SDFGroup,
-        MetaChildPortKind::PlacementGroup,
+        MetaChildPortKind::TransformGroup,
     );
 
     fn params() -> MetaNodeParams {
@@ -1350,15 +1358,15 @@ impl SpecificMetaNodeKind for MetaSDFScattering {
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 0);
-        let (sdf_id, placement_id) = binary_children(id_map, children)?;
-        Some(MetaSDFNode::new_scattering(sdf_id, placement_id))
+        let (sdf_id, transform_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::new_scattering(sdf_id, transform_id))
     }
 }
 
 impl SpecificMetaNodeKind for MetaStochasticSelection {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
         label: "Stochastic selection",
-        hover_text: "Random selection of SDFs or placements from a group",
+        hover_text: "Random selection of SDFs or transforms from a group.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
     const CHILD_PORT_KINDS: MetaChildPortKinds = single_child_port_kind(MetaChildPortKind::Any);
@@ -1424,25 +1432,25 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 impl MetaNodeKind {
     pub const fn all_non_root() -> [Self; 20] {
         [
-            Self::Box,
-            Self::Sphere,
-            Self::GradientNoise,
-            Self::Translation,
-            Self::Rotation,
-            Self::Scaling,
-            Self::MultifractalNoise,
-            Self::MultiscaleSphere,
-            Self::Union,
-            Self::Subtraction,
-            Self::Intersection,
-            Self::GroupUnion,
-            Self::StratifiedPlacement,
-            Self::PlacementTranslation,
-            Self::PlacementRotation,
-            Self::PlacementScaling,
+            Self::BoxSDF,
+            Self::SphereSDF,
+            Self::GradientNoiseSDF,
+            Self::SDFTranslation,
+            Self::SDFRotation,
+            Self::SDFScaling,
+            Self::MultifractalNoiseSDFModifier,
+            Self::MultiscaleSphereSDFModifier,
+            Self::SDFUnion,
+            Self::SDFSubtraction,
+            Self::SDFIntersection,
+            Self::SDFGroupUnion,
+            Self::StratifiedGridTransforms,
+            Self::TransformTranslation,
+            Self::TransformRotation,
+            Self::TransformScaling,
             Self::TranslationToSurface,
             Self::RotationToGradient,
-            Self::Scattering,
+            Self::TransformApplication,
             Self::StochasticSelection,
         ]
     }
@@ -1454,19 +1462,25 @@ impl MetaNodeKind {
     pub const fn group(&self) -> MetaNodeKindGroup {
         match self {
             Self::Output => MetaNodeKindGroup::Root,
-            Self::Box | Self::Sphere | Self::GradientNoise => MetaNodeKindGroup::Primitive,
-            Self::Translation | Self::Rotation | Self::Scaling => MetaNodeKindGroup::Transform,
-            Self::MultifractalNoise | Self::MultiscaleSphere => MetaNodeKindGroup::Modification,
-            Self::Union | Self::Subtraction | Self::Intersection | Self::GroupUnion => {
-                MetaNodeKindGroup::Combination
+            Self::BoxSDF | Self::SphereSDF | Self::GradientNoiseSDF => {
+                MetaNodeKindGroup::SDFPrimitive
             }
-            Self::StratifiedPlacement
-            | Self::PlacementTranslation
-            | Self::PlacementRotation
-            | Self::PlacementScaling
+            Self::SDFTranslation | Self::SDFRotation | Self::SDFScaling => {
+                MetaNodeKindGroup::SDFTransform
+            }
+            Self::MultifractalNoiseSDFModifier | Self::MultiscaleSphereSDFModifier => {
+                MetaNodeKindGroup::SDFModification
+            }
+            Self::SDFUnion | Self::SDFSubtraction | Self::SDFIntersection | Self::SDFGroupUnion => {
+                MetaNodeKindGroup::SDFCombination
+            }
+            Self::StratifiedGridTransforms
+            | Self::TransformTranslation
+            | Self::TransformRotation
+            | Self::TransformScaling
             | Self::TranslationToSurface
             | Self::RotationToGradient
-            | Self::Scattering => MetaNodeKindGroup::Placement,
+            | Self::TransformApplication => MetaNodeKindGroup::Transform,
             Self::StochasticSelection => MetaNodeKindGroup::Filtering,
         }
     }
@@ -1474,25 +1488,25 @@ impl MetaNodeKind {
     pub const fn label(&self) -> LabelAndHoverText {
         match self {
             Self::Output => LabelAndHoverText::label_only("Output"),
-            Self::Box => MetaBoxSDF::LABEL,
-            Self::Sphere => MetaSphereSDF::LABEL,
-            Self::GradientNoise => MetaGradientNoiseSDF::LABEL,
-            Self::Translation => MetaSDFTranslation::LABEL,
-            Self::Rotation => MetaSDFRotation::LABEL,
-            Self::Scaling => MetaSDFScaling::LABEL,
-            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::LABEL,
-            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::LABEL,
-            Self::Union => MetaSDFUnion::LABEL,
-            Self::Subtraction => MetaSDFSubtraction::LABEL,
-            Self::Intersection => MetaSDFIntersection::LABEL,
-            Self::GroupUnion => MetaSDFGroupUnion::LABEL,
-            Self::StratifiedPlacement => MetaStratifiedPlacement::LABEL,
-            Self::PlacementTranslation => MetaPlacementTranslation::LABEL,
-            Self::PlacementRotation => MetaPlacementRotation::LABEL,
-            Self::PlacementScaling => MetaPlacementScaling::LABEL,
+            Self::BoxSDF => MetaBoxSDF::LABEL,
+            Self::SphereSDF => MetaSphereSDF::LABEL,
+            Self::GradientNoiseSDF => MetaGradientNoiseSDF::LABEL,
+            Self::SDFTranslation => MetaSDFTranslation::LABEL,
+            Self::SDFRotation => MetaSDFRotation::LABEL,
+            Self::SDFScaling => MetaSDFScaling::LABEL,
+            Self::MultifractalNoiseSDFModifier => MetaMultifractalNoiseSDFModifier::LABEL,
+            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::LABEL,
+            Self::SDFUnion => MetaSDFUnion::LABEL,
+            Self::SDFSubtraction => MetaSDFSubtraction::LABEL,
+            Self::SDFIntersection => MetaSDFIntersection::LABEL,
+            Self::SDFGroupUnion => MetaSDFGroupUnion::LABEL,
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::LABEL,
+            Self::TransformTranslation => MetaTransformTranslation::LABEL,
+            Self::TransformRotation => MetaTransformRotation::LABEL,
+            Self::TransformScaling => MetaTransformScaling::LABEL,
             Self::TranslationToSurface => MetaTranslationToSurface::LABEL,
             Self::RotationToGradient => MetaRotationToGradient::LABEL,
-            Self::Scattering => MetaSDFScattering::LABEL,
+            Self::TransformApplication => MetaTransformApplication::LABEL,
             Self::StochasticSelection => MetaStochasticSelection::LABEL,
         }
     }
@@ -1500,25 +1514,27 @@ impl MetaNodeKind {
     pub const fn parent_port_kind(&self) -> MetaParentPortKind {
         match self {
             Self::Output => MetaParentPortKind::SingleSDF,
-            Self::Box => MetaBoxSDF::PARENT_PORT_KIND,
-            Self::Sphere => MetaSphereSDF::PARENT_PORT_KIND,
-            Self::GradientNoise => MetaGradientNoiseSDF::PARENT_PORT_KIND,
-            Self::Translation => MetaSDFTranslation::PARENT_PORT_KIND,
-            Self::Rotation => MetaSDFRotation::PARENT_PORT_KIND,
-            Self::Scaling => MetaSDFScaling::PARENT_PORT_KIND,
-            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::PARENT_PORT_KIND,
-            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::PARENT_PORT_KIND,
-            Self::Union => MetaSDFUnion::PARENT_PORT_KIND,
-            Self::Subtraction => MetaSDFSubtraction::PARENT_PORT_KIND,
-            Self::Intersection => MetaSDFIntersection::PARENT_PORT_KIND,
-            Self::GroupUnion => MetaSDFGroupUnion::PARENT_PORT_KIND,
-            Self::StratifiedPlacement => MetaStratifiedPlacement::PARENT_PORT_KIND,
-            Self::PlacementTranslation => MetaPlacementTranslation::PARENT_PORT_KIND,
-            Self::PlacementRotation => MetaPlacementRotation::PARENT_PORT_KIND,
-            Self::PlacementScaling => MetaPlacementScaling::PARENT_PORT_KIND,
+            Self::BoxSDF => MetaBoxSDF::PARENT_PORT_KIND,
+            Self::SphereSDF => MetaSphereSDF::PARENT_PORT_KIND,
+            Self::GradientNoiseSDF => MetaGradientNoiseSDF::PARENT_PORT_KIND,
+            Self::SDFTranslation => MetaSDFTranslation::PARENT_PORT_KIND,
+            Self::SDFRotation => MetaSDFRotation::PARENT_PORT_KIND,
+            Self::SDFScaling => MetaSDFScaling::PARENT_PORT_KIND,
+            Self::MultifractalNoiseSDFModifier => {
+                MetaMultifractalNoiseSDFModifier::PARENT_PORT_KIND
+            }
+            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::PARENT_PORT_KIND,
+            Self::SDFUnion => MetaSDFUnion::PARENT_PORT_KIND,
+            Self::SDFSubtraction => MetaSDFSubtraction::PARENT_PORT_KIND,
+            Self::SDFIntersection => MetaSDFIntersection::PARENT_PORT_KIND,
+            Self::SDFGroupUnion => MetaSDFGroupUnion::PARENT_PORT_KIND,
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::PARENT_PORT_KIND,
+            Self::TransformTranslation => MetaTransformTranslation::PARENT_PORT_KIND,
+            Self::TransformRotation => MetaTransformRotation::PARENT_PORT_KIND,
+            Self::TransformScaling => MetaTransformScaling::PARENT_PORT_KIND,
             Self::TranslationToSurface => MetaTranslationToSurface::PARENT_PORT_KIND,
             Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
-            Self::Scattering => MetaSDFScattering::PARENT_PORT_KIND,
+            Self::TransformApplication => MetaTransformApplication::PARENT_PORT_KIND,
             Self::StochasticSelection => MetaStochasticSelection::PARENT_PORT_KIND,
         }
     }
@@ -1526,25 +1542,27 @@ impl MetaNodeKind {
     const fn raw_child_port_kinds(&self) -> MetaChildPortKinds {
         match self {
             Self::Output => single_child_port_kind(MetaChildPortKind::SingleSDF),
-            Self::Box => MetaBoxSDF::CHILD_PORT_KINDS,
-            Self::Sphere => MetaSphereSDF::CHILD_PORT_KINDS,
-            Self::GradientNoise => MetaGradientNoiseSDF::CHILD_PORT_KINDS,
-            Self::Translation => MetaSDFTranslation::CHILD_PORT_KINDS,
-            Self::Rotation => MetaSDFRotation::CHILD_PORT_KINDS,
-            Self::Scaling => MetaSDFScaling::CHILD_PORT_KINDS,
-            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::CHILD_PORT_KINDS,
-            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::CHILD_PORT_KINDS,
-            Self::Union => MetaSDFUnion::CHILD_PORT_KINDS,
-            Self::Subtraction => MetaSDFSubtraction::CHILD_PORT_KINDS,
-            Self::Intersection => MetaSDFIntersection::CHILD_PORT_KINDS,
-            Self::GroupUnion => MetaSDFGroupUnion::CHILD_PORT_KINDS,
-            Self::StratifiedPlacement => MetaStratifiedPlacement::CHILD_PORT_KINDS,
-            Self::PlacementTranslation => MetaPlacementTranslation::CHILD_PORT_KINDS,
-            Self::PlacementRotation => MetaPlacementRotation::CHILD_PORT_KINDS,
-            Self::PlacementScaling => MetaPlacementScaling::CHILD_PORT_KINDS,
+            Self::BoxSDF => MetaBoxSDF::CHILD_PORT_KINDS,
+            Self::SphereSDF => MetaSphereSDF::CHILD_PORT_KINDS,
+            Self::GradientNoiseSDF => MetaGradientNoiseSDF::CHILD_PORT_KINDS,
+            Self::SDFTranslation => MetaSDFTranslation::CHILD_PORT_KINDS,
+            Self::SDFRotation => MetaSDFRotation::CHILD_PORT_KINDS,
+            Self::SDFScaling => MetaSDFScaling::CHILD_PORT_KINDS,
+            Self::MultifractalNoiseSDFModifier => {
+                MetaMultifractalNoiseSDFModifier::CHILD_PORT_KINDS
+            }
+            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::CHILD_PORT_KINDS,
+            Self::SDFUnion => MetaSDFUnion::CHILD_PORT_KINDS,
+            Self::SDFSubtraction => MetaSDFSubtraction::CHILD_PORT_KINDS,
+            Self::SDFIntersection => MetaSDFIntersection::CHILD_PORT_KINDS,
+            Self::SDFGroupUnion => MetaSDFGroupUnion::CHILD_PORT_KINDS,
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::CHILD_PORT_KINDS,
+            Self::TransformTranslation => MetaTransformTranslation::CHILD_PORT_KINDS,
+            Self::TransformRotation => MetaTransformRotation::CHILD_PORT_KINDS,
+            Self::TransformScaling => MetaTransformScaling::CHILD_PORT_KINDS,
             Self::TranslationToSurface => MetaTranslationToSurface::CHILD_PORT_KINDS,
             Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
-            Self::Scattering => MetaSDFScattering::CHILD_PORT_KINDS,
+            Self::TransformApplication => MetaTransformApplication::CHILD_PORT_KINDS,
             Self::StochasticSelection => MetaStochasticSelection::CHILD_PORT_KINDS,
         }
     }
@@ -1564,25 +1582,25 @@ impl MetaNodeKind {
     pub fn params(&self) -> MetaNodeParams {
         match self {
             Self::Output => output_node_params(),
-            Self::Box => MetaBoxSDF::params(),
-            Self::Sphere => MetaSphereSDF::params(),
-            Self::GradientNoise => MetaGradientNoiseSDF::params(),
-            Self::Translation => MetaSDFTranslation::params(),
-            Self::Rotation => MetaSDFRotation::params(),
-            Self::Scaling => MetaSDFScaling::params(),
-            Self::MultifractalNoise => MetaMultifractalNoiseSDFModifier::params(),
-            Self::MultiscaleSphere => MetaMultiscaleSphereSDFModifier::params(),
-            Self::Union => MetaSDFUnion::params(),
-            Self::Subtraction => MetaSDFSubtraction::params(),
-            Self::Intersection => MetaSDFIntersection::params(),
-            Self::GroupUnion => MetaSDFGroupUnion::params(),
-            Self::StratifiedPlacement => MetaStratifiedPlacement::params(),
-            Self::PlacementTranslation => MetaPlacementTranslation::params(),
-            Self::PlacementRotation => MetaPlacementRotation::params(),
-            Self::PlacementScaling => MetaPlacementScaling::params(),
+            Self::BoxSDF => MetaBoxSDF::params(),
+            Self::SphereSDF => MetaSphereSDF::params(),
+            Self::GradientNoiseSDF => MetaGradientNoiseSDF::params(),
+            Self::SDFTranslation => MetaSDFTranslation::params(),
+            Self::SDFRotation => MetaSDFRotation::params(),
+            Self::SDFScaling => MetaSDFScaling::params(),
+            Self::MultifractalNoiseSDFModifier => MetaMultifractalNoiseSDFModifier::params(),
+            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::params(),
+            Self::SDFUnion => MetaSDFUnion::params(),
+            Self::SDFSubtraction => MetaSDFSubtraction::params(),
+            Self::SDFIntersection => MetaSDFIntersection::params(),
+            Self::SDFGroupUnion => MetaSDFGroupUnion::params(),
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::params(),
+            Self::TransformTranslation => MetaTransformTranslation::params(),
+            Self::TransformRotation => MetaTransformRotation::params(),
+            Self::TransformScaling => MetaTransformScaling::params(),
             Self::TranslationToSurface => MetaTranslationToSurface::params(),
             Self::RotationToGradient => MetaRotationToGradient::params(),
-            Self::Scattering => MetaSDFScattering::params(),
+            Self::TransformApplication => MetaTransformApplication::params(),
             Self::StochasticSelection => MetaStochasticSelection::params(),
         }
     }
@@ -1595,29 +1613,31 @@ impl MetaNodeKind {
     ) -> Option<MetaSDFNode> {
         match self {
             Self::Output => None,
-            Self::Box => MetaBoxSDF::build(id_map, children, params),
-            Self::Sphere => MetaSphereSDF::build(id_map, children, params),
-            Self::GradientNoise => MetaGradientNoiseSDF::build(id_map, children, params),
-            Self::Translation => MetaSDFTranslation::build(id_map, children, params),
-            Self::Rotation => MetaSDFRotation::build(id_map, children, params),
-            Self::Scaling => MetaSDFScaling::build(id_map, children, params),
-            Self::MultifractalNoise => {
+            Self::BoxSDF => MetaBoxSDF::build(id_map, children, params),
+            Self::SphereSDF => MetaSphereSDF::build(id_map, children, params),
+            Self::GradientNoiseSDF => MetaGradientNoiseSDF::build(id_map, children, params),
+            Self::SDFTranslation => MetaSDFTranslation::build(id_map, children, params),
+            Self::SDFRotation => MetaSDFRotation::build(id_map, children, params),
+            Self::SDFScaling => MetaSDFScaling::build(id_map, children, params),
+            Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::build(id_map, children, params)
             }
-            Self::MultiscaleSphere => {
+            Self::MultiscaleSphereSDFModifier => {
                 MetaMultiscaleSphereSDFModifier::build(id_map, children, params)
             }
-            Self::Union => MetaSDFUnion::build(id_map, children, params),
-            Self::Subtraction => MetaSDFSubtraction::build(id_map, children, params),
-            Self::Intersection => MetaSDFIntersection::build(id_map, children, params),
-            Self::GroupUnion => MetaSDFGroupUnion::build(id_map, children, params),
-            Self::StratifiedPlacement => MetaStratifiedPlacement::build(id_map, children, params),
-            Self::PlacementTranslation => MetaPlacementTranslation::build(id_map, children, params),
-            Self::PlacementRotation => MetaPlacementRotation::build(id_map, children, params),
-            Self::PlacementScaling => MetaPlacementScaling::build(id_map, children, params),
+            Self::SDFUnion => MetaSDFUnion::build(id_map, children, params),
+            Self::SDFSubtraction => MetaSDFSubtraction::build(id_map, children, params),
+            Self::SDFIntersection => MetaSDFIntersection::build(id_map, children, params),
+            Self::SDFGroupUnion => MetaSDFGroupUnion::build(id_map, children, params),
+            Self::StratifiedGridTransforms => {
+                MetaStratifiedGridTransforms::build(id_map, children, params)
+            }
+            Self::TransformTranslation => MetaTransformTranslation::build(id_map, children, params),
+            Self::TransformRotation => MetaTransformRotation::build(id_map, children, params),
+            Self::TransformScaling => MetaTransformScaling::build(id_map, children, params),
             Self::TranslationToSurface => MetaTranslationToSurface::build(id_map, children, params),
             Self::RotationToGradient => MetaRotationToGradient::build(id_map, children, params),
-            Self::Scattering => MetaSDFScattering::build(id_map, children, params),
+            Self::TransformApplication => MetaTransformApplication::build(id_map, children, params),
             Self::StochasticSelection => MetaStochasticSelection::build(id_map, children, params),
         }
     }
@@ -1626,11 +1646,11 @@ impl MetaNodeKind {
 impl MetaNodeKindGroup {
     pub const fn all_non_root() -> [Self; 6] {
         [
-            Self::Primitive,
+            Self::SDFPrimitive,
+            Self::SDFTransform,
+            Self::SDFModification,
+            Self::SDFCombination,
             Self::Transform,
-            Self::Modification,
-            Self::Combination,
-            Self::Placement,
             Self::Filtering,
         ]
     }
