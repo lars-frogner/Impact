@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 pub enum ConcreteEdgeDataType {
     SingleSDF,
     SDFGroup,
-    SinglePlacement,
-    PlacementGroup,
+    SingleTransform,
+    TransformGroup,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -37,7 +37,7 @@ impl EdgeDataType {
                 MetaPaletteColor::yellow()
             }
             Self::Concrete(
-                ConcreteEdgeDataType::SinglePlacement | ConcreteEdgeDataType::PlacementGroup,
+                ConcreteEdgeDataType::SingleTransform | ConcreteEdgeDataType::TransformGroup,
             ) => MetaPaletteColor::blue(),
             Self::Undefined => MetaPaletteColor::green(),
         }
@@ -46,10 +46,10 @@ impl EdgeDataType {
     pub const fn port_shape(&self) -> MetaPortShape {
         match self {
             Self::Concrete(
-                ConcreteEdgeDataType::SingleSDF | ConcreteEdgeDataType::SinglePlacement,
+                ConcreteEdgeDataType::SingleSDF | ConcreteEdgeDataType::SingleTransform,
             ) => MetaPortShape::Circle,
             Self::Concrete(
-                ConcreteEdgeDataType::SDFGroup | ConcreteEdgeDataType::PlacementGroup,
+                ConcreteEdgeDataType::SDFGroup | ConcreteEdgeDataType::TransformGroup,
             )
             | Self::Undefined => MetaPortShape::Square,
         }
@@ -59,8 +59,8 @@ impl EdgeDataType {
         match self {
             Self::Concrete(ConcreteEdgeDataType::SingleSDF) => "SDF",
             Self::Concrete(ConcreteEdgeDataType::SDFGroup) => "SDF group",
-            Self::Concrete(ConcreteEdgeDataType::SinglePlacement) => "Placement",
-            Self::Concrete(ConcreteEdgeDataType::PlacementGroup) => "Placement group",
+            Self::Concrete(ConcreteEdgeDataType::SingleTransform) => "Transform",
+            Self::Concrete(ConcreteEdgeDataType::TransformGroup) => "Transform group",
             Self::Undefined => "Not determined",
         }
     }
@@ -76,12 +76,12 @@ impl EdgeDataType {
                     Self::Concrete(SingleSDF | SDFGroup)
                 )
                 | (
-                    Self::Concrete(SinglePlacement),
-                    Self::Concrete(SinglePlacement)
+                    Self::Concrete(SingleTransform),
+                    Self::Concrete(SingleTransform)
                 )
                 | (
-                    Self::Concrete(PlacementGroup),
-                    Self::Concrete(SinglePlacement | PlacementGroup)
+                    Self::Concrete(TransformGroup),
+                    Self::Concrete(SingleTransform | TransformGroup)
                 )
                 | (Self::Undefined, _)
                 | (_, Self::Undefined)
@@ -104,11 +104,11 @@ pub fn input_and_output_types_for_new_node(
         let data_type = match port_kind {
             MetaChildPortKind::SingleSDF => EdgeDataType::Concrete(ConcreteEdgeDataType::SingleSDF),
             MetaChildPortKind::SDFGroup => EdgeDataType::Concrete(ConcreteEdgeDataType::SDFGroup),
-            MetaChildPortKind::SinglePlacement => {
-                EdgeDataType::Concrete(ConcreteEdgeDataType::SinglePlacement)
+            MetaChildPortKind::SingleTransform => {
+                EdgeDataType::Concrete(ConcreteEdgeDataType::SingleTransform)
             }
-            MetaChildPortKind::PlacementGroup => {
-                EdgeDataType::Concrete(ConcreteEdgeDataType::PlacementGroup)
+            MetaChildPortKind::TransformGroup => {
+                EdgeDataType::Concrete(ConcreteEdgeDataType::TransformGroup)
             }
             MetaChildPortKind::Any => EdgeDataType::Undefined,
         };
@@ -118,11 +118,11 @@ pub fn input_and_output_types_for_new_node(
     let output_data_type = match kind.parent_port_kind() {
         MetaParentPortKind::SingleSDF => EdgeDataType::Concrete(ConcreteEdgeDataType::SingleSDF),
         MetaParentPortKind::SDFGroup => EdgeDataType::Concrete(ConcreteEdgeDataType::SDFGroup),
-        MetaParentPortKind::SinglePlacement => {
-            EdgeDataType::Concrete(ConcreteEdgeDataType::SinglePlacement)
+        MetaParentPortKind::SingleTransform => {
+            EdgeDataType::Concrete(ConcreteEdgeDataType::SingleTransform)
         }
-        MetaParentPortKind::PlacementGroup => {
-            EdgeDataType::Concrete(ConcreteEdgeDataType::PlacementGroup)
+        MetaParentPortKind::TransformGroup => {
+            EdgeDataType::Concrete(ConcreteEdgeDataType::TransformGroup)
         }
         MetaParentPortKind::SameAsInput { .. } => EdgeDataType::Undefined,
     };
@@ -175,11 +175,11 @@ pub fn update_edge_data_types(
                         MetaChildPortKind::SDFGroup => {
                             EdgeDataType::Concrete(ConcreteEdgeDataType::SDFGroup)
                         }
-                        MetaChildPortKind::SinglePlacement => {
-                            EdgeDataType::Concrete(ConcreteEdgeDataType::SinglePlacement)
+                        MetaChildPortKind::SingleTransform => {
+                            EdgeDataType::Concrete(ConcreteEdgeDataType::SingleTransform)
                         }
-                        MetaChildPortKind::PlacementGroup => {
-                            EdgeDataType::Concrete(ConcreteEdgeDataType::PlacementGroup)
+                        MetaChildPortKind::TransformGroup => {
+                            EdgeDataType::Concrete(ConcreteEdgeDataType::TransformGroup)
                         }
                         MetaChildPortKind::Any => {
                             if let Some(link) = node.links_to_children[slot]
@@ -201,11 +201,11 @@ pub fn update_edge_data_types(
                     MetaParentPortKind::SDFGroup => {
                         EdgeDataType::Concrete(ConcreteEdgeDataType::SDFGroup)
                     }
-                    MetaParentPortKind::SinglePlacement => {
-                        EdgeDataType::Concrete(ConcreteEdgeDataType::SinglePlacement)
+                    MetaParentPortKind::SingleTransform => {
+                        EdgeDataType::Concrete(ConcreteEdgeDataType::SingleTransform)
                     }
-                    MetaParentPortKind::PlacementGroup => {
-                        EdgeDataType::Concrete(ConcreteEdgeDataType::PlacementGroup)
+                    MetaParentPortKind::TransformGroup => {
+                        EdgeDataType::Concrete(ConcreteEdgeDataType::TransformGroup)
                     }
                     MetaParentPortKind::SameAsInput { slot } => {
                         if let Some(link) = node.links_to_children[slot]
