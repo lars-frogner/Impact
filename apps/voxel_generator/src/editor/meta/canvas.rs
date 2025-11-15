@@ -11,7 +11,7 @@ use crate::editor::{
         CollapsedMetaSubgraph, CollapsedMetaSubgraphChildPort, CollapsedMetaSubgraphParentPort,
         MetaPaletteColor,
         data_type::EdgeDataType,
-        io::{IOMetaGraph, IOMetaGraphKind, IOMetaGraphRef},
+        io::{IOMetaGraph, IOMetaGraphKind, IOMetaGraphRef, IOMetaNode},
     },
     util::create_bezier_edge,
 };
@@ -69,6 +69,7 @@ pub struct MetaCanvasScratch {
     world_node_rects: BTreeMap<MetaNodeID, Rect>,
     screen_node_rects: BTreeMap<MetaNodeID, Rect>,
     subgraph_node_ids: Vec<MetaNodeID>,
+    node_id_lookup: HashSet<MetaNodeID>,
     layout_lut: MetaLayoutLookupTable,
     search: SearchScratch,
     data_type: DataTypeScratch,
@@ -1825,14 +1826,25 @@ impl MetaGraphCanvas {
             bail!("Missing root node {root_node_id} when saving subgraph");
         }
 
+        scratch.node_id_lookup.clear();
+        scratch
+            .node_id_lookup
+            .extend(scratch.subgraph_node_ids.iter().copied());
+
         let mut nodes = AVec::with_capacity_in(scratch.subgraph_node_ids.len(), arena);
 
-        nodes.extend(
-            scratch
-                .subgraph_node_ids
-                .iter()
-                .map(|node_id| (node_id, &self.nodes[node_id]).into()),
-        );
+        nodes.extend(scratch.subgraph_node_ids.iter().map(|node_id| {
+            let mut node: IOMetaNode = (node_id, &self.nodes[node_id]).into();
+
+            // Clear parent links to nodes outside the subgraph
+            for link in &mut node.links_to_parents {
+                if link.is_some_and(|link| !scratch.node_id_lookup.contains(&link.to_node)) {
+                    *link = None;
+                }
+            }
+
+            node
+        }));
 
         let graph = IOMetaGraphRef {
             kind: IOMetaGraphKind::Subgraph { root_node_id },
@@ -1991,6 +2003,7 @@ impl MetaCanvasScratch {
             world_node_rects: BTreeMap::new(),
             screen_node_rects: BTreeMap::new(),
             subgraph_node_ids: Vec::new(),
+            node_id_lookup: HashSet::default(),
             layout_lut: MetaLayoutLookupTable::new(),
             search: SearchScratch::new(),
             data_type: DataTypeScratch::new(),
