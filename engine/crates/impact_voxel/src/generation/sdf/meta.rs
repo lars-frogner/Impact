@@ -948,7 +948,7 @@ impl MetaSDFNode {
     /// Combines a node type tag, node seed parameter (for applicable nodes) and
     /// the stable seeds of the child nodes to obtain a stable seed that will
     /// only change due to changes in the seeding, types or topology of the
-    /// node's subtree.
+    /// node's subgraph.
     fn obtain_stable_seed(&self, stable_seeds: &[u64]) -> u64 {
         let combine_seeded_leaf =
             |tag, seed: &u32| splitmix::random_u64_from_two_states(tag, (*seed).into());
