@@ -1,7 +1,8 @@
 use super::{AtomicFloatParam, AtomicNode, AtomicNodeParams, AtomicPortConfig, AtomicUIntParam};
 use impact_voxel::generation::sdf::{
-    BoxSDF, GradientNoiseSDF, MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier,
-    SDFIntersection, SDFRotation, SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion, SphereSDF,
+    BoxSDF, CapsuleSDF, GradientNoiseSDF, MultifractalNoiseSDFModifier,
+    MultiscaleSphereSDFModifier, SDFIntersection, SDFRotation, SDFScaling, SDFSubtraction,
+    SDFTranslation, SDFUnion, SphereSDF,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -9,6 +10,7 @@ pub enum AtomicNodeKind {
     Output,
     Box,
     Sphere,
+    Capsule,
     GradientNoise,
     Translation,
     Rotation,
@@ -34,6 +36,13 @@ impl AtomicNode {
         let mut params = AtomicNodeParams::new();
         params.push(AtomicFloatParam::new("Radius", node.radius()).into());
         Self::new_leaf(AtomicNodeKind::Sphere, params)
+    }
+
+    pub fn for_capsule(node: &CapsuleSDF) -> Self {
+        let mut params = AtomicNodeParams::new();
+        params.push(AtomicFloatParam::new("Segment length", node.segment_length()).into());
+        params.push(AtomicFloatParam::new("Radius", node.radius()).into());
+        Self::new_leaf(AtomicNodeKind::Capsule, params)
     }
 
     pub fn for_gradient_noise(node: &GradientNoiseSDF) -> Self {
@@ -136,6 +145,7 @@ impl AtomicNodeKind {
             Self::Output => "Output",
             Self::Box => "Box",
             Self::Sphere => "Sphere",
+            Self::Capsule => "Capsule",
             Self::GradientNoise => "Gradient noise",
             Self::Translation => "Translation",
             Self::Rotation => "Rotation",
@@ -151,7 +161,9 @@ impl AtomicNodeKind {
     pub fn port_config(&self) -> AtomicPortConfig {
         match self {
             Self::Output => AtomicPortConfig::root(),
-            Self::Box | Self::Sphere | Self::GradientNoise => AtomicPortConfig::leaf(),
+            Self::Box | Self::Sphere | Self::Capsule | Self::GradientNoise => {
+                AtomicPortConfig::leaf()
+            }
             Self::Translation
             | Self::Rotation
             | Self::Scaling

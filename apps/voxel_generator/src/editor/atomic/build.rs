@@ -10,6 +10,7 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
     viewer_nodes.extend(graph.nodes().iter().map(|node| match node {
         SDFNode::Box(node) => AtomicNode::for_box(node),
         SDFNode::Sphere(node) => AtomicNode::for_sphere(node),
+        SDFNode::Capsule(node) => AtomicNode::for_capsule(node),
         SDFNode::GradientNoise(node) => AtomicNode::for_gradient_noise(node),
         SDFNode::Translation(node) => AtomicNode::for_translation(node),
         SDFNode::Rotation(node) => AtomicNode::for_rotation(node),
@@ -23,7 +24,10 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
 
     for (idx, node) in graph.nodes().iter().enumerate() {
         match node {
-            SDFNode::Box(_) | SDFNode::Sphere(_) | SDFNode::GradientNoise(_) => {}
+            SDFNode::Box(_)
+            | SDFNode::Sphere(_)
+            | SDFNode::Capsule(_)
+            | SDFNode::GradientNoise(_) => {}
             SDFNode::Translation(SDFTranslation { child_id, .. })
             | SDFNode::Rotation(SDFRotation { child_id, .. })
             | SDFNode::Scaling(SDFScaling { child_id, .. })
