@@ -10,6 +10,7 @@ use impact::egui::{
     Stroke, StrokeKind, Ui, Vec2, emath::Numeric, pos2, vec2,
 };
 use impact::egui::{ComboBox, Label};
+use impact::impact_math::Hash64;
 use impact_dev_ui::option_panels::{LabelAndHoverText, labeled_option, option_drag_value};
 use impact_voxel::generation::sdf::meta::{ContParamRange, DiscreteParamRange};
 use node_kind::MetaNodeKind;
@@ -307,7 +308,7 @@ impl MetaNodeData {
     pub fn run_controls(&mut self, ui: &mut Ui) -> bool {
         let mut any_param_changed = false;
         for (idx, param) in self.params.iter_mut().enumerate() {
-            if param.show_controls(ui).changed() {
+            if param.show_controls_and_return_changed(ui) {
                 any_param_changed = true;
 
                 if let (Some(zoom), Some(gally)) =
@@ -567,13 +568,13 @@ impl MetaPaletteColor {
 }
 
 impl MetaNodeParam {
-    pub fn show_controls(&mut self, ui: &mut Ui) -> Response {
+    pub fn show_controls_and_return_changed(&mut self, ui: &mut Ui) -> bool {
         match self {
-            Self::Enum(param) => param.show_controls(ui),
-            Self::UInt(param) => param.show_controls(ui),
-            Self::Float(param) => param.show_controls(ui),
-            Self::UIntRange(param) => param.show_controls(ui),
-            Self::FloatRange(param) => param.show_controls(ui),
+            Self::Enum(param) => param.show_controls_and_return_changed(ui),
+            Self::UInt(param) => param.show_controls(ui).changed(),
+            Self::Float(param) => param.show_controls(ui).changed(),
+            Self::UIntRange(param) => param.show_controls(ui).changed(),
+            Self::FloatRange(param) => param.show_controls(ui).changed(),
         }
     }
 
@@ -698,7 +699,8 @@ impl MetaEnumParam {
         }
     }
 
-    fn show_controls(&mut self, ui: &mut Ui) -> Response {
+    fn show_controls_and_return_changed(&mut self, ui: &mut Ui) -> bool {
+        let old_value_hash = Hash64::from_str(self.value);
         labeled_option(ui, self.text.clone(), |ui| {
             ComboBox::from_id_salt(("meta_enum_param", self.text.label))
                 .selected_text(self.value)
@@ -707,8 +709,8 @@ impl MetaEnumParam {
                         ui.selectable_value(&mut self.value, variant, variant);
                     }
                 })
-        })
-        .response
+        });
+        old_value_hash != Hash64::from_str(self.value)
     }
 
     fn text_to_display(&self) -> String {
