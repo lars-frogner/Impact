@@ -5,10 +5,10 @@ use super::{
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
-    CompositionMode, MetaBoxSDF, MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier,
-    MetaMultiscaleSphereSDFModifier, MetaRotationToGradient, MetaSDFGroupUnion,
-    MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling,
-    MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF,
+    CompositionMode, MetaBoxSDF, MetaCapsuleSDF, MetaGradientNoiseSDF,
+    MetaMultifractalNoiseSDFModifier, MetaMultiscaleSphereSDFModifier, MetaRotationToGradient,
+    MetaSDFGroupUnion, MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFRotation,
+    MetaSDFScaling, MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF,
     MetaSphereSurfaceTransforms, MetaStochasticSelection, MetaStratifiedGridTransforms,
     MetaTransformApplication, MetaTransformRotation, MetaTransformScaling,
     MetaTransformTranslation, MetaTranslationToSurface, SphereSurfaceRotation,
@@ -34,6 +34,7 @@ pub enum MetaNodeKind {
     Output,
     BoxSDF,
     SphereSDF,
+    CapsuleSDF,
     GradientNoiseSDF,
     SDFTranslation,
     SDFRotation,
@@ -113,7 +114,7 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
                     label: "Extent x",
                     hover_text: "Extent of the box along the x-axis, in voxels.",
                 },
-                62.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -124,7 +125,7 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
                     label: "Extent y",
                     hover_text: "Extent of the box along the y-axis, in voxels.",
                 },
-                62.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -135,7 +136,7 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
                     label: "Extent z",
                     hover_text: "Extent of the box along the z-axis, in voxels.",
                 },
-                62.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -185,7 +186,7 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
                     label: "Radius",
                     hover_text: "Radius of the sphere, in voxels.",
                 },
-                31.0,
+                30.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -215,6 +216,64 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
     }
 }
 
+impl SpecificMetaNodeKind for MetaCapsuleSDF {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Capsule SDF",
+        hover_text: "A vertical capsule-shaped SDF.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Segment length",
+                    hover_text: "Length between the centers of the spherical caps, in voxels.",
+                },
+                30.0,
+            )
+            .with_min_value(0.0)
+            .into(),
+        );
+        params.push(
+            MetaFloatRangeParam::new_single_value(
+                LabelAndHoverText {
+                    label: "Radius",
+                    hover_text: "Radius of the spherical caps, in voxels.",
+                },
+                15.0,
+            )
+            .with_min_value(0.0)
+            .into(),
+        );
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for selecting a segment length radius within the specified ranges.",
+                },
+                0,
+            )
+            .into(),
+        );
+        params
+    }
+
+    fn build(
+        _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        _children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 3);
+        let segment_length = params[0].float_range();
+        let radius = params[1].float_range();
+        let seed = params[2].uint();
+        Some(MetaSDFNode::new_capsule_sdf(segment_length, radius, seed))
+    }
+}
+
 impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
         label: "Gradient noise SDF",
@@ -231,7 +290,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
                     label: "Extent x",
                     hover_text: "Extent of the noise field along the x-axis, in voxels.",
                 },
-                62.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -242,7 +301,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
                     label: "Extent y",
                     hover_text: "Extent of the noise field along the y-axis, in voxels.",
                 },
-                62.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -253,7 +312,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
                     label: "Extent z",
                     hover_text: "Extent of the noise field along the z-axis, in voxels.",
                 },
-                62.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -956,8 +1015,8 @@ impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
                     label: "Cell extent x",
                     hover_text: "Extent of a grid cell along the x-axis, in voxels.",
                 },
-                62.0,
-                62.0,
+                60.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -968,8 +1027,8 @@ impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
                     label: "Cell extent y",
                     hover_text: "Extent of a grid cell along the y-axis, in voxels.",
                 },
-                62.0,
-                62.0,
+                60.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -980,8 +1039,8 @@ impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
                     label: "Cell extent z",
                     hover_text: "Extent of a grid cell along the z-axis, in voxels.",
                 },
-                62.0,
-                62.0,
+                60.0,
+                60.0,
             )
             .with_min_value(0.0)
             .into(),
@@ -1540,10 +1599,11 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 }
 
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 21] {
+    pub const fn all_non_root() -> [Self; 22] {
         [
             Self::BoxSDF,
             Self::SphereSDF,
+            Self::CapsuleSDF,
             Self::GradientNoiseSDF,
             Self::SDFTranslation,
             Self::SDFRotation,
@@ -1573,7 +1633,7 @@ impl MetaNodeKind {
     pub const fn group(&self) -> MetaNodeKindGroup {
         match self {
             Self::Output => MetaNodeKindGroup::Root,
-            Self::BoxSDF | Self::SphereSDF | Self::GradientNoiseSDF => {
+            Self::BoxSDF | Self::SphereSDF | Self::CapsuleSDF | Self::GradientNoiseSDF => {
                 MetaNodeKindGroup::SDFPrimitive
             }
             Self::SDFTranslation | Self::SDFRotation | Self::SDFScaling => {
@@ -1602,6 +1662,7 @@ impl MetaNodeKind {
             Self::Output => LabelAndHoverText::label_only("Output"),
             Self::BoxSDF => MetaBoxSDF::LABEL,
             Self::SphereSDF => MetaSphereSDF::LABEL,
+            Self::CapsuleSDF => MetaCapsuleSDF::LABEL,
             Self::GradientNoiseSDF => MetaGradientNoiseSDF::LABEL,
             Self::SDFTranslation => MetaSDFTranslation::LABEL,
             Self::SDFRotation => MetaSDFRotation::LABEL,
@@ -1629,6 +1690,7 @@ impl MetaNodeKind {
             Self::Output => MetaParentPortKind::SingleSDF,
             Self::BoxSDF => MetaBoxSDF::PARENT_PORT_KIND,
             Self::SphereSDF => MetaSphereSDF::PARENT_PORT_KIND,
+            Self::CapsuleSDF => MetaCapsuleSDF::PARENT_PORT_KIND,
             Self::GradientNoiseSDF => MetaGradientNoiseSDF::PARENT_PORT_KIND,
             Self::SDFTranslation => MetaSDFTranslation::PARENT_PORT_KIND,
             Self::SDFRotation => MetaSDFRotation::PARENT_PORT_KIND,
@@ -1658,6 +1720,7 @@ impl MetaNodeKind {
             Self::Output => single_child_port_kind(MetaChildPortKind::SingleSDF),
             Self::BoxSDF => MetaBoxSDF::CHILD_PORT_KINDS,
             Self::SphereSDF => MetaSphereSDF::CHILD_PORT_KINDS,
+            Self::CapsuleSDF => MetaCapsuleSDF::CHILD_PORT_KINDS,
             Self::GradientNoiseSDF => MetaGradientNoiseSDF::CHILD_PORT_KINDS,
             Self::SDFTranslation => MetaSDFTranslation::CHILD_PORT_KINDS,
             Self::SDFRotation => MetaSDFRotation::CHILD_PORT_KINDS,
@@ -1699,6 +1762,7 @@ impl MetaNodeKind {
             Self::Output => output_node_params(),
             Self::BoxSDF => MetaBoxSDF::params(),
             Self::SphereSDF => MetaSphereSDF::params(),
+            Self::CapsuleSDF => MetaCapsuleSDF::params(),
             Self::GradientNoiseSDF => MetaGradientNoiseSDF::params(),
             Self::SDFTranslation => MetaSDFTranslation::params(),
             Self::SDFRotation => MetaSDFRotation::params(),
@@ -1731,6 +1795,7 @@ impl MetaNodeKind {
             Self::Output => None,
             Self::BoxSDF => MetaBoxSDF::build(id_map, children, params),
             Self::SphereSDF => MetaSphereSDF::build(id_map, children, params),
+            Self::CapsuleSDF => MetaCapsuleSDF::build(id_map, children, params),
             Self::GradientNoiseSDF => MetaGradientNoiseSDF::build(id_map, children, params),
             Self::SDFTranslation => MetaSDFTranslation::build(id_map, children, params),
             Self::SDFRotation => MetaSDFRotation::build(id_map, children, params),

@@ -37,6 +37,7 @@ pub enum MetaSDFNode {
     // SDF primitives
     BoxSDF(MetaBoxSDF),
     SphereSDF(MetaSphereSDF),
+    CapsuleSDF(MetaCapsuleSDF),
     GradientNoiseSDF(MetaGradientNoiseSDF),
 
     // SDF transforms
@@ -135,6 +136,21 @@ pub struct MetaSphereSDF {
     /// Radius of the sphere, in voxels.
     radius: ContParamRange,
     /// Seed for selecting a radius within the specified range.
+    seed: u32,
+}
+
+/// A vertical capsule-shaped SDF.
+///
+/// Output: `SingleSDF`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct MetaCapsuleSDF {
+    /// Length between the centers of the spherical caps, in voxels.
+    segment_length: ContParamRange,
+    /// Radius of the spherical caps, in voxels.
+    radius: ContParamRange,
+    /// Seed for selecting a segment length and radius within the specified
+    /// ranges.
     seed: u32,
 }
 
@@ -574,6 +590,7 @@ impl<A: Allocator> MetaSDFGraph<A> {
                             match &self.nodes[node_idx] {
                                 MetaSDFNode::BoxSDF(_)
                                 | MetaSDFNode::SphereSDF(_)
+                                | MetaSDFNode::CapsuleSDF(_)
                                 | MetaSDFNode::GradientNoiseSDF(_)
                                 | MetaSDFNode::StratifiedGridTransforms(_)
                                 | MetaSDFNode::SphereSurfaceTransforms(_) => {}
@@ -731,6 +748,20 @@ impl MetaSDFNode {
     pub fn new_sphere_sdf(radius: ContParamRange, seed: u32) -> Self {
         assert!(radius.min >= 0.0);
         Self::SphereSDF(MetaSphereSDF { radius, seed })
+    }
+
+    pub fn new_capsule_sdf(
+        segment_length: ContParamRange,
+        radius: ContParamRange,
+        seed: u32,
+    ) -> Self {
+        assert!(segment_length.min >= 0.0);
+        assert!(radius.min >= 0.0);
+        Self::CapsuleSDF(MetaCapsuleSDF {
+            segment_length,
+            radius,
+            seed,
+        })
     }
 
     pub fn new_gradient_noise_sdf(
@@ -1044,8 +1075,9 @@ impl MetaSDFNode {
         match self {
             Self::BoxSDF(MetaBoxSDF { seed, .. }) => combine_seeded_leaf(0x01, seed),
             Self::SphereSDF(MetaSphereSDF { seed, .. }) => combine_seeded_leaf(0x02, seed),
+            Self::CapsuleSDF(MetaCapsuleSDF { seed, .. }) => combine_seeded_leaf(0x03, seed),
             Self::GradientNoiseSDF(MetaGradientNoiseSDF { seed, .. }) => {
-                combine_seeded_leaf(0x03, seed)
+                combine_seeded_leaf(0x04, seed)
             }
             Self::SDFTranslation(MetaSDFTranslation { seed, child_id, .. }) => {
                 combine_seeded_unary(0x10, seed, child_id)
@@ -1130,6 +1162,7 @@ impl MetaSDFNode {
         match self {
             Self::BoxSDF(node) => Ok(node.resolve(graph, seed)),
             Self::SphereSDF(node) => Ok(node.resolve(graph, seed)),
+            Self::CapsuleSDF(node) => Ok(node.resolve(graph, seed)),
             Self::GradientNoiseSDF(node) => Ok(node.resolve(graph, seed)),
             Self::SDFTranslation(node) => node.resolve(arena, graph, outputs, seed),
             Self::SDFRotation(node) => node.resolve(arena, graph, outputs, seed),
@@ -1167,6 +1200,16 @@ impl MetaSphereSDF {
         let mut rng = create_rng(seed);
         let radius = self.radius.pick_value(&mut rng);
         let node_id = graph.add_node(SDFNode::new_sphere(radius));
+        MetaSDFNodeOutput::SingleSDF(Some(node_id))
+    }
+}
+
+impl MetaCapsuleSDF {
+    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
+        let mut rng = create_rng(seed);
+        let segment_length = self.segment_length.pick_value(&mut rng);
+        let radius = self.radius.pick_value(&mut rng);
+        let node_id = graph.add_node(SDFNode::new_capsule(segment_length, radius));
         MetaSDFNodeOutput::SingleSDF(Some(node_id))
     }
 }
