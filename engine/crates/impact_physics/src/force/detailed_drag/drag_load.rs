@@ -4,7 +4,7 @@ use crate::{
     fph,
     quantities::{Direction, Force, Orientation, Position, Torque},
 };
-use impact_math::{Angle, Float, Radians};
+use impact_math::Float;
 use nalgebra::{Point3, UnitVector3, Vector3, vector};
 use simba::scalar::SubsetOf;
 use std::ops::{Add, AddAssign, Div, Mul};
@@ -190,7 +190,7 @@ where
 {
     let mesh_triangles = compute_mesh_triangle_drag_properties(triangle_vertex_positions);
 
-    compute_uniformly_distributed_directions(n_direction_samples)
+    impact_geometry::compute_uniformly_distributed_radial_directions(n_direction_samples)
         .map(|direction| {
             let load = compute_aggregate_drag_load_for_direction(
                 &mesh_triangles,
@@ -269,43 +269,6 @@ where
             )
         })
         .collect()
-}
-
-/// Computes the given number of directions, making them close to uniformly
-/// distributed.
-///
-/// # Returns
-/// An iterator over the directions.
-///
-/// # Panics
-/// If the given number of directions is zero.
-pub fn compute_uniformly_distributed_directions(
-    n_direction_samples: usize,
-) -> impl Iterator<Item = Direction> {
-    assert_ne!(n_direction_samples, 0);
-
-    let idx_norm = 1.0 / ((n_direction_samples - 1) as fph);
-    let golden_angle = compute_golden_angle();
-
-    (0..n_direction_samples).map(move |idx| {
-        // Distribute evenly in z
-        let z = 1.0 - 2.0 * (idx as fph) * idx_norm;
-        let horizontal_radius = fph::sqrt(1.0 - z.powi(2));
-
-        // Use golden angle to space the azimuthal angles, giving a close to
-        // uniform distribution over the sphere
-        let azimuthal_angle = (idx as fph) * golden_angle.radians();
-
-        let (sin_azimuthal_angle, cos_azimuthal_angle) = azimuthal_angle.sin_cos();
-        let x = horizontal_radius * cos_azimuthal_angle;
-        let y = horizontal_radius * sin_azimuthal_angle;
-
-        Direction::new_normalize(vector![x, y, z])
-    })
-}
-
-fn compute_golden_angle() -> Radians<fph> {
-    Radians(fph::PI * (3.0 - fph::sqrt(5.0)))
 }
 
 #[cfg(test)]
