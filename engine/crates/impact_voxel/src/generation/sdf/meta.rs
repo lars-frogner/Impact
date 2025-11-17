@@ -682,7 +682,9 @@ impl<A: Allocator> MetaSDFGraph<A> {
 
         if let MetaSDFNodeOutput::SingleSDF(atomic_node_id) = &outputs[root_node_id as usize] {
             if let Some(id) = atomic_node_id {
-                assert_eq!(*id, graph.root_node_id());
+                graph.set_root_node(*id);
+            } else {
+                return Ok(SDFGraph::new_in(arena));
             }
         } else {
             bail!("Root meta node must have single SDF output");
@@ -2081,7 +2083,6 @@ impl MetaStochasticSelection {
     fn resolve<A>(
         &self,
         arena: A,
-        graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
     ) -> MetaSDFNodeOutput<A>
@@ -2110,11 +2111,6 @@ impl MetaStochasticSelection {
                 for &input_node_id in input_node_ids.choose_multiple(&mut rng, count as usize) {
                     if rng.random_range(0.0..1.0) < self.pick_probability {
                         output_node_ids.push(input_node_id);
-                        // The current root node will be the last of the input
-                        // node IDs. That might not be included in the
-                        // selection, so we set the last of the actually
-                        // selected nodes as root instead.
-                        graph.set_root_node(input_node_id);
                     }
                 }
                 MetaSDFNodeOutput::SDFGroup(output_node_ids)
