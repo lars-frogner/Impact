@@ -78,9 +78,11 @@ pub struct AtomicFloatParam {
 }
 
 impl AtomicNode {
-    fn new_output(child_id: SDFNodeID) -> Self {
+    fn new_output(child_id: Option<SDFNodeID>) -> Self {
         let mut children = AtomicNodeChildren::new();
-        children.push(child_id);
+        if let Some(child_id) = child_id {
+            children.push(child_id);
+        }
         Self {
             data: AtomicNodeData::new(AtomicNodeKind::Output, AtomicNodeParams::new()),
             children,
