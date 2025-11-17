@@ -472,7 +472,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
             MetaFloatRangeParam::new_single_value(
                 LabelAndHoverText {
                     label: "Roll",
-                    hover_text: "Rotation angle around the z-axis, in radians.",
+                    hover_text: "Rotation angle around the x-axis, in radians.",
                 },
                 0.0,
             )
@@ -494,7 +494,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
             MetaFloatRangeParam::new_single_value(
                 LabelAndHoverText {
                     label: "Yaw",
-                    hover_text: "Rotation angle around the x-axis, in radians.",
+                    hover_text: "Rotation angle around the z-axis, in radians.",
                 },
                 0.0,
             )
@@ -1321,7 +1321,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
             MetaFloatRangeParam::new_single_value(
                 LabelAndHoverText {
                     label: "Roll",
-                    hover_text: "Rotation angle around the z-axis, in radians.",
+                    hover_text: "Rotation angle around the x-axis, in radians.",
                 },
                 0.0,
             )
@@ -1343,7 +1343,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
             MetaFloatRangeParam::new_single_value(
                 LabelAndHoverText {
                     label: "Yaw",
-                    hover_text: "Rotation angle around the x-axis, in radians.",
+                    hover_text: "Rotation angle around the z-axis, in radians.",
                 },
                 0.0,
             )

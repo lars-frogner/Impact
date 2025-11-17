@@ -196,11 +196,11 @@ pub struct MetaSDFTranslation {
 pub struct MetaSDFRotation {
     /// ID of the child SDF node to transform.
     child_id: MetaSDFNodeID,
-    /// Rotation angle around the z-axis, in radians.
+    /// Rotation angle around the x-axis, in radians.
     roll: ContParamRange,
     /// Rotation angle around the y-axis, in radians.
     pitch: ContParamRange,
-    /// Rotation angle around the x-axis, in radians.
+    /// Rotation angle around the z-axis, in radians.
     yaw: ContParamRange,
     /// Seed for selecting a rotation within the specified ranges.
     seed: u32,
@@ -408,11 +408,11 @@ pub struct MetaTransformRotation {
     /// Whether to apply the rotation before ('Pre') or after ('Post') the
     /// input transforms.
     composition: CompositionMode,
-    /// Rotation angle around the z-axis, in radians.
+    /// Rotation angle around the x-axis, in radians.
     roll: ContParamRange,
     /// Rotation angle around the y-axis, in radians.
     pitch: ContParamRange,
-    /// Rotation angle around the x-axis, in radians.
+    /// Rotation angle around the z-axis, in radians.
     yaw: ContParamRange,
     /// Seed for selecting a rotation within the specified ranges.
     seed: u32,
