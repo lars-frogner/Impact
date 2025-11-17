@@ -61,8 +61,13 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
     }
 
     let output_id = viewer_nodes.len() as SDFNodeID;
-    viewer_nodes.push(AtomicNode::new_output(graph.root_node_id()));
-    viewer_nodes[graph.root_node_id() as usize]
-        .parents
-        .push(output_id);
+
+    if viewer_nodes.is_empty() {
+        viewer_nodes.push(AtomicNode::new_output(None));
+    } else {
+        viewer_nodes.push(AtomicNode::new_output(Some(graph.root_node_id())));
+        viewer_nodes[graph.root_node_id() as usize]
+            .parents
+            .push(output_id);
+    }
 }
