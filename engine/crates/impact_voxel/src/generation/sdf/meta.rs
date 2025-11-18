@@ -12,7 +12,7 @@ use allocator_api2::{
 use anyhow::{Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::FixedQueue;
-use impact_geometry::rotation_between_axes;
+use impact_geometry::{compute_uniformly_distributed_radial_directions, rotation_between_axes};
 use impact_math::splitmix;
 use nalgebra::{
     Point3, Similarity, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
@@ -65,7 +65,8 @@ pub enum MetaSDFNode {
     TransformScaling(MetaTransformScaling),
 
     // SDF/transform operations
-    TranslationToSurface(MetaTranslationToSurface),
+    ClosestTranslationToSurface(MetaClosestTranslationToSurface),
+    RayTranslationToSurface(MetaRayTranslationToSurface),
     RotationToGradient(MetaRotationToGradient),
 
     // Transform application
@@ -436,15 +437,30 @@ pub struct MetaTransformScaling {
     seed: u32,
 }
 
-/// Translation of the SDFs or transforms in the second input to the surface of
-/// the SDF in the first input.
+/// Translation of the SDFs or transforms in the second input to the closest
+/// points on the surface of the SDF in the first input.
 ///
 /// Input 1: `SingleSDF`
 /// Input 2: Any
 /// Output: Same as input 2
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct MetaTranslationToSurface {
+pub struct MetaClosestTranslationToSurface {
+    /// ID of the SDF node whose surface to translate to.
+    surface_sdf_id: MetaSDFNodeID,
+    /// ID of the node containing SDFs or transforms to translate.
+    subject_id: MetaSDFNodeID,
+}
+
+/// Translation of the SDFs or transforms in the second input to the
+/// intersection of their y-axes with the surface of the SDF in the first input.
+///
+/// Input 1: `SingleSDF`
+/// Input 2: Any
+/// Output: Same as input 2
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct MetaRayTranslationToSurface {
     /// ID of the SDF node whose surface to translate to.
     surface_sdf_id: MetaSDFNodeID,
     /// ID of the node containing SDFs or transforms to translate.
@@ -646,10 +662,18 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                     sdf_id: child_1_id,
                                     transform_id: child_2_id,
                                 })
-                                | MetaSDFNode::TranslationToSurface(MetaTranslationToSurface {
-                                    surface_sdf_id: child_1_id,
-                                    subject_id: child_2_id,
-                                })
+                                | MetaSDFNode::ClosestTranslationToSurface(
+                                    MetaClosestTranslationToSurface {
+                                        surface_sdf_id: child_1_id,
+                                        subject_id: child_2_id,
+                                    },
+                                )
+                                | MetaSDFNode::RayTranslationToSurface(
+                                    MetaRayTranslationToSurface {
+                                        surface_sdf_id: child_1_id,
+                                        subject_id: child_2_id,
+                                    },
+                                )
                                 | MetaSDFNode::RotationToGradient(MetaRotationToGradient {
                                     gradient_sdf_id: child_1_id,
                                     subject_id: child_2_id,
@@ -995,11 +1019,21 @@ impl MetaSDFNode {
         })
     }
 
-    pub fn new_translation_to_surface(
+    pub fn new_closest_translation_to_surface(
         surface_sdf_id: MetaSDFNodeID,
         subject_id: MetaSDFNodeID,
     ) -> Self {
-        Self::TranslationToSurface(MetaTranslationToSurface {
+        Self::ClosestTranslationToSurface(MetaClosestTranslationToSurface {
+            surface_sdf_id,
+            subject_id,
+        })
+    }
+
+    pub fn new_ray_translation_to_surface(
+        surface_sdf_id: MetaSDFNodeID,
+        subject_id: MetaSDFNodeID,
+    ) -> Self {
+        Self::RayTranslationToSurface(MetaRayTranslationToSurface {
             surface_sdf_id,
             subject_id,
         })
@@ -1133,14 +1167,18 @@ impl MetaSDFNode {
             Self::TransformScaling(MetaTransformScaling { seed, child_id, .. }) => {
                 combine_seeded_unary(0x52, seed, child_id)
             }
-            Self::TranslationToSurface(MetaTranslationToSurface {
+            Self::ClosestTranslationToSurface(MetaClosestTranslationToSurface {
                 surface_sdf_id,
                 subject_id,
             }) => combine_binary(0x60, surface_sdf_id, subject_id),
+            Self::RayTranslationToSurface(MetaRayTranslationToSurface {
+                surface_sdf_id,
+                subject_id,
+            }) => combine_binary(0x61, surface_sdf_id, subject_id),
             Self::RotationToGradient(MetaRotationToGradient {
                 gradient_sdf_id,
                 subject_id,
-            }) => combine_binary(0x61, gradient_sdf_id, subject_id),
+            }) => combine_binary(0x62, gradient_sdf_id, subject_id),
             Self::TransformApplication(MetaTransformApplication {
                 sdf_id,
                 transform_id,
@@ -1180,10 +1218,11 @@ impl MetaSDFNode {
             Self::TransformTranslation(node) => node.resolve(arena, outputs, seed),
             Self::TransformRotation(node) => node.resolve(arena, outputs, seed),
             Self::TransformScaling(node) => node.resolve(arena, outputs, seed),
-            Self::TranslationToSurface(node) => node.resolve(arena, graph, outputs),
+            Self::ClosestTranslationToSurface(node) => node.resolve(arena, graph, outputs),
+            Self::RayTranslationToSurface(node) => node.resolve(arena, graph, outputs),
             Self::RotationToGradient(node) => node.resolve(arena, graph, outputs),
             Self::TransformApplication(node) => node.resolve(arena, graph, outputs),
-            Self::StochasticSelection(node) => Ok(node.resolve(arena, graph, outputs, seed)),
+            Self::StochasticSelection(node) => Ok(node.resolve(arena, outputs, seed)),
         }
     }
 }
@@ -1610,7 +1649,7 @@ impl MetaSphereSurfaceTransforms {
 
         let mut transforms = AVec::with_capacity_in(count, arena);
 
-        for direction in impact_geometry::compute_uniformly_distributed_radial_directions(count) {
+        for direction in compute_uniformly_distributed_radial_directions(count) {
             let jittered_direction =
                 compute_jittered_direction(direction, max_jitter_angle, &mut rng);
 
@@ -1619,7 +1658,7 @@ impl MetaSphereSurfaceTransforms {
             let rotation = match self.rotation {
                 SphereSurfaceRotation::Identity => UnitQuaternion::identity(),
                 SphereSurfaceRotation::Radial => {
-                    impact_geometry::rotation_between_axes(&Vector3::y_axis(), &jittered_direction)
+                    rotation_between_axes(&Vector3::y_axis(), &jittered_direction)
                 }
             };
 
@@ -1730,7 +1769,7 @@ impl MetaTransformScaling {
     }
 }
 
-impl MetaTranslationToSurface {
+impl MetaClosestTranslationToSurface {
     fn resolve<A>(
         &self,
         arena: A,
@@ -1749,7 +1788,7 @@ impl MetaTranslationToSurface {
             MetaSDFNodeOutput::SingleSDF(Some(sdf_node_id)) => *sdf_node_id,
             child_output => {
                 bail!(
-                    "TranslationToSurface node expects SingleSDF as input 1, got {}",
+                    "ClosestTranslationToSurface node expects SingleSDF as input 1, got {}",
                     child_output.label(),
                 );
             }
@@ -1769,13 +1808,150 @@ impl MetaTranslationToSurface {
 
         let mut compute_translation_to_surface =
             |subject_node_to_parent_transform: &Similarity3<f32>| {
-                compute_translation_to_surface(
+                compute_translation_to_closest_point_on_surface(
                     &generator,
                     &mut buffers,
                     &surface_sdf_node_to_parent_transform,
                     subject_node_to_parent_transform,
                     5,
                     0.25,
+                )
+            };
+
+        match subject_node_output {
+            MetaSDFNodeOutput::SingleSDF(subject_node_id) => {
+                let subject_node_id = subject_node_id.unwrap();
+                let subject_node_to_parent_transform =
+                    graph.nodes()[subject_node_id as usize].node_to_parent_transform();
+
+                let Some(translation_to_surface_in_parent_space) =
+                    compute_translation_to_surface(&subject_node_to_parent_transform)
+                else {
+                    return Ok(MetaSDFNodeOutput::SingleSDF(None));
+                };
+
+                let translated_subject_node_id = graph.add_node(SDFNode::new_translation(
+                    subject_node_id,
+                    translation_to_surface_in_parent_space,
+                ));
+
+                Ok(MetaSDFNodeOutput::SingleSDF(Some(
+                    translated_subject_node_id,
+                )))
+            }
+            MetaSDFNodeOutput::SDFGroup(subject_node_ids) => {
+                let mut translated_subject_node_ids =
+                    AVec::with_capacity_in(subject_node_ids.len(), arena);
+
+                for &subject_node_id in subject_node_ids {
+                    let subject_node_to_parent_transform =
+                        graph.nodes()[subject_node_id as usize].node_to_parent_transform();
+
+                    let Some(translation_to_surface_in_parent_space) =
+                        compute_translation_to_surface(&subject_node_to_parent_transform)
+                    else {
+                        continue;
+                    };
+
+                    let translated_subject_node_id = graph.add_node(SDFNode::new_translation(
+                        subject_node_id,
+                        translation_to_surface_in_parent_space,
+                    ));
+                    translated_subject_node_ids.push(translated_subject_node_id);
+                }
+
+                Ok(MetaSDFNodeOutput::SDFGroup(translated_subject_node_ids))
+            }
+            MetaSDFNodeOutput::SingleTransform(subject_transform) => {
+                let subject_node_to_parent_transform = subject_transform.as_ref().unwrap();
+
+                let Some(translation_to_surface_in_parent_space) =
+                    compute_translation_to_surface(subject_node_to_parent_transform)
+                else {
+                    return Ok(MetaSDFNodeOutput::SingleTransform(None));
+                };
+
+                let translated_subject_transform =
+                    Translation3::from(translation_to_surface_in_parent_space)
+                        * subject_node_to_parent_transform;
+
+                Ok(MetaSDFNodeOutput::SingleTransform(Some(
+                    translated_subject_transform,
+                )))
+            }
+            MetaSDFNodeOutput::TransformGroup(subject_transforms) => {
+                let mut translated_subject_transforms =
+                    AVec::with_capacity_in(subject_transforms.len(), arena);
+
+                for subject_node_to_parent_transform in subject_transforms {
+                    let Some(translation_to_surface_in_parent_space) =
+                        compute_translation_to_surface(subject_node_to_parent_transform)
+                    else {
+                        continue;
+                    };
+
+                    let translated_subject_transform =
+                        Translation3::from(translation_to_surface_in_parent_space)
+                            * subject_node_to_parent_transform;
+
+                    translated_subject_transforms.push(translated_subject_transform);
+                }
+
+                Ok(MetaSDFNodeOutput::TransformGroup(
+                    translated_subject_transforms,
+                ))
+            }
+        }
+    }
+}
+
+impl MetaRayTranslationToSurface {
+    fn resolve<A>(
+        &self,
+        arena: A,
+        graph: &mut SDFGraph<A>,
+        outputs: &[MetaSDFNodeOutput<A>],
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let subject_node_output = &outputs[self.subject_id as usize];
+
+        let sdf_node_id = match &outputs[self.surface_sdf_id as usize] {
+            MetaSDFNodeOutput::SingleSDF(None) => {
+                return Ok(subject_node_output.clone());
+            }
+            MetaSDFNodeOutput::SingleSDF(Some(sdf_node_id)) => *sdf_node_id,
+            child_output => {
+                bail!(
+                    "RayTranslationToSurface node expects SingleSDF as input 1, got {}",
+                    child_output.label(),
+                );
+            }
+        };
+
+        if let MetaSDFNodeOutput::SingleSDF(None) | MetaSDFNodeOutput::SingleTransform(None) =
+            subject_node_output
+        {
+            return Ok(subject_node_output.clone());
+        };
+
+        let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
+        let mut buffers = generator.create_buffers_for_block(arena);
+
+        let surface_sdf_node_to_parent_transform =
+            graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
+
+        let mut compute_translation_to_surface =
+            |subject_node_to_parent_transform: &Similarity3<f32>| {
+                compute_translation_to_ray_intersection_point_on_surface(
+                    &generator,
+                    &mut buffers,
+                    &surface_sdf_node_to_parent_transform,
+                    subject_node_to_parent_transform,
+                    64,
+                    0.25,
+                    0.5,
                 )
             };
 
@@ -2264,7 +2440,7 @@ where
     queue.pop_front()
 }
 
-fn compute_translation_to_surface<A: Allocator>(
+fn compute_translation_to_closest_point_on_surface<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
     surface_sdf_node_to_parent_transform: &Similarity3<f32>,
@@ -2281,9 +2457,10 @@ fn compute_translation_to_surface<A: Allocator>(
     // combined with a binary operator.
 
     // We need to determine the position of the subject node's domain center in
-    // the space of the surface node, since this is where we will sample the
-    // SDF. The center of the subject node's domain in its own space is the
-    // origin, and we start by transforming that to the (common) parent space.
+    // the space of the surface node, since this is where we will begin to
+    // sample the SDF. The center of the subject node's domain in its own space
+    // is the origin, and we start by transforming that to the (common) parent
+    // space.
     let subject_center_in_parent_space =
         subject_node_to_parent_transform.transform_point(&Point3::origin());
 
@@ -2292,8 +2469,8 @@ fn compute_translation_to_surface<A: Allocator>(
     let subject_center_in_surface_sdf_space = surface_sdf_node_to_parent_transform
         .inverse_transform_point(&subject_center_in_parent_space);
 
-    // To find the surface (where the signed distance is zero), we use the
-    // Newton-Raphson method
+    // To find the closest point on the surface (where the signed distance is
+    // zero), we use the Newton-Raphson method
 
     let mut sampling_position = subject_center_in_surface_sdf_space;
     let mut iteration_count = 0;
@@ -2326,11 +2503,124 @@ fn compute_translation_to_surface<A: Allocator>(
         // Newton-Raphson step
         sampling_position += (-signed_distance / gradient_norm_squared) * gradient;
 
-        if signed_distance.abs() < max_distance_from_surface {
+        if signed_distance.abs() <= max_distance_from_surface {
             break;
         }
 
         iteration_count += 1;
+    }
+
+    let translation_to_surface_in_surface_sdf_space =
+        sampling_position - subject_center_in_surface_sdf_space;
+
+    // We are still in the space of the surface node, but when applying the
+    // translation to the subject node we need the translation to be in the
+    // parent space
+    let translation_to_surface_in_parent_space = surface_sdf_node_to_parent_transform
+        .transform_vector(&translation_to_surface_in_surface_sdf_space);
+
+    Some(translation_to_surface_in_parent_space)
+}
+
+fn compute_translation_to_ray_intersection_point_on_surface<A: Allocator>(
+    generator: &SDFGenerator<A>,
+    buffers: &mut SDFGeneratorBlockBuffers<1, A>,
+    surface_sdf_node_to_parent_transform: &Similarity3<f32>,
+    subject_node_to_parent_transform: &Similarity3<f32>,
+    max_steps: u32,
+    max_distance_from_surface: f32,
+    safety_factor: f32,
+) -> Option<Vector3<f32>> {
+    assert!(safety_factor > 0.0 && safety_factor <= 1.0);
+
+    // The basis for this computation is that the surface node (for which we
+    // sample the SDF) and the subject node (which we will translate) have the
+    // *same* parent space. In other words, we assume that no additional
+    // transforms will be applied to either of the nodes before they are
+    // combined with a binary operator.
+
+    // We need to determine the position of the subject node's domain center in
+    // the space of the surface node, since this is where we will begin to
+    // sample the SDF. The center of the subject node's domain in its own space
+    // is the origin, and we start by transforming that to the (common) parent
+    // space.
+    let subject_center_in_parent_space =
+        subject_node_to_parent_transform.transform_point(&Point3::origin());
+
+    // We also need the ray direction, which is the y-axis in the subject node's
+    // space, in the parent space
+    let subject_y_axis_in_parent_space =
+        subject_node_to_parent_transform.transform_vector(&Vector3::y());
+
+    // We can now transform the position and direction from the common parent
+    // space to the space of the surface node
+    let subject_center_in_surface_sdf_space = surface_sdf_node_to_parent_transform
+        .inverse_transform_point(&subject_center_in_parent_space);
+
+    let subject_y_axis_in_surface_sdf_space = surface_sdf_node_to_parent_transform
+        .inverse_transform_vector(&subject_y_axis_in_parent_space);
+
+    let ray_origin = subject_center_in_surface_sdf_space;
+    let ray_direction = UnitVector3::try_new(subject_y_axis_in_surface_sdf_space, 1e-8)?;
+
+    let domain_in_surface_sdf_space = generator.domain();
+
+    let (start_distance_along_ray, max_distance_along_ray) =
+        domain_in_surface_sdf_space.find_ray_intersection(ray_origin, ray_direction)?;
+
+    let mut distance_along_ray = start_distance_along_ray;
+    let mut sampling_position = ray_origin + ray_direction.scale(distance_along_ray);
+
+    let mut signed_distance = generator.compute_signed_distance(buffers, &sampling_position);
+    let mut distance = signed_distance.abs();
+
+    let starting_sign = signed_distance.signum();
+
+    let mut step_count = 0;
+    let mut crossed_surface = false;
+
+    while distance > max_distance_from_surface {
+        step_count += 1;
+
+        // If we reach max iterations, we assume that we are fairly close to the
+        // surface if we have crossed it (we are stepping back and forth across
+        // it without getting close enough), otherwise we assume we missed and
+        // give up
+        if step_count >= max_steps {
+            if crossed_surface {
+                break;
+            } else {
+                return None;
+            }
+        }
+
+        // If the SDF was exact, the surface couldn't possibly be closer than
+        // `distance`, so we could safely step that far without overshooting.
+        // However, since the distances may be inaccurate due to things like
+        // smoothing or perturbing with noise, we shorten the distance by a
+        // safety factor. To handle overshoot, we also multiply with the sign of
+        // the SDF at the starting position. This will cause us to step back
+        // along the ray if we overshoot, regardless of whether we started
+        // inside or outside of the surface.
+        distance_along_ray += starting_sign * signed_distance * safety_factor;
+
+        if !crossed_surface
+            && signed_distance.is_sign_positive() != starting_sign.is_sign_positive()
+        {
+            crossed_surface = true;
+        }
+
+        // We have exited the SDF domain, so the ray didn't hit the surface
+        if distance_along_ray > max_distance_along_ray
+            || distance_along_ray < start_distance_along_ray
+        {
+            return None;
+        }
+
+        sampling_position = ray_origin + ray_direction.scale(distance_along_ray);
+
+        signed_distance = generator.compute_signed_distance(buffers, &sampling_position);
+        distance = signed_distance.abs();
     }
 
     let translation_to_surface_in_surface_sdf_space =

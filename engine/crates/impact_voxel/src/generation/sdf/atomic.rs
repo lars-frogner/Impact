@@ -1049,6 +1049,18 @@ impl<A: Allocator> SDFGenerator<A> {
 
         assert_eq!(stack_top, 1);
     }
+
+    pub fn compute_signed_distance(
+        &self,
+        buffers: &mut SDFGeneratorBlockBuffers<1, A>,
+        position_in_root_space: &Point3<f32>,
+    ) -> f32 {
+        self.compute_signed_distances_for_block_preserving_gradients::<1, 1>(
+            buffers,
+            position_in_root_space,
+        );
+        buffers.final_signed_distances()[0]
+    }
 }
 
 impl Default for SDFGenerator {
