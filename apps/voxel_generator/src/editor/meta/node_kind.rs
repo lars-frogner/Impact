@@ -5,13 +5,13 @@ use super::{
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
-    CompositionMode, MetaBoxSDF, MetaCapsuleSDF, MetaGradientNoiseSDF,
-    MetaMultifractalNoiseSDFModifier, MetaMultiscaleSphereSDFModifier, MetaRotationToGradient,
-    MetaSDFGroupUnion, MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFRotation,
-    MetaSDFScaling, MetaSDFSubtraction, MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF,
-    MetaSphereSurfaceTransforms, MetaStochasticSelection, MetaStratifiedGridTransforms,
-    MetaTransformApplication, MetaTransformRotation, MetaTransformScaling,
-    MetaTransformTranslation, MetaTranslationToSurface, SphereSurfaceRotation,
+    CompositionMode, MetaBoxSDF, MetaCapsuleSDF, MetaClosestTranslationToSurface,
+    MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier, MetaMultiscaleSphereSDFModifier,
+    MetaRayTranslationToSurface, MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFIntersection,
+    MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling, MetaSDFSubtraction,
+    MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF, MetaSphereSurfaceTransforms,
+    MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
+    MetaTransformRotation, MetaTransformScaling, MetaTransformTranslation, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +50,8 @@ pub enum MetaNodeKind {
     TransformTranslation,
     TransformRotation,
     TransformScaling,
-    TranslationToSurface,
+    ClosestTranslationToSurface,
+    RayTranslationToSurface,
     RotationToGradient,
     TransformApplication,
     StochasticSelection,
@@ -1452,10 +1453,10 @@ impl SpecificMetaNodeKind for MetaTransformScaling {
     }
 }
 
-impl SpecificMetaNodeKind for MetaTranslationToSurface {
+impl SpecificMetaNodeKind for MetaClosestTranslationToSurface {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Translation to surface",
-        hover_text: "Translation of the SDFs or transforms in the second input to the surface of the SDF in the first input.",
+        label: "Closest translation to surface",
+        hover_text: "Translation of the SDFs or transforms in the second input to the closest points on the surface of the SDF in the first input.",
     };
     const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
     const CHILD_PORT_KINDS: MetaChildPortKinds =
@@ -1472,7 +1473,34 @@ impl SpecificMetaNodeKind for MetaTranslationToSurface {
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 0);
         let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
-        Some(MetaSDFNode::new_translation_to_surface(
+        Some(MetaSDFNode::new_closest_translation_to_surface(
+            surface_sdf_id,
+            subject_id,
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaRayTranslationToSurface {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Ray translation to surface",
+        hover_text: "Translation of the SDFs or transforms in the second input to the intersection of their y-axes with the surface of the SDF in the first input.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Any);
+
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::new_ray_translation_to_surface(
             surface_sdf_id,
             subject_id,
         ))
@@ -1599,7 +1627,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 }
 
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 22] {
+    pub const fn all_non_root() -> [Self; 23] {
         [
             Self::BoxSDF,
             Self::SphereSDF,
@@ -1619,7 +1647,8 @@ impl MetaNodeKind {
             Self::TransformTranslation,
             Self::TransformRotation,
             Self::TransformScaling,
-            Self::TranslationToSurface,
+            Self::ClosestTranslationToSurface,
+            Self::RayTranslationToSurface,
             Self::RotationToGradient,
             Self::TransformApplication,
             Self::StochasticSelection,
@@ -1650,7 +1679,8 @@ impl MetaNodeKind {
             | Self::TransformTranslation
             | Self::TransformRotation
             | Self::TransformScaling
-            | Self::TranslationToSurface
+            | Self::ClosestTranslationToSurface
+            | Self::RayTranslationToSurface
             | Self::RotationToGradient
             | Self::TransformApplication => MetaNodeKindGroup::Transform,
             Self::StochasticSelection => MetaNodeKindGroup::Filtering,
@@ -1678,7 +1708,8 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::LABEL,
             Self::TransformRotation => MetaTransformRotation::LABEL,
             Self::TransformScaling => MetaTransformScaling::LABEL,
-            Self::TranslationToSurface => MetaTranslationToSurface::LABEL,
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::LABEL,
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::LABEL,
             Self::RotationToGradient => MetaRotationToGradient::LABEL,
             Self::TransformApplication => MetaTransformApplication::LABEL,
             Self::StochasticSelection => MetaStochasticSelection::LABEL,
@@ -1708,7 +1739,8 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::PARENT_PORT_KIND,
             Self::TransformRotation => MetaTransformRotation::PARENT_PORT_KIND,
             Self::TransformScaling => MetaTransformScaling::PARENT_PORT_KIND,
-            Self::TranslationToSurface => MetaTranslationToSurface::PARENT_PORT_KIND,
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::PARENT_PORT_KIND,
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::PARENT_PORT_KIND,
             Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
             Self::TransformApplication => MetaTransformApplication::PARENT_PORT_KIND,
             Self::StochasticSelection => MetaStochasticSelection::PARENT_PORT_KIND,
@@ -1738,7 +1770,8 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::CHILD_PORT_KINDS,
             Self::TransformRotation => MetaTransformRotation::CHILD_PORT_KINDS,
             Self::TransformScaling => MetaTransformScaling::CHILD_PORT_KINDS,
-            Self::TranslationToSurface => MetaTranslationToSurface::CHILD_PORT_KINDS,
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::CHILD_PORT_KINDS,
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::CHILD_PORT_KINDS,
             Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
             Self::TransformApplication => MetaTransformApplication::CHILD_PORT_KINDS,
             Self::StochasticSelection => MetaStochasticSelection::CHILD_PORT_KINDS,
@@ -1778,7 +1811,8 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::params(),
             Self::TransformRotation => MetaTransformRotation::params(),
             Self::TransformScaling => MetaTransformScaling::params(),
-            Self::TranslationToSurface => MetaTranslationToSurface::params(),
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::params(),
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::params(),
             Self::RotationToGradient => MetaRotationToGradient::params(),
             Self::TransformApplication => MetaTransformApplication::params(),
             Self::StochasticSelection => MetaStochasticSelection::params(),
@@ -1819,7 +1853,12 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::build(id_map, children, params),
             Self::TransformRotation => MetaTransformRotation::build(id_map, children, params),
             Self::TransformScaling => MetaTransformScaling::build(id_map, children, params),
-            Self::TranslationToSurface => MetaTranslationToSurface::build(id_map, children, params),
+            Self::ClosestTranslationToSurface => {
+                MetaClosestTranslationToSurface::build(id_map, children, params)
+            }
+            Self::RayTranslationToSurface => {
+                MetaRayTranslationToSurface::build(id_map, children, params)
+            }
             Self::RotationToGradient => MetaRotationToGradient::build(id_map, children, params),
             Self::TransformApplication => MetaTransformApplication::build(id_map, children, params),
             Self::StochasticSelection => MetaStochasticSelection::build(id_map, children, params),

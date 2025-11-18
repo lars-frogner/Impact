@@ -4,7 +4,7 @@ use crate::{Plane, Point};
 use approx::AbsDiffEq;
 use impact_math::Float;
 use na::point;
-use nalgebra::{self as na, Matrix4, Point3, Vector3};
+use nalgebra::{self as na, Matrix4, Point3, UnitVector3, Vector3};
 
 use Corner::{Lower, Upper};
 
@@ -331,6 +331,46 @@ impl<F: Float> AxisAlignedBox<F> {
         }
     }
 
+    /// Given a ray defined by an origin and direction, finds the distances
+    /// along the ray at which the ray enters and exits the box, or returns
+    /// [`None`] if the ray does not hit the box.
+    pub fn find_ray_intersection(
+        &self,
+        ray_origin: Point3<F>,
+        ray_direction: UnitVector3<F>,
+    ) -> Option<(F, F)> {
+        let mut t_min = F::ZERO;
+        let mut t_max = F::INFINITY;
+
+        for dim in 0..3 {
+            if ray_direction[dim] != F::ZERO {
+                let recip = ray_direction[dim].recip();
+                let t1 = (self.lower_corner()[dim] - ray_origin[dim]) * recip;
+                let t2 = (self.upper_corner()[dim] - ray_origin[dim]) * recip;
+
+                let (t_entry, t_exit) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
+
+                t_min = t_min.max(t_entry);
+                t_max = t_max.min(t_exit);
+
+                if t_max < t_min {
+                    return None;
+                }
+            } else if ray_origin[dim] < self.lower_corner()[dim]
+                || ray_origin[dim] > self.upper_corner()[dim]
+            {
+                return None;
+            }
+        }
+
+        // Require intersection in the forward ray direction
+        if t_max >= F::ZERO {
+            Some((t_min.max(F::ZERO), t_max))
+        } else {
+            None
+        }
+    }
+
     /// Returns a version of this AAB that extrudes as little as possible
     /// into the positive halfspace of the given plane without changing the
     /// volume of the box lying within the negative halfspace.
@@ -620,5 +660,103 @@ mod tests {
         let projected = aabb.projected_onto_negative_halfspace(&plane);
         let expected = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
         assert_abs_diff_eq!(projected, expected);
+    }
+
+    #[test]
+    fn find_ray_intersection_with_ray_through_box_center_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let ray_origin = point![-1.0, 1.0, 1.0];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        assert_abs_diff_eq!(t_min, 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 3.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_ray_intersection_with_ray_missing_box_returns_none() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let ray_origin = point![2.0, 2.0, 2.0];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_ray_intersection_with_ray_starting_inside_box_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        let ray_origin = point![1.0, 1.0, 1.0];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        assert_abs_diff_eq!(t_min, 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 1.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_ray_intersection_with_ray_parallel_to_box_axis_outside_box_returns_none() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        // Ray parallel to x-axis but at y=0.5, z=2.0 (outside the box in z dimension)
+        let ray_origin = point![-1.0, 0.5, 2.0];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_ray_intersection_with_ray_behind_box_returns_none() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        // Ray would intersect box if extended backwards, but only forward direction counts
+        let ray_origin = point![2.0, 0.5, 0.5];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_ray_intersection_with_diagonal_ray_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        let ray_origin = point![-1.0, -1.0, -1.0];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_some());
+        // Ray enters box when all coordinates reach 0, exits when all reach 1
+        let (t_min, t_max) = result.unwrap();
+        let sqrt_3 = 3.0_f64.sqrt();
+        assert_abs_diff_eq!(t_min, sqrt_3, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, sqrt_3 * 2.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_ray_intersection_with_zero_direction_component_inside_bounds_works() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![2.0, 2.0, 2.0]);
+        // Ray with zero y-component but y-coordinate inside box bounds
+        let ray_origin = point![-1.0, 1.0, 1.0];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        assert_abs_diff_eq!(t_min, 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 3.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_ray_intersection_with_zero_direction_component_outside_bounds_returns_none() {
+        let aabb = AxisAlignedBox::new(point![0.0, 0.0, 0.0], point![1.0, 1.0, 1.0]);
+        // Ray with zero y-component but y-coordinate outside box bounds
+        let ray_origin = point![-1.0, 2.0, 0.5];
+        let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
+
+        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        assert!(result.is_none());
     }
 }
