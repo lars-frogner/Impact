@@ -2,14 +2,20 @@
 //! high-level "meta" SDF nodes that is compiled into the runtime graph of
 //! simpler atomic nodes.
 
-use crate::generation::sdf::{
-    SDFGenerator, SDFGeneratorBlockBuffers, SDFGraph, SDFNode, SDFNodeID,
+pub mod params;
+
+use crate::{
+    define_meta_node_params,
+    generation::sdf::{
+        SDFGenerator, SDFGeneratorBlockBuffers, SDFGraph, SDFNode, SDFNodeID,
+        meta::params::ParamScratch,
+    },
 };
 use allocator_api2::{
     alloc::{Allocator, Global},
     vec::Vec as AVec,
 };
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::FixedQueue;
 use impact_geometry::{compute_uniformly_distributed_radial_directions, rotation_between_axes};
@@ -17,13 +23,13 @@ use impact_math::splitmix;
 use nalgebra::{
     Point3, Similarity, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
 };
+use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
 use rand::{
-    Rng, SeedableRng,
+    Rng,
     distr::{Distribution, Uniform},
     seq::IndexedRandom,
 };
-use rand_pcg::Pcg64Mcg;
-use std::{array, borrow::Cow, f32::consts::PI, ops::RangeInclusive};
+use std::{array, borrow::Cow, f32::consts::PI};
 
 #[derive(Clone, Debug)]
 pub struct MetaSDFGraph<A: Allocator = Global> {
@@ -102,30 +108,29 @@ enum MetaSDFNodeOutput<A: Allocator> {
     TransformGroup(AVec<Similarity3<f32>, A>),
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug)]
-pub struct DiscreteParamRange {
-    pub min: u32,
-    pub max: u32,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug)]
-pub struct ContParamRange {
-    pub min: f32,
-    pub max: f32,
-}
-
 /// A box-shaped SDF.
 ///
 /// Output: `SingleSDF`
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaBoxSDF {
-    /// Extent of the box along each axis, in voxels.
-    extents: [ContParamRange; 3],
-    /// Seed for selecting an extent within the specified ranges.
-    seed: u32,
+    /// Extent of the box along the x-axis, in voxels.
+    pub extent_x: ContParamSpec,
+    /// Extent of the box along the y-axis, in voxels.
+    pub extent_y: ContParamSpec,
+    /// Extent of the box along the z-axis, in voxels.
+    pub extent_z: ContParamSpec,
+    /// Seed for sampling random extent values.
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaBoxSDF,
+    struct MetaBoxParams {
+        extent_x: f32,
+        extent_y: f32,
+        extent_z: f32,
+    }
 }
 
 /// A sphere-shaped SDF.
@@ -135,9 +140,16 @@ pub struct MetaBoxSDF {
 #[derive(Clone, Debug)]
 pub struct MetaSphereSDF {
     /// Radius of the sphere, in voxels.
-    radius: ContParamRange,
+    pub radius: ContParamSpec,
     /// Seed for selecting a radius within the specified range.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaSphereSDF,
+    struct MetaSphereParams {
+        radius: f32,
+    }
 }
 
 /// A vertical capsule-shaped SDF.
@@ -147,12 +159,20 @@ pub struct MetaSphereSDF {
 #[derive(Clone, Debug)]
 pub struct MetaCapsuleSDF {
     /// Length between the centers of the spherical caps, in voxels.
-    segment_length: ContParamRange,
+    pub segment_length: ContParamSpec,
     /// Radius of the spherical caps, in voxels.
-    radius: ContParamRange,
+    pub radius: ContParamSpec,
     /// Seed for selecting a segment length and radius within the specified
     /// ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaCapsuleSDF,
+    struct MetaCapsuleParams {
+        segment_length: f32,
+        radius: f32,
+    }
 }
 
 /// An SDF generated from thresholding a gradient noise field.
@@ -161,16 +181,31 @@ pub struct MetaCapsuleSDF {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaGradientNoiseSDF {
-    /// Extent of the noise field along each axis, in voxels.
-    extents: [ContParamRange; 3],
+    /// Extent of the noise field along the x-axis, in voxels.
+    pub extent_x: ContParamSpec,
+    /// Extent of the noise field along the y-axis, in voxels.
+    pub extent_y: ContParamSpec,
+    /// Extent of the noise field along the z-axis, in voxels.
+    pub extent_z: ContParamSpec,
     /// Spatial frequency of the noise pattern, in inverse voxels.
-    noise_frequency: ContParamRange,
+    pub noise_frequency: ContParamSpec,
     /// Minimum noise value (they range from -1 to 1) for a voxel to be
     /// considered inside the object.
-    noise_threshold: ContParamRange,
+    pub noise_threshold: ContParamSpec,
     /// Seed for generating noise and selecting parameter values within the
     /// specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaGradientNoiseSDF,
+    struct MetaGradientNoiseParams {
+        extent_x: f32,
+        extent_y: f32,
+        extent_z: f32,
+        noise_frequency: f32,
+        noise_threshold: f32,
+    }
 }
 
 /// Translation of one or more SDFs.
@@ -181,11 +216,24 @@ pub struct MetaGradientNoiseSDF {
 #[derive(Clone, Debug)]
 pub struct MetaSDFTranslation {
     /// ID of the child SDF node to transform.
-    child_id: MetaSDFNodeID,
-    /// Translation distance along each axis, in voxels.
-    translation: [ContParamRange; 3],
+    pub child_id: MetaSDFNodeID,
+    /// Translation distance along the x-axis, in voxels.
+    pub translation_x: ContParamSpec,
+    /// Translation distance along the y-axis, in voxels.
+    pub translation_y: ContParamSpec,
+    /// Translation distance along the z-axis, in voxels.
+    pub translation_z: ContParamSpec,
     /// Seed for selecting a translation within the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaSDFTranslation,
+    struct MetaSDFTranslationParams {
+        translation_x: f32,
+        translation_y: f32,
+        translation_z: f32,
+    }
 }
 
 /// Rotation of one or more SDFs.
@@ -196,15 +244,24 @@ pub struct MetaSDFTranslation {
 #[derive(Clone, Debug)]
 pub struct MetaSDFRotation {
     /// ID of the child SDF node to transform.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Rotation angle around the x-axis, in radians.
-    roll: ContParamRange,
+    pub roll: ContParamSpec,
     /// Rotation angle around the y-axis, in radians.
-    pitch: ContParamRange,
+    pub pitch: ContParamSpec,
     /// Rotation angle around the z-axis, in radians.
-    yaw: ContParamRange,
+    pub yaw: ContParamSpec,
     /// Seed for selecting a rotation within the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaSDFRotation,
+    struct MetaSDFRotationParams {
+        roll: f32,
+        pitch: f32,
+        yaw: f32,
+    }
 }
 
 /// Uniform scaling of one or more SDFs.
@@ -215,11 +272,18 @@ pub struct MetaSDFRotation {
 #[derive(Clone, Debug)]
 pub struct MetaSDFScaling {
     /// ID of the child SDF node to transform.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Uniform scale factor.
-    scaling: ContParamRange,
+    pub scaling: ContParamSpec,
     /// Seed for selecting a scale factor within the specified range.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaSDFScaling,
+    struct MetaSDFScalingParams {
+        scaling: f32,
+    }
 }
 
 /// Perturbation of one or more SDFs using a multifractal noise field.
@@ -230,21 +294,32 @@ pub struct MetaSDFScaling {
 #[derive(Clone, Debug)]
 pub struct MetaMultifractalNoiseSDFModifier {
     /// ID of the child SDF node to modify.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Number of noise octaves (patterns of increasing frequency) to combine.
-    octaves: DiscreteParamRange,
+    pub octaves: DiscreteParamSpec,
     /// Spatial frequency of the noise pattern in the first octave, in inverse
     /// voxels.
-    frequency: ContParamRange,
+    pub frequency: ContParamSpec,
     /// Noise frequency multiplier between successive octaves.
-    lacunarity: ContParamRange,
+    pub lacunarity: ContParamSpec,
     /// Noise amplitude multiplier between successive octaves.
-    persistence: ContParamRange,
+    pub persistence: ContParamSpec,
     /// Noise amplitude (max distransform) in the first octave, in voxels.
-    amplitude: ContParamRange,
+    pub amplitude: ContParamSpec,
     /// Seed for generating noise and selecting parameter values within the
     /// specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaMultifractalNoiseSDFModifier,
+    struct MetaMultifractalNoiseParams {
+        octaves: u32,
+        frequency: f32,
+        lacunarity: f32,
+        persistence: f32,
+        amplitude: f32,
+    }
 }
 
 /// Perturbation of one or more SDFs by intersecting and combining with grids
@@ -256,25 +331,37 @@ pub struct MetaMultifractalNoiseSDFModifier {
 #[derive(Clone, Debug)]
 pub struct MetaMultiscaleSphereSDFModifier {
     /// ID of the child SDF node to modify.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Number of sphere scales to combine for detail variation.
-    octaves: DiscreteParamRange,
+    pub octaves: DiscreteParamSpec,
     /// Maximum scale of variation in the multiscale pattern, in voxels.
-    max_scale: ContParamRange,
+    pub max_scale: ContParamSpec,
     /// Scale multiplier between successive octaves.
-    persistence: ContParamRange,
+    pub persistence: ContParamSpec,
     /// Amount to expand the pattern being modified before intersecting with
     /// spheres, in factors of the max scale.
-    inflation: ContParamRange,
+    pub inflation: ContParamSpec,
     /// Smoothness factor for intersecting spheres with the inflated version of
     /// the pattern being modified.
-    intersection_smoothness: ContParamRange,
+    pub intersection_smoothness: ContParamSpec,
     /// Smoothness factor for combining the intersected sphere pattern with the
     /// original pattern.
-    union_smoothness: ContParamRange,
+    pub union_smoothness: ContParamSpec,
     /// Seed for generating random sphere radii as well as selecting parameter
     /// values within the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaMultiscaleSphereSDFModifier,
+    struct MetaMultiscaleSphereParams {
+        octaves: u32,
+        max_scale: f32,
+        persistence: f32,
+        inflation: f32,
+        intersection_smoothness: f32,
+        union_smoothness: f32,
+    }
 }
 
 /// Smooth union of two SDFs.
@@ -286,11 +373,11 @@ pub struct MetaMultiscaleSphereSDFModifier {
 #[derive(Clone, Debug)]
 pub struct MetaSDFUnion {
     /// ID of the first SDF node to combine.
-    child_1_id: MetaSDFNodeID,
+    pub child_1_id: MetaSDFNodeID,
     /// ID of the second SDF node to combine.
-    child_2_id: MetaSDFNodeID,
+    pub child_2_id: MetaSDFNodeID,
     /// Smoothness factor for blending the two shapes together.
-    smoothness: f32,
+    pub smoothness: f32,
 }
 
 /// Smooth subtraction of the second SDF from the first.
@@ -302,11 +389,11 @@ pub struct MetaSDFUnion {
 #[derive(Clone, Debug)]
 pub struct MetaSDFSubtraction {
     /// ID of the SDF node to subtract from.
-    child_1_id: MetaSDFNodeID,
+    pub child_1_id: MetaSDFNodeID,
     /// ID of the SDF node to subtract.
-    child_2_id: MetaSDFNodeID,
+    pub child_2_id: MetaSDFNodeID,
     /// Smoothness factor for blending the subtraction operation.
-    smoothness: f32,
+    pub smoothness: f32,
 }
 
 /// Smooth intersection of two SDFs.
@@ -318,11 +405,11 @@ pub struct MetaSDFSubtraction {
 #[derive(Clone, Debug)]
 pub struct MetaSDFIntersection {
     /// ID of the first SDF node to intersect.
-    child_1_id: MetaSDFNodeID,
+    pub child_1_id: MetaSDFNodeID,
     /// ID of the second SDF node to intersect.
-    child_2_id: MetaSDFNodeID,
+    pub child_2_id: MetaSDFNodeID,
     /// Smoothness factor for blending the intersection operation.
-    smoothness: f32,
+    pub smoothness: f32,
 }
 
 /// Smooth union of all SDFs in a group.
@@ -333,9 +420,9 @@ pub struct MetaSDFIntersection {
 #[derive(Clone, Debug)]
 pub struct MetaSDFGroupUnion {
     /// ID of the SDF group node to union.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Smoothness factor for blending all the shapes in the group together.
-    smoothness: f32,
+    pub smoothness: f32,
 }
 
 /// Transforms with translations from the center of a grid to grid points picked
@@ -345,17 +432,39 @@ pub struct MetaSDFGroupUnion {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct MetaStratifiedGridTransforms {
-    /// Number of grid cells along each axis.
-    shape: [DiscreteParamRange; 3],
-    /// Extent of a grid cell along each axis, in voxels.
-    cell_extents: [ContParamRange; 3],
+    /// Number of grid cells along the x-axis.
+    pub shape_x: DiscreteParamSpec,
+    /// Number of grid cells along the y-axis.
+    pub shape_y: DiscreteParamSpec,
+    /// Number of grid cells along the z-axis.
+    pub shape_z: DiscreteParamSpec,
+    /// Extent of a grid cell along the x-axis, in voxels.
+    pub cell_extent_x: ContParamSpec,
+    /// Extent of a grid cell along the y-axis, in voxels.
+    pub cell_extent_y: ContParamSpec,
+    /// Extent of a grid cell along the z-axis, in voxels.
+    pub cell_extent_z: ContParamSpec,
     /// Number of points generated within each grid cell.
-    points_per_grid_cell: DiscreteParamRange,
+    pub points_per_grid_cell: DiscreteParamSpec,
     /// Fraction of a grid cell to randomly displace the points.
-    jitter_fraction: ContParamRange,
+    pub jitter_fraction: ContParamSpec,
     /// Seed for random jittering as well as selecting parameter values within
     /// the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaStratifiedGridTransforms,
+    struct MetaStratifiedGridParams {
+        shape_x: u32,
+        shape_y: u32,
+        shape_z: u32,
+        cell_extent_x: f32,
+        cell_extent_y: f32,
+        cell_extent_z: f32,
+        points_per_grid_cell: u32,
+        jitter_fraction: f32,
+    }
 }
 
 /// Transforms with translations from the center to the surface of a sphere and
@@ -366,17 +475,26 @@ pub struct MetaStratifiedGridTransforms {
 #[derive(Clone, Debug)]
 pub struct MetaSphereSurfaceTransforms {
     /// Number of transforms to generate.
-    count: DiscreteParamRange,
+    pub count: DiscreteParamSpec,
     /// Radius of the sphere, in voxels.
-    radius: ContParamRange,
+    pub radius: ContParamSpec,
     /// Fraction of the regular point spacing to randomly displace the points.
-    jitter_fraction: ContParamRange,
+    pub jitter_fraction: ContParamSpec,
     /// Whether to include rotations from the y-axes to the outward radial
     /// direction.
-    rotation: SphereSurfaceRotation,
+    pub rotation: SphereSurfaceRotation,
     /// Seed for random jittering as well as selecting parameter values within
     /// the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaSphereSurfaceTransforms,
+    struct MetaSphereSurfaceParams {
+        count: u32,
+        radius: f32,
+        jitter_fraction: f32,
+    }
 }
 
 /// Translation of one or more transforms.
@@ -387,14 +505,27 @@ pub struct MetaSphereSurfaceTransforms {
 #[derive(Clone, Debug)]
 pub struct MetaTransformTranslation {
     /// ID of the child transform node to translate.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Whether to apply the translation before ('Pre') or after ('Post') the
     /// input transforms.
-    composition: CompositionMode,
-    /// Translation distance along each axis, in voxels.
-    translation: [ContParamRange; 3],
+    pub composition: CompositionMode,
+    /// Translation distance along the x-axis, in voxels.
+    pub translation_x: ContParamSpec,
+    /// Translation distance along the y-axis, in voxels.
+    pub translation_y: ContParamSpec,
+    /// Translation distance along the z-axis, in voxels.
+    pub translation_z: ContParamSpec,
     /// Seed for selecting a translation within the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaTransformTranslation,
+    struct MetaTransformTranslationParams {
+        translation_x: f32,
+        translation_y: f32,
+        translation_z: f32,
+    }
 }
 
 /// Rotation of one or more transforms.
@@ -405,18 +536,27 @@ pub struct MetaTransformTranslation {
 #[derive(Clone, Debug)]
 pub struct MetaTransformRotation {
     /// ID of the child transform node to rotate.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Whether to apply the rotation before ('Pre') or after ('Post') the
     /// input transforms.
-    composition: CompositionMode,
+    pub composition: CompositionMode,
     /// Rotation angle around the x-axis, in radians.
-    roll: ContParamRange,
+    pub roll: ContParamSpec,
     /// Rotation angle around the y-axis, in radians.
-    pitch: ContParamRange,
+    pub pitch: ContParamSpec,
     /// Rotation angle around the z-axis, in radians.
-    yaw: ContParamRange,
+    pub yaw: ContParamSpec,
     /// Seed for selecting a rotation within the specified ranges.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaTransformRotation,
+    struct MetaTransformRotationParams {
+        roll: f32,
+        pitch: f32,
+        yaw: f32,
+    }
 }
 
 /// Uniform scaling of one or more transforms.
@@ -427,14 +567,21 @@ pub struct MetaTransformRotation {
 #[derive(Clone, Debug)]
 pub struct MetaTransformScaling {
     /// ID of the child transform node to scale.
-    child_id: MetaSDFNodeID,
+    pub child_id: MetaSDFNodeID,
     /// Whether to apply the scaling before ('Pre') or after ('Post') the
     /// input transforms.
-    composition: CompositionMode,
+    pub composition: CompositionMode,
     /// Uniform scale factor.
-    scaling: ContParamRange,
+    pub scaling: ContParamSpec,
     /// Seed for selecting a scale factor within the specified range.
-    seed: u32,
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaTransformScaling,
+    struct MetaTransformScalingParams {
+        scaling: f32,
+    }
 }
 
 /// Translation of the SDFs or transforms in the second input to the closest
@@ -447,9 +594,9 @@ pub struct MetaTransformScaling {
 #[derive(Clone, Debug)]
 pub struct MetaClosestTranslationToSurface {
     /// ID of the SDF node whose surface to translate to.
-    surface_sdf_id: MetaSDFNodeID,
+    pub surface_sdf_id: MetaSDFNodeID,
     /// ID of the node containing SDFs or transforms to translate.
-    subject_id: MetaSDFNodeID,
+    pub subject_id: MetaSDFNodeID,
 }
 
 /// Translation of the SDFs or transforms in the second input to the
@@ -462,9 +609,9 @@ pub struct MetaClosestTranslationToSurface {
 #[derive(Clone, Debug)]
 pub struct MetaRayTranslationToSurface {
     /// ID of the SDF node whose surface to translate to.
-    surface_sdf_id: MetaSDFNodeID,
+    pub surface_sdf_id: MetaSDFNodeID,
     /// ID of the node containing SDFs or transforms to translate.
-    subject_id: MetaSDFNodeID,
+    pub subject_id: MetaSDFNodeID,
 }
 
 /// Rotation of the SDFs or transforms in the second input to make their y-axis
@@ -477,9 +624,9 @@ pub struct MetaRayTranslationToSurface {
 #[derive(Clone, Debug)]
 pub struct MetaRotationToGradient {
     /// ID of the SDF node whose gradient to align with.
-    gradient_sdf_id: MetaSDFNodeID,
+    pub gradient_sdf_id: MetaSDFNodeID,
     /// ID of the node containing SDFs or transforms to rotate.
-    subject_id: MetaSDFNodeID,
+    pub subject_id: MetaSDFNodeID,
 }
 
 /// Application of the transforms in the second input to the SDFs in the first
@@ -492,9 +639,9 @@ pub struct MetaRotationToGradient {
 #[derive(Clone, Debug)]
 pub struct MetaTransformApplication {
     /// ID of the SDF or SDF group node to scatter.
-    sdf_id: MetaSDFNodeID,
+    pub sdf_id: MetaSDFNodeID,
     /// ID of the transform or transform group node to apply.
-    transform_id: MetaSDFNodeID,
+    pub transform_id: MetaSDFNodeID,
 }
 
 /// Random selection of SDFs or transforms from a group.
@@ -505,14 +652,16 @@ pub struct MetaTransformApplication {
 #[derive(Clone, Debug)]
 pub struct MetaStochasticSelection {
     /// ID of the child group node to select from.
-    child_id: MetaSDFNodeID,
-    /// Minimum and maximum number of items to select initially.
-    pick_count: RangeInclusive<u32>,
+    pub child_id: MetaSDFNodeID,
+    /// Minimum number of items to select initially.
+    pub min_pick_count: u32,
+    /// Maximum number of items to select initially.
+    pub max_pick_count: u32,
     /// Probability that each of the initially selected items will be kept in
     /// the final selection.
-    pick_probability: f32,
+    pub pick_probability: f32,
     /// Seed for random selection.
-    seed: u32,
+    pub seed: u32,
 }
 
 /// How to combine the current transformation with the input transformation.
@@ -533,8 +682,6 @@ pub enum SphereSurfaceRotation {
     Identity,
     Radial,
 }
-
-type NodeRng = Pcg64Mcg;
 
 impl<A: Allocator> MetaSDFGraph<A> {
     pub fn new_in(alloc: A, seed: u64) -> Self {
@@ -575,6 +722,8 @@ impl<A: Allocator> MetaSDFGraph<A> {
 
         let mut stable_seeds = AVec::new_in(arena);
         stable_seeds.resize(self.nodes.len(), 0u64);
+
+        let mut param_scratch = ParamScratch::new_in(arena);
 
         let mut operation_stack = AVec::with_capacity_in(3 * self.nodes.len(), arena);
 
@@ -699,7 +848,8 @@ impl<A: Allocator> MetaSDFGraph<A> {
 
                     let seed = splitmix::random_u64_from_two_states(self.seed, stable_seed);
 
-                    outputs[node_idx] = node.resolve(arena, &mut graph, &outputs, seed)?;
+                    outputs[node_idx] =
+                        node.resolve(arena, &mut param_scratch, &mut graph, &outputs, seed)?;
                 }
             }
         }
@@ -729,349 +879,7 @@ impl<A: Allocator> MetaSDFNodeOutput<A> {
     }
 }
 
-impl DiscreteParamRange {
-    pub fn new(min: u32, max: u32) -> Self {
-        assert!(min <= max);
-        Self { min, max }
-    }
-
-    fn pick_value(&self, rng: &mut NodeRng) -> u32 {
-        rng.random_range(self.min..=self.max)
-    }
-}
-
-impl From<u32> for DiscreteParamRange {
-    fn from(value: u32) -> Self {
-        Self::new(value, value)
-    }
-}
-
-impl ContParamRange {
-    pub fn new(min: f32, max: f32) -> Self {
-        assert!(min <= max);
-        Self { min, max }
-    }
-
-    fn pick_value(&self, rng: &mut NodeRng) -> f32 {
-        rng.random_range(self.min..=self.max)
-    }
-}
-
-impl From<f32> for ContParamRange {
-    fn from(value: f32) -> Self {
-        Self::new(value, value)
-    }
-}
-
 impl MetaSDFNode {
-    pub fn new_box_sdf(extents: [ContParamRange; 3], seed: u32) -> Self {
-        assert!(extents[0].min >= 0.0);
-        assert!(extents[1].min >= 0.0);
-        assert!(extents[2].min >= 0.0);
-        Self::BoxSDF(MetaBoxSDF { extents, seed })
-    }
-
-    pub fn new_sphere_sdf(radius: ContParamRange, seed: u32) -> Self {
-        assert!(radius.min >= 0.0);
-        Self::SphereSDF(MetaSphereSDF { radius, seed })
-    }
-
-    pub fn new_capsule_sdf(
-        segment_length: ContParamRange,
-        radius: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        assert!(segment_length.min >= 0.0);
-        assert!(radius.min >= 0.0);
-        Self::CapsuleSDF(MetaCapsuleSDF {
-            segment_length,
-            radius,
-            seed,
-        })
-    }
-
-    pub fn new_gradient_noise_sdf(
-        extents: [ContParamRange; 3],
-        noise_frequency: ContParamRange,
-        noise_threshold: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        assert!(extents[0].min >= 0.0);
-        assert!(extents[1].min >= 0.0);
-        assert!(extents[2].min >= 0.0);
-        Self::GradientNoiseSDF(MetaGradientNoiseSDF {
-            extents,
-            noise_frequency,
-            noise_threshold,
-            seed,
-        })
-    }
-
-    pub fn new_sdf_translation(
-        child_id: MetaSDFNodeID,
-        translation: [ContParamRange; 3],
-        seed: u32,
-    ) -> Self {
-        Self::SDFTranslation(MetaSDFTranslation {
-            child_id,
-            translation,
-            seed,
-        })
-    }
-
-    pub fn new_sdf_rotation(
-        child_id: MetaSDFNodeID,
-        roll: ContParamRange,
-        pitch: ContParamRange,
-        yaw: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        Self::SDFRotation(MetaSDFRotation {
-            child_id,
-            roll,
-            pitch,
-            yaw,
-            seed,
-        })
-    }
-
-    pub fn new_sdf_scaling(child_id: MetaSDFNodeID, scaling: ContParamRange, seed: u32) -> Self {
-        assert!(scaling.min > 0.0);
-        Self::SDFScaling(MetaSDFScaling {
-            child_id,
-            scaling,
-            seed,
-        })
-    }
-
-    pub fn new_multifractal_noise(
-        child_id: MetaSDFNodeID,
-        octaves: DiscreteParamRange,
-        frequency: ContParamRange,
-        lacunarity: ContParamRange,
-        persistence: ContParamRange,
-        amplitude: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        Self::MultifractalNoiseSDFModifier(MetaMultifractalNoiseSDFModifier {
-            child_id,
-            octaves,
-            frequency,
-            lacunarity,
-            persistence,
-            amplitude,
-            seed,
-        })
-    }
-
-    pub fn new_multiscale_sphere(
-        child_id: MetaSDFNodeID,
-        octaves: DiscreteParamRange,
-        max_scale: ContParamRange,
-        persistence: ContParamRange,
-        inflation: ContParamRange,
-        intersection_smoothness: ContParamRange,
-        union_smoothness: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        Self::MultiscaleSphereSDFModifier(MetaMultiscaleSphereSDFModifier {
-            child_id,
-            octaves,
-            max_scale,
-            persistence,
-            inflation,
-            intersection_smoothness,
-            union_smoothness,
-            seed,
-        })
-    }
-
-    pub fn new_sdf_union(
-        child_1_id: MetaSDFNodeID,
-        child_2_id: MetaSDFNodeID,
-        smoothness: f32,
-    ) -> Self {
-        assert!(smoothness >= 0.0);
-        Self::SDFUnion(MetaSDFUnion {
-            child_1_id,
-            child_2_id,
-            smoothness,
-        })
-    }
-
-    pub fn new_sdf_subtraction(
-        child_1_id: MetaSDFNodeID,
-        child_2_id: MetaSDFNodeID,
-        smoothness: f32,
-    ) -> Self {
-        assert!(smoothness >= 0.0);
-        Self::SDFSubtraction(MetaSDFSubtraction {
-            child_1_id,
-            child_2_id,
-            smoothness,
-        })
-    }
-
-    pub fn new_sdf_intersection(
-        child_1_id: MetaSDFNodeID,
-        child_2_id: MetaSDFNodeID,
-        smoothness: f32,
-    ) -> Self {
-        assert!(smoothness >= 0.0);
-        Self::SDFIntersection(MetaSDFIntersection {
-            child_1_id,
-            child_2_id,
-            smoothness,
-        })
-    }
-
-    pub fn new_sdf_group_union(child_id: MetaSDFNodeID, smoothness: f32) -> Self {
-        assert!(smoothness >= 0.0);
-        Self::SDFGroupUnion(MetaSDFGroupUnion {
-            child_id,
-            smoothness,
-        })
-    }
-
-    pub fn new_stratified_grid_transforms(
-        shape: [DiscreteParamRange; 3],
-        cell_extents: [ContParamRange; 3],
-        points_per_grid_cell: DiscreteParamRange,
-        jitter_fraction: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        assert!(cell_extents[0].min >= 0.0);
-        assert!(cell_extents[1].min >= 0.0);
-        assert!(cell_extents[2].min >= 0.0);
-        assert!(jitter_fraction.min >= 0.0);
-        assert!(jitter_fraction.max <= 1.0);
-        Self::StratifiedGridTransforms(MetaStratifiedGridTransforms {
-            shape,
-            cell_extents,
-            points_per_grid_cell,
-            jitter_fraction,
-            seed,
-        })
-    }
-
-    pub fn new_sphere_surface_transforms(
-        count: DiscreteParamRange,
-        radius: ContParamRange,
-        jitter_fraction: ContParamRange,
-        rotation: SphereSurfaceRotation,
-        seed: u32,
-    ) -> Self {
-        assert!(radius.min >= 0.0);
-        assert!(jitter_fraction.min >= 0.0);
-        assert!(jitter_fraction.max <= 1.0);
-        Self::SphereSurfaceTransforms(MetaSphereSurfaceTransforms {
-            count,
-            radius,
-            jitter_fraction,
-            rotation,
-            seed,
-        })
-    }
-
-    pub fn new_transform_translation(
-        child_id: MetaSDFNodeID,
-        composition: CompositionMode,
-        translation: [ContParamRange; 3],
-        seed: u32,
-    ) -> Self {
-        Self::TransformTranslation(MetaTransformTranslation {
-            child_id,
-            composition,
-            translation,
-            seed,
-        })
-    }
-
-    pub fn new_transform_rotation(
-        child_id: MetaSDFNodeID,
-        composition: CompositionMode,
-        roll: ContParamRange,
-        pitch: ContParamRange,
-        yaw: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        Self::TransformRotation(MetaTransformRotation {
-            child_id,
-            composition,
-            roll,
-            pitch,
-            yaw,
-            seed,
-        })
-    }
-
-    pub fn new_transform_scaling(
-        child_id: MetaSDFNodeID,
-        composition: CompositionMode,
-        scaling: ContParamRange,
-        seed: u32,
-    ) -> Self {
-        Self::TransformScaling(MetaTransformScaling {
-            child_id,
-            composition,
-            scaling,
-            seed,
-        })
-    }
-
-    pub fn new_closest_translation_to_surface(
-        surface_sdf_id: MetaSDFNodeID,
-        subject_id: MetaSDFNodeID,
-    ) -> Self {
-        Self::ClosestTranslationToSurface(MetaClosestTranslationToSurface {
-            surface_sdf_id,
-            subject_id,
-        })
-    }
-
-    pub fn new_ray_translation_to_surface(
-        surface_sdf_id: MetaSDFNodeID,
-        subject_id: MetaSDFNodeID,
-    ) -> Self {
-        Self::RayTranslationToSurface(MetaRayTranslationToSurface {
-            surface_sdf_id,
-            subject_id,
-        })
-    }
-
-    pub fn new_rotation_to_gradient(
-        gradient_sdf_id: MetaSDFNodeID,
-        subject_id: MetaSDFNodeID,
-    ) -> Self {
-        Self::RotationToGradient(MetaRotationToGradient {
-            gradient_sdf_id,
-            subject_id,
-        })
-    }
-
-    pub fn new_scattering(sdf_id: MetaSDFNodeID, transform_id: MetaSDFNodeID) -> Self {
-        Self::TransformApplication(MetaTransformApplication {
-            sdf_id,
-            transform_id,
-        })
-    }
-
-    pub fn new_stochastic_selection(
-        child_id: MetaSDFNodeID,
-        pick_count: RangeInclusive<u32>,
-        pick_probability: f32,
-        seed: u32,
-    ) -> Self {
-        assert!(pick_probability >= 0.0);
-        assert!(pick_probability <= 1.0);
-        Self::StochasticSelection(MetaStochasticSelection {
-            child_id,
-            pick_count,
-            pick_probability,
-            seed,
-        })
-    }
-
     /// Combines a node type tag, node seed parameter (for applicable nodes) and
     /// the stable seeds of the child nodes to obtain a stable seed that will
     /// only change due to changes in the seeding, types or topology of the
@@ -1192,6 +1000,7 @@ impl MetaSDFNode {
     fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
@@ -1200,86 +1009,198 @@ impl MetaSDFNode {
         A: Allocator + Copy,
     {
         match self {
-            Self::BoxSDF(node) => Ok(node.resolve(graph, seed)),
-            Self::SphereSDF(node) => Ok(node.resolve(graph, seed)),
-            Self::CapsuleSDF(node) => Ok(node.resolve(graph, seed)),
-            Self::GradientNoiseSDF(node) => Ok(node.resolve(graph, seed)),
-            Self::SDFTranslation(node) => node.resolve(arena, graph, outputs, seed),
-            Self::SDFRotation(node) => node.resolve(arena, graph, outputs, seed),
-            Self::SDFScaling(node) => node.resolve(arena, graph, outputs, seed),
-            Self::MultifractalNoiseSDFModifier(node) => node.resolve(arena, graph, outputs, seed),
-            Self::MultiscaleSphereSDFModifier(node) => node.resolve(arena, graph, outputs, seed),
-            Self::SDFUnion(node) => node.resolve(graph, outputs),
-            Self::SDFSubtraction(node) => node.resolve(graph, outputs),
-            Self::SDFIntersection(node) => node.resolve(graph, outputs),
-            Self::SDFGroupUnion(node) => node.resolve(arena, graph, outputs),
-            Self::StratifiedGridTransforms(node) => Ok(node.resolve(arena, seed)),
-            Self::SphereSurfaceTransforms(node) => Ok(node.resolve(arena, seed)),
-            Self::TransformTranslation(node) => node.resolve(arena, outputs, seed),
-            Self::TransformRotation(node) => node.resolve(arena, outputs, seed),
-            Self::TransformScaling(node) => node.resolve(arena, outputs, seed),
-            Self::ClosestTranslationToSurface(node) => node.resolve(arena, graph, outputs),
-            Self::RayTranslationToSurface(node) => node.resolve(arena, graph, outputs),
-            Self::RotationToGradient(node) => node.resolve(arena, graph, outputs),
-            Self::TransformApplication(node) => node.resolve(arena, graph, outputs),
+            Self::BoxSDF(node) => node
+                .resolve(param_scratch, graph, seed)
+                .context("Failed to resolve BoxSDF node"),
+            Self::SphereSDF(node) => node
+                .resolve(param_scratch, graph, seed)
+                .context("Failed to resolve SphereSDF node"),
+            Self::CapsuleSDF(node) => node
+                .resolve(param_scratch, graph, seed)
+                .context("Failed to resolve CapsuleSDF node"),
+            Self::GradientNoiseSDF(node) => node
+                .resolve(param_scratch, graph, seed)
+                .context("Failed to resolve GradientNoiseSDF node"),
+            Self::SDFTranslation(node) => node
+                .resolve(arena, param_scratch, graph, outputs, seed)
+                .context("Failed to resolve SDFTranslation node"),
+            Self::SDFRotation(node) => node
+                .resolve(arena, param_scratch, graph, outputs, seed)
+                .context("Failed to resolve SDFRotation node"),
+            Self::SDFScaling(node) => node
+                .resolve(arena, param_scratch, graph, outputs, seed)
+                .context("Failed to resolve SDFScaling node"),
+            Self::MultifractalNoiseSDFModifier(node) => node
+                .resolve(arena, param_scratch, graph, outputs, seed)
+                .context("Failed to resolve MultifractalNoiseSDFModifier node"),
+            Self::MultiscaleSphereSDFModifier(node) => node
+                .resolve(arena, param_scratch, graph, outputs, seed)
+                .context("Failed to resolve MultiscaleSphereSDFModifier node"),
+            Self::SDFUnion(node) => node
+                .resolve(graph, outputs)
+                .context("Failed to resolve SDFUnion node"),
+            Self::SDFSubtraction(node) => node
+                .resolve(graph, outputs)
+                .context("Failed to resolve SDFSubtraction node"),
+            Self::SDFIntersection(node) => node
+                .resolve(graph, outputs)
+                .context("Failed to resolve SDFIntersection node"),
+            Self::SDFGroupUnion(node) => node
+                .resolve(arena, graph, outputs)
+                .context("Failed to resolve SDFGroupUnion node"),
+            Self::StratifiedGridTransforms(node) => node
+                .resolve(param_scratch, arena, seed)
+                .context("Failed to resolve StratifiedGridTransforms node"),
+            Self::SphereSurfaceTransforms(node) => node
+                .resolve(param_scratch, arena, seed)
+                .context("Failed to resolve SphereSurfaceTransforms node"),
+            Self::TransformTranslation(node) => node
+                .resolve(arena, param_scratch, outputs, seed)
+                .context("Failed to resolve TransformTranslation node"),
+            Self::TransformRotation(node) => node
+                .resolve(arena, param_scratch, outputs, seed)
+                .context("Failed to resolve TransformRotation node"),
+            Self::TransformScaling(node) => node
+                .resolve(arena, param_scratch, outputs, seed)
+                .context("Failed to resolve TransformScaling node"),
+            Self::ClosestTranslationToSurface(node) => node
+                .resolve(arena, graph, outputs)
+                .context("Failed to resolve ClosestTranslationToSurface node"),
+            Self::RayTranslationToSurface(node) => node
+                .resolve(arena, graph, outputs)
+                .context("Failed to resolve RayTranslationToSurface node"),
+            Self::RotationToGradient(node) => node
+                .resolve(arena, graph, outputs)
+                .context("Failed to resolve RotationToGradient node"),
+            Self::TransformApplication(node) => node
+                .resolve(arena, graph, outputs)
+                .context("Failed to resolve TransformApplication node"),
             Self::StochasticSelection(node) => Ok(node.resolve(arena, outputs, seed)),
         }
     }
 }
 
 impl MetaBoxSDF {
-    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed);
-        let extents = self.extents.map(|range| range.pick_value(&mut rng));
+    fn resolve<A>(
+        &self,
+        param_scratch: &mut ParamScratch<A>,
+        graph: &mut SDFGraph<A>,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let mut rng = create_param_rng(seed);
+
+        let MetaBoxParams {
+            extent_x,
+            extent_y,
+            extent_z,
+        } = self.sample_params(param_scratch, &mut rng)?;
+
+        let extents = [extent_x.max(0.0), extent_y.max(0.0), extent_z.max(0.0)];
+
         let node_id = graph.add_node(SDFNode::new_box(extents));
-        MetaSDFNodeOutput::SingleSDF(Some(node_id))
+
+        Ok(MetaSDFNodeOutput::SingleSDF(Some(node_id)))
     }
 }
 
 impl MetaSphereSDF {
-    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed);
-        let radius = self.radius.pick_value(&mut rng);
+    fn resolve<A>(
+        &self,
+        param_scratch: &mut ParamScratch<A>,
+        graph: &mut SDFGraph<A>,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let mut rng = create_param_rng(seed);
+
+        let MetaSphereParams { radius } = self.sample_params(param_scratch, &mut rng)?;
+
+        let radius = radius.max(0.0);
+
         let node_id = graph.add_node(SDFNode::new_sphere(radius));
-        MetaSDFNodeOutput::SingleSDF(Some(node_id))
+
+        Ok(MetaSDFNodeOutput::SingleSDF(Some(node_id)))
     }
 }
 
 impl MetaCapsuleSDF {
-    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed);
-        let segment_length = self.segment_length.pick_value(&mut rng);
-        let radius = self.radius.pick_value(&mut rng);
+    fn resolve<A>(
+        &self,
+        param_scratch: &mut ParamScratch<A>,
+        graph: &mut SDFGraph<A>,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let mut rng = create_param_rng(seed);
+
+        let MetaCapsuleParams {
+            segment_length,
+            radius,
+        } = self.sample_params(param_scratch, &mut rng)?;
+
+        let segment_length = segment_length.max(0.0);
+        let radius = radius.max(0.0);
+
         let node_id = graph.add_node(SDFNode::new_capsule(segment_length, radius));
-        MetaSDFNodeOutput::SingleSDF(Some(node_id))
+
+        Ok(MetaSDFNodeOutput::SingleSDF(Some(node_id)))
     }
 }
 
 impl MetaGradientNoiseSDF {
-    fn resolve<A: Allocator>(&self, graph: &mut SDFGraph<A>, seed: u64) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed);
-        let extents = self.extents.map(|range| range.pick_value(&mut rng));
-        let noise_frequency = self.noise_frequency.pick_value(&mut rng);
-        let noise_threshold = self.noise_threshold.pick_value(&mut rng);
+    fn resolve<A>(
+        &self,
+        param_scratch: &mut ParamScratch<A>,
+        graph: &mut SDFGraph<A>,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let mut rng = create_param_rng(seed);
+
+        let MetaGradientNoiseParams {
+            extent_x,
+            extent_y,
+            extent_z,
+            noise_frequency,
+            noise_threshold,
+        } = self.sample_params(param_scratch, &mut rng)?;
+
+        let extents = [extent_x.max(0.0), extent_y.max(0.0), extent_z.max(0.0)];
+
         let seed = rng.random();
+
         let node_id = graph.add_node(SDFNode::new_gradient_noise(
             extents,
             noise_frequency,
             noise_threshold,
             seed,
         ));
-        MetaSDFNodeOutput::SingleSDF(Some(node_id))
+
+        Ok(MetaSDFNodeOutput::SingleSDF(Some(node_id)))
     }
 }
 
 impl MetaSDFTranslation {
-    fn resolve<A: Allocator>(
+    fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>> {
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
         resolve_unary_sdf_op(
             arena,
             graph,
@@ -1287,21 +1208,32 @@ impl MetaSDFTranslation {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
-                let translation = self.translation.map(|range| range.pick_value(rng));
-                SDFNode::new_translation(input_node_id, translation.into())
+                let MetaSDFTranslationParams {
+                    translation_x,
+                    translation_y,
+                    translation_z,
+                } = self.sample_params(param_scratch, rng)?;
+
+                let translation = vector![translation_x, translation_y, translation_z,];
+
+                Ok(SDFNode::new_translation(input_node_id, translation))
             },
         )
     }
 }
 
 impl MetaSDFRotation {
-    fn resolve<A: Allocator>(
+    fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>> {
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
         resolve_unary_sdf_op(
             arena,
             graph,
@@ -1309,26 +1241,30 @@ impl MetaSDFRotation {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
-                let roll = self.roll.pick_value(rng);
-                let pitch = self.pitch.pick_value(rng);
-                let yaw = self.yaw.pick_value(rng);
-                SDFNode::new_rotation(
+                let MetaSDFRotationParams { roll, pitch, yaw } =
+                    self.sample_params(param_scratch, rng)?;
+
+                Ok(SDFNode::new_rotation(
                     input_node_id,
                     UnitQuaternion::from_euler_angles(roll, pitch, yaw),
-                )
+                ))
             },
         )
     }
 }
 
 impl MetaSDFScaling {
-    fn resolve<A: Allocator>(
+    fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>> {
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
         resolve_unary_sdf_op(
             arena,
             graph,
@@ -1336,35 +1272,46 @@ impl MetaSDFScaling {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
-                let scaling = self.scaling.pick_value(rng);
-                SDFNode::new_scaling(input_node_id, scaling)
+                let MetaSDFScalingParams { scaling } = self.sample_params(param_scratch, rng)?;
+
+                let scaling = scaling.max(f32::EPSILON);
+
+                Ok(SDFNode::new_scaling(input_node_id, scaling))
             },
         )
     }
 }
 
 impl MetaMultifractalNoiseSDFModifier {
-    fn resolve<A: Allocator>(
+    fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>> {
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
         resolve_unary_sdf_op(
             arena,
             graph,
-            "MultifractalNoise",
+            "MultifractalNoiseSDFModifier",
             seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
-                let octaves = self.octaves.pick_value(rng);
-                let frequency = self.frequency.pick_value(rng);
-                let lacunarity = self.lacunarity.pick_value(rng);
-                let persistence = self.persistence.pick_value(rng);
-                let amplitude = self.amplitude.pick_value(rng);
+                let MetaMultifractalNoiseParams {
+                    octaves,
+                    frequency,
+                    lacunarity,
+                    persistence,
+                    amplitude,
+                } = self.sample_params(param_scratch, rng)?;
+
                 let seed = rng.random();
-                SDFNode::new_multifractal_noise(
+
+                Ok(SDFNode::new_multifractal_noise(
                     input_node_id,
                     octaves,
                     frequency,
@@ -1372,35 +1319,43 @@ impl MetaMultifractalNoiseSDFModifier {
                     persistence,
                     amplitude,
                     seed,
-                )
+                ))
             },
         )
     }
 }
 
 impl MetaMultiscaleSphereSDFModifier {
-    fn resolve<A: Allocator>(
+    fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         graph: &mut SDFGraph<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>> {
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
         resolve_unary_sdf_op(
             arena,
             graph,
-            "MultiscaleSphere",
+            "MultiscaleSphereSDFModifier",
             seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
-                let octaves = self.octaves.pick_value(rng);
-                let max_scale = self.max_scale.pick_value(rng);
-                let persistence = self.persistence.pick_value(rng);
-                let inflation = self.inflation.pick_value(rng);
-                let intersection_smoothness = self.intersection_smoothness.pick_value(rng);
-                let union_smoothness = self.union_smoothness.pick_value(rng);
+                let MetaMultiscaleSphereParams {
+                    octaves,
+                    max_scale,
+                    persistence,
+                    inflation,
+                    intersection_smoothness,
+                    union_smoothness,
+                } = self.sample_params(param_scratch, rng)?;
+
                 let seed = rng.random();
-                SDFNode::new_multiscale_sphere(
+
+                Ok(SDFNode::new_multiscale_sphere(
                     input_node_id,
                     octaves,
                     max_scale,
@@ -1409,7 +1364,7 @@ impl MetaMultiscaleSphereSDFModifier {
                     intersection_smoothness,
                     union_smoothness,
                     seed,
-                )
+                ))
             },
         )
     }
@@ -1449,7 +1404,7 @@ impl MetaSDFUnion {
                 let output_node_id = graph.add_node(SDFNode::new_union(
                     input_node_1_id,
                     input_node_2_id,
-                    self.smoothness,
+                    self.smoothness.max(0.0),
                 ));
                 Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
             }
@@ -1490,7 +1445,7 @@ impl MetaSDFSubtraction {
                 let output_node_id = graph.add_node(SDFNode::new_subtraction(
                     input_node_1_id,
                     input_node_2_id,
-                    self.smoothness,
+                    self.smoothness.max(0.0),
                 ));
                 Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
             }
@@ -1530,7 +1485,7 @@ impl MetaSDFIntersection {
                 let output_node_id = graph.add_node(SDFNode::new_intersection(
                     input_node_1_id,
                     input_node_2_id,
-                    self.smoothness,
+                    self.smoothness.max(0.0),
                 ));
                 Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
             }
@@ -1560,7 +1515,7 @@ impl MetaSDFGroupUnion {
                         graph.add_node(SDFNode::new_union(
                             child_node_1,
                             child_node_2,
-                            self.smoothness,
+                            self.smoothness.max(0.0),
                         ))
                     },
                 );
@@ -1577,18 +1532,41 @@ impl MetaSDFGroupUnion {
 }
 
 impl MetaStratifiedGridTransforms {
-    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed);
-        let shape = self.shape.map(|range| range.pick_value(&mut rng));
-        let cell_extents = self.cell_extents.map(|range| range.pick_value(&mut rng));
-        let points_per_grid_cell = self.points_per_grid_cell.pick_value(&mut rng);
-        let jitter_fraction = self.jitter_fraction.pick_value(&mut rng);
+    fn resolve<A>(
+        &self,
+        param_scratch: &mut ParamScratch<A>,
+        arena: A,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let mut rng = create_param_rng(seed);
+
+        let MetaStratifiedGridParams {
+            shape_x,
+            shape_y,
+            shape_z,
+            cell_extent_x,
+            cell_extent_y,
+            cell_extent_z,
+            points_per_grid_cell,
+            jitter_fraction,
+        } = self.sample_params(param_scratch, &mut rng)?;
+
+        let shape = [shape_x, shape_y, shape_z];
+        let cell_extents = [
+            cell_extent_x.max(0.0),
+            cell_extent_y.max(0.0),
+            cell_extent_z.max(0.0),
+        ];
+        let jitter_fraction = jitter_fraction.clamp(0.0, 1.0);
 
         let grid_cell_count = (shape[0] as usize) * (shape[1] as usize) * (shape[2] as usize);
         let point_count = grid_cell_count * points_per_grid_cell as usize;
 
         if point_count == 0 {
-            return MetaSDFNodeOutput::TransformGroup(AVec::new_in(arena));
+            return Ok(MetaSDFNodeOutput::TransformGroup(AVec::new_in(arena)));
         }
 
         let grid_center: [_; 3] = array::from_fn(|i| {
@@ -1630,19 +1608,34 @@ impl MetaStratifiedGridTransforms {
             }
         }
 
-        MetaSDFNodeOutput::TransformGroup(translations)
+        Ok(MetaSDFNodeOutput::TransformGroup(translations))
     }
 }
 
 impl MetaSphereSurfaceTransforms {
-    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> MetaSDFNodeOutput<A> {
-        let mut rng = create_rng(seed);
-        let count = self.count.pick_value(&mut rng) as usize;
-        let radius = self.radius.pick_value(&mut rng);
-        let jitter_fraction = self.jitter_fraction.pick_value(&mut rng);
+    fn resolve<A>(
+        &self,
+        param_scratch: &mut ParamScratch<A>,
+        arena: A,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        let mut rng = create_param_rng(seed);
+
+        let MetaSphereSurfaceParams {
+            count,
+            radius,
+            jitter_fraction,
+        } = self.sample_params(param_scratch, &mut rng)?;
+
+        let count = count as usize;
+        let radius = radius.max(0.0);
+        let jitter_fraction = jitter_fraction.clamp(0.0, 1.0);
 
         if count == 0 {
-            return MetaSDFNodeOutput::TransformGroup(AVec::new_in(arena));
+            return Ok(MetaSDFNodeOutput::TransformGroup(AVec::new_in(arena)));
         }
 
         let max_jitter_angle = Self::compute_max_jitter_angle(count, jitter_fraction);
@@ -1669,7 +1662,7 @@ impl MetaSphereSurfaceTransforms {
             ));
         }
 
-        MetaSDFNodeOutput::TransformGroup(transforms)
+        Ok(MetaSDFNodeOutput::TransformGroup(transforms))
     }
 
     fn compute_max_jitter_angle(count: usize, jitter_fraction: f32) -> f32 {
@@ -1691,6 +1684,7 @@ impl MetaTransformTranslation {
     fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>>
@@ -1703,12 +1697,18 @@ impl MetaTransformTranslation {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_transform| {
-                let translation: Translation3<f32> =
-                    self.translation.map(|range| range.pick_value(rng)).into();
-                match self.composition {
+                let MetaTransformTranslationParams {
+                    translation_x,
+                    translation_y,
+                    translation_z,
+                } = self.sample_params(param_scratch, rng)?;
+
+                let translation = Translation3::from([translation_x, translation_y, translation_z]);
+
+                Ok(match self.composition {
                     CompositionMode::Pre => input_transform * translation,
                     CompositionMode::Post => translation * input_transform,
-                }
+                })
             },
         )
     }
@@ -1718,6 +1718,7 @@ impl MetaTransformRotation {
     fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>>
@@ -1730,14 +1731,15 @@ impl MetaTransformRotation {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_transform| {
-                let roll = self.roll.pick_value(rng);
-                let pitch = self.pitch.pick_value(rng);
-                let yaw = self.yaw.pick_value(rng);
+                let MetaTransformRotationParams { roll, pitch, yaw } =
+                    self.sample_params(param_scratch, rng)?;
+
                 let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
-                match self.composition {
+
+                Ok(match self.composition {
                     CompositionMode::Pre => input_transform * rotation,
                     CompositionMode::Post => rotation * input_transform,
-                }
+                })
             },
         )
     }
@@ -1747,6 +1749,7 @@ impl MetaTransformScaling {
     fn resolve<A>(
         &self,
         arena: A,
+        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>>
@@ -1759,11 +1762,15 @@ impl MetaTransformScaling {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_transform| {
-                let scaling = self.scaling.pick_value(rng);
-                match self.composition {
+                let MetaTransformScalingParams { scaling } =
+                    self.sample_params(param_scratch, rng)?;
+
+                let scaling = scaling.max(f32::EPSILON);
+
+                Ok(match self.composition {
                     CompositionMode::Pre => input_transform.prepend_scaling(scaling),
                     CompositionMode::Post => input_transform.append_scaling(scaling),
-                }
+                })
             },
         )
     }
@@ -2265,10 +2272,13 @@ impl MetaStochasticSelection {
     where
         A: Allocator + Copy,
     {
-        let mut rng = create_rng(seed);
+        let mut rng = create_param_rng(seed);
+
+        let pick_count = self.min_pick_count..=self.max_pick_count.max(self.min_pick_count);
+        let pick_probability = self.pick_probability.clamp(0.0, 1.0);
 
         let mut single_is_selected =
-            || *self.pick_count.start() > 0 && rng.random_range(0.0..1.0) < self.pick_probability;
+            || *pick_count.start() > 0 && rng.random_range(0.0..1.0) < pick_probability;
 
         match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::SingleSDF(None) => MetaSDFNodeOutput::SingleSDF(None),
@@ -2283,9 +2293,9 @@ impl MetaStochasticSelection {
             }
             MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
                 let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
-                let count = rng.random_range(self.pick_count.clone());
+                let count = rng.random_range(pick_count.clone());
                 for &input_node_id in input_node_ids.choose_multiple(&mut rng, count as usize) {
-                    if rng.random_range(0.0..1.0) < self.pick_probability {
+                    if rng.random_range(0.0..1.0) < pick_probability {
                         output_node_ids.push(input_node_id);
                     }
                 }
@@ -2293,9 +2303,9 @@ impl MetaStochasticSelection {
             }
             MetaSDFNodeOutput::TransformGroup(input_transforms) => {
                 let mut output_transforms = AVec::with_capacity_in(input_transforms.len(), arena);
-                let count = rng.random_range(self.pick_count.clone());
+                let count = rng.random_range(pick_count.clone());
                 for input_transform in input_transforms.choose_multiple(&mut rng, count as usize) {
-                    if rng.random_range(0.0..1.0) < self.pick_probability {
+                    if rng.random_range(0.0..1.0) < pick_probability {
                         output_transforms.push(*input_transform);
                     }
                 }
@@ -2325,30 +2335,26 @@ impl SphereSurfaceRotation {
     }
 }
 
-fn create_rng(seed: u64) -> NodeRng {
-    NodeRng::seed_from_u64(seed)
-}
-
 fn resolve_unary_sdf_op<A: Allocator>(
     arena: A,
     graph: &mut SDFGraph<A>,
     name: &str,
     seed: u64,
     child_output: &MetaSDFNodeOutput<A>,
-    create_atomic_node: impl Fn(&mut NodeRng, SDFNodeID) -> SDFNode,
+    mut create_atomic_node: impl FnMut(&mut ParamRng, SDFNodeID) -> Result<SDFNode>,
 ) -> Result<MetaSDFNodeOutput<A>> {
     match child_output {
         MetaSDFNodeOutput::SingleSDF(None) => Ok(MetaSDFNodeOutput::SingleSDF(None)),
         MetaSDFNodeOutput::SingleSDF(Some(input_node_id)) => {
-            let mut rng = create_rng(seed);
-            let output_node_id = graph.add_node(create_atomic_node(&mut rng, *input_node_id));
+            let mut rng = create_param_rng(seed);
+            let output_node_id = graph.add_node(create_atomic_node(&mut rng, *input_node_id)?);
             Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
         }
         MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
             let output_node_ids =
                 unary_sdf_group_op(arena, graph, seed, input_node_ids, |rng, input_node_id| {
                     create_atomic_node(rng, input_node_id)
-                });
+                })?;
             Ok(MetaSDFNodeOutput::SDFGroup(output_node_ids))
         }
         child_output => {
@@ -2365,14 +2371,14 @@ fn unary_sdf_group_op<A: Allocator>(
     graph: &mut SDFGraph<A>,
     seed: u64,
     input_node_ids: &[SDFNodeID],
-    create_output_node: impl Fn(&mut NodeRng, SDFNodeID) -> SDFNode,
-) -> AVec<SDFNodeID, A> {
-    let mut rng = create_rng(seed);
+    mut create_output_node: impl FnMut(&mut ParamRng, SDFNodeID) -> Result<SDFNode>,
+) -> Result<AVec<SDFNodeID, A>> {
+    let mut rng = create_param_rng(seed);
     let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
     for input_node_id in input_node_ids {
-        output_node_ids.push(graph.add_node(create_output_node(&mut rng, *input_node_id)));
+        output_node_ids.push(graph.add_node(create_output_node(&mut rng, *input_node_id)?));
     }
-    output_node_ids
+    Ok(output_node_ids)
 }
 
 fn resolve_unary_transform_op<A: Allocator>(
@@ -2380,20 +2386,20 @@ fn resolve_unary_transform_op<A: Allocator>(
     name: &str,
     seed: u64,
     child_output: &MetaSDFNodeOutput<A>,
-    create_transform: impl Fn(&mut NodeRng, &Similarity3<f32>) -> Similarity3<f32>,
+    mut create_transform: impl FnMut(&mut ParamRng, &Similarity3<f32>) -> Result<Similarity3<f32>>,
 ) -> Result<MetaSDFNodeOutput<A>> {
     match child_output {
         MetaSDFNodeOutput::SingleTransform(None) => Ok(MetaSDFNodeOutput::SingleTransform(None)),
         MetaSDFNodeOutput::SingleTransform(Some(input_transform)) => {
-            let mut rng = create_rng(seed);
-            let output_transform = create_transform(&mut rng, input_transform);
+            let mut rng = create_param_rng(seed);
+            let output_transform = create_transform(&mut rng, input_transform)?;
             Ok(MetaSDFNodeOutput::SingleTransform(Some(output_transform)))
         }
         MetaSDFNodeOutput::TransformGroup(input_transforms) => {
             let output_transforms =
                 unary_transform_group_op(arena, seed, input_transforms, |rng, input_transform| {
                     create_transform(rng, input_transform)
-                });
+                })?;
             Ok(MetaSDFNodeOutput::TransformGroup(output_transforms))
         }
         child_output => {
@@ -2409,14 +2415,14 @@ fn unary_transform_group_op<A: Allocator>(
     arena: A,
     seed: u64,
     input_transforms: &[Similarity3<f32>],
-    create_transform: impl Fn(&mut NodeRng, &Similarity3<f32>) -> Similarity3<f32>,
-) -> AVec<Similarity3<f32>, A> {
-    let mut rng = create_rng(seed);
+    mut create_transform: impl FnMut(&mut ParamRng, &Similarity3<f32>) -> Result<Similarity3<f32>>,
+) -> Result<AVec<Similarity3<f32>, A>> {
+    let mut rng = create_param_rng(seed);
     let mut output_transforms = AVec::with_capacity_in(input_transforms.len(), arena);
     for input_transform in input_transforms {
-        output_transforms.push(create_transform(&mut rng, input_transform));
+        output_transforms.push(create_transform(&mut rng, input_transform)?);
     }
-    output_transforms
+    Ok(output_transforms)
 }
 
 fn emit_balanced_binary_tree<A, N>(
@@ -2718,7 +2724,7 @@ fn compute_gradient_from_2x2x2_samples(signed_distances: &[f32; 8]) -> Vector3<f
 fn compute_jittered_direction(
     direction: UnitVector3<f32>,
     max_jitter_angle: f32,
-    rng: &mut NodeRng,
+    rng: &mut ParamRng,
 ) -> UnitVector3<f32> {
     assert!(max_jitter_angle >= 0.0);
     if abs_diff_eq!(max_jitter_angle, 0.0) {

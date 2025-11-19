@@ -1,0 +1,511 @@
+//! Parameters for meta SDF nodes.
+
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use anyhow::{Result, bail};
+use impact_containers::FixedQueue;
+use rand::{Rng, SeedableRng};
+use rand_pcg::Pcg64Mcg;
+use tinyvec::TinyVec;
+
+pub type ParamRng = Pcg64Mcg;
+
+pub type ParamIdx = u16;
+
+#[derive(Clone, Debug)]
+pub enum ParamSpecRef<'a> {
+    Discrete(&'a DiscreteParamSpec),
+    Continuous(&'a ContParamSpec),
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum DiscreteParamSpec {
+    Constant(DiscreteValueSource),
+    RandomUniform {
+        min: DiscreteValueSource,
+        max: DiscreteValueSource,
+    },
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum ContParamSpec {
+    Constant(ContValueSource),
+    RandomUniform {
+        min: ContValueSource,
+        max: ContValueSource,
+    },
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum DiscreteValueSource {
+    Fixed(u32),
+    FromParam {
+        idx: ParamIdx,
+        mapping: ParamValueMapping,
+    },
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub enum ContValueSource {
+    Fixed(f32),
+    FromParam {
+        idx: ParamIdx,
+        mapping: ParamValueMapping,
+    },
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug)]
+pub enum ParamValueMapping {
+    Linear { offset: f32, scale: f32 },
+}
+
+#[derive(Clone, Debug)]
+pub struct ParamScratch<A: Allocator> {
+    dep_counts: AVec<u16, A>,
+    reverse_deps: AVec<ParamIndicesForDeps, A>,
+    queue: FixedQueue<ParamIdx, A>,
+}
+
+type ParamIndicesForDeps = TinyVec<[ParamIdx; 2]>;
+
+impl<'a> ParamSpecRef<'a> {
+    fn param_dependencies(&self) -> ParamIndicesForDeps {
+        match self {
+            Self::Discrete(spec) => spec.param_dependencies(),
+            Self::Continuous(spec) => spec.param_dependencies(),
+        }
+    }
+
+    fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> f32 {
+        match self {
+            Self::Discrete(spec) => spec.sample(param_values, rng) as f32,
+            Self::Continuous(spec) => spec.sample(param_values, rng),
+        }
+    }
+}
+
+impl DiscreteParamSpec {
+    pub fn as_spec<'a>(&'a self) -> ParamSpecRef<'a> {
+        ParamSpecRef::Discrete(self)
+    }
+
+    fn param_dependencies(&self) -> ParamIndicesForDeps {
+        let mut deps = ParamIndicesForDeps::new();
+        match self {
+            Self::Constant(v) => v.add_param_dependency(&mut deps),
+            Self::RandomUniform { min, max } => {
+                min.add_param_dependency(&mut deps);
+                max.add_param_dependency(&mut deps);
+            }
+        }
+        deps
+    }
+
+    fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> u32 {
+        match self {
+            Self::Constant(constant) => constant.eval(param_values),
+            Self::RandomUniform { min, max } => {
+                let min_value = min.eval(param_values);
+                let max_value = max.eval(param_values).max(min_value);
+                rng.random_range(min_value..=max_value)
+            }
+        }
+    }
+}
+
+impl ContParamSpec {
+    pub fn as_spec<'a>(&'a self) -> ParamSpecRef<'a> {
+        ParamSpecRef::Continuous(self)
+    }
+
+    fn param_dependencies(&self) -> ParamIndicesForDeps {
+        let mut deps = ParamIndicesForDeps::new();
+        match self {
+            Self::Constant(v) => v.add_param_dependency(&mut deps),
+            Self::RandomUniform { min, max } => {
+                min.add_param_dependency(&mut deps);
+                max.add_param_dependency(&mut deps);
+            }
+        }
+        deps
+    }
+
+    fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> f32 {
+        match self {
+            Self::Constant(constant) => constant.eval(param_values),
+            Self::RandomUniform { min, max } => {
+                let min_value = min.eval(param_values);
+                let max_value = max.eval(param_values).max(min_value);
+                rng.random_range(min_value..=max_value)
+            }
+        }
+    }
+}
+
+impl DiscreteValueSource {
+    fn add_param_dependency(&self, deps: &mut ParamIndicesForDeps) {
+        if let Self::FromParam { idx, .. } = self {
+            deps.push(*idx);
+        }
+    }
+
+    fn eval(&self, param_values: &[f32]) -> u32 {
+        match self {
+            Self::Fixed(value) => *value,
+            Self::FromParam { idx, mapping } => {
+                let unmapped_value = param_values[*idx as usize];
+                let float_value = mapping.apply(unmapped_value);
+                float_value.round().max(0.0) as u32
+            }
+        }
+    }
+}
+
+impl ContValueSource {
+    fn add_param_dependency(&self, deps: &mut ParamIndicesForDeps) {
+        if let Self::FromParam { idx, .. } = self {
+            deps.push(*idx);
+        }
+    }
+
+    fn eval(&self, param_values: &[f32]) -> f32 {
+        match self {
+            Self::Fixed(value) => *value,
+            Self::FromParam { idx, mapping } => {
+                let unmapped_value = param_values[*idx as usize];
+                mapping.apply(unmapped_value)
+            }
+        }
+    }
+}
+
+impl ParamValueMapping {
+    fn apply(&self, value: f32) -> f32 {
+        match *self {
+            Self::Linear { offset, scale } => offset + scale * value,
+        }
+    }
+}
+
+impl<A: Allocator + Copy> ParamScratch<A> {
+    pub fn new_in(alloc: A) -> Self {
+        Self {
+            dep_counts: AVec::new_in(alloc),
+            reverse_deps: AVec::new_in(alloc),
+            queue: FixedQueue::with_capacity_in(0, alloc),
+        }
+    }
+
+    fn ensure_capacity(&mut self, n_params: usize) {
+        self.dep_counts.clear();
+        self.dep_counts.resize(n_params, 0);
+
+        self.reverse_deps.clear();
+        self.reverse_deps
+            .resize_with(n_params, ParamIndicesForDeps::new);
+
+        self.queue.clear_and_set_capacity(n_params);
+    }
+}
+
+pub fn create_param_rng(seed: u64) -> ParamRng {
+    ParamRng::seed_from_u64(seed)
+}
+
+pub fn evaluate_params_for_node<A, const N: usize>(
+    scratch: &mut ParamScratch<A>,
+    param_specs: &[ParamSpecRef<'_>; N],
+    evaluated_params: &mut [f32; N],
+    rng: &mut ParamRng,
+) -> Result<()>
+where
+    A: Allocator + Copy,
+{
+    let mut eval_order = [0; N];
+    compute_param_eval_order(scratch, param_specs, &mut eval_order)?;
+
+    for param_idx in eval_order {
+        let value = param_specs[param_idx as usize].sample(evaluated_params, rng);
+        evaluated_params[param_idx as usize] = value;
+    }
+
+    Ok(())
+}
+
+fn compute_param_eval_order<A, const N: usize>(
+    scratch: &mut ParamScratch<A>,
+    specs: &[ParamSpecRef<'_>; N],
+    eval_order: &mut [ParamIdx; N],
+) -> Result<()>
+where
+    A: Allocator + Copy,
+{
+    if specs.is_empty() {
+        return Ok(());
+    }
+
+    let n_params = specs.len();
+
+    scratch.ensure_capacity(n_params);
+
+    // Count dependencies for each parameter and store the indices of the
+    // parameters that depend on them
+    for (param_idx, spec) in specs.iter().enumerate() {
+        for dep_idx in spec.param_dependencies() {
+            if dep_idx >= n_params as ParamIdx {
+                bail!(
+                    "Parameter {} depends on out-of-range parameter {}",
+                    param_idx,
+                    dep_idx
+                );
+            }
+
+            scratch.dep_counts[param_idx] += 1;
+            scratch.reverse_deps[dep_idx as usize].push(param_idx as ParamIdx);
+        }
+    }
+
+    // Queue each parameter with no dependencies
+    for param_idx in 0..n_params {
+        if scratch.dep_counts[param_idx] == 0 {
+            scratch.queue.push_back(param_idx as ParamIdx);
+        }
+    }
+
+    // Traverse in topological order to determine evaluation order
+    let mut eval_counter = 0;
+    while let Some(param_idx) = scratch.queue.pop_front() {
+        eval_order[eval_counter] = param_idx;
+        eval_counter += 1;
+
+        for &rev_dep_idx in &scratch.reverse_deps[param_idx as usize] {
+            // Decrement remaining dependecy count and enqueue when ready
+            scratch.dep_counts[rev_dep_idx as usize] -= 1;
+            if scratch.dep_counts[rev_dep_idx as usize] == 0 {
+                scratch.queue.push_back(rev_dep_idx);
+            }
+        }
+    }
+
+    if eval_counter != n_params {
+        bail!("Cycle in parameter dependencies");
+    }
+
+    Ok(())
+}
+
+#[macro_export]
+macro_rules! define_meta_node_params {
+    (
+        $node:ty,
+        struct $params:ident {
+            $( $field:ident : $typ:ty ),+ $(,)?
+        }
+    ) => {
+        #[derive(Clone, Copy, Debug)]
+        struct $params {
+            $( $field: $typ, )+
+        }
+
+        impl $node {
+            fn sample_params<A>(
+                &self,
+                scratch: &mut $crate::generation::sdf::meta::params::ParamScratch<A>,
+                rng: &mut $crate::generation::sdf::meta::params::ParamRng,
+            ) -> ::anyhow::Result<$params>
+            where
+                A: ::allocator_api2::alloc::Allocator + Copy,
+            {
+                const N: usize = define_meta_node_params!(@count $( $field )+ );
+                let specs: [$crate::generation::sdf::meta::params::ParamSpecRef<'_>; N] = [
+                    $( self.$field.as_spec(), )+
+                ];
+                let mut values = [0.0; N];
+                $crate::generation::sdf::meta::params::evaluate_params_for_node(scratch, &specs, &mut values, rng)?;
+
+                let mut _idx = 0;
+                Ok($params {
+                    $(
+                        $field: { let v = values[_idx]; _idx += 1; v as $typ },
+                    )+
+                })
+            }
+        }
+    };
+
+    // Helper to count fields
+    (@count $($field:ident)+) => {
+        <[()]>::len(&[ $( define_meta_node_params!(@unit $field) ),+ ])
+    };
+    (@unit $field:ident) => { () };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use allocator_api2::alloc::Global;
+
+    const FIXED: DiscreteParamSpec = DiscreteParamSpec::Constant(DiscreteValueSource::Fixed(0));
+
+    fn fixed() -> ParamSpecRef<'static> {
+        FIXED.as_spec()
+    }
+
+    const fn from_param(idx: ParamIdx) -> DiscreteParamSpec {
+        DiscreteParamSpec::Constant(DiscreteValueSource::FromParam {
+            idx,
+            mapping: ParamValueMapping::Linear {
+                offset: 0.0,
+                scale: 1.0,
+            },
+        })
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_empty_specs_succeeds() {
+        let mut scratch = ParamScratch::new_in(Global);
+        let specs: [ParamSpecRef<'_>; 0] = [];
+        let mut eval_order: [ParamIdx; 0] = [];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_single_independent_param_works() {
+        let mut scratch = ParamScratch::new_in(Global);
+        let specs = [fixed()];
+        let mut eval_order = [0];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_ok());
+        assert_eq!(eval_order, [0]);
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_multiple_independent_params_works() {
+        let mut scratch = ParamScratch::new_in(Global);
+        let specs = [fixed(), fixed(), fixed()];
+        let mut eval_order = [0; 3];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_ok());
+
+        // All parameters should be included exactly once
+        let mut sorted_order = eval_order;
+        sorted_order.sort();
+        assert_eq!(sorted_order, [0, 1, 2]);
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_linear_dependency_chain_works() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: independent
+        // Param 1: depends on param 0
+        // Param 2: depends on param 1
+        let spec1 = from_param(0);
+        let spec2 = from_param(1);
+        let specs = [fixed(), spec1.as_spec(), spec2.as_spec()];
+        let mut eval_order = [0; 3];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_ok());
+        assert_eq!(eval_order, [0, 1, 2]);
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_reverse_linear_dependency_chain_works() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: depends on param 1
+        // Param 1: depends on param 2
+        // Param 2: independent
+        let spec0 = from_param(1);
+        let spec1 = from_param(2);
+        let specs = [spec0.as_spec(), spec1.as_spec(), fixed()];
+        let mut eval_order = [0; 3];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_ok());
+        assert_eq!(eval_order, [2, 1, 0]);
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_long_dependency_chain_works() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: independent
+        // Param 1: depends on param 0
+        // Param 2: depends on param 1
+        // Param 3: depends on param 2
+        let spec1 = from_param(0);
+        let spec2 = from_param(1);
+        let spec3 = from_param(2);
+        let specs = [fixed(), spec1.as_spec(), spec2.as_spec(), spec3.as_spec()];
+        let mut eval_order = [0; 4];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_ok());
+        assert_eq!(eval_order, [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_circular_dependency_fails() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: depends on param 1
+        // Param 1: depends on param 0
+        let spec0 = from_param(1);
+        let spec1 = from_param(0);
+        let specs = [spec0.as_spec(), spec1.as_spec()];
+        let mut eval_order = [0, 0];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Cycle"));
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_self_dependency_fails() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: depends on itself
+        let spec = from_param(0);
+        let specs = [spec.as_spec()];
+        let mut eval_order = [0];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Cycle"));
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_three_way_cycle_fails() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: depends on param 2
+        // Param 1: depends on param 0
+        // Param 2: depends on param 1
+        let spec0 = from_param(2);
+        let spec1 = from_param(0);
+        let spec2 = from_param(1);
+        let specs = [spec0.as_spec(), spec1.as_spec(), spec2.as_spec()];
+        let mut eval_order = [0, 0, 0];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Cycle"));
+    }
+
+    #[test]
+    fn compute_param_eval_order_with_out_of_range_dependency_fails() {
+        let mut scratch = ParamScratch::new_in(Global);
+        // Param 0: depends on param 5 (out of range)
+        let spec = from_param(5);
+        let specs = [spec.as_spec()];
+        let mut eval_order = [0];
+
+        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("range"));
+    }
+}
