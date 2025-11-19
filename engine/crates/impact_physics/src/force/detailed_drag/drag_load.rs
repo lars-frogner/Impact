@@ -5,7 +5,7 @@ use crate::{
     quantities::{Direction, Force, Orientation, Position, Torque},
 };
 use impact_math::Float;
-use nalgebra::{Point3, UnitVector3, Vector3, vector};
+use nalgebra::{Point3, UnitVector3, Vector3};
 use simba::scalar::SubsetOf;
 use std::ops::{Add, AddAssign, Div, Mul};
 
@@ -130,8 +130,8 @@ impl<'de, F: Float + serde::Deserialize<'de>> serde::Deserialize<'de> for DragLo
             <((F, F, F), (F, F, F))>::deserialize(deserializer)?;
 
         Ok(DragLoad {
-            force: vector![force_x, force_y, force_z],
-            torque: vector![torque_x, torque_y, torque_z],
+            force: Vector3::new(force_x, force_y, force_z),
+            torque: Vector3::new(torque_x, torque_y, torque_z),
         })
     }
 }
@@ -283,11 +283,11 @@ mod tests {
             phi in 0.0..fph::TWO_PI,
             theta in 0.0..fph::PI,
         ) -> Direction {
-            Direction::new_normalize(vector![
+            Direction::new_normalize(Vector3::new(
                 fph::cos(phi) * fph::sin(theta),
                 fph::sin(phi) * fph::sin(theta),
                 fph::cos(theta)
-            ])
+            ))
         }
     }
 
