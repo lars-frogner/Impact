@@ -29,7 +29,7 @@ use rand::{
     distr::{Distribution, Uniform},
     seq::IndexedRandom,
 };
-use std::{array, borrow::Cow, f32::consts::PI, ops::RangeInclusive};
+use std::{array, borrow::Cow, f32::consts::PI};
 
 #[derive(Clone, Debug)]
 pub struct MetaSDFGraph<A: Allocator = Global> {
@@ -653,8 +653,10 @@ pub struct MetaTransformApplication {
 pub struct MetaStochasticSelection {
     /// ID of the child group node to select from.
     pub child_id: MetaSDFNodeID,
-    /// Minimum and maximum number of items to select initially.
-    pub pick_count: RangeInclusive<u32>,
+    /// Minimum number of items to select initially.
+    pub min_pick_count: u32,
+    /// Maximum number of items to select initially.
+    pub max_pick_count: u32,
     /// Probability that each of the initially selected items will be kept in
     /// the final selection.
     pub pick_probability: f32,
@@ -2272,10 +2274,11 @@ impl MetaStochasticSelection {
     {
         let mut rng = create_param_rng(seed);
 
+        let pick_count = self.min_pick_count..=self.max_pick_count.max(self.min_pick_count);
         let pick_probability = self.pick_probability.clamp(0.0, 1.0);
 
         let mut single_is_selected =
-            || *self.pick_count.start() > 0 && rng.random_range(0.0..1.0) < pick_probability;
+            || *pick_count.start() > 0 && rng.random_range(0.0..1.0) < pick_probability;
 
         match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::SingleSDF(None) => MetaSDFNodeOutput::SingleSDF(None),
@@ -2290,7 +2293,7 @@ impl MetaStochasticSelection {
             }
             MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
                 let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
-                let count = rng.random_range(self.pick_count.clone());
+                let count = rng.random_range(pick_count.clone());
                 for &input_node_id in input_node_ids.choose_multiple(&mut rng, count as usize) {
                     if rng.random_range(0.0..1.0) < pick_probability {
                         output_node_ids.push(input_node_id);
@@ -2300,7 +2303,7 @@ impl MetaStochasticSelection {
             }
             MetaSDFNodeOutput::TransformGroup(input_transforms) => {
                 let mut output_transforms = AVec::with_capacity_in(input_transforms.len(), arena);
-                let count = rng.random_range(self.pick_count.clone());
+                let count = rng.random_range(pick_count.clone());
                 for input_transform in input_transforms.choose_multiple(&mut rng, count as usize) {
                     if rng.random_range(0.0..1.0) < pick_probability {
                         output_transforms.push(*input_transform);

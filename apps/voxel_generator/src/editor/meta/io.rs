@@ -1,7 +1,10 @@
 use super::{
-    MetaEnumParam, MetaFloatParam, MetaFloatRangeParam, MetaNode, MetaNodeChildLinks, MetaNodeData,
-    MetaNodeID, MetaNodeParam, MetaNodeParentLinks, MetaUIntParam, MetaUIntRangeParam,
+    MetaNode, MetaNodeChildLinks, MetaNodeData, MetaNodeID, MetaNodeParentLinks,
     node_kind::MetaNodeKind,
+    param::{
+        MetaDistributedParam, MetaEnumParam, MetaFloatParam, MetaNodeParam, MetaUIntParam,
+        ParamDistribution,
+    },
 };
 use anyhow::{Error, bail};
 use impact::impact_containers::HashSet;
@@ -57,6 +60,7 @@ pub enum IOMetaNodeParam {
         low: f32,
         high: f32,
     },
+    Distributed(ParamDistribution),
 }
 
 impl IOMetaGraphKind {
@@ -89,7 +93,13 @@ impl<'a> From<(&'a MetaNodeID, &'a MetaNode)> for IOMetaNode {
             position: (node.position.x, node.position.y),
             name: node.data.name.clone(),
             kind: node.data.kind,
-            params: node.data.params.iter().map(IOMetaNodeParam::from).collect(),
+            params: node
+                .data
+                .params
+                .params
+                .iter()
+                .map(IOMetaNodeParam::from)
+                .collect(),
             links_to_parents: node.links_to_parents.clone(),
             links_to_children: node.links_to_children.clone(),
         }
@@ -104,7 +114,7 @@ impl TryFrom<IOMetaNode> for MetaNode {
         if node.params.len() != params.len() {
             bail!("Invalid number of parameters");
         }
-        for (param, io_param) in params.iter_mut().zip(node.params) {
+        for (param, io_param) in params.params.iter_mut().zip(node.params) {
             match (param, io_param) {
                 (
                     MetaNodeParam::UInt(MetaUIntParam { value, .. }),
@@ -119,26 +129,10 @@ impl TryFrom<IOMetaNode> for MetaNode {
                     *value = io_value;
                 }
                 (
-                    MetaNodeParam::UIntRange(MetaUIntRangeParam {
-                        low_value,
-                        high_value,
-                        ..
-                    }),
-                    IOMetaNodeParam::UIntRange { low, high },
+                    MetaNodeParam::Distributed(MetaDistributedParam { distribution, .. }),
+                    IOMetaNodeParam::Distributed(io_distribution),
                 ) => {
-                    *low_value = low;
-                    *high_value = high;
-                }
-                (
-                    MetaNodeParam::FloatRange(MetaFloatRangeParam {
-                        low_value,
-                        high_value,
-                        ..
-                    }),
-                    IOMetaNodeParam::FloatRange { low, high },
-                ) => {
-                    *low_value = low;
-                    *high_value = high;
+                    *distribution = io_distribution;
                 }
                 _ => {
                     bail!("Inconsistent parameter types");
@@ -175,22 +169,9 @@ impl<'a> From<&'a MetaNodeParam> for IOMetaNodeParam {
             },
             MetaNodeParam::UInt(MetaUIntParam { value, .. }) => Self::UInt(*value),
             MetaNodeParam::Float(MetaFloatParam { value, .. }) => Self::Float(*value),
-            MetaNodeParam::UIntRange(MetaUIntRangeParam {
-                low_value,
-                high_value,
-                ..
-            }) => Self::UIntRange {
-                low: *low_value,
-                high: *high_value,
-            },
-            MetaNodeParam::FloatRange(MetaFloatRangeParam {
-                low_value,
-                high_value,
-                ..
-            }) => Self::FloatRange {
-                low: *low_value,
-                high: *high_value,
-            },
+            MetaNodeParam::Distributed(MetaDistributedParam { distribution, .. }) => {
+                Self::Distributed(distribution.clone())
+            }
         }
     }
 }

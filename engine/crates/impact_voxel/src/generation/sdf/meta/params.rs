@@ -321,7 +321,7 @@ macro_rules! define_meta_node_params {
                 A: ::allocator_api2::alloc::Allocator + Copy,
             {
                 const N: usize = define_meta_node_params!(@count $( $field )+ );
-                let specs: [$crate::generation::sdf::meta::params::ParamSpec<'_>; N] = [
+                let specs: [$crate::generation::sdf::meta::params::ParamSpecRef<'_>; N] = [
                     $( self.$field.as_spec(), )+
                 ];
                 let mut values = [0.0; N];
