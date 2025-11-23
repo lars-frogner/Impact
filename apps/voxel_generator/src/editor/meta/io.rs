@@ -46,20 +46,11 @@ type IOMetaNodeParams = TinyVec<[IOMetaNodeParam; 12]>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum IOMetaNodeParam {
-    Enum {
-        variants: TinyVec<[String; 2]>,
-        value: String,
-    },
+    Enum(u32),
     UInt(u32),
     Float(f32),
-    UIntRange {
-        low: u32,
-        high: u32,
-    },
-    FloatRange {
-        low: f32,
-        high: f32,
-    },
+    UIntRange { low: u32, high: u32 },
+    FloatRange { low: f32, high: f32 },
     Distributed(ParamDistribution),
 }
 
@@ -117,6 +108,14 @@ impl TryFrom<IOMetaNode> for MetaNode {
         for (param, io_param) in params.params.iter_mut().zip(node.params) {
             match (param, io_param) {
                 (
+                    MetaNodeParam::Enum(MetaEnumParam {
+                        variants, value, ..
+                    }),
+                    IOMetaNodeParam::Enum(variant_idx),
+                ) => {
+                    *value = variants[variant_idx as usize];
+                }
+                (
                     MetaNodeParam::UInt(MetaUIntParam { value, .. }),
                     IOMetaNodeParam::UInt(io_value),
                 ) => {
@@ -163,10 +162,7 @@ impl<'a> From<&'a MetaNodeParam> for IOMetaNodeParam {
         match param {
             MetaNodeParam::Enum(MetaEnumParam {
                 variants, value, ..
-            }) => Self::Enum {
-                variants: variants.iter().map(|v| (*v).to_string()).collect(),
-                value: (*value).to_string(),
-            },
+            }) => Self::Enum(variants.iter().position(|v| v == value).unwrap() as u32),
             MetaNodeParam::UInt(MetaUIntParam { value, .. }) => Self::UInt(*value),
             MetaNodeParam::Float(MetaFloatParam { value, .. }) => Self::Float(*value),
             MetaNodeParam::Distributed(MetaDistributedParam { distribution, .. }) => {
