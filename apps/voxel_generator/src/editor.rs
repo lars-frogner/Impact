@@ -71,11 +71,12 @@ pub struct EditorConfig {
     pub show_atomic_graph: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 enum MetaGraphStatus {
     InSync,
     Dirty,
-    Invalid,
+    Incomplete,
+    Invalid { error: String },
 }
 
 #[derive(Clone, Debug)]
@@ -99,7 +100,7 @@ impl Editor {
             atomic_graph_canvas: AtomicGraphCanvas::new(),
             graph_needs_compilation: false,
             rebuild_generator: false,
-            graph_status: MetaGraphStatus::Invalid,
+            graph_status: MetaGraphStatus::Incomplete,
             last_graph_path: None,
             config,
         }
@@ -113,15 +114,26 @@ impl Editor {
             return None;
         }
 
-        let Some(compiled_graph) = build::build_sdf_graph(
+        let compiled_graph = match build::build_sdf_graph(
             arena,
             &mut self.meta_canvas_scratch.build,
             &self.meta_graph_canvas.nodes,
-        ) else {
-            self.graph_needs_compilation = false;
-            self.rebuild_generator = false;
-            self.graph_status = MetaGraphStatus::Invalid;
-            return None;
+        ) {
+            Some(Ok(compiled_graph)) => compiled_graph,
+            Some(Err(error)) => {
+                self.graph_needs_compilation = false;
+                self.rebuild_generator = false;
+                self.graph_status = MetaGraphStatus::Invalid {
+                    error: format!("The graph is invalid: {error:#}"),
+                };
+                return None;
+            }
+            None => {
+                self.graph_needs_compilation = false;
+                self.rebuild_generator = false;
+                self.graph_status = MetaGraphStatus::Incomplete;
+                return None;
+            }
         };
 
         self.atomic_graph_canvas.update_nodes(&compiled_graph.graph);
@@ -541,7 +553,7 @@ impl CustomPanels for Editor {
             self.meta_graph_canvas.show(
                 &mut self.meta_canvas_scratch,
                 ctx,
-                self.graph_status,
+                &self.graph_status,
                 pending_node_operations,
                 layout_requested,
                 self.config.auto_attach,
