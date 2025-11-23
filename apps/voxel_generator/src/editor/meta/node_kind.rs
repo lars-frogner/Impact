@@ -441,7 +441,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Roll",
-                    hover_text: "Rotation angle around the x-axis, in radians.",
+                    hover_text: "Rotation angle around the x-axis, in degrees.",
                 },
                 0.0,
             )
@@ -451,7 +451,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Pitch",
-                    hover_text: "Rotation angle around the y-axis, in radians.",
+                    hover_text: "Rotation angle around the y-axis, in degrees.",
                 },
                 0.0,
             )
@@ -461,7 +461,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Yaw",
-                    hover_text: "Rotation angle around the z-axis, in radians.",
+                    hover_text: "Rotation angle around the z-axis, in degrees.",
                 },
                 0.0,
             )
@@ -1197,7 +1197,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Roll",
-                    hover_text: "Rotation angle around the x-axis, in radians.",
+                    hover_text: "Rotation angle around the x-axis, in degrees.",
                 },
                 0.0,
             )
@@ -1207,7 +1207,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Pitch",
-                    hover_text: "Rotation angle around the y-axis, in radians.",
+                    hover_text: "Rotation angle around the y-axis, in degrees.",
                 },
                 0.0,
             )
@@ -1217,7 +1217,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Yaw",
-                    hover_text: "Rotation angle around the z-axis, in radians.",
+                    hover_text: "Rotation angle around the z-axis, in degrees.",
                 },
                 0.0,
             )

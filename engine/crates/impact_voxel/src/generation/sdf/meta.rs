@@ -19,7 +19,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::FixedQueue;
 use impact_geometry::{compute_uniformly_distributed_radial_directions, rotation_between_axes};
-use impact_math::splitmix;
+use impact_math::{Angle, Degrees, splitmix};
 use nalgebra::{
     Point3, Similarity, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
 };
@@ -245,11 +245,11 @@ define_meta_node_params! {
 pub struct MetaSDFRotation {
     /// ID of the child SDF node to transform.
     pub child_id: MetaSDFNodeID,
-    /// Rotation angle around the x-axis, in radians.
+    /// Rotation angle around the x-axis, in degrees.
     pub roll: ContParamSpec,
-    /// Rotation angle around the y-axis, in radians.
+    /// Rotation angle around the y-axis, in degrees.
     pub pitch: ContParamSpec,
-    /// Rotation angle around the z-axis, in radians.
+    /// Rotation angle around the z-axis, in degrees.
     pub yaw: ContParamSpec,
     /// Seed for selecting a rotation within the specified ranges.
     pub seed: u32,
@@ -540,11 +540,11 @@ pub struct MetaTransformRotation {
     /// Whether to apply the rotation before ('Pre') or after ('Post') the
     /// input transforms.
     pub composition: CompositionMode,
-    /// Rotation angle around the x-axis, in radians.
+    /// Rotation angle around the x-axis, in degrees.
     pub roll: ContParamSpec,
-    /// Rotation angle around the y-axis, in radians.
+    /// Rotation angle around the y-axis, in degrees.
     pub pitch: ContParamSpec,
-    /// Rotation angle around the z-axis, in radians.
+    /// Rotation angle around the z-axis, in degrees.
     pub yaw: ContParamSpec,
     /// Seed for selecting a rotation within the specified ranges.
     pub seed: u32,
@@ -1247,7 +1247,11 @@ impl MetaSDFRotation {
 
                 Ok(SDFNode::new_rotation(
                     input_node_id,
-                    UnitQuaternion::from_euler_angles(roll, pitch, yaw),
+                    UnitQuaternion::from_euler_angles(
+                        Degrees(roll).radians(),
+                        Degrees(pitch).radians(),
+                        Degrees(yaw).radians(),
+                    ),
                 ))
             },
         )
@@ -1732,7 +1736,11 @@ impl MetaTransformRotation {
                 let MetaTransformRotationParams { roll, pitch, yaw } =
                     self.sample_params(param_scratch, rng)?;
 
-                let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
+                let rotation = UnitQuaternion::from_euler_angles(
+                    Degrees(roll).radians(),
+                    Degrees(pitch).radians(),
+                    Degrees(yaw).radians(),
+                );
 
                 Ok(match self.composition {
                     CompositionMode::Pre => input_transform * rotation,
