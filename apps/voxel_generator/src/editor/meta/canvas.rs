@@ -1282,6 +1282,7 @@ impl MetaGraphCanvas {
                 }
                 if let Some(node_id) = self.selected_node_id
                     && ui.input(|i| i.key_pressed(Key::Delete))
+                    && !ui.ctx().wants_keyboard_input()
                 {
                     self.remove_node(scratch, node_id, changes);
                 }
