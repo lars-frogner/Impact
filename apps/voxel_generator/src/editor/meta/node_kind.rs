@@ -1,8 +1,8 @@
 use super::{
     MetaNodeID, MetaNodeLink,
     param::{
-        MetaDistributedParam, MetaEnumParam, MetaFloatParam, MetaNodeParam, MetaNodeParams,
-        MetaUIntParam,
+        EnumParamVariants, MetaDistributedParam, MetaEnumParam, MetaFloatParam, MetaNodeParam,
+        MetaNodeParams, MetaUIntParam,
     },
 };
 use impact::impact_containers::HashMap;
@@ -1056,9 +1056,9 @@ impl SpecificMetaNodeKind for MetaSphereSurfaceTransforms {
             MetaEnumParam::new(
                 LabelAndHoverText {
                     label: "Rotation",
-                    hover_text: "Whether to include rotations from the y-axes to the outward radial direction.",
+                    hover_text: "Whether to include rotations from the y-axes to the outward or inward radial direction.",
                 },
-                ["Identity", "Radial"].into(),
+                EnumParamVariants::from_iter(["Identity", "Radial (outwards)", "Radial (inwards)"]),
                 "Identity",
             )
         );
@@ -1109,7 +1109,7 @@ impl SpecificMetaNodeKind for MetaTransformTranslation {
                     label: "Composition",
                     hover_text: "Whether to apply the translation before ('Pre') or after ('Post') the input transforms.",
                 },
-                ["Pre", "Post"].into(),
+                 EnumParamVariants::from_iter(["Pre", "Post"]),
                 "Pre",
             )
         );
@@ -1189,7 +1189,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
                     label: "Composition",
                     hover_text: "Whether to apply the rotation before ('Pre') or after ('Post') the input transforms.",
                 },
-                ["Pre", "Post"].into(),
+                EnumParamVariants::from_iter(["Pre", "Post"]),
                 "Pre",
             )
         );
@@ -1267,7 +1267,7 @@ impl SpecificMetaNodeKind for MetaTransformScaling {
                     label: "Composition",
                     hover_text: "Whether to apply the scaling before ('Pre') or after ('Post') the input transforms.",
                 },
-                ["Pre", "Post"].into(),
+                EnumParamVariants::from_iter(["Pre", "Post"]),
                 "Pre",
             )
         );

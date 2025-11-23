@@ -33,7 +33,7 @@ pub struct MetaEnumParam {
     pub value: &'static str,
 }
 
-pub type EnumParamVariants = TinyVec<[&'static str; 2]>;
+pub type EnumParamVariants = TinyVec<[&'static str; 3]>;
 
 #[derive(Clone, Debug)]
 pub struct MetaUIntParam {
