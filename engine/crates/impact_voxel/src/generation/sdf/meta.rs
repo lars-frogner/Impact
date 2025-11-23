@@ -120,7 +120,7 @@ pub struct MetaBoxSDF {
     pub extent_y: ContParamSpec,
     /// Extent of the box along the z-axis, in voxels.
     pub extent_z: ContParamSpec,
-    /// Seed for sampling random extent values.
+    /// Seed for generating randomized extent values.
     pub seed: u32,
 }
 
@@ -141,7 +141,7 @@ define_meta_node_params! {
 pub struct MetaSphereSDF {
     /// Radius of the sphere, in voxels.
     pub radius: ContParamSpec,
-    /// Seed for selecting a radius within the specified range.
+    /// Seed for generating randomized radius values.
     pub seed: u32,
 }
 
@@ -162,8 +162,7 @@ pub struct MetaCapsuleSDF {
     pub segment_length: ContParamSpec,
     /// Radius of the spherical caps, in voxels.
     pub radius: ContParamSpec,
-    /// Seed for selecting a segment length and radius within the specified
-    /// ranges.
+    /// Seed for generating randomized segment length and radius values.
     pub seed: u32,
 }
 
@@ -192,8 +191,7 @@ pub struct MetaGradientNoiseSDF {
     /// Minimum noise value (they range from -1 to 1) for a voxel to be
     /// considered inside the object.
     pub noise_threshold: ContParamSpec,
-    /// Seed for generating noise and selecting parameter values within the
-    /// specified ranges.
+    /// Seed for generating noise and randomized parameter values.
     pub seed: u32,
 }
 
@@ -223,7 +221,7 @@ pub struct MetaSDFTranslation {
     pub translation_y: ContParamSpec,
     /// Translation distance along the z-axis, in voxels.
     pub translation_z: ContParamSpec,
-    /// Seed for selecting a translation within the specified ranges.
+    /// Seed for generating randomized translations.
     pub seed: u32,
 }
 
@@ -251,7 +249,7 @@ pub struct MetaSDFRotation {
     pub turn_angle: ContParamSpec,
     /// Additional roll angle around the final rotated axis, in degrees.
     pub roll_angle: ContParamSpec,
-    /// Seed for selecting a rotation within the specified ranges.
+    /// Seed for generating randomized rotations.
     pub seed: u32,
 }
 
@@ -275,7 +273,7 @@ pub struct MetaSDFScaling {
     pub child_id: MetaSDFNodeID,
     /// Uniform scale factor.
     pub scaling: ContParamSpec,
-    /// Seed for selecting a scale factor within the specified range.
+    /// Seed for generating randomized scale factors.
     pub seed: u32,
 }
 
@@ -306,8 +304,7 @@ pub struct MetaMultifractalNoiseSDFModifier {
     pub persistence: ContParamSpec,
     /// Noise amplitude (max distransform) in the first octave, in voxels.
     pub amplitude: ContParamSpec,
-    /// Seed for generating noise and selecting parameter values within the
-    /// specified ranges.
+    /// Seed for generating noise and randomized parameter values.
     pub seed: u32,
 }
 
@@ -347,8 +344,8 @@ pub struct MetaMultiscaleSphereSDFModifier {
     /// Smoothness factor for combining the intersected sphere pattern with the
     /// original pattern.
     pub union_smoothness: ContParamSpec,
-    /// Seed for generating random sphere radii as well as selecting parameter
-    /// values within the specified ranges.
+    /// Seed for generating random sphere radii as well as randomized
+    /// parameter values.
     pub seed: u32,
 }
 
@@ -448,8 +445,8 @@ pub struct MetaStratifiedGridTransforms {
     pub points_per_grid_cell: DiscreteParamSpec,
     /// Fraction of a grid cell to randomly displace the points.
     pub jitter_fraction: ContParamSpec,
-    /// Seed for random jittering as well as selecting parameter values within
-    /// the specified ranges.
+    /// Seed for random jittering as well as generating randomized parameter
+    /// values.
     pub seed: u32,
 }
 
@@ -483,8 +480,8 @@ pub struct MetaSphereSurfaceTransforms {
     /// Whether to include rotations from the y-axes to the outward radial
     /// direction.
     pub rotation: SphereSurfaceRotation,
-    /// Seed for random jittering as well as selecting parameter values within
-    /// the specified ranges.
+    /// Seed for random jittering as well as generating randomized parameter
+    /// values.
     pub seed: u32,
 }
 
@@ -515,7 +512,7 @@ pub struct MetaTransformTranslation {
     pub translation_y: ContParamSpec,
     /// Translation distance along the z-axis, in voxels.
     pub translation_z: ContParamSpec,
-    /// Seed for selecting a translation within the specified ranges.
+    /// Seed for generating randomized translations.
     pub seed: u32,
 }
 
@@ -546,7 +543,7 @@ pub struct MetaTransformRotation {
     pub turn_angle: ContParamSpec,
     /// Additional roll angle around the final rotated axis, in degrees.
     pub roll_angle: ContParamSpec,
-    /// Seed for selecting a rotation within the specified ranges.
+    /// Seed for generating randomized rotations.
     pub seed: u32,
 }
 
@@ -573,7 +570,7 @@ pub struct MetaTransformScaling {
     pub composition: CompositionMode,
     /// Uniform scale factor.
     pub scaling: ContParamSpec,
-    /// Seed for selecting a scale factor within the specified range.
+    /// Seed for generating randomized scale factors.
     pub seed: u32,
 }
 
