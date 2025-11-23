@@ -1941,13 +1941,11 @@ fn smooth_sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
 }
 
 fn smooth_sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
-    let h = (0.5 - 0.5 * (distance_2 + distance_1) / smoothness).clamp(0.0, 1.0);
-    mix(distance_2, -distance_1, h) + smoothness * h * (1.0 - h)
+    -smooth_sdf_union(-distance_1, distance_2, smoothness)
 }
 
 fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
-    let h = (0.5 - 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
-    mix(distance_2, distance_1, h) + smoothness * h * (1.0 - h)
+    -smooth_sdf_union(-distance_1, -distance_2, smoothness)
 }
 
 fn mix(a: f32, b: f32, factor: f32) -> f32 {
