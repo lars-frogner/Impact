@@ -145,7 +145,7 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting an extent within the specified ranges.",
+                hover_text: "Seed for generating randomized extent values.",
             },
             0,
         ));
@@ -190,7 +190,7 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a radius within the specified range.",
+                hover_text: "Seed for generating randomized radius values.",
             },
             0,
         ));
@@ -240,15 +240,13 @@ impl SpecificMetaNodeKind for MetaCapsuleSDF {
             )
             .with_min_value(0.0),
         );
-        params.push(
-            MetaUIntParam::new(
-                LabelAndHoverText {
-                    label: "Seed",
-                    hover_text: "Seed for selecting a segment length radius within the specified ranges.",
-                },
-                0,
-            )
-        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for generating randomized segment length and radius values.",
+            },
+            0,
+        ));
         params
     }
 
@@ -330,15 +328,13 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
             .with_max_value(1.0)
             .with_speed(0.001)
         );
-        params.push(
-            MetaUIntParam::new(
-                LabelAndHoverText {
-                    label: "Seed",
-                    hover_text: "Seed for generating noise and selecting parameter values within the specified ranges.",
-                },
-                0,
-            )
-        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for generating noise and randomized parameter values.",
+            },
+            0,
+        ));
         params
     }
 
@@ -403,7 +399,7 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a translation within the specified ranges.",
+                hover_text: "Seed for generating randomized translations.",
             },
             0,
         ));
@@ -470,7 +466,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a rotation within the specified ranges.",
+                hover_text: "Seed for generating randomized rotations.",
             },
             0,
         ));
@@ -518,7 +514,7 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a scale factor within the specified range.",
+                hover_text: "Seed for generating randomized scale factors.",
             },
             0,
         ));
@@ -606,15 +602,13 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
             .with_min_value(0.0)
             .with_speed(0.05)
         );
-        params.push(
-            MetaUIntParam::new(
-                LabelAndHoverText {
-                    label: "Seed",
-                    hover_text: "Seed for generating noise and selecting parameter values within the specified ranges.",
-                },
-                0,
-            )
-        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for generating noise and randomized parameter values.",
+            },
+            0,
+        ));
         params
     }
 
@@ -716,7 +710,7 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
             MetaUIntParam::new(
                 LabelAndHoverText {
                     label: "Seed",
-                    hover_text: "Seed for generating random sphere radii as well as selecting parameter values within the specified ranges..",
+                    hover_text: "Seed for generating random sphere radii as well as randomized parameter values.",
                 },
                 0,
             )
@@ -983,7 +977,7 @@ impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
             MetaUIntParam::new(
                 LabelAndHoverText {
                     label: "Seed",
-                    hover_text: "Seed for random jittering as well as selecting parameter values within the specified ranges.",
+                    hover_text: "Seed for random jittering as well as generating randomized parameter values.",
                 },
                 0,
             )
@@ -1066,7 +1060,7 @@ impl SpecificMetaNodeKind for MetaSphereSurfaceTransforms {
             MetaUIntParam::new(
                 LabelAndHoverText {
                     label: "Seed",
-                    hover_text: "Seed for random jittering as well as selecting parameter values within the specified ranges.",
+                    hover_text: "Seed for random jittering as well as generating randomized parameter values.",
                 },
                 0,
             )
@@ -1146,7 +1140,7 @@ impl SpecificMetaNodeKind for MetaTransformTranslation {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a translation within the specified ranges.",
+                hover_text: "Seed for generating randomized translations.",
             },
             0,
         ));
@@ -1226,7 +1220,7 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a rotation within the specified ranges.",
+                hover_text: "Seed for generating randomized rotations.",
             },
             0,
         ));
@@ -1285,7 +1279,7 @@ impl SpecificMetaNodeKind for MetaTransformScaling {
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for selecting a scale factor within the specified range.",
+                hover_text: "Seed for generating randomized scale factors.",
             },
             0,
         ));
