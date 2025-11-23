@@ -2,7 +2,8 @@ use impact::egui::ComboBox;
 use impact::egui::{DragValue, Response, Ui, emath::Numeric};
 use impact::impact_math::Hash64;
 use impact_dev_ui::option_panels::{
-    LabelAndHoverText, labeled_option, option_drag_value, strong_option_label,
+    LabelAndHoverText, configurable_labeled_option, configurable_option_drag_value, labeled_option,
+    option_drag_value, strong_option_label,
 };
 use impact_voxel::generation::sdf::meta::params::{self as core, ParamIdx};
 use serde::{Deserialize, Serialize};
@@ -323,15 +324,10 @@ impl MetaEnumParam {
     }
 
     fn show_controls_and_return_changed(&mut self, ui: &mut Ui) -> bool {
-        strong_option_label(ui, self.text.clone());
-
         let old_value_hash = Hash64::from_str(self.value);
-        labeled_option(
+        configurable_labeled_option(
             ui,
-            LabelAndHoverText {
-                label: "Variant",
-                hover_text: "The selected variant",
-            },
+            self.text.clone(),
             |ui| {
                 ComboBox::from_id_salt(("meta_enum_param", self.text.label))
                     .selected_text(self.value)
@@ -341,6 +337,7 @@ impl MetaEnumParam {
                         }
                     })
             },
+            true,
         );
         old_value_hash != Hash64::from_str(self.value)
     }
@@ -360,16 +357,13 @@ impl MetaUIntParam {
     }
 
     fn show_controls(&mut self, ui: &mut Ui) -> Response {
-        strong_option_label(ui, self.text.clone());
-        option_drag_value(
+        configurable_option_drag_value(
             ui,
-            LabelAndHoverText {
-                label: "Value",
-                hover_text: "The value of the parameter",
-            },
+            self.text.clone(),
             DragValue::new(&mut self.value)
                 .fixed_decimals(0)
                 .speed(self.speed),
+            true,
         )
     }
 
@@ -405,16 +399,13 @@ impl MetaFloatParam {
     }
 
     fn show_controls(&mut self, ui: &mut Ui) -> Response {
-        strong_option_label(ui, self.text.clone());
-        option_drag_value(
+        configurable_option_drag_value(
             ui,
-            LabelAndHoverText {
-                label: "Value",
-                hover_text: "The value of the parameter",
-            },
+            self.text.clone(),
             DragValue::new(&mut self.value)
                 .range(self.min_value..=self.max_value)
                 .speed(self.speed),
+            true,
         )
     }
 
