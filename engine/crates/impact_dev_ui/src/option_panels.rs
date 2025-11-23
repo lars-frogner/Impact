@@ -82,7 +82,16 @@ pub fn option_drag_value(
     text: LabelAndHoverText,
     drag_value: DragValue<'_>,
 ) -> Response {
-    labeled_option(ui, text, |ui| ui.add(drag_value))
+    configurable_option_drag_value(ui, text, drag_value, false)
+}
+
+pub fn configurable_option_drag_value(
+    ui: &mut Ui,
+    text: LabelAndHoverText,
+    drag_value: DragValue<'_>,
+    strong: bool,
+) -> Response {
+    configurable_labeled_option(ui, text, |ui| ui.add(drag_value), strong)
 }
 
 pub fn labeled_option<R>(
@@ -90,7 +99,20 @@ pub fn labeled_option<R>(
     text: LabelAndHoverText,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    ui.label(text.label)
+    configurable_labeled_option(ui, text, add_contents, false)
+}
+
+pub fn configurable_labeled_option<R>(
+    ui: &mut Ui,
+    text: LabelAndHoverText,
+    add_contents: impl FnOnce(&mut Ui) -> R,
+    strong: bool,
+) -> R {
+    let mut label = RichText::new(text.label);
+    if strong {
+        label = label.strong();
+    }
+    ui.label(label)
         .on_hover_cursor(CursorIcon::Help)
         .on_hover_text(text.hover_text);
 
