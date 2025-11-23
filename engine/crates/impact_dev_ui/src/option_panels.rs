@@ -5,7 +5,7 @@ pub mod rendering;
 use crate::UserInterfaceConfig;
 use impact::egui::{
     Align, Color32, Context, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Response,
-    ScrollArea, Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32,
+    RichText, ScrollArea, Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32,
     emath::Numeric,
 };
 use std::{hash::Hash, ops::RangeInclusive};
@@ -105,6 +105,13 @@ pub fn labeled_option<R>(
 
     ui.end_row();
     response
+}
+
+pub fn strong_option_label(ui: &mut Ui, text: LabelAndHoverText) {
+    ui.label(RichText::new(text.label).strong())
+        .on_hover_cursor(CursorIcon::Help)
+        .on_hover_text(text.hover_text);
+    ui.end_row();
 }
 
 pub fn transform_slider_recip<Num: Numeric>(

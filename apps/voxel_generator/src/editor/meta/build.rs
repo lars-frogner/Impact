@@ -3,6 +3,7 @@ use super::{
     node_kind::{self},
 };
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use anyhow::Result;
 use impact::impact_containers::HashMap;
 use impact_voxel::{
     generation::{
@@ -75,14 +76,14 @@ pub fn build_sdf_graph<A>(
     arena: A,
     scratch: &mut BuildScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
-) -> Option<SDFGraphBuildResult<A>>
+) -> Option<Result<SDFGraphBuildResult<A>>>
 where
     A: Allocator + Copy,
 {
     let output_node = nodes.get(&0)?;
 
     let (voxel_extent, seed) =
-        node_kind::get_voxel_extent_and_seed_from_output_node(&output_node.data.params);
+        node_kind::get_voxel_extent_and_seed_from_output_node(&output_node.data.params.params);
 
     let root_node_id = output_node.links_to_children[0]?.to_node;
     let root_node = &nodes[&root_node_id];
@@ -116,7 +117,7 @@ where
                 let generator_node = node.data.kind.build_sdf_generator_node(
                     &scratch.id_map,
                     &node.links_to_children,
-                    &node.data.params,
+                    &node.data.params.params,
                 )?;
 
                 let sdf_node_id = meta_graph.add_node(generator_node);
@@ -125,15 +126,15 @@ where
         }
     }
 
-    let graph = meta_graph
-        .build(arena)
-        .inspect_err(|err| {
-            impact_log::error!("Invalid meta graph: {err}");
-        })
-        .ok()?;
-
-    Some(SDFGraphBuildResult {
-        voxel_extent,
-        graph,
-    })
+    Some(
+        meta_graph
+            .build(arena)
+            .map(|graph| SDFGraphBuildResult {
+                voxel_extent,
+                graph,
+            })
+            .inspect_err(|err| {
+                impact_log::error!("Invalid meta graph: {err:#}");
+            }),
+    )
 }

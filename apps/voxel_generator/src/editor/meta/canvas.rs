@@ -44,10 +44,11 @@ const STATUS_DOT_RADIUS: f32 = 6.0;
 const STATUS_DOT_OFFSET: Vec2 = vec2(12.0, 12.0);
 const STATUS_DOT_IN_SYNC_COLOR: Color32 = Color32::GREEN;
 const STATUS_DOT_DIRTY_COLOR: Color32 = Color32::YELLOW;
+const STATUS_DOT_INCOMPLETE_COLOR: Color32 = Color32::ORANGE;
 const STATUS_DOT_INVALID_COLOR: Color32 = Color32::RED;
 const STATUS_DOT_IN_SYNC_HOVER_TEXT: &str = "The graph is in sync";
 const STATUS_DOT_DIRTY_HOVER_TEXT: &str = "The graph is out of sync";
-const STATUS_DOT_INVALID_HOVER_TEXT: &str = "The graph is not valid";
+const STATUS_DOT_INCOMPLETE_HOVER_TEXT: &str = "The graph is incomplete";
 
 const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(80.0, 0.0);
 
@@ -640,7 +641,7 @@ impl MetaGraphCanvas {
         &mut self,
         scratch: &mut MetaCanvasScratch,
         ctx: &Context,
-        graph_status: MetaGraphStatus,
+        graph_status: &MetaGraphStatus,
         pending_node_operations: PendingNodeOperations,
         layout_requested: bool,
         auto_attach: bool,
@@ -1255,8 +1256,12 @@ impl MetaGraphCanvas {
                         (STATUS_DOT_IN_SYNC_COLOR, STATUS_DOT_IN_SYNC_HOVER_TEXT)
                     }
                     MetaGraphStatus::Dirty => (STATUS_DOT_DIRTY_COLOR, STATUS_DOT_DIRTY_HOVER_TEXT),
-                    MetaGraphStatus::Invalid => {
-                        (STATUS_DOT_INVALID_COLOR, STATUS_DOT_INVALID_HOVER_TEXT)
+                    MetaGraphStatus::Incomplete => (
+                        STATUS_DOT_INCOMPLETE_COLOR,
+                        STATUS_DOT_INCOMPLETE_HOVER_TEXT,
+                    ),
+                    MetaGraphStatus::Invalid { error } => {
+                        (STATUS_DOT_INVALID_COLOR, error.as_str())
                     }
                 };
 
