@@ -680,7 +680,8 @@ pub enum CompositionMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SphereSurfaceRotation {
     Identity,
-    Radial,
+    RadialOutwards,
+    RadialInwards,
 }
 
 impl<A: Allocator> MetaSDFGraph<A> {
@@ -1644,8 +1645,11 @@ impl MetaSphereSurfaceTransforms {
 
             let rotation = match self.rotation {
                 SphereSurfaceRotation::Identity => UnitQuaternion::identity(),
-                SphereSurfaceRotation::Radial => {
+                SphereSurfaceRotation::RadialOutwards => {
                     rotation_between_axes(&Vector3::y_axis(), &jittered_direction)
+                }
+                SphereSurfaceRotation::RadialInwards => {
+                    rotation_between_axes(&(-Vector3::y_axis()), &jittered_direction)
                 }
             };
 
@@ -2323,7 +2327,8 @@ impl SphereSurfaceRotation {
     pub fn try_from_str(variant: &str) -> Result<Self> {
         match variant {
             "Identity" => Ok(Self::Identity),
-            "Radial" => Ok(Self::Radial),
+            "Radial (outwards)" => Ok(Self::RadialOutwards),
+            "Radial (inwards)" => Ok(Self::RadialInwards),
             invalid => Err(anyhow!("Invalid SphereSurfaceRotation variant: {invalid}")),
         }
     }
