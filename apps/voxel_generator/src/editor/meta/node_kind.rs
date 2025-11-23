@@ -440,32 +440,32 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
-                    label: "Roll",
-                    hover_text: "Rotation angle around the x-axis, in degrees.",
+                    label: "Tilt angle",
+                    hover_text: "Angle away from the y-axis, in degrees",
                 },
                 0.0,
             )
-            .with_speed(0.002),
+            .with_speed(0.03),
         );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
-                    label: "Pitch",
-                    hover_text: "Rotation angle around the y-axis, in degrees.",
+                    label: "Turn angle",
+                    hover_text: "Angle from the x-axis in the xz-plane, in degrees.",
                 },
                 0.0,
             )
-            .with_speed(0.002),
+            .with_speed(0.03),
         );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
-                    label: "Yaw",
-                    hover_text: "Rotation angle around the z-axis, in degrees.",
+                    label: "Roll angle",
+                    hover_text: "Additional roll angle around the final rotated axis, in degrees.",
                 },
                 0.0,
             )
-            .with_speed(0.002),
+            .with_speed(0.03),
         );
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
@@ -485,9 +485,9 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
         assert_eq!(params.len(), 4);
         Some(MetaSDFNode::SDFRotation(MetaSDFRotation {
             child_id: unary_child(id_map, children)?,
-            roll: (&params[0]).into(),
-            pitch: (&params[1]).into(),
-            yaw: (&params[2]).into(),
+            tilt_angle: (&params[0]).into(),
+            turn_angle: (&params[1]).into(),
+            roll_angle: (&params[2]).into(),
             seed: (&params[3]).into(),
         }))
     }
@@ -1196,32 +1196,32 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
-                    label: "Roll",
-                    hover_text: "Rotation angle around the x-axis, in degrees.",
+                    label: "Tilt angle",
+                    hover_text: "Angle away from the y-axis, in degrees",
                 },
                 0.0,
             )
-            .with_speed(0.002),
+            .with_speed(0.03),
         );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
-                    label: "Pitch",
-                    hover_text: "Rotation angle around the y-axis, in degrees.",
+                    label: "Turn angle",
+                    hover_text: "Angle from the x-axis in the xz-plane, in degrees.",
                 },
                 0.0,
             )
-            .with_speed(0.002),
+            .with_speed(0.03),
         );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
-                    label: "Yaw",
-                    hover_text: "Rotation angle around the z-axis, in degrees.",
+                    label: "Roll angle",
+                    hover_text: "Additional roll angle around the final rotated axis, in degrees.",
                 },
                 0.0,
             )
-            .with_speed(0.002),
+            .with_speed(0.03),
         );
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
@@ -1242,9 +1242,9 @@ impl SpecificMetaNodeKind for MetaTransformRotation {
         Some(MetaSDFNode::TransformRotation(MetaTransformRotation {
             child_id: unary_child(id_map, children)?,
             composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
-            roll: (&params[1]).into(),
-            pitch: (&params[2]).into(),
-            yaw: (&params[3]).into(),
+            tilt_angle: (&params[1]).into(),
+            turn_angle: (&params[2]).into(),
+            roll_angle: (&params[3]).into(),
             seed: (&params[4]).into(),
         }))
     }

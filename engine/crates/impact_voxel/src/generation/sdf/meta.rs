@@ -245,12 +245,12 @@ define_meta_node_params! {
 pub struct MetaSDFRotation {
     /// ID of the child SDF node to transform.
     pub child_id: MetaSDFNodeID,
-    /// Rotation angle around the x-axis, in degrees.
-    pub roll: ContParamSpec,
-    /// Rotation angle around the y-axis, in degrees.
-    pub pitch: ContParamSpec,
-    /// Rotation angle around the z-axis, in degrees.
-    pub yaw: ContParamSpec,
+    /// Angle away from the y-axis, in degrees.
+    pub tilt_angle: ContParamSpec,
+    /// Angle from the x-axis in the xz-plane, in degrees.
+    pub turn_angle: ContParamSpec,
+    /// Additional roll angle around the final rotated axis, in degrees.
+    pub roll_angle: ContParamSpec,
     /// Seed for selecting a rotation within the specified ranges.
     pub seed: u32,
 }
@@ -258,9 +258,9 @@ pub struct MetaSDFRotation {
 define_meta_node_params! {
     MetaSDFRotation,
     struct MetaSDFRotationParams {
-        roll: f32,
-        pitch: f32,
-        yaw: f32,
+        tilt_angle: f32,
+        turn_angle: f32,
+        roll_angle: f32,
     }
 }
 
@@ -540,12 +540,12 @@ pub struct MetaTransformRotation {
     /// Whether to apply the rotation before ('Pre') or after ('Post') the
     /// input transforms.
     pub composition: CompositionMode,
-    /// Rotation angle around the x-axis, in degrees.
-    pub roll: ContParamSpec,
-    /// Rotation angle around the y-axis, in degrees.
-    pub pitch: ContParamSpec,
-    /// Rotation angle around the z-axis, in degrees.
-    pub yaw: ContParamSpec,
+    /// Angle away from the y-axis, in degrees.
+    pub tilt_angle: ContParamSpec,
+    /// Angle from the x-axis in the xz-plane, in degrees.
+    pub turn_angle: ContParamSpec,
+    /// Additional roll angle around the final rotated axis, in degrees.
+    pub roll_angle: ContParamSpec,
     /// Seed for selecting a rotation within the specified ranges.
     pub seed: u32,
 }
@@ -553,9 +553,9 @@ pub struct MetaTransformRotation {
 define_meta_node_params! {
     MetaTransformRotation,
     struct MetaTransformRotationParams {
-        roll: f32,
-        pitch: f32,
-        yaw: f32,
+        tilt_angle: f32,
+        turn_angle: f32,
+        roll_angle: f32,
     }
 }
 
@@ -1242,15 +1242,18 @@ impl MetaSDFRotation {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_node_id| {
-                let MetaSDFRotationParams { roll, pitch, yaw } =
-                    self.sample_params(param_scratch, rng)?;
+                let MetaSDFRotationParams {
+                    tilt_angle,
+                    turn_angle,
+                    roll_angle,
+                } = self.sample_params(param_scratch, rng)?;
 
                 Ok(SDFNode::new_rotation(
                     input_node_id,
-                    UnitQuaternion::from_euler_angles(
-                        Degrees(roll).radians(),
-                        Degrees(pitch).radians(),
-                        Degrees(yaw).radians(),
+                    unit_quaternion_from_tilt_turn_roll(
+                        Degrees(tilt_angle),
+                        Degrees(turn_angle),
+                        Degrees(roll_angle),
                     ),
                 ))
             },
@@ -1733,13 +1736,16 @@ impl MetaTransformRotation {
             seed,
             &outputs[self.child_id as usize],
             |rng, input_transform| {
-                let MetaTransformRotationParams { roll, pitch, yaw } =
-                    self.sample_params(param_scratch, rng)?;
+                let MetaTransformRotationParams {
+                    tilt_angle,
+                    turn_angle,
+                    roll_angle,
+                } = self.sample_params(param_scratch, rng)?;
 
-                let rotation = UnitQuaternion::from_euler_angles(
-                    Degrees(roll).radians(),
-                    Degrees(pitch).radians(),
-                    Degrees(yaw).radians(),
+                let rotation = unit_quaternion_from_tilt_turn_roll(
+                    Degrees(tilt_angle),
+                    Degrees(turn_angle),
+                    Degrees(roll_angle),
                 );
 
                 Ok(match self.composition {
@@ -2764,4 +2770,29 @@ fn compute_jittered_direction(
     let rotation = UnitQuaternion::from_axis_angle(&axis, angle);
 
     rotation * direction
+}
+
+fn unit_quaternion_from_tilt_turn_roll(
+    tilt_angle: Degrees<f32>,
+    turn_angle: Degrees<f32>,
+    roll_angle: Degrees<f32>,
+) -> UnitQuaternion<f32> {
+    let polar_angle = tilt_angle.radians();
+    let azimuthal_angle = turn_angle.radians();
+    let roll_angle = roll_angle.radians();
+
+    let (sin_polar_angle, cos_polar_angle) = polar_angle.sin_cos();
+    let (sin_azimuthal_angle, cos_azimuthal_angle) = azimuthal_angle.sin_cos();
+
+    let direction = UnitVector3::new_unchecked(vector![
+        sin_polar_angle * cos_azimuthal_angle,
+        cos_polar_angle,
+        sin_polar_angle * sin_azimuthal_angle,
+    ]);
+
+    let rotation_without_roll = rotation_between_axes(&Vector3::y_axis(), &direction);
+
+    let roll_rotation = UnitQuaternion::from_axis_angle(&direction, roll_angle);
+
+    roll_rotation * rotation_without_roll
 }
