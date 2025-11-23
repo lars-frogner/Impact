@@ -1569,12 +1569,6 @@ impl MetaStratifiedGridTransforms {
             return Ok(MetaSDFNodeOutput::TransformGroup(AVec::new_in(arena)));
         }
 
-        let grid_center: [_; 3] = array::from_fn(|i| {
-            let cell_extent = cell_extents[i];
-            let grid_extent = shape[i] as f32 * cell_extent;
-            0.5 * grid_extent
-        });
-
         // Center of the lower corner cell
         let start_pos: [_; 3] = array::from_fn(|i| {
             let cell_extent = cell_extents[i];
@@ -1587,11 +1581,11 @@ impl MetaStratifiedGridTransforms {
         let uniform_distr = Uniform::new(-0.5, 0.5).unwrap();
 
         for i in 0..shape[0] {
-            let x = start_pos[0] + i as f32 * cell_extents[0] - grid_center[0];
+            let x = start_pos[0] + i as f32 * cell_extents[0];
             for j in 0..shape[1] {
-                let y = start_pos[1] + j as f32 * cell_extents[1] - grid_center[1];
+                let y = start_pos[1] + j as f32 * cell_extents[1];
                 for k in 0..shape[2] {
-                    let z = start_pos[2] + k as f32 * cell_extents[2] - grid_center[2];
+                    let z = start_pos[2] + k as f32 * cell_extents[2];
 
                     for _ in 0..points_per_grid_cell {
                         let jx = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[0];
