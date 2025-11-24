@@ -11,7 +11,7 @@ use crate::editor::{
         CollapsedMetaSubgraph, CollapsedMetaSubgraphChildPort, CollapsedMetaSubgraphParentPort,
         MetaPaletteColor,
         data_type::EdgeDataType,
-        io::{IOMetaGraph, IOMetaGraphKind, IOMetaGraphRef, IOMetaNode},
+        io::{IOEditorSettings, IOMetaGraph, IOMetaGraphKind, IOMetaGraphRef, IOMetaNode},
     },
     util::create_bezier_edge,
 };
@@ -1797,7 +1797,12 @@ impl MetaGraphCanvas {
         );
     }
 
-    pub fn save_graph<A: Allocator>(&self, arena: A, output_path: &Path) -> Result<()> {
+    pub fn save_graph<A: Allocator>(
+        &self,
+        arena: A,
+        editor_settings: impl Into<IOEditorSettings>,
+        output_path: &Path,
+    ) -> Result<()> {
         let mut nodes = AVec::with_capacity_in(self.nodes.len(), arena);
         nodes.extend(self.nodes.iter().map(Into::into));
 
@@ -1805,6 +1810,7 @@ impl MetaGraphCanvas {
             kind: IOMetaGraphKind::Full {
                 pan: self.pan_zoom_state.pan.into(),
                 zoom: self.pan_zoom_state.zoom,
+                editor_settings: editor_settings.into(),
             },
             nodes: nodes.as_slice(),
             collapsed_nodes: &self.collapsed_nodes,
@@ -1866,11 +1872,16 @@ impl MetaGraphCanvas {
         scratch: &mut MetaCanvasScratch,
         ui: &Ui,
         path: &Path,
-    ) -> Result<()> {
+    ) -> Result<IOEditorSettings> {
         let graph: IOMetaGraph =
             impact_io::parse_ron_file(path).context("Failed to parse graph file")?;
 
-        let IOMetaGraphKind::Full { pan, zoom } = graph.kind else {
+        let IOMetaGraphKind::Full {
+            pan,
+            zoom,
+            editor_settings,
+        } = graph.kind
+        else {
             bail!(
                 "Graph file contains a {}, not a full graph",
                 graph.kind.label()
@@ -1911,7 +1922,7 @@ impl MetaGraphCanvas {
         self.update_edge_data_types(scratch);
         self.rebuild_collapse_index(scratch);
 
-        Ok(())
+        Ok(editor_settings)
     }
 
     pub fn load_subgraph(

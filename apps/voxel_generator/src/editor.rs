@@ -174,16 +174,24 @@ impl Editor {
             .set_title("Load graph")
             .pick_file()
         {
-            if let Err(err) =
-                self.meta_graph_canvas
-                    .load_graph(&mut self.meta_canvas_scratch, ui, &path)
+            match self
+                .meta_graph_canvas
+                .load_graph(&mut self.meta_canvas_scratch, ui, &path)
             {
-                impact_log::error!("Failed to load graph from {}: {err:#}", path.display());
-            } else {
-                self.graph_needs_compilation = true;
-                self.rebuild_generator = true;
-                impact_log::info!("Loaded graph from {}", path.display());
-                self.last_graph_path = Some(GraphPath::new(path));
+                Ok(settings) => {
+                    self.config.auto_generate = settings.auto_generate;
+                    self.config.auto_attach = settings.auto_attach;
+                    self.config.auto_layout = settings.auto_layout;
+                    self.config.show_atomic_graph = settings.show_atomic_graph;
+
+                    self.graph_needs_compilation = true;
+                    self.rebuild_generator = true;
+                    impact_log::info!("Loaded graph from {}", path.display());
+                    self.last_graph_path = Some(GraphPath::new(path));
+                }
+                Err(err) => {
+                    impact_log::error!("Failed to load graph from {}: {err:#}", path.display());
+                }
             }
         }
     }
@@ -213,7 +221,10 @@ impl Editor {
             .set_title("Save graph as")
             .save_file()
         {
-            if let Err(err) = self.meta_graph_canvas.save_graph(arena, &path) {
+            if let Err(err) = self
+                .meta_graph_canvas
+                .save_graph(arena, &self.config, &path)
+            {
                 impact_log::error!("Failed to save graph to {}: {err:#}", path.display());
             } else {
                 impact_log::info!("Saved graph to {}", path.display());
@@ -224,7 +235,10 @@ impl Editor {
 
     fn save_graph_to_last_path<A: Allocator>(&mut self, arena: A) {
         if let Some(path) = &self.last_graph_path {
-            if let Err(err) = self.meta_graph_canvas.save_graph(arena, &path.path) {
+            if let Err(err) = self
+                .meta_graph_canvas
+                .save_graph(arena, &self.config, &path.path)
+            {
                 impact_log::error!("Failed to save graph to {}: {err:#}", path.path_string);
             } else {
                 impact_log::info!("Saved graph to {}", path.path_string);

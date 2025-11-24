@@ -1,3 +1,5 @@
+use crate::editor::EditorConfig;
+
 use super::{
     MetaNode, MetaNodeChildLinks, MetaNodeData, MetaNodeID, MetaNodeParentLinks,
     node_kind::MetaNodeKind,
@@ -27,8 +29,22 @@ pub struct IOMetaGraphRef<'a> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum IOMetaGraphKind {
-    Full { pan: [f32; 2], zoom: f32 },
-    Subgraph { root_node_id: MetaNodeID },
+    Full {
+        editor_settings: IOEditorSettings,
+        pan: [f32; 2],
+        zoom: f32,
+    },
+    Subgraph {
+        root_node_id: MetaNodeID,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IOEditorSettings {
+    pub auto_generate: bool,
+    pub auto_attach: bool,
+    pub auto_layout: bool,
+    pub show_atomic_graph: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -59,6 +75,17 @@ impl IOMetaGraphKind {
         match self {
             Self::Full { .. } => "full graph",
             Self::Subgraph { .. } => "subgraph",
+        }
+    }
+}
+
+impl<'a> From<&'a EditorConfig> for IOEditorSettings {
+    fn from(config: &'a EditorConfig) -> Self {
+        Self {
+            auto_generate: config.auto_generate,
+            auto_attach: config.auto_attach,
+            auto_layout: config.auto_layout,
+            show_atomic_graph: config.show_atomic_graph,
         }
     }
 }
