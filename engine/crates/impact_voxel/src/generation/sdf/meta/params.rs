@@ -3,8 +3,10 @@
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, bail};
 use impact_containers::FixedQueue;
+use impact_math::angle::{degrees_to_radians, radians_to_degrees};
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64Mcg;
+use std::f32::consts::PI;
 use tinyvec::TinyVec;
 
 pub type ParamRng = Pcg64Mcg;
@@ -21,7 +23,7 @@ pub enum ParamSpecRef<'a> {
 #[derive(Clone, Debug)]
 pub enum DiscreteParamSpec {
     Constant(DiscreteValueSource),
-    RandomUniform {
+    Uniform {
         min: DiscreteValueSource,
         max: DiscreteValueSource,
     },
@@ -31,9 +33,13 @@ pub enum DiscreteParamSpec {
 #[derive(Clone, Debug)]
 pub enum ContParamSpec {
     Constant(ContValueSource),
-    RandomUniform {
+    Uniform {
         min: ContValueSource,
         max: ContValueSource,
+    },
+    UniformCosAngle {
+        min_angle: ContValueSource,
+        max_angle: ContValueSource,
     },
 }
 
@@ -97,7 +103,7 @@ impl DiscreteParamSpec {
         let mut deps = ParamIndicesForDeps::new();
         match self {
             Self::Constant(v) => v.add_param_dependency(&mut deps),
-            Self::RandomUniform { min, max } => {
+            Self::Uniform { min, max } => {
                 min.add_param_dependency(&mut deps);
                 max.add_param_dependency(&mut deps);
             }
@@ -108,7 +114,7 @@ impl DiscreteParamSpec {
     fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> u32 {
         match self {
             Self::Constant(constant) => constant.eval(param_values),
-            Self::RandomUniform { min, max } => {
+            Self::Uniform { min, max } => {
                 let min_value = min.eval(param_values);
                 let max_value = max.eval(param_values).max(min_value);
                 rng.random_range(min_value..=max_value)
@@ -126,7 +132,11 @@ impl ContParamSpec {
         let mut deps = ParamIndicesForDeps::new();
         match self {
             Self::Constant(v) => v.add_param_dependency(&mut deps),
-            Self::RandomUniform { min, max } => {
+            Self::Uniform { min, max }
+            | Self::UniformCosAngle {
+                min_angle: min,
+                max_angle: max,
+            } => {
                 min.add_param_dependency(&mut deps);
                 max.add_param_dependency(&mut deps);
             }
@@ -137,10 +147,27 @@ impl ContParamSpec {
     fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> f32 {
         match self {
             Self::Constant(constant) => constant.eval(param_values),
-            Self::RandomUniform { min, max } => {
+            Self::Uniform { min, max } => {
                 let min_value = min.eval(param_values);
                 let max_value = max.eval(param_values).max(min_value);
                 rng.random_range(min_value..=max_value)
+            }
+            Self::UniformCosAngle {
+                min_angle,
+                max_angle,
+            } => {
+                let mut min_angle = degrees_to_radians(min_angle.eval(param_values));
+                let mut max_angle = degrees_to_radians(max_angle.eval(param_values));
+
+                min_angle = min_angle.clamp(0.0, PI);
+                max_angle = max_angle.clamp(min_angle, PI);
+
+                let min_cos = f32::cos(max_angle);
+                let max_cos = f32::cos(min_angle);
+
+                let cos_angle = rng.random_range(min_cos..=max_cos);
+
+                radians_to_degrees(f32::acos(cos_angle))
             }
         }
     }

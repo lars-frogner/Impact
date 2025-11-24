@@ -72,26 +72,37 @@ pub enum ParamValueType {
 pub struct ParamDistribution {
     pub variant: DistributionVariant,
     pub constant: ValueSource,
-    pub random_uniform: RandomUniformDistribution,
+    #[serde(default)]
+    pub uniform: Option<UniformDistribution>,
+    #[serde(default)]
+    pub uniform_cos_angle: Option<UniformCosAngleDistribution>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct RandomUniformDistribution {
+pub struct UniformDistribution {
     pub min: ValueSource,
     pub max: ValueSource,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct UniformCosAngleDistribution {
+    pub min_angle: ValueSource,
+    pub max_angle: ValueSource,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DistributionVariant {
     #[default]
     Constant,
-    RandomUniform,
+    Uniform,
+    UniformCosAngle,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ValueSource {
     pub variant: ValueSourceVariant,
     pub fixed: f32,
+    #[serde(default, skip_serializing_if = "FromParamSource::is_default")]
     pub from_param: FromParamSource,
 }
 
@@ -102,13 +113,13 @@ pub enum ValueSourceVariant {
     FromParam,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct FromParamSource {
     pub param_idx: ParamIdx,
     pub mapping: ParamValueMapping,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ParamValueMapping {
     pub variant: ParamValueMappingVariant,
     pub linear: LinearParamValueMapping,
@@ -120,7 +131,7 @@ pub enum ParamValueMappingVariant {
     Linear,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct LinearParamValueMapping {
     pub offset: f32,
     pub scale: f32,
@@ -467,7 +478,13 @@ impl MetaDistributedParam {
 
         strong_option_label(ui, self.text.clone());
 
-        distribution_combobox(ui, id_salt, &mut distribution.variant, &mut changed);
+        distribution_combobox(
+            ui,
+            self.value_type,
+            id_salt,
+            &mut distribution.variant,
+            &mut changed,
+        );
 
         match distribution.variant {
             DistributionVariant::Constant => {
@@ -485,9 +502,9 @@ impl MetaDistributedParam {
                     &mut changed,
                 );
             }
-            DistributionVariant::RandomUniform => {
-                let id_salt = (id_salt, "random_uniform");
-                let random_uniform = &mut distribution.random_uniform;
+            DistributionVariant::Uniform => {
+                let id_salt = (id_salt, "uniform");
+                let uniform = distribution.get_or_init_uniform();
 
                 strong_option_label(
                     ui,
@@ -499,7 +516,7 @@ impl MetaDistributedParam {
                 source_controls(
                     ui,
                     (id_salt, "min"),
-                    &mut random_uniform.min,
+                    &mut uniform.min,
                     self.value_type,
                     self.min_value,
                     self.max_value,
@@ -519,7 +536,51 @@ impl MetaDistributedParam {
                 source_controls(
                     ui,
                     (id_salt, "max"),
-                    &mut random_uniform.max,
+                    &mut uniform.max,
+                    self.value_type,
+                    self.min_value,
+                    self.max_value,
+                    self.speed,
+                    current_distr_param_idx,
+                    distr_param_names,
+                    &mut changed,
+                );
+            }
+            DistributionVariant::UniformCosAngle => {
+                let id_salt = (id_salt, "uniform_cos_angle");
+                let uniform_cos_angle = distribution.get_or_init_uniform_cos_angle();
+
+                strong_option_label(
+                    ui,
+                    LabelAndHoverText {
+                        label: "    Min angle",
+                        hover_text: "The minimum random angle, in degrees",
+                    },
+                );
+                source_controls(
+                    ui,
+                    (id_salt, "min_angle"),
+                    &mut uniform_cos_angle.min_angle,
+                    self.value_type,
+                    self.min_value,
+                    self.max_value,
+                    self.speed,
+                    current_distr_param_idx,
+                    distr_param_names,
+                    &mut changed,
+                );
+
+                strong_option_label(
+                    ui,
+                    LabelAndHoverText {
+                        label: "    Max angle",
+                        hover_text: "The maximum random angle, in degrees",
+                    },
+                );
+                source_controls(
+                    ui,
+                    (id_salt, "max_angle"),
+                    &mut uniform_cos_angle.max_angle,
                     self.value_type,
                     self.min_value,
                     self.max_value,
@@ -544,9 +605,14 @@ impl MetaDistributedParam {
                     .constant
                     .append_display_text(&mut text, distr_param_names);
             }
-            DistributionVariant::RandomUniform => {
+            DistributionVariant::Uniform => {
                 self.distribution
-                    .random_uniform
+                    .uniform()
+                    .append_display_text(&mut text, distr_param_names);
+            }
+            DistributionVariant::UniformCosAngle => {
+                self.distribution
+                    .uniform_cos_angle()
                     .append_display_text(&mut text, distr_param_names);
             }
         }
@@ -569,11 +635,26 @@ impl ParamDistribution {
         Self {
             variant: DistributionVariant::Constant,
             constant: ValueSource::fixed(value),
-            random_uniform: RandomUniformDistribution {
-                min: ValueSource::fixed(value),
-                max: ValueSource::fixed(value),
-            },
+            ..Self::default()
         }
+    }
+
+    fn uniform(&self) -> &UniformDistribution {
+        self.uniform.as_ref().unwrap()
+    }
+
+    fn uniform_cos_angle(&self) -> &UniformCosAngleDistribution {
+        self.uniform_cos_angle.as_ref().unwrap()
+    }
+
+    fn get_or_init_uniform(&mut self) -> &mut UniformDistribution {
+        self.uniform
+            .get_or_insert_with(|| UniformDistribution::fixed_same(self.constant.fixed))
+    }
+
+    fn get_or_init_uniform_cos_angle(&mut self) -> &mut UniformCosAngleDistribution {
+        self.uniform_cos_angle
+            .get_or_insert_with(|| UniformCosAngleDistribution::fixed_same(self.constant.fixed))
     }
 
     fn to_discrete_param_spec(&self) -> core::DiscreteParamSpec {
@@ -581,25 +662,37 @@ impl ParamDistribution {
             DistributionVariant::Constant => {
                 core::DiscreteParamSpec::Constant((&self.constant).into())
             }
-            DistributionVariant::RandomUniform => core::DiscreteParamSpec::RandomUniform {
-                min: (&self.random_uniform.min).into(),
-                max: (&self.random_uniform.max).into(),
+            DistributionVariant::Uniform => core::DiscreteParamSpec::Uniform {
+                min: (&self.uniform().min).into(),
+                max: (&self.uniform().max).into(),
             },
+            DistributionVariant::UniformCosAngle => unreachable!(),
         }
     }
 
     fn to_cont_param_spec(&self) -> core::ContParamSpec {
         match self.variant {
             DistributionVariant::Constant => core::ContParamSpec::Constant((&self.constant).into()),
-            DistributionVariant::RandomUniform => core::ContParamSpec::RandomUniform {
-                min: (&self.random_uniform.min).into(),
-                max: (&self.random_uniform.max).into(),
+            DistributionVariant::Uniform => core::ContParamSpec::Uniform {
+                min: (&self.uniform().min).into(),
+                max: (&self.uniform().max).into(),
+            },
+            DistributionVariant::UniformCosAngle => core::ContParamSpec::UniformCosAngle {
+                min_angle: (&self.uniform_cos_angle().min_angle).into(),
+                max_angle: (&self.uniform_cos_angle().max_angle).into(),
             },
         }
     }
 }
 
-impl RandomUniformDistribution {
+impl UniformDistribution {
+    fn fixed_same(value: f32) -> Self {
+        Self {
+            min: ValueSource::fixed(value),
+            max: ValueSource::fixed(value),
+        }
+    }
+
     fn append_display_text(&self, text: &mut String, distr_param_names: &[&'static str]) {
         text.push_str("uniform(min = ");
         self.min.append_display_text(text, distr_param_names);
@@ -609,15 +702,45 @@ impl RandomUniformDistribution {
     }
 }
 
+impl UniformCosAngleDistribution {
+    fn fixed_same(value: f32) -> Self {
+        Self {
+            min_angle: ValueSource::fixed(value),
+            max_angle: ValueSource::fixed(value),
+        }
+    }
+
+    fn append_display_text(&self, text: &mut String, distr_param_names: &[&'static str]) {
+        text.push_str("uniformCosAngle(min = ");
+        self.min_angle.append_display_text(text, distr_param_names);
+        text.push_str(", max = ");
+        self.max_angle.append_display_text(text, distr_param_names);
+        text.push(')');
+    }
+}
+
+const DISCRETE_DISTRIBUTIONS: [DistributionVariant; 2] =
+    [DistributionVariant::Constant, DistributionVariant::Uniform];
+
+const CONT_DISTRIBUTIONS: [DistributionVariant; 3] = [
+    DistributionVariant::Constant,
+    DistributionVariant::Uniform,
+    DistributionVariant::UniformCosAngle,
+];
+
 impl DistributionVariant {
-    fn all() -> [Self; 2] {
-        [Self::Constant, Self::RandomUniform]
+    fn all(value_type: ParamValueType) -> &'static [Self] {
+        match value_type {
+            ParamValueType::Discrete => &DISCRETE_DISTRIBUTIONS,
+            ParamValueType::Continuous => &CONT_DISTRIBUTIONS,
+        }
     }
 
     fn label(&self) -> &'static str {
         match self {
             Self::Constant => "Constant",
-            Self::RandomUniform => "Random (uniform)",
+            Self::Uniform => "Uniform",
+            Self::UniformCosAngle => "Uniform cos(angle)",
         }
     }
 }
@@ -671,6 +794,10 @@ impl FromParamSource {
     fn append_display_text(&self, text: &mut String, distr_param_names: &[&'static str]) {
         self.mapping
             .append_display_text(text, distr_param_names[self.param_idx as usize]);
+    }
+
+    fn is_default(&self) -> bool {
+        self == &Self::default()
     }
 }
 
@@ -758,6 +885,7 @@ impl ParamValueMappingVariant {
 
 fn distribution_combobox(
     ui: &mut Ui,
+    value_type: ParamValueType,
     id_salt: impl Hash,
     selected_variant: &mut DistributionVariant,
     changed: &mut bool,
@@ -773,7 +901,7 @@ fn distribution_combobox(
             ComboBox::from_id_salt(id_salt)
                 .selected_text(selected_variant.label())
                 .show_ui(ui, |ui| {
-                    for variant in DistributionVariant::all() {
+                    for &variant in DistributionVariant::all(value_type) {
                         ui.selectable_value(selected_variant, variant, variant.label());
                     }
                 })
