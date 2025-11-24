@@ -3,11 +3,11 @@
 #[macro_use]
 mod macros;
 
-mod angle;
-mod bounds;
-mod halton;
-mod hash;
-mod num;
+pub mod angle;
+pub mod bounds;
+pub mod halton;
+pub mod hash;
+pub mod num;
 pub mod splitmix;
 
 pub use angle::{Angle, Degrees, Radians};

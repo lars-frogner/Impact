@@ -96,13 +96,13 @@ impl<F: Float> Angle<F> for Radians<F> {
 
 impl<F: Float> From<Radians<F>> for Degrees<F> {
     fn from(rad: Radians<F>) -> Self {
-        Self(rad.value() * F::from_f64(180.0).unwrap() * <F as Float>::FRAC_1_PI)
+        Self(radians_to_degrees(rad.value()))
     }
 }
 
 impl<F: Float> From<Degrees<F>> for Radians<F> {
     fn from(deg: Degrees<F>) -> Self {
-        Self(deg.value() * <F as Float>::PI / F::from_f64(180.0).unwrap())
+        Self(degrees_to_radians(deg.value()))
     }
 }
 
@@ -334,6 +334,14 @@ roc_integration::impl_roc_for_library_provided_primitives! {
     Radians<f64> => core, None,    Radians, Radians,  Some("_64"), DoublePrecision,
     Degrees<f32> => core, None,    Degrees, Degrees,  Some("_32"), SinglePrecision,
     Degrees<f64> => core, None,    Degrees, Degrees,  Some("_64"), DoublePrecision,
+}
+
+pub fn radians_to_degrees<F: Float>(radians: F) -> F {
+    radians * F::from_f64(180.0).unwrap() * <F as Float>::FRAC_1_PI
+}
+
+pub fn degrees_to_radians<F: Float>(degrees: F) -> F {
+    degrees * <F as Float>::PI / F::from_f64(180.0).unwrap()
 }
 
 #[cfg(test)]
