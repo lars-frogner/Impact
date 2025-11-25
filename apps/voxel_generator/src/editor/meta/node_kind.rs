@@ -14,7 +14,8 @@ use impact_voxel::generation::sdf::meta::{
     MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling, MetaSDFSubtraction,
     MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF, MetaSphereSurfaceTransforms,
     MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
-    MetaTransformRotation, MetaTransformScaling, MetaTransformTranslation, SphereSurfaceRotation,
+    MetaTransformRotation, MetaTransformScaling, MetaTransformSimilarity, MetaTransformTranslation,
+    SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,6 +54,7 @@ pub enum MetaNodeKind {
     TransformTranslation,
     TransformRotation,
     TransformScaling,
+    TransformSimilarity,
     ClosestTranslationToSurface,
     RayTranslationToSurface,
     RotationToGradient,
@@ -1301,6 +1303,129 @@ impl SpecificMetaNodeKind for MetaTransformScaling {
     }
 }
 
+impl SpecificMetaNodeKind for MetaTransformSimilarity {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Transform similarity",
+        hover_text: "Similarity transformation (scale, rotate, translate) of one or more transforms.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::TransformGroup);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the similarity transform before ('Pre') or after ('Post') the input transforms.",
+                },
+                EnumParamVariants::from_iter(["Pre", "Post"]),
+                "Pre",
+            )
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Scale",
+                    hover_text: "Uniform scale factor.",
+                },
+                1.0,
+            )
+            .with_min_value(1e-3)
+            .with_speed(0.005),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Tilt angle",
+                    hover_text: "Angle away from the y-axis, in degrees.",
+                },
+                0.0,
+            )
+            .with_speed(0.03),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Turn angle",
+                    hover_text: "Angle from the x-axis in the xz-plane, in degrees.",
+                },
+                0.0,
+            )
+            .with_speed(0.03),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Roll angle",
+                    hover_text: "Additional roll angle around the final rotated axis, in degrees.",
+                },
+                0.0,
+            )
+            .with_speed(0.03),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Translation x",
+                    hover_text: "Translation distance along the x-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Translation y",
+                    hover_text: "Translation distance along the y-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Translation z",
+                    hover_text: "Translation distance along the z-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05),
+        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for generating randomized similarity transforms.",
+            },
+            0,
+        ));
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 9);
+        Some(MetaSDFNode::TransformSimilarity(MetaTransformSimilarity {
+            child_id: unary_child(id_map, children)?,
+            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
+            scale: (&params[1]).into(),
+            tilt_angle: (&params[2]).into(),
+            turn_angle: (&params[3]).into(),
+            roll_angle: (&params[4]).into(),
+            translation_x: (&params[5]).into(),
+            translation_y: (&params[6]).into(),
+            translation_z: (&params[7]).into(),
+            seed: (&params[8]).into(),
+        }))
+    }
+}
+
 impl SpecificMetaNodeKind for MetaClosestTranslationToSurface {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
         label: "Closest translation to surface",
@@ -1480,7 +1605,7 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
 }
 
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 23] {
+    pub const fn all_non_root() -> [Self; 24] {
         [
             Self::BoxSDF,
             Self::SphereSDF,
@@ -1500,6 +1625,7 @@ impl MetaNodeKind {
             Self::TransformTranslation,
             Self::TransformRotation,
             Self::TransformScaling,
+            Self::TransformSimilarity,
             Self::ClosestTranslationToSurface,
             Self::RayTranslationToSurface,
             Self::RotationToGradient,
@@ -1532,6 +1658,7 @@ impl MetaNodeKind {
             | Self::TransformTranslation
             | Self::TransformRotation
             | Self::TransformScaling
+            | Self::TransformSimilarity
             | Self::ClosestTranslationToSurface
             | Self::RayTranslationToSurface
             | Self::RotationToGradient
@@ -1561,6 +1688,7 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::LABEL,
             Self::TransformRotation => MetaTransformRotation::LABEL,
             Self::TransformScaling => MetaTransformScaling::LABEL,
+            Self::TransformSimilarity => MetaTransformSimilarity::LABEL,
             Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::LABEL,
             Self::RayTranslationToSurface => MetaRayTranslationToSurface::LABEL,
             Self::RotationToGradient => MetaRotationToGradient::LABEL,
@@ -1592,6 +1720,7 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::PARENT_PORT_KIND,
             Self::TransformRotation => MetaTransformRotation::PARENT_PORT_KIND,
             Self::TransformScaling => MetaTransformScaling::PARENT_PORT_KIND,
+            Self::TransformSimilarity => MetaTransformSimilarity::PARENT_PORT_KIND,
             Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::PARENT_PORT_KIND,
             Self::RayTranslationToSurface => MetaRayTranslationToSurface::PARENT_PORT_KIND,
             Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
@@ -1623,6 +1752,7 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::CHILD_PORT_KINDS,
             Self::TransformRotation => MetaTransformRotation::CHILD_PORT_KINDS,
             Self::TransformScaling => MetaTransformScaling::CHILD_PORT_KINDS,
+            Self::TransformSimilarity => MetaTransformSimilarity::CHILD_PORT_KINDS,
             Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::CHILD_PORT_KINDS,
             Self::RayTranslationToSurface => MetaRayTranslationToSurface::CHILD_PORT_KINDS,
             Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
@@ -1664,6 +1794,7 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::params(),
             Self::TransformRotation => MetaTransformRotation::params(),
             Self::TransformScaling => MetaTransformScaling::params(),
+            Self::TransformSimilarity => MetaTransformSimilarity::params(),
             Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::params(),
             Self::RayTranslationToSurface => MetaRayTranslationToSurface::params(),
             Self::RotationToGradient => MetaRotationToGradient::params(),
@@ -1706,6 +1837,7 @@ impl MetaNodeKind {
             Self::TransformTranslation => MetaTransformTranslation::build(id_map, children, params),
             Self::TransformRotation => MetaTransformRotation::build(id_map, children, params),
             Self::TransformScaling => MetaTransformScaling::build(id_map, children, params),
+            Self::TransformSimilarity => MetaTransformSimilarity::build(id_map, children, params),
             Self::ClosestTranslationToSurface => {
                 MetaClosestTranslationToSurface::build(id_map, children, params)
             }
