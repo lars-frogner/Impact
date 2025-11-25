@@ -150,30 +150,6 @@ define_setup_type! {
 
 define_setup_type! {
     target = VoxelObjectID;
-    /// An object made of voxels in a gradient noise pattern.
-    #[roc(parents = "Setup")]
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct VoxelGradientNoisePattern {
-        /// The extent of a single voxel.
-        pub voxel_extent: f32,
-        /// The maximum number of voxels in the x-direction.
-        pub extent_x: f32,
-        /// The maximum number of voxels in the y-direction.
-        pub extent_y: f32,
-        /// The maximum number of voxels in the z-direction.
-        pub extent_z: f32,
-        /// The spatial frequency of the noise pattern.
-        pub noise_frequency: f32,
-        /// The threshold noise value for generating a voxel.
-        pub noise_threshold: f32,
-        /// The seed for the noise pattern.
-        pub seed: u32,
-    }
-}
-
-define_setup_type! {
-    target = VoxelObjectID;
     /// A voxel object with dynamic voxels will behave like a dynamic rigid body
     /// and respond to voxel absorption.
     #[roc(parents = "Setup")]
@@ -507,68 +483,6 @@ impl VoxelSphereUnion {
             sphere_1_id,
             sphere_2_id,
             self.smoothness,
-        ))
-    }
-}
-
-#[roc]
-impl VoxelGradientNoisePattern {
-    /// Defines a gradient noise voxel pattern with the given maximum number of
-    /// voxels in each direction, spatial noise frequency, noise threshold and
-    /// seed.
-    #[roc(body = r#"
-    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
-    # expect voxel_extent > 0.0
-    # expect extent_x >= 0.0
-    # expect extent_y >= 0.0
-    # expect extent_z >= 0.0
-    {
-        voxel_extent,
-        extent_x,
-        extent_y,
-        extent_z,
-        noise_frequency,
-        noise_threshold,
-        seed,
-    }"#)]
-    pub fn new(
-        voxel_extent: f32,
-        extent_x: f32,
-        extent_y: f32,
-        extent_z: f32,
-        noise_frequency: f32,
-        noise_threshold: f32,
-        seed: u32,
-    ) -> Self {
-        assert!(voxel_extent > 0.0);
-        assert!(extent_x >= 0.0);
-        assert!(extent_y >= 0.0);
-        assert!(extent_z >= 0.0);
-        Self {
-            voxel_extent,
-            extent_x,
-            extent_y,
-            extent_z,
-            noise_frequency,
-            noise_threshold,
-            seed,
-        }
-    }
-
-    pub fn voxel_extent(&self) -> f64 {
-        f64::from(self.voxel_extent)
-    }
-
-    pub fn extents_in_voxels(&self) -> [f32; 3] {
-        [self.extent_x, self.extent_y, self.extent_z]
-    }
-
-    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
-        graph.add_node(SDFNode::new_gradient_noise(
-            self.extents_in_voxels(),
-            self.noise_frequency,
-            self.noise_threshold,
-            self.seed,
         ))
     }
 }

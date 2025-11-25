@@ -8,14 +8,12 @@ use super::{
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
-    CompositionMode, MetaBoxSDF, MetaCapsuleSDF, MetaClosestTranslationToSurface,
-    MetaGradientNoiseSDF, MetaMultifractalNoiseSDFModifier, MetaMultiscaleSphereSDFModifier,
-    MetaRayTranslationToSurface, MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFIntersection,
-    MetaSDFNode, MetaSDFNodeID, MetaSDFRotation, MetaSDFScaling, MetaSDFSubtraction,
-    MetaSDFTranslation, MetaSDFUnion, MetaSphereSDF, MetaSphereSurfaceTransforms,
-    MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
-    MetaTransformRotation, MetaTransformScaling, MetaTransformSimilarity, MetaTransformTranslation,
-    SphereSurfaceRotation,
+    MetaBoxes, MetaCapsules, MetaClosestTranslationToSurface, MetaMultifractalNoiseSDFModifier,
+    MetaMultiscaleSphereSDFModifier, MetaPoints, MetaRayTranslationToSurface, MetaRotation,
+    MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFInstantiation, MetaSDFIntersection,
+    MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction, MetaSDFUnion, MetaScaling, MetaSimilarity,
+    MetaSphereSurfaceTransforms, MetaSpheres, MetaStochasticSelection,
+    MetaStratifiedGridTransforms, MetaTransformApplication, MetaTranslation, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,41 +34,41 @@ trait SpecificMetaNodeKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MetaNodeKind {
     Output,
-    BoxSDF,
-    SphereSDF,
-    CapsuleSDF,
-    GradientNoiseSDF,
-    SDFTranslation,
-    SDFRotation,
-    SDFScaling,
+    Points,
+    Spheres,
+    Capsules,
+    Boxes,
+    Translation,
+    Rotation,
+    Scaling,
+    Similarity,
+    StratifiedGridTransforms,
+    SphereSurfaceTransforms,
+    ClosestTranslationToSurface,
+    RayTranslationToSurface,
+    RotationToGradient,
+    StochasticSelection,
+    SDFInstantiation,
+    TransformApplication,
     MultifractalNoiseSDFModifier,
     MultiscaleSphereSDFModifier,
     SDFUnion,
     SDFSubtraction,
     SDFIntersection,
     SDFGroupUnion,
-    StratifiedGridTransforms,
-    SphereSurfaceTransforms,
-    TransformTranslation,
-    TransformRotation,
-    TransformScaling,
-    TransformSimilarity,
-    ClosestTranslationToSurface,
-    RayTranslationToSurface,
-    RotationToGradient,
-    TransformApplication,
-    StochasticSelection,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MetaNodeKindGroup {
     Root,
-    SDFPrimitive,
-    SDFTransform,
-    SDFModification,
-    SDFCombination,
-    Transform,
+    InstancePrimitives,
+    BasicInstanceTransforms,
+    StructuredInstanceTransforms,
+    SDFBasedInstanceTransforms,
     Filtering,
+    SDFFromInstances,
+    SDFModifiers,
+    SDFCombination,
 }
 
 #[allow(dead_code)]
@@ -79,8 +77,7 @@ pub enum MetaChildPortKind {
     #[default]
     SingleSDF,
     SDFGroup,
-    SingleTransform,
-    TransformGroup,
+    Instances,
     Any,
 }
 
@@ -90,8 +87,7 @@ pub enum MetaParentPortKind {
     #[default]
     SingleSDF,
     SDFGroup,
-    SingleTransform,
-    TransformGroup,
+    Instances,
     SameAsInput {
         slot: usize,
     },
@@ -104,52 +100,22 @@ type MetaChildPortKinds = [Option<MetaChildPortKind>; MAX_CHILD_PORTS];
 pub const DEFAULT_VOXEL_EXTENT: f32 = 0.25;
 pub const MIN_VOXEL_EXTENT: f32 = 0.005;
 
-impl SpecificMetaNodeKind for MetaBoxSDF {
+impl SpecificMetaNodeKind for MetaPoints {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Box SDF",
-        hover_text: "A box-shaped SDF.",
+        label: "Points",
+        hover_text: "A set of instances with no shape, each having an identity transform.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Extent x",
-                    hover_text: "Extent of the box along the x-axis, in voxels.",
-                },
-                60.0,
-            )
-            .with_min_value(0.0),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Extent y",
-                    hover_text: "Extent of the box along the y-axis, in voxels.",
-                },
-                60.0,
-            )
-            .with_min_value(0.0),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Extent z",
-                    hover_text: "Extent of the box along the z-axis, in voxels.",
-                },
-                60.0,
-            )
-            .with_min_value(0.0),
-        );
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
-                label: "Seed",
-                hover_text: "Seed for generating randomized extent values.",
+                label: "Count",
+                hover_text: "Number of points to generate.",
             },
-            0,
+            1,
         ));
         params
     }
@@ -159,22 +125,19 @@ impl SpecificMetaNodeKind for MetaBoxSDF {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 4);
-        Some(MetaSDFNode::BoxSDF(MetaBoxSDF {
-            extent_x: (&params[0]).into(),
-            extent_y: (&params[1]).into(),
-            extent_z: (&params[2]).into(),
-            seed: (&params[3]).into(),
+        assert_eq!(params.len(), 1);
+        Some(MetaSDFNode::Points(MetaPoints {
+            count: (&params[0]).into(),
         }))
     }
 }
 
-impl SpecificMetaNodeKind for MetaSphereSDF {
+impl SpecificMetaNodeKind for MetaSpheres {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Sphere SDF",
-        hover_text: "A sphere-shaped SDF.",
+        label: "Spheres",
+        hover_text: "A set of sphere instances, each having an identity transform.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
@@ -183,12 +146,19 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Radius",
-                    hover_text: "Radius of the sphere, in voxels.",
+                    hover_text: "Sphere radius, in voxels.",
                 },
                 30.0,
             )
             .with_min_value(0.0),
         );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Count",
+                hover_text: "Number of spheres to generate.",
+            },
+            1,
+        ));
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
@@ -204,20 +174,21 @@ impl SpecificMetaNodeKind for MetaSphereSDF {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 2);
-        Some(MetaSDFNode::SphereSDF(MetaSphereSDF {
+        assert_eq!(params.len(), 3);
+        Some(MetaSDFNode::Spheres(MetaSpheres {
             radius: (&params[0]).into(),
-            seed: (&params[1]).into(),
+            count: (&params[1]).into(),
+            seed: (&params[2]).into(),
         }))
     }
 }
 
-impl SpecificMetaNodeKind for MetaCapsuleSDF {
+impl SpecificMetaNodeKind for MetaCapsules {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Capsule SDF",
-        hover_text: "A vertical capsule-shaped SDF.",
+        label: "Capsules",
+        hover_text: "A set of vertical capsule instances, each having an identity transform.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
@@ -236,12 +207,19 @@ impl SpecificMetaNodeKind for MetaCapsuleSDF {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Radius",
-                    hover_text: "Radius of the spherical caps, in voxels.",
+                    hover_text: "Radius of the spherical caps, in voxels",
                 },
                 15.0,
             )
             .with_min_value(0.0),
         );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Count",
+                hover_text: "Number of capsules to generate.",
+            },
+            1,
+        ));
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
@@ -257,21 +235,22 @@ impl SpecificMetaNodeKind for MetaCapsuleSDF {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
-        Some(MetaSDFNode::CapsuleSDF(MetaCapsuleSDF {
+        assert_eq!(params.len(), 4);
+        Some(MetaSDFNode::Capsules(MetaCapsules {
             segment_length: (&params[0]).into(),
             radius: (&params[1]).into(),
-            seed: (&params[2]).into(),
+            count: (&params[2]).into(),
+            seed: (&params[3]).into(),
         }))
     }
 }
 
-impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
+impl SpecificMetaNodeKind for MetaBoxes {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Gradient noise SDF",
-        hover_text: "An SDF generated from thresholding a gradient noise field.",
+        label: "Boxes",
+        hover_text: "A set of box instances, each having an identity transform.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SingleSDF;
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
 
     fn params() -> MetaNodeParams {
@@ -280,7 +259,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Extent x",
-                    hover_text: "Extent of the noise field along the x-axis, in voxels.",
+                    hover_text: "Extent along the x-axis, in voxels.",
                 },
                 60.0,
             )
@@ -290,7 +269,7 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Extent y",
-                    hover_text: "Extent of the noise field along the y-axis, in voxels.",
+                    hover_text: "Extent along the y-axis, in voxels.",
                 },
                 60.0,
             )
@@ -300,40 +279,23 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "Extent z",
-                    hover_text: "Extent of the noise field along the z-axis, in voxels.",
+                    hover_text: "Extent along the z-axis, in voxels.",
                 },
                 60.0,
             )
             .with_min_value(0.0),
         );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Frequency",
-                    hover_text: "Spatial frequency of the noise pattern, in inverse voxels.",
-                },
-                0.05,
-            )
-            .with_min_value(0.0)
-            .with_max_value(1.0)
-            .with_speed(0.0002),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Threshold",
-                    hover_text: "Minimum noise value (they range from -1 to 1) for a voxel to be considered inside the object.",
-                },
-                0.0,
-            )
-            .with_min_value(-1.0)
-            .with_max_value(1.0)
-            .with_speed(0.001)
-        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Count",
+                hover_text: "Number of boxes to generate.",
+            },
+            1,
+        ));
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Seed",
-                hover_text: "Seed for generating noise and randomized parameter values.",
+                hover_text: "Seed for generating randomized extent values.",
             },
             0,
         ));
@@ -345,26 +307,25 @@ impl SpecificMetaNodeKind for MetaGradientNoiseSDF {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 6);
-        Some(MetaSDFNode::GradientNoiseSDF(MetaGradientNoiseSDF {
+        assert_eq!(params.len(), 5);
+        Some(MetaSDFNode::Boxes(MetaBoxes {
             extent_x: (&params[0]).into(),
             extent_y: (&params[1]).into(),
             extent_z: (&params[2]).into(),
-            noise_frequency: (&params[3]).into(),
-            noise_threshold: (&params[4]).into(),
-            seed: (&params[5]).into(),
+            count: (&params[3]).into(),
+            seed: (&params[4]).into(),
         }))
     }
 }
 
-impl SpecificMetaNodeKind for MetaSDFTranslation {
+impl SpecificMetaNodeKind for MetaTranslation {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "SDF translation",
-        hover_text: "Translation of one or more SDFs.",
+        label: "Translation",
+        hover_text: "Translation of one or more instances.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::SDFGroup);
+        single_child_port_kind(MetaChildPortKind::Instances);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -414,7 +375,7 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 4);
-        Some(MetaSDFNode::SDFTranslation(MetaSDFTranslation {
+        Some(MetaSDFNode::Translation(MetaTranslation {
             child_id: unary_child(id_map, children)?,
             translation_x: (&params[0]).into(),
             translation_y: (&params[1]).into(),
@@ -424,14 +385,14 @@ impl SpecificMetaNodeKind for MetaSDFTranslation {
     }
 }
 
-impl SpecificMetaNodeKind for MetaSDFRotation {
+impl SpecificMetaNodeKind for MetaRotation {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "SDF rotation",
-        hover_text: "Rotation of one or more SDFs.",
+        label: "Rotation",
+        hover_text: "Rotation of one or more instances.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::SDFGroup);
+        single_child_port_kind(MetaChildPortKind::Instances);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -481,7 +442,7 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 4);
-        Some(MetaSDFNode::SDFRotation(MetaSDFRotation {
+        Some(MetaSDFNode::Rotation(MetaRotation {
             child_id: unary_child(id_map, children)?,
             tilt_angle: (&params[0]).into(),
             turn_angle: (&params[1]).into(),
@@ -491,14 +452,14 @@ impl SpecificMetaNodeKind for MetaSDFRotation {
     }
 }
 
-impl SpecificMetaNodeKind for MetaSDFScaling {
+impl SpecificMetaNodeKind for MetaScaling {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "SDF scaling",
-        hover_text: "Uniform scaling of one or more SDFs.",
+        label: "Scaling",
+        hover_text: "Uniform scaling of one or more instances.",
     };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
     const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::SDFGroup);
+        single_child_port_kind(MetaChildPortKind::Instances);
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
@@ -529,11 +490,505 @@ impl SpecificMetaNodeKind for MetaSDFScaling {
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
         assert_eq!(params.len(), 2);
-        Some(MetaSDFNode::SDFScaling(MetaSDFScaling {
+        Some(MetaSDFNode::Scaling(MetaScaling {
             child_id: unary_child(id_map, children)?,
             scaling: (&params[0]).into(),
             seed: (&params[1]).into(),
         }))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaSimilarity {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Similarity",
+        hover_text: "Similarity transformation (scale, rotate, translate) of one or more instances.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Scale",
+                    hover_text: "Uniform scale factor.",
+                },
+                1.0,
+            )
+            .with_min_value(1e-3)
+            .with_speed(0.005),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Tilt angle",
+                    hover_text: "Angle away from the y-axis, in degrees.",
+                },
+                0.0,
+            )
+            .with_speed(0.03),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Turn angle",
+                    hover_text: "Angle from the x-axis in the xz-plane, in degrees.",
+                },
+                0.0,
+            )
+            .with_speed(0.03),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Roll angle",
+                    hover_text: "Additional roll angle around the final rotated axis, in degrees.",
+                },
+                0.0,
+            )
+            .with_speed(0.03),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Translation x",
+                    hover_text: "Translation distance along the x-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Translation y",
+                    hover_text: "Translation distance along the y-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Translation z",
+                    hover_text: "Translation distance along the z-axis, in voxels.",
+                },
+                0.0,
+            )
+            .with_speed(0.05),
+        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for generating randomized similarity transforms.",
+            },
+            0,
+        ));
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 8);
+        Some(MetaSDFNode::Similarity(MetaSimilarity {
+            child_id: unary_child(id_map, children)?,
+            scale: (&params[0]).into(),
+            tilt_angle: (&params[1]).into(),
+            turn_angle: (&params[2]).into(),
+            roll_angle: (&params[3]).into(),
+            translation_x: (&params[4]).into(),
+            translation_y: (&params[5]).into(),
+            translation_z: (&params[6]).into(),
+            seed: (&params[7]).into(),
+        }))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Stratified grid transforms",
+        hover_text: "Translation of instances from the center of a grid to grid points picked by stratified sampling.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
+            LabelAndHoverText {
+                label: "Size x",
+                hover_text: "Number of grid cells along the x-axis.",
+            },
+            1,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
+            LabelAndHoverText {
+                label: "Size y",
+                hover_text: "Number of grid cells along the y-axis.",
+            },
+            1,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
+            LabelAndHoverText {
+                label: "Size z",
+                hover_text: "Number of grid cells along the z-axis.",
+            },
+            1,
+        ));
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Cell extent x",
+                    hover_text: "Extent of a grid cell along the x-axis, in voxels.",
+                },
+                60.0,
+            )
+            .with_min_value(0.0),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Cell extent y",
+                    hover_text: "Extent of a grid cell along the y-axis, in voxels.",
+                },
+                60.0,
+            )
+            .with_min_value(0.0),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Cell extent z",
+                    hover_text: "Extent of a grid cell along the z-axis, in voxels.",
+                },
+                60.0,
+            )
+            .with_min_value(0.0),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Jitter fraction",
+                    hover_text: "Fraction of a grid cell to randomly displace the points.",
+                },
+                0.0,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001),
+        );
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for random jittering as well as generating randomized parameter values.",
+                },
+                0,
+            )
+        );
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 8);
+        Some(MetaSDFNode::StratifiedGridTransforms(
+            MetaStratifiedGridTransforms {
+                child_id: unary_child(id_map, children)?,
+                shape_x: (&params[0]).into(),
+                shape_y: (&params[1]).into(),
+                shape_z: (&params[2]).into(),
+                cell_extent_x: (&params[3]).into(),
+                cell_extent_y: (&params[4]).into(),
+                cell_extent_z: (&params[5]).into(),
+                jitter_fraction: (&params[6]).into(),
+                seed: (&params[7]).into(),
+            },
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaSphereSurfaceTransforms {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Sphere surface transforms",
+        hover_text: "Translation of instances from the center to the surface of a sphere, with optional rotations from the y-axis to the radial direction.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Radius",
+                    hover_text: "Radius of the sphere, in voxels.",
+                },
+                30.0,
+            )
+            .with_min_value(0.0),
+        );
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Jitter fraction",
+                    hover_text: "Fraction of the regular point spacing to randomly displace the points.",
+                },
+                0.0,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+        );
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Rotation",
+                    hover_text: "Whether to include rotations from the y-axes to the outward or inward radial direction.",
+                },
+                EnumParamVariants::from_iter(["Identity", "Radial (outwards)", "Radial (inwards)"]),
+                "Identity",
+            )
+        );
+        params.push(
+            MetaUIntParam::new(
+                LabelAndHoverText {
+                    label: "Seed",
+                    hover_text: "Seed for random jittering as well as generating randomized parameter values.",
+                },
+                0,
+            )
+        );
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 4);
+        Some(MetaSDFNode::SphereSurfaceTransforms(
+            MetaSphereSurfaceTransforms {
+                child_id: unary_child(id_map, children)?,
+                radius: (&params[0]).into(),
+                jitter_fraction: (&params[1]).into(),
+                rotation: SphereSurfaceRotation::try_from_str(params[2].enum_value()).unwrap(),
+                seed: (&params[3]).into(),
+            },
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaClosestTranslationToSurface {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Closest translation to surface",
+        hover_text: "Translation of the instances in the second input to the closest points on the surface of the SDF in the first input.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::ClosestTranslationToSurface(
+            MetaClosestTranslationToSurface {
+                surface_sdf_id,
+                subject_id,
+            },
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaRayTranslationToSurface {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Ray translation to surface",
+        hover_text: "Translation of the instances in the second input to the intersection of their y-axes with the surface of the SDF in the first input.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::RayTranslationToSurface(
+            MetaRayTranslationToSurface {
+                surface_sdf_id,
+                subject_id,
+            },
+        ))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaRotationToGradient {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Rotation to gradient",
+        hover_text: "Rotation of the instances in the second input to make their y-axis align with the gradient of the SDF in the first input.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (gradient_sdf_id, subject_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::RotationToGradient(MetaRotationToGradient {
+            gradient_sdf_id,
+            subject_id,
+        }))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaStochasticSelection {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Stochastic selection",
+        hover_text: "Random selection of SDFs or instances from a group.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
+    const CHILD_PORT_KINDS: MetaChildPortKinds = single_child_port_kind(MetaChildPortKind::Any);
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Min count",
+                hover_text: "Minimum number of items to select initially.",
+            },
+            1,
+        ));
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Max count",
+                hover_text: "Maximum number of items to select initially.",
+            },
+            1,
+        ));
+        params.push(
+            MetaFloatParam::new(
+                LabelAndHoverText {
+                    label: "Probability",
+                    hover_text: "Probability that each of the initially selected items will be kept in the final selection.",
+                },
+                1.0,
+            )
+            .with_min_value(0.0)
+            .with_max_value(1.0)
+            .with_speed(0.001)
+        );
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for random selection.",
+            },
+            0,
+        ));
+        params
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 4);
+        Some(MetaSDFNode::StochasticSelection(MetaStochasticSelection {
+            child_id: unary_child(id_map, children)?,
+            min_pick_count: (&params[0]).into(),
+            max_pick_count: (&params[1]).into(),
+            pick_probability: (&params[2]).into(),
+            seed: (&params[3]).into(),
+        }))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaSDFInstantiation {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "SDF instantiation",
+        hover_text: "Instantiation of the input instances into SDFs using their shapes and transforms. Instances with no shape produce no SDFs.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SDFGroup;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        single_child_port_kind(MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        Some(MetaSDFNode::SDFInstantiation(MetaSDFInstantiation {
+            child_id: unary_child(id_map, children)?,
+        }))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaTransformApplication {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Transform application",
+        hover_text: "Application of the transforms of the instances in the second input to the SDFs in the first input (yields all combinations).",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SDFGroup;
+    const CHILD_PORT_KINDS: MetaChildPortKinds =
+        two_child_port_kinds(MetaChildPortKind::SDFGroup, MetaChildPortKind::Instances);
+
+    fn params() -> MetaNodeParams {
+        MetaNodeParams::new()
+    }
+
+    fn build(
+        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
+        children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 0);
+        let (sdf_id, instance_id) = binary_children(id_map, children)?;
+        Some(MetaSDFNode::TransformApplication(
+            MetaTransformApplication {
+                sdf_id,
+                instance_id,
+            },
+        ))
     }
 }
 
@@ -895,742 +1350,31 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
     }
 }
 
-impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Stratified grid transforms",
-        hover_text: "Transforms with translations from the center of a grid to grid points picked by stratified sampling.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::TransformGroup;
-    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
-            LabelAndHoverText {
-                label: "Size x",
-                hover_text: "Number of grid cells along the x-axis.",
-            },
-            1,
-        ));
-        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
-            LabelAndHoverText {
-                label: "Size y",
-                hover_text: "Number of grid cells along the y-axis.",
-            },
-            1,
-        ));
-        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
-            LabelAndHoverText {
-                label: "Size z",
-                hover_text: "Number of grid cells along the z-axis.",
-            },
-            1,
-        ));
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Cell extent x",
-                    hover_text: "Extent of a grid cell along the x-axis, in voxels.",
-                },
-                60.0,
-            )
-            .with_min_value(0.0),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Cell extent y",
-                    hover_text: "Extent of a grid cell along the y-axis, in voxels.",
-                },
-                60.0,
-            )
-            .with_min_value(0.0),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Cell extent z",
-                    hover_text: "Extent of a grid cell along the z-axis, in voxels.",
-                },
-                60.0,
-            )
-            .with_min_value(0.0),
-        );
-        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
-            LabelAndHoverText {
-                label: "Points per cell",
-                hover_text: "Number of points generated within each grid cell.",
-            },
-            1,
-        ));
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Jitter fraction",
-                    hover_text: "Fraction of a grid cell to randomly displace the points.",
-                },
-                0.0,
-            )
-            .with_min_value(0.0)
-            .with_max_value(1.0)
-            .with_speed(0.001),
-        );
-        params.push(
-            MetaUIntParam::new(
-                LabelAndHoverText {
-                    label: "Seed",
-                    hover_text: "Seed for random jittering as well as generating randomized parameter values.",
-                },
-                0,
-            )
-        );
-        params
-    }
-
-    fn build(
-        _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        _children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 9);
-        Some(MetaSDFNode::StratifiedGridTransforms(
-            MetaStratifiedGridTransforms {
-                shape_x: (&params[0]).into(),
-                shape_y: (&params[1]).into(),
-                shape_z: (&params[2]).into(),
-                cell_extent_x: (&params[3]).into(),
-                cell_extent_y: (&params[4]).into(),
-                cell_extent_z: (&params[5]).into(),
-                points_per_grid_cell: (&params[6]).into(),
-                jitter_fraction: (&params[7]).into(),
-                seed: (&params[8]).into(),
-            },
-        ))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaSphereSurfaceTransforms {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Sphere surface transforms",
-        hover_text: "Transforms with translations from the center to the surface of a sphere and optional rotations from the y-axis to the radial direction.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::TransformGroup;
-    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
-            LabelAndHoverText {
-                label: "Count",
-                hover_text: "Number of transforms to generate.",
-            },
-            6,
-        ));
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Radius",
-                    hover_text: "Radius of the sphere, in voxels.",
-                },
-                30.0,
-            )
-            .with_min_value(0.0),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Jitter fraction",
-                    hover_text: "Fraction of the regular point spacing to randomly displace the points.",
-                },
-                0.0,
-            )
-            .with_min_value(0.0)
-            .with_max_value(1.0)
-            .with_speed(0.001)
-        );
-        params.push(
-            MetaEnumParam::new(
-                LabelAndHoverText {
-                    label: "Rotation",
-                    hover_text: "Whether to include rotations from the y-axes to the outward or inward radial direction.",
-                },
-                EnumParamVariants::from_iter(["Identity", "Radial (outwards)", "Radial (inwards)"]),
-                "Identity",
-            )
-        );
-        params.push(
-            MetaUIntParam::new(
-                LabelAndHoverText {
-                    label: "Seed",
-                    hover_text: "Seed for random jittering as well as generating randomized parameter values.",
-                },
-                0,
-            )
-        );
-        params
-    }
-
-    fn build(
-        _id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        _children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 5);
-        Some(MetaSDFNode::SphereSurfaceTransforms(
-            MetaSphereSurfaceTransforms {
-                count: (&params[0]).into(),
-                radius: (&params[1]).into(),
-                jitter_fraction: (&params[2]).into(),
-                rotation: SphereSurfaceRotation::try_from_str(params[3].enum_value()).unwrap(),
-                seed: (&params[4]).into(),
-            },
-        ))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaTransformTranslation {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Transform translation",
-        hover_text: "Translation of one or more transforms.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::TransformGroup);
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(
-            MetaEnumParam::new(
-                LabelAndHoverText {
-                    label: "Composition",
-                    hover_text: "Whether to apply the translation before ('Pre') or after ('Post') the input transforms.",
-                },
-                 EnumParamVariants::from_iter(["Pre", "Post"]),
-                "Pre",
-            )
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "In x",
-                    hover_text: "Translation distance along the x-axis, in voxels.",
-                },
-                0.0,
-            )
-            .with_speed(0.05),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "In y",
-                    hover_text: "Translation distance along the y-axis, in voxels.",
-                },
-                0.0,
-            )
-            .with_speed(0.05),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "In z",
-                    hover_text: "Translation distance along the z-axis, in voxels.",
-                },
-                0.0,
-            )
-            .with_speed(0.05),
-        );
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Seed",
-                hover_text: "Seed for generating randomized translations.",
-            },
-            0,
-        ));
-        params
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 5);
-        Some(MetaSDFNode::TransformTranslation(
-            MetaTransformTranslation {
-                child_id: unary_child(id_map, children)?,
-                composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
-                translation_x: (&params[1]).into(),
-                translation_y: (&params[2]).into(),
-                translation_z: (&params[3]).into(),
-                seed: (&params[4]).into(),
-            },
-        ))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaTransformRotation {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Transform rotation",
-        hover_text: "Rotation of one or more transforms.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::TransformGroup);
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(
-            MetaEnumParam::new(
-                LabelAndHoverText {
-                    label: "Composition",
-                    hover_text: "Whether to apply the rotation before ('Pre') or after ('Post') the input transforms.",
-                },
-                EnumParamVariants::from_iter(["Pre", "Post"]),
-                "Pre",
-            )
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Tilt angle",
-                    hover_text: "Angle away from the y-axis, in degrees",
-                },
-                0.0,
-            )
-            .with_speed(0.03),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Turn angle",
-                    hover_text: "Angle from the x-axis in the xz-plane, in degrees.",
-                },
-                0.0,
-            )
-            .with_speed(0.03),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Roll angle",
-                    hover_text: "Additional roll angle around the final rotated axis, in degrees.",
-                },
-                0.0,
-            )
-            .with_speed(0.03),
-        );
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Seed",
-                hover_text: "Seed for generating randomized rotations.",
-            },
-            0,
-        ));
-        params
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 5);
-        Some(MetaSDFNode::TransformRotation(MetaTransformRotation {
-            child_id: unary_child(id_map, children)?,
-            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
-            tilt_angle: (&params[1]).into(),
-            turn_angle: (&params[2]).into(),
-            roll_angle: (&params[3]).into(),
-            seed: (&params[4]).into(),
-        }))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaTransformScaling {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Transform scaling",
-        hover_text: "Uniform scaling of one or more transforms.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::TransformGroup);
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(
-            MetaEnumParam::new(
-                LabelAndHoverText {
-                    label: "Composition",
-                    hover_text: "Whether to apply the scaling before ('Pre') or after ('Post') the input transforms.",
-                },
-                EnumParamVariants::from_iter(["Pre", "Post"]),
-                "Pre",
-            )
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Factor",
-                    hover_text: "Uniform scale factor.",
-                },
-                1.0,
-            )
-            .with_min_value(1e-3)
-            .with_speed(0.005),
-        );
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Seed",
-                hover_text: "Seed for generating randomized scale factors.",
-            },
-            0,
-        ));
-        params
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
-        Some(MetaSDFNode::TransformScaling(MetaTransformScaling {
-            child_id: unary_child(id_map, children)?,
-            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
-            scaling: (&params[1]).into(),
-            seed: (&params[2]).into(),
-        }))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaTransformSimilarity {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Transform similarity",
-        hover_text: "Similarity transformation (scale, rotate, translate) of one or more transforms.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::TransformGroup);
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(
-            MetaEnumParam::new(
-                LabelAndHoverText {
-                    label: "Composition",
-                    hover_text: "Whether to apply the similarity transform before ('Pre') or after ('Post') the input transforms.",
-                },
-                EnumParamVariants::from_iter(["Pre", "Post"]),
-                "Pre",
-            )
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Scale",
-                    hover_text: "Uniform scale factor.",
-                },
-                1.0,
-            )
-            .with_min_value(1e-3)
-            .with_speed(0.005),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Tilt angle",
-                    hover_text: "Angle away from the y-axis, in degrees.",
-                },
-                0.0,
-            )
-            .with_speed(0.03),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Turn angle",
-                    hover_text: "Angle from the x-axis in the xz-plane, in degrees.",
-                },
-                0.0,
-            )
-            .with_speed(0.03),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Roll angle",
-                    hover_text: "Additional roll angle around the final rotated axis, in degrees.",
-                },
-                0.0,
-            )
-            .with_speed(0.03),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Translation x",
-                    hover_text: "Translation distance along the x-axis, in voxels.",
-                },
-                0.0,
-            )
-            .with_speed(0.05),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Translation y",
-                    hover_text: "Translation distance along the y-axis, in voxels.",
-                },
-                0.0,
-            )
-            .with_speed(0.05),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Translation z",
-                    hover_text: "Translation distance along the z-axis, in voxels.",
-                },
-                0.0,
-            )
-            .with_speed(0.05),
-        );
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Seed",
-                hover_text: "Seed for generating randomized similarity transforms.",
-            },
-            0,
-        ));
-        params
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 9);
-        Some(MetaSDFNode::TransformSimilarity(MetaTransformSimilarity {
-            child_id: unary_child(id_map, children)?,
-            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
-            scale: (&params[1]).into(),
-            tilt_angle: (&params[2]).into(),
-            turn_angle: (&params[3]).into(),
-            roll_angle: (&params[4]).into(),
-            translation_x: (&params[5]).into(),
-            translation_y: (&params[6]).into(),
-            translation_z: (&params[7]).into(),
-            seed: (&params[8]).into(),
-        }))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaClosestTranslationToSurface {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Closest translation to surface",
-        hover_text: "Translation of the SDFs or transforms in the second input to the closest points on the surface of the SDF in the first input.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Any);
-
-    fn params() -> MetaNodeParams {
-        MetaNodeParams::new()
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 0);
-        let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
-        Some(MetaSDFNode::ClosestTranslationToSurface(
-            MetaClosestTranslationToSurface {
-                surface_sdf_id,
-                subject_id,
-            },
-        ))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaRayTranslationToSurface {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Ray translation to surface",
-        hover_text: "Translation of the SDFs or transforms in the second input to the intersection of their y-axes with the surface of the SDF in the first input.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Any);
-
-    fn params() -> MetaNodeParams {
-        MetaNodeParams::new()
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 0);
-        let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
-        Some(MetaSDFNode::RayTranslationToSurface(
-            MetaRayTranslationToSurface {
-                surface_sdf_id,
-                subject_id,
-            },
-        ))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaRotationToGradient {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Rotation to gradient",
-        hover_text: "Rotation of the SDFs or transforms in the second input to make their y-axis align with the gradient of the SDF in the first input.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 1 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Any);
-
-    fn params() -> MetaNodeParams {
-        MetaNodeParams::new()
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 0);
-        let (gradient_sdf_id, subject_id) = binary_children(id_map, children)?;
-        Some(MetaSDFNode::RotationToGradient(MetaRotationToGradient {
-            gradient_sdf_id,
-            subject_id,
-        }))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaTransformApplication {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Transform application",
-        hover_text: "Application of the transforms in the second input to the SDFs in the first input (yields all combinations).",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SDFGroup;
-    const CHILD_PORT_KINDS: MetaChildPortKinds = two_child_port_kinds(
-        MetaChildPortKind::SDFGroup,
-        MetaChildPortKind::TransformGroup,
-    );
-
-    fn params() -> MetaNodeParams {
-        MetaNodeParams::new()
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 0);
-        let (sdf_id, transform_id) = binary_children(id_map, children)?;
-        Some(MetaSDFNode::TransformApplication(
-            MetaTransformApplication {
-                sdf_id,
-                transform_id,
-            },
-        ))
-    }
-}
-
-impl SpecificMetaNodeKind for MetaStochasticSelection {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Stochastic selection",
-        hover_text: "Random selection of SDFs or transforms from a group.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds = single_child_port_kind(MetaChildPortKind::Any);
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Min count",
-                hover_text: "Minimum number of items to select initially.",
-            },
-            1,
-        ));
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Max count",
-                hover_text: "Maximum number of items to select initially.",
-            },
-            1,
-        ));
-        params.push(
-            MetaFloatParam::new(
-                LabelAndHoverText {
-                    label: "Probability",
-                    hover_text: "Probability that each of the initially selected items will be kept in the final selection.",
-                },
-                1.0,
-            )
-            .with_min_value(0.0)
-            .with_max_value(1.0)
-            .with_speed(0.001)
-        );
-        params.push(MetaUIntParam::new(
-            LabelAndHoverText {
-                label: "Seed",
-                hover_text: "Seed for random selection.",
-            },
-            0,
-        ));
-        params
-    }
-
-    fn build(
-        id_map: &HashMap<MetaNodeID, MetaSDFNodeID>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 4);
-        Some(MetaSDFNode::StochasticSelection(MetaStochasticSelection {
-            child_id: unary_child(id_map, children)?,
-            min_pick_count: (&params[0]).into(),
-            max_pick_count: (&params[1]).into(),
-            pick_probability: (&params[2]).into(),
-            seed: (&params[3]).into(),
-        }))
-    }
-}
-
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 24] {
+    pub const fn all_non_root() -> [Self; 22] {
         [
-            Self::BoxSDF,
-            Self::SphereSDF,
-            Self::CapsuleSDF,
-            Self::GradientNoiseSDF,
-            Self::SDFTranslation,
-            Self::SDFRotation,
-            Self::SDFScaling,
+            Self::Points,
+            Self::Spheres,
+            Self::Capsules,
+            Self::Boxes,
+            Self::Translation,
+            Self::Rotation,
+            Self::Scaling,
+            Self::Similarity,
+            Self::StratifiedGridTransforms,
+            Self::SphereSurfaceTransforms,
+            Self::ClosestTranslationToSurface,
+            Self::RayTranslationToSurface,
+            Self::RotationToGradient,
+            Self::StochasticSelection,
+            Self::SDFInstantiation,
+            Self::TransformApplication,
             Self::MultifractalNoiseSDFModifier,
             Self::MultiscaleSphereSDFModifier,
             Self::SDFUnion,
             Self::SDFSubtraction,
             Self::SDFIntersection,
             Self::SDFGroupUnion,
-            Self::StratifiedGridTransforms,
-            Self::SphereSurfaceTransforms,
-            Self::TransformTranslation,
-            Self::TransformRotation,
-            Self::TransformScaling,
-            Self::TransformSimilarity,
-            Self::ClosestTranslationToSurface,
-            Self::RayTranslationToSurface,
-            Self::RotationToGradient,
-            Self::TransformApplication,
-            Self::StochasticSelection,
         ]
     }
 
@@ -1641,72 +1385,78 @@ impl MetaNodeKind {
     pub const fn group(&self) -> MetaNodeKindGroup {
         match self {
             Self::Output => MetaNodeKindGroup::Root,
-            Self::BoxSDF | Self::SphereSDF | Self::CapsuleSDF | Self::GradientNoiseSDF => {
-                MetaNodeKindGroup::SDFPrimitive
+            Self::Points | Self::Spheres | Self::Capsules | Self::Boxes => {
+                MetaNodeKindGroup::InstancePrimitives
             }
-            Self::SDFTranslation | Self::SDFRotation | Self::SDFScaling => {
-                MetaNodeKindGroup::SDFTransform
+            Self::Translation | Self::Rotation | Self::Scaling | Self::Similarity => {
+                MetaNodeKindGroup::BasicInstanceTransforms
+            }
+            Self::StratifiedGridTransforms | Self::SphereSurfaceTransforms => {
+                MetaNodeKindGroup::StructuredInstanceTransforms
+            }
+            Self::ClosestTranslationToSurface
+            | Self::RayTranslationToSurface
+            | Self::RotationToGradient => MetaNodeKindGroup::SDFBasedInstanceTransforms,
+            Self::StochasticSelection => MetaNodeKindGroup::Filtering,
+            Self::SDFInstantiation | Self::TransformApplication => {
+                MetaNodeKindGroup::SDFFromInstances
             }
             Self::MultifractalNoiseSDFModifier | Self::MultiscaleSphereSDFModifier => {
-                MetaNodeKindGroup::SDFModification
+                MetaNodeKindGroup::SDFModifiers
             }
             Self::SDFUnion | Self::SDFSubtraction | Self::SDFIntersection | Self::SDFGroupUnion => {
                 MetaNodeKindGroup::SDFCombination
             }
-            Self::StratifiedGridTransforms
-            | Self::SphereSurfaceTransforms
-            | Self::TransformTranslation
-            | Self::TransformRotation
-            | Self::TransformScaling
-            | Self::TransformSimilarity
-            | Self::ClosestTranslationToSurface
-            | Self::RayTranslationToSurface
-            | Self::RotationToGradient
-            | Self::TransformApplication => MetaNodeKindGroup::Transform,
-            Self::StochasticSelection => MetaNodeKindGroup::Filtering,
         }
     }
 
     pub const fn label(&self) -> LabelAndHoverText {
         match self {
             Self::Output => LabelAndHoverText::label_only("Output"),
-            Self::BoxSDF => MetaBoxSDF::LABEL,
-            Self::SphereSDF => MetaSphereSDF::LABEL,
-            Self::CapsuleSDF => MetaCapsuleSDF::LABEL,
-            Self::GradientNoiseSDF => MetaGradientNoiseSDF::LABEL,
-            Self::SDFTranslation => MetaSDFTranslation::LABEL,
-            Self::SDFRotation => MetaSDFRotation::LABEL,
-            Self::SDFScaling => MetaSDFScaling::LABEL,
+            Self::Points => MetaPoints::LABEL,
+            Self::Spheres => MetaSpheres::LABEL,
+            Self::Capsules => MetaCapsules::LABEL,
+            Self::Boxes => MetaBoxes::LABEL,
+            Self::Translation => MetaTranslation::LABEL,
+            Self::Rotation => MetaRotation::LABEL,
+            Self::Scaling => MetaScaling::LABEL,
+            Self::Similarity => MetaSimilarity::LABEL,
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::LABEL,
+            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::LABEL,
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::LABEL,
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::LABEL,
+            Self::RotationToGradient => MetaRotationToGradient::LABEL,
+            Self::StochasticSelection => MetaStochasticSelection::LABEL,
+            Self::SDFInstantiation => MetaSDFInstantiation::LABEL,
+            Self::TransformApplication => MetaTransformApplication::LABEL,
             Self::MultifractalNoiseSDFModifier => MetaMultifractalNoiseSDFModifier::LABEL,
             Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::LABEL,
             Self::SDFUnion => MetaSDFUnion::LABEL,
             Self::SDFSubtraction => MetaSDFSubtraction::LABEL,
             Self::SDFIntersection => MetaSDFIntersection::LABEL,
             Self::SDFGroupUnion => MetaSDFGroupUnion::LABEL,
-            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::LABEL,
-            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::LABEL,
-            Self::TransformTranslation => MetaTransformTranslation::LABEL,
-            Self::TransformRotation => MetaTransformRotation::LABEL,
-            Self::TransformScaling => MetaTransformScaling::LABEL,
-            Self::TransformSimilarity => MetaTransformSimilarity::LABEL,
-            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::LABEL,
-            Self::RayTranslationToSurface => MetaRayTranslationToSurface::LABEL,
-            Self::RotationToGradient => MetaRotationToGradient::LABEL,
-            Self::TransformApplication => MetaTransformApplication::LABEL,
-            Self::StochasticSelection => MetaStochasticSelection::LABEL,
         }
     }
 
     pub const fn parent_port_kind(&self) -> MetaParentPortKind {
         match self {
             Self::Output => MetaParentPortKind::SingleSDF,
-            Self::BoxSDF => MetaBoxSDF::PARENT_PORT_KIND,
-            Self::SphereSDF => MetaSphereSDF::PARENT_PORT_KIND,
-            Self::CapsuleSDF => MetaCapsuleSDF::PARENT_PORT_KIND,
-            Self::GradientNoiseSDF => MetaGradientNoiseSDF::PARENT_PORT_KIND,
-            Self::SDFTranslation => MetaSDFTranslation::PARENT_PORT_KIND,
-            Self::SDFRotation => MetaSDFRotation::PARENT_PORT_KIND,
-            Self::SDFScaling => MetaSDFScaling::PARENT_PORT_KIND,
+            Self::Points => MetaPoints::PARENT_PORT_KIND,
+            Self::Spheres => MetaSpheres::PARENT_PORT_KIND,
+            Self::Capsules => MetaCapsules::PARENT_PORT_KIND,
+            Self::Boxes => MetaBoxes::PARENT_PORT_KIND,
+            Self::Translation => MetaTranslation::PARENT_PORT_KIND,
+            Self::Rotation => MetaRotation::PARENT_PORT_KIND,
+            Self::Scaling => MetaScaling::PARENT_PORT_KIND,
+            Self::Similarity => MetaSimilarity::PARENT_PORT_KIND,
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::PARENT_PORT_KIND,
+            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::PARENT_PORT_KIND,
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::PARENT_PORT_KIND,
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::PARENT_PORT_KIND,
+            Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
+            Self::StochasticSelection => MetaStochasticSelection::PARENT_PORT_KIND,
+            Self::SDFInstantiation => MetaSDFInstantiation::PARENT_PORT_KIND,
+            Self::TransformApplication => MetaTransformApplication::PARENT_PORT_KIND,
             Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::PARENT_PORT_KIND
             }
@@ -1715,30 +1465,28 @@ impl MetaNodeKind {
             Self::SDFSubtraction => MetaSDFSubtraction::PARENT_PORT_KIND,
             Self::SDFIntersection => MetaSDFIntersection::PARENT_PORT_KIND,
             Self::SDFGroupUnion => MetaSDFGroupUnion::PARENT_PORT_KIND,
-            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::PARENT_PORT_KIND,
-            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::PARENT_PORT_KIND,
-            Self::TransformTranslation => MetaTransformTranslation::PARENT_PORT_KIND,
-            Self::TransformRotation => MetaTransformRotation::PARENT_PORT_KIND,
-            Self::TransformScaling => MetaTransformScaling::PARENT_PORT_KIND,
-            Self::TransformSimilarity => MetaTransformSimilarity::PARENT_PORT_KIND,
-            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::PARENT_PORT_KIND,
-            Self::RayTranslationToSurface => MetaRayTranslationToSurface::PARENT_PORT_KIND,
-            Self::RotationToGradient => MetaRotationToGradient::PARENT_PORT_KIND,
-            Self::TransformApplication => MetaTransformApplication::PARENT_PORT_KIND,
-            Self::StochasticSelection => MetaStochasticSelection::PARENT_PORT_KIND,
         }
     }
 
     const fn raw_child_port_kinds(&self) -> MetaChildPortKinds {
         match self {
             Self::Output => single_child_port_kind(MetaChildPortKind::SingleSDF),
-            Self::BoxSDF => MetaBoxSDF::CHILD_PORT_KINDS,
-            Self::SphereSDF => MetaSphereSDF::CHILD_PORT_KINDS,
-            Self::CapsuleSDF => MetaCapsuleSDF::CHILD_PORT_KINDS,
-            Self::GradientNoiseSDF => MetaGradientNoiseSDF::CHILD_PORT_KINDS,
-            Self::SDFTranslation => MetaSDFTranslation::CHILD_PORT_KINDS,
-            Self::SDFRotation => MetaSDFRotation::CHILD_PORT_KINDS,
-            Self::SDFScaling => MetaSDFScaling::CHILD_PORT_KINDS,
+            Self::Points => MetaPoints::CHILD_PORT_KINDS,
+            Self::Spheres => MetaSpheres::CHILD_PORT_KINDS,
+            Self::Capsules => MetaCapsules::CHILD_PORT_KINDS,
+            Self::Boxes => MetaBoxes::CHILD_PORT_KINDS,
+            Self::Translation => MetaTranslation::CHILD_PORT_KINDS,
+            Self::Rotation => MetaRotation::CHILD_PORT_KINDS,
+            Self::Scaling => MetaScaling::CHILD_PORT_KINDS,
+            Self::Similarity => MetaSimilarity::CHILD_PORT_KINDS,
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::CHILD_PORT_KINDS,
+            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::CHILD_PORT_KINDS,
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::CHILD_PORT_KINDS,
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::CHILD_PORT_KINDS,
+            Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
+            Self::StochasticSelection => MetaStochasticSelection::CHILD_PORT_KINDS,
+            Self::SDFInstantiation => MetaSDFInstantiation::CHILD_PORT_KINDS,
+            Self::TransformApplication => MetaTransformApplication::CHILD_PORT_KINDS,
             Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::CHILD_PORT_KINDS
             }
@@ -1747,17 +1495,6 @@ impl MetaNodeKind {
             Self::SDFSubtraction => MetaSDFSubtraction::CHILD_PORT_KINDS,
             Self::SDFIntersection => MetaSDFIntersection::CHILD_PORT_KINDS,
             Self::SDFGroupUnion => MetaSDFGroupUnion::CHILD_PORT_KINDS,
-            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::CHILD_PORT_KINDS,
-            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::CHILD_PORT_KINDS,
-            Self::TransformTranslation => MetaTransformTranslation::CHILD_PORT_KINDS,
-            Self::TransformRotation => MetaTransformRotation::CHILD_PORT_KINDS,
-            Self::TransformScaling => MetaTransformScaling::CHILD_PORT_KINDS,
-            Self::TransformSimilarity => MetaTransformSimilarity::CHILD_PORT_KINDS,
-            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::CHILD_PORT_KINDS,
-            Self::RayTranslationToSurface => MetaRayTranslationToSurface::CHILD_PORT_KINDS,
-            Self::RotationToGradient => MetaRotationToGradient::CHILD_PORT_KINDS,
-            Self::TransformApplication => MetaTransformApplication::CHILD_PORT_KINDS,
-            Self::StochasticSelection => MetaStochasticSelection::CHILD_PORT_KINDS,
         }
     }
 
@@ -1776,30 +1513,28 @@ impl MetaNodeKind {
     pub fn params(&self) -> MetaNodeParams {
         match self {
             Self::Output => output_node_params(),
-            Self::BoxSDF => MetaBoxSDF::params(),
-            Self::SphereSDF => MetaSphereSDF::params(),
-            Self::CapsuleSDF => MetaCapsuleSDF::params(),
-            Self::GradientNoiseSDF => MetaGradientNoiseSDF::params(),
-            Self::SDFTranslation => MetaSDFTranslation::params(),
-            Self::SDFRotation => MetaSDFRotation::params(),
-            Self::SDFScaling => MetaSDFScaling::params(),
+            Self::Points => MetaPoints::params(),
+            Self::Spheres => MetaSpheres::params(),
+            Self::Capsules => MetaCapsules::params(),
+            Self::Boxes => MetaBoxes::params(),
+            Self::Translation => MetaTranslation::params(),
+            Self::Rotation => MetaRotation::params(),
+            Self::Scaling => MetaScaling::params(),
+            Self::Similarity => MetaSimilarity::params(),
+            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::params(),
+            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::params(),
+            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::params(),
+            Self::RayTranslationToSurface => MetaRayTranslationToSurface::params(),
+            Self::RotationToGradient => MetaRotationToGradient::params(),
+            Self::StochasticSelection => MetaStochasticSelection::params(),
+            Self::SDFInstantiation => MetaSDFInstantiation::params(),
+            Self::TransformApplication => MetaTransformApplication::params(),
             Self::MultifractalNoiseSDFModifier => MetaMultifractalNoiseSDFModifier::params(),
             Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::params(),
             Self::SDFUnion => MetaSDFUnion::params(),
             Self::SDFSubtraction => MetaSDFSubtraction::params(),
             Self::SDFIntersection => MetaSDFIntersection::params(),
             Self::SDFGroupUnion => MetaSDFGroupUnion::params(),
-            Self::StratifiedGridTransforms => MetaStratifiedGridTransforms::params(),
-            Self::SphereSurfaceTransforms => MetaSphereSurfaceTransforms::params(),
-            Self::TransformTranslation => MetaTransformTranslation::params(),
-            Self::TransformRotation => MetaTransformRotation::params(),
-            Self::TransformScaling => MetaTransformScaling::params(),
-            Self::TransformSimilarity => MetaTransformSimilarity::params(),
-            Self::ClosestTranslationToSurface => MetaClosestTranslationToSurface::params(),
-            Self::RayTranslationToSurface => MetaRayTranslationToSurface::params(),
-            Self::RotationToGradient => MetaRotationToGradient::params(),
-            Self::TransformApplication => MetaTransformApplication::params(),
-            Self::StochasticSelection => MetaStochasticSelection::params(),
         }
     }
 
@@ -1811,13 +1546,30 @@ impl MetaNodeKind {
     ) -> Option<MetaSDFNode> {
         match self {
             Self::Output => None,
-            Self::BoxSDF => MetaBoxSDF::build(id_map, children, params),
-            Self::SphereSDF => MetaSphereSDF::build(id_map, children, params),
-            Self::CapsuleSDF => MetaCapsuleSDF::build(id_map, children, params),
-            Self::GradientNoiseSDF => MetaGradientNoiseSDF::build(id_map, children, params),
-            Self::SDFTranslation => MetaSDFTranslation::build(id_map, children, params),
-            Self::SDFRotation => MetaSDFRotation::build(id_map, children, params),
-            Self::SDFScaling => MetaSDFScaling::build(id_map, children, params),
+            Self::Points => MetaPoints::build(id_map, children, params),
+            Self::Spheres => MetaSpheres::build(id_map, children, params),
+            Self::Capsules => MetaCapsules::build(id_map, children, params),
+            Self::Boxes => MetaBoxes::build(id_map, children, params),
+            Self::Translation => MetaTranslation::build(id_map, children, params),
+            Self::Rotation => MetaRotation::build(id_map, children, params),
+            Self::Scaling => MetaScaling::build(id_map, children, params),
+            Self::Similarity => MetaSimilarity::build(id_map, children, params),
+            Self::StratifiedGridTransforms => {
+                MetaStratifiedGridTransforms::build(id_map, children, params)
+            }
+            Self::SphereSurfaceTransforms => {
+                MetaSphereSurfaceTransforms::build(id_map, children, params)
+            }
+            Self::ClosestTranslationToSurface => {
+                MetaClosestTranslationToSurface::build(id_map, children, params)
+            }
+            Self::RayTranslationToSurface => {
+                MetaRayTranslationToSurface::build(id_map, children, params)
+            }
+            Self::RotationToGradient => MetaRotationToGradient::build(id_map, children, params),
+            Self::StochasticSelection => MetaStochasticSelection::build(id_map, children, params),
+            Self::SDFInstantiation => MetaSDFInstantiation::build(id_map, children, params),
+            Self::TransformApplication => MetaTransformApplication::build(id_map, children, params),
             Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::build(id_map, children, params)
             }
@@ -1828,38 +1580,21 @@ impl MetaNodeKind {
             Self::SDFSubtraction => MetaSDFSubtraction::build(id_map, children, params),
             Self::SDFIntersection => MetaSDFIntersection::build(id_map, children, params),
             Self::SDFGroupUnion => MetaSDFGroupUnion::build(id_map, children, params),
-            Self::StratifiedGridTransforms => {
-                MetaStratifiedGridTransforms::build(id_map, children, params)
-            }
-            Self::SphereSurfaceTransforms => {
-                MetaSphereSurfaceTransforms::build(id_map, children, params)
-            }
-            Self::TransformTranslation => MetaTransformTranslation::build(id_map, children, params),
-            Self::TransformRotation => MetaTransformRotation::build(id_map, children, params),
-            Self::TransformScaling => MetaTransformScaling::build(id_map, children, params),
-            Self::TransformSimilarity => MetaTransformSimilarity::build(id_map, children, params),
-            Self::ClosestTranslationToSurface => {
-                MetaClosestTranslationToSurface::build(id_map, children, params)
-            }
-            Self::RayTranslationToSurface => {
-                MetaRayTranslationToSurface::build(id_map, children, params)
-            }
-            Self::RotationToGradient => MetaRotationToGradient::build(id_map, children, params),
-            Self::TransformApplication => MetaTransformApplication::build(id_map, children, params),
-            Self::StochasticSelection => MetaStochasticSelection::build(id_map, children, params),
         }
     }
 }
 
 impl MetaNodeKindGroup {
-    pub const fn all_non_root() -> [Self; 6] {
+    pub const fn all_non_root() -> [Self; 8] {
         [
-            Self::SDFPrimitive,
-            Self::SDFTransform,
-            Self::SDFModification,
-            Self::SDFCombination,
-            Self::Transform,
+            Self::InstancePrimitives,
+            Self::BasicInstanceTransforms,
+            Self::StructuredInstanceTransforms,
+            Self::SDFBasedInstanceTransforms,
             Self::Filtering,
+            Self::SDFFromInstances,
+            Self::SDFModifiers,
+            Self::SDFCombination,
         ]
     }
 }

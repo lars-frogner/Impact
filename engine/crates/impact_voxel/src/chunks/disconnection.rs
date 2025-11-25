@@ -2794,7 +2794,7 @@ mod tests {
     use crate::{
         generation::{
             SDFVoxelGenerator,
-            sdf::{BoxSDF, GradientNoiseSDF, SDFGraph, SDFNode},
+            sdf::{BoxSDF, SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
         voxel_types::VoxelType,
@@ -2805,23 +2805,6 @@ mod tests {
         let generator = SDFVoxelGenerator::new(
             1.0,
             BoxSDF::new([1.0; 3]).into(),
-            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-        );
-        let object = ChunkedVoxelObject::generate(&generator);
-        object.validate_region_count();
-    }
-
-    #[test]
-    fn connected_region_count_is_correct_for_gradient_noise_sdf() {
-        let generator = SDFVoxelGenerator::new(
-            1.0,
-            GradientNoiseSDF::new(
-                [3.263961, 1.263729, 15.064503],
-                0.224581,
-                0.250592,
-                2880154539,
-            )
-            .into(),
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator);
