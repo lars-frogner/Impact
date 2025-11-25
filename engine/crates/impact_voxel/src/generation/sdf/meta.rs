@@ -69,6 +69,7 @@ pub enum MetaSDFNode {
     TransformTranslation(MetaTransformTranslation),
     TransformRotation(MetaTransformRotation),
     TransformScaling(MetaTransformScaling),
+    TransformSimilarity(MetaTransformSimilarity),
 
     // SDF/transform operations
     ClosestTranslationToSurface(MetaClosestTranslationToSurface),
@@ -581,6 +582,46 @@ define_meta_node_params! {
     }
 }
 
+/// Similarity transformation (scale, rotate, translate) of one or more
+/// transforms.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MetaTransformSimilarity {
+    /// ID of the child transform node to apply the similarity transform to.
+    pub child_id: MetaSDFNodeID,
+    /// Whether to apply the similarity transform before ('Pre') or after
+    /// ('Post') the input transforms.
+    pub composition: CompositionMode,
+    /// Uniform scale factor.
+    pub scale: ContParamSpec,
+    /// Angle away from the y-axis, in degrees.
+    pub tilt_angle: ContParamSpec,
+    /// Angle from the x-axis in the xz-plane, in degrees.
+    pub turn_angle: ContParamSpec,
+    /// Additional roll angle around the final rotated axis, in degrees.
+    pub roll_angle: ContParamSpec,
+    /// Translation distance along the x-axis, in voxels.
+    pub translation_x: ContParamSpec,
+    /// Translation distance along the y-axis, in voxels.
+    pub translation_y: ContParamSpec,
+    /// Translation distance along the z-axis, in voxels.
+    pub translation_z: ContParamSpec,
+    /// Seed for generating randomized similarity transforms.
+    pub seed: u32,
+}
+
+define_meta_node_params! {
+    MetaTransformSimilarity,
+    struct MetaTransformSimilarityParams {
+        scale: f32,
+        tilt_angle: f32,
+        turn_angle: f32,
+        roll_angle: f32,
+        translation_x: f32,
+        translation_y: f32,
+        translation_z: f32,
+    }
+}
+
 /// Translation of the SDFs or transforms in the second input to the closest
 /// points on the surface of the SDF in the first input.
 ///
@@ -784,6 +825,10 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                     child_id,
                                     ..
                                 })
+                                | MetaSDFNode::TransformSimilarity(MetaTransformSimilarity {
+                                    child_id,
+                                    ..
+                                })
                                 | MetaSDFNode::StochasticSelection(MetaStochasticSelection {
                                     child_id,
                                     ..
@@ -973,6 +1018,9 @@ impl MetaSDFNode {
             Self::TransformScaling(MetaTransformScaling { seed, child_id, .. }) => {
                 combine_seeded_unary(0x52, seed, child_id)
             }
+            Self::TransformSimilarity(MetaTransformSimilarity { seed, child_id, .. }) => {
+                combine_seeded_unary(0x53, seed, child_id)
+            }
             Self::ClosestTranslationToSurface(MetaClosestTranslationToSurface {
                 surface_sdf_id,
                 subject_id,
@@ -1061,6 +1109,9 @@ impl MetaSDFNode {
             Self::TransformScaling(node) => node
                 .resolve(arena, param_scratch, outputs, seed)
                 .context("Failed to resolve TransformScaling node"),
+            Self::TransformSimilarity(node) => node
+                .resolve(arena, param_scratch, outputs, seed)
+                .context("Failed to resolve TransformSimilarity node"),
             Self::ClosestTranslationToSurface(node) => node
                 .resolve(arena, graph, outputs)
                 .context("Failed to resolve ClosestTranslationToSurface node"),
@@ -1748,6 +1799,54 @@ impl MetaTransformRotation {
                 Ok(match self.composition {
                     CompositionMode::Pre => input_transform * rotation,
                     CompositionMode::Post => rotation * input_transform,
+                })
+            },
+        )
+    }
+}
+
+impl MetaTransformSimilarity {
+    fn resolve<A>(
+        &self,
+        arena: A,
+        param_scratch: &mut ParamScratch<A>,
+        outputs: &[MetaSDFNodeOutput<A>],
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>>
+    where
+        A: Allocator + Copy,
+    {
+        resolve_unary_transform_op(
+            arena,
+            "TransformSimilarity",
+            seed,
+            &outputs[self.child_id as usize],
+            |rng, input_transform| {
+                let MetaTransformSimilarityParams {
+                    scale,
+                    tilt_angle,
+                    turn_angle,
+                    roll_angle,
+                    translation_x,
+                    translation_y,
+                    translation_z,
+                } = self.sample_params(param_scratch, rng)?;
+
+                let scaling = scale.max(f32::EPSILON);
+
+                let rotation = unit_quaternion_from_tilt_turn_roll(
+                    Degrees(tilt_angle),
+                    Degrees(turn_angle),
+                    Degrees(roll_angle),
+                );
+
+                let translation = Translation3::from([translation_x, translation_y, translation_z]);
+
+                let transform = Similarity3::from_parts(translation, rotation, scaling);
+
+                Ok(match self.composition {
+                    CompositionMode::Pre => input_transform * transform,
+                    CompositionMode::Post => transform * input_transform,
                 })
             },
         )
