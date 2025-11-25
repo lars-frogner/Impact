@@ -8,10 +8,9 @@ use impact_voxel::generation::sdf::{
 pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut Vec<AtomicNode>) {
     viewer_nodes.clear();
     viewer_nodes.extend(graph.nodes().iter().map(|node| match node {
-        SDFNode::Box(node) => AtomicNode::for_box(node),
         SDFNode::Sphere(node) => AtomicNode::for_sphere(node),
         SDFNode::Capsule(node) => AtomicNode::for_capsule(node),
-        SDFNode::GradientNoise(node) => AtomicNode::for_gradient_noise(node),
+        SDFNode::Box(node) => AtomicNode::for_box(node),
         SDFNode::Translation(node) => AtomicNode::for_translation(node),
         SDFNode::Rotation(node) => AtomicNode::for_rotation(node),
         SDFNode::Scaling(node) => AtomicNode::for_scaling(node),
@@ -24,10 +23,7 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
 
     for (idx, node) in graph.nodes().iter().enumerate() {
         match node {
-            SDFNode::Box(_)
-            | SDFNode::Sphere(_)
-            | SDFNode::Capsule(_)
-            | SDFNode::GradientNoise(_) => {}
+            SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {}
             SDFNode::Translation(SDFTranslation { child_id, .. })
             | SDFNode::Rotation(SDFRotation { child_id, .. })
             | SDFNode::Scaling(SDFScaling { child_id, .. })

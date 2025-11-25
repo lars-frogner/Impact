@@ -8,7 +8,7 @@ use impact_voxel::{
     collidable,
     generation::{
         SDFVoxelGenerator,
-        sdf::{BoxSDF, GradientNoiseSDF, SDFGraph, SDFNode, SphereSDF},
+        sdf::{BoxSDF, SDFGraph, SDFNode, SphereSDF},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     mesh::ChunkedVoxelObjectMesh,
@@ -21,15 +21,6 @@ pub fn generate_box(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
         1.0,
         BoxSDF::new([80.0; 3]).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
-    benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
-}
-
-pub fn generate_gradient_noise_pattern(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        GradientNoiseSDF::new([80.0; 3], 0.05, 0.0, 0).into(),
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));

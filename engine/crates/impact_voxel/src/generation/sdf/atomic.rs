@@ -60,10 +60,9 @@ pub type SDFNodeID = u32;
 #[derive(Clone, Debug)]
 pub enum SDFNode {
     // Primitives
-    Box(BoxSDF),
     Sphere(SphereSDF),
     Capsule(CapsuleSDF),
-    GradientNoise(GradientNoiseSDF),
+    Box(BoxSDF),
 
     // Transforms
     Translation(SDFTranslation),
@@ -100,13 +99,6 @@ struct ProcessedSDFNode {
     domain_margin: f32,
 }
 
-/// Generator for a signed distance field representing an axis-aligned box
-/// centered at the origin.
-#[derive(Clone, Debug)]
-pub struct BoxSDF {
-    half_extents: Vector3<f32>,
-}
-
 /// Generator for a signed distance field representing a sphere centered at the
 /// origin.
 #[derive(Clone, Debug)]
@@ -122,14 +114,11 @@ pub struct CapsuleSDF {
     radius: f32,
 }
 
-/// Generator for a signed "distance" field obtained by thresholding a gradient
-/// noise pattern centered at the origin.
+/// Generator for a signed distance field representing an axis-aligned box
+/// centered at the origin.
 #[derive(Clone, Debug)]
-pub struct GradientNoiseSDF {
+pub struct BoxSDF {
     half_extents: Vector3<f32>,
-    noise_frequency: f32,
-    noise_threshold: f32,
-    seed: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -310,10 +299,7 @@ impl<A: Allocator> SDFGenerator<A> {
                             operation_stack.push(BuildOperation::Process(node_id));
 
                             match &nodes[node_idx] {
-                                SDFNode::Box(_)
-                                | SDFNode::Sphere(_)
-                                | SDFNode::Capsule(_)
-                                | SDFNode::GradientNoise(_) => {}
+                                SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {}
                                 SDFNode::Translation(SDFTranslation { child_id, .. })
                                 | SDFNode::Rotation(SDFRotation { child_id, .. })
                                 | SDFNode::Scaling(SDFScaling { child_id, .. })
@@ -366,17 +352,14 @@ impl<A: Allocator> SDFGenerator<A> {
                         *state = NodeBuildState::DomainDetermined;
 
                         match node {
-                            SDFNode::Box(box_generator) => {
-                                domains[node_idx] = box_generator.domain_bounds();
-                            }
                             SDFNode::Sphere(sphere_generator) => {
                                 domains[node_idx] = sphere_generator.domain_bounds();
                             }
                             SDFNode::Capsule(capsule_generator) => {
                                 domains[node_idx] = capsule_generator.domain_bounds();
                             }
-                            SDFNode::GradientNoise(gradient_noise_generator) => {
-                                domains[node_idx] = gradient_noise_generator.domain_bounds();
+                            SDFNode::Box(box_generator) => {
+                                domains[node_idx] = box_generator.domain_bounds();
                             }
                             &SDFNode::Translation(SDFTranslation {
                                 child_id,
@@ -473,10 +456,7 @@ impl<A: Allocator> SDFGenerator<A> {
                     // Keep track of where the top of an operation stack would
                     // be during an unrolled traversal from children to parents
                     match node {
-                        SDFNode::Box(_)
-                        | SDFNode::Sphere(_)
-                        | SDFNode::Capsule(_)
-                        | SDFNode::GradientNoise(_) => {
+                        SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {
                             stack_top += 1;
                             if stack_top > max_stack_top {
                                 max_stack_top = stack_top;
@@ -543,10 +523,7 @@ impl<A: Allocator> SDFGenerator<A> {
             node.expanded_domain = node.expanded_domain.expanded_about_center(margin);
 
             match &node.node {
-                SDFNode::Box(_)
-                | SDFNode::Sphere(_)
-                | SDFNode::Capsule(_)
-                | SDFNode::GradientNoise(_) => {
+                SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {
                     stack_top = stack_top.saturating_sub(1);
                 }
                 SDFNode::Translation(SDFTranslation { translation, .. }) => {
@@ -665,36 +642,6 @@ impl<A: Allocator> SDFGenerator<A> {
 
         for node in &self.nodes {
             match &node.node {
-                SDFNode::Box(box_generator) => {
-                    let block_aabb_in_node_space =
-                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
-
-                    if node
-                        .expanded_domain
-                        .box_lies_outside(&block_aabb_in_node_space)
-                    {
-                        // Fully outside: distances are guaranteed >= margin
-                        buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
-                    } else if box_generator
-                        .expanded_domain_bounds(-node.domain_margin)
-                        .contains_box(&block_aabb_in_node_space)
-                    {
-                        // Fully inside: distances are guaranteed <= -margin
-                        buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
-                    } else {
-                        update_signed_distances_for_block::<SIZE, COUNT>(
-                            &mut buffers.signed_distance_stack[stack_top],
-                            &node.transform_to_node_space,
-                            block_aabb_in_root_space.lower_corner(),
-                            &|signed_distance, position_in_node_space| {
-                                *signed_distance =
-                                    box_generator.compute_signed_distance(position_in_node_space);
-                            },
-                        );
-                    }
-
-                    stack_top += 1;
-                }
                 SDFNode::Sphere(sphere_generator) => {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
@@ -751,7 +698,7 @@ impl<A: Allocator> SDFGenerator<A> {
 
                     stack_top += 1;
                 }
-                SDFNode::GradientNoise(gradient_noise_generator) => {
+                SDFNode::Box(box_generator) => {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
@@ -759,12 +706,23 @@ impl<A: Allocator> SDFGenerator<A> {
                         .expanded_domain
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
+                        // Fully outside: distances are guaranteed >= margin
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
+                    } else if box_generator
+                        .expanded_domain_bounds(-node.domain_margin)
+                        .contains_box(&block_aabb_in_node_space)
+                    {
+                        // Fully inside: distances are guaranteed <= -margin
+                        buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
-                        gradient_noise_generator.compute_signed_distances_for_block::<SIZE, COUNT>(
+                        update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
                             block_aabb_in_root_space.lower_corner(),
+                            &|signed_distance, position_in_node_space| {
+                                *signed_distance =
+                                    box_generator.compute_signed_distance(position_in_node_space);
+                            },
                         );
                     }
 
@@ -921,19 +879,6 @@ impl<A: Allocator> SDFGenerator<A> {
 
         for node in &self.nodes {
             match &node.node {
-                SDFNode::Box(box_generator) => {
-                    update_signed_distances_for_block::<SIZE, COUNT>(
-                        &mut buffers.signed_distance_stack[stack_top],
-                        &node.transform_to_node_space,
-                        block_origin_in_root_space,
-                        &|signed_distance, position_in_node_space| {
-                            *signed_distance =
-                                box_generator.compute_signed_distance(position_in_node_space);
-                        },
-                    );
-
-                    stack_top += 1;
-                }
                 SDFNode::Sphere(sphere_generator) => {
                     update_signed_distances_for_block::<SIZE, COUNT>(
                         &mut buffers.signed_distance_stack[stack_top],
@@ -960,11 +905,15 @@ impl<A: Allocator> SDFGenerator<A> {
 
                     stack_top += 1;
                 }
-                SDFNode::GradientNoise(gradient_noise_generator) => {
-                    gradient_noise_generator.compute_signed_distances_for_block::<SIZE, COUNT>(
+                SDFNode::Box(box_generator) => {
+                    update_signed_distances_for_block::<SIZE, COUNT>(
                         &mut buffers.signed_distance_stack[stack_top],
                         &node.transform_to_node_space,
                         block_origin_in_root_space,
+                        &|signed_distance, position_in_node_space| {
+                            *signed_distance =
+                                box_generator.compute_signed_distance(position_in_node_space);
+                        },
                     );
 
                     stack_top += 1;
@@ -1069,14 +1018,6 @@ impl Default for SDFGenerator {
     }
 }
 
-impl From<BoxSDF> for SDFGenerator {
-    fn from(generator: BoxSDF) -> Self {
-        let mut nodes = AVec::new();
-        nodes.push(SDFNode::Box(generator));
-        Self::new(Global, &nodes, 0).unwrap()
-    }
-}
-
 impl From<SphereSDF> for SDFGenerator {
     fn from(generator: SphereSDF) -> Self {
         let mut nodes = AVec::new();
@@ -1093,10 +1034,10 @@ impl From<CapsuleSDF> for SDFGenerator {
     }
 }
 
-impl From<GradientNoiseSDF> for SDFGenerator {
-    fn from(generator: GradientNoiseSDF) -> Self {
+impl From<BoxSDF> for SDFGenerator {
+    fn from(generator: BoxSDF) -> Self {
         let mut nodes = AVec::new();
-        nodes.push(SDFNode::GradientNoise(generator));
+        nodes.push(SDFNode::Box(generator));
         Self::new(Global, &nodes, 0).unwrap()
     }
 }
@@ -1182,10 +1123,6 @@ impl Default for SDFGraph<Global> {
 }
 
 impl SDFNode {
-    pub fn new_box(extents: [f32; 3]) -> Self {
-        Self::Box(BoxSDF::new(extents))
-    }
-
     pub fn new_sphere(radius: f32) -> Self {
         Self::Sphere(SphereSDF::new(radius))
     }
@@ -1194,18 +1131,8 @@ impl SDFNode {
         Self::Capsule(CapsuleSDF::new(segment_length, radius))
     }
 
-    pub fn new_gradient_noise(
-        extents: [f32; 3],
-        noise_frequency: f32,
-        noise_threshold: f32,
-        seed: u32,
-    ) -> Self {
-        Self::GradientNoise(GradientNoiseSDF::new(
-            extents,
-            noise_frequency,
-            noise_threshold,
-            seed,
-        ))
+    pub fn new_box(extents: [f32; 3]) -> Self {
+        Self::Box(BoxSDF::new(extents))
     }
 
     pub fn new_translation(child_id: SDFNodeID, translation: Vector3<f32>) -> Self {
@@ -1298,41 +1225,6 @@ impl SDFNode {
     }
 }
 
-impl BoxSDF {
-    /// Creates a new generator for a box with the given extents (in voxels).
-    pub fn new(extents: [f32; 3]) -> Self {
-        assert!(extents.iter().copied().all(f32::is_sign_positive));
-        let half_extents = 0.5 * Vector3::from(extents);
-        Self { half_extents }
-    }
-
-    pub fn extents(&self) -> [f32; 3] {
-        [
-            2.0 * self.half_extents.x,
-            2.0 * self.half_extents.y,
-            2.0 * self.half_extents.z,
-        ]
-    }
-
-    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
-        AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
-    }
-
-    fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
-        let expanded_half_extents = self.half_extents + Vector3::repeat(margin);
-        AxisAlignedBox::new(
-            (-expanded_half_extents).into(),
-            expanded_half_extents.into(),
-        )
-    }
-
-    #[inline]
-    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
-        let q = position_in_node_space.coords.abs() - self.half_extents;
-        q.sup(&Vector3::zeros()).magnitude() + f32::min(q.max(), 0.0)
-    }
-}
-
 impl SphereSDF {
     /// Creates a new generator for a sphere with the given radius (in voxels).
     pub fn new(radius: f32) -> Self {
@@ -1414,18 +1306,12 @@ impl CapsuleSDF {
     }
 }
 
-impl GradientNoiseSDF {
-    /// Creates a new generator for a gradient noise voxel pattern with the
-    /// given extents (in voxels), noise frequency, noise threshold and seed.
-    pub fn new(extents: [f32; 3], noise_frequency: f32, noise_threshold: f32, seed: u32) -> Self {
+impl BoxSDF {
+    /// Creates a new generator for a box with the given extents (in voxels).
+    pub fn new(extents: [f32; 3]) -> Self {
         assert!(extents.iter().copied().all(f32::is_sign_positive));
         let half_extents = 0.5 * Vector3::from(extents);
-        Self {
-            half_extents,
-            noise_frequency,
-            noise_threshold,
-            seed,
-        }
+        Self { half_extents }
     }
 
     pub fn extents(&self) -> [f32; 3] {
@@ -1436,95 +1322,22 @@ impl GradientNoiseSDF {
         ]
     }
 
-    pub fn noise_frequency(&self) -> f32 {
-        self.noise_frequency
-    }
-
-    pub fn noise_threshold(&self) -> f32 {
-        self.noise_threshold
-    }
-
-    pub fn seed(&self) -> u32 {
-        self.seed
-    }
-
     fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
-    /// Note: This will happily generate values outside of `domain_bounds`.
-    fn compute_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
-        &self,
-        signed_distances: &mut [f32; COUNT],
-        transform_to_node_space: &Matrix4<f32>,
-        block_origin_in_root_space: &Point3<f32>,
-    ) {
-        let origin_in_node_space =
-            transform_to_node_space.transform_point(block_origin_in_root_space);
-
-        let dx = transform_to_node_space.column(0).xyz();
-        let dy = transform_to_node_space.column(1).xyz();
-        let dz = transform_to_node_space.column(2).xyz();
-
-        let inverse_scale = dx.norm();
-        let scale = inverse_scale.recip();
-
-        // We incorporate the scaling into the noise by dividing the original
-        // frequency with the scale and adjusting the origin to compensate
-        let unscaled_frequency = self.noise_frequency * inverse_scale;
-        let origin_for_noise = Point3::from(origin_in_node_space.coords.scale(scale));
-
-        // Fall back to per-voxel evaluation if there is any rotation
-        if abs_diff_ne!(dx.x * inverse_scale, 1.0, epsilon = 1e-6)
-            || abs_diff_ne!(dy.y * inverse_scale, 1.0, epsilon = 1e-6)
-        {
-            let dx_for_noise = dx.scale(scale);
-            let dy_for_noise = dy.scale(scale);
-            let dz_for_noise = dz.scale(scale);
-            let mut noise = [0.0];
-
-            let mut idx = 0;
-            for i in 0..SIZE {
-                let origin_plus_x = origin_for_noise + (i as f32) * dx_for_noise;
-                for j in 0..SIZE {
-                    let mut pos = origin_plus_x + (j as f32) * dy_for_noise;
-                    for _ in 0..SIZE {
-                        NoiseBuilder::gradient_3d_offset(
-                            // Warning: We reverse the order of dimensions here to match the
-                            // block-wise evaluation below
-                            pos.z, 1, pos.y, 1, pos.x, 1,
-                        )
-                        .with_freq(unscaled_frequency)
-                        .with_seed(self.seed as i32)
-                        .generate(&mut noise);
-
-                        signed_distances[idx] = self.noise_threshold - noise[0];
-
-                        pos += dz_for_noise;
-                        idx += 1;
-                    }
-                }
-            }
-            return;
-        }
-
-        NoiseBuilder::gradient_3d_offset(
-            // Warning: We reverse the order of dimensions here because the
-            // generated noise is laid out in row-major order
-            origin_for_noise.z,
-            SIZE,
-            origin_for_noise.y,
-            SIZE,
-            origin_for_noise.x,
-            SIZE,
+    fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
+        let expanded_half_extents = self.half_extents + Vector3::repeat(margin);
+        AxisAlignedBox::new(
+            (-expanded_half_extents).into(),
+            expanded_half_extents.into(),
         )
-        .with_freq(unscaled_frequency)
-        .with_seed(self.seed as i32)
-        .generate(signed_distances);
+    }
 
-        for signed_distance in signed_distances {
-            *signed_distance = self.noise_threshold - *signed_distance;
-        }
+    #[inline]
+    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+        let q = position_in_node_space.coords.abs() - self.half_extents;
+        q.sup(&Vector3::zeros()).magnitude() + f32::min(q.max(), 0.0)
     }
 }
 

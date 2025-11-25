@@ -215,7 +215,7 @@ pub mod fuzzing {
     use super::*;
     use crate::{
         generation::{
-            sdf::{BoxSDF, GradientNoiseSDF, SDFNode, SphereSDF},
+            sdf::{BoxSDF, CapsuleSDF, SDFNode, SphereSDF},
             voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
         },
         voxel_types::VoxelTypeRegistry,
@@ -229,9 +229,9 @@ pub mod fuzzing {
     #[allow(clippy::large_enum_variant)]
     #[derive(Clone, Debug, Arbitrary)]
     enum ArbitrarySDFGeneratorNode {
-        Box(BoxSDF),
         Sphere(SphereSDF),
-        GradientNoise(GradientNoiseSDF),
+        Capsule(CapsuleSDF),
+        Box(BoxSDF),
     }
 
     impl<'a> Arbitrary<'a> for SDFVoxelGenerator {
@@ -260,11 +260,9 @@ pub mod fuzzing {
     impl Arbitrary<'_> for SDFGenerator {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let primitive = match u.arbitrary()? {
-                ArbitrarySDFGeneratorNode::Box(generator) => SDFNode::Box(generator),
                 ArbitrarySDFGeneratorNode::Sphere(generator) => SDFNode::Sphere(generator),
-                ArbitrarySDFGeneratorNode::GradientNoise(generator) => {
-                    SDFNode::GradientNoise(generator)
-                }
+                ArbitrarySDFGeneratorNode::Capsule(generator) => SDFNode::Capsule(generator),
+                ArbitrarySDFGeneratorNode::Box(generator) => SDFNode::Box(generator),
             };
             let mut nodes = AVec::new();
             nodes.push(primitive);
@@ -273,23 +271,6 @@ pub mod fuzzing {
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {
             ArbitrarySDFGeneratorNode::size_hint(depth)
-        }
-    }
-
-    impl Arbitrary<'_> for BoxSDF {
-        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let extent_x =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
-            let extent_y =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
-            let extent_z =
-                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
-            Ok(Self::new([extent_x, extent_y, extent_z]))
-        }
-
-        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let size = 6 * mem::size_of::<usize>();
-            (size, Some(size))
         }
     }
 
@@ -306,7 +287,22 @@ pub mod fuzzing {
         }
     }
 
-    impl Arbitrary<'_> for GradientNoiseSDF {
+    impl Arbitrary<'_> for CapsuleSDF {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let segment_length = u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE / 2 - 1) as f32
+                + arbitrary_norm_f32(u)?;
+            let radius =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
+            Ok(Self::new(segment_length, radius))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 4 * mem::size_of::<usize>();
+            (size, Some(size))
+        }
+    }
+
+    impl Arbitrary<'_> for BoxSDF {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let extent_x =
                 u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
@@ -314,19 +310,11 @@ pub mod fuzzing {
                 u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
             let extent_z =
                 u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
-            let noise_frequency = 0.15 * arbitrary_norm_f32(u)?;
-            let noise_threshold = arbitrary_norm_f32(u)?;
-            let seed = u.arbitrary()?;
-            Ok(Self::new(
-                [extent_x, extent_y, extent_z],
-                noise_frequency,
-                noise_threshold,
-                seed,
-            ))
+            Ok(Self::new([extent_x, extent_y, extent_z]))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-            let size = 8 * mem::size_of::<usize>() + mem::size_of::<u32>();
+            let size = 6 * mem::size_of::<usize>();
             (size, Some(size))
         }
     }

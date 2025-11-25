@@ -19,8 +19,7 @@ use impact_voxel::{
     generation::{SDFVoxelGenerator, sdf::SDFGraph},
     setup::{
         self, DynamicVoxels, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
-        MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelGradientNoisePattern,
-        VoxelSphere, VoxelSphereUnion,
+        MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelSphere, VoxelSphereUnion,
     },
 };
 use parking_lot::RwLock;
@@ -184,46 +183,6 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_object_manager = scene.voxel_object_manager().owrite();
         },
         components,
-        |voxel_noise_pattern: &VoxelGradientNoisePattern,
-         voxel_type: &SameVoxelType,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-         multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
-            let mut graph = SDFGraph::new();
-            let node_id = voxel_noise_pattern.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
-            let sdf_generator = graph.build()?;
-
-            let voxel_type_generator = voxel_type
-                .create_generator(&resource_manager.voxel_types)?
-                .into();
-
-            let generator = SDFVoxelGenerator::new(
-                voxel_noise_pattern.voxel_extent(),
-                sdf_generator,
-                voxel_type_generator,
-            );
-
-            Ok(setup::setup_voxel_object(
-                &mut voxel_object_manager,
-                &generator,
-            ))
-        },
-        ![VoxelObjectID]
-    )?;
-
-    setup!(
-        {
-            let resource_manager = resource_manager.oread();
-            let scene = scene.oread();
-            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
-        },
-        components,
         |voxel_box: &VoxelBox,
          voxel_types: &GradientNoiseVoxelTypes,
          multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
@@ -325,46 +284,6 @@ pub fn setup_voxel_objects_for_new_entities(
 
             let generator = SDFVoxelGenerator::new(
                 voxel_sphere_union.voxel_extent(),
-                sdf_generator,
-                voxel_type_generator,
-            );
-
-            Ok(setup::setup_voxel_object(
-                &mut voxel_object_manager,
-                &generator,
-            ))
-        },
-        ![VoxelObjectID]
-    )?;
-
-    setup!(
-        {
-            let resource_manager = resource_manager.oread();
-            let scene = scene.oread();
-            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
-        },
-        components,
-        |voxel_noise_pattern: &VoxelGradientNoisePattern,
-         voxel_types: &GradientNoiseVoxelTypes,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
-         multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
-            let mut graph = SDFGraph::new();
-            let node_id = voxel_noise_pattern.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
-            let sdf_generator = graph.build()?;
-
-            let voxel_type_generator = voxel_types
-                .create_generator(&resource_manager.voxel_types)?
-                .into();
-
-            let generator = SDFVoxelGenerator::new(
-                voxel_noise_pattern.voxel_extent(),
                 sdf_generator,
                 voxel_type_generator,
             );

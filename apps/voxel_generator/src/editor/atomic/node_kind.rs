@@ -1,8 +1,7 @@
 use super::{AtomicFloatParam, AtomicNode, AtomicNodeParams, AtomicPortConfig, AtomicUIntParam};
 use impact_voxel::generation::sdf::{
-    BoxSDF, CapsuleSDF, GradientNoiseSDF, MultifractalNoiseSDFModifier,
-    MultiscaleSphereSDFModifier, SDFIntersection, SDFRotation, SDFScaling, SDFSubtraction,
-    SDFTranslation, SDFUnion, SphereSDF,
+    BoxSDF, CapsuleSDF, MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFIntersection,
+    SDFRotation, SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion, SphereSDF,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -11,7 +10,6 @@ pub enum AtomicNodeKind {
     Box,
     Sphere,
     Capsule,
-    GradientNoise,
     Translation,
     Rotation,
     Scaling,
@@ -23,15 +21,6 @@ pub enum AtomicNodeKind {
 }
 
 impl AtomicNode {
-    pub fn for_box(node: &BoxSDF) -> Self {
-        let extents = node.extents();
-        let mut params = AtomicNodeParams::new();
-        params.push(AtomicFloatParam::new("Extent x", extents[0]).into());
-        params.push(AtomicFloatParam::new("Extent y", extents[1]).into());
-        params.push(AtomicFloatParam::new("Extent z", extents[2]).into());
-        Self::new_leaf(AtomicNodeKind::Box, params)
-    }
-
     pub fn for_sphere(node: &SphereSDF) -> Self {
         let mut params = AtomicNodeParams::new();
         params.push(AtomicFloatParam::new("Radius", node.radius()).into());
@@ -45,16 +34,13 @@ impl AtomicNode {
         Self::new_leaf(AtomicNodeKind::Capsule, params)
     }
 
-    pub fn for_gradient_noise(node: &GradientNoiseSDF) -> Self {
+    pub fn for_box(node: &BoxSDF) -> Self {
         let extents = node.extents();
         let mut params = AtomicNodeParams::new();
         params.push(AtomicFloatParam::new("Extent x", extents[0]).into());
         params.push(AtomicFloatParam::new("Extent y", extents[1]).into());
         params.push(AtomicFloatParam::new("Extent z", extents[2]).into());
-        params.push(AtomicFloatParam::new("Frequency", node.noise_frequency()).into());
-        params.push(AtomicFloatParam::new("Threshold", node.noise_threshold()).into());
-        params.push(AtomicUIntParam::new("Seed", node.seed()).into());
-        Self::new_leaf(AtomicNodeKind::GradientNoise, params)
+        Self::new_leaf(AtomicNodeKind::Box, params)
     }
 
     pub fn for_translation(node: &SDFTranslation) -> Self {
@@ -143,10 +129,9 @@ impl AtomicNodeKind {
     pub fn label(&self) -> &'static str {
         match self {
             Self::Output => "Output",
-            Self::Box => "Box",
             Self::Sphere => "Sphere",
             Self::Capsule => "Capsule",
-            Self::GradientNoise => "Gradient noise",
+            Self::Box => "Box",
             Self::Translation => "Translation",
             Self::Rotation => "Rotation",
             Self::Scaling => "Scaling",
@@ -161,9 +146,7 @@ impl AtomicNodeKind {
     pub fn port_config(&self) -> AtomicPortConfig {
         match self {
             Self::Output => AtomicPortConfig::root(),
-            Self::Box | Self::Sphere | Self::Capsule | Self::GradientNoise => {
-                AtomicPortConfig::leaf()
-            }
+            Self::Sphere | Self::Capsule | Self::Box => AtomicPortConfig::leaf(),
             Self::Translation
             | Self::Rotation
             | Self::Scaling

@@ -5,7 +5,6 @@ impact_profiling::define_target_enum! {
     crate::benchmark::benchmarks,
     chunked_voxel_object => {
         generate_box,
-        generate_gradient_noise_pattern,
         generate_sphere_union,
         generate_complex_object,
         generate_object_with_multifractal_noise,
