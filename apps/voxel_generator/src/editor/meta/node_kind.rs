@@ -8,12 +8,13 @@ use super::{
 use impact::impact_containers::HashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
-    MetaBoxes, MetaCapsules, MetaClosestTranslationToSurface, MetaMultifractalNoiseSDFModifier,
-    MetaMultiscaleSphereSDFModifier, MetaPoints, MetaRayTranslationToSurface, MetaRotation,
-    MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFInstantiation, MetaSDFIntersection,
-    MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction, MetaSDFUnion, MetaScaling, MetaSimilarity,
-    MetaSphereSurfaceTransforms, MetaSpheres, MetaStochasticSelection,
-    MetaStratifiedGridTransforms, MetaTransformApplication, MetaTranslation, SphereSurfaceRotation,
+    CompositionMode, MetaBoxes, MetaCapsules, MetaClosestTranslationToSurface,
+    MetaMultifractalNoiseSDFModifier, MetaMultiscaleSphereSDFModifier, MetaPoints,
+    MetaRayTranslationToSurface, MetaRotation, MetaRotationToGradient, MetaSDFGroupUnion,
+    MetaSDFInstantiation, MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction,
+    MetaSDFUnion, MetaScaling, MetaSimilarity, MetaSphereSurfaceTransforms, MetaSpheres,
+    MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
+    MetaTranslation, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -330,6 +331,16 @@ impl SpecificMetaNodeKind for MetaTranslation {
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
         params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the translation after ('Post') or before ('Pre') the transforms of the input instances.",
+                },
+                 EnumParamVariants::from_iter(["Post", "Pre"]),
+                "Post",
+            )
+        );
+        params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
                     label: "In x",
@@ -374,13 +385,14 @@ impl SpecificMetaNodeKind for MetaTranslation {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 4);
+        assert_eq!(params.len(), 5);
         Some(MetaSDFNode::Translation(MetaTranslation {
             child_id: unary_child(id_map, children)?,
-            translation_x: (&params[0]).into(),
-            translation_y: (&params[1]).into(),
-            translation_z: (&params[2]).into(),
-            seed: (&params[3]).into(),
+            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
+            translation_x: (&params[1]).into(),
+            translation_y: (&params[2]).into(),
+            translation_z: (&params[3]).into(),
+            seed: (&params[4]).into(),
         }))
     }
 }
@@ -396,6 +408,16 @@ impl SpecificMetaNodeKind for MetaRotation {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the rotation after ('Post') or before ('Pre') the transforms of the input instances.",
+                },
+                 EnumParamVariants::from_iter(["Post", "Pre"]),
+                "Post",
+            )
+        );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
@@ -441,13 +463,14 @@ impl SpecificMetaNodeKind for MetaRotation {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 4);
+        assert_eq!(params.len(), 5);
         Some(MetaSDFNode::Rotation(MetaRotation {
             child_id: unary_child(id_map, children)?,
-            tilt_angle: (&params[0]).into(),
-            turn_angle: (&params[1]).into(),
-            roll_angle: (&params[2]).into(),
-            seed: (&params[3]).into(),
+            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
+            tilt_angle: (&params[1]).into(),
+            turn_angle: (&params[2]).into(),
+            roll_angle: (&params[3]).into(),
+            seed: (&params[4]).into(),
         }))
     }
 }
@@ -463,6 +486,16 @@ impl SpecificMetaNodeKind for MetaScaling {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the scaling after ('Post') or before ('Pre') the transforms of the input instances.",
+                },
+                 EnumParamVariants::from_iter(["Post", "Pre"]),
+                "Post",
+            )
+        );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
@@ -489,11 +522,12 @@ impl SpecificMetaNodeKind for MetaScaling {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 2);
+        assert_eq!(params.len(), 3);
         Some(MetaSDFNode::Scaling(MetaScaling {
             child_id: unary_child(id_map, children)?,
-            scaling: (&params[0]).into(),
-            seed: (&params[1]).into(),
+            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
+            scaling: (&params[1]).into(),
+            seed: (&params[2]).into(),
         }))
     }
 }
@@ -509,6 +543,16 @@ impl SpecificMetaNodeKind for MetaSimilarity {
 
     fn params() -> MetaNodeParams {
         let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Composition",
+                    hover_text: "Whether to apply the similarity transform after ('Post') or before ('Pre') the transforms of the input instances.",
+                },
+                 EnumParamVariants::from_iter(["Post", "Pre"]),
+                "Post",
+            )
+        );
         params.push(
             MetaDistributedParam::new_fixed_constant_continuous_value(
                 LabelAndHoverText {
@@ -595,17 +639,18 @@ impl SpecificMetaNodeKind for MetaSimilarity {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 8);
+        assert_eq!(params.len(), 9);
         Some(MetaSDFNode::Similarity(MetaSimilarity {
             child_id: unary_child(id_map, children)?,
-            scale: (&params[0]).into(),
-            tilt_angle: (&params[1]).into(),
-            turn_angle: (&params[2]).into(),
-            roll_angle: (&params[3]).into(),
-            translation_x: (&params[4]).into(),
-            translation_y: (&params[5]).into(),
-            translation_z: (&params[6]).into(),
-            seed: (&params[7]).into(),
+            composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
+            scale: (&params[1]).into(),
+            tilt_angle: (&params[2]).into(),
+            turn_angle: (&params[3]).into(),
+            roll_angle: (&params[4]).into(),
+            translation_x: (&params[5]).into(),
+            translation_y: (&params[6]).into(),
+            translation_z: (&params[7]).into(),
+            seed: (&params[8]).into(),
         }))
     }
 }

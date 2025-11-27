@@ -224,6 +224,9 @@ define_meta_node_params! {
 pub struct MetaTranslation {
     /// ID of the child instance node to translate.
     pub child_id: MetaSDFNodeID,
+    /// Whether to apply the translation before ('Pre') or after ('Post') the
+    /// transforms of the input instances.
+    pub composition: CompositionMode,
     /// Translation distance along the x-axis, in voxels.
     pub translation_x: ContParamSpec,
     /// Translation distance along the y-axis, in voxels.
@@ -252,6 +255,9 @@ define_meta_node_params! {
 pub struct MetaRotation {
     /// ID of the child instance node to rotate.
     pub child_id: MetaSDFNodeID,
+    /// Whether to apply the rotation before ('Pre') or after ('Post') the
+    /// transforms of the input instances.
+    pub composition: CompositionMode,
     /// Angle away from the y-axis, in degrees.
     pub tilt_angle: ContParamSpec,
     /// Angle from the x-axis in the xz-plane, in degrees.
@@ -280,6 +286,9 @@ define_meta_node_params! {
 pub struct MetaScaling {
     /// ID of the child instance node to scale.
     pub child_id: MetaSDFNodeID,
+    /// Whether to apply the scaling before ('Pre') or after ('Post') the
+    /// transforms of the input instances.
+    pub composition: CompositionMode,
     /// Uniform scale factor.
     pub scaling: ContParamSpec,
     /// Seed for generating randomized scale factors.
@@ -302,6 +311,9 @@ define_meta_node_params! {
 pub struct MetaSimilarity {
     /// ID of the child instance node to apply the similarity transform to.
     pub child_id: MetaSDFNodeID,
+    /// Whether to apply the similarity transform before ('Pre') or after
+    /// ('Post') the transforms of the input instances.
+    pub composition: CompositionMode,
     /// Uniform scale factor.
     pub scale: ContParamSpec,
     /// Angle away from the y-axis, in degrees.
@@ -633,6 +645,18 @@ pub struct MetaSDFGroupUnion {
     pub child_id: MetaSDFNodeID,
     /// Smoothness factor for blending all the shapes in the group together.
     pub smoothness: f32,
+}
+
+/// How to combine the current transformation with the input transformation.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompositionMode {
+    /// Apply the current transformation to the subject *after* applying the
+    /// input transformation.
+    Post,
+    /// Apply the current transformation to the subject *before* applying the
+    /// input transformation.
+    Pre,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1185,7 +1209,14 @@ impl MetaTranslation {
 
                 let translation = Translation3::from([translation_x, translation_y, translation_z]);
 
-                Ok(input_instance.with_transform(translation * input_instance.transform))
+                Ok(match self.composition {
+                    CompositionMode::Post => {
+                        input_instance.with_transform(translation * input_instance.transform)
+                    }
+                    CompositionMode::Pre => {
+                        input_instance.with_transform(input_instance.transform * translation)
+                    }
+                })
             },
         )
     }
@@ -1220,7 +1251,14 @@ impl MetaRotation {
                     Degrees(roll_angle),
                 );
 
-                Ok(input_instance.with_transform(rotation * input_instance.transform))
+                Ok(match self.composition {
+                    CompositionMode::Post => {
+                        input_instance.with_transform(rotation * input_instance.transform)
+                    }
+                    CompositionMode::Pre => {
+                        input_instance.with_transform(input_instance.transform * rotation)
+                    }
+                })
             },
         )
     }
@@ -1247,7 +1285,12 @@ impl MetaScaling {
 
                 let scaling = scaling.max(f32::EPSILON);
 
-                Ok(input_instance.with_transform(input_instance.transform.append_scaling(scaling)))
+                Ok(match self.composition {
+                    CompositionMode::Post => input_instance
+                        .with_transform(input_instance.transform.append_scaling(scaling)),
+                    CompositionMode::Pre => input_instance
+                        .with_transform(input_instance.transform.prepend_scaling(scaling)),
+                })
             },
         )
     }
@@ -1292,7 +1335,14 @@ impl MetaSimilarity {
 
                 let transform = Similarity3::from_parts(translation, rotation, scaling);
 
-                Ok(input_instance.with_applied_transform(transform))
+                Ok(match self.composition {
+                    CompositionMode::Post => {
+                        input_instance.with_transform(transform * input_instance.transform)
+                    }
+                    CompositionMode::Pre => {
+                        input_instance.with_transform(input_instance.transform * transform)
+                    }
+                })
             },
         )
     }
@@ -2121,6 +2171,16 @@ impl MetaSDFGroupUnion {
             MetaSDFNodeOutput::Instances(_) => {
                 bail!("SDFGroupUnion node expects SDFGroup or SingleSDF input, got Instances");
             }
+        }
+    }
+}
+
+impl CompositionMode {
+    pub fn try_from_str(variant: &str) -> Result<Self> {
+        match variant {
+            "Post" => Ok(Self::Post),
+            "Pre" => Ok(Self::Pre),
+            invalid => Err(anyhow!("Invalid CompositionMode variant: {invalid}")),
         }
     }
 }
