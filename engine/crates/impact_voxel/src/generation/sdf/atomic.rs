@@ -600,10 +600,10 @@ impl<A: Allocator> SDFGenerator<A> {
                     transform_stack[stack_top].append_scaling_mut(scaling.recip());
 
                     // Margin: A scaling node should have the same effective
-                    // margin as its child, but since it scales the signed
-                    // distances of the child by `scaling`, the child margin has
-                    // to be `margin / scaling`
-                    let margin_for_child = margin / scaling;
+                    // margin as its child, but because scaling expands space by
+                    // `scaling`, the child’s domain margin must be `margin *
+                    // scaling`.
+                    let margin_for_child = margin * scaling;
                     margin_stack[stack_top] = margin_for_child;
                 }
                 SDFNode::MultifractalNoise(modifier) => {
@@ -639,10 +639,10 @@ impl<A: Allocator> SDFGenerator<A> {
                     // interior distances can deviate by up to about twice that
                     // amount. Any point that could fall within this node's
                     // margin might thus come from a child point as far as
-                    // `margin + 2 * soft_combine_domain_padding` from the child
-                    // surface.
+                    // roughly `margin + 2 * soft_combine_domain_padding` from
+                    // the child surface. For safety we use 2.5.
                     let margin_for_child =
-                        margin + 2.0 * soft_combine_domain_padding(smoothness, node.leaf_count);
+                        margin + 2.5 * soft_combine_domain_padding(smoothness, node.leaf_count);
                     margin_stack[stack_top] = margin_for_child;
                     margin_stack[stack_top + 1] = margin_for_child;
 
