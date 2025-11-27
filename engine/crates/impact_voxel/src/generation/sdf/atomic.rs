@@ -95,8 +95,9 @@ struct ProcessedSDFNode {
     /// evaluating the SDF there. Note that this does leave an invalid SDF
     /// though, since the gradient becomes zero. But as long as we don't need
     /// the gradient, that is OK.
-    expanded_domain: AxisAlignedBox<f32>,
+    domain_with_margin: AxisAlignedBox<f32>,
     domain_margin: f32,
+    leaf_count: u32,
 }
 
 /// Generator for a signed distance field representing a sphere centered at the
@@ -259,8 +260,20 @@ impl<A: Allocator> SDFGenerator<A> {
     {
         let mut processed_nodes = AVec::with_capacity_in(nodes.len(), alloc);
 
+        // The domains of each node computed from child domains, not accounting
+        // for required padding due to soft combination operations
         let mut domains = AVec::new_in(arena);
         domains.resize(nodes.len(), zero_domain());
+
+        // The number of leaves below each node, for computing padding for
+        // soft combination nodes
+        let mut leaf_counts = AVec::new_in(arena);
+        leaf_counts.resize(nodes.len(), 0_u32);
+
+        // The padding we must add to each node's domain to account for soft
+        // combination operations
+        let mut required_padding = AVec::new_in(arena);
+        required_padding.resize(nodes.len(), 0.0_f32);
 
         let mut states = AVec::new_in(arena);
         states.resize(nodes.len(), NodeBuildState::Unvisited);
@@ -354,12 +367,15 @@ impl<A: Allocator> SDFGenerator<A> {
                         match node {
                             SDFNode::Sphere(sphere_generator) => {
                                 domains[node_idx] = sphere_generator.domain_bounds();
+                                leaf_counts[node_idx] = 1;
                             }
                             SDFNode::Capsule(capsule_generator) => {
                                 domains[node_idx] = capsule_generator.domain_bounds();
+                                leaf_counts[node_idx] = 1;
                             }
                             SDFNode::Box(box_generator) => {
                                 domains[node_idx] = box_generator.domain_bounds();
+                                leaf_counts[node_idx] = 1;
                             }
                             &SDFNode::Translation(SDFTranslation {
                                 child_id,
@@ -367,6 +383,10 @@ impl<A: Allocator> SDFGenerator<A> {
                             }) => {
                                 let child_domain = &domains[child_id as usize];
                                 domains[node_idx] = child_domain.translated(&translation);
+
+                                leaf_counts[node_idx] = leaf_counts[child_id as usize];
+
+                                required_padding[node_idx] = required_padding[child_id as usize];
                             }
                             &SDFNode::Rotation(SDFRotation { child_id, rotation }) => {
                                 let child_domain = &domains[child_id as usize];
@@ -375,10 +395,16 @@ impl<A: Allocator> SDFGenerator<A> {
                                 domains[node_idx] = AxisAlignedBox::aabb_for_point_array(
                                     &domain_ob.compute_corners(),
                                 );
+
+                                leaf_counts[node_idx] = leaf_counts[child_id as usize];
+                                required_padding[node_idx] = required_padding[child_id as usize];
                             }
                             &SDFNode::Scaling(SDFScaling { child_id, scaling }) => {
                                 let child_domain = &domains[child_id as usize];
                                 domains[node_idx] = child_domain.scaled(scaling);
+
+                                leaf_counts[node_idx] = leaf_counts[child_id as usize];
+                                required_padding[node_idx] = required_padding[child_id as usize];
                             }
                             SDFNode::MultifractalNoise(MultifractalNoiseSDFModifier {
                                 child_id,
@@ -387,13 +413,19 @@ impl<A: Allocator> SDFGenerator<A> {
                             }) => {
                                 let child_domain = &domains[*child_id as usize];
                                 domains[node_idx] = child_domain.expanded_about_center(*amplitude);
+
+                                leaf_counts[node_idx] = leaf_counts[*child_id as usize];
+                                required_padding[node_idx] = required_padding[*child_id as usize];
                             }
                             SDFNode::MultiscaleSphere(
                                 modifier @ MultiscaleSphereSDFModifier { child_id, .. },
                             ) => {
                                 let child_domain = &domains[*child_id as usize];
                                 domains[node_idx] =
-                                    child_domain.expanded_about_center(modifier.domain_padding());
+                                    child_domain.expanded_about_center(modifier.domain_expansion());
+
+                                leaf_counts[node_idx] = leaf_counts[*child_id as usize];
+                                required_padding[node_idx] = required_padding[*child_id as usize];
                             }
                             &SDFNode::Union(SDFUnion {
                                 child_1_id,
@@ -402,21 +434,32 @@ impl<A: Allocator> SDFGenerator<A> {
                             }) => {
                                 let child_1_domain = &domains[child_1_id as usize];
                                 let child_2_domain = &domains[child_2_id as usize];
-                                let domain =
+                                domains[node_idx] =
                                     AxisAlignedBox::aabb_from_pair(child_1_domain, child_2_domain);
-                                domains[node_idx] = domain.expanded_about_center(
-                                    domain_padding_for_smoothness(smoothness),
-                                );
+
+                                let leaf_count = leaf_counts[child_1_id as usize]
+                                    + leaf_counts[child_2_id as usize];
+
+                                leaf_counts[node_idx] = leaf_count;
+
+                                required_padding[node_idx] =
+                                    soft_combine_domain_padding(smoothness, leaf_count);
                             }
                             &SDFNode::Subtraction(SDFSubtraction {
                                 child_1_id,
-                                child_2_id: _,
+                                child_2_id,
                                 smoothness,
                             }) => {
                                 let selected_child_domain = &domains[child_1_id as usize];
-                                domains[node_idx] = selected_child_domain.expanded_about_center(
-                                    domain_padding_for_smoothness(smoothness),
-                                );
+                                domains[node_idx] = selected_child_domain.clone();
+
+                                let leaf_count = leaf_counts[child_1_id as usize]
+                                    + leaf_counts[child_2_id as usize];
+
+                                leaf_counts[node_idx] = leaf_count;
+
+                                required_padding[node_idx] =
+                                    soft_combine_domain_padding(smoothness, leaf_count);
                             }
                             &SDFNode::Intersection(SDFIntersection {
                                 child_1_id,
@@ -425,18 +468,23 @@ impl<A: Allocator> SDFGenerator<A> {
                             }) => {
                                 let child_1_domain = &domains[child_1_id as usize];
                                 let child_2_domain = &domains[child_2_id as usize];
-                                domains[node_idx] = if let Some(domain) =
-                                    child_1_domain.compute_overlap_with(child_2_domain)
-                                {
-                                    domain.expanded_about_center(domain_padding_for_smoothness(
-                                        smoothness,
-                                    ))
-                                } else {
-                                    zero_domain()
-                                };
+                                domains[node_idx] = child_1_domain
+                                    .compute_overlap_with(child_2_domain)
+                                    .unwrap_or_else(zero_domain);
+
+                                let leaf_count = leaf_counts[child_1_id as usize]
+                                    + leaf_counts[child_2_id as usize];
+
+                                leaf_counts[node_idx] = leaf_count;
+
+                                required_padding[node_idx] =
+                                    soft_combine_domain_padding(smoothness, leaf_count);
                             }
                         }
                     }
+
+                    let padded_domain =
+                        domains[node_idx].expanded_about_center(required_padding[node_idx]);
 
                     // We push a node even when its domain has already been
                     // determined (meaning we duplicate the node) so that we can
@@ -447,10 +495,11 @@ impl<A: Allocator> SDFGenerator<A> {
                         // We will determine the correct transform in
                         // `determine_transforms_and_margins`
                         transform_to_node_space: Matrix4::identity(),
-                        // The domain stays unexpanded until we have determined
-                        // the appropriate margin
-                        expanded_domain: domains[node_idx].clone(),
+                        // The domain stays without margin (but with padding)
+                        // until we have determined the appropriate margin
+                        domain_with_margin: padded_domain,
                         domain_margin: 0.0,
+                        leaf_count: leaf_counts[node_idx],
                     });
 
                     // Keep track of where the top of an operation stack would
@@ -480,12 +529,13 @@ impl<A: Allocator> SDFGenerator<A> {
 
         Self::determine_transforms_and_margins(arena, &mut processed_nodes);
 
-        let domain = domains[root_node_id as usize].clone();
+        let root_domain = domains[root_node_id as usize]
+            .expanded_about_center(required_padding[root_node_id as usize]);
 
         Ok(Self {
             nodes: processed_nodes,
             required_forward_stack_size: max_stack_top,
-            domain,
+            domain: root_domain,
         })
     }
 
@@ -520,7 +570,7 @@ impl<A: Allocator> SDFGenerator<A> {
 
             node.transform_to_node_space = transform;
             node.domain_margin = margin;
-            node.expanded_domain = node.expanded_domain.expanded_about_center(margin);
+            node.domain_with_margin = node.domain_with_margin.expanded_about_center(margin);
 
             match &node.node {
                 SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {
@@ -571,7 +621,7 @@ impl<A: Allocator> SDFGenerator<A> {
                     // transform as its parent
 
                     // Margin: Same logic as for `MultifractalNoise`
-                    let margin_for_child = margin + modifier.domain_padding();
+                    let margin_for_child = margin + modifier.domain_expansion();
                     margin_stack[stack_top] = margin_for_child;
                 }
                 &SDFNode::Union(SDFUnion { smoothness, .. })
@@ -581,12 +631,18 @@ impl<A: Allocator> SDFGenerator<A> {
                     // child branch
                     transform_stack[stack_top + 1] = transform;
 
-                    // Margin: Any point that could fall within this node's
-                    // margin might come from a child point as far as `margin +
-                    // domain_padding_for_smoothness(smoothness)` from the child
-                    // surface, because the smoothing operation can offset the
-                    // distance field by up to that amount
-                    let margin_for_child = margin + domain_padding_for_smoothness(smoothness);
+                    // Margin: The smoothing operation can distort the distance
+                    // field of its entire subtree by up to roughly `2 *
+                    // soft_combine_domain_padding`.
+                    // `soft_combine_domain_padding` estimates how far the
+                    // *surface* of this subtree can move due to smoothing, but
+                    // interior distances can deviate by up to about twice that
+                    // amount. Any point that could fall within this node's
+                    // margin might thus come from a child point as far as
+                    // `margin + 2 * soft_combine_domain_padding` from the child
+                    // surface.
+                    let margin_for_child =
+                        margin + 2.0 * soft_combine_domain_padding(smoothness, node.leaf_count);
                     margin_stack[stack_top] = margin_for_child;
                     margin_stack[stack_top + 1] = margin_for_child;
 
@@ -647,7 +703,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
@@ -675,7 +731,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
@@ -703,7 +759,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         // Fully outside: distances are guaranteed >= margin
@@ -736,7 +792,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         for signed_distance in &mut buffers.signed_distance_stack[stack_top - 1] {
@@ -749,7 +805,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let scratch_idx = buffers.signed_distance_stack.len() - 1;
@@ -771,7 +827,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         update_signed_distances_for_block::<SIZE, COUNT>(
@@ -795,7 +851,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let [distances_1, distances_2] = buffers
@@ -818,7 +874,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let [distances_1, distances_2] = buffers
@@ -841,7 +897,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
                     if !node
-                        .expanded_domain
+                        .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
                         let [distances_1, distances_2] = buffers
@@ -1593,8 +1649,8 @@ impl MultiscaleSphereSDFModifier {
         self.seed
     }
 
-    fn domain_padding(&self) -> f32 {
-        self.scaled_inflation + domain_padding_for_smoothness(self.union_smoothness)
+    fn domain_expansion(&self) -> f32 {
+        self.scaled_inflation + displacement_due_to_smoothness(self.union_smoothness)
     }
 
     #[inline]
@@ -1694,8 +1750,22 @@ fn zero_domain() -> AxisAlignedBox<f32> {
     AxisAlignedBox::new(Point3::origin(), Point3::origin())
 }
 
-fn domain_padding_for_smoothness(smoothness: f32) -> f32 {
-    smoothness // `smoothness / 4` is too low and leads to artifacts
+/// When several SDF fields are blended with a soft operator, the smoothing
+/// can push the resulting surface slightly outside the true union of the
+/// input domains. This outward displacement does not only depend on the
+/// smoothing factor itself, but also on how many leaf SDFs contribute to the
+/// blend: combining more fields compounds the effect.
+///
+/// To capture this, the combined domain is expanded by an amount that grows
+/// with both the smoothing factor and the number of leaf nodes beneath the
+/// combination node.
+fn soft_combine_domain_padding(smoothness: f32, leaf_count: u32) -> f32 {
+    let local_padding = displacement_due_to_smoothness(smoothness);
+    local_padding * (leaf_count as f32).log2()
+}
+
+fn displacement_due_to_smoothness(smoothness: f32) -> f32 {
+    0.25 * smoothness
 }
 
 #[inline]
