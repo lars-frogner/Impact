@@ -153,6 +153,27 @@ impl SpecificMetaNodeKind for MetaSpheres {
             )
             .with_min_value(0.0),
         );
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center x",
+                hover_text: "Sphere center x-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Sphere center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Sphere center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Count",
@@ -175,11 +196,14 @@ impl SpecificMetaNodeKind for MetaSpheres {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
+        assert_eq!(params.len(), 6);
         Some(MetaSDFNode::Spheres(MetaSpheres {
             radius: (&params[0]).into(),
-            count: (&params[1]).into(),
-            seed: (&params[2]).into(),
+            center_x: (&params[1]).into(),
+            center_y: (&params[2]).into(),
+            center_z: (&params[3]).into(),
+            count: (&params[4]).into(),
+            seed: (&params[5]).into(),
         }))
     }
 }
@@ -214,6 +238,27 @@ impl SpecificMetaNodeKind for MetaCapsules {
             )
             .with_min_value(0.0),
         );
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center x",
+                hover_text: "Capsule center x-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Capsule center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Capsule center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Count",
@@ -236,12 +281,15 @@ impl SpecificMetaNodeKind for MetaCapsules {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 4);
+        assert_eq!(params.len(), 7);
         Some(MetaSDFNode::Capsules(MetaCapsules {
             segment_length: (&params[0]).into(),
             radius: (&params[1]).into(),
-            count: (&params[2]).into(),
-            seed: (&params[3]).into(),
+            center_x: (&params[2]).into(),
+            center_y: (&params[3]).into(),
+            center_z: (&params[4]).into(),
+            count: (&params[5]).into(),
+            seed: (&params[6]).into(),
         }))
     }
 }
@@ -286,6 +334,27 @@ impl SpecificMetaNodeKind for MetaBoxes {
             )
             .with_min_value(0.0),
         );
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center x",
+                hover_text: "Box center x-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Box center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Box center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
         params.push(MetaUIntParam::new(
             LabelAndHoverText {
                 label: "Count",
@@ -308,13 +377,16 @@ impl SpecificMetaNodeKind for MetaBoxes {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 5);
+        assert_eq!(params.len(), 8);
         Some(MetaSDFNode::Boxes(MetaBoxes {
             extent_x: (&params[0]).into(),
             extent_y: (&params[1]).into(),
             extent_z: (&params[2]).into(),
-            count: (&params[3]).into(),
-            seed: (&params[4]).into(),
+            center_x: (&params[3]).into(),
+            center_y: (&params[4]).into(),
+            center_z: (&params[5]).into(),
+            count: (&params[6]).into(),
+            seed: (&params[7]).into(),
         }))
     }
 }

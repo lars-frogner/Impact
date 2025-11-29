@@ -118,12 +118,18 @@ enum InstanceShape {
 #[derive(Clone, Copy, Debug)]
 struct SphereShape {
     radius: f32,
+    center_x: f32,
+    center_y: f32,
+    center_z: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 struct CapsuleShape {
     segment_length: f32,
     radius: f32,
+    center_x: f32,
+    center_y: f32,
+    center_z: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -131,6 +137,9 @@ struct BoxShape {
     extent_x: f32,
     extent_y: f32,
     extent_z: f32,
+    center_x: f32,
+    center_y: f32,
+    center_z: f32,
 }
 
 /// A set of instances with no shape, each having an identity transform.
@@ -151,6 +160,12 @@ pub struct MetaPoints {
 pub struct MetaSpheres {
     /// Sphere radius, in voxels.
     pub radius: ContParamSpec,
+    /// Sphere center x-coordinate, in voxels.
+    pub center_x: ContParamSpec,
+    /// Sphere center y-coordinate, in voxels.
+    pub center_y: ContParamSpec,
+    /// Sphere center z-coordinate, in voxels.
+    pub center_z: ContParamSpec,
     /// Number of spheres to generate.
     pub count: u32,
     /// Seed for generating randomized radius values.
@@ -161,6 +176,9 @@ define_meta_node_params! {
     MetaSpheres,
     struct MetaSphereInstanceParams {
         radius: f32,
+        center_x: f32,
+        center_y: f32,
+        center_z: f32,
     }
 }
 
@@ -174,6 +192,12 @@ pub struct MetaCapsules {
     pub segment_length: ContParamSpec,
     /// Radius of the spherical caps, in voxels.
     pub radius: ContParamSpec,
+    /// Capsule center x-coordinate, in voxels.
+    pub center_x: ContParamSpec,
+    /// Capsule center y-coordinate, in voxels.
+    pub center_y: ContParamSpec,
+    /// Capsule center z-coordinate, in voxels.
+    pub center_z: ContParamSpec,
     /// Number of capsules to generate.
     pub count: u32,
     /// Seed for generating randomized segment length and radius values.
@@ -185,6 +209,9 @@ define_meta_node_params! {
     struct MetaCapsuleInstanceParams {
         segment_length: f32,
         radius: f32,
+        center_x: f32,
+        center_y: f32,
+        center_z: f32,
     }
 }
 
@@ -200,6 +227,12 @@ pub struct MetaBoxes {
     pub extent_y: ContParamSpec,
     /// Extent along the z-axis, in voxels.
     pub extent_z: ContParamSpec,
+    /// Box center x-coordinate, in voxels.
+    pub center_x: ContParamSpec,
+    /// Box center y-coordinate, in voxels.
+    pub center_y: ContParamSpec,
+    /// Box center z-coordinate, in voxels.
+    pub center_z: ContParamSpec,
     /// Number of boxes to generate.
     pub count: u32,
     /// Seed for generating randomized extent values.
@@ -212,6 +245,9 @@ define_meta_node_params! {
         extent_x: f32,
         extent_y: f32,
         extent_z: f32,
+        center_x: f32,
+        center_y: f32,
+        center_z: f32,
     }
 }
 
@@ -1103,11 +1139,20 @@ impl MetaSpheres {
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
         for _ in 0..self.count {
-            let MetaSphereInstanceParams { radius } =
-                self.sample_params(param_scratch, &mut rng)?;
+            let MetaSphereInstanceParams {
+                radius,
+                center_x,
+                center_y,
+                center_z,
+            } = self.sample_params(param_scratch, &mut rng)?;
 
             instances.push(Instance {
-                shape: InstanceShape::Sphere(SphereShape { radius }),
+                shape: InstanceShape::Sphere(SphereShape {
+                    radius,
+                    center_x,
+                    center_y,
+                    center_z,
+                }),
                 transform: Similarity3::identity(),
             });
         }
@@ -1134,12 +1179,18 @@ impl MetaCapsules {
             let MetaCapsuleInstanceParams {
                 segment_length,
                 radius,
+                center_x,
+                center_y,
+                center_z,
             } = self.sample_params(param_scratch, &mut rng)?;
 
             instances.push(Instance {
                 shape: InstanceShape::Capsule(CapsuleShape {
                     segment_length,
                     radius,
+                    center_x,
+                    center_y,
+                    center_z,
                 }),
                 transform: Similarity3::identity(),
             });
@@ -1168,6 +1219,9 @@ impl MetaBoxes {
                 extent_x,
                 extent_y,
                 extent_z,
+                center_x,
+                center_y,
+                center_z,
             } = self.sample_params(param_scratch, &mut rng)?;
 
             instances.push(Instance {
@@ -1175,6 +1229,9 @@ impl MetaBoxes {
                     extent_x,
                     extent_y,
                     extent_z,
+                    center_x,
+                    center_y,
+                    center_z,
                 }),
                 transform: Similarity3::identity(),
             });
@@ -1816,22 +1873,40 @@ impl MetaSDFInstantiation {
         let mut output_node_ids = AVec::with_capacity_in(4 * instances.len(), arena);
 
         for instance in instances {
-            let mut output_node_id = match instance.shape {
+            let (mut output_node_id, center) = match instance.shape {
                 InstanceShape::None => {
                     continue;
                 }
-                InstanceShape::Sphere(SphereShape { radius }) => {
-                    graph.add_node(SDFNode::new_sphere(radius))
-                }
+                InstanceShape::Sphere(SphereShape {
+                    radius,
+                    center_x,
+                    center_y,
+                    center_z,
+                }) => (
+                    graph.add_node(SDFNode::new_sphere(radius)),
+                    Point3::new(center_x, center_y, center_z),
+                ),
                 InstanceShape::Capsule(CapsuleShape {
                     segment_length,
                     radius,
-                }) => graph.add_node(SDFNode::new_capsule(segment_length, radius)),
+                    center_x,
+                    center_y,
+                    center_z,
+                }) => (
+                    graph.add_node(SDFNode::new_capsule(segment_length, radius)),
+                    Point3::new(center_x, center_y, center_z),
+                ),
                 InstanceShape::Box(BoxShape {
                     extent_x,
                     extent_y,
                     extent_z,
-                }) => graph.add_node(SDFNode::new_box([extent_x, extent_y, extent_z])),
+                    center_x,
+                    center_y,
+                    center_z,
+                }) => (
+                    graph.add_node(SDFNode::new_box([extent_x, extent_y, extent_z])),
+                    Point3::new(center_x, center_y, center_z),
+                ),
             };
 
             let transform = &instance.transform;
@@ -1840,6 +1915,10 @@ impl MetaSDFInstantiation {
             let rotation = transform.isometry.rotation;
             let translation = transform.isometry.translation.vector;
 
+            if abs_diff_ne!(&center, &Point3::origin()) {
+                output_node_id =
+                    graph.add_node(SDFNode::new_translation(output_node_id, center.coords));
+            }
             if abs_diff_ne!(scaling, 1.0) {
                 output_node_id = graph.add_node(SDFNode::new_scaling(output_node_id, scaling));
             }
