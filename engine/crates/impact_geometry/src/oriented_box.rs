@@ -222,7 +222,7 @@ pub fn compute_box_intersection_bounds<F: Float>(
         let box_b_edge_vector = box_b_edge_end - box_b_edge_start;
 
         if let Some((t_min, t_max)) =
-            box_a.find_contained_subsegment(box_b_edge_start, box_b_edge_vector)
+            box_a.find_contained_subsegment(&box_b_edge_start, &box_b_edge_vector)
         {
             let contained_box_b_edge_start = box_b_edge_start + box_b_edge_vector * t_min;
             let contained_box_b_edge_end = box_b_edge_start + box_b_edge_vector * t_max;
@@ -261,8 +261,8 @@ pub fn compute_box_intersection_bounds<F: Float>(
             box_a_edge_end_in_box_b_frame - box_a_edge_start_in_box_b_frame;
 
         if let Some((t_min, t_max)) = box_b_in_box_b_frame.find_contained_subsegment(
-            box_a_edge_start_in_box_b_frame,
-            box_a_edge_vector_in_box_b_frame,
+            &box_a_edge_start_in_box_b_frame,
+            &box_a_edge_vector_in_box_b_frame,
         ) {
             let contained_box_a_edge_start_in_box_b_frame =
                 box_a_edge_start_in_box_b_frame + box_a_edge_vector_in_box_b_frame * t_min;

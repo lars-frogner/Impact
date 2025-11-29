@@ -14,7 +14,7 @@ use impact_voxel::generation::sdf::meta::{
     MetaSDFInstantiation, MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction,
     MetaSDFUnion, MetaScaling, MetaSimilarity, MetaSphereSurfaceTransforms, MetaSpheres,
     MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
-    MetaTranslation, SphereSurfaceRotation,
+    MetaTranslation, RayTranslationAnchor, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -947,7 +947,18 @@ impl SpecificMetaNodeKind for MetaRayTranslationToSurface {
         two_child_port_kinds(MetaChildPortKind::SingleSDF, MetaChildPortKind::Instances);
 
     fn params() -> MetaNodeParams {
-        MetaNodeParams::new()
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Anchor",
+                    hover_text: "The anchor (origin or shape boundary) that should be translated to the surface.",
+                },
+                 EnumParamVariants::from_iter(["Origin", "Shape boundary at origin"]),
+                "Origin",
+            )
+        );
+        params
     }
 
     fn build(
@@ -955,12 +966,13 @@ impl SpecificMetaNodeKind for MetaRayTranslationToSurface {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 0);
+        assert_eq!(params.len(), 1);
         let (surface_sdf_id, subject_id) = binary_children(id_map, children)?;
         Some(MetaSDFNode::RayTranslationToSurface(
             MetaRayTranslationToSurface {
                 surface_sdf_id,
                 subject_id,
+                anchor: RayTranslationAnchor::try_from_str(params[0].enum_value()).unwrap(),
             },
         ))
     }

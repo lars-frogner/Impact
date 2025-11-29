@@ -18,7 +18,9 @@ use allocator_api2::{
 use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::FixedQueue;
-use impact_geometry::{compute_uniformly_distributed_radial_directions, rotation_between_axes};
+use impact_geometry::{
+    Sphere, compute_uniformly_distributed_radial_directions, rotation_between_axes,
+};
 use impact_math::{Angle, Degrees, splitmix};
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
@@ -468,8 +470,8 @@ pub struct MetaClosestTranslationToSurface {
     pub subject_id: MetaSDFNodeID,
 }
 
-/// Translation of the instances in the second input to the intersection of
-/// their y-axes with the surface of the SDF in the first input.
+/// Translation of the instances in the second input along their y-axes until a
+/// chosen anchor reaches the surface of the SDF in the first input.
 ///
 /// Input 1: `SingleSDF`
 /// Input 2: `Instances`
@@ -481,6 +483,9 @@ pub struct MetaRayTranslationToSurface {
     pub surface_sdf_id: MetaSDFNodeID,
     /// ID of the node containing instances to translate.
     pub subject_id: MetaSDFNodeID,
+    /// The anchor (origin or shape boundary) that should be translated to the
+    /// surface.
+    pub anchor: RayTranslationAnchor,
 }
 
 /// Rotation of the instances in the second input to make their y-axis align
@@ -697,6 +702,16 @@ pub enum CompositionMode {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RayTranslationAnchor {
+    /// Place the instance's transform origin on the surface.
+    Origin,
+    /// Place the boundary of the instance’s shape, treated as if centered at
+    /// the instance’s transform origin, on the surface.
+    ShapeBoundaryAtOrigin,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SphereSurfaceRotation {
     Identity,
     RadialOutwards,
@@ -816,6 +831,7 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                     MetaRayTranslationToSurface {
                                         surface_sdf_id: child_1_id,
                                         subject_id: child_2_id,
+                                        ..
                                     },
                                 )
                                 | MetaSDFNode::RotationToGradient(MetaRotationToGradient {
@@ -961,6 +977,7 @@ impl MetaSDFNode {
             Self::RayTranslationToSurface(MetaRayTranslationToSurface {
                 surface_sdf_id,
                 subject_id,
+                ..
             }) => combine_binary(0x21, surface_sdf_id, subject_id),
             Self::RotationToGradient(MetaRotationToGradient {
                 gradient_sdf_id,
@@ -1626,7 +1643,7 @@ impl MetaClosestTranslationToSurface {
                     &surface_sdf_node_to_parent_transform,
                     subject_node_to_parent_transform,
                     5,
-                    0.25,
+                    0.1,
                 )
             };
 
@@ -1693,17 +1710,44 @@ impl MetaRayTranslationToSurface {
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_translation_to_surface =
-            |subject_node_to_parent_transform: &Similarity3<f32>| {
-                compute_translation_to_ray_intersection_point_on_surface(
+            |subject_node_to_parent_transform: &Similarity3<f32>,
+             sphere_in_subject_space: &Sphere<f32>| {
+                compute_spherecast_translation_to_surface(
                     &generator,
                     &mut buffers,
                     &surface_sdf_node_to_parent_transform,
                     subject_node_to_parent_transform,
+                    sphere_in_subject_space,
+                    &Vector3::y_axis(),
                     64,
-                    0.25,
+                    0.1,
                     0.5,
                 )
             };
+
+        // We ignore the center coordinates of the shape, which allows the
+        // actual shape to be offset relative to the shape used for intersection
+        let sphere_for_shape = |shape: &InstanceShape| match shape {
+            InstanceShape::None => Sphere::new(Point3::origin(), 0.0),
+            &InstanceShape::Sphere(SphereShape { radius, .. }) => {
+                Sphere::new(Point3::origin(), radius)
+            }
+            &InstanceShape::Capsule(CapsuleShape {
+                segment_length,
+                radius,
+                ..
+            }) => Sphere::new(Point3::new(0.0, 0.5 * segment_length, 0.0), radius),
+            &InstanceShape::Box(BoxShape {
+                extent_x,
+                extent_y,
+                extent_z,
+                ..
+            }) => {
+                // Use an inscribed sphere rather than the actual box
+                let radius = 0.5 * extent_x.min(extent_y).min(extent_z);
+                Sphere::new(Point3::new(0.0, 0.5 * extent_y - radius, 0.0), radius)
+            }
+        };
 
         let mut translated_subject_instances =
             AVec::with_capacity_in(subject_instances.len(), arena);
@@ -1711,9 +1755,17 @@ impl MetaRayTranslationToSurface {
         for subject_instance in subject_instances {
             let subject_node_to_parent_transform = &subject_instance.transform;
 
-            let Some(translation_to_surface_in_parent_space) =
-                compute_translation_to_surface(subject_node_to_parent_transform)
-            else {
+            let sphere_in_subject_space = match self.anchor {
+                RayTranslationAnchor::Origin => Sphere::new(Point3::origin(), 0.0),
+                RayTranslationAnchor::ShapeBoundaryAtOrigin => {
+                    sphere_for_shape(&subject_instance.shape)
+                }
+            };
+
+            let Some(translation_to_surface_in_parent_space) = compute_translation_to_surface(
+                subject_node_to_parent_transform,
+                &sphere_in_subject_space,
+            ) else {
                 continue;
             };
 
@@ -2264,6 +2316,16 @@ impl CompositionMode {
     }
 }
 
+impl RayTranslationAnchor {
+    pub fn try_from_str(variant: &str) -> Result<Self> {
+        match variant {
+            "Origin" => Ok(Self::Origin),
+            "Shape boundary at origin" => Ok(Self::ShapeBoundaryAtOrigin),
+            invalid => Err(anyhow!("Invalid CompositionMode variant: {invalid}")),
+        }
+    }
+}
+
 impl SphereSurfaceRotation {
     pub fn try_from_str(variant: &str) -> Result<Self> {
         match variant {
@@ -2462,119 +2524,6 @@ fn compute_translation_to_closest_point_on_surface<A: Allocator>(
     Some(translation_to_surface_in_parent_space)
 }
 
-fn compute_translation_to_ray_intersection_point_on_surface<A: Allocator>(
-    generator: &SDFGenerator<A>,
-    buffers: &mut SDFGeneratorBlockBuffers<1, A>,
-    surface_sdf_node_to_parent_transform: &Similarity3<f32>,
-    subject_node_to_parent_transform: &Similarity3<f32>,
-    max_steps: u32,
-    max_distance_from_surface: f32,
-    safety_factor: f32,
-) -> Option<Vector3<f32>> {
-    assert!(safety_factor > 0.0 && safety_factor <= 1.0);
-
-    // The basis for this computation is that the surface node (for which we
-    // sample the SDF) and the subject node (which we will translate) have the
-    // *same* parent space. In other words, we assume that no additional
-    // transforms will be applied to either of the nodes before they are
-    // combined with a binary operator.
-
-    // We need to determine the position of the subject node's domain center in
-    // the space of the surface node, since this is where we will begin to
-    // sample the SDF. The center of the subject node's domain in its own space
-    // is the origin, and we start by transforming that to the (common) parent
-    // space.
-    let subject_center_in_parent_space =
-        subject_node_to_parent_transform.transform_point(&Point3::origin());
-
-    // We also need the ray direction, which is the y-axis in the subject node's
-    // space, in the parent space
-    let subject_y_axis_in_parent_space =
-        subject_node_to_parent_transform.transform_vector(&Vector3::y());
-
-    // We can now transform the position and direction from the common parent
-    // space to the space of the surface node
-    let subject_center_in_surface_sdf_space = surface_sdf_node_to_parent_transform
-        .inverse_transform_point(&subject_center_in_parent_space);
-
-    let subject_y_axis_in_surface_sdf_space = surface_sdf_node_to_parent_transform
-        .inverse_transform_vector(&subject_y_axis_in_parent_space);
-
-    let ray_origin = subject_center_in_surface_sdf_space;
-    let ray_direction = UnitVector3::try_new(subject_y_axis_in_surface_sdf_space, 1e-8)?;
-
-    let domain_in_surface_sdf_space = generator.domain();
-
-    let (start_distance_along_ray, max_distance_along_ray) =
-        domain_in_surface_sdf_space.find_ray_intersection(ray_origin, ray_direction)?;
-
-    let mut distance_along_ray = start_distance_along_ray;
-    let mut sampling_position = ray_origin + ray_direction.scale(distance_along_ray);
-
-    let mut signed_distance = generator.compute_signed_distance(buffers, &sampling_position);
-    let mut distance = signed_distance.abs();
-
-    let starting_sign = signed_distance.signum();
-
-    let mut step_count = 0;
-    let mut crossed_surface = false;
-
-    while distance > max_distance_from_surface {
-        step_count += 1;
-
-        // If we reach max iterations, we assume that we are fairly close to the
-        // surface if we have crossed it (we are stepping back and forth across
-        // it without getting close enough), otherwise we assume we missed and
-        // give up
-        if step_count >= max_steps {
-            if crossed_surface {
-                break;
-            } else {
-                return None;
-            }
-        }
-
-        // If the SDF was exact, the surface couldn't possibly be closer than
-        // `distance`, so we could safely step that far without overshooting.
-        // However, since the distances may be inaccurate due to things like
-        // smoothing or perturbing with noise, we shorten the distance by a
-        // safety factor. To handle overshoot, we also multiply with the sign of
-        // the SDF at the starting position. This will cause us to step back
-        // along the ray if we overshoot, regardless of whether we started
-        // inside or outside of the surface.
-        distance_along_ray += starting_sign * signed_distance * safety_factor;
-
-        if !crossed_surface
-            && signed_distance.is_sign_positive() != starting_sign.is_sign_positive()
-        {
-            crossed_surface = true;
-        }
-
-        // We have exited the SDF domain, so the ray didn't hit the surface
-        if distance_along_ray > max_distance_along_ray
-            || distance_along_ray < start_distance_along_ray
-        {
-            return None;
-        }
-
-        sampling_position = ray_origin + ray_direction.scale(distance_along_ray);
-
-        signed_distance = generator.compute_signed_distance(buffers, &sampling_position);
-        distance = signed_distance.abs();
-    }
-
-    let translation_to_surface_in_surface_sdf_space =
-        sampling_position - subject_center_in_surface_sdf_space;
-
-    // We are still in the space of the surface node, but when applying the
-    // translation to the subject node we need the translation to be in the
-    // parent space
-    let translation_to_surface_in_parent_space = surface_sdf_node_to_parent_transform
-        .transform_vector(&translation_to_surface_in_surface_sdf_space);
-
-    Some(translation_to_surface_in_parent_space)
-}
-
 fn compute_rotation_to_gradient<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
@@ -2632,6 +2581,161 @@ fn compute_rotation_to_gradient<A: Allocator>(
     let gradient_direction = UnitVector3::try_new(gradient_in_parent_space, 1e-8)?;
 
     Some(rotation_between_axes(&y_axis, &gradient_direction))
+}
+
+fn compute_spherecast_translation_to_surface<A: Allocator>(
+    generator: &SDFGenerator<A>,
+    buffers: &mut SDFGeneratorBlockBuffers<1, A>,
+    surface_sdf_node_to_parent_transform: &Similarity3<f32>,
+    subject_node_to_parent_transform: &Similarity3<f32>,
+    sphere_in_subject_space: &Sphere<f32>,
+    direction_in_subject_space: &UnitVector3<f32>,
+    max_steps: u32,
+    tolerance: f32,
+    safety_factor: f32,
+) -> Option<Vector3<f32>> {
+    // The basis for this computation is that the surface node (for which we
+    // sample the SDF) and the subject node (where the sphere is defined) have
+    // the *same* parent space. In other words, we assume that no additional
+    // transforms will be applied to either of the nodes before they are
+    // combined with a binary operator.
+
+    // We need to determine the position of the sphere's center in the space of
+    // the surface node, since this is where we will begin to sample the SDF. We
+    // start by transforming the center from the subject node space to the
+    // (common) parent space.
+    let sphere_center_in_parent_space =
+        subject_node_to_parent_transform.transform_point(sphere_in_subject_space.center());
+
+    // Same for radius and direction
+    let sphere_radius_in_parent_space =
+        subject_node_to_parent_transform.scaling() * sphere_in_subject_space.radius();
+
+    let direction_in_parent_space =
+        subject_node_to_parent_transform.transform_vector(direction_in_subject_space);
+
+    // We can now transform the sphere and direction from the common parent
+    // space to the space of the surface node
+    let sphere_center_in_surface_sdf_space = surface_sdf_node_to_parent_transform
+        .inverse_transform_point(&sphere_center_in_parent_space);
+
+    let sphere_radius_in_surface_space =
+        surface_sdf_node_to_parent_transform.scaling().recip() * sphere_radius_in_parent_space;
+
+    let sphere_in_surface_space = Sphere::new(
+        sphere_center_in_surface_sdf_space,
+        sphere_radius_in_surface_space,
+    );
+
+    let direction_in_surface_sdf_space = UnitVector3::try_new(
+        surface_sdf_node_to_parent_transform.inverse_transform_vector(&direction_in_parent_space),
+        1e-8,
+    )?;
+
+    let translation_to_surface_in_surface_sdf_space =
+        compute_spherecast_translation_to_surface_same_space(
+            generator,
+            buffers,
+            &sphere_in_surface_space,
+            &direction_in_surface_sdf_space,
+            max_steps,
+            tolerance,
+            safety_factor,
+        )?;
+
+    // We are still in the space of the surface node, but when applying the
+    // translation to the subject node we need the translation to be in the
+    // parent space
+    let translation_to_surface_in_parent_space = surface_sdf_node_to_parent_transform
+        .transform_vector(&translation_to_surface_in_surface_sdf_space);
+
+    Some(translation_to_surface_in_parent_space)
+}
+
+fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
+    generator: &SDFGenerator<A>,
+    buffers: &mut SDFGeneratorBlockBuffers<1, A>,
+    sphere: &Sphere<f32>,
+    direction: &UnitVector3<f32>,
+    max_steps: u32,
+    tolerance: f32,
+    safety_factor: f32,
+) -> Option<Vector3<f32>> {
+    assert!(safety_factor > 0.0 && safety_factor <= 1.0);
+
+    let ray_origin = sphere.center();
+    let ray_direction = direction;
+
+    let domain = generator.domain();
+
+    let (start_distance_along_ray, max_distance_along_ray) =
+        domain.find_ray_intersection(ray_origin, ray_direction)?;
+
+    let mut center_distance_along_ray = start_distance_along_ray;
+    let mut sampling_position = ray_origin + ray_direction.scale(center_distance_along_ray);
+
+    // To determine where the sphere hits the surface, we need to find the point
+    // along the ray where the difference between the signed distance and the
+    // sphere radius is zero
+    let mut adjusted_signed_distance =
+        generator.compute_signed_distance(buffers, &sampling_position) - sphere.radius();
+
+    let mut adjusted_distance = adjusted_signed_distance.abs();
+
+    let starting_sign = adjusted_signed_distance.signum();
+
+    let mut step_count = 0;
+    let mut crossed_surface = false;
+
+    while adjusted_distance > tolerance {
+        step_count += 1;
+
+        // If we reach max iterations, we assume that we are fairly close to the
+        // surface if we have crossed it (we are stepping back and forth across
+        // it without getting close enough), otherwise we assume we missed and
+        // give up
+        if step_count >= max_steps {
+            if crossed_surface {
+                break;
+            } else {
+                return None;
+            }
+        }
+
+        // If the SDF was exact, the surface couldn't possibly be closer to the
+        // sphere boundary than `adjusted_distance`, so we could safely step
+        // that far without overshooting. However, since the distances may be
+        // inaccurate due to things like smoothing or perturbing with noise, we
+        // shorten the stepping distance by a safety factor. To handle
+        // overshoot, we also multiply with the sign of the SDF at the starting
+        // position. This will cause us to step back along the ray if we
+        // overshoot, regardless of whether we started inside or outside of the
+        // surface.
+        center_distance_along_ray += starting_sign * adjusted_signed_distance * safety_factor;
+
+        if !crossed_surface
+            && adjusted_signed_distance.is_sign_positive() != starting_sign.is_sign_positive()
+        {
+            crossed_surface = true;
+        }
+
+        // We have exited the SDF domain, so the ray didn't hit the surface
+        if center_distance_along_ray > max_distance_along_ray
+            || center_distance_along_ray < start_distance_along_ray
+        {
+            return None;
+        }
+
+        sampling_position = ray_origin + ray_direction.scale(center_distance_along_ray);
+
+        adjusted_signed_distance =
+            generator.compute_signed_distance(buffers, &sampling_position) - sphere.radius();
+        adjusted_distance = adjusted_signed_distance.abs();
+    }
+
+    let translation_to_surface = sampling_position - ray_origin;
+
+    Some(translation_to_surface)
 }
 
 /// Takes 2x2x2 signed distances (column-major order) sampled one voxel width
