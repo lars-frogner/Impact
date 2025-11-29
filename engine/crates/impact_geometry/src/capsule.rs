@@ -106,7 +106,7 @@ impl<F: Float> Capsule<F> {
     /// lies completely outside the box.
     pub fn with_segment_clamped_to_aab(&self, aab: &AxisAlignedBox<F>) -> Option<Self> {
         let (t_min, t_max) =
-            aab.find_contained_subsegment(self.segment_start, self.segment_vector)?;
+            aab.find_contained_subsegment(&self.segment_start, &self.segment_vector)?;
         let clamped_segment_start = self.segment_start + self.segment_vector * t_min;
         let clamped_segment_vector = self.segment_vector * (t_max - t_min);
         Some(Self::new(

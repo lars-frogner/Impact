@@ -301,8 +301,8 @@ impl<F: Float> AxisAlignedBox<F> {
     /// completely outside the box.
     pub fn find_contained_subsegment(
         &self,
-        segment_start: Point3<F>,
-        offset_from_segment_start_to_end: Vector3<F>,
+        segment_start: &Point3<F>,
+        offset_from_segment_start_to_end: &Vector3<F>,
     ) -> Option<(F, F)> {
         let mut t_min = F::ZERO;
         let mut t_max = F::ONE;
@@ -336,8 +336,8 @@ impl<F: Float> AxisAlignedBox<F> {
     /// [`None`] if the ray does not hit the box.
     pub fn find_ray_intersection(
         &self,
-        ray_origin: Point3<F>,
-        ray_direction: UnitVector3<F>,
+        ray_origin: &Point3<F>,
+        ray_direction: &UnitVector3<F>,
     ) -> Option<(F, F)> {
         let mut t_min = F::ZERO;
         let mut t_max = F::INFINITY;
@@ -668,7 +668,7 @@ mod tests {
         let ray_origin = point![-1.0, 1.0, 1.0];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
         let (t_min, t_max) = result.unwrap();
         assert_abs_diff_eq!(t_min, 1.0, epsilon = 1e-6);
@@ -681,7 +681,7 @@ mod tests {
         let ray_origin = point![2.0, 2.0, 2.0];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
     }
 
@@ -691,7 +691,7 @@ mod tests {
         let ray_origin = point![1.0, 1.0, 1.0];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
         let (t_min, t_max) = result.unwrap();
         assert_abs_diff_eq!(t_min, 0.0, epsilon = 1e-6);
@@ -705,7 +705,7 @@ mod tests {
         let ray_origin = point![-1.0, 0.5, 2.0];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
     }
 
@@ -716,7 +716,7 @@ mod tests {
         let ray_origin = point![2.0, 0.5, 0.5];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
     }
 
@@ -726,7 +726,7 @@ mod tests {
         let ray_origin = point![-1.0, -1.0, -1.0];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
         // Ray enters box when all coordinates reach 0, exits when all reach 1
         let (t_min, t_max) = result.unwrap();
@@ -742,7 +742,7 @@ mod tests {
         let ray_origin = point![-1.0, 1.0, 1.0];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
         let (t_min, t_max) = result.unwrap();
         assert_abs_diff_eq!(t_min, 1.0, epsilon = 1e-6);
@@ -756,7 +756,7 @@ mod tests {
         let ray_origin = point![-1.0, 2.0, 0.5];
         let ray_direction = UnitVector3::new_normalize(vector![1.0, 0.0, 0.0]);
 
-        let result = aabb.find_ray_intersection(ray_origin, ray_direction);
+        let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
     }
 }
