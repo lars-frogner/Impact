@@ -14,7 +14,7 @@ use impact_voxel::generation::sdf::meta::{
     MetaSDFInstantiation, MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction,
     MetaSDFUnion, MetaScaling, MetaSimilarity, MetaSphereSurfaceTransforms, MetaSpheres,
     MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
-    MetaTranslation, RayTranslationAnchor, SphereSurfaceRotation,
+    MetaTranslation, ParameterSamplingMode, RayTranslationAnchor, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -188,6 +188,16 @@ impl SpecificMetaNodeKind for MetaSpheres {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -196,7 +206,7 @@ impl SpecificMetaNodeKind for MetaSpheres {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 6);
+        assert_eq!(params.len(), 7);
         Some(MetaSDFNode::Spheres(MetaSpheres {
             radius: (&params[0]).into(),
             center_x: (&params[1]).into(),
@@ -204,6 +214,7 @@ impl SpecificMetaNodeKind for MetaSpheres {
             center_z: (&params[3]).into(),
             count: (&params[4]).into(),
             seed: (&params[5]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[6].enum_value()).unwrap(),
         }))
     }
 }
@@ -273,6 +284,16 @@ impl SpecificMetaNodeKind for MetaCapsules {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -281,7 +302,7 @@ impl SpecificMetaNodeKind for MetaCapsules {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 7);
+        assert_eq!(params.len(), 8);
         Some(MetaSDFNode::Capsules(MetaCapsules {
             segment_length: (&params[0]).into(),
             radius: (&params[1]).into(),
@@ -290,6 +311,7 @@ impl SpecificMetaNodeKind for MetaCapsules {
             center_z: (&params[4]).into(),
             count: (&params[5]).into(),
             seed: (&params[6]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[7].enum_value()).unwrap(),
         }))
     }
 }
@@ -369,6 +391,16 @@ impl SpecificMetaNodeKind for MetaBoxes {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -377,7 +409,7 @@ impl SpecificMetaNodeKind for MetaBoxes {
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 8);
+        assert_eq!(params.len(), 9);
         Some(MetaSDFNode::Boxes(MetaBoxes {
             extent_x: (&params[0]).into(),
             extent_y: (&params[1]).into(),
@@ -387,6 +419,7 @@ impl SpecificMetaNodeKind for MetaBoxes {
             center_z: (&params[5]).into(),
             count: (&params[6]).into(),
             seed: (&params[7]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[8].enum_value()).unwrap(),
         }))
     }
 }
@@ -449,6 +482,16 @@ impl SpecificMetaNodeKind for MetaTranslation {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -457,7 +500,7 @@ impl SpecificMetaNodeKind for MetaTranslation {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 5);
+        assert_eq!(params.len(), 6);
         Some(MetaSDFNode::Translation(MetaTranslation {
             child_id: unary_child(id_map, children)?,
             composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
@@ -465,6 +508,7 @@ impl SpecificMetaNodeKind for MetaTranslation {
             translation_y: (&params[2]).into(),
             translation_z: (&params[3]).into(),
             seed: (&params[4]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[5].enum_value()).unwrap(),
         }))
     }
 }
@@ -527,6 +571,16 @@ impl SpecificMetaNodeKind for MetaRotation {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -535,7 +589,7 @@ impl SpecificMetaNodeKind for MetaRotation {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 5);
+        assert_eq!(params.len(), 6);
         Some(MetaSDFNode::Rotation(MetaRotation {
             child_id: unary_child(id_map, children)?,
             composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
@@ -543,6 +597,7 @@ impl SpecificMetaNodeKind for MetaRotation {
             turn_angle: (&params[2]).into(),
             roll_angle: (&params[3]).into(),
             seed: (&params[4]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[5].enum_value()).unwrap(),
         }))
     }
 }
@@ -586,6 +641,16 @@ impl SpecificMetaNodeKind for MetaScaling {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -594,12 +659,13 @@ impl SpecificMetaNodeKind for MetaScaling {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 3);
+        assert_eq!(params.len(), 4);
         Some(MetaSDFNode::Scaling(MetaScaling {
             child_id: unary_child(id_map, children)?,
             composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
             scaling: (&params[1]).into(),
             seed: (&params[2]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[3].enum_value()).unwrap(),
         }))
     }
 }
@@ -703,6 +769,16 @@ impl SpecificMetaNodeKind for MetaSimilarity {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -711,7 +787,7 @@ impl SpecificMetaNodeKind for MetaSimilarity {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 9);
+        assert_eq!(params.len(), 10);
         Some(MetaSDFNode::Similarity(MetaSimilarity {
             child_id: unary_child(id_map, children)?,
             composition: CompositionMode::try_from_str(params[0].enum_value()).unwrap(),
@@ -723,6 +799,7 @@ impl SpecificMetaNodeKind for MetaSimilarity {
             translation_y: (&params[6]).into(),
             translation_z: (&params[7]).into(),
             seed: (&params[8]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[9].enum_value()).unwrap(),
         }))
     }
 }
@@ -1195,6 +1272,16 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
             },
             0,
         ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple SDFs.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per SDF"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -1203,7 +1290,7 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 6);
+        assert_eq!(params.len(), 7);
         Some(MetaSDFNode::MultifractalNoiseSDFModifier(
             MetaMultifractalNoiseSDFModifier {
                 child_id: unary_child(id_map, children)?,
@@ -1213,6 +1300,7 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
                 persistence: (&params[3]).into(),
                 amplitude: (&params[4]).into(),
                 seed: (&params[5]).into(),
+                sampling: ParameterSamplingMode::try_from_str(params[6].enum_value()).unwrap(),
             },
         ))
     }
@@ -1301,6 +1389,16 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
                 0,
             )
         );
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple SDFs.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per SDF"]),
+                "Only once",
+            )
+        );
         params
     }
 
@@ -1309,7 +1407,7 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 7);
+        assert_eq!(params.len(), 8);
         Some(MetaSDFNode::MultiscaleSphereSDFModifier(
             MetaMultiscaleSphereSDFModifier {
                 child_id: unary_child(id_map, children)?,
@@ -1320,6 +1418,7 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
                 intersection_smoothness: (&params[4]).into(),
                 union_smoothness: (&params[5]).into(),
                 seed: (&params[6]).into(),
+                sampling: ParameterSamplingMode::try_from_str(params[7].enum_value()).unwrap(),
             },
         ))
     }
