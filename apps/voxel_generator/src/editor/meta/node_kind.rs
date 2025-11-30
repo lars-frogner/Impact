@@ -169,8 +169,8 @@ impl SpecificMetaNodeKind for MetaSpheres {
         ));
         params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
             LabelAndHoverText {
-                label: "Center y",
-                hover_text: "Sphere center y-coordinate, in voxels.",
+                label: "Center z",
+                hover_text: "Sphere center z-coordinate, in voxels.",
             },
             0.0,
         ));
@@ -265,8 +265,8 @@ impl SpecificMetaNodeKind for MetaCapsules {
         ));
         params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
             LabelAndHoverText {
-                label: "Center y",
-                hover_text: "Capsule center y-coordinate, in voxels.",
+                label: "Center z",
+                hover_text: "Capsule center z-coordinate, in voxels.",
             },
             0.0,
         ));
@@ -372,8 +372,8 @@ impl SpecificMetaNodeKind for MetaBoxes {
         ));
         params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
             LabelAndHoverText {
-                label: "Center y",
-                hover_text: "Box center y-coordinate, in voxels.",
+                label: "Center z",
+                hover_text: "Box center z-coordinate, in voxels.",
             },
             0.0,
         ));
