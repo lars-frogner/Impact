@@ -172,6 +172,9 @@ pub struct MetaSpheres {
     pub count: u32,
     /// Seed for generating randomized radius values.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -204,6 +207,9 @@ pub struct MetaCapsules {
     pub count: u32,
     /// Seed for generating randomized segment length and radius values.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -239,6 +245,9 @@ pub struct MetaBoxes {
     pub count: u32,
     /// Seed for generating randomized extent values.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -273,6 +282,9 @@ pub struct MetaTranslation {
     pub translation_z: ContParamSpec,
     /// Seed for generating randomized translations.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -304,6 +316,9 @@ pub struct MetaRotation {
     pub roll_angle: ContParamSpec,
     /// Seed for generating randomized rotations.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -331,6 +346,9 @@ pub struct MetaScaling {
     pub scaling: ContParamSpec,
     /// Seed for generating randomized scale factors.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -368,6 +386,9 @@ pub struct MetaSimilarity {
     pub translation_z: ContParamSpec,
     /// Seed for generating randomized similarity transforms.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -572,6 +593,9 @@ pub struct MetaMultifractalNoiseSDFModifier {
     pub amplitude: ContParamSpec,
     /// Seed for generating noise and randomized parameter values.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// SDFs.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -613,6 +637,9 @@ pub struct MetaMultiscaleSphereSDFModifier {
     /// Seed for generating random sphere radii as well as randomized
     /// parameter values.
     pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// SDFs.
+    pub sampling: ParameterSamplingMode,
 }
 
 define_meta_node_params! {
@@ -698,6 +725,17 @@ pub enum CompositionMode {
     /// Apply the current transformation to the subject *before* applying the
     /// input transformation.
     Pre,
+}
+
+/// How to sample parameters from distributions when there are multiple
+/// instances or SDFs.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ParameterSamplingMode {
+    /// Sample the parameters once and use for all instances.
+    OnlyOnce,
+    /// Sample a new set of parameters for each instance.
+    PerInstance,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1155,23 +1193,22 @@ impl MetaSpheres {
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
-        for _ in 0..self.count {
-            let MetaSphereInstanceParams {
-                radius,
-                center_x,
-                center_y,
-                center_z,
-            } = self.sample_params(param_scratch, &mut rng)?;
+        let mut params = self.sample_params(param_scratch, &mut rng)?;
 
+        for idx in 0..self.count {
             instances.push(Instance {
                 shape: InstanceShape::Sphere(SphereShape {
-                    radius,
-                    center_x,
-                    center_y,
-                    center_z,
+                    radius: params.radius,
+                    center_x: params.center_x,
+                    center_y: params.center_y,
+                    center_z: params.center_z,
                 }),
                 transform: Similarity3::identity(),
             });
+
+            if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
+                params = self.sample_params(param_scratch, &mut rng)?;
+            }
         }
 
         Ok(MetaSDFNodeOutput::Instances(instances))
@@ -1192,25 +1229,23 @@ impl MetaCapsules {
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
-        for _ in 0..self.count {
-            let MetaCapsuleInstanceParams {
-                segment_length,
-                radius,
-                center_x,
-                center_y,
-                center_z,
-            } = self.sample_params(param_scratch, &mut rng)?;
+        let mut params = self.sample_params(param_scratch, &mut rng)?;
 
+        for idx in 0..self.count {
             instances.push(Instance {
                 shape: InstanceShape::Capsule(CapsuleShape {
-                    segment_length,
-                    radius,
-                    center_x,
-                    center_y,
-                    center_z,
+                    segment_length: params.segment_length,
+                    radius: params.radius,
+                    center_x: params.center_x,
+                    center_y: params.center_y,
+                    center_z: params.center_z,
                 }),
                 transform: Similarity3::identity(),
             });
+
+            if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
+                params = self.sample_params(param_scratch, &mut rng)?;
+            }
         }
 
         Ok(MetaSDFNodeOutput::Instances(instances))
@@ -1231,27 +1266,24 @@ impl MetaBoxes {
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
-        for _ in 0..self.count {
-            let MetaBoxInstanceParams {
-                extent_x,
-                extent_y,
-                extent_z,
-                center_x,
-                center_y,
-                center_z,
-            } = self.sample_params(param_scratch, &mut rng)?;
+        let mut params = self.sample_params(param_scratch, &mut rng)?;
 
+        for idx in 0..self.count {
             instances.push(Instance {
                 shape: InstanceShape::Box(BoxShape {
-                    extent_x,
-                    extent_y,
-                    extent_z,
-                    center_x,
-                    center_y,
-                    center_z,
+                    extent_x: params.extent_x,
+                    extent_y: params.extent_y,
+                    extent_z: params.extent_z,
+                    center_x: params.center_x,
+                    center_y: params.center_y,
+                    center_z: params.center_z,
                 }),
                 transform: Similarity3::identity(),
             });
+
+            if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
+                params = self.sample_params(param_scratch, &mut rng)?;
+            }
         }
 
         Ok(MetaSDFNodeOutput::Instances(instances))
@@ -1274,23 +1306,23 @@ impl MetaTranslation {
             "Translation",
             seed,
             &outputs[self.child_id as usize],
-            |rng, input_instance| {
-                let MetaTranslationParams {
-                    translation_x,
-                    translation_y,
-                    translation_z,
-                } = self.sample_params(param_scratch, rng)?;
+            self.sampling,
+            |rng| self.sample_params(param_scratch, rng),
+            |params, input_instance| {
+                let translation = Translation3::from([
+                    params.translation_x,
+                    params.translation_y,
+                    params.translation_z,
+                ]);
 
-                let translation = Translation3::from([translation_x, translation_y, translation_z]);
-
-                Ok(match self.composition {
+                match self.composition {
                     CompositionMode::Post => {
                         input_instance.with_transform(translation * input_instance.transform)
                     }
                     CompositionMode::Pre => {
                         input_instance.with_transform(input_instance.transform * translation)
                     }
-                })
+                }
             },
         )
     }
@@ -1312,27 +1344,23 @@ impl MetaRotation {
             "Rotation",
             seed,
             &outputs[self.child_id as usize],
-            |rng, input_instance| {
-                let MetaRotationParams {
-                    tilt_angle,
-                    turn_angle,
-                    roll_angle,
-                } = self.sample_params(param_scratch, rng)?;
-
+            self.sampling,
+            |rng| self.sample_params(param_scratch, rng),
+            |params, input_instance| {
                 let rotation = unit_quaternion_from_tilt_turn_roll(
-                    Degrees(tilt_angle),
-                    Degrees(turn_angle),
-                    Degrees(roll_angle),
+                    Degrees(params.tilt_angle),
+                    Degrees(params.turn_angle),
+                    Degrees(params.roll_angle),
                 );
 
-                Ok(match self.composition {
+                match self.composition {
                     CompositionMode::Post => {
                         input_instance.with_transform(rotation * input_instance.transform)
                     }
                     CompositionMode::Pre => {
                         input_instance.with_transform(input_instance.transform * rotation)
                     }
-                })
+                }
             },
         )
     }
@@ -1354,17 +1382,17 @@ impl MetaScaling {
             "Scaling",
             seed,
             &outputs[self.child_id as usize],
-            |rng, input_instance| {
-                let MetaScalingParams { scaling } = self.sample_params(param_scratch, rng)?;
+            self.sampling,
+            |rng| self.sample_params(param_scratch, rng),
+            |params, input_instance| {
+                let scaling = params.scaling.max(f32::EPSILON);
 
-                let scaling = scaling.max(f32::EPSILON);
-
-                Ok(match self.composition {
+                match self.composition {
                     CompositionMode::Post => input_instance
                         .with_transform(input_instance.transform.append_scaling(scaling)),
                     CompositionMode::Pre => input_instance
                         .with_transform(input_instance.transform.prepend_scaling(scaling)),
-                })
+                }
             },
         )
     }
@@ -1386,37 +1414,33 @@ impl MetaSimilarity {
             "Similarity",
             seed,
             &outputs[self.child_id as usize],
-            |rng, input_instance| {
-                let MetaSimilarityParams {
-                    scale,
-                    tilt_angle,
-                    turn_angle,
-                    roll_angle,
-                    translation_x,
-                    translation_y,
-                    translation_z,
-                } = self.sample_params(param_scratch, rng)?;
-
-                let scaling = scale.max(f32::EPSILON);
+            self.sampling,
+            |rng| self.sample_params(param_scratch, rng),
+            |params, input_instance| {
+                let scaling = params.scale.max(f32::EPSILON);
 
                 let rotation = unit_quaternion_from_tilt_turn_roll(
-                    Degrees(tilt_angle),
-                    Degrees(turn_angle),
-                    Degrees(roll_angle),
+                    Degrees(params.tilt_angle),
+                    Degrees(params.turn_angle),
+                    Degrees(params.roll_angle),
                 );
 
-                let translation = Translation3::from([translation_x, translation_y, translation_z]);
+                let translation = Translation3::from([
+                    params.translation_x,
+                    params.translation_y,
+                    params.translation_z,
+                ]);
 
                 let transform = Similarity3::from_parts(translation, rotation, scaling);
 
-                Ok(match self.composition {
+                match self.composition {
                     CompositionMode::Post => {
                         input_instance.with_transform(transform * input_instance.transform)
                     }
                     CompositionMode::Pre => {
                         input_instance.with_transform(input_instance.transform * transform)
                     }
-                })
+                }
             },
         )
     }
@@ -2078,26 +2102,18 @@ impl MetaMultifractalNoiseSDFModifier {
             "MultifractalNoiseSDFModifier",
             seed,
             &outputs[self.child_id as usize],
-            |rng, input_node_id| {
-                let MetaMultifractalNoiseParams {
-                    octaves,
-                    frequency,
-                    lacunarity,
-                    persistence,
-                    amplitude,
-                } = self.sample_params(param_scratch, rng)?;
-
-                let seed = rng.random();
-
-                Ok(SDFNode::new_multifractal_noise(
+            self.sampling,
+            |rng| Ok((self.sample_params(param_scratch, rng)?, rng.random::<u32>())),
+            |(params, seed), input_node_id| {
+                SDFNode::new_multifractal_noise(
                     input_node_id,
-                    octaves,
-                    frequency,
-                    lacunarity,
-                    persistence,
-                    amplitude,
-                    seed,
-                ))
+                    params.octaves,
+                    params.frequency,
+                    params.lacunarity,
+                    params.persistence,
+                    params.amplitude,
+                    *seed,
+                )
             },
         )
     }
@@ -2121,28 +2137,19 @@ impl MetaMultiscaleSphereSDFModifier {
             "MultiscaleSphereSDFModifier",
             seed,
             &outputs[self.child_id as usize],
-            |rng, input_node_id| {
-                let MetaMultiscaleSphereParams {
-                    octaves,
-                    max_scale,
-                    persistence,
-                    inflation,
-                    intersection_smoothness,
-                    union_smoothness,
-                } = self.sample_params(param_scratch, rng)?;
-
-                let seed = rng.random();
-
-                Ok(SDFNode::new_multiscale_sphere(
+            self.sampling,
+            |rng| Ok((self.sample_params(param_scratch, rng)?, rng.random::<u32>())),
+            |(params, seed), input_node_id| {
+                SDFNode::new_multiscale_sphere(
                     input_node_id,
-                    octaves,
-                    max_scale,
-                    persistence,
-                    inflation,
-                    intersection_smoothness,
-                    union_smoothness,
-                    seed,
-                ))
+                    params.octaves,
+                    params.max_scale,
+                    params.persistence,
+                    params.inflation,
+                    params.intersection_smoothness,
+                    params.union_smoothness,
+                    *seed,
+                )
             },
         )
     }
@@ -2316,6 +2323,16 @@ impl CompositionMode {
     }
 }
 
+impl ParameterSamplingMode {
+    pub fn try_from_str(variant: &str) -> Result<Self> {
+        match variant {
+            "Only once" => Ok(Self::OnlyOnce),
+            "Per instance" | "Per SDF" => Ok(Self::PerInstance),
+            invalid => Err(anyhow!("Invalid ParameterSamplingMode variant: {invalid}")),
+        }
+    }
+}
+
 impl RayTranslationAnchor {
     pub fn try_from_str(variant: &str) -> Result<Self> {
         match variant {
@@ -2337,26 +2354,82 @@ impl SphereSurfaceRotation {
     }
 }
 
-fn resolve_unary_sdf_op<A: Allocator>(
+fn resolve_unary_instance_op<A: Allocator, P>(
+    arena: A,
+    name: &str,
+    seed: u64,
+    child_output: &MetaSDFNodeOutput<A>,
+    sampling: ParameterSamplingMode,
+    mut sample_params: impl FnMut(&mut ParamRng) -> Result<P>,
+    create_instance: impl Fn(&P, &Instance) -> Instance,
+) -> Result<MetaSDFNodeOutput<A>> {
+    let input_instances = match child_output {
+        MetaSDFNodeOutput::Instances(input_instances) => input_instances,
+        child_output => {
+            bail!(
+                "{name} node expects Instances input, got {}",
+                child_output.label()
+            );
+        }
+    };
+
+    let mut rng = create_param_rng(seed);
+
+    let instance_count = input_instances.len();
+
+    let mut output_instances = AVec::with_capacity_in(instance_count, arena);
+
+    let mut params = sample_params(&mut rng)?;
+
+    for (idx, input_instance) in input_instances.iter().enumerate() {
+        output_instances.push(create_instance(&params, input_instance));
+
+        if sampling == ParameterSamplingMode::PerInstance && idx + 1 < instance_count {
+            params = sample_params(&mut rng)?;
+        }
+    }
+
+    Ok(MetaSDFNodeOutput::Instances(output_instances))
+}
+
+fn resolve_unary_sdf_op<A: Allocator, P>(
     arena: A,
     graph: &mut SDFGraph<A>,
     name: &str,
     seed: u64,
     child_output: &MetaSDFNodeOutput<A>,
-    mut create_atomic_node: impl FnMut(&mut ParamRng, SDFNodeID) -> Result<SDFNode>,
+    sampling: ParameterSamplingMode,
+    mut sample_params: impl FnMut(&mut ParamRng) -> Result<P>,
+    create_atomic_node: impl Fn(&P, SDFNodeID) -> SDFNode,
 ) -> Result<MetaSDFNodeOutput<A>> {
     match child_output {
         MetaSDFNodeOutput::SingleSDF(None) => Ok(MetaSDFNodeOutput::SingleSDF(None)),
         MetaSDFNodeOutput::SingleSDF(Some(input_node_id)) => {
             let mut rng = create_param_rng(seed);
-            let output_node_id = graph.add_node(create_atomic_node(&mut rng, *input_node_id)?);
+            let params = sample_params(&mut rng)?;
+
+            let output_node_id = graph.add_node(create_atomic_node(&params, *input_node_id));
+
             Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
         }
         MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
-            let output_node_ids =
-                unary_sdf_group_op(arena, graph, seed, input_node_ids, |rng, input_node_id| {
-                    create_atomic_node(rng, input_node_id)
-                })?;
+            let mut rng = create_param_rng(seed);
+
+            let count = input_node_ids.len();
+
+            let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
+
+            let mut params = sample_params(&mut rng)?;
+
+            for (idx, input_node_id) in input_node_ids.iter().enumerate() {
+                let output_node_id = graph.add_node(create_atomic_node(&params, *input_node_id));
+                output_node_ids.push(output_node_id);
+
+                if sampling == ParameterSamplingMode::PerInstance && idx + 1 < count {
+                    params = sample_params(&mut rng)?;
+                }
+            }
+
             Ok(MetaSDFNodeOutput::SDFGroup(output_node_ids))
         }
         child_output => {
@@ -2366,59 +2439,6 @@ fn resolve_unary_sdf_op<A: Allocator>(
             );
         }
     }
-}
-
-fn unary_sdf_group_op<A: Allocator>(
-    arena: A,
-    graph: &mut SDFGraph<A>,
-    seed: u64,
-    input_node_ids: &[SDFNodeID],
-    mut create_output_node: impl FnMut(&mut ParamRng, SDFNodeID) -> Result<SDFNode>,
-) -> Result<AVec<SDFNodeID, A>> {
-    let mut rng = create_param_rng(seed);
-    let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
-    for input_node_id in input_node_ids {
-        output_node_ids.push(graph.add_node(create_output_node(&mut rng, *input_node_id)?));
-    }
-    Ok(output_node_ids)
-}
-
-fn resolve_unary_instance_op<A: Allocator>(
-    arena: A,
-    name: &str,
-    seed: u64,
-    child_output: &MetaSDFNodeOutput<A>,
-    mut create_instance: impl FnMut(&mut ParamRng, &Instance) -> Result<Instance>,
-) -> Result<MetaSDFNodeOutput<A>> {
-    match child_output {
-        MetaSDFNodeOutput::Instances(input_instances) => {
-            let output_instances =
-                unary_instance_group_op(arena, seed, input_instances, |rng, input_instance| {
-                    create_instance(rng, input_instance)
-                })?;
-            Ok(MetaSDFNodeOutput::Instances(output_instances))
-        }
-        child_output => {
-            bail!(
-                "{name} node expects Instances input, got {}",
-                child_output.label()
-            );
-        }
-    }
-}
-
-fn unary_instance_group_op<A: Allocator>(
-    arena: A,
-    seed: u64,
-    input_instances: &[Instance],
-    mut create_instances: impl FnMut(&mut ParamRng, &Instance) -> Result<Instance>,
-) -> Result<AVec<Instance, A>> {
-    let mut rng = create_param_rng(seed);
-    let mut output_instances = AVec::with_capacity_in(input_instances.len(), arena);
-    for input_instance in input_instances {
-        output_instances.push(create_instances(&mut rng, input_instance)?);
-    }
-    Ok(output_instances)
 }
 
 fn emit_balanced_binary_tree<A, N>(
