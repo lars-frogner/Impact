@@ -599,11 +599,12 @@ impl<A: Allocator> SDFGenerator<A> {
                     // scale
                     transform_stack[stack_top].append_scaling_mut(scaling.recip());
 
-                    // Margin: A scaling node should have the same effective
-                    // margin as its child, but because scaling expands space by
-                    // `scaling`, the child’s domain margin must be `margin *
-                    // scaling`.
-                    let margin_for_child = margin * scaling;
+                    // Margin: A scaling node should preserve the same effective
+                    // margin in parent space. Since SDF values scale by
+                    // `scaling`, the child must use a margin of `margin /
+                    // scaling` so that after scaling its distances still reach
+                    // the required margin in the parent.
+                    let margin_for_child = margin / scaling;
                     margin_stack[stack_top] = margin_for_child;
                 }
                 SDFNode::MultifractalNoise(modifier) => {
@@ -694,6 +695,8 @@ impl<A: Allocator> SDFGenerator<A> {
             return;
         }
 
+        let block_origin_in_root_space = block_aabb_in_root_space.lower_corner();
+
         let mut stack_top: usize = 0;
 
         for node in &self.nodes {
@@ -706,17 +709,19 @@ impl<A: Allocator> SDFGenerator<A> {
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
+                        // Fully outside: distances are assumed >= margin
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
                     } else if sphere_generator
                         .expanded_interior_domain_bounds(-node.domain_margin)
                         .contains_box(&block_aabb_in_node_space)
                     {
+                        // Fully inside: distances are assumed <= -margin
                         buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
                         update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
-                            block_aabb_in_root_space.lower_corner(),
+                            block_origin_in_root_space,
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = sphere_generator
                                     .compute_signed_distance(position_in_node_space);
@@ -744,7 +749,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
-                            block_aabb_in_root_space.lower_corner(),
+                            block_origin_in_root_space,
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = capsule_generator
                                     .compute_signed_distance(position_in_node_space);
@@ -762,19 +767,17 @@ impl<A: Allocator> SDFGenerator<A> {
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
                     {
-                        // Fully outside: distances are guaranteed >= margin
                         buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
                     } else if box_generator
                         .expanded_domain_bounds(-node.domain_margin)
                         .contains_box(&block_aabb_in_node_space)
                     {
-                        // Fully inside: distances are guaranteed <= -margin
                         buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
                         update_signed_distances_for_block::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
-                            block_aabb_in_root_space.lower_corner(),
+                            block_origin_in_root_space,
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance =
                                     box_generator.compute_signed_distance(position_in_node_space);
@@ -788,52 +791,64 @@ impl<A: Allocator> SDFGenerator<A> {
                 SDFNode::Scaling(SDFScaling { scaling, .. }) => {
                     debug_assert!(stack_top >= 1);
 
-                    let block_aabb_in_node_space =
-                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+                    let distances = &mut buffers.signed_distance_stack[stack_top - 1];
 
-                    if !node
-                        .domain_with_margin
-                        .box_lies_outside(&block_aabb_in_node_space)
-                    {
-                        for signed_distance in &mut buffers.signed_distance_stack[stack_top - 1] {
-                            *signed_distance *= scaling;
-                        }
+                    for signed_distance in distances.iter_mut() {
+                        *signed_distance *= scaling;
                     }
                 }
                 SDFNode::MultifractalNoise(modifier) => {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
+                    let scratch_idx = buffers.signed_distance_stack.len() - 1;
+                    let [distances, scratch] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, scratch_idx])
+                        .unwrap();
+
                     if !node
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
+                        || !modifier
+                            .all_modified_signed_distances_at_block_test_positions_pass_predicate::<SIZE, COUNT>(
+                                distances,
+                                &node.transform_to_node_space,
+                                block_origin_in_root_space,
+                                |signed_distance| signed_distance >= node.domain_margin,
+                            )
                     {
-                        let scratch_idx = buffers.signed_distance_stack.len() - 1;
-                        let [distances, scratch] = buffers
-                            .signed_distance_stack
-                            .get_disjoint_mut([stack_top - 1, scratch_idx])
-                            .unwrap();
-
-                        modifier.modify_signed_distances_for_block::<SIZE, COUNT>(
-                            distances,
-                            scratch,
-                            &node.transform_to_node_space,
-                            block_aabb_in_root_space.lower_corner(),
-                        );
+                    modifier.modify_signed_distances_for_block::<SIZE, COUNT>(
+                        distances,
+                        scratch,
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                    );
                     }
                 }
                 SDFNode::MultiscaleSphere(modifier) => {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
+                    let distances = &mut buffers.signed_distance_stack[stack_top - 1];
+
                     if !node
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
+                        || !all_block_test_positions_pass_predicate::<SIZE, COUNT>(
+                            &node.transform_to_node_space,
+                            block_origin_in_root_space,
+                            &|idx, position_in_node_space| {
+                                modifier
+                                    .modify_signed_distance(&position_in_node_space, distances[idx])
+                                    >= node.domain_margin
+                            },
+                        )
                     {
                         update_signed_distances_for_block::<SIZE, COUNT>(
-                            &mut buffers.signed_distance_stack[stack_top - 1],
+                            distances,
                             &node.transform_to_node_space,
-                            block_aabb_in_root_space.lower_corner(),
+                            block_origin_in_root_space,
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = modifier.modify_signed_distance(
                                     position_in_node_space,
@@ -850,15 +865,23 @@ impl<A: Allocator> SDFGenerator<A> {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
+                    let [distances_1, distances_2] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, stack_top])
+                        .unwrap();
+
                     if !node
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
+                        || !all_block_test_positions_pass_predicate::<SIZE, COUNT>(
+                            &node.transform_to_node_space,
+                            block_origin_in_root_space,
+                            &|idx, _| {
+                                sdf_union(distances_1[idx], distances_2[idx], smoothness)
+                                    >= node.domain_margin
+                            },
+                        )
                     {
-                        let [distances_1, distances_2] = buffers
-                            .signed_distance_stack
-                            .get_disjoint_mut([stack_top - 1, stack_top])
-                            .unwrap();
-
                         for (distance_1, &distance_2) in
                             distances_1.iter_mut().zip(distances_2.iter())
                         {
@@ -873,15 +896,23 @@ impl<A: Allocator> SDFGenerator<A> {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
+                    let [distances_1, distances_2] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, stack_top])
+                        .unwrap();
+
                     if !node
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
+                        || !all_block_test_positions_pass_predicate::<SIZE, COUNT>(
+                            &node.transform_to_node_space,
+                            block_origin_in_root_space,
+                            &|idx, _| {
+                                sdf_subtraction(distances_1[idx], distances_2[idx], smoothness)
+                                    >= node.domain_margin
+                            },
+                        )
                     {
-                        let [distances_1, distances_2] = buffers
-                            .signed_distance_stack
-                            .get_disjoint_mut([stack_top - 1, stack_top])
-                            .unwrap();
-
                         for (distance_1, &distance_2) in
                             distances_1.iter_mut().zip(distances_2.iter())
                         {
@@ -896,15 +927,23 @@ impl<A: Allocator> SDFGenerator<A> {
                     let block_aabb_in_node_space =
                         block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
 
+                    let [distances_1, distances_2] = buffers
+                        .signed_distance_stack
+                        .get_disjoint_mut([stack_top - 1, stack_top])
+                        .unwrap();
+
                     if !node
                         .domain_with_margin
                         .box_lies_outside(&block_aabb_in_node_space)
+                        || !all_block_test_positions_pass_predicate::<SIZE, COUNT>(
+                            &node.transform_to_node_space,
+                            block_origin_in_root_space,
+                            &|idx, _| {
+                                sdf_intersection(distances_1[idx], distances_2[idx], smoothness)
+                                    >= node.domain_margin
+                            },
+                        )
                     {
-                        let [distances_1, distances_2] = buffers
-                            .signed_distance_stack
-                            .get_disjoint_mut([stack_top - 1, stack_top])
-                            .unwrap();
-
                         for (distance_1, &distance_2) in
                             distances_1.iter_mut().zip(distances_2.iter())
                         {
@@ -1587,6 +1626,65 @@ impl MultifractalNoiseSDFModifier {
             *signed_distance += *noise * self.noise_scale;
         }
     }
+
+    fn all_modified_signed_distances_at_block_test_positions_pass_predicate<
+        const SIZE: usize,
+        const COUNT: usize,
+    >(
+        &self,
+        signed_distances: &[f32; COUNT],
+        transform_to_node_space: &Matrix4<f32>,
+        block_origin_in_root_space: &Point3<f32>,
+        predicate: impl Fn(f32) -> bool,
+    ) -> bool {
+        let origin_in_node_space =
+            transform_to_node_space.transform_point(block_origin_in_root_space);
+
+        let dx = transform_to_node_space.column(0).xyz();
+        let dy = transform_to_node_space.column(1).xyz();
+        let dz = transform_to_node_space.column(2).xyz();
+
+        let inverse_scale = dx.norm();
+        let scale = inverse_scale.recip();
+
+        // We incorporate the scaling into the noise by dividing the original
+        // frequency with the scale and adjusting the origin to compensate
+        let unscaled_frequency = self.frequency * inverse_scale;
+        let origin_for_noise = Point3::from(origin_in_node_space.coords.scale(scale));
+
+        let dx_for_noise = dx.scale(scale);
+        let dy_for_noise = dy.scale(scale);
+        let dz_for_noise = dz.scale(scale);
+
+        let mut noise = [0.0];
+
+        for (idx, point) in all_block_test_positions_with_indices::<SIZE, COUNT>(
+            &origin_for_noise,
+            &dx_for_noise,
+            &dy_for_noise,
+            &dz_for_noise,
+        ) {
+            NoiseBuilder::fbm_3d_offset(
+                // Warning: We reverse the order of dimensions here to match
+                // `Self::modify_signed_distances_for_block`
+                point.z, 1, point.y, 1, point.x, 1,
+            )
+            .with_octaves(self.octaves as u8)
+            .with_freq(unscaled_frequency)
+            .with_lacunarity(self.lacunarity)
+            .with_gain(self.persistence)
+            .with_seed(self.seed as i32)
+            .generate(&mut noise);
+
+            let modified_signed_distance = signed_distances[idx] + noise[0] * self.noise_scale;
+
+            if !predicate(modified_signed_distance) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 impl MultiscaleSphereSDFModifier {
@@ -1792,6 +1890,143 @@ fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
             }
         }
     }
+}
+
+#[inline]
+fn all_block_test_positions_pass_predicate<const SIZE: usize, const COUNT: usize>(
+    transform_to_node_space: &Matrix4<f32>,
+    block_origin_in_root_space: &Point3<f32>,
+    predicate: &impl Fn(usize, Point3<f32>) -> bool,
+) -> bool {
+    let lower = transform_to_node_space.transform_point(block_origin_in_root_space);
+    let dx = transform_to_node_space.column(0).xyz();
+    let dy = transform_to_node_space.column(1).xyz();
+    let dz = transform_to_node_space.column(2).xyz();
+
+    for (idx, point) in all_block_test_positions_with_indices::<SIZE, COUNT>(&lower, &dx, &dy, &dz)
+    {
+        if !predicate(idx, point) {
+            return false;
+        }
+    }
+    true
+}
+
+#[inline]
+fn all_block_test_positions_with_indices<const SIZE: usize, const COUNT: usize>(
+    origin: &Point3<f32>,
+    dx: &Vector3<f32>,
+    dy: &Vector3<f32>,
+    dz: &Vector3<f32>,
+) -> impl Iterator<Item = (usize, Point3<f32>)> {
+    block_corner_positions_with_indices::<SIZE, COUNT>(origin, dx, dy, dz)
+        .into_iter()
+        .chain(block_edge_midpoint_positions_with_indices::<SIZE, COUNT>(
+            origin, dx, dy, dz,
+        ))
+        .chain(block_face_center_positions_with_indices::<SIZE, COUNT>(
+            origin, dx, dy, dz,
+        ))
+}
+
+#[inline]
+fn block_corner_positions_with_indices<const SIZE: usize, const COUNT: usize>(
+    origin: &Point3<f32>,
+    dx: &Vector3<f32>,
+    dy: &Vector3<f32>,
+    dz: &Vector3<f32>,
+) -> [(usize, Point3<f32>); 8] {
+    let flat_idx = |i: usize, j: usize, k: usize| i * SIZE * SIZE + j * SIZE + k;
+
+    let s = (SIZE - 1) as f32;
+
+    [
+        (flat_idx(0, 0, 0), *origin),
+        (flat_idx(SIZE - 1, 0, 0), *origin + s * dx),
+        (flat_idx(0, SIZE - 1, 0), *origin + s * dy),
+        (flat_idx(0, 0, SIZE - 1), *origin + s * dz),
+        (flat_idx(SIZE - 1, SIZE - 1, 0), *origin + s * (dx + dy)),
+        (flat_idx(SIZE - 1, 0, SIZE - 1), *origin + s * (dx + dz)),
+        (flat_idx(0, SIZE - 1, SIZE - 1), *origin + s * (dy + dz)),
+        (
+            flat_idx(SIZE - 1, SIZE - 1, SIZE - 1),
+            *origin + s * (dx + dy + dz),
+        ),
+    ]
+}
+
+#[inline]
+fn block_edge_midpoint_positions_with_indices<const SIZE: usize, const COUNT: usize>(
+    origin: &Point3<f32>,
+    dx: &Vector3<f32>,
+    dy: &Vector3<f32>,
+    dz: &Vector3<f32>,
+) -> [(usize, Point3<f32>); 12] {
+    let flat_idx = |i: usize, j: usize, k: usize| i * SIZE * SIZE + j * SIZE + k;
+
+    let s = (SIZE - 1) as f32;
+    let h = s * 0.5;
+
+    [
+        // X edges
+        (flat_idx(0, 0, 0), *origin + h * dx),
+        (flat_idx(0, SIZE - 1, 0), *origin + h * dx + s * dy),
+        (flat_idx(0, 0, SIZE - 1), *origin + h * dx + s * dz),
+        (
+            flat_idx(0, SIZE - 1, SIZE - 1),
+            *origin + h * dx + s * (dy + dz),
+        ),
+        // Y edges
+        (flat_idx(0, 0, 0), *origin + h * dy),
+        (flat_idx(SIZE - 1, 0, 0), *origin + h * dy + s * dx),
+        (flat_idx(0, 0, SIZE - 1), *origin + h * dy + s * dz),
+        (
+            flat_idx(SIZE - 1, 0, SIZE - 1),
+            *origin + h * dy + s * (dx + dz),
+        ),
+        // Z edges
+        (flat_idx(0, 0, 0), *origin + h * dz),
+        (flat_idx(SIZE - 1, 0, 0), *origin + h * dz + s * dx),
+        (flat_idx(0, SIZE - 1, 0), *origin + h * dz + s * dy),
+        (
+            flat_idx(SIZE - 1, SIZE - 1, 0),
+            *origin + h * dz + s * (dx + dy),
+        ),
+    ]
+}
+
+#[inline]
+fn block_face_center_positions_with_indices<const SIZE: usize, const COUNT: usize>(
+    origin: &Point3<f32>,
+    dx: &Vector3<f32>,
+    dy: &Vector3<f32>,
+    dz: &Vector3<f32>,
+) -> [(usize, Point3<f32>); 6] {
+    let flat_idx = |i: usize, j: usize, k: usize| i * SIZE * SIZE + j * SIZE + k;
+
+    let s = (SIZE - 1) as f32;
+    let h = s * 0.5;
+
+    [
+        // X- faces
+        (flat_idx(0, SIZE / 2, SIZE / 2), *origin + h * dy + h * dz),
+        (
+            flat_idx(SIZE - 1, SIZE / 2, SIZE / 2),
+            *origin + s * dx + h * dy + h * dz,
+        ),
+        // Y- faces
+        (flat_idx(SIZE / 2, 0, SIZE / 2), *origin + h * dx + h * dz),
+        (
+            flat_idx(SIZE / 2, SIZE - 1, SIZE / 2),
+            *origin + s * dy + h * dx + h * dz,
+        ),
+        // Z- faces
+        (flat_idx(SIZE / 2, SIZE / 2, 0), *origin + h * dx + h * dy),
+        (
+            flat_idx(SIZE / 2, SIZE / 2, SIZE - 1),
+            *origin + s * dz + h * dx + h * dy,
+        ),
+    ]
 }
 
 fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
