@@ -76,6 +76,8 @@ pub struct ParamDistribution {
     pub uniform: Option<UniformDistribution>,
     #[serde(default)]
     pub uniform_cos_angle: Option<UniformCosAngleDistribution>,
+    #[serde(default)]
+    pub power_law: Option<PowerLawDistribution>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -90,12 +92,20 @@ pub struct UniformCosAngleDistribution {
     pub max_angle: ValueSource,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PowerLawDistribution {
+    pub min: ValueSource,
+    pub max: ValueSource,
+    pub exponent: ValueSource,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DistributionVariant {
     #[default]
     Constant,
     Uniform,
     UniformCosAngle,
+    PowerLaw,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -590,6 +600,70 @@ impl MetaDistributedParam {
                     &mut changed,
                 );
             }
+            DistributionVariant::PowerLaw => {
+                let id_salt = (id_salt, "power_law");
+                let power_law = distribution.get_or_init_power_law();
+
+                strong_option_label(
+                    ui,
+                    LabelAndHoverText {
+                        label: "    Min",
+                        hover_text: "The minimum random value",
+                    },
+                );
+                source_controls(
+                    ui,
+                    (id_salt, "min"),
+                    &mut power_law.min,
+                    self.value_type,
+                    self.min_value,
+                    self.max_value,
+                    self.speed,
+                    current_distr_param_idx,
+                    distr_param_names,
+                    &mut changed,
+                );
+
+                strong_option_label(
+                    ui,
+                    LabelAndHoverText {
+                        label: "    Max",
+                        hover_text: "The maximum random value",
+                    },
+                );
+                source_controls(
+                    ui,
+                    (id_salt, "max"),
+                    &mut power_law.max,
+                    self.value_type,
+                    self.min_value,
+                    self.max_value,
+                    self.speed,
+                    current_distr_param_idx,
+                    distr_param_names,
+                    &mut changed,
+                );
+
+                strong_option_label(
+                    ui,
+                    LabelAndHoverText {
+                        label: "    Exponent",
+                        hover_text: "The power law exponent",
+                    },
+                );
+                source_controls(
+                    ui,
+                    (id_salt, "exponent"),
+                    &mut power_law.exponent,
+                    self.value_type,
+                    self.min_value,
+                    self.max_value,
+                    self.speed,
+                    current_distr_param_idx,
+                    distr_param_names,
+                    &mut changed,
+                );
+            }
         }
 
         changed
@@ -613,6 +687,11 @@ impl MetaDistributedParam {
             DistributionVariant::UniformCosAngle => {
                 self.distribution
                     .uniform_cos_angle()
+                    .append_display_text(&mut text, distr_param_names);
+            }
+            DistributionVariant::PowerLaw => {
+                self.distribution
+                    .power_law()
                     .append_display_text(&mut text, distr_param_names);
             }
         }
@@ -647,6 +726,10 @@ impl ParamDistribution {
         self.uniform_cos_angle.as_ref().unwrap()
     }
 
+    fn power_law(&self) -> &PowerLawDistribution {
+        self.power_law.as_ref().unwrap()
+    }
+
     fn get_or_init_uniform(&mut self) -> &mut UniformDistribution {
         self.uniform
             .get_or_insert_with(|| UniformDistribution::fixed_same(self.constant.fixed))
@@ -655,6 +738,11 @@ impl ParamDistribution {
     fn get_or_init_uniform_cos_angle(&mut self) -> &mut UniformCosAngleDistribution {
         self.uniform_cos_angle
             .get_or_insert_with(|| UniformCosAngleDistribution::fixed_same(self.constant.fixed))
+    }
+
+    fn get_or_init_power_law(&mut self) -> &mut PowerLawDistribution {
+        self.power_law
+            .get_or_insert_with(|| PowerLawDistribution::fixed_same(self.constant.fixed))
     }
 
     fn to_discrete_param_spec(&self) -> core::DiscreteParamSpec {
@@ -666,7 +754,7 @@ impl ParamDistribution {
                 min: (&self.uniform().min).into(),
                 max: (&self.uniform().max).into(),
             },
-            DistributionVariant::UniformCosAngle => unreachable!(),
+            DistributionVariant::UniformCosAngle | DistributionVariant::PowerLaw => unreachable!(),
         }
     }
 
@@ -680,6 +768,11 @@ impl ParamDistribution {
             DistributionVariant::UniformCosAngle => core::ContParamSpec::UniformCosAngle {
                 min_angle: (&self.uniform_cos_angle().min_angle).into(),
                 max_angle: (&self.uniform_cos_angle().max_angle).into(),
+            },
+            DistributionVariant::PowerLaw => core::ContParamSpec::PowerLaw {
+                min: (&self.power_law().min).into(),
+                max: (&self.power_law().max).into(),
+                exponent: (&self.power_law().exponent).into(),
             },
         }
     }
@@ -719,13 +812,34 @@ impl UniformCosAngleDistribution {
     }
 }
 
+impl PowerLawDistribution {
+    fn fixed_same(value: f32) -> Self {
+        Self {
+            min: ValueSource::fixed(value),
+            max: ValueSource::fixed(value),
+            exponent: ValueSource::fixed(1.0),
+        }
+    }
+
+    fn append_display_text(&self, text: &mut String, distr_param_names: &[&'static str]) {
+        text.push_str("powerLaw(min = ");
+        self.min.append_display_text(text, distr_param_names);
+        text.push_str(", max = ");
+        self.max.append_display_text(text, distr_param_names);
+        text.push_str(", exponent = ");
+        self.exponent.append_display_text(text, distr_param_names);
+        text.push(')');
+    }
+}
+
 const DISCRETE_DISTRIBUTIONS: [DistributionVariant; 2] =
     [DistributionVariant::Constant, DistributionVariant::Uniform];
 
-const CONT_DISTRIBUTIONS: [DistributionVariant; 3] = [
+const CONT_DISTRIBUTIONS: [DistributionVariant; 4] = [
     DistributionVariant::Constant,
     DistributionVariant::Uniform,
     DistributionVariant::UniformCosAngle,
+    DistributionVariant::PowerLaw,
 ];
 
 impl DistributionVariant {
@@ -741,6 +855,7 @@ impl DistributionVariant {
             Self::Constant => "Constant",
             Self::Uniform => "Uniform",
             Self::UniformCosAngle => "Uniform cos(angle)",
+            Self::PowerLaw => "Power law",
         }
     }
 }

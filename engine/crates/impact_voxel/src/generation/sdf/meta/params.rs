@@ -3,7 +3,10 @@
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, bail};
 use impact_containers::FixedQueue;
-use impact_math::angle::{degrees_to_radians, radians_to_degrees};
+use impact_math::{
+    angle::{degrees_to_radians, radians_to_degrees},
+    power_law::sample_power_law,
+};
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64Mcg;
 use std::f32::consts::PI;
@@ -40,6 +43,11 @@ pub enum ContParamSpec {
     UniformCosAngle {
         min_angle: ContValueSource,
         max_angle: ContValueSource,
+    },
+    PowerLaw {
+        min: ContValueSource,
+        max: ContValueSource,
+        exponent: ContValueSource,
     },
 }
 
@@ -140,6 +148,11 @@ impl ContParamSpec {
                 min.add_param_dependency(&mut deps);
                 max.add_param_dependency(&mut deps);
             }
+            Self::PowerLaw { min, max, exponent } => {
+                min.add_param_dependency(&mut deps);
+                max.add_param_dependency(&mut deps);
+                exponent.add_param_dependency(&mut deps);
+            }
         }
         deps
     }
@@ -168,6 +181,12 @@ impl ContParamSpec {
                 let cos_angle = rng.random_range(min_cos..=max_cos);
 
                 radians_to_degrees(f32::acos(cos_angle))
+            }
+            Self::PowerLaw { min, max, exponent } => {
+                let min_value = min.eval(param_values);
+                let max_value = max.eval(param_values).max(min_value);
+                let exponent = exponent.eval(param_values);
+                sample_power_law(min_value, max_value, exponent, rng.random())
             }
         }
     }
