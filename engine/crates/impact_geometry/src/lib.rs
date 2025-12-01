@@ -38,6 +38,27 @@ impl<F: Float> Point<F> for Point3<F> {
     }
 }
 
+/// Uses the Frisvad method.
+pub fn orthonormal_basis_with_z_axis<F: Float>(
+    z: UnitVector3<F>,
+) -> (UnitVector3<F>, UnitVector3<F>, UnitVector3<F>) {
+    let zx = z.x;
+    let zy = z.y;
+    let zz = z.z;
+
+    let sign = if zz >= F::ZERO { F::ONE } else { F::NEG_ONE };
+    let a = F::NEG_ONE / (sign + zz);
+    let b = zx * zy * a;
+
+    let x = Vector3::new(F::ONE + sign * zx * zx * a, sign * b, -sign * zx);
+    let y = Vector3::new(b, sign + zy * zy * a, -zy);
+
+    let x = UnitVector3::new_normalize(x);
+    let y = UnitVector3::new_normalize(y);
+
+    (x, y, z)
+}
+
 pub fn rotation_between_axes<F: Float>(
     a: &UnitVector3<F>,
     b: &UnitVector3<F>,
@@ -47,17 +68,21 @@ pub fn rotation_between_axes<F: Float>(
     } else {
         // If the axes are antiparallel, we pick a suitable axis about which to
         // flip `a`
-        let axis_most_orthogonal_to_a = if a.x.abs() < a.y.abs() && a.x.abs() < a.z.abs() {
-            Vector3::x()
-        } else if a.y.abs() < a.z.abs() {
-            Vector3::y()
-        } else {
-            Vector3::z()
-        };
+        let axis_most_orthogonal_to_a = cartesian_axis_most_orthogonal_to_vector(a);
         let axis_perpendicular_to_a =
             UnitVector3::new_normalize(a.cross(&axis_most_orthogonal_to_a));
 
         UnitQuaternion::from_axis_angle(&axis_perpendicular_to_a, <F as Float>::PI)
+    }
+}
+
+pub fn cartesian_axis_most_orthogonal_to_vector<F: Float>(vector: &Vector3<F>) -> UnitVector3<F> {
+    if vector.x.abs() < vector.y.abs() && vector.x.abs() < vector.z.abs() {
+        Vector3::x_axis()
+    } else if vector.y.abs() < vector.z.abs() {
+        Vector3::y_axis()
+    } else {
+        Vector3::z_axis()
     }
 }
 
