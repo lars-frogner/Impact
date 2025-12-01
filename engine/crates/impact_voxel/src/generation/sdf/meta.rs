@@ -104,8 +104,8 @@ enum MetaSDFNodeOutput<A: Allocator> {
 #[derive(Clone, Debug)]
 struct Instance {
     shape: InstanceShape,
-    /// Transform from the local space of the SDF or instance being transformed
-    /// to the space of this instance.
+    /// Transform from the local space of this instance's shape into this
+    /// instance's coordinate space.
     transform: Similarity3<f32>,
 }
 
@@ -1728,7 +1728,8 @@ impl MetaRayTranslationToSurface {
         };
 
         let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
-        let mut buffers = generator.create_buffers_for_block(arena);
+        let mut buffers_1x1x1 = generator.create_buffers_for_block::<1>(arena);
+        let mut buffers_2x2x2 = generator.create_buffers_for_block::<8>(arena);
 
         let surface_sdf_node_to_parent_transform =
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
@@ -1738,12 +1739,13 @@ impl MetaRayTranslationToSurface {
              sphere_in_subject_space: &Sphere<f32>| {
                 compute_spherecast_translation_to_surface(
                     &generator,
-                    &mut buffers,
+                    &mut buffers_1x1x1,
+                    &mut buffers_2x2x2,
                     &surface_sdf_node_to_parent_transform,
                     subject_node_to_parent_transform,
                     sphere_in_subject_space,
                     &Vector3::y_axis(),
-                    64,
+                    128,
                     0.1,
                     0.5,
                 )
@@ -2470,8 +2472,6 @@ fn compute_translation_to_closest_point_on_surface<A: Allocator>(
     max_iterations: u32,
     max_distance_from_surface: f32,
 ) -> Option<Vector3<f32>> {
-    const SAMPLE_BLOCK_SIZE: usize = 2;
-
     // The basis for this computation is that the surface node (for which we
     // sample the SDF) and the subject node (which we will translate) have the
     // *same* parent space. In other words, we assume that no additional
@@ -2501,18 +2501,8 @@ fn compute_translation_to_closest_point_on_surface<A: Allocator>(
         // We will sample a block of 2x2x2 signed distance values centered at
         // the sampling position. The samples are one voxel apart, so the lower
         // samples will be offset by 0.5 voxels down from the sampling position.
-        let block_origin =
-            sampling_position - Vector3::repeat(0.5 * (SAMPLE_BLOCK_SIZE - 1) as f32);
-
-        generator.compute_signed_distances_for_block_preserving_gradients::<SAMPLE_BLOCK_SIZE, _>(
-            buffers,
-            &block_origin,
-        );
-
-        let sampled_signed_distances = buffers.final_signed_distances();
-
-        let signed_distance = compute_center_value_of_2x2x2_samples(sampled_signed_distances);
-        let gradient = compute_gradient_from_2x2x2_samples(sampled_signed_distances);
+        let (signed_distance, gradient) =
+            sample_signed_distance_with_gradient(generator, buffers, &sampling_position);
 
         let gradient_norm_squared = gradient.norm_squared();
 
@@ -2550,8 +2540,6 @@ fn compute_rotation_to_gradient<A: Allocator>(
     gradient_sdf_node_to_parent_transform: &Similarity3<f32>,
     subject_node_to_parent_transform: &Similarity3<f32>,
 ) -> Option<UnitQuaternion<f32>> {
-    const SAMPLE_BLOCK_SIZE: usize = 2;
-
     // The basis for this computation is that the gradient node (for which we
     // sample the SDF) and the subject node (which we will rotate) have the
     // *same* parent space. In other words, we assume that no additional
@@ -2571,18 +2559,11 @@ fn compute_rotation_to_gradient<A: Allocator>(
     let subject_center_in_gradient_sdf_space = gradient_sdf_node_to_parent_transform
         .inverse_transform_point(&subject_center_in_parent_space);
 
-    // We will sample a block of 2x2x2 signed distance values centered at
-    // the sampling position. The samples are one voxel apart, so the lower
-    // samples will be offset by 0.5 voxels down from the sampling position.
-    let block_origin = subject_center_in_gradient_sdf_space
-        - Vector3::repeat(0.5 * (SAMPLE_BLOCK_SIZE - 1) as f32);
-
-    generator.compute_signed_distances_for_block_preserving_gradients::<SAMPLE_BLOCK_SIZE, _>(
+    let (_, gradient) = sample_signed_distance_with_gradient(
+        generator,
         buffers,
-        &block_origin,
+        &subject_center_in_gradient_sdf_space,
     );
-
-    let gradient = compute_gradient_from_2x2x2_samples(buffers.final_signed_distances());
 
     // The rotation will be from the subject's y-axis to the gradient. When
     // applying the rotation to the subject node we need the rotation to be in
@@ -2605,7 +2586,8 @@ fn compute_rotation_to_gradient<A: Allocator>(
 
 fn compute_spherecast_translation_to_surface<A: Allocator>(
     generator: &SDFGenerator<A>,
-    buffers: &mut SDFGeneratorBlockBuffers<1, A>,
+    buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
+    buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
     surface_sdf_node_to_parent_transform: &Similarity3<f32>,
     subject_node_to_parent_transform: &Similarity3<f32>,
     sphere_in_subject_space: &Sphere<f32>,
@@ -2655,7 +2637,8 @@ fn compute_spherecast_translation_to_surface<A: Allocator>(
     let translation_to_surface_in_surface_sdf_space =
         compute_spherecast_translation_to_surface_same_space(
             generator,
-            buffers,
+            buffers_1x1x1,
+            buffers_2x2x2,
             &sphere_in_surface_space,
             &direction_in_surface_sdf_space,
             max_steps,
@@ -2674,7 +2657,8 @@ fn compute_spherecast_translation_to_surface<A: Allocator>(
 
 fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
     generator: &SDFGenerator<A>,
-    buffers: &mut SDFGeneratorBlockBuffers<1, A>,
+    buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
+    buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
     sphere: &Sphere<f32>,
     direction: &UnitVector3<f32>,
     max_steps: u32,
@@ -2688,26 +2672,40 @@ fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
 
     let domain = generator.domain();
 
-    let (start_distance_along_ray, max_distance_along_ray) =
+    let (ray_domain_intersection_start, ray_domain_intersection_end) =
         domain.find_ray_intersection(ray_origin, ray_direction)?;
+
+    // We want the front of the sphere, not the center, to start at the domain
+    // boundary
+    let start_distance_along_ray = ray_domain_intersection_start - sphere.radius();
+    let max_distance_along_ray = ray_domain_intersection_end;
 
     let mut center_distance_along_ray = start_distance_along_ray;
     let mut sampling_position = ray_origin + ray_direction.scale(center_distance_along_ray);
 
     // To determine where the sphere hits the surface, we need to find the point
-    // along the ray where the difference between the signed distance and the
-    // sphere radius is zero
-    let mut adjusted_signed_distance =
-        generator.compute_signed_distance(buffers, &sampling_position) - sphere.radius();
+    // along the ray where the signed distance of the point on the sphere
+    // closest to the surface is zero
+    let mut smallest_signed_distance = compute_smallest_signed_distance_on_sphere(
+        generator,
+        buffers_1x1x1,
+        buffers_2x2x2,
+        sphere.radius(),
+        &sampling_position,
+    )?;
 
-    let mut adjusted_distance = adjusted_signed_distance.abs();
+    if smallest_signed_distance < 0.0 {
+        // The sphere is already penetrating the surface. We treat that as a
+        // miss.
+        return None;
+    }
 
-    let starting_sign = adjusted_signed_distance.signum();
+    let mut smallest_distance = smallest_signed_distance.abs();
 
     let mut step_count = 0;
     let mut crossed_surface = false;
 
-    while adjusted_distance > tolerance {
+    while smallest_distance > tolerance {
         step_count += 1;
 
         // If we reach max iterations, we assume that we are fairly close to the
@@ -2723,19 +2721,13 @@ fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
         }
 
         // If the SDF was exact, the surface couldn't possibly be closer to the
-        // sphere boundary than `adjusted_distance`, so we could safely step
+        // sphere boundary than `smallest_distance`, so we could safely step
         // that far without overshooting. However, since the distances may be
         // inaccurate due to things like smoothing or perturbing with noise, we
-        // shorten the stepping distance by a safety factor. To handle
-        // overshoot, we also multiply with the sign of the SDF at the starting
-        // position. This will cause us to step back along the ray if we
-        // overshoot, regardless of whether we started inside or outside of the
-        // surface.
-        center_distance_along_ray += starting_sign * adjusted_signed_distance * safety_factor;
+        // shorten the stepping distance by a safety factor.
+        center_distance_along_ray += smallest_signed_distance * safety_factor;
 
-        if !crossed_surface
-            && adjusted_signed_distance.is_sign_positive() != starting_sign.is_sign_positive()
-        {
+        if !crossed_surface && smallest_signed_distance.is_sign_negative() {
             crossed_surface = true;
         }
 
@@ -2748,14 +2740,64 @@ fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
 
         sampling_position = ray_origin + ray_direction.scale(center_distance_along_ray);
 
-        adjusted_signed_distance =
-            generator.compute_signed_distance(buffers, &sampling_position) - sphere.radius();
-        adjusted_distance = adjusted_signed_distance.abs();
+        smallest_signed_distance = compute_smallest_signed_distance_on_sphere(
+            generator,
+            buffers_1x1x1,
+            buffers_2x2x2,
+            sphere.radius(),
+            &sampling_position,
+        )?;
+        smallest_distance = smallest_signed_distance.abs();
     }
 
     let translation_to_surface = sampling_position - ray_origin;
 
     Some(translation_to_surface)
+}
+
+fn compute_smallest_signed_distance_on_sphere<A: Allocator>(
+    generator: &SDFGenerator<A>,
+    buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
+    buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
+    radius: f32,
+    position: &Point3<f32>,
+) -> Option<f32> {
+    let closest_point_on_sphere = if abs_diff_ne!(radius, 0.0) {
+        let (_, gradient) =
+            sample_signed_distance_with_gradient(generator, buffers_2x2x2, position);
+        let gradient_direction = UnitVector3::try_new(gradient, 1e-8)?;
+
+        position - gradient_direction.scale(radius)
+    } else {
+        *position
+    };
+
+    let signed_distance =
+        generator.compute_signed_distance(buffers_1x1x1, &closest_point_on_sphere);
+
+    Some(signed_distance)
+}
+
+fn sample_signed_distance_with_gradient<A: Allocator>(
+    generator: &SDFGenerator<A>,
+    buffers: &mut SDFGeneratorBlockBuffers<8, A>,
+    sampling_position: &Point3<f32>,
+) -> (f32, Vector3<f32>) {
+    const SAMPLE_BLOCK_SIZE: usize = 2;
+
+    let block_origin = sampling_position - Vector3::repeat(0.5 * (SAMPLE_BLOCK_SIZE - 1) as f32);
+
+    generator.compute_signed_distances_for_block_preserving_gradients::<SAMPLE_BLOCK_SIZE, _>(
+        buffers,
+        &block_origin,
+    );
+
+    let sampled_signed_distances = buffers.final_signed_distances();
+
+    let signed_distance = compute_center_value_of_2x2x2_samples(sampled_signed_distances);
+    let gradient = compute_gradient_from_2x2x2_samples(sampled_signed_distances);
+
+    (signed_distance, gradient)
 }
 
 /// Takes 2x2x2 signed distances (column-major order) sampled one voxel width
