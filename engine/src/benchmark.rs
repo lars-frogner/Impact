@@ -3,13 +3,15 @@ pub mod benchmarks;
 impact_profiling::define_target_enum! {
     Target,
     crate::benchmark::benchmarks,
-    chunked_voxel_object => {
+    generation => {
         generate_box,
         generate_sphere_union,
         generate_complex_object,
         generate_object_with_multifractal_noise,
         generate_object_with_multiscale_spheres,
         generate_box_with_gradient_noise_voxel_types,
+    },
+    voxel_object => {
         update_internal_adjacencies_for_all_chunks,
         update_connected_regions_for_all_chunks,
         update_all_chunk_boundary_adjacencies,
