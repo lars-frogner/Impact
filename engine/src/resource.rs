@@ -8,7 +8,10 @@ use impact_material::{MaterialRegistry, MaterialTemplateRegistry, MaterialTextur
 use impact_mesh::{LineSegmentMeshRegistry, TriangleMeshRegistry};
 use impact_rendering::resource::BasicResourceRegistries;
 use impact_texture::{SamplerRegistry, TextureRegistry, lookup_table::LookupTableRegistry};
-use impact_voxel::{gpu_resource::VoxelResourceRegistries, voxel_types::VoxelTypeRegistry};
+use impact_voxel::{
+    generation::VoxelGeneratorRegistry, gpu_resource::VoxelResourceRegistries,
+    voxel_types::VoxelTypeRegistry,
+};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -35,6 +38,7 @@ pub struct ResourceManager {
     pub materials: MaterialRegistry,
     pub material_templates: MaterialTemplateRegistry,
     pub material_texture_groups: MaterialTextureGroupRegistry,
+    pub voxel_generators: VoxelGeneratorRegistry,
     pub voxel_types: VoxelTypeRegistry,
     pub config: ResourceConfig,
 }
@@ -83,6 +87,7 @@ impl ResourceManager {
             materials: MaterialRegistry::new(),
             material_templates: MaterialTemplateRegistry::new(),
             material_texture_groups: MaterialTextureGroupRegistry::new(),
+            voxel_generators: VoxelGeneratorRegistry::new(),
             voxel_types,
             config,
         }
@@ -138,6 +143,10 @@ impl ResourceManager {
             &mut self.material_templates,
             &mut self.material_texture_groups,
             &resource_declarations.materials,
+        )?;
+        impact_voxel::generation::import::load_declared_voxel_generators(
+            &mut self.voxel_generators,
+            &resource_declarations.voxel_generators,
         )?;
         Ok(())
     }

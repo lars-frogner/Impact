@@ -30,7 +30,7 @@ use impact::{
 use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
 use impact_voxel::{
     chunks::ChunkedVoxelObject,
-    generation::{SDFVoxelGenerator, VoxelGenerator},
+    generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
     mesh::MeshedChunkedVoxelObject,
 };
 use parking_lot::RwLock;

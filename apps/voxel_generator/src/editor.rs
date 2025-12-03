@@ -20,7 +20,7 @@ use impact_dev_ui::{
 };
 use impact_voxel::{
     generation::{
-        SDFVoxelGenerator,
+        SDFVoxelGenerator, VoxelGeneratorRef,
         voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
     },
     voxel_types::VoxelType,
@@ -285,6 +285,29 @@ impl Editor {
             }
         }
     }
+
+    fn export_graph_as_resource(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .add_filter("Voxel generator resource (*.vgen.ron)", &["vgen.ron"])
+            .set_title("Export as resource")
+            .save_file()
+        {
+            let sdf_graph = &self.meta_canvas_scratch.build.meta_graph;
+            let generator = VoxelGeneratorRef { sdf_graph };
+
+            if let Err(err) = impact_io::write_ron_file(&generator, &path) {
+                impact_log::error!(
+                    "Failed to save graph as voxel generator resource to {}: {err:#}",
+                    path.display()
+                );
+            } else {
+                impact_log::info!(
+                    "Saved graph as voxel generator resource to {}",
+                    path.display()
+                );
+            }
+        }
+    }
 }
 
 impl CustomPanels for Editor {
@@ -339,6 +362,19 @@ impl CustomPanels for Editor {
                     .clicked()
                 {
                     self.save_graph_to_last_path(arena);
+                };
+
+                if ui
+                    .add_enabled(
+                        matches!(self.graph_status, MetaGraphStatus::InSync),
+                        Button::new("Export..."),
+                    )
+                    .on_disabled_hover_text(
+                        "Generate a valid object to enable exporting the generator",
+                    )
+                    .clicked()
+                {
+                    self.export_graph_as_resource();
                 };
 
                 ui.horizontal(|ui| {

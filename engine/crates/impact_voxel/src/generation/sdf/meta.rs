@@ -11,10 +11,7 @@ use crate::{
         meta::params::ParamScratch,
     },
 };
-use allocator_api2::{
-    alloc::{Allocator, Global},
-    vec::Vec as AVec,
-};
+use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_containers::FixedQueue;
@@ -31,10 +28,10 @@ use rand::{
 };
 use std::{array, borrow::Cow, f32::consts::PI};
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct MetaSDFGraph<A: Allocator = Global> {
-    seed: u64,
-    nodes: AVec<MetaSDFNode, A>,
+pub struct MetaSDFGraph {
+    nodes: Vec<MetaSDFNode>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -756,18 +753,14 @@ pub enum SphereSurfaceRotation {
     RadialInwards,
 }
 
-impl<A: Allocator> MetaSDFGraph<A> {
-    pub fn new_in(alloc: A, seed: u64) -> Self {
-        Self {
-            seed,
-            nodes: AVec::new_in(alloc),
-        }
+impl MetaSDFGraph {
+    pub fn new() -> Self {
+        Self { nodes: Vec::new() }
     }
 
-    pub fn with_capacity_in(capacity: usize, alloc: A, seed: u64) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            seed,
-            nodes: AVec::with_capacity_in(capacity, alloc),
+            nodes: Vec::with_capacity(capacity),
         }
     }
 
@@ -777,9 +770,9 @@ impl<A: Allocator> MetaSDFGraph<A> {
         id
     }
 
-    pub fn build<AR>(&self, arena: AR) -> Result<SDFGraph<AR>>
+    pub fn build<A>(&self, arena: A, seed: u64) -> Result<SDFGraph<A>>
     where
-        AR: Allocator + Copy,
+        A: Allocator + Copy,
     {
         let mut graph = SDFGraph::new_in(arena);
 
@@ -788,7 +781,7 @@ impl<A: Allocator> MetaSDFGraph<A> {
         }
 
         let mut outputs = AVec::new_in(arena);
-        outputs.resize(self.nodes.len(), MetaSDFNodeOutput::<AR>::SingleSDF(None));
+        outputs.resize(self.nodes.len(), MetaSDFNodeOutput::<A>::SingleSDF(None));
 
         let mut states = AVec::new_in(arena);
         states.resize(self.nodes.len(), MetaNodeBuildState::Unvisited);
@@ -914,7 +907,7 @@ impl<A: Allocator> MetaSDFGraph<A> {
                     let stable_seed = node.obtain_stable_seed(&stable_seeds);
                     stable_seeds[node_idx] = stable_seed;
 
-                    let seed = splitmix::random_u64_from_two_states(self.seed, stable_seed);
+                    let seed = splitmix::random_u64_from_two_states(seed, stable_seed);
 
                     outputs[node_idx] =
                         node.resolve(arena, &mut param_scratch, &mut graph, &outputs, seed)?;
@@ -933,6 +926,16 @@ impl<A: Allocator> MetaSDFGraph<A> {
         }
 
         Ok(graph)
+    }
+
+    pub fn clear(&mut self) {
+        self.nodes.clear();
+    }
+}
+
+impl Default for MetaSDFGraph {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

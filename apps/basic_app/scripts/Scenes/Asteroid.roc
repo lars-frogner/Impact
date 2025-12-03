@@ -16,7 +16,6 @@ import pf.Comp.AmbientEmission
 import pf.Setup.CylinderMesh
 import pf.Setup.GradientNoiseVoxelTypes
 import pf.Comp.ControlledVelocity
-import pf.Setup.MultifractalNoiseSDFModification
 import pf.Comp.ControlledAngularVelocity
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
@@ -34,7 +33,7 @@ import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
-import pf.Setup.VoxelSphereUnion
+import pf.Setup.GeneratedVoxelObject
 import pf.Setup.DynamicVoxels
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import InputHandling.MouseButton as MouseButtonInput
@@ -157,11 +156,12 @@ ground =
 asteroid =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 30))
-    |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
+    |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 0)
+    # |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
     # |> Setup.VoxelBox.add_new(0.25, 31, 15, 15)
     |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
     # |> Setup.SameVoxelType.add_new("Default")
-    |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
+    # |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
     |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(0)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(

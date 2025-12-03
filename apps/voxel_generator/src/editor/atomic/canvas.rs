@@ -11,7 +11,7 @@ use impact::egui::{
 };
 use impact_voxel::generation::sdf::{SDFGraph, SDFNodeID};
 
-const CANVAS_DEFAULT_POS: Pos2 = pos2(870.0, 22.0);
+const CANVAS_DEFAULT_POS: Pos2 = pos2(900.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(600.0, 700.0);
 
 const MIN_NODE_SEPARATION: f32 = 8.0;

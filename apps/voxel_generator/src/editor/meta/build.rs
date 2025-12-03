@@ -26,6 +26,7 @@ pub struct SDFGraphBuildResult<A: Allocator> {
 
 #[derive(Clone, Debug)]
 pub struct BuildScratch {
+    pub meta_graph: MetaSDFGraph,
     id_map: HashMap<MetaNodeID, MetaSDFNodeID>,
 }
 
@@ -38,6 +39,7 @@ enum SDFBuildOperation<'a> {
 impl BuildScratch {
     pub fn new() -> Self {
         Self {
+            meta_graph: MetaSDFGraph::new(),
             id_map: HashMap::default(),
         }
     }
@@ -86,8 +88,7 @@ where
     let root_node_id = output_node.links_to_children[0]?.to_node;
     let root_node = &nodes[&root_node_id];
 
-    let mut meta_graph = MetaSDFGraph::with_capacity_in(nodes.len(), arena, seed.into());
-
+    scratch.meta_graph.clear();
     scratch.id_map.clear();
 
     let mut operation_stack = AVec::new_in(arena);
@@ -118,15 +119,16 @@ where
                     &node.data.params.params,
                 )?;
 
-                let sdf_node_id = meta_graph.add_node(generator_node);
+                let sdf_node_id = scratch.meta_graph.add_node(generator_node);
                 scratch.id_map.insert(node_id, sdf_node_id);
             }
         }
     }
 
     Some(
-        meta_graph
-            .build(arena)
+        scratch
+            .meta_graph
+            .build(arena, seed.into())
             .map(|graph| SDFGraphBuildResult {
                 voxel_extent,
                 graph,

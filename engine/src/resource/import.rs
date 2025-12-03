@@ -4,6 +4,7 @@ use anyhow::Result;
 use impact_material::import::MaterialDeclaration;
 use impact_mesh::import::TriangleMeshDeclaration;
 use impact_texture::import::ImageTextureDeclaration;
+use impact_voxel::generation::import::VoxelGeneratorDeclaration;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -13,6 +14,7 @@ pub struct ResourceDeclarations {
     pub triangle_meshes: Vec<TriangleMeshDeclaration>,
     pub textures: Vec<ImageTextureDeclaration>,
     pub materials: Vec<MaterialDeclaration>,
+    pub voxel_generators: Vec<VoxelGeneratorDeclaration>,
 }
 
 impl ResourceDeclarations {
@@ -34,6 +36,9 @@ impl ResourceDeclarations {
             declaration.resolve_paths(root_path);
         }
         for declaration in &mut self.textures {
+            declaration.resolve_paths(root_path);
+        }
+        for declaration in &mut self.voxel_generators {
             declaration.resolve_paths(root_path);
         }
     }

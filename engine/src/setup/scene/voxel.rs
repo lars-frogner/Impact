@@ -3,7 +3,8 @@
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
-use anyhow::Result;
+use allocator_api2::alloc::Global;
+use anyhow::{Context, Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
@@ -18,8 +19,9 @@ use impact_voxel::{
     VoxelObjectID,
     generation::{SDFVoxelGenerator, sdf::SDFGraph},
     setup::{
-        self, DynamicVoxels, GradientNoiseVoxelTypes, MultifractalNoiseSDFModification,
-        MultiscaleSphereSDFModification, SameVoxelType, VoxelBox, VoxelSphere, VoxelSphereUnion,
+        self, DynamicVoxels, GeneratedVoxelObject, GradientNoiseVoxelTypes,
+        MultifractalNoiseSDFModification, MultiscaleSphereSDFModification, SameVoxelType, VoxelBox,
+        VoxelSphere, VoxelSphereUnion,
     },
 };
 use parking_lot::RwLock;
@@ -55,6 +57,54 @@ pub fn setup_voxel_objects_for_new_entities(
             }
         }
     );
+
+    setup!(
+        {
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+        },
+        components,
+        |generated_voxel_object: &GeneratedVoxelObject,
+         voxel_type: &SameVoxelType|
+         -> Result<VoxelObjectID> {
+            let generator_id = generated_voxel_object.generator_id;
+
+            let generator = resource_manager
+                .voxel_generators
+                .get(generator_id)
+                .ok_or_else(|| {
+                    anyhow!("Tried to setup voxel object using missing generator {generator_id}")
+                })?;
+
+            let graph = generator
+                .sdf_graph
+                .build(Global, generated_voxel_object.seed)
+                .with_context(|| {
+                    format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
+                })?;
+
+            let sdf_generator = graph.build().with_context(|| {
+                format!("Failed to build SDF generator from atomic graph for voxel generator {generator_id}")
+            })?;
+
+            let voxel_type_generator = voxel_type
+                .create_generator(&resource_manager.voxel_types)?
+                .into();
+
+            let generator = SDFVoxelGenerator::new(
+                generated_voxel_object.voxel_extent,
+                sdf_generator,
+                voxel_type_generator,
+            );
+
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
+        },
+        ![VoxelObjectID]
+    )?;
 
     setup!(
         {
@@ -164,6 +214,54 @@ pub fn setup_voxel_objects_for_new_entities(
 
             let generator = SDFVoxelGenerator::new(
                 voxel_sphere_union.voxel_extent(),
+                sdf_generator,
+                voxel_type_generator,
+            );
+
+            Ok(setup::setup_voxel_object(
+                &mut voxel_object_manager,
+                &generator,
+            ))
+        },
+        ![VoxelObjectID]
+    )?;
+
+    setup!(
+        {
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+        },
+        components,
+        |generated_voxel_object: &GeneratedVoxelObject,
+         voxel_types: &GradientNoiseVoxelTypes|
+         -> Result<VoxelObjectID> {
+            let generator_id = generated_voxel_object.generator_id;
+
+            let generator = resource_manager
+                .voxel_generators
+                .get(generator_id)
+                .ok_or_else(|| {
+                    anyhow!("Tried to setup voxel object using missing generator {generator_id}")
+                })?;
+
+            let graph = generator
+                .sdf_graph
+                .build(Global, generated_voxel_object.seed)
+                .with_context(|| {
+                    format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
+                })?;
+
+            let sdf_generator = graph.build().with_context(|| {
+                format!("Failed to build SDF generator from atomic graph for voxel generator {generator_id}")
+            })?;
+
+            let voxel_type_generator = voxel_types
+                .create_generator(&resource_manager.voxel_types)?
+                .into();
+
+            let generator = SDFVoxelGenerator::new(
+                generated_voxel_object.voxel_extent,
                 sdf_generator,
                 voxel_type_generator,
             );
