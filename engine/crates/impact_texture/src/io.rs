@@ -1,5 +1,6 @@
 //! Input/output of texture data.
 
+use crate::processing::ImageProcessing;
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, anyhow, bail};
 use impact_gpu::{
@@ -29,6 +30,7 @@ pub fn create_texture_from_image_path<A>(
     mipmapper_generator: &MipmapperGenerator,
     image_path: impl AsRef<Path>,
     texture_config: TextureConfig,
+    processing: &ImageProcessing,
     label: &str,
 ) -> Result<Texture>
 where
@@ -42,6 +44,7 @@ where
         mipmapper_generator,
         &image,
         texture_config,
+        processing,
         label,
     )
 }

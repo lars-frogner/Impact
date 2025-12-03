@@ -18,7 +18,13 @@ use impact_dev_ui::{
         LabelAndHoverText, labeled_option, option_checkbox, option_group, option_panel,
     },
 };
-use impact_voxel::generation::SDFVoxelGenerator;
+use impact_voxel::{
+    generation::{
+        SDFVoxelGenerator,
+        voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
+    },
+    voxel_types::VoxelType,
+};
 use meta::{
     MetaNodeData, MetaNodeID, build,
     canvas::{
@@ -58,6 +64,7 @@ pub struct Editor {
     rebuild_generator: bool,
     graph_status: MetaGraphStatus,
     last_graph_path: Option<GraphPath>,
+    voxel_type: VoxelType,
     config: EditorConfig,
 }
 
@@ -102,6 +109,7 @@ impl Editor {
             rebuild_generator: false,
             graph_status: MetaGraphStatus::Incomplete,
             last_graph_path: None,
+            voxel_type: VoxelType::from_idx(0),
             config,
         }
     }
@@ -147,7 +155,11 @@ impl Editor {
 
         self.rebuild_generator = false;
 
-        let generator = build::build_sdf_voxel_generator(arena, compiled_graph);
+        let voxel_type_generator =
+            VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(self.voxel_type));
+
+        let generator =
+            build::build_sdf_voxel_generator(arena, compiled_graph, voxel_type_generator);
 
         self.graph_status = MetaGraphStatus::InSync;
 

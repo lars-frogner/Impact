@@ -4,6 +4,7 @@ pub mod gpu_resource;
 pub mod import;
 pub mod io;
 pub mod lookup_table;
+pub mod processing;
 
 use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context, Result, anyhow, bail};
@@ -20,6 +21,7 @@ use impact_io::image::{Image, ImageMetadata, PixelFormat};
 use impact_math::{hash64, stringhash64_newtype};
 use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
 use lookup_table::LookupTableTextureCreateInfo;
+use processing::ImageProcessing;
 use roc_integration::roc;
 use std::{
     fmt,
@@ -64,6 +66,7 @@ pub struct ImageTextureCreateInfo {
     metadata: ImageMetadata,
     texture_config: TextureConfig,
     sampler_config: Option<SamplerConfig>,
+    processing: ImageProcessing,
 }
 
 /// Source for image-based texture data.
@@ -177,6 +180,7 @@ impl ImageTextureCreateInfo {
         metadata: ImageMetadata,
         texture_config: TextureConfig,
         sampler_config: Option<SamplerConfig>,
+        processing: ImageProcessing,
     ) -> Result<Self> {
         if metadata.width == 0 || metadata.height == 0 {
             bail!("Got zero width or height for texture image");
@@ -194,6 +198,7 @@ impl ImageTextureCreateInfo {
             metadata,
             texture_config,
             sampler_config,
+            processing,
         })
     }
 
@@ -272,6 +277,7 @@ pub fn create_texture_from_bytes<A>(
     mipmapper_generator: &MipmapperGenerator,
     byte_buffer: &[u8],
     texture_config: TextureConfig,
+    processing: &ImageProcessing,
     label: &str,
 ) -> Result<Texture>
 where
@@ -284,6 +290,7 @@ where
         mipmapper_generator,
         &image,
         texture_config,
+        processing,
         label,
     )
 }
@@ -305,6 +312,7 @@ pub fn create_texture_from_image<A, IA>(
     mipmapper_generator: &MipmapperGenerator,
     image: &Image<IA>,
     texture_config: TextureConfig,
+    processing: &ImageProcessing,
     label: &str,
 ) -> Result<Texture>
 where
@@ -319,11 +327,18 @@ where
     let texel_description =
         determine_valid_texel_description(image.meta.pixel_format, &texture_config)?;
 
+    let processed = processing.execute(arena, image);
+
+    let data = processed.as_ref().map_or_else(
+        || image.data.as_slice(),
+        |processed| processed.data.as_slice(),
+    );
+
     Texture::create(
         arena,
         graphics_device,
         Some(mipmapper_generator),
-        &image.data,
+        data,
         width,
         height,
         DepthOrArrayLayers::Depth(depth),
@@ -358,6 +373,7 @@ pub fn create_texture_array_from_image_sources<'a, A, I, V>(
     verify_metadata: V,
     texture_config: TextureConfig,
     usage: TextureArrayUsage,
+    processing: &ImageProcessing,
     label: &str,
 ) -> Result<Texture>
 where
@@ -392,7 +408,10 @@ where
             })?;
             verify_metadata(&image.meta)?;
 
-            let mut byte_buffer = image.data;
+            let processed = processing.execute(arena, &image);
+
+            let mut byte_buffer = processed.map_or(image.data, |processed| processed.data);
+
             byte_buffer.reserve((n_images - 1) * image_size_from_meta(&image.meta)?);
 
             (byte_buffer, image.meta)
@@ -404,6 +423,8 @@ where
                 AVec::with_capacity_in(n_images * image_size_from_meta(&image.meta)?, arena);
 
             byte_buffer.extend_from_slice(&image.data);
+
+            processing.execute_in_place(&image.meta, &mut byte_buffer);
 
             (byte_buffer, image.meta.clone())
         }
@@ -420,13 +441,24 @@ where
                     impact_io::image::load_image_from_path(arena, path).with_context(|| {
                         format!("Failed to load array texture image from {}", path.display())
                     })?;
+
                 verify_metadata(&image.meta)?;
+
                 byte_buffer.extend_from_slice(&image.data);
+
+                let image_start = byte_buffer.len() - image.data.len();
+                processing.execute_in_place(&image.meta, &mut byte_buffer[image_start..]);
+
                 image.meta
             }
             ImageSource::Bytes(image) => {
                 verify_metadata(&image.meta)?;
+
                 byte_buffer.extend_from_slice(&image.data);
+
+                let image_start = byte_buffer.len() - image.data.len();
+                processing.execute_in_place(&image.meta, &mut byte_buffer[image_start..]);
+
                 image.meta.clone()
             }
         };
@@ -472,7 +504,6 @@ where
 /// - [`create_texture_from_image`],
 /// - [`create_texture_array_from_image_sources`]
 /// - [`create_texture_from_lookup_table`](lookup_table::create_texture_from_lookup_table).
-#[allow(unused_variables)]
 pub(crate) fn create_texture_from_info<A>(
     arena: A,
     graphics_device: &GraphicsDevice,
@@ -511,6 +542,7 @@ where
         TextureCreateInfo::Image(image_texture_info) => {
             let image_metadata = &image_texture_info.metadata;
             let texture_config = image_texture_info.texture_config.clone();
+            let processing = &image_texture_info.processing;
             let sampler_id = image_texture_info.sampler_config.as_ref().map(Into::into);
 
             let texture = match &image_texture_info.source {
@@ -528,6 +560,7 @@ where
                         mipmapper_generator,
                         &image,
                         texture_config,
+                        processing,
                         label,
                     )?
                 }
@@ -540,6 +573,7 @@ where
                         mipmapper_generator,
                         image,
                         texture_config,
+                        processing,
                         label,
                     )?
                 }
@@ -557,6 +591,7 @@ where
                         |meta| verify_image_metadata(image_metadata, meta),
                         texture_config,
                         *usage,
+                        processing,
                         label,
                     )?
                 }
