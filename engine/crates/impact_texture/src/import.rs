@@ -3,6 +3,7 @@
 use crate::{
     ImageSource, ImageTextureCreateInfo, ImageTextureSource, SamplerCreateInfo, SamplerID,
     SamplerRegistry, TextureArrayUsage, TextureCreateInfo, TextureID, TextureRegistry,
+    processing::ImageProcessing,
 };
 use anyhow::{Context, Result, bail};
 use impact_gpu::texture::{SamplerConfig, TextureConfig};
@@ -22,6 +23,9 @@ pub struct ImageTextureDeclaration {
     /// Optional configuration for the texture sampler.
     #[cfg_attr(feature = "serde", serde(default))]
     pub sampler_config: Option<SamplerConfig>,
+    /// Image processing to perform on the texture before use.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub processing: ImageProcessing,
 }
 
 /// Source for image-based texture data.
@@ -151,6 +155,7 @@ pub fn load_declared_image_texture(
         declaration.source.into(),
         declaration.texture_config,
         declaration.sampler_config,
+        declaration.processing,
     )?;
     Ok(declaration.id)
 }
@@ -173,6 +178,7 @@ pub fn load_image_texture(
     source: ImageTextureSource,
     texture_config: TextureConfig,
     sampler_config: Option<SamplerConfig>,
+    processing: ImageProcessing,
 ) -> Result<()> {
     if texture_registry.contains(texture_id) {
         bail!("Tried to load texture under already existing ID: {texture_id}");
@@ -214,8 +220,13 @@ pub fn load_image_texture(
         }
     };
 
-    let image_texture_info =
-        ImageTextureCreateInfo::new(source, metadata, texture_config, sampler_config.clone())?;
+    let image_texture_info = ImageTextureCreateInfo::new(
+        source,
+        metadata,
+        texture_config,
+        sampler_config.clone(),
+        processing,
+    )?;
 
     texture_registry.insert(texture_id, TextureCreateInfo::Image(image_texture_info));
 

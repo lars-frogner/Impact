@@ -46,14 +46,12 @@ impl BuildScratch {
 pub fn build_sdf_voxel_generator<A>(
     arena: A,
     compiled_graph: SDFGraphBuildResult<A>,
+    voxel_type_generator: VoxelTypeGenerator,
 ) -> SDFVoxelGenerator
 where
     A: Allocator + Copy,
 {
     let sdf_generator = compiled_graph.graph.build_with_arena(arena).unwrap();
-
-    let voxel_type_generator =
-        VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0)));
 
     SDFVoxelGenerator::new(
         f64::from(compiled_graph.voxel_extent),

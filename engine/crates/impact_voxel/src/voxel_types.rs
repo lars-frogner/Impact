@@ -18,6 +18,7 @@ use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
     TextureRegistry,
     gpu_resource::{SamplerMap, TextureMap},
+    processing::{FormatConversion, ImageProcessing, NormalMapFormat},
 };
 use nalgebra::{Vector3, Vector4, vector};
 use std::{
@@ -45,7 +46,7 @@ pub struct VoxelTypeSpecification {
     pub roughness: VoxelRoughness,
     pub metalness: f32,
     pub emissive_luminance: f32,
-    pub normal_map: Option<PathBuf>,
+    pub normal_map: Option<VoxelNormalMap>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -62,6 +63,14 @@ pub type RBGColor = Vector3<f32>;
 pub enum VoxelRoughness {
     Uniform(f32),
     Textured { path: PathBuf, scale_factor: f32 },
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct VoxelNormalMap {
+    path: PathBuf,
+    #[cfg_attr(feature = "serde", serde(default))]
+    format: NormalMapFormat,
 }
 
 /// Registry containing the names and properties of all voxel types.
@@ -198,8 +207,8 @@ impl VoxelTypeRegistry {
             fixed_material_properties,
             color_texture_sources,
             roughness_texture_sources,
-            normal_texture_sources,
-        ) = voxel_types.resolve(texture_resolution);
+            (normal_texture_sources, normal_map_format),
+        ) = voxel_types.resolve(texture_resolution)?;
 
         let name_lookup_table: NoHashMap<_, _> = names
             .iter()
@@ -231,6 +240,7 @@ impl VoxelTypeRegistry {
                 addressing: TextureAddressingConfig::Repeating,
                 filtering: TextureFilteringConfig::Basic,
             }),
+            ImageProcessing::none(),
         )
         .context("Failed to load voxel color texture array")?;
 
@@ -247,8 +257,14 @@ impl VoxelTypeRegistry {
                 max_mip_level_count: None,
             },
             None,
+            ImageProcessing::none(),
         )
         .context("Failed to load voxel roughness texture array")?;
+
+        let normal_map_processing =
+            normal_map_format.map_or_else(ImageProcessing::none, |format| ImageProcessing {
+                format_conversions: vec![FormatConversion::NormalMap { from: format }],
+            });
 
         impact_texture::import::load_image_texture(
             texture_registry,
@@ -263,6 +279,7 @@ impl VoxelTypeRegistry {
                 max_mip_level_count: None,
             },
             None,
+            normal_map_processing,
         )
         .context("Failed to load voxel normal texture array")?;
 
@@ -377,20 +394,21 @@ impl VoxelTypeSpecifications {
     fn resolve(
         self,
         texture_resolution: NonZeroU32,
-    ) -> (
+    ) -> Result<(
         Vec<Cow<'static, str>>,
         Vec<f32>,
         Vec<FixedVoxelMaterialProperties>,
         Vec<ImageSource>,
         Vec<ImageSource>,
-        Vec<ImageSource>,
-    ) {
+        (Vec<ImageSource>, Option<NormalMapFormat>),
+    )> {
         let mut names = Vec::with_capacity(self.0.len());
         let mut mass_densities = Vec::with_capacity(self.0.len());
         let mut fixed_material_properties = Vec::with_capacity(self.0.len());
         let mut color_texture_sources = Vec::with_capacity(self.0.len());
         let mut roughness_texture_sources = Vec::with_capacity(self.0.len());
         let mut normal_texture_sources = Vec::with_capacity(self.0.len());
+        let mut normal_map_format = None;
 
         for VoxelTypeSpecification {
             name,
@@ -424,7 +442,16 @@ impl VoxelTypeSpecifications {
             };
 
             let normal_texture_source = match normal_map {
-                Some(path) => ImageSource::File(path),
+                Some(VoxelNormalMap { path, format }) => {
+                    if let Some(existing_format) = normal_map_format
+                        && format != existing_format
+                    {
+                        bail!("Mixed normal map formats for voxel types is not supported");
+                    } else {
+                        normal_map_format = Some(format);
+                    }
+                    ImageSource::File(path)
+                }
                 None => ImageSource::Bytes(create_identity_normal_image(texture_resolution)),
             };
 
@@ -441,14 +468,14 @@ impl VoxelTypeSpecifications {
             normal_texture_sources.push(normal_texture_source);
         }
 
-        (
+        Ok((
             names,
             mass_densities,
             fixed_material_properties,
             color_texture_sources,
             roughness_texture_sources,
-            normal_texture_sources,
-        )
+            (normal_texture_sources, normal_map_format),
+        ))
     }
 }
 
@@ -525,7 +552,7 @@ impl VoxelTypeSpecification {
         if let VoxelRoughness::Textured { path, .. } = &mut self.roughness {
             *path = root_path.join(&path);
         }
-        if let Some(path) = &mut self.normal_map {
+        if let Some(VoxelNormalMap { path, .. }) = &mut self.normal_map {
             *path = root_path.join(&path);
         }
     }
