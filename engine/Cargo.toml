@@ -284,7 +284,12 @@ harness = false
 required-features = ["criterion"]
 
 [[bench]]
-name = "voxel"
+name = "voxel_object"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
+name = "generation"
 harness = false
 required-features = ["criterion"]
 
