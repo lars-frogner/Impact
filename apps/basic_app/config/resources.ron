@@ -178,5 +178,11 @@
                 addressing: Repeating,
             )),
         ),
+    ],
+    voxel_generators: [
+        (
+            id: "asteroid",
+            path: "../resources/asteroid.vgen.ron",
+        )
     ]
 )

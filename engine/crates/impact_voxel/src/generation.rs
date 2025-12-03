@@ -1,21 +1,46 @@
 //! Generation of spatial voxel distributions.
 
+pub mod import;
 pub mod sdf;
 pub mod voxel_type;
 
 use crate::{
     Voxel, VoxelSignedDistance,
     chunks::{ChunkedVoxelObject, LoopForChunkVoxels},
+    generation::sdf::meta::MetaSDFGraph,
     voxel_types::VoxelType,
 };
 use impact_geometry::AxisAlignedBox;
+use impact_math::{hash64, stringhash64_newtype};
+use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
 use nalgebra::{Point3, Vector3};
+use roc_integration::roc;
 use sdf::{SDFGenerator, SDFGeneratorChunkBuffers};
 use voxel_type::{VoxelTypeGenerator, VoxelTypeGeneratorChunkBuffers};
 
+pub type VoxelGeneratorRegistry = ImmutableResourceRegistry<VoxelGenerator>;
+
+stringhash64_newtype!(
+    /// Identifier for a voxel generator.
+    #[roc(parents = "Voxel")]
+    [pub] VoxelGeneratorID
+);
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct VoxelGenerator {
+    pub sdf_graph: MetaSDFGraph,
+}
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[derive(Clone, Debug)]
+pub struct VoxelGeneratorRef<'a> {
+    pub sdf_graph: &'a MetaSDFGraph,
+}
+
 /// Represents a voxel generator that provides voxels for a chunked voxel
 /// object.
-pub trait VoxelGenerator {
+pub trait ChunkedVoxelGenerator {
     type ChunkGenerationBuffers;
 
     /// Returns the extent of single voxel.
@@ -54,6 +79,42 @@ pub struct SDFVoxelGenerator {
 pub struct SDFVoxelGeneratorChunkBuffers {
     sdf: SDFGeneratorChunkBuffers,
     voxel_type: VoxelTypeGeneratorChunkBuffers,
+}
+
+impl ResourceID for VoxelGeneratorID {}
+
+#[roc(dependencies = [impact_math::Hash64])]
+impl VoxelGeneratorID {
+    #[roc(body = "Hashing.hash_str_64(name)")]
+    /// Creates a voxel generator ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash64!(name))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for VoxelGeneratorID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for VoxelGeneratorID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self::from_name(&s))
+    }
+}
+
+impl Resource for VoxelGenerator {
+    type ID = VoxelGeneratorID;
 }
 
 impl SDFVoxelGenerator {
@@ -119,7 +180,7 @@ impl SDFVoxelGenerator {
     }
 }
 
-impl VoxelGenerator for SDFVoxelGenerator {
+impl ChunkedVoxelGenerator for SDFVoxelGenerator {
     type ChunkGenerationBuffers = SDFVoxelGeneratorChunkBuffers;
 
     fn voxel_extent(&self) -> f64 {

@@ -27,7 +27,7 @@ use impact::{
 };
 use std::{collections::BTreeMap, path::Path};
 
-const CANVAS_DEFAULT_POS: Pos2 = pos2(250.0, 25.0);
+const CANVAS_DEFAULT_POS: Pos2 = pos2(281.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(600.0, 700.0);
 
 const MIN_NODE_SEPARATION: f32 = 8.0;

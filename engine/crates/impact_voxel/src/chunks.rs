@@ -7,7 +7,7 @@ pub mod sdf;
 
 use crate::{
     Voxel, VoxelFlags,
-    generation::VoxelGenerator,
+    generation::ChunkedVoxelGenerator,
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
@@ -195,7 +195,7 @@ impl ChunkedVoxelObject {
     /// [`Self::compute_all_derived_state`] on it.
     pub fn generate<G>(generator: &G) -> Self
     where
-        G: VoxelGenerator,
+        G: ChunkedVoxelGenerator,
     {
         let mut object = Self::generate_without_derived_state(generator);
         object.update_occupied_voxel_ranges();
@@ -206,7 +206,7 @@ impl ChunkedVoxelObject {
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
     pub fn generate_without_derived_state<G>(generator: &G) -> Self
     where
-        G: VoxelGenerator,
+        G: ChunkedVoxelGenerator,
     {
         let generator_grid_shape = generator.grid_shape();
 
@@ -1297,7 +1297,7 @@ impl VoxelChunk {
         chunk_indices: [usize; 3],
     ) -> Self
     where
-        G: VoxelGenerator,
+        G: ChunkedVoxelGenerator,
     {
         let origin = [
             chunk_indices[0] * CHUNK_SIZE,
@@ -2600,7 +2600,7 @@ mod tests {
         }
     }
 
-    impl VoxelGenerator for OffsetBoxVoxelGenerator {
+    impl ChunkedVoxelGenerator for OffsetBoxVoxelGenerator {
         type ChunkGenerationBuffers = ();
 
         fn voxel_extent(&self) -> f64 {
@@ -2644,7 +2644,7 @@ mod tests {
         }
     }
 
-    impl<const N: usize> VoxelGenerator for ManualVoxelGenerator<N> {
+    impl<const N: usize> ChunkedVoxelGenerator for ManualVoxelGenerator<N> {
         type ChunkGenerationBuffers = ();
 
         fn voxel_extent(&self) -> f64 {

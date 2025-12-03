@@ -4,7 +4,7 @@ use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
-        VoxelGenerator,
+        ChunkedVoxelGenerator, VoxelGeneratorID,
         sdf::{SDFGraph, SDFNode, SDFNodeID},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
@@ -32,6 +32,19 @@ use impact_scene::{
 };
 use nalgebra::Vector3;
 use roc_integration::roc;
+
+define_setup_type! {
+    target = VoxelObjectID;
+    /// A generated voxel object.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct GeneratedVoxelObject {
+        pub generator_id: VoxelGeneratorID,
+        pub voxel_extent: f64,
+        pub seed: u64,
+    }
+}
 
 define_setup_type! {
     target = VoxelObjectID;
@@ -156,6 +169,18 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct DynamicVoxels;
+}
+
+#[roc(dependencies = [impact_math::Hash64])]
+impl GeneratedVoxelObject {
+    #[roc(body = "{ generator_id: Hashing.hash_str_64(generator_name), voxel_extent, seed }")]
+    pub fn new(generator_name: &str, voxel_extent: f64, seed: u64) -> Self {
+        Self {
+            generator_id: VoxelGeneratorID::from_name(generator_name),
+            voxel_extent,
+            seed,
+        }
+    }
 }
 
 #[roc]
@@ -538,7 +563,7 @@ pub fn apply_modifications(
 
 pub fn setup_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
-    generator: &impl VoxelGenerator,
+    generator: &impl ChunkedVoxelGenerator,
 ) -> VoxelObjectID {
     let voxel_object = ChunkedVoxelObject::generate(generator);
 
