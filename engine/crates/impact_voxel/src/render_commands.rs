@@ -228,12 +228,13 @@ impl VoxelRenderCommands {
         );
 
         for voxel_object_id in visible_voxel_object_ids {
-            let voxel_object_buffers = gpu_resources
+            let Some(voxel_object_buffers) = gpu_resources
                 .voxel_objects()
                 .get_voxel_object_buffers(*voxel_object_id)
-                .ok_or_else(|| {
-                    anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
-                })?;
+            else {
+                // If the object has only empty voxels, it will not have a GPU buffer
+                continue;
+            };
 
             let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 
@@ -526,12 +527,13 @@ impl VoxelChunkCullingPass {
                 .zip(visible_voxel_object_ids)
                 .zip(visible_voxel_object_to_frustum_transforms)
         {
-            let voxel_object_buffers = gpu_resources
+            let Some(voxel_object_buffers) = gpu_resources
                 .voxel_objects()
                 .get_voxel_object_buffers(*voxel_object_id)
-                .ok_or_else(|| {
-                    anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
-                })?;
+            else {
+                // If the object has only empty voxels, it will not have a GPU buffer
+                continue;
+            };
 
             let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 
@@ -804,12 +806,13 @@ impl VoxelGeometryPipeline {
         );
 
         for voxel_object_id in visible_voxel_object_ids {
-            let voxel_object_buffers = gpu_resources
+            let Some(voxel_object_buffers) = gpu_resources
                 .voxel_objects()
                 .get_voxel_object_buffers(*voxel_object_id)
-                .ok_or_else(|| {
-                    anyhow!("Missing GPU buffers for voxel object {}", voxel_object_id)
-                })?;
+            else {
+                // If the object has only empty voxels, it will not have a GPU buffer
+                continue;
+            };
 
             self.set_per_object_push_constants(render_pass, voxel_object_buffers);
 
