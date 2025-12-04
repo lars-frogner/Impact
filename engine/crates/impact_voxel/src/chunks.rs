@@ -156,8 +156,8 @@ pub type LoopOverChunkVoxelDataMut<'a, 'b> = MutDataLoop3<'a, 'b, Voxel, CHUNK_S
 
 const LOG2_CHUNK_SIZE: usize = 4;
 
-/// The minimum number of non-empty voxels that should be present in a chunk for
-/// it to be considered non-empty.
+/// The minimum number of non-empty voxels that should be present in a voxel
+/// object for it to be considered non-empty.
 pub const NON_EMPTY_VOXEL_THRESHOLD: usize = 8;
 
 /// The number of voxels across a cubic voxel chunk. It is always a power of
@@ -458,9 +458,15 @@ impl ChunkedVoxelObject {
         let occupied_chunk_count: usize =
             self.occupied_chunk_ranges.iter().map(Range::len).product();
 
-        if occupied_chunk_count > 8 {
+        if occupied_chunk_count >= NON_EMPTY_VOXEL_THRESHOLD {
+            // There is at least one non-empty voxel in each occupied chunk
             return false;
-        } else if occupied_chunk_count == 0 {
+        }
+
+        let max_occupied_voxel_count: usize =
+            self.occupied_voxel_ranges.iter().map(Range::len).product();
+
+        if max_occupied_voxel_count < NON_EMPTY_VOXEL_THRESHOLD {
             return true;
         }
 
@@ -483,11 +489,15 @@ impl ChunkedVoxelObject {
                         }
                     };
                     total_non_empty_voxel_count += non_empty_voxel_count;
+
+                    if total_non_empty_voxel_count >= NON_EMPTY_VOXEL_THRESHOLD {
+                        return false;
+                    }
                 }
             }
         }
 
-        total_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD
+        true
     }
 
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
