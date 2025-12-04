@@ -135,4 +135,5 @@ serde = { version = "1.0", features = ["derive"] }
 workspace = true
 
 [profile.release]
+debug = "limited"
 # lto = true
