@@ -1,16 +1,19 @@
 //! Benchmarks for SDF generation.
 
+use super::benchmark_data_path;
+use bumpalo::Bump;
 use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
     chunks::ChunkedVoxelObject,
     generation::{
-        SDFVoxelGenerator,
+        SDFVoxelGenerator, VoxelGenerator,
         sdf::{BoxSDF, SDFGraph, SDFNode},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     voxel_types::VoxelType,
 };
 use nalgebra::{UnitQuaternion, Vector3, vector};
+use std::hint::black_box;
 
 pub fn generate_box(benchmarker: impl Benchmarker) {
     let generator = SDFVoxelGenerator::new(
@@ -111,4 +114,16 @@ pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarke
         .into(),
     );
     benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
+}
+
+pub fn compile_complex_meta_graph(benchmarker: impl Benchmarker) {
+    let mut arena = Bump::new();
+
+    let generator: VoxelGenerator =
+        impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
+
+    benchmarker.benchmark(&mut || {
+        black_box(generator.sdf_graph.build(&arena, 0).unwrap());
+        arena.reset();
+    });
 }

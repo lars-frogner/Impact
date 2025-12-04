@@ -10,6 +10,7 @@ impact_profiling::define_target_enum! {
         generate_object_with_multifractal_noise,
         generate_object_with_multiscale_spheres,
         generate_box_with_gradient_noise_voxel_types,
+        compile_complex_meta_graph,
     },
     voxel_object => {
         update_internal_adjacencies_for_all_chunks,
