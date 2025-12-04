@@ -244,7 +244,7 @@ impl ChunkedVoxelObject {
                         Self::handle_chunk_voxels_modified(
                             &mut self.voxels,
                             &mut self.split_detector,
-                            &self.occupied_chunk_ranges,
+                            &self.chunk_counts,
                             chunk,
                             chunk_indices,
                             chunk_idx,
@@ -392,7 +392,7 @@ impl ChunkedVoxelObject {
                         Self::handle_chunk_voxels_modified(
                             &mut self.voxels,
                             &mut self.split_detector,
-                            &self.occupied_chunk_ranges,
+                            &self.chunk_counts,
                             chunk,
                             chunk_indices,
                             chunk_idx,
@@ -440,7 +440,7 @@ impl ChunkedVoxelObject {
     fn handle_chunk_voxels_modified(
         voxels: &mut [Voxel],
         split_detector: &mut SplitDetector,
-        occupied_chunk_ranges: &ChunkRanges,
+        chunk_counts: &[usize; 3],
         chunk: &mut VoxelChunk,
         chunk_indices: [usize; 3],
         chunk_idx: usize,
@@ -486,15 +486,13 @@ impl ChunkedVoxelObject {
             let voxel_range = &object_voxel_ranges_in_chunk[dim];
             let touched_voxel_range = &touched_voxel_ranges_in_chunk[dim];
 
-            if chunk_indices[dim] > occupied_chunk_ranges[dim].start
-                && touched_voxel_range.start - voxel_range.start < 2
-            {
+            if chunk_indices[dim] > 0 && touched_voxel_range.start - voxel_range.start < 2 {
                 let mut adjacent_chunk_indices = chunk_indices;
                 adjacent_chunk_indices[dim] -= 1;
                 invalidated_mesh_chunk_indices.insert(adjacent_chunk_indices);
             }
 
-            if chunk_indices[dim] < occupied_chunk_ranges[dim].end - 1
+            if chunk_indices[dim] + 1 < chunk_counts[dim]
                 && voxel_range.end - touched_voxel_range.end < 2
             {
                 let mut adjacent_chunk_indices = chunk_indices;
