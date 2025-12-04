@@ -1,0 +1,1603 @@
+(
+    kind: Full(
+        editor_settings: (
+            auto_generate: true,
+            auto_attach: true,
+            auto_layout: false,
+            show_atomic_graph: false,
+        ),
+        pan: (179.99323, 151.92674),
+        zoom: 0.749588,
+    ),
+    nodes: [
+        (
+            id: 0,
+            position: (224.23248, -102.189865),
+            name: "",
+            kind: Output,
+            params: [
+                Float(0.25),
+                UInt(346),
+            ],
+            links_to_parents: [],
+            links_to_children: [
+                Some((
+                    to_node: 62,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 1,
+            position: (-1185.574, 4321.5596),
+            name: "",
+            kind: Spheres,
+            params: [
+                Distributed((
+                    variant: Uniform,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 60.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(8),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 2,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [],
+        ),
+        (
+            id: 2,
+            position: (-1031.7615, 3966.2559),
+            name: "",
+            kind: StratifiedGridTransforms,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 2.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 2.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 2.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 30.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 30.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 30.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.75,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 3,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 1,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 3,
+            position: (-1031.7615, 3766.8887),
+            name: "",
+            kind: StochasticSelection,
+            params: [
+                UInt(3),
+                UInt(6),
+                Float(1.0),
+                UInt(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 15,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 2,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 4,
+            position: (-1161.3939, 3406.36),
+            name: "",
+            kind: SDFInstantiation,
+            params: [],
+            links_to_parents: [
+                Some((
+                    to_node: 5,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 15,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 5,
+            position: (-1198.2998, 3187.8909),
+            name: "",
+            kind: SDFGroupUnion,
+            params: [
+                Float(25.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 6,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 4,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 6,
+            position: (-554.657, 2025.5613),
+            name: "Asteroid base",
+            kind: MultifractalNoiseSDFModifier,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 1.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.01,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 2.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.5,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 8.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+                Enum(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 12,
+                    to_slot: 0,
+                )),
+                Some((
+                    to_node: 14,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 5,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 7,
+            position: (-520.63385, 2420.2683),
+            name: "",
+            kind: Capsules,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: FromParam,
+                        fixed: 100.0,
+                        from_param: (
+                            param_idx: 1,
+                            mapping: (
+                                variant: Linear,
+                                linear: (
+                                    offset: 0.0,
+                                    scale: 1.0,
+                                ),
+                            ),
+                        ),
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                        exponent: (
+                            variant: Fixed,
+                            fixed: 1.0,
+                        ),
+                    )),
+                )),
+                Distributed((
+                    variant: PowerLaw,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 19.9,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 40.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 70.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 50.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 80.0,
+                        ),
+                        exponent: (
+                            variant: Fixed,
+                            fixed: 2.0,
+                        ),
+                    )),
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Uniform,
+                    constant: (
+                        variant: FromParam,
+                        fixed: 0.0,
+                        from_param: (
+                            param_idx: 1,
+                            mapping: (
+                                variant: Linear,
+                                linear: (
+                                    offset: 0.0,
+                                    scale: 0.25,
+                                ),
+                            ),
+                        ),
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: FromParam,
+                            fixed: 0.0,
+                            from_param: (
+                                param_idx: 1,
+                                mapping: (
+                                    variant: Linear,
+                                    linear: (
+                                        offset: 0.0,
+                                        scale: 0.2,
+                                    ),
+                                ),
+                            ),
+                        ),
+                        max: (
+                            variant: FromParam,
+                            fixed: 0.0,
+                            from_param: (
+                                param_idx: 1,
+                                mapping: (
+                                    variant: Linear,
+                                    linear: (
+                                        offset: 0.0,
+                                        scale: 0.3,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(40),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 13,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [],
+        ),
+        (
+            id: 9,
+            position: (-351.92554, 1801.6512),
+            name: "",
+            kind: SDFInstantiation,
+            params: [],
+            links_to_parents: [
+                Some((
+                    to_node: 10,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 14,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 10,
+            position: (-354.02832, 1709.4514),
+            name: "",
+            kind: SDFGroupUnion,
+            params: [
+                Float(8.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 12,
+                    to_slot: 1,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 9,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 11,
+            position: (-374.036, 2025.5613),
+            name: "",
+            kind: SphereSurfaceTransforms,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 350.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 1.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Enum(2),
+                UInt(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 14,
+                    to_slot: 1,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 13,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 12,
+            position: (-97.98884, 1455.4406),
+            name: "Big craters",
+            kind: SDFSubtraction,
+            params: [
+                Float(8.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 28,
+                    to_slot: 0,
+                )),
+                Some((
+                    to_node: 30,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 6,
+                    to_slot: 0,
+                )),
+                Some((
+                    to_node: 10,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 13,
+            position: (-505.8787, 2204.16),
+            name: "",
+            kind: Rotation,
+            params: [
+                Enum(0),
+                Distributed((
+                    variant: UniformCosAngle,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                    )),
+                    uniform_cos_angle: Some((
+                        min_angle: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max_angle: (
+                            variant: Fixed,
+                            fixed: 80.0,
+                        ),
+                    )),
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: UniformCosAngle,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 360.0,
+                        ),
+                    )),
+                    uniform_cos_angle: Some((
+                        min_angle: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max_angle: (
+                            variant: Fixed,
+                            fixed: 360.0,
+                        ),
+                    )),
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 11,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 7,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 14,
+            position: (-389.27676, 1893.8513),
+            name: "",
+            kind: RayTranslationToSurface,
+            params: [
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 9,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 6,
+                    to_slot: 1,
+                )),
+                Some((
+                    to_node: 11,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 15,
+            position: (-1031.7615, 3605.7273),
+            name: "",
+            kind: Scaling,
+            params: [
+                Enum(0),
+                Distributed((
+                    variant: Uniform,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 4.2,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.5,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 2.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 4,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 3,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 23,
+            position: (13.91344, 1833.1455),
+            name: "",
+            kind: Capsules,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: FromParam,
+                        fixed: 100.0,
+                        from_param: (
+                            param_idx: 1,
+                            mapping: (
+                                variant: Linear,
+                                linear: (
+                                    offset: 0.0,
+                                    scale: 1.0,
+                                ),
+                            ),
+                        ),
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                        exponent: (
+                            variant: Fixed,
+                            fixed: 1.0,
+                        ),
+                    )),
+                )),
+                Distributed((
+                    variant: PowerLaw,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 19.9,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 40.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 70.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 15.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 55.0,
+                        ),
+                        exponent: (
+                            variant: Fixed,
+                            fixed: 2.0,
+                        ),
+                    )),
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Uniform,
+                    constant: (
+                        variant: FromParam,
+                        fixed: 0.0,
+                        from_param: (
+                            param_idx: 1,
+                            mapping: (
+                                variant: Linear,
+                                linear: (
+                                    offset: 0.0,
+                                    scale: 0.25,
+                                ),
+                            ),
+                        ),
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: FromParam,
+                            fixed: 0.0,
+                            from_param: (
+                                param_idx: 1,
+                                mapping: (
+                                    variant: Linear,
+                                    linear: (
+                                        offset: 0.0,
+                                        scale: 0.15,
+                                    ),
+                                ),
+                            ),
+                        ),
+                        max: (
+                            variant: FromParam,
+                            fixed: 0.0,
+                            from_param: (
+                                param_idx: 1,
+                                mapping: (
+                                    variant: Linear,
+                                    linear: (
+                                        offset: 0.0,
+                                        scale: 0.3,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(150),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 29,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [],
+        ),
+        (
+            id: 25,
+            position: (-172.2014, 1164.9943),
+            name: "",
+            kind: SDFInstantiation,
+            params: [],
+            links_to_parents: [
+                Some((
+                    to_node: 26,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 30,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 26,
+            position: (-147.94266, 958.6897),
+            name: "",
+            kind: SDFGroupUnion,
+            params: [
+                Float(3.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 28,
+                    to_slot: 1,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 25,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 27,
+            position: (80.256065, 1455.4406),
+            name: "",
+            kind: SphereSurfaceTransforms,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 300.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 1.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Enum(2),
+                UInt(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 30,
+                    to_slot: 1,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 29,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 28,
+            position: (-97.98885, 787.28894),
+            name: "Medium craters",
+            kind: SDFSubtraction,
+            params: [
+                Float(3.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 59,
+                    to_slot: 0,
+                )),
+                Some((
+                    to_node: 61,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 12,
+                    to_slot: 0,
+                )),
+                Some((
+                    to_node: 26,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 29,
+            position: (13.91344, 1626.8413),
+            name: "",
+            kind: Rotation,
+            params: [
+                Enum(0),
+                Distributed((
+                    variant: UniformCosAngle,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                    )),
+                    uniform_cos_angle: Some((
+                        min_angle: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max_angle: (
+                            variant: Fixed,
+                            fixed: 80.0,
+                        ),
+                    )),
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: UniformCosAngle,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 360.0,
+                        ),
+                    )),
+                    uniform_cos_angle: Some((
+                        min_angle: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max_angle: (
+                            variant: Fixed,
+                            fixed: 360.0,
+                        ),
+                    )),
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 27,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 23,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 30,
+            position: (13.91344, 1327.6693),
+            name: "",
+            kind: RayTranslationToSurface,
+            params: [
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 25,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 12,
+                    to_slot: 1,
+                )),
+                Some((
+                    to_node: 27,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 54,
+            position: (97.20249, 1164.9943),
+            name: "",
+            kind: Capsules,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: FromParam,
+                        fixed: 100.0,
+                        from_param: (
+                            param_idx: 1,
+                            mapping: (
+                                variant: Linear,
+                                linear: (
+                                    offset: 0.0,
+                                    scale: 1.0,
+                                ),
+                            ),
+                        ),
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 30.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                        exponent: (
+                            variant: Fixed,
+                            fixed: 1.0,
+                        ),
+                    )),
+                )),
+                Distributed((
+                    variant: PowerLaw,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 19.9,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 40.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 70.0,
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 5.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 25.0,
+                        ),
+                        exponent: (
+                            variant: Fixed,
+                            fixed: 2.0,
+                        ),
+                    )),
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Uniform,
+                    constant: (
+                        variant: FromParam,
+                        fixed: 0.0,
+                        from_param: (
+                            param_idx: 1,
+                            mapping: (
+                                variant: Linear,
+                                linear: (
+                                    offset: 0.0,
+                                    scale: 0.25,
+                                ),
+                            ),
+                        ),
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: FromParam,
+                            fixed: 0.0,
+                            from_param: (
+                                param_idx: 1,
+                                mapping: (
+                                    variant: Linear,
+                                    linear: (
+                                        offset: 0.0,
+                                        scale: 0.25,
+                                    ),
+                                ),
+                            ),
+                        ),
+                        max: (
+                            variant: FromParam,
+                            fixed: 0.0,
+                            from_param: (
+                                param_idx: 1,
+                                mapping: (
+                                    variant: Linear,
+                                    linear: (
+                                        offset: 0.0,
+                                        scale: 0.4,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )),
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(250),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 60,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [],
+        ),
+        (
+            id: 56,
+            position: (13.91344, 568.6497),
+            name: "",
+            kind: SDFInstantiation,
+            params: [],
+            links_to_parents: [
+                Some((
+                    to_node: 57,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 61,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 57,
+            position: (13.91344, 477.78198),
+            name: "",
+            kind: SDFGroupUnion,
+            params: [
+                Float(3.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 59,
+                    to_slot: 1,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 56,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 58,
+            position: (93.167, 787.28894),
+            name: "",
+            kind: SphereSurfaceTransforms,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 250.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 1.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Enum(2),
+                UInt(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 61,
+                    to_slot: 1,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 60,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 59,
+            position: (224.23248, 208.0758),
+            name: "Small craters",
+            kind: SDFSubtraction,
+            params: [
+                Float(3.0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 62,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 28,
+                    to_slot: 0,
+                )),
+                Some((
+                    to_node: 57,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 60,
+            position: (95.17335, 958.6897),
+            name: "",
+            kind: Rotation,
+            params: [
+                Enum(0),
+                Distributed((
+                    variant: UniformCosAngle,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 60.0,
+                        ),
+                    )),
+                    uniform_cos_angle: Some((
+                        min_angle: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max_angle: (
+                            variant: Fixed,
+                            fixed: 80.0,
+                        ),
+                    )),
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: UniformCosAngle,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: Some((
+                        min: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max: (
+                            variant: Fixed,
+                            fixed: 360.0,
+                        ),
+                    )),
+                    uniform_cos_angle: Some((
+                        min_angle: (
+                            variant: Fixed,
+                            fixed: 0.0,
+                        ),
+                        max_angle: (
+                            variant: Fixed,
+                            fixed: 360.0,
+                        ),
+                    )),
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 58,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 54,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 61,
+            position: (13.91344, 659.5176),
+            name: "",
+            kind: RayTranslationToSurface,
+            params: [
+                Enum(1),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 56,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 28,
+                    to_slot: 1,
+                )),
+                Some((
+                    to_node: 58,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+        (
+            id: 62,
+            position: (224.23248, 60.78993),
+            name: "",
+            kind: MultifractalNoiseSDFModifier,
+            params: [
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 5.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.02,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 2.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 0.546,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                Distributed((
+                    variant: Constant,
+                    constant: (
+                        variant: Fixed,
+                        fixed: 2.0,
+                    ),
+                    uniform: None,
+                    uniform_cos_angle: None,
+                    power_law: None,
+                )),
+                UInt(0),
+                Enum(0),
+            ],
+            links_to_parents: [
+                Some((
+                    to_node: 0,
+                    to_slot: 0,
+                )),
+            ],
+            links_to_children: [
+                Some((
+                    to_node: 59,
+                    to_slot: 0,
+                )),
+            ],
+        ),
+    ],
+    collapsed_nodes: [
+        12,
+        6,
+        28,
+        59,
+    ],
+)
