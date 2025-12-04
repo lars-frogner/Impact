@@ -878,6 +878,9 @@ impl ChunkedVoxelObject {
         // must be computed from scratch
         voxel_object.compute_all_chunk_external_derived_state();
 
+        // Also make sure to tighten the voxel ranges
+        voxel_object.update_occupied_voxel_ranges();
+
         DisconnectedVoxelObject {
             voxel_object,
             origin_offset_in_parent,
