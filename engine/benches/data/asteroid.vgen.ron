@@ -1,0 +1,295 @@
+(
+    sdf_graph: (
+        nodes: [
+            Spheres((
+                radius: Uniform(
+                    min: Fixed(30.0),
+                    max: Fixed(60.0),
+                ),
+                center_x: Constant(Fixed(0.0)),
+                center_y: Constant(Fixed(0.0)),
+                center_z: Constant(Fixed(0.0)),
+                count: 8,
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            StratifiedGridTransforms((
+                child_id: 0,
+                shape_x: Constant(Fixed(2)),
+                shape_y: Constant(Fixed(2)),
+                shape_z: Constant(Fixed(2)),
+                cell_extent_x: Constant(Fixed(30.0)),
+                cell_extent_y: Constant(Fixed(30.0)),
+                cell_extent_z: Constant(Fixed(30.0)),
+                jitter_fraction: Constant(Fixed(0.75)),
+                seed: 0,
+            )),
+            StochasticSelection((
+                child_id: 1,
+                min_pick_count: 3,
+                max_pick_count: 6,
+                pick_probability: 1.0,
+                seed: 0,
+            )),
+            Scaling((
+                child_id: 2,
+                composition: Post,
+                scaling: Uniform(
+                    min: Fixed(0.5),
+                    max: Fixed(2.0),
+                ),
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            SDFInstantiation((
+                child_id: 3,
+            )),
+            SDFGroupUnion((
+                child_id: 4,
+                smoothness: 25.0,
+            )),
+            MultifractalNoiseSDFModifier((
+                child_id: 5,
+                octaves: Constant(Fixed(1)),
+                frequency: Constant(Fixed(0.01)),
+                lacunarity: Constant(Fixed(2.0)),
+                persistence: Constant(Fixed(0.5)),
+                amplitude: Constant(Fixed(8.0)),
+                seed: 0,
+                sampling: OnlyOnce,
+            )),
+            Capsules((
+                segment_length: Constant(FromParam(
+                    idx: 1,
+                    mapping: Linear(
+                        offset: 0.0,
+                        scale: 1.0,
+                    ),
+                )),
+                radius: PowerLaw(
+                    min: Fixed(50.0),
+                    max: Fixed(80.0),
+                    exponent: Fixed(2.0),
+                ),
+                center_x: Constant(Fixed(0.0)),
+                center_y: Uniform(
+                    min: FromParam(
+                        idx: 1,
+                        mapping: Linear(
+                            offset: 0.0,
+                            scale: 0.2,
+                        ),
+                    ),
+                    max: FromParam(
+                        idx: 1,
+                        mapping: Linear(
+                            offset: 0.0,
+                            scale: 0.3,
+                        ),
+                    ),
+                ),
+                center_z: Constant(Fixed(0.0)),
+                count: 40,
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            Rotation((
+                child_id: 7,
+                composition: Post,
+                tilt_angle: UniformCosAngle(
+                    min_angle: Fixed(0.0),
+                    max_angle: Fixed(80.0),
+                ),
+                turn_angle: UniformCosAngle(
+                    min_angle: Fixed(0.0),
+                    max_angle: Fixed(360.0),
+                ),
+                roll_angle: Constant(Fixed(0.0)),
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            SphereSurfaceTransforms((
+                child_id: 8,
+                radius: Constant(Fixed(350.0)),
+                jitter_fraction: Constant(Fixed(1.0)),
+                rotation: RadialInwards,
+                seed: 0,
+            )),
+            RayTranslationToSurface((
+                surface_sdf_id: 6,
+                subject_id: 9,
+                anchor: ShapeBoundaryAtOrigin,
+            )),
+            SDFInstantiation((
+                child_id: 10,
+            )),
+            SDFGroupUnion((
+                child_id: 11,
+                smoothness: 8.0,
+            )),
+            SDFSubtraction((
+                child_1_id: 6,
+                child_2_id: 12,
+                smoothness: 8.0,
+            )),
+            Capsules((
+                segment_length: Constant(FromParam(
+                    idx: 1,
+                    mapping: Linear(
+                        offset: 0.0,
+                        scale: 1.0,
+                    ),
+                )),
+                radius: PowerLaw(
+                    min: Fixed(15.0),
+                    max: Fixed(55.0),
+                    exponent: Fixed(2.0),
+                ),
+                center_x: Constant(Fixed(0.0)),
+                center_y: Uniform(
+                    min: FromParam(
+                        idx: 1,
+                        mapping: Linear(
+                            offset: 0.0,
+                            scale: 0.15,
+                        ),
+                    ),
+                    max: FromParam(
+                        idx: 1,
+                        mapping: Linear(
+                            offset: 0.0,
+                            scale: 0.3,
+                        ),
+                    ),
+                ),
+                center_z: Constant(Fixed(0.0)),
+                count: 150,
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            Rotation((
+                child_id: 14,
+                composition: Post,
+                tilt_angle: UniformCosAngle(
+                    min_angle: Fixed(0.0),
+                    max_angle: Fixed(80.0),
+                ),
+                turn_angle: UniformCosAngle(
+                    min_angle: Fixed(0.0),
+                    max_angle: Fixed(360.0),
+                ),
+                roll_angle: Constant(Fixed(0.0)),
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            SphereSurfaceTransforms((
+                child_id: 15,
+                radius: Constant(Fixed(300.0)),
+                jitter_fraction: Constant(Fixed(1.0)),
+                rotation: RadialInwards,
+                seed: 0,
+            )),
+            RayTranslationToSurface((
+                surface_sdf_id: 13,
+                subject_id: 16,
+                anchor: ShapeBoundaryAtOrigin,
+            )),
+            SDFInstantiation((
+                child_id: 17,
+            )),
+            SDFGroupUnion((
+                child_id: 18,
+                smoothness: 3.0,
+            )),
+            SDFSubtraction((
+                child_1_id: 13,
+                child_2_id: 19,
+                smoothness: 3.0,
+            )),
+            Capsules((
+                segment_length: Constant(FromParam(
+                    idx: 1,
+                    mapping: Linear(
+                        offset: 0.0,
+                        scale: 1.0,
+                    ),
+                )),
+                radius: PowerLaw(
+                    min: Fixed(5.0),
+                    max: Fixed(25.0),
+                    exponent: Fixed(2.0),
+                ),
+                center_x: Constant(Fixed(0.0)),
+                center_y: Uniform(
+                    min: FromParam(
+                        idx: 1,
+                        mapping: Linear(
+                            offset: 0.0,
+                            scale: 0.25,
+                        ),
+                    ),
+                    max: FromParam(
+                        idx: 1,
+                        mapping: Linear(
+                            offset: 0.0,
+                            scale: 0.4,
+                        ),
+                    ),
+                ),
+                center_z: Constant(Fixed(0.0)),
+                count: 250,
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            Rotation((
+                child_id: 21,
+                composition: Post,
+                tilt_angle: UniformCosAngle(
+                    min_angle: Fixed(0.0),
+                    max_angle: Fixed(80.0),
+                ),
+                turn_angle: UniformCosAngle(
+                    min_angle: Fixed(0.0),
+                    max_angle: Fixed(360.0),
+                ),
+                roll_angle: Constant(Fixed(0.0)),
+                seed: 0,
+                sampling: PerInstance,
+            )),
+            SphereSurfaceTransforms((
+                child_id: 22,
+                radius: Constant(Fixed(250.0)),
+                jitter_fraction: Constant(Fixed(1.0)),
+                rotation: RadialInwards,
+                seed: 0,
+            )),
+            RayTranslationToSurface((
+                surface_sdf_id: 20,
+                subject_id: 23,
+                anchor: ShapeBoundaryAtOrigin,
+            )),
+            SDFInstantiation((
+                child_id: 24,
+            )),
+            SDFGroupUnion((
+                child_id: 25,
+                smoothness: 3.0,
+            )),
+            SDFSubtraction((
+                child_1_id: 20,
+                child_2_id: 26,
+                smoothness: 3.0,
+            )),
+            MultifractalNoiseSDFModifier((
+                child_id: 27,
+                octaves: Constant(Fixed(5)),
+                frequency: Constant(Fixed(0.02)),
+                lacunarity: Constant(Fixed(2.0)),
+                persistence: Constant(Fixed(0.546)),
+                amplitude: Constant(Fixed(2.0)),
+                seed: 0,
+                sampling: OnlyOnce,
+            )),
+        ],
+    ),
+)
