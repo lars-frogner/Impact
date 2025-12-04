@@ -16,6 +16,8 @@
 
 - Centralize assignment of binding locations?
 
+- Check out Reddit shadow mapping article.
+
 ## Physics
 
 - Support disabling rigid bodies.
@@ -25,6 +27,10 @@
 - Implement Voronoi fracturing.
 
 - Implement N-body gravity simulation using multipole expansion for the gravitational field of extended objects and a Barnes-Hut tree as acceleration structure.
+
+## Generation
+
+- Implement graph based system for generating voxel types (probably integrated with SDF graph).
 
 ## Math
 
@@ -46,6 +52,8 @@
 
 - Add acceleration structure for broad phase collision detection.
 
+- Pass arena when setting up entities.
+
 ## ECS
 
 - Support querying only entities where certain components have changed.
@@ -62,6 +70,12 @@
 
 - Fix black square flashes due to bloom filter propagating NaNs.
 
+- Fix intermittent black triangles for voxel objects.
+
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
 - Investigate flakyness of the `executing_tasks_works` test.
+
+- Benchmark building of meta and atomic SDF graphs.
+
+- Create timelapse of asteroid generation in graph editor.
