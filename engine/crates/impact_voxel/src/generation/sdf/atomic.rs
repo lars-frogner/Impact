@@ -2029,6 +2029,7 @@ fn block_face_center_positions_with_indices<const SIZE: usize, const COUNT: usiz
     ]
 }
 
+#[inline]
 fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     if smoothness == 0.0 {
         f32::min(distance_1, distance_2)
@@ -2037,6 +2038,7 @@ fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     }
 }
 
+#[inline]
 fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     if smoothness == 0.0 {
         f32::max(distance_1, -distance_2)
@@ -2045,6 +2047,7 @@ fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     }
 }
 
+#[inline]
 fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     if smoothness == 0.0 {
         f32::max(distance_1, distance_2)
@@ -2053,19 +2056,23 @@ fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     }
 }
 
+#[inline]
 fn smooth_sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     let h = (0.5 + 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
     mix(distance_2, distance_1, h) - smoothness * h * (1.0 - h)
 }
 
+#[inline]
 fn smooth_sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     -smooth_sdf_union(-distance_1, distance_2, smoothness)
 }
 
+#[inline]
 fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
     -smooth_sdf_union(-distance_1, -distance_2, smoothness)
 }
 
+#[inline]
 fn mix(a: f32, b: f32, factor: f32) -> f32 {
     (1.0 - factor) * a + factor * b
 }
