@@ -127,3 +127,37 @@ pub fn compile_complex_meta_graph(benchmarker: impl Benchmarker) {
         arena.reset();
     });
 }
+
+pub fn build_complex_atomic_graph(benchmarker: impl Benchmarker) {
+    let generator: VoxelGenerator =
+        impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
+
+    let arena_for_meta = Bump::new();
+    let atomic_graph = generator.sdf_graph.build(&arena_for_meta, 0).unwrap();
+
+    let mut arena = Bump::new();
+
+    benchmarker.benchmark(&mut || {
+        black_box(atomic_graph.build_with_arena(&arena).unwrap());
+        arena.reset();
+    });
+}
+
+pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
+    let generator: VoxelGenerator =
+        impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
+
+    let arena = Bump::new();
+    let atomic_graph = generator.sdf_graph.build(&arena, 0).unwrap();
+    let sdf_generator = atomic_graph.build_with_arena(&arena).unwrap();
+
+    let generator = SDFVoxelGenerator::new(
+        1.0,
+        sdf_generator,
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+    );
+
+    benchmarker.benchmark(&mut || {
+        black_box(ChunkedVoxelObject::generate(&generator));
+    });
+}
