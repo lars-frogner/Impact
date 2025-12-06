@@ -84,7 +84,7 @@ pub struct ParamScratch<A: Allocator> {
     queue: FixedQueue<ParamIdx, A>,
 }
 
-type ParamIndicesForDeps = TinyVec<[ParamIdx; 2]>;
+type ParamIndicesForDeps = TinyVec<[ParamIdx; 4]>;
 
 impl<'a> ParamSpecRef<'a> {
     fn param_dependencies(&self) -> ParamIndicesForDeps {
