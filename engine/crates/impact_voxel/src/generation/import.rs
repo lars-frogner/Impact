@@ -1,8 +1,6 @@
 //! Importing voxel object generators from declarations.
 
-use crate::generation::{VoxelGeneratorID, VoxelGeneratorRegistry};
-use anyhow::{Context, Result, bail};
-use impact_io::parse_ron_file;
+use crate::generation::VoxelGeneratorID;
 use std::path::{Path, PathBuf};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -25,10 +23,11 @@ impl VoxelGeneratorDeclaration {
 ///
 /// # Errors
 /// See [`load_declared_voxel_generator`].
+#[cfg(feature = "ron")]
 pub fn load_declared_voxel_generators(
-    registry: &mut VoxelGeneratorRegistry,
+    registry: &mut crate::generation::VoxelGeneratorRegistry,
     declarations: &[VoxelGeneratorDeclaration],
-) -> Result<()> {
+) -> anyhow::Result<()> {
     for declaration in declarations {
         if let Err(error) = load_declared_voxel_generator(registry, declaration) {
             // Failing to load a voxel generator is not fatal, since we might not need it
@@ -48,20 +47,23 @@ pub fn load_declared_voxel_generators(
 /// Returns an error if:
 /// - Another voxel generator with the same name is already loaded.
 /// - The voxel generator file can not be found or is invalid.
+#[cfg(feature = "ron")]
 pub fn load_declared_voxel_generator(
-    registry: &mut VoxelGeneratorRegistry,
+    registry: &mut crate::generation::VoxelGeneratorRegistry,
     declaration: &VoxelGeneratorDeclaration,
-) -> Result<VoxelGeneratorID> {
+) -> anyhow::Result<VoxelGeneratorID> {
+    use anyhow::Context;
+
     let id = declaration.id;
     let path = &declaration.path;
 
     impact_log::debug!("Loading voxel generator `{id}` from {}", path.display());
 
     if registry.contains(id) {
-        bail!("Tried to load voxel generator under already existing ID: {id}");
+        anyhow::bail!("Tried to load voxel generator under already existing ID: {id}");
     }
 
-    let generator = parse_ron_file(path)
+    let generator = impact_io::parse_ron_file(path)
         .with_context(|| format!("Failed to load voxel generator from {}", path.display()))?;
 
     registry.insert(id, generator);

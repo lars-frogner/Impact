@@ -360,7 +360,8 @@ define_meta_node_params! {
 ///
 /// Input: `Instances`
 /// Output: `Instances`
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct MetaSimilarity {
     /// ID of the child instance node to apply the similarity transform to.
     pub child_id: MetaSDFNodeID,
