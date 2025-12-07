@@ -165,7 +165,7 @@ pub const NON_EMPTY_VOXEL_THRESHOLD: usize = 8;
 pub const CHUNK_SIZE: usize = 1 << LOG2_CHUNK_SIZE;
 const CHUNK_SIZE_SQUARED: usize = CHUNK_SIZE.pow(2);
 /// The total number of voxels comprising each chunk.
-const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
+pub const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
 
 // We assume that a linear voxel index within a chunk fits into a `u16`
 const _: () = assert!(CHUNK_VOXEL_COUNT <= u16::MAX as usize);
