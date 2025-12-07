@@ -144,21 +144,21 @@ pub struct SDFScaling {
 pub struct SDFUnion {
     pub child_1_id: SDFNodeID,
     pub child_2_id: SDFNodeID,
-    pub smoothness: f32,
+    pub smoothness: Smoothness,
 }
 
 #[derive(Clone, Debug)]
 pub struct SDFSubtraction {
     pub child_1_id: SDFNodeID,
     pub child_2_id: SDFNodeID,
-    pub smoothness: f32,
+    pub smoothness: Smoothness,
 }
 
 #[derive(Clone, Debug)]
 pub struct SDFIntersection {
     pub child_1_id: SDFNodeID,
     pub child_2_id: SDFNodeID,
-    pub smoothness: f32,
+    pub smoothness: Smoothness,
 }
 
 /// Modifier for a signed distance field that adds a multifractal noise term to
@@ -194,9 +194,15 @@ pub struct MultiscaleSphereSDFModifier {
     frequency: f32,
     persistence: f32,
     scaled_inflation: f32,
-    scaled_intersection_smoothness: f32,
-    union_smoothness: f32,
+    scaled_intersection_smoothness: Smoothness,
+    union_smoothness: Smoothness,
     seed: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Smoothness {
+    smoothness: f32,
+    quarter_inv_smoothness: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -443,7 +449,7 @@ impl<A: Allocator> SDFGenerator<A> {
                                 leaf_counts[node_idx] = leaf_count;
 
                                 required_padding[node_idx] =
-                                    soft_combine_domain_padding(smoothness, leaf_count);
+                                    soft_combine_domain_padding(smoothness.get(), leaf_count);
                             }
                             &SDFNode::Subtraction(SDFSubtraction {
                                 child_1_id,
@@ -459,7 +465,7 @@ impl<A: Allocator> SDFGenerator<A> {
                                 leaf_counts[node_idx] = leaf_count;
 
                                 required_padding[node_idx] =
-                                    soft_combine_domain_padding(smoothness, leaf_count);
+                                    soft_combine_domain_padding(smoothness.get(), leaf_count);
                             }
                             &SDFNode::Intersection(SDFIntersection {
                                 child_1_id,
@@ -478,7 +484,7 @@ impl<A: Allocator> SDFGenerator<A> {
                                 leaf_counts[node_idx] = leaf_count;
 
                                 required_padding[node_idx] =
-                                    soft_combine_domain_padding(smoothness, leaf_count);
+                                    soft_combine_domain_padding(smoothness.get(), leaf_count);
                             }
                         }
                     }
@@ -642,8 +648,8 @@ impl<A: Allocator> SDFGenerator<A> {
                     // margin might thus come from a child point as far as
                     // roughly `margin + 2 * soft_combine_domain_padding` from
                     // the child surface. For safety we use 2.5.
-                    let margin_for_child =
-                        margin + 2.5 * soft_combine_domain_padding(smoothness, node.leaf_count);
+                    let margin_for_child = margin
+                        + 2.5 * soft_combine_domain_padding(smoothness.get(), node.leaf_count);
                     margin_stack[stack_top] = margin_for_child;
                     margin_stack[stack_top + 1] = margin_for_child;
 
@@ -1445,7 +1451,7 @@ impl SDFUnion {
         Self {
             child_1_id,
             child_2_id,
-            smoothness,
+            smoothness: smoothness.into(),
         }
     }
 }
@@ -1456,7 +1462,7 @@ impl SDFSubtraction {
         Self {
             child_1_id,
             child_2_id,
-            smoothness,
+            smoothness: smoothness.into(),
         }
     }
 }
@@ -1467,7 +1473,7 @@ impl SDFIntersection {
         Self {
             child_1_id,
             child_2_id,
-            smoothness,
+            smoothness: smoothness.into(),
         }
     }
 }
@@ -1692,8 +1698,8 @@ impl MultiscaleSphereSDFModifier {
             frequency,
             persistence,
             scaled_inflation,
-            scaled_intersection_smoothness,
-            union_smoothness,
+            scaled_intersection_smoothness: scaled_intersection_smoothness.into(),
+            union_smoothness: union_smoothness.into(),
             seed,
         }
     }
@@ -1715,11 +1721,11 @@ impl MultiscaleSphereSDFModifier {
     }
 
     pub fn intersection_smoothness(&self) -> f32 {
-        self.scaled_intersection_smoothness / self.max_scale()
+        self.scaled_intersection_smoothness.get() / self.max_scale()
     }
 
     pub fn union_smoothness(&self) -> f32 {
-        self.union_smoothness
+        self.union_smoothness.get()
     }
 
     pub fn seed(&self) -> u32 {
@@ -1727,7 +1733,7 @@ impl MultiscaleSphereSDFModifier {
     }
 
     fn domain_expansion(&self) -> f32 {
-        self.scaled_inflation + displacement_due_to_smoothness(self.union_smoothness)
+        self.scaled_inflation + displacement_due_to_smoothness(self.union_smoothness.get())
     }
 
     #[inline]
@@ -1752,13 +1758,13 @@ impl MultiscaleSphereSDFModifier {
             let intersected_sphere_grid_distance = smooth_sdf_intersection(
                 sphere_grid_distance,
                 parent_distance - self.scaled_inflation * scale,
-                self.scaled_intersection_smoothness * scale,
+                self.scaled_intersection_smoothness.scaled(scale),
             );
 
             parent_distance = smooth_sdf_union(
                 intersected_sphere_grid_distance,
                 parent_distance,
-                self.union_smoothness * scale,
+                self.union_smoothness.scaled(scale),
             );
 
             position = ROTATION * (position / self.persistence);
@@ -1820,6 +1826,36 @@ impl MultiscaleSphereSDFModifier {
             bytemuck::bytes_of(&(grid_cell_indices + corner_offsets)),
         );
         HASH_TO_RADIUS * hash as f32
+    }
+}
+
+impl Smoothness {
+    pub fn new(smoothness: f32) -> Self {
+        Self {
+            smoothness,
+            quarter_inv_smoothness: 0.25 / smoothness,
+        }
+    }
+
+    #[inline]
+    pub fn get(&self) -> f32 {
+        self.smoothness
+    }
+
+    #[inline]
+    pub fn scaled(&self, scale: f32) -> Self {
+        Self::new(self.smoothness * scale)
+    }
+
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self.smoothness == 0.0
+    }
+}
+
+impl From<f32> for Smoothness {
+    fn from(smoothness: f32) -> Self {
+        Self::new(smoothness)
     }
 }
 
@@ -2017,18 +2053,15 @@ fn block_face_center_positions_with_indices<const SIZE: usize, const COUNT: usiz
 fn apply_sdf_unions<const COUNT: usize>(
     distances_1: &mut [f32; COUNT],
     distances_2: &[f32; COUNT],
-    smoothness: f32,
+    smoothness: Smoothness,
 ) {
-    if smoothness == 0.0 {
+    if smoothness.is_zero() {
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
             *distance_1 = f32::min(*distance_1, distance_2);
         }
     } else {
-        let inv_smoothness = smoothness.recip();
-
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
-            *distance_1 =
-                smooth_sdf_union_fast(*distance_1, distance_2, smoothness, inv_smoothness);
+            *distance_1 = smooth_sdf_union(*distance_1, distance_2, smoothness);
         }
     }
 }
@@ -2037,18 +2070,15 @@ fn apply_sdf_unions<const COUNT: usize>(
 fn apply_sdf_subtractions<const COUNT: usize>(
     distances_1: &mut [f32; COUNT],
     distances_2: &[f32; COUNT],
-    smoothness: f32,
+    smoothness: Smoothness,
 ) {
-    if smoothness == 0.0 {
+    if smoothness.is_zero() {
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
             *distance_1 = f32::max(*distance_1, -distance_2);
         }
     } else {
-        let inv_smoothness = smoothness.recip();
-
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
-            *distance_1 =
-                smooth_sdf_subtraction_fast(*distance_1, distance_2, smoothness, inv_smoothness);
+            *distance_1 = smooth_sdf_subtraction(*distance_1, distance_2, smoothness);
         }
     }
 }
@@ -2057,56 +2087,22 @@ fn apply_sdf_subtractions<const COUNT: usize>(
 fn apply_sdf_intersections<const COUNT: usize>(
     distances_1: &mut [f32; COUNT],
     distances_2: &[f32; COUNT],
-    smoothness: f32,
+    smoothness: Smoothness,
 ) {
-    if smoothness == 0.0 {
+    if smoothness.is_zero() {
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
             *distance_1 = f32::max(*distance_1, distance_2);
         }
     } else {
-        let inv_smoothness = smoothness.recip();
-
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
-            *distance_1 =
-                smooth_sdf_intersection_fast(*distance_1, distance_2, smoothness, inv_smoothness);
+            *distance_1 = smooth_sdf_intersection(*distance_1, distance_2, smoothness);
         }
     }
 }
 
 #[inline]
-fn smooth_sdf_union_fast(
-    distance_1: f32,
-    distance_2: f32,
-    smoothness: f32,
-    inv_smoothness: f32,
-) -> f32 {
-    let h = (0.5 + 0.5 * (distance_2 - distance_1) * inv_smoothness).clamp(0.0, 1.0);
-    mix(distance_2, distance_1, h) - smoothness * h * (1.0 - h)
-}
-
-#[inline]
-fn smooth_sdf_subtraction_fast(
-    distance_1: f32,
-    distance_2: f32,
-    smoothness: f32,
-    inv_smoothness: f32,
-) -> f32 {
-    -smooth_sdf_union_fast(-distance_1, distance_2, smoothness, inv_smoothness)
-}
-
-#[inline]
-fn smooth_sdf_intersection_fast(
-    distance_1: f32,
-    distance_2: f32,
-    smoothness: f32,
-    inv_smoothness: f32,
-) -> f32 {
-    -smooth_sdf_union_fast(-distance_1, -distance_2, smoothness, inv_smoothness)
-}
-
-#[inline]
-fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
-    if smoothness == 0.0 {
+fn sdf_union(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
+    if smoothness.is_zero() {
         f32::min(distance_1, distance_2)
     } else {
         smooth_sdf_union(distance_1, distance_2, smoothness)
@@ -2114,8 +2110,8 @@ fn sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
 }
 
 #[inline]
-fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
-    if smoothness == 0.0 {
+fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
+    if smoothness.is_zero() {
         f32::max(distance_1, -distance_2)
     } else {
         smooth_sdf_subtraction(distance_1, distance_2, smoothness)
@@ -2123,8 +2119,8 @@ fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
 }
 
 #[inline]
-fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
-    if smoothness == 0.0 {
+fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
+    if smoothness.is_zero() {
         f32::max(distance_1, distance_2)
     } else {
         smooth_sdf_intersection(distance_1, distance_2, smoothness)
@@ -2132,24 +2128,19 @@ fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
 }
 
 #[inline]
-fn smooth_sdf_union(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
-    let h = (0.5 + 0.5 * (distance_2 - distance_1) / smoothness).clamp(0.0, 1.0);
-    mix(distance_2, distance_1, h) - smoothness * h * (1.0 - h)
+fn smooth_sdf_union(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
+    let h = (smoothness.get() - (distance_1 - distance_2).abs()).max(0.0);
+    distance_1.min(distance_2) - (h * h) * smoothness.quarter_inv_smoothness
 }
 
 #[inline]
-fn smooth_sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
+fn smooth_sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
     -smooth_sdf_union(-distance_1, distance_2, smoothness)
 }
 
 #[inline]
-fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: f32) -> f32 {
+fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
     -smooth_sdf_union(-distance_1, -distance_2, smoothness)
-}
-
-#[inline]
-fn mix(a: f32, b: f32, factor: f32) -> f32 {
-    (1.0 - factor) * a + factor * b
 }
 
 /// Assumes underlying gradient noise in range [-1.0, 1.0].
