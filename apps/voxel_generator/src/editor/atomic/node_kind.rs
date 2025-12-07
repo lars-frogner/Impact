@@ -93,7 +93,7 @@ impl AtomicNode {
 
     pub fn for_union(node: &SDFUnion) -> Self {
         let mut params = AtomicNodeParams::new();
-        params.push(AtomicFloatParam::new("Smoothness", node.smoothness).into());
+        params.push(AtomicFloatParam::new("Smoothness", node.smoothness.get()).into());
         Self::new_binary(
             AtomicNodeKind::Union,
             params,
@@ -104,7 +104,7 @@ impl AtomicNode {
 
     pub fn for_subtraction(node: &SDFSubtraction) -> Self {
         let mut params = AtomicNodeParams::new();
-        params.push(AtomicFloatParam::new("Smoothness", node.smoothness).into());
+        params.push(AtomicFloatParam::new("Smoothness", node.smoothness.get()).into());
         Self::new_binary(
             AtomicNodeKind::Subtraction,
             params,
@@ -115,7 +115,7 @@ impl AtomicNode {
 
     pub fn for_intersection(node: &SDFIntersection) -> Self {
         let mut params = AtomicNodeParams::new();
-        params.push(AtomicFloatParam::new("Smoothness", node.smoothness).into());
+        params.push(AtomicFloatParam::new("Smoothness", node.smoothness.get()).into());
         Self::new_binary(
             AtomicNodeKind::Intersection,
             params,
