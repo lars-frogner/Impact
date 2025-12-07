@@ -41,7 +41,7 @@ pub struct SDFGenerator<A: Allocator = Global> {
 pub struct SDFGeneratorBlockBuffers<const COUNT: usize, A: Allocator> {
     /// Contains `required_forward_stack_size + 1` arrays, where the last one is scratch
     /// space.
-    signed_distance_stack: AVec<[f32; COUNT], A>,
+    pub signed_distance_stack: AVec<[f32; COUNT], A>,
 }
 
 const CHUNK_SIZE: usize = ChunkedVoxelObject::chunk_size();
@@ -882,11 +882,7 @@ impl<A: Allocator> SDFGenerator<A> {
                             },
                         )
                     {
-                        for (distance_1, &distance_2) in
-                            distances_1.iter_mut().zip(distances_2.iter())
-                        {
-                            *distance_1 = sdf_union(*distance_1, distance_2, smoothness);
-                        }
+                        apply_sdf_unions(distances_1, distances_2, smoothness);
                     }
                 }
                 &SDFNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
@@ -913,11 +909,7 @@ impl<A: Allocator> SDFGenerator<A> {
                             },
                         )
                     {
-                        for (distance_1, &distance_2) in
-                            distances_1.iter_mut().zip(distances_2.iter())
-                        {
-                            *distance_1 = sdf_subtraction(*distance_1, distance_2, smoothness);
-                        }
+                        apply_sdf_subtractions(distances_1, distances_2, smoothness);
                     }
                 }
                 &SDFNode::Intersection(SDFIntersection { smoothness, .. }) => {
@@ -944,11 +936,7 @@ impl<A: Allocator> SDFGenerator<A> {
                             },
                         )
                     {
-                        for (distance_1, &distance_2) in
-                            distances_1.iter_mut().zip(distances_2.iter())
-                        {
-                            *distance_1 = sdf_intersection(*distance_1, distance_2, smoothness);
-                        }
+                        apply_sdf_intersections(distances_1, distances_2, smoothness);
                     }
                 }
             }
@@ -1055,10 +1043,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         .get_disjoint_mut([stack_top - 1, stack_top])
                         .unwrap();
 
-                    for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter())
-                    {
-                        *distance_1 = sdf_union(*distance_1, distance_2, smoothness);
-                    }
+                    apply_sdf_unions(distances_1, distances_2, smoothness);
                 }
                 &SDFNode::Subtraction(SDFSubtraction { smoothness, .. }) => {
                     debug_assert!(stack_top >= 2);
@@ -1069,10 +1054,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         .get_disjoint_mut([stack_top - 1, stack_top])
                         .unwrap();
 
-                    for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter())
-                    {
-                        *distance_1 = sdf_subtraction(*distance_1, distance_2, smoothness);
-                    }
+                    apply_sdf_subtractions(distances_1, distances_2, smoothness);
                 }
                 &SDFNode::Intersection(SDFIntersection { smoothness, .. }) => {
                     debug_assert!(stack_top >= 2);
@@ -1083,10 +1065,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         .get_disjoint_mut([stack_top - 1, stack_top])
                         .unwrap();
 
-                    for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter())
-                    {
-                        *distance_1 = sdf_intersection(*distance_1, distance_2, smoothness);
-                    }
+                    apply_sdf_intersections(distances_1, distances_2, smoothness);
                 }
             }
         }
@@ -1331,7 +1310,7 @@ impl SphereSDF {
         self.radius
     }
 
-    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+    pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         let half_extents = Vector3::repeat(self.radius);
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
@@ -1348,7 +1327,7 @@ impl SphereSDF {
     }
 
     #[inline]
-    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
         position_in_node_space.coords.magnitude() - self.radius
     }
 }
@@ -1373,7 +1352,7 @@ impl CapsuleSDF {
         self.radius
     }
 
-    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+    pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         let mut half_extents = Vector3::repeat(self.radius);
         half_extents.y += self.half_segment_length;
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
@@ -1392,7 +1371,7 @@ impl CapsuleSDF {
     }
 
     #[inline]
-    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
         let mut position = *position_in_node_space;
         position.y -= position
             .y
@@ -1417,7 +1396,7 @@ impl BoxSDF {
         ]
     }
 
-    fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+    pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
@@ -1430,7 +1409,7 @@ impl BoxSDF {
     }
 
     #[inline]
-    fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
         let q = position_in_node_space.coords.abs() - self.half_extents;
         q.sup(&Vector3::zeros()).magnitude() + f32::min(q.max(), 0.0)
     }
@@ -1867,12 +1846,14 @@ fn displacement_due_to_smoothness(smoothness: f32) -> f32 {
 }
 
 #[inline]
-fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
+pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
     signed_distances: &mut [f32; COUNT],
     transform_to_node_space: &Matrix4<f32>,
     block_origin_in_root_space: &Point3<f32>,
     update_signed_distance: &impl Fn(&mut f32, &Point3<f32>),
 ) {
+    assert_eq!(COUNT, SIZE.pow(3));
+
     let origin = transform_to_node_space.transform_point(block_origin_in_root_space);
     let dx = transform_to_node_space.column(0).xyz();
     let dy = transform_to_node_space.column(1).xyz();
@@ -1884,7 +1865,8 @@ fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
         for j in 0..SIZE {
             let mut position = origin_plus_x + (j as f32) * dy;
             for _ in 0..SIZE {
-                update_signed_distance(&mut signed_distances[idx], &position);
+                let signed_distance = unsafe { signed_distances.get_unchecked_mut(idx) };
+                update_signed_distance(signed_distance, &position);
                 position += dz;
                 idx += 1;
             }
@@ -1898,6 +1880,8 @@ fn all_block_test_positions_pass_predicate<const SIZE: usize, const COUNT: usize
     block_origin_in_root_space: &Point3<f32>,
     predicate: &impl Fn(usize, Point3<f32>) -> bool,
 ) -> bool {
+    assert_eq!(COUNT, SIZE.pow(3));
+
     let lower = transform_to_node_space.transform_point(block_origin_in_root_space);
     let dx = transform_to_node_space.column(0).xyz();
     let dy = transform_to_node_space.column(1).xyz();
@@ -2027,6 +2011,97 @@ fn block_face_center_positions_with_indices<const SIZE: usize, const COUNT: usiz
             *origin + s * dz + h * dx + h * dy,
         ),
     ]
+}
+
+#[inline]
+fn apply_sdf_unions<const COUNT: usize>(
+    distances_1: &mut [f32; COUNT],
+    distances_2: &[f32; COUNT],
+    smoothness: f32,
+) {
+    if smoothness == 0.0 {
+        for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
+            *distance_1 = f32::min(*distance_1, distance_2);
+        }
+    } else {
+        let inv_smoothness = smoothness.recip();
+
+        for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
+            *distance_1 =
+                smooth_sdf_union_fast(*distance_1, distance_2, smoothness, inv_smoothness);
+        }
+    }
+}
+
+#[inline]
+fn apply_sdf_subtractions<const COUNT: usize>(
+    distances_1: &mut [f32; COUNT],
+    distances_2: &[f32; COUNT],
+    smoothness: f32,
+) {
+    if smoothness == 0.0 {
+        for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
+            *distance_1 = f32::max(*distance_1, -distance_2);
+        }
+    } else {
+        let inv_smoothness = smoothness.recip();
+
+        for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
+            *distance_1 =
+                smooth_sdf_subtraction_fast(*distance_1, distance_2, smoothness, inv_smoothness);
+        }
+    }
+}
+
+#[inline]
+fn apply_sdf_intersections<const COUNT: usize>(
+    distances_1: &mut [f32; COUNT],
+    distances_2: &[f32; COUNT],
+    smoothness: f32,
+) {
+    if smoothness == 0.0 {
+        for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
+            *distance_1 = f32::max(*distance_1, distance_2);
+        }
+    } else {
+        let inv_smoothness = smoothness.recip();
+
+        for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
+            *distance_1 =
+                smooth_sdf_intersection_fast(*distance_1, distance_2, smoothness, inv_smoothness);
+        }
+    }
+}
+
+#[inline]
+fn smooth_sdf_union_fast(
+    distance_1: f32,
+    distance_2: f32,
+    smoothness: f32,
+    inv_smoothness: f32,
+) -> f32 {
+    let h = (0.5 + 0.5 * (distance_2 - distance_1) * inv_smoothness).clamp(0.0, 1.0);
+    mix(distance_2, distance_1, h) - smoothness * h * (1.0 - h)
+}
+
+#[inline]
+fn smooth_sdf_subtraction_fast(
+    distance_1: f32,
+    distance_2: f32,
+    smoothness: f32,
+    inv_smoothness: f32,
+) -> f32 {
+    -smooth_sdf_union_fast(-distance_1, distance_2, smoothness, inv_smoothness)
+}
+
+#[inline]
+fn smooth_sdf_intersection_fast(
+    distance_1: f32,
+    distance_2: f32,
+    smoothness: f32,
+    inv_smoothness: f32,
+) -> f32 {
+    -smooth_sdf_union_fast(-distance_1, -distance_2, smoothness, inv_smoothness)
 }
 
 #[inline]

@@ -13,6 +13,7 @@ impact_profiling::define_target_enum! {
         compile_complex_meta_graph,
         build_complex_atomic_graph,
         generate_object_from_complex_graph,
+        update_signed_distances_for_block,
     },
     voxel_object => {
         update_internal_adjacencies_for_all_chunks,

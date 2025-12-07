@@ -13,6 +13,7 @@ define_criterion_target!(generation, generate_box_with_gradient_noise_voxel_type
 define_criterion_target!(generation, compile_complex_meta_graph);
 define_criterion_target!(generation, build_complex_atomic_graph);
 define_criterion_target!(generation, generate_object_from_complex_graph, 10);
+define_criterion_target!(generation, update_signed_distances_for_block);
 
 criterion::criterion_group!(
     name = benches;
@@ -27,5 +28,6 @@ criterion::criterion_group!(
         compile_complex_meta_graph,
         build_complex_atomic_graph,
         generate_object_from_complex_graph,
+        update_signed_distances_for_block,
 );
 criterion::criterion_main!(benches);

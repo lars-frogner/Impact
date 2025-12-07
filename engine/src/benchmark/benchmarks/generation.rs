@@ -4,15 +4,15 @@ use super::benchmark_data_path;
 use bumpalo::Bump;
 use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
-    chunks::ChunkedVoxelObject,
+    chunks::{CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkedVoxelObject},
     generation::{
         SDFVoxelGenerator, VoxelGenerator,
-        sdf::{BoxSDF, SDFGraph, SDFNode},
+        sdf::{BoxSDF, SDFGenerator, SDFGraph, SDFNode, SphereSDF},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     voxel_types::VoxelType,
 };
-use nalgebra::{UnitQuaternion, Vector3, vector};
+use nalgebra::{Matrix4, Point3, UnitQuaternion, Vector3, vector};
 use std::hint::black_box;
 
 pub fn generate_box(benchmarker: impl Benchmarker) {
@@ -159,5 +159,28 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
 
     benchmarker.benchmark(&mut || {
         black_box(ChunkedVoxelObject::generate(&generator));
+    });
+}
+
+pub fn update_signed_distances_for_block(benchmarker: impl Benchmarker) {
+    let sphere_sdf = &SphereSDF::new(8.0);
+    let sdf_generator = SDFGenerator::from(sphere_sdf.clone());
+    let mut buffers = sdf_generator.create_buffers_for_chunk();
+
+    let transform = Matrix4::identity();
+    let origin = Point3::origin();
+
+    benchmarker.benchmark(&mut || {
+        impact_voxel::generation::sdf::atomic::update_signed_distances_for_block::<
+            CHUNK_SIZE,
+            CHUNK_VOXEL_COUNT,
+        >(
+            black_box(&mut buffers.signed_distance_stack[0]),
+            black_box(&transform),
+            black_box(&origin),
+            &|signed_distance, position| {
+                *signed_distance = sphere_sdf.compute_signed_distance(position);
+            },
+        );
     });
 }
