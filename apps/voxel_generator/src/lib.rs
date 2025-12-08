@@ -28,6 +28,7 @@ use impact::{
     window::WindowConfig,
 };
 use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
+use impact_thread::rayon::RayonThreadPool;
 use impact_voxel::{
     chunks::ChunkedVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
@@ -36,6 +37,7 @@ use impact_voxel::{
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -47,6 +49,7 @@ const OBJECT_ENTITY_ID: EntityID = EntityID::hashed_from_str("object");
 #[derive(Debug)]
 pub struct VoxelGeneratorApp {
     user_interface: RwLock<UserInterface>,
+    thread_pool: RayonThreadPool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -69,6 +72,7 @@ impl VoxelGeneratorApp {
     pub fn new(user_interface: UserInterface) -> Self {
         Self {
             user_interface: RwLock::new(user_interface),
+            thread_pool: RayonThreadPool::new(num_threads()),
         }
     }
 }
@@ -83,8 +87,11 @@ impl Application for VoxelGeneratorApp {
 
         impact_log::debug!("Setting up scene");
 
-        let (voxel_object, model_transform) =
-            generate_next_voxel_object_or_default(arena, &mut self.user_interface.write().editor);
+        let (voxel_object, model_transform) = generate_next_voxel_object_or_default(
+            arena,
+            &self.thread_pool,
+            &mut self.user_interface.write().editor,
+        );
 
         let voxel_object_id = engine.add_voxel_object(voxel_object);
 
@@ -101,9 +108,11 @@ impl Application for VoxelGeneratorApp {
     }
 
     fn on_new_frame(&self, arena: &Bump, engine: &Engine, _frame_number: u64) -> Result<()> {
-        if let Some((voxel_object, new_model_transform)) =
-            generate_next_voxel_object(arena, &mut self.user_interface.write().editor)
-        {
+        if let Some((voxel_object, new_model_transform)) = generate_next_voxel_object(
+            arena,
+            &self.thread_pool,
+            &mut self.user_interface.write().editor,
+        ) {
             engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
                 *model_transform = new_model_transform;
                 Ok(())
@@ -234,6 +243,7 @@ impl UserInterface {
 
 fn generate_next_voxel_object<A>(
     arena: A,
+    thread_pool: &RayonThreadPool,
     editor: &mut Editor,
 ) -> Option<(MeshedChunkedVoxelObject, ModelTransform)>
 where
@@ -241,13 +251,17 @@ where
 {
     let generator = editor.build_next_voxel_sdf_generator(arena)?;
     Some((
-        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate(&generator)),
+        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
+            thread_pool,
+            &generator,
+        )),
         compute_model_transform(&generator),
     ))
 }
 
 fn generate_next_voxel_object_or_default<A>(
     arena: A,
+    thread_pool: &RayonThreadPool,
     editor: &mut Editor,
 ) -> (MeshedChunkedVoxelObject, ModelTransform)
 where
@@ -255,11 +269,18 @@ where
 {
     let generator = editor.build_next_voxel_sdf_generator_or_default(arena);
     (
-        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate(&generator)),
+        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
+            thread_pool,
+            &generator,
+        )),
         compute_model_transform(&generator),
     )
 }
 
 fn compute_model_transform(generator: &SDFVoxelGenerator) -> ModelTransform {
     ModelTransform::with_offset(generator.voxel_extent() as f32 * generator.grid_center().coords)
+}
+
+fn num_threads() -> NonZeroUsize {
+    std::thread::available_parallelism().unwrap_or_else(|_| NonZeroUsize::new(4).unwrap())
 }

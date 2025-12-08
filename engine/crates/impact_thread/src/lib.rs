@@ -1,5 +1,8 @@
 //! Utilities for multithreading.
 
+#[cfg(feature = "rayon")]
+pub mod rayon;
+
 use anyhow::Error;
 use crossbeam_channel::{Receiver, Sender};
 use impact_containers::HashMap;

@@ -83,7 +83,7 @@ pub enum VoxelChunk {
 /// information, boundary voxels in a uniform chunk must have the same
 /// adjacencies as interior voxels, meaning that the chunk boundaries must be
 /// fully obscured by adjacent chunks for the chunk to be considered uniform.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct UniformVoxelChunk {
     voxel: Voxel,
     split_detection: UniformChunkSplitDetectionData,
@@ -96,7 +96,7 @@ pub struct UniformVoxelChunk {
 /// well as information on the distribution of voxels across the faces of the
 /// chunk and a set of flags encoding additional information about the state of
 /// the chunk.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct NonUniformVoxelChunk {
     data_offset: u32,
     face_distributions: [[FaceVoxelDistribution; 2]; 3],
@@ -104,12 +104,21 @@ pub struct NonUniformVoxelChunk {
     split_detection: NonUniformChunkSplitDetectionData,
 }
 
+#[derive(Clone, Debug)]
+struct ChunkAnalysisResults {
+    uniform_chunk_count: usize,
+    non_uniform_chunk_count: usize,
+    occupied_chunk_ranges: [Range<usize>; 3],
+    occupied_voxel_ranges: [Range<usize>; 3],
+}
+
 /// Information about the distribution of voxels across a specific face of a
 /// chunk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
 enum FaceVoxelDistribution {
     /// There are no voxels on the face.
+    #[default]
     Empty,
     /// The face is completely filled with voxels (but they may have different
     /// properties).
@@ -120,7 +129,7 @@ enum FaceVoxelDistribution {
 
 bitflags! {
     /// Bitflags encoding a set of potential binary states for a voxel chunk.
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct VoxelChunkFlags: u8 {
         /// The face on the negative x-side of the chunk is fully obscured by
         /// adjacent voxels.
@@ -165,7 +174,7 @@ pub const NON_EMPTY_VOXEL_THRESHOLD: usize = 8;
 pub const CHUNK_SIZE: usize = 1 << LOG2_CHUNK_SIZE;
 const CHUNK_SIZE_SQUARED: usize = CHUNK_SIZE.pow(2);
 /// The total number of voxels comprising each chunk.
-pub const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
+const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
 
 // We assume that a linear voxel index within a chunk fits into a `u16`
 const _: () = assert!(CHUNK_VOXEL_COUNT <= u16::MAX as usize);
@@ -195,9 +204,26 @@ impl ChunkedVoxelObject {
     /// [`Self::compute_all_derived_state`] on it.
     pub fn generate<G>(generator: &G) -> Self
     where
-        G: ChunkedVoxelGenerator,
+        G: ChunkedVoxelGenerator + Sync,
     {
         let mut object = Self::generate_without_derived_state(generator);
+        object.update_occupied_voxel_ranges();
+        object.compute_all_derived_state();
+        object
+    }
+
+    /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
+    /// and calls [`Self::update_occupied_voxel_ranges`] and
+    /// [`Self::compute_all_derived_state`] on it.
+    #[cfg(feature = "rayon")]
+    pub fn generate_in_parallel<G>(
+        thread_pool: &impact_thread::rayon::RayonThreadPool,
+        generator: &G,
+    ) -> Self
+    where
+        G: ChunkedVoxelGenerator + Sync,
+    {
+        let mut object = Self::generate_without_derived_state_in_parallel(thread_pool, generator);
         object.update_occupied_voxel_ranges();
         object.compute_all_derived_state();
         object
@@ -206,58 +232,201 @@ impl ChunkedVoxelObject {
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
     pub fn generate_without_derived_state<G>(generator: &G) -> Self
     where
-        G: ChunkedVoxelGenerator,
+        G: ChunkedVoxelGenerator + Sync,
+    {
+        Self::generate_without_derived_state_using_closure(
+            generator,
+            |chunk_counts, chunks, voxels| {
+                Self::generate_voxels_for_chunks(generator, chunk_counts, chunks, voxels);
+            },
+        )
+    }
+
+    /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
+    #[cfg(feature = "rayon")]
+    pub fn generate_without_derived_state_in_parallel<G>(
+        thread_pool: &impact_thread::rayon::RayonThreadPool,
+        generator: &G,
+    ) -> Self
+    where
+        G: ChunkedVoxelGenerator + Sync,
+    {
+        Self::generate_without_derived_state_using_closure(
+            generator,
+            |chunk_counts, chunks, voxels| {
+                Self::generate_voxels_for_chunks_in_parallel(
+                    thread_pool,
+                    generator,
+                    chunk_counts,
+                    chunks,
+                    voxels,
+                );
+            },
+        )
+    }
+
+    fn generate_without_derived_state_using_closure<G>(
+        generator: &G,
+        generate_voxels_for_chunks: impl FnOnce([usize; 3], &mut [VoxelChunk], &mut [Voxel]),
+    ) -> Self
+    where
+        G: ChunkedVoxelGenerator + Sync,
     {
         let generator_grid_shape = generator.grid_shape();
+        let chunk_counts = generator_grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
+        let total_chunk_count = chunk_counts.iter().product();
+
+        let mut chunks = vec![VoxelChunk::Empty; total_chunk_count];
+        let mut voxels = vec![Voxel::default(); total_chunk_count * CHUNK_VOXEL_COUNT];
+
+        generate_voxels_for_chunks(chunk_counts, &mut chunks, &mut voxels);
+
+        let ChunkAnalysisResults {
+            uniform_chunk_count,
+            non_uniform_chunk_count,
+            occupied_chunk_ranges,
+            occupied_voxel_ranges,
+        } = Self::analyze_and_initialize_chunks(chunk_counts, &mut chunks);
+
+        let compacted_voxels = Self::compact_voxels(&chunks, &voxels, non_uniform_chunk_count);
 
         let voxel_extent = generator.voxel_extent();
 
-        let chunk_counts = generator_grid_shape.map(|size| {
-            if size == 0 {
-                0
-            } else {
-                size.div_ceil(CHUNK_SIZE)
-            }
-        });
         let chunk_idx_strides = [chunk_counts[2] * chunk_counts[1], chunk_counts[2], 1];
 
-        let mut chunks = Vec::with_capacity(chunk_counts.iter().product());
-        let mut voxels = Vec::new();
+        // This object has not been split off from a parent
+        let origin_offset_in_root = [0; 3];
 
-        let mut occupied_chunks_i = REVERSED_MAX_RANGE;
-        let mut occupied_chunks_j = REVERSED_MAX_RANGE;
-        let mut occupied_chunks_k = REVERSED_MAX_RANGE;
-        let mut has_non_empty_chunks = false;
+        let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
 
-        let mut uniform_chunk_count = 0;
-        let mut non_uniform_chunk_count = 0;
+        Self {
+            voxel_extent,
+            chunk_counts,
+            chunk_idx_strides,
+            occupied_chunk_ranges,
+            occupied_voxel_ranges,
+            origin_offset_in_root,
+            chunks,
+            voxels: compacted_voxels,
+            split_detector,
+            invalidated_mesh_chunk_indices: HashSet::default(),
+        }
+    }
+
+    fn generate_voxels_for_chunks<G>(
+        generator: &G,
+        chunk_counts: [usize; 3],
+        chunks: &mut [VoxelChunk],
+        voxels: &mut [Voxel],
+    ) where
+        G: ChunkedVoxelGenerator,
+    {
+        assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
 
         let mut generation_buffers = generator.create_buffers();
 
-        for chunk_i in 0..chunk_counts[0] {
-            for chunk_j in 0..chunk_counts[1] {
-                for chunk_k in 0..chunk_counts[2] {
-                    let chunk = VoxelChunk::generate(
-                        &mut generation_buffers,
-                        &mut voxels,
-                        &mut uniform_chunk_count,
-                        &mut non_uniform_chunk_count,
-                        generator,
-                        [chunk_i, chunk_j, chunk_k],
-                    );
+        chunks
+            .iter_mut()
+            .zip(voxels.chunks_mut(CHUNK_VOXEL_COUNT))
+            .enumerate()
+            .for_each(|(chunk_idx, (chunk, chunk_voxels))| {
+                let origin =
+                    chunk_indices_from_linear_idx(&chunk_counts, chunk_idx).map(|i| i * CHUNK_SIZE);
 
-                    if !chunk.contains_only_empty_voxels() {
-                        occupied_chunks_i.start = occupied_chunks_i.start.min(chunk_i);
-                        occupied_chunks_i.end = occupied_chunks_i.end.max(chunk_i + 1);
-                        occupied_chunks_j.start = occupied_chunks_j.start.min(chunk_j);
-                        occupied_chunks_j.end = occupied_chunks_j.end.max(chunk_j + 1);
-                        occupied_chunks_k.start = occupied_chunks_k.start.min(chunk_k);
-                        occupied_chunks_k.end = occupied_chunks_k.end.max(chunk_k + 1);
-                        has_non_empty_chunks = true;
-                    }
+                generator.generate_chunk(&mut generation_buffers, chunk_voxels, &origin);
 
-                    chunks.push(chunk);
+                *chunk = VoxelChunk::for_voxels(chunk_voxels);
+            });
+    }
+
+    #[cfg(feature = "rayon")]
+    fn generate_voxels_for_chunks_in_parallel<G>(
+        thread_pool: &impact_thread::rayon::RayonThreadPool,
+        generator: &G,
+        chunk_counts: [usize; 3],
+        chunks: &mut [VoxelChunk],
+        voxels: &mut [Voxel],
+    ) where
+        G: ChunkedVoxelGenerator + Sync,
+    {
+        use rayon::{
+            iter::{IndexedParallelIterator, ParallelIterator},
+            slice::ParallelSliceMut,
+        };
+
+        assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
+
+        let chunks_per_thread = chunks.len().div_ceil(thread_pool.num_threads().get());
+
+        thread_pool.pool().install(|| {
+            chunks
+                // This can never produce more than `num_threads` iterations
+                .par_chunks_mut(chunks_per_thread)
+                .zip(voxels.par_chunks_mut(chunks_per_thread * CHUNK_VOXEL_COUNT))
+                .enumerate()
+                .for_each(|(group_idx, (chunks, voxels))| {
+                    let mut generation_buffers = generator.create_buffers();
+
+                    chunks
+                        .iter_mut()
+                        .zip(voxels.chunks_mut(CHUNK_VOXEL_COUNT))
+                        .enumerate()
+                        .for_each(|(local_chunk_idx, (chunk, chunk_voxels))| {
+                            let chunk_idx = group_idx * chunks_per_thread + local_chunk_idx;
+
+                            let origin = chunk_indices_from_linear_idx(&chunk_counts, chunk_idx)
+                                .map(|i| i * CHUNK_SIZE);
+
+                            generator.generate_chunk(
+                                &mut generation_buffers,
+                                chunk_voxels,
+                                &origin,
+                            );
+
+                            *chunk = VoxelChunk::for_voxels(chunk_voxels);
+                        });
+                });
+        });
+    }
+
+    fn analyze_and_initialize_chunks(
+        chunk_counts: [usize; 3],
+        chunks: &mut [VoxelChunk],
+    ) -> ChunkAnalysisResults {
+        let mut occupied_chunks_i = REVERSED_MAX_RANGE;
+        let mut occupied_chunks_j = REVERSED_MAX_RANGE;
+        let mut occupied_chunks_k = REVERSED_MAX_RANGE;
+
+        let mut uniform_chunk_count = 0;
+        let mut non_uniform_chunk_count = 0;
+        let mut has_non_empty_chunks = false;
+
+        for (chunk_idx, chunk) in chunks.iter_mut().enumerate() {
+            match chunk {
+                VoxelChunk::Uniform(uniform_chunk) => {
+                    uniform_chunk.split_detection =
+                        UniformChunkSplitDetectionData::new(uniform_chunk_count);
+                    uniform_chunk_count += 1;
                 }
+                VoxelChunk::NonUniform(non_uniform_chunk) => {
+                    non_uniform_chunk.data_offset = non_uniform_chunk_count as u32;
+                    non_uniform_chunk_count += 1;
+                }
+                VoxelChunk::Empty => {}
+            }
+
+            if !chunk.contains_only_empty_voxels() {
+                let [chunk_i, chunk_j, chunk_k] =
+                    chunk_indices_from_linear_idx(&chunk_counts, chunk_idx);
+
+                occupied_chunks_i.start = occupied_chunks_i.start.min(chunk_i);
+                occupied_chunks_i.end = occupied_chunks_i.end.max(chunk_i + 1);
+                occupied_chunks_j.start = occupied_chunks_j.start.min(chunk_j);
+                occupied_chunks_j.end = occupied_chunks_j.end.max(chunk_j + 1);
+                occupied_chunks_k.start = occupied_chunks_k.start.min(chunk_k);
+                occupied_chunks_k.end = occupied_chunks_k.end.max(chunk_k + 1);
+
+                has_non_empty_chunks = true;
             }
         }
 
@@ -271,23 +440,36 @@ impl ChunkedVoxelObject {
             .clone()
             .map(|chunk_range| chunk_range.start * CHUNK_SIZE..chunk_range.end * CHUNK_SIZE);
 
-        // This object has not been split off from a parent
-        let origin_offset_in_parent = [0; 3];
-
-        let split_detector = SplitDetector::new(uniform_chunk_count, non_uniform_chunk_count);
-
-        Self {
-            voxel_extent,
-            chunk_counts,
-            chunk_idx_strides,
+        ChunkAnalysisResults {
+            uniform_chunk_count,
+            non_uniform_chunk_count,
             occupied_chunk_ranges,
             occupied_voxel_ranges,
-            origin_offset_in_root: origin_offset_in_parent,
-            chunks,
-            voxels,
-            split_detector,
-            invalidated_mesh_chunk_indices: HashSet::default(),
         }
+    }
+
+    fn compact_voxels(
+        chunks: &[VoxelChunk],
+        voxels: &[Voxel],
+        non_uniform_chunk_count: usize,
+    ) -> Vec<Voxel> {
+        assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
+
+        let mut compacted_voxels = Vec::with_capacity(non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+
+        for (chunk_idx, chunk) in chunks.iter().enumerate() {
+            if let VoxelChunk::NonUniform(_) = chunk {
+                compacted_voxels.extend_from_slice(
+                    &voxels[chunk_idx * CHUNK_VOXEL_COUNT..(chunk_idx + 1) * CHUNK_VOXEL_COUNT],
+                );
+            }
+        }
+        assert_eq!(
+            compacted_voxels.len(),
+            non_uniform_chunk_count * CHUNK_VOXEL_COUNT
+        );
+
+        compacted_voxels
     }
 
     fn _find_voxel_types(chunks: &[VoxelChunk], voxels: &[Voxel]) -> Vec<VoxelType> {
@@ -1298,35 +1480,17 @@ impl ChunkedVoxelObject {
 }
 
 impl VoxelChunk {
-    fn generate<G>(
-        generation_buffers: &mut G::ChunkGenerationBuffers,
-        voxels: &mut Vec<Voxel>,
-        uniform_chunk_count: &mut usize,
-        non_uniform_chunk_count: &mut usize,
-        generator: &G,
-        chunk_indices: [usize; 3],
-    ) -> Self
-    where
-        G: ChunkedVoxelGenerator,
-    {
-        let origin = [
-            chunk_indices[0] * CHUNK_SIZE,
-            chunk_indices[1] * CHUNK_SIZE,
-            chunk_indices[2] * CHUNK_SIZE,
-        ];
+    fn for_voxels(chunk_voxels: &[Voxel]) -> Self {
+        assert_eq!(chunk_voxels.len(), CHUNK_VOXEL_COUNT);
 
-        let start_voxel_idx = voxels.len();
-
-        generator.generate_chunk(generation_buffers, voxels, &origin);
-
-        let mut first_voxel = voxels[start_voxel_idx];
+        let mut first_voxel = chunk_voxels[0];
         let mut is_uniform = true;
         let mut has_non_empty_voxels = false;
 
         let mut face_empty_counts = FaceEmptyCounts::zero();
 
-        LoopOverChunkVoxelData::new(&LoopForChunkVoxels::over_all(), &voxels[start_voxel_idx..])
-            .execute(&mut |&[i_in_chunk, j_in_chunk, k_in_chunk], voxel| {
+        LoopOverChunkVoxelData::new(&LoopForChunkVoxels::over_all(), chunk_voxels).execute(
+            &mut |&[i_in_chunk, j_in_chunk, k_in_chunk], voxel| {
                 if is_uniform
                     && (!voxel.matches_type_and_flags(first_voxel)
                         || !voxel.signed_distance().is_maximally_inside_or_outside())
@@ -1353,11 +1517,10 @@ impl VoxelChunk {
                 } else {
                     has_non_empty_voxels = true;
                 }
-            });
+            },
+        );
 
         if is_uniform {
-            voxels.truncate(start_voxel_idx);
-
             if has_non_empty_voxels {
                 // If the chunk has truly uniform information, even the boundary voxels must be
                 // fully surrounded by neighbors. We don't know if this is the case yet, but we
@@ -1367,18 +1530,15 @@ impl VoxelChunk {
 
                 let chunk = UniformVoxelChunk {
                     voxel: first_voxel,
-                    split_detection: UniformChunkSplitDetectionData::new(*uniform_chunk_count),
+                    // Remaining fields will be determined later
+                    ..Default::default()
                 };
-
-                *uniform_chunk_count += 1;
 
                 Self::Uniform(chunk)
             } else {
                 Self::Empty
             }
         } else {
-            *non_uniform_chunk_count += 1;
-
             let face_distributions = face_empty_counts.to_chunk_face_distributions();
 
             let mut flags = VoxelChunkFlags::empty();
@@ -1387,10 +1547,10 @@ impl VoxelChunk {
             }
 
             Self::NonUniform(NonUniformVoxelChunk {
-                data_offset: chunk_data_offset_from_start_voxel_idx(start_voxel_idx),
                 face_distributions,
                 flags,
-                split_detection: NonUniformChunkSplitDetectionData::new(),
+                // Remaining fields will be determined later
+                ..Default::default()
             })
         }
     }
@@ -2433,6 +2593,13 @@ fn determine_occupied_voxel_ranges(
     array::from_fn(|dim| min_voxel_indices[dim]..max_voxel_indices[dim] + 1)
 }
 
+fn chunk_indices_from_linear_idx(chunk_counts: &[usize; 3], chunk_idx: usize) -> [usize; 3] {
+    let chunk_i = chunk_idx / (chunk_counts[2] * chunk_counts[1]);
+    let chunk_j = (chunk_idx / chunk_counts[2]) % chunk_counts[1];
+    let chunk_k = chunk_idx % chunk_counts[2];
+    [chunk_i, chunk_j, chunk_k]
+}
+
 const fn chunk_start_voxel_idx(data_offset: u32) -> usize {
     (data_offset as usize) << (3 * LOG2_CHUNK_SIZE)
 }
@@ -2630,9 +2797,11 @@ mod tests {
         fn generate_chunk(
             &self,
             _buffers: &mut Self::ChunkGenerationBuffers,
-            voxels: &mut Vec<Voxel>,
+            voxels: &mut [Voxel],
             chunk_origin: &[usize; 3],
         ) {
+            assert_eq!(voxels.len(), CHUNK_VOXEL_COUNT);
+            let mut idx = 0;
             for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
                 for j in chunk_origin[1]..chunk_origin[1] + CHUNK_SIZE {
                     for k in chunk_origin[2]..chunk_origin[2] + CHUNK_SIZE {
@@ -2647,7 +2816,8 @@ mod tests {
                         } else {
                             Voxel::maximally_outside()
                         };
-                        voxels.push(voxel);
+                        voxels[idx] = voxel;
+                        idx += 1;
                     }
                 }
             }
@@ -2670,9 +2840,11 @@ mod tests {
         fn generate_chunk(
             &self,
             _buffers: &mut Self::ChunkGenerationBuffers,
-            voxels: &mut Vec<Voxel>,
+            voxels: &mut [Voxel],
             chunk_origin: &[usize; 3],
         ) {
+            assert_eq!(voxels.len(), CHUNK_VOXEL_COUNT);
+            let mut idx = 0;
             for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
                 for j in chunk_origin[1]..chunk_origin[1] + CHUNK_SIZE {
                     for k in chunk_origin[2]..chunk_origin[2] + CHUNK_SIZE {
@@ -2690,7 +2862,8 @@ mod tests {
                         } else {
                             Voxel::maximally_outside()
                         };
-                        voxels.push(voxel);
+                        voxels[idx] = voxel;
+                        idx += 1;
                     }
                 }
             }

@@ -48,7 +48,7 @@ define_component_type! {
 /// A voxel, which may either be be empty or filled with a material with
 /// specific properties.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Voxel {
     voxel_type: VoxelType,
     signed_distance: VoxelSignedDistance,

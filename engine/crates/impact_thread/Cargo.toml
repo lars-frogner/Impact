@@ -5,6 +5,9 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
+[features]
+rayon = ["dep:rayon"]
+
 [dependencies]
 anyhow = { workspace = true }
 crossbeam-channel = "0.5"
@@ -13,6 +16,7 @@ impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_profiling = { path = "../impact_profiling" }
 parking_lot = { workspace = true }
+rayon = { workspace = true, optional = true }
 
 [lints]
 workspace = true
