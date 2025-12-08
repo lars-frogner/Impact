@@ -15,7 +15,6 @@ use crate::editor::{
     },
     util::create_bezier_edge,
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context as _, Result, bail};
 use bitflags::bitflags;
 use impact::{
@@ -25,6 +24,7 @@ use impact::{
     },
     impact_containers::{BitVector, HashMap, HashSet, KeyIndexMapper},
 };
+use impact_alloc::{AVec, Allocator};
 use std::{collections::BTreeMap, path::Path};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(281.0, 22.0);
@@ -1797,9 +1797,9 @@ impl MetaGraphCanvas {
         );
     }
 
-    pub fn save_graph<A: Allocator>(
+    pub fn save_graph(
         &self,
-        arena: A,
+        arena: impl Allocator,
         editor_settings: impl Into<IOEditorSettings>,
         output_path: &Path,
     ) -> Result<()> {
@@ -1819,9 +1819,9 @@ impl MetaGraphCanvas {
         impact_io::write_ron_file(&graph, output_path)
     }
 
-    pub fn save_subgraph<A: Allocator>(
+    pub fn save_subgraph(
         &self,
-        arena: A,
+        arena: impl Allocator,
         scratch: &mut MetaCanvasScratch,
         root_node_id: MetaNodeID,
         output_path: &Path,

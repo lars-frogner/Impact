@@ -11,11 +11,11 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 
 [dependencies]
-allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 approx = { workspace = true }
 bitflags = { workspace = true, features = ["bytemuck"] }
 bytemuck = { workspace = true }
+impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }

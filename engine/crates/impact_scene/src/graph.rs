@@ -5,9 +5,9 @@ use crate::{
     camera::SceneCamera,
     model::{ModelID, ModelInstanceManager},
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::{AVec, Allocator};
 use impact_containers::{HashMap, SlotKey, SlotMap};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
@@ -466,7 +466,7 @@ impl SceneGraph {
 
     /// Updates the transform from local space to the space of the root node for
     /// all group nodes in the scene graph.
-    pub fn update_all_group_to_root_transforms<A: Allocator>(&mut self, arena: A) {
+    pub fn update_all_group_to_root_transforms(&mut self, arena: impl Allocator) {
         let mut operation_stack = AVec::with_capacity_in(32, arena);
 
         operation_stack.push((self.root_node_id, Isometry3::identity()));
@@ -499,7 +499,7 @@ impl SceneGraph {
 
     /// Updates the bounding spheres of all nodes in the scene graph (excluding
     /// contributions from hidden model instances).
-    pub fn update_all_bounding_spheres<A: Allocator>(&mut self, arena: A) {
+    pub fn update_all_bounding_spheres(&mut self, arena: impl Allocator) {
         fn merge_spheres(accum: &mut Option<Sphere<f32>>, sphere: Sphere<f32>) {
             match accum {
                 None => {
@@ -1620,8 +1620,8 @@ impl From<SceneEntityFlags> for ModelInstanceFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use allocator_api2::alloc::Global;
     use approx::assert_abs_diff_eq;
+    use impact_alloc::Global;
     use impact_math::Hash64;
     use impact_model::InstanceFeatureStorage;
     use nalgebra::{Point3, Rotation3, Translation3, point};

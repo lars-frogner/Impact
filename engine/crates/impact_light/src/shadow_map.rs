@@ -1,7 +1,7 @@
 //! Textures representing shadow maps.
 
-use allocator_api2::alloc::Allocator;
 use anyhow::Result;
+use impact_alloc::Allocator;
 use impact_geometry::CubemapFace;
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use std::path::Path;

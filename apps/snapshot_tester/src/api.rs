@@ -7,7 +7,9 @@ use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
     engine::{Engine, EngineConfig},
+    impact_alloc::arena::TaskArenas,
     impact_ecs::{component::ComponentID, world::EntityID},
+    impact_log,
     roc_integration::Roc,
     run::headless::run as run_engine,
 };
@@ -78,20 +80,26 @@ pub fn stage_entity_for_removal(entity_id: u64) -> Result<()> {
 pub fn create_entity_with_id(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
     impact_log::trace!("Creating entity with ID {entity_id}");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
-    with_engine(|engine| engine.create_entity_with_id(EntityID::from_u64(entity_id), components))
+    with_engine(|engine| {
+        TaskArenas::with(|arena| {
+            engine.create_entity_with_id(arena, EntityID::from_u64(entity_id), components)
+        })
+    })
 }
 
 pub fn create_entity(component_bytes: &[u8]) -> Result<u64> {
     impact_log::trace!("Creating entity");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
-    let entity_id = with_engine(|engine| engine.create_entity(components))?;
+    let entity_id =
+        with_engine(|engine| TaskArenas::with(|arena| engine.create_entity(arena, components)))?;
     Ok(entity_id.as_u64())
 }
 
 pub fn create_entities(component_bytes: &[u8]) -> Result<impl Iterator<Item = u64>> {
     impact_log::trace!("Creating multiple entities");
     let components = impact::ffi::deserialize_components_for_multiple_entities(component_bytes)?;
-    let entity_ids = with_engine(|engine| engine.create_entities(components))?;
+    let entity_ids =
+        with_engine(|engine| TaskArenas::with(|arena| engine.create_entities(arena, components)))?;
     Ok(entity_ids.into_iter().map(|entity_id| entity_id.as_u64()))
 }
 

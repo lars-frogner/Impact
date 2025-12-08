@@ -3,6 +3,7 @@
 use super::Engine;
 use crate::lock_order::OrderedMutex;
 use anyhow::Result;
+use impact_alloc::Allocator;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentCategory, ComponentID},
@@ -16,7 +17,10 @@ type ComponentMetadataList<T> = TinyVec<[T; 16]>;
 impl Engine {
     /// Creates entities staged for creation and removes entities staged for
     /// removal.
-    pub(crate) fn handle_staged_entities(&self) -> Result<()> {
+    pub(crate) fn handle_staged_entities<A>(&self, arena: A) -> Result<()>
+    where
+        A: Allocator + Copy,
+    {
         let mut entity_stager = self.entity_stager.olock();
 
         for EntityToCreateWithID {
@@ -24,15 +28,15 @@ impl Engine {
             components,
         } in entity_stager.drain_entities_to_create_with_id()
         {
-            self.create_entity_with_id(entity_id, components)?;
+            self.create_entity_with_id(arena, entity_id, components)?;
         }
 
         for EntityToCreate { components } in entity_stager.drain_single_entities_to_create() {
-            self.create_entity(components)?;
+            self.create_entity(arena, components)?;
         }
 
         for EntitiesToCreate { components } in entity_stager.drain_multi_entities_to_create() {
-            self.create_entities(components)?;
+            self.create_entities(arena, components)?;
         }
 
         for EntityToUpdate {

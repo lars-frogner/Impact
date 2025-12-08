@@ -3,8 +3,8 @@
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
-use allocator_api2::alloc::Global;
 use anyhow::{Context, Result, anyhow};
+use impact_alloc::{Allocator, Global};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_physics::{
@@ -26,12 +26,16 @@ use impact_voxel::{
 };
 use parking_lot::RwLock;
 
-pub fn setup_voxel_objects_for_new_entities(
+pub fn setup_voxel_objects_for_new_entities<A>(
+    arena: A,
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
-) -> Result<()> {
+) -> Result<()>
+where
+    A: Allocator + Copy,
+{
     // Make sure entities that have manually created voxel object and physics
     // context get a model transform component with the center of mass offset
     setup!(
@@ -84,7 +88,7 @@ pub fn setup_voxel_objects_for_new_entities(
                     format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
                 })?;
 
-            let sdf_generator = graph.build().with_context(|| {
+            let sdf_generator = graph.build_with_arena(arena).with_context(|| {
                 format!("Failed to build SDF generator from atomic graph for voxel generator {generator_id}")
             })?;
 

@@ -4,8 +4,8 @@ use crate::{
     Material, MaterialBindGroupTemplate, MaterialID, MaterialTemplate, MaterialTemplateID,
     MaterialTextureGroup, MaterialTextureGroupID,
 };
-use allocator_api2::alloc::Allocator;
 use anyhow::{Result, anyhow};
+use impact_alloc::Allocator;
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_resource::gpu::{GPUResource, GPUResourceMap};
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};

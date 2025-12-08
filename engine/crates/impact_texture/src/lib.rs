@@ -6,9 +6,9 @@ pub mod io;
 pub mod lookup_table;
 pub mod processing;
 
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context, Result, anyhow, bail};
 use gpu_resource::SamplingTexture;
+use impact_alloc::{AVec, Allocator};
 use impact_containers::DefaultHasher;
 use impact_gpu::{
     device::GraphicsDevice,

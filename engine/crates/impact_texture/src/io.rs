@@ -1,8 +1,8 @@
 //! Input/output of texture data.
 
 use crate::processing::ImageProcessing;
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, anyhow, bail};
+use impact_alloc::{AVec, Allocator};
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{Texture, TextureConfig, mipmap::MipmapperGenerator},

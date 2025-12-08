@@ -1,9 +1,6 @@
 //! Bit vector for storing bits compactly.
 
-use allocator_api2::{
-    alloc::{Allocator, Global},
-    vec::Vec as AVec,
-};
+use impact_alloc::{AVec, Allocator, Global};
 
 /// A bit vector that stores bits packed into 64-bit words.
 #[derive(Clone, Debug)]

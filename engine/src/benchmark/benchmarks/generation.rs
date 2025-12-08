@@ -1,7 +1,7 @@
 //! Benchmarks for SDF generation.
 
 use super::benchmark_data_path;
-use bumpalo::Bump;
+use impact_alloc::arena::Arena;
 use impact_profiling::benchmark::Benchmarker;
 use impact_thread::rayon::RayonThreadPool;
 use impact_voxel::{
@@ -118,7 +118,7 @@ pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarke
 }
 
 pub fn compile_complex_meta_graph(benchmarker: impl Benchmarker) {
-    let mut arena = Bump::new();
+    let mut arena = Arena::new();
 
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
@@ -133,10 +133,10 @@ pub fn build_complex_atomic_graph(benchmarker: impl Benchmarker) {
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
-    let arena_for_meta = Bump::new();
+    let arena_for_meta = Arena::new();
     let atomic_graph = generator.sdf_graph.build(&arena_for_meta, 0).unwrap();
 
-    let mut arena = Bump::new();
+    let mut arena = Arena::new();
 
     benchmarker.benchmark(&mut || {
         black_box(atomic_graph.build_with_arena(&arena).unwrap());
@@ -148,7 +148,7 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
-    let arena = Bump::new();
+    let arena = Arena::new();
     let atomic_graph = generator.sdf_graph.build(&arena, 0).unwrap();
     let sdf_generator = atomic_graph.build_with_arena(&arena).unwrap();
 

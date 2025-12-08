@@ -3,9 +3,9 @@
 pub mod mipmap;
 
 use crate::{buffer, device::GraphicsDevice};
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, bail};
 use bytemuck::Pod;
+use impact_alloc::{AVec, Allocator};
 use mipmap::MipmapperGenerator;
 use ordered_float::OrderedFloat;
 use std::{

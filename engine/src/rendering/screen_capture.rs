@@ -1,8 +1,8 @@
 //! Screen capture.
 
 use crate::{lock_order::OrderedRwLock, rendering::RenderingSystem};
-use allocator_api2::alloc::Allocator;
 use anyhow::Result;
+use impact_alloc::Allocator;
 use impact_geometry::CubemapFace;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
 use impact_rendering::{resource::BasicGPUResources, surface::RenderingSurface};

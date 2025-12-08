@@ -27,9 +27,9 @@ use crate::{
     resource::{ResourceConfig, ResourceManager},
     scene::Scene,
 };
-use allocator_api2::alloc::Allocator;
 use anyhow::Result;
-use bumpalo::Bump;
+use impact_alloc::Allocator;
+use impact_alloc::arena::Arena;
 use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
     metadata::ComponentMetadataRegistry,
@@ -327,7 +327,7 @@ impl Engine {
             .update_pixels_per_point(pixels_per_point);
     }
 
-    pub(crate) fn handle_queued_input_events(&self, arena: &Bump) -> Result<()> {
+    pub(crate) fn handle_queued_input_events(&self, arena: &Arena) -> Result<()> {
         let mut input_manager = self.input_manager.olock();
         let input_manager = &mut **input_manager;
         for event in input_manager.event_queue.drain(..) {

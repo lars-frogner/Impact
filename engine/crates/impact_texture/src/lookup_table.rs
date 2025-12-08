@@ -1,8 +1,8 @@
 //! Lookup tables that can be loaded into textures.
 
 use crate::{SamplerID, TextureID};
-use allocator_api2::alloc::Allocator;
 use anyhow::{Result, bail};
+use impact_alloc::Allocator;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{

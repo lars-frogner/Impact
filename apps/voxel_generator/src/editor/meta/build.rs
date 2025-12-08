@@ -2,9 +2,9 @@ use super::{
     MetaNode, MetaNodeID,
     node_kind::{self},
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::Result;
-use impact::impact_containers::HashMap;
+use impact::{impact_containers::HashMap, impact_log};
+use impact_alloc::{AVec, Allocator};
 use impact_voxel::{
     generation::{
         SDFVoxelGenerator,

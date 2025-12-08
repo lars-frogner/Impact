@@ -7,7 +7,7 @@ pub mod window;
 
 use crate::engine::Engine;
 use anyhow::Result;
-use bumpalo::Bump;
+use impact_alloc::arena::Arena;
 use impact_gpu::{device::GraphicsDevice, timestamp_query::TimestampQueryRegistry, wgpu};
 use impact_rendering::surface::RenderingSurface;
 
@@ -16,7 +16,7 @@ pub trait UserInterface: Send + Sync + std::fmt::Debug {
     /// Handle UI logic and process and store output.
     ///
     /// This is called once at the beginning of each frame.
-    fn process(&self, arena: &Bump, engine: &Engine) -> Result<()>;
+    fn process(&self, arena: &Arena, engine: &Engine) -> Result<()>;
 
     /// Render the output from [`Self::process`].
     fn render(
@@ -34,7 +34,7 @@ pub trait UserInterface: Send + Sync + std::fmt::Debug {
 pub struct NoUserInterface;
 
 impl UserInterface for NoUserInterface {
-    fn process(&self, _arena: &Bump, _engine: &Engine) -> Result<()> {
+    fn process(&self, _arena: &Arena, _engine: &Engine) -> Result<()> {
         Ok(())
     }
 

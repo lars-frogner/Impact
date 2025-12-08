@@ -275,8 +275,8 @@ pub mod fuzzing {
         },
         voxel_types::VoxelTypeRegistry,
     };
-    use allocator_api2::{alloc::Global, vec::Vec as AVec};
     use arbitrary::{Arbitrary, MaxRecursionReached, Result, Unstructured, size_hint};
+    use impact_alloc::{AVec, Global};
     use std::mem;
 
     const MAX_SIZE: usize = 200;

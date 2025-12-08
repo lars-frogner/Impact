@@ -11,10 +11,10 @@ pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integrat
 use anyhow::Result;
 use impact::{
     application::Application,
-    bumpalo::Bump,
     egui,
     engine::{Engine, EngineConfig},
-    impact_io,
+    impact_alloc::arena::Arena,
+    impact_io, impact_log,
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -63,7 +63,7 @@ impl BasicApp {
 }
 
 impl Application for BasicApp {
-    fn on_engine_initialized(&self, _arena: &Bump, engine: Arc<Engine>) -> Result<()> {
+    fn on_engine_initialized(&self, _arena: &Arena, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
@@ -74,29 +74,29 @@ impl Application for BasicApp {
         scripting::setup_scene()
     }
 
-    fn handle_keyboard_event(&self, _arena: &Bump, event: KeyboardEvent) -> Result<()> {
+    fn handle_keyboard_event(&self, _arena: &Arena, event: KeyboardEvent) -> Result<()> {
         impact_log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
-    fn handle_mouse_button_event(&self, _arena: &Bump, event: MouseButtonEvent) -> Result<()> {
+    fn handle_mouse_button_event(&self, _arena: &Arena, event: MouseButtonEvent) -> Result<()> {
         impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
-    fn handle_mouse_drag_event(&self, _arena: &Bump, event: MouseDragEvent) -> Result<()> {
+    fn handle_mouse_drag_event(&self, _arena: &Arena, event: MouseDragEvent) -> Result<()> {
         impact_log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
     }
 
-    fn handle_mouse_scroll_event(&self, _arena: &Bump, event: MouseScrollEvent) -> Result<()> {
+    fn handle_mouse_scroll_event(&self, _arena: &Arena, event: MouseScrollEvent) -> Result<()> {
         impact_log::trace!("Handling mouse scroll event {event:?}");
         scripting::handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(
         &self,
-        arena: &Bump,
+        arena: &Arena,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,

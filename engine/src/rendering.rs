@@ -7,8 +7,8 @@ pub mod screen_capture;
 use crate::{
     lock_order::OrderedRwLock, resource::ResourceManager, tasks::RenderToSurface, ui::UserInterface,
 };
-use allocator_api2::alloc::Allocator;
 use anyhow::Result;
+use impact_alloc::Allocator;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -436,7 +436,7 @@ impl RenderingSystem {
     /// Loads the timestamps recorded during rendering. Call after
     /// [`Self::render_to_surface`]. This method will wait for the GPU to finish
     /// rendering.
-    pub fn load_recorded_timing_results<A: Allocator>(&mut self, arena: A) -> Result<()> {
+    pub fn load_recorded_timing_results(&mut self, arena: impl Allocator) -> Result<()> {
         self.timestamp_query_manager
             .load_recorded_timing_results(arena, &self.graphics_device)?;
         self.timestamp_query_manager.reset();

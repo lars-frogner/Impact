@@ -8,8 +8,8 @@ mod time_overlay;
 mod timing_panels;
 mod toolbar;
 
-use allocator_api2::alloc::Allocator;
 pub use command::{UICommand, UICommandQueue};
+use impact_alloc::Allocator;
 
 use anyhow::Result;
 use impact::{

@@ -2,12 +2,9 @@
 //! simple "atomic" SDF nodes that is traversed during generation.
 
 use crate::{VoxelSignedDistance, chunks::ChunkedVoxelObject};
-use allocator_api2::{
-    alloc::{Allocator, Global},
-    vec::Vec as AVec,
-};
 use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_ne;
+use impact_alloc::{AVec, Allocator, Global};
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::Float;
 use nalgebra::{

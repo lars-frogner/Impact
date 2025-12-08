@@ -1,9 +1,9 @@
 //! Voxel types and their properties.
 
 use crate::gpu_resource::VoxelMaterialGPUResources;
-use allocator_api2::vec::Vec as AVec;
 use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::AVec;
 use impact_containers::NoHashMap;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,

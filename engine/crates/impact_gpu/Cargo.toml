@@ -14,10 +14,10 @@ tracy = ["impact_profiling/tracy"]
 
 [dependencies]
 aho-corasick = "1.1"
-allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
+impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }

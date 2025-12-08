@@ -1,7 +1,7 @@
 //! Parameters for meta SDF nodes.
 
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Result, bail};
+use impact_alloc::{AVec, Allocator};
 use impact_containers::FixedQueue;
 use impact_math::{
     angle::{degrees_to_radians, radians_to_degrees},
@@ -364,7 +364,7 @@ macro_rules! define_meta_node_params {
                 rng: &mut $crate::generation::sdf::meta::params::ParamRng,
             ) -> ::anyhow::Result<$params>
             where
-                A: ::allocator_api2::alloc::Allocator + Copy,
+                A: ::impact_alloc::Allocator + Copy,
             {
                 const N: usize = define_meta_node_params!(@count $( $field )+ );
                 let specs: [$crate::generation::sdf::meta::params::ParamSpecRef<'_>; N] = [
@@ -393,7 +393,7 @@ macro_rules! define_meta_node_params {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use allocator_api2::alloc::Global;
+    use impact_alloc::Global;
 
     const FIXED: DiscreteParamSpec = DiscreteParamSpec::Constant(DiscreteValueSource::Fixed(0));
 

@@ -11,9 +11,9 @@ use crate::{
         meta::params::ParamScratch,
     },
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
+use impact_alloc::{AVec, Allocator};
 use impact_containers::FixedQueue;
 use impact_geometry::{
     Sphere, compute_uniformly_distributed_radial_directions, rotation_between_axes,
