@@ -561,10 +561,13 @@ pub fn apply_modifications(
     }
 }
 
-pub fn setup_voxel_object(
+pub fn setup_voxel_object<G>(
     voxel_object_manager: &mut VoxelObjectManager,
-    generator: &impl ChunkedVoxelGenerator,
-) -> VoxelObjectID {
+    generator: &G,
+) -> VoxelObjectID
+where
+    G: ChunkedVoxelGenerator + Sync,
+{
     let voxel_object = ChunkedVoxelObject::generate(generator);
 
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);

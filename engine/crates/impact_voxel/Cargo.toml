@@ -24,6 +24,7 @@ ecs = [
     "impact_scene/ecs",
 ]
 fuzzing = ["arbitrary"]
+rayon = ["dep:rayon", "dep:impact_thread", "impact_thread/rayon"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 ron = ["impact_io/ron", "serde"]
 serde = ["dep:serde", "nalgebra/serde-serialize"]
@@ -53,6 +54,7 @@ impact_rendering = { path = "../impact_rendering" }
 impact_resource = { path = "../impact_resource" }
 impact_scene = { path = "../impact_scene" }
 impact_texture = { path = "../impact_texture" }
+impact_thread = { path = "../impact_thread", optional = true }
 inventory = { workspace = true, optional = true }
 nalgebra = { workspace = true }
 num-traits = { workspace = true }
@@ -61,6 +63,7 @@ parking_lot = { workspace = true }
 pastey = { workspace = true }
 rand = { workspace = true }
 rand_pcg = "0.9"
+rayon = { workspace = true, optional = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 simdnoise = { git = "https://github.com/lars-frogner/rust-simd-noise" }

@@ -91,7 +91,7 @@ pub struct SplitDetector {
 }
 
 /// Data for a uniform chunk needed to perform split detection.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct UniformChunkSplitDetectionData {
     /// The index of this uniform chunk in the original list of all uniform
     /// chunks.

@@ -55,12 +55,12 @@ pub trait ChunkedVoxelGenerator {
     fn create_buffers(&self) -> Self::ChunkGenerationBuffers;
 
     /// Generates voxels for a single chunks with the given chunk origin (global
-    /// voxel object indices of the lower chunk corner). The voxels are appended
-    /// to the given vector.
+    /// voxel object indices of the lower chunk corner) and writes them into the
+    /// given slice.
     fn generate_chunk(
         &self,
         buffers: &mut Self::ChunkGenerationBuffers,
-        voxels: &mut Vec<Voxel>,
+        voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
     );
 }
@@ -201,19 +201,18 @@ impl ChunkedVoxelGenerator for SDFVoxelGenerator {
     fn generate_chunk(
         &self,
         buffers: &mut Self::ChunkGenerationBuffers,
-        voxels: &mut Vec<Voxel>,
+        voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
     ) {
+        assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
+
         if self.sdf_generator.is_empty()
             || chunk_origin
                 .iter()
                 .zip(self.grid_shape)
                 .any(|(&origin, size)| origin >= size)
         {
-            voxels.resize(
-                voxels.len() + ChunkedVoxelObject::chunk_voxel_count(),
-                Voxel::maximally_outside(),
-            );
+            voxels.fill(Voxel::maximally_outside());
             return;
         }
 
@@ -230,9 +229,6 @@ impl ChunkedVoxelGenerator for SDFVoxelGenerator {
 
         let signed_distances = buffers.sdf.final_signed_distances();
 
-        let start_voxel_idx = voxels.len();
-        voxels.reserve(ChunkedVoxelObject::chunk_voxel_count());
-
         let mut chunk_is_empty = true;
 
         LoopForChunkVoxels::over_all().execute_with_linear_idx(
@@ -241,7 +237,7 @@ impl ChunkedVoxelGenerator for SDFVoxelGenerator {
                 let j = chunk_origin[1] + j_in_chunk;
                 let k = chunk_origin[2] + k_in_chunk;
 
-                let voxel = if i >= self.grid_shape[0]
+                voxels[idx] = if i >= self.grid_shape[0]
                     || j >= self.grid_shape[1]
                     || k >= self.grid_shape[2]
                 {
@@ -256,14 +252,12 @@ impl ChunkedVoxelGenerator for SDFVoxelGenerator {
                         Voxel::empty(signed_distance)
                     }
                 };
-
-                voxels.push(voxel);
             },
         );
 
         if !chunk_is_empty {
             self.voxel_type_generator.set_voxel_types_for_chunk(
-                &mut voxels[start_voxel_idx..],
+                voxels,
                 &mut buffers.voxel_type,
                 &chunk_origin_in_root_space,
             );
