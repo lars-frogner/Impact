@@ -8,6 +8,7 @@ use impact::{
         uils::ToActiveState,
     },
     engine::Engine,
+    impact_log,
     impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
     roc_integration::roc,
 };

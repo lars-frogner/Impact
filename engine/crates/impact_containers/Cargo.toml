@@ -9,10 +9,10 @@ license = { workspace = true }
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
-allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 atomic_enum = "0.3"
 bytemuck = { workspace = true }
+impact_alloc = { path = "../impact_alloc" }
 indexmap = "2.10"
 inventory = { workspace = true, optional = true }
 nohash-hasher = { workspace = true }

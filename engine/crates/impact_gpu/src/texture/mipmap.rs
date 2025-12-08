@@ -1,7 +1,7 @@
 //! Mipmapping.
 
 use crate::device::GraphicsDevice;
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use impact_alloc::{AVec, Allocator};
 use impact_containers::HashMap;
 use std::{borrow::Cow, sync::Arc};
 

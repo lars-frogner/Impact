@@ -12,8 +12,8 @@ jpeg = ["dep:zune-jpeg"]
 serde = ["dep:serde"]
 
 [dependencies]
-allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
+impact_alloc = { path = "../impact_alloc" }
 impact_log = { path = "../impact_log" }
 png = { version = "0.17", optional = true }
 memmap2 = "0.9"

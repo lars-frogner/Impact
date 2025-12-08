@@ -3,7 +3,6 @@ mod layout;
 mod meta;
 mod util;
 
-use allocator_api2::alloc::Allocator;
 use atomic::canvas::AtomicGraphCanvas;
 use impact::{
     egui::{
@@ -11,7 +10,9 @@ use impact::{
         Vec2,
     },
     engine::Engine,
+    impact_log,
 };
+use impact_alloc::Allocator;
 use impact_dev_ui::{
     CustomPanels, UserInterfaceConfig as DevUserInterfaceConfig,
     option_panels::{
@@ -227,7 +228,7 @@ impl Editor {
         }
     }
 
-    fn save_graph_to_file<A: Allocator>(&mut self, arena: A) {
+    fn save_graph_to_file(&mut self, arena: impl Allocator) {
         if let Some(path) = FileDialog::new()
             .add_filter("Graph (*.graph.ron)", &["graph.ron"])
             .set_title("Save graph as")
@@ -245,7 +246,7 @@ impl Editor {
         }
     }
 
-    fn save_graph_to_last_path<A: Allocator>(&mut self, arena: A) {
+    fn save_graph_to_last_path(&mut self, arena: impl Allocator) {
         if let Some(path) = &self.last_graph_path {
             if let Err(err) = self
                 .meta_graph_canvas
@@ -258,7 +259,7 @@ impl Editor {
         }
     }
 
-    fn save_subgraph_to_file<A: Allocator>(&mut self, arena: A, root_node_id: MetaNodeID) {
+    fn save_subgraph_to_file(&mut self, arena: impl Allocator, root_node_id: MetaNodeID) {
         let file_name = self
             .meta_graph_canvas
             .nodes

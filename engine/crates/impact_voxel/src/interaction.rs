@@ -14,7 +14,7 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::{VoxelAbsorbingCapsule, VoxelAbsorbingSphere};
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},

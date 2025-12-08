@@ -2,7 +2,6 @@
 
 pub mod headless {
     use crate::{
-        alloc::TaskArenas,
         application::Application,
         engine::{Engine, EngineConfig},
         gpu,
@@ -12,7 +11,8 @@ pub mod headless {
         },
     };
     use anyhow::Result;
-    use bumpalo::Bump;
+    use impact_alloc::arena::Arena;
+    use impact_alloc::arena::TaskArenas;
     use std::sync::Arc;
 
     pub fn run(
@@ -28,7 +28,7 @@ pub mod headless {
     }
 
     fn create_runtime(
-        arena: &Bump,
+        arena: &Arena,
         app: Arc<dyn Application>,
         headless_config: HeadlessConfig,
         runtime_config: RuntimeConfig,
@@ -53,7 +53,6 @@ pub mod headless {
 #[cfg(feature = "egui")]
 pub mod window {
     use crate::{
-        alloc::TaskArenas,
         application::Application,
         engine::{Engine, EngineConfig},
         gpu,
@@ -62,7 +61,8 @@ pub mod window {
         window::{Window, WindowConfig},
     };
     use anyhow::Result;
-    use bumpalo::Bump;
+    use impact_alloc::arena::Arena;
+    use impact_alloc::arena::TaskArenas;
     use std::sync::Arc;
 
     pub fn run(
@@ -83,7 +83,7 @@ pub mod window {
     }
 
     fn create_runtime(
-        arena: &Bump,
+        arena: &Arena,
         app: Arc<dyn Application>,
         window: Window,
         runtime_config: RuntimeConfig,

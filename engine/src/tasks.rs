@@ -1,12 +1,12 @@
 //! Task definitions, arranged in dependency-consistent order.
 
 use crate::{
-    alloc::TaskArenas,
     gizmo,
     lock_order::{OrderedMutex, OrderedRwLock},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
+use impact_alloc::arena::TaskArenas;
 use impact_scheduling::{define_execution_tag, define_task};
 
 // =============================================================================
@@ -295,7 +295,9 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Handling staged entities", engine, {
-            engine.handle_staged_entities()
+            TaskArenas::with(|arena| {
+                engine.handle_staged_entities(arena)
+            })
         })
     }
 );

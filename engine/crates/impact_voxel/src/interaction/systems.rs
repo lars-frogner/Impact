@@ -10,7 +10,7 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use impact_alloc::{AVec, Allocator};
 use impact_ecs::{
     component::{ComponentArray, ComponentFlags, ComponentStorage},
     metadata::ComponentMetadataRegistry,
@@ -276,8 +276,8 @@ pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
-pub fn apply_absorption<A: Allocator>(
-    arena: A,
+pub fn apply_absorption(
+    arena: impl Allocator,
     component_metadata_registry: &ComponentMetadataRegistry,
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,

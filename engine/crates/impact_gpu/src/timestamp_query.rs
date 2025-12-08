@@ -6,9 +6,9 @@ use crate::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use anyhow::Result;
 use external::{ExternalGPUProfiler, ExternalGPUSpanGuard};
+use impact_alloc::{AVec, Allocator};
 use std::{borrow::Cow, iter, num::NonZeroU32, time::Duration};
 
 /// Helper for performing timestamp GPU queries.
@@ -159,9 +159,9 @@ impl TimestampQueryManager {
     /// # Errors
     /// Returns an error if the recorded timestamps could not be read from the
     /// GPU buffer.
-    pub fn load_recorded_timing_results<A: Allocator>(
+    pub fn load_recorded_timing_results(
         &mut self,
-        arena: A,
+        arena: impl Allocator,
         graphics_device: &GraphicsDevice,
     ) -> Result<()> {
         self.last_timing_results.clear();

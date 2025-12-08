@@ -1,10 +1,7 @@
 //! Image loading and saving.
 
-use allocator_api2::{
-    alloc::{Allocator, Global},
-    vec::Vec as AVec,
-};
 use anyhow::{Context, Result, bail};
+use impact_alloc::{AVec, Allocator, Global};
 use memmap2::Mmap;
 use std::{
     fs::{self, File},

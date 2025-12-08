@@ -1,9 +1,6 @@
 //! A fixed-capacity circular queue (ring buffer) implementation.
 
-use allocator_api2::{
-    alloc::{Allocator, Global},
-    vec::Vec as AVec,
-};
+use impact_alloc::{AVec, Allocator, Global};
 
 /// A fixed-capacity circular queue (ring buffer) that stores elements in FIFO
 /// order.

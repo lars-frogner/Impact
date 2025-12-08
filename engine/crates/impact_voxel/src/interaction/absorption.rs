@@ -10,8 +10,8 @@ use crate::{
     mesh::MeshedChunkedVoxelObject,
     voxel_types::VoxelTypeRegistry,
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::{AVec, Allocator};
 use impact_geometry::{Capsule, Sphere};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},

@@ -1,6 +1,6 @@
 //! Processing of imported textures.
 
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
+use impact_alloc::{AVec, Allocator};
 use impact_io::image::{Image, ImageMetadata, PixelFormat};
 
 /// Processing operations for a texture image.

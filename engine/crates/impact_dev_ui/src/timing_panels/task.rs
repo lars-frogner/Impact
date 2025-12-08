@@ -1,11 +1,11 @@
 use super::timing_panel;
 use crate::UserInterfaceConfig;
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use egui_extras::{Column, TableBuilder};
 use impact::{
     egui::{Context, TextStyle, TextWrapMode},
     engine::Engine,
 };
+use impact_alloc::{AVec, Allocator};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TaskTimingPanel;

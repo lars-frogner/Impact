@@ -9,17 +9,16 @@ pub use impact;
 #[cfg(feature = "roc_codegen")]
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
-use allocator_api2::alloc::Allocator;
 use anyhow::Result;
 use editor::{Editor, EditorConfig};
 use impact::{
     application::Application,
-    bumpalo::Bump,
     egui,
     engine::{Engine, EngineConfig},
+    impact_alloc::arena::Arena,
     impact_ecs::world::EntityID,
     impact_geometry::{ModelTransform, ReferenceFrame},
-    impact_io,
+    impact_io, impact_log,
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -27,6 +26,7 @@ use impact::{
     runtime::RuntimeConfig,
     window::WindowConfig,
 };
+use impact_alloc::Allocator;
 use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
 use impact_thread::rayon::RayonThreadPool;
 use impact_voxel::{
@@ -78,7 +78,7 @@ impl VoxelGeneratorApp {
 }
 
 impl Application for VoxelGeneratorApp {
-    fn on_engine_initialized(&self, arena: &Bump, engine: Arc<Engine>) -> Result<()> {
+    fn on_engine_initialized(&self, arena: &Arena, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
@@ -96,6 +96,7 @@ impl Application for VoxelGeneratorApp {
         let voxel_object_id = engine.add_voxel_object(voxel_object);
 
         engine.create_entity_with_id(
+            arena,
             OBJECT_ENTITY_ID,
             (
                 &voxel_object_id,
@@ -107,7 +108,7 @@ impl Application for VoxelGeneratorApp {
         scripting::setup_scene()
     }
 
-    fn on_new_frame(&self, arena: &Bump, engine: &Engine, _frame_number: u64) -> Result<()> {
+    fn on_new_frame(&self, arena: &Arena, engine: &Engine, _frame_number: u64) -> Result<()> {
         if let Some((voxel_object, new_model_transform)) = generate_next_voxel_object(
             arena,
             &self.thread_pool,
@@ -125,29 +126,29 @@ impl Application for VoxelGeneratorApp {
         Ok(())
     }
 
-    fn handle_keyboard_event(&self, _arena: &Bump, event: KeyboardEvent) -> Result<()> {
+    fn handle_keyboard_event(&self, _arena: &Arena, event: KeyboardEvent) -> Result<()> {
         impact_log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
-    fn handle_mouse_button_event(&self, _arena: &Bump, event: MouseButtonEvent) -> Result<()> {
+    fn handle_mouse_button_event(&self, _arena: &Arena, event: MouseButtonEvent) -> Result<()> {
         impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
-    fn handle_mouse_drag_event(&self, _arena: &Bump, event: MouseDragEvent) -> Result<()> {
+    fn handle_mouse_drag_event(&self, _arena: &Arena, event: MouseDragEvent) -> Result<()> {
         impact_log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
     }
 
-    fn handle_mouse_scroll_event(&self, _arena: &Bump, event: MouseScrollEvent) -> Result<()> {
+    fn handle_mouse_scroll_event(&self, _arena: &Arena, event: MouseScrollEvent) -> Result<()> {
         impact_log::trace!("Handling mouse scroll event {event:?}");
         scripting::handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(
         &self,
-        arena: &Bump,
+        arena: &Arena,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
@@ -224,7 +225,7 @@ impl UserInterface {
 
     pub fn run(
         &mut self,
-        arena: &Bump,
+        arena: &Arena,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,

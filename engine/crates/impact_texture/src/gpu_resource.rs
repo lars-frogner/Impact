@@ -4,8 +4,8 @@ use crate::{
     SamplerCreateInfo, SamplerID, TextureCreateInfo, TextureID,
     lookup_table::{LookupTableBindingInfo, LookupTableID, LookupTableTextureCreateInfo},
 };
-use allocator_api2::alloc::Allocator;
 use anyhow::{Context, Result, anyhow};
+use impact_alloc::Allocator;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,

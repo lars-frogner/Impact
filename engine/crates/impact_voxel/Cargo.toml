@@ -31,7 +31,6 @@ serde = ["dep:serde", "nalgebra/serde-serialize"]
 unchecked = []
 
 [dependencies]
-allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 approx = { workspace = true }
 arbitrary = { workspace = true, optional = true }
@@ -39,6 +38,7 @@ bitflags = { workspace = true }
 bytemuck = { workspace = true }
 cfg-if = { workspace = true }
 glam = "0.30"
+impact_alloc = { path = "../impact_alloc" }
 impact_camera = { path = "../impact_camera" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }

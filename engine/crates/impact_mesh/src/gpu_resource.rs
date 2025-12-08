@@ -6,9 +6,9 @@ use crate::{
     VertexAttributeSet, VertexColor, VertexNormalVector, VertexPosition,
     VertexTangentSpaceQuaternion, VertexTextureCoords,
 };
-use allocator_api2::alloc::Allocator;
 use anyhow::{Result, anyhow};
 use bytemuck::Pod;
+use impact_alloc::Allocator;
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,

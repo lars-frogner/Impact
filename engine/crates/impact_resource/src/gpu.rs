@@ -8,8 +8,8 @@ use crate::{
         ResourceRegistry,
     },
 };
-use allocator_api2::alloc::Allocator;
 use anyhow::Result;
+use impact_alloc::Allocator;
 use impact_containers::RandomState;
 use std::{
     collections::{HashMap, hash_map::Entry},

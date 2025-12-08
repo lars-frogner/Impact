@@ -17,12 +17,12 @@ serde = [
 ]
 
 [dependencies]
-allocator-api2 = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bincode = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 half = { version = "2.6", features = ["bytemuck"] }
+impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_gpu = { path = "../impact_gpu" }
 impact_io = { path = "../impact_io", features = ["png", "jpeg"] }

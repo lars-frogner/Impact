@@ -10,6 +10,7 @@ use crate::{
     setup,
 };
 use anyhow::{Result, anyhow};
+use impact_alloc::Allocator;
 use impact_ecs::{
     archetype::ArchetypeComponents,
     component::{
@@ -92,13 +93,15 @@ impl Engine {
             .stage_entity_for_removal(entity_id);
     }
 
-    pub fn create_entity_with_id<A, E>(
+    pub fn create_entity_with_id<A, CA, E>(
         &self,
+        arena: A,
         entity_id: EntityID,
-        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<CA>>, Error = E>,
     ) -> Result<()>
     where
-        A: ComponentArray,
+        A: Allocator + Copy,
+        CA: ComponentArray,
         E: Into<anyhow::Error>,
     {
         let mut components = components
@@ -107,37 +110,41 @@ impl Engine {
             .into_inner()
             .into_storage();
 
-        setup::perform_setup_for_new_entities(self, &mut components)?;
+        setup::perform_setup_for_new_entities(arena, self, &mut components)?;
 
         self.ecs_world
             .owrite()
             .create_entity_with_id(entity_id, SingleInstance::new(components))
     }
 
-    pub fn create_entity<A, E>(
+    pub fn create_entity<A, AC, E>(
         &self,
-        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+        arena: A,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<AC>>, Error = E>,
     ) -> Result<EntityID>
     where
-        A: ComponentArray,
+        A: Allocator + Copy,
+        AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
         Ok(self
-            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
+            .create_entities(arena, components.try_into().map_err(E::into)?.into_inner())?
             .pop()
             .unwrap())
     }
 
-    pub fn create_entities<A, E>(
+    pub fn create_entities<A, AC, E>(
         &self,
-        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
+        arena: A,
+        components: impl TryInto<ArchetypeComponents<AC>, Error = E>,
     ) -> Result<Vec<EntityID>>
     where
-        A: ComponentArray,
+        A: Allocator + Copy,
+        AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
-        setup::perform_setup_for_new_entities(self, &mut components)?;
+        setup::perform_setup_for_new_entities(arena, self, &mut components)?;
         self.ecs_world.owrite().create_entities(components)
     }
 

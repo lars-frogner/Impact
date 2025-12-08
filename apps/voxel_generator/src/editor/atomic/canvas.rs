@@ -4,11 +4,11 @@ use crate::editor::{
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     util::create_bezier_edge,
 };
-use allocator_api2::{alloc::Allocator, vec::Vec as AVec};
 use impact::egui::{
     Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Vec2, Window,
     epaint::PathStroke, pos2, vec2,
 };
+use impact_alloc::{AVec, Allocator};
 use impact_voxel::generation::sdf::{SDFGraph, SDFNodeID};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(900.0, 22.0);
@@ -76,7 +76,7 @@ impl AtomicGraphCanvas {
         self.is_panning || self.dragging_node_id.is_some()
     }
 
-    pub fn show<A: Allocator>(&mut self, arena: A, ctx: &Context, layout_requested: bool) {
+    pub fn show(&mut self, arena: impl Allocator, ctx: &Context, layout_requested: bool) {
         Window::new("Compiled SDF graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)

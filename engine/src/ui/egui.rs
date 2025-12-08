@@ -8,7 +8,7 @@ use crate::{
     window::Window,
 };
 use anyhow::Result;
-use bumpalo::Bump;
+use impact_alloc::arena::Arena;
 use impact_gpu::{device::GraphicsDevice, timestamp_query::TimestampQueryRegistry, wgpu};
 use impact_rendering::surface::RenderingSurface;
 use parking_lot::Mutex;
@@ -77,7 +77,7 @@ impl EguiUserInterface {
 }
 
 impl UserInterface for EguiUserInterface {
-    fn process(&self, arena: &Bump, engine: &Engine) -> Result<()> {
+    fn process(&self, arena: &Arena, engine: &Engine) -> Result<()> {
         let input = self
             .window_integration
             .lock()
