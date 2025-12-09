@@ -2,7 +2,6 @@
 
 use crate::{lock_order::OrderedRwLock, rendering::RenderingSystem};
 use anyhow::Result;
-use impact_alloc::Allocator;
 use impact_geometry::CubemapFace;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
 use impact_rendering::{resource::BasicGPUResources, surface::RenderingSurface};
@@ -78,15 +77,11 @@ impl ScreenCapturer {
     /// Checks if a screenshot capture was scheduled with
     /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
     /// saves it as a PNG image at the configured output path.
-    pub fn save_screenshot_if_requested<A>(
+    pub fn save_screenshot_if_requested(
         &self,
-        arena: A,
         renderer: &RwLock<RenderingSystem>,
         frame_number: u64,
-    ) -> Result<()>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<()> {
         if self
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
@@ -114,7 +109,6 @@ impl ScreenCapturer {
                 .build_output_path(|tag| format!("screenshot_{tag}.png"), frame_number);
 
             impact_texture::io::save_texture_as_png_file(
-                arena,
                 renderer.graphics_device(),
                 surface_texture,
                 0,
@@ -131,15 +125,11 @@ impl ScreenCapturer {
     /// [`Self::request_omnidirectional_light_shadow_map_save`], and if so,
     /// captures the textures and saves them as timestamped PNG files at the
     /// configured output paths.
-    pub fn save_omnidirectional_light_shadow_maps_if_requested<A>(
+    pub fn save_omnidirectional_light_shadow_maps_if_requested(
         &self,
-        arena: A,
         renderer: &RwLock<RenderingSystem>,
         frame_number: u64,
-    ) -> Result<()>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<()> {
         if self
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
@@ -165,7 +155,6 @@ impl ScreenCapturer {
                         );
 
                         texture.save_face_as_png_file(
-                            arena,
                             renderer.graphics_device(),
                             face,
                             output_path,
@@ -185,15 +174,11 @@ impl ScreenCapturer {
     /// [`Self::request_unidirectional_light_shadow_map_save`], and if so,
     /// captures the textures and saves them as timestamped PNG files at the
     /// configured output paths.
-    pub fn save_unidirectional_light_shadow_maps_if_requested<A>(
+    pub fn save_unidirectional_light_shadow_maps_if_requested(
         &self,
-        arena: A,
         renderer: &RwLock<RenderingSystem>,
         frame_number: u64,
-    ) -> Result<()>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<()> {
         if self
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
@@ -219,7 +204,6 @@ impl ScreenCapturer {
                         );
 
                         texture.save_cascade_as_png_file(
-                            arena,
                             renderer.graphics_device(),
                             cascade_idx,
                             output_path,

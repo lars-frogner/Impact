@@ -1,7 +1,7 @@
 //! Parameters for meta SDF nodes.
 
 use anyhow::{Result, bail};
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, arena::ArenaPool, avec};
 use impact_containers::FixedQueue;
 use impact_math::{
     angle::{degrees_to_radians, radians_to_degrees},
@@ -75,13 +75,6 @@ pub enum ContValueSource {
 #[derive(Clone, Copy, Debug)]
 pub enum ParamValueMapping {
     Linear { offset: f32, scale: f32 },
-}
-
-#[derive(Clone, Debug)]
-pub struct ParamScratch<A: Allocator> {
-    dep_counts: AVec<u16, A>,
-    reverse_deps: AVec<ParamIndicesForDeps, A>,
-    queue: FixedQueue<ParamIdx, A>,
 }
 
 type ParamIndicesForDeps = TinyVec<[ParamIdx; 4]>;
@@ -237,42 +230,17 @@ impl ParamValueMapping {
     }
 }
 
-impl<A: Allocator + Copy> ParamScratch<A> {
-    pub fn new_in(alloc: A) -> Self {
-        Self {
-            dep_counts: AVec::new_in(alloc),
-            reverse_deps: AVec::new_in(alloc),
-            queue: FixedQueue::with_capacity_in(0, alloc),
-        }
-    }
-
-    fn ensure_capacity(&mut self, n_params: usize) {
-        self.dep_counts.clear();
-        self.dep_counts.resize(n_params, 0);
-
-        self.reverse_deps.clear();
-        self.reverse_deps
-            .resize_with(n_params, ParamIndicesForDeps::new);
-
-        self.queue.clear_and_set_capacity(n_params);
-    }
-}
-
 pub fn create_param_rng(seed: u64) -> ParamRng {
     ParamRng::seed_from_u64(seed)
 }
 
-pub fn evaluate_params_for_node<A, const N: usize>(
-    scratch: &mut ParamScratch<A>,
+pub fn evaluate_params_for_node<const N: usize>(
     param_specs: &[ParamSpecRef<'_>; N],
     evaluated_params: &mut [f32; N],
     rng: &mut ParamRng,
-) -> Result<()>
-where
-    A: Allocator + Copy,
-{
+) -> Result<()> {
     let mut eval_order = [0; N];
-    compute_param_eval_order(scratch, param_specs, &mut eval_order)?;
+    compute_param_eval_order(param_specs, &mut eval_order)?;
 
     for param_idx in eval_order {
         let value = param_specs[param_idx as usize].sample(evaluated_params, rng);
@@ -282,21 +250,24 @@ where
     Ok(())
 }
 
-fn compute_param_eval_order<A, const N: usize>(
-    scratch: &mut ParamScratch<A>,
+fn compute_param_eval_order<const N: usize>(
     specs: &[ParamSpecRef<'_>; N],
     eval_order: &mut [ParamIdx; N],
-) -> Result<()>
-where
-    A: Allocator + Copy,
-{
+) -> Result<()> {
     if specs.is_empty() {
         return Ok(());
     }
 
     let n_params = specs.len();
 
-    scratch.ensure_capacity(n_params);
+    let arena = ArenaPool::get_arena();
+
+    let mut dep_counts = avec![in &arena; 0; n_params];
+
+    let mut reverse_deps = AVec::new_in(&arena);
+    reverse_deps.resize_with(n_params, ParamIndicesForDeps::new);
+
+    let mut queue = FixedQueue::with_capacity_in(n_params, &arena);
 
     // Count dependencies for each parameter and store the indices of the
     // parameters that depend on them
@@ -310,29 +281,29 @@ where
                 );
             }
 
-            scratch.dep_counts[param_idx] += 1;
-            scratch.reverse_deps[dep_idx as usize].push(param_idx as ParamIdx);
+            dep_counts[param_idx] += 1;
+            reverse_deps[dep_idx as usize].push(param_idx as ParamIdx);
         }
     }
 
     // Queue each parameter with no dependencies
     for param_idx in 0..n_params {
-        if scratch.dep_counts[param_idx] == 0 {
-            scratch.queue.push_back(param_idx as ParamIdx);
+        if dep_counts[param_idx] == 0 {
+            queue.push_back(param_idx as ParamIdx);
         }
     }
 
     // Traverse in topological order to determine evaluation order
     let mut eval_counter = 0;
-    while let Some(param_idx) = scratch.queue.pop_front() {
+    while let Some(param_idx) = queue.pop_front() {
         eval_order[eval_counter] = param_idx;
         eval_counter += 1;
 
-        for &rev_dep_idx in &scratch.reverse_deps[param_idx as usize] {
+        for &rev_dep_idx in &reverse_deps[param_idx as usize] {
             // Decrement remaining dependecy count and enqueue when ready
-            scratch.dep_counts[rev_dep_idx as usize] -= 1;
-            if scratch.dep_counts[rev_dep_idx as usize] == 0 {
-                scratch.queue.push_back(rev_dep_idx);
+            dep_counts[rev_dep_idx as usize] -= 1;
+            if dep_counts[rev_dep_idx as usize] == 0 {
+                queue.push_back(rev_dep_idx);
             }
         }
     }
@@ -358,20 +329,17 @@ macro_rules! define_meta_node_params {
         }
 
         impl $node {
-            fn sample_params<A>(
+            fn sample_params(
                 &self,
-                scratch: &mut $crate::generation::sdf::meta::params::ParamScratch<A>,
                 rng: &mut $crate::generation::sdf::meta::params::ParamRng,
             ) -> ::anyhow::Result<$params>
-            where
-                A: ::impact_alloc::Allocator + Copy,
             {
                 const N: usize = define_meta_node_params!(@count $( $field )+ );
                 let specs: [$crate::generation::sdf::meta::params::ParamSpecRef<'_>; N] = [
                     $( self.$field.as_spec(), )+
                 ];
                 let mut values = [0.0; N];
-                $crate::generation::sdf::meta::params::evaluate_params_for_node(scratch, &specs, &mut values, rng)?;
+                $crate::generation::sdf::meta::params::evaluate_params_for_node(&specs, &mut values, rng)?;
 
                 let mut _idx = 0;
                 Ok($params {
@@ -393,7 +361,6 @@ macro_rules! define_meta_node_params {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use impact_alloc::Global;
 
     const FIXED: DiscreteParamSpec = DiscreteParamSpec::Constant(DiscreteValueSource::Fixed(0));
 
@@ -413,32 +380,29 @@ mod tests {
 
     #[test]
     fn compute_param_eval_order_with_empty_specs_succeeds() {
-        let mut scratch = ParamScratch::new_in(Global);
         let specs: [ParamSpecRef<'_>; 0] = [];
         let mut eval_order: [ParamIdx; 0] = [];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_ok());
     }
 
     #[test]
     fn compute_param_eval_order_with_single_independent_param_works() {
-        let mut scratch = ParamScratch::new_in(Global);
         let specs = [fixed()];
         let mut eval_order = [0];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_ok());
         assert_eq!(eval_order, [0]);
     }
 
     #[test]
     fn compute_param_eval_order_with_multiple_independent_params_works() {
-        let mut scratch = ParamScratch::new_in(Global);
         let specs = [fixed(), fixed(), fixed()];
         let mut eval_order = [0; 3];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_ok());
 
         // All parameters should be included exactly once
@@ -449,7 +413,6 @@ mod tests {
 
     #[test]
     fn compute_param_eval_order_with_linear_dependency_chain_works() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: independent
         // Param 1: depends on param 0
         // Param 2: depends on param 1
@@ -458,14 +421,13 @@ mod tests {
         let specs = [fixed(), spec1.as_spec(), spec2.as_spec()];
         let mut eval_order = [0; 3];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_ok());
         assert_eq!(eval_order, [0, 1, 2]);
     }
 
     #[test]
     fn compute_param_eval_order_with_reverse_linear_dependency_chain_works() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: depends on param 1
         // Param 1: depends on param 2
         // Param 2: independent
@@ -474,14 +436,13 @@ mod tests {
         let specs = [spec0.as_spec(), spec1.as_spec(), fixed()];
         let mut eval_order = [0; 3];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_ok());
         assert_eq!(eval_order, [2, 1, 0]);
     }
 
     #[test]
     fn compute_param_eval_order_with_long_dependency_chain_works() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: independent
         // Param 1: depends on param 0
         // Param 2: depends on param 1
@@ -492,14 +453,13 @@ mod tests {
         let specs = [fixed(), spec1.as_spec(), spec2.as_spec(), spec3.as_spec()];
         let mut eval_order = [0; 4];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_ok());
         assert_eq!(eval_order, [0, 1, 2, 3]);
     }
 
     #[test]
     fn compute_param_eval_order_with_circular_dependency_fails() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: depends on param 1
         // Param 1: depends on param 0
         let spec0 = from_param(1);
@@ -507,27 +467,25 @@ mod tests {
         let specs = [spec0.as_spec(), spec1.as_spec()];
         let mut eval_order = [0, 0];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Cycle"));
     }
 
     #[test]
     fn compute_param_eval_order_with_self_dependency_fails() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: depends on itself
         let spec = from_param(0);
         let specs = [spec.as_spec()];
         let mut eval_order = [0];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Cycle"));
     }
 
     #[test]
     fn compute_param_eval_order_with_three_way_cycle_fails() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: depends on param 2
         // Param 1: depends on param 0
         // Param 2: depends on param 1
@@ -537,20 +495,19 @@ mod tests {
         let specs = [spec0.as_spec(), spec1.as_spec(), spec2.as_spec()];
         let mut eval_order = [0, 0, 0];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Cycle"));
     }
 
     #[test]
     fn compute_param_eval_order_with_out_of_range_dependency_fails() {
-        let mut scratch = ParamScratch::new_in(Global);
         // Param 0: depends on param 5 (out of range)
         let spec = from_param(5);
         let specs = [spec.as_spec()];
         let mut eval_order = [0];
 
-        let result = compute_param_eval_order(&mut scratch, &specs, &mut eval_order);
+        let result = compute_param_eval_order(&specs, &mut eval_order);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("range"));
     }

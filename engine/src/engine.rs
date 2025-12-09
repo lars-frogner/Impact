@@ -28,8 +28,6 @@ use crate::{
     scene::Scene,
 };
 use anyhow::Result;
-use impact_alloc::Allocator;
-use impact_alloc::arena::Arena;
 use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
     metadata::ComponentMetadataRegistry,
@@ -275,31 +273,23 @@ impl Engine {
 
     /// Captures and saves any screenshots or related textures requested through
     /// the [`ScreenCapturer`].
-    pub(crate) fn save_requested_screenshots<A>(&self, arena: A) -> Result<()>
-    where
-        A: Copy + Allocator,
-    {
+    pub(crate) fn save_requested_screenshots(&self) -> Result<()> {
         let current_frame_number = self.game_loop_controller.oread().iteration();
 
         // The screenshot we can save now represents the previous frame
         let frame_number_for_image = current_frame_number.saturating_sub(1);
 
-        self.screen_capturer.save_screenshot_if_requested(
-            arena,
-            self.renderer(),
-            frame_number_for_image,
-        )?;
+        self.screen_capturer
+            .save_screenshot_if_requested(self.renderer(), frame_number_for_image)?;
 
         self.screen_capturer
             .save_omnidirectional_light_shadow_maps_if_requested(
-                arena,
                 self.renderer(),
                 frame_number_for_image,
             )?;
 
         self.screen_capturer
             .save_unidirectional_light_shadow_maps_if_requested(
-                arena,
                 self.renderer(),
                 frame_number_for_image,
             )
@@ -327,35 +317,32 @@ impl Engine {
             .update_pixels_per_point(pixels_per_point);
     }
 
-    pub(crate) fn handle_queued_input_events(&self, arena: &Arena) -> Result<()> {
+    pub(crate) fn handle_queued_input_events(&self) -> Result<()> {
         let mut input_manager = self.input_manager.olock();
         let input_manager = &mut **input_manager;
         for event in input_manager.event_queue.drain(..) {
             match event {
                 InputEvent::Keyboard(event) => {
-                    self.app().handle_keyboard_event(arena, event)?;
+                    self.app().handle_keyboard_event(event)?;
                 }
                 InputEvent::MouseButton(event) => {
                     input_manager.state.record_mouse_button_event(event);
-                    self.app().handle_mouse_button_event(arena, event)?;
+                    self.app().handle_mouse_button_event(event)?;
                 }
                 InputEvent::MouseMotion(MouseMotionEvent {
                     ang_delta_x,
                     ang_delta_y,
                 }) => {
                     self.update_orientation_controller(ang_delta_x, ang_delta_y);
-                    self.app().handle_mouse_drag_event(
-                        arena,
-                        MouseDragEvent {
-                            ang_delta_x,
-                            ang_delta_y,
-                            pressed: input_manager.state.pressed_mouse_buttons,
-                            cursor: input_manager.state.cursor_direction,
-                        },
-                    )?;
+                    self.app().handle_mouse_drag_event(MouseDragEvent {
+                        ang_delta_x,
+                        ang_delta_y,
+                        pressed: input_manager.state.pressed_mouse_buttons,
+                        cursor: input_manager.state.cursor_direction,
+                    })?;
                 }
                 InputEvent::MouseScroll(event) => {
-                    self.app().handle_mouse_scroll_event(arena, event)?;
+                    self.app().handle_mouse_scroll_event(event)?;
                 }
                 InputEvent::CursorMoved(event) => {
                     input_manager.state.record_cursor_moved_event(event);

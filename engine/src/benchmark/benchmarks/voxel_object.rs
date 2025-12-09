@@ -1,14 +1,18 @@
 //! Benchmarks for chunked voxel object functionality.
 
+use impact_alloc::Global;
 use impact_geometry::{Plane, Sphere};
 use impact_physics::quantities::Position;
 use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
-    chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
+    chunks::{
+        ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
+        sdf::VoxelChunkSignedDistanceField,
+    },
     collidable,
     generation::{
         SDFVoxelGenerator,
-        sdf::{SDFGraph, SDFNode, SphereSDF},
+        sdf::{SDFGraph, SDFNode},
         voxel_type::SameVoxelTypeGenerator,
     },
     mesh::ChunkedVoxelObjectMesh,
@@ -18,11 +22,7 @@ use nalgebra::{Isometry3, Translation, UnitQuaternion, UnitVector3, Vector3, vec
 use std::hint::black_box;
 
 pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     benchmarker.benchmark(&mut || {
         object.update_internal_adjacencies_for_all_chunks();
@@ -31,11 +31,7 @@ pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker)
 }
 
 pub fn update_connected_regions_for_all_chunks(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     object.update_internal_adjacencies_for_all_chunks();
     benchmarker.benchmark(&mut || {
@@ -45,11 +41,7 @@ pub fn update_connected_regions_for_all_chunks(benchmarker: impl Benchmarker) {
 }
 
 pub fn update_all_chunk_boundary_adjacencies(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     object.update_internal_adjacencies_for_all_chunks();
     object.update_local_connected_regions_for_all_chunks();
@@ -60,11 +52,7 @@ pub fn update_all_chunk_boundary_adjacencies(benchmarker: impl Benchmarker) {
 }
 
 pub fn resolve_connected_regions_between_all_chunks(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     object.update_internal_adjacencies_for_all_chunks();
     object.update_local_connected_regions_for_all_chunks();
@@ -76,11 +64,7 @@ pub fn resolve_connected_regions_between_all_chunks(benchmarker: impl Benchmarke
 }
 
 pub fn update_occupied_voxel_ranges(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     benchmarker.benchmark(&mut || {
         object.update_occupied_voxel_ranges();
@@ -89,11 +73,7 @@ pub fn update_occupied_voxel_ranges(benchmarker: impl Benchmarker) {
 }
 
 pub fn compute_all_derived_state(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let mut object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     benchmarker.benchmark(&mut || {
         object.compute_all_derived_state();
@@ -102,11 +82,7 @@ pub fn compute_all_derived_state(benchmarker: impl Benchmarker) {
 }
 
 pub fn initialize_inertial_properties(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let voxel_type_densities = [1.0; 256];
     let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
     benchmarker.benchmark(&mut || {
@@ -114,24 +90,37 @@ pub fn initialize_inertial_properties(benchmarker: impl Benchmarker) {
     });
 }
 
+pub fn clone_object(benchmarker: impl Benchmarker) {
+    let generator = create_sphere_generator(100.0);
+    let object = ChunkedVoxelObject::generate(&generator);
+    benchmarker.benchmark(&mut || object.clone());
+}
+
 pub fn create_mesh(benchmarker: impl Benchmarker) {
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(100.0).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(100.0);
     let object = ChunkedVoxelObject::generate(&generator);
     benchmarker.benchmark(&mut || ChunkedVoxelObjectMesh::create(&object));
+}
+
+pub fn get_each_voxel(benchmarker: impl Benchmarker) {
+    let generator = create_sphere_generator(100.0);
+    let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
+    let ranges = object.occupied_voxel_ranges();
+    benchmarker.benchmark(&mut || {
+        for i in ranges[0].clone() {
+            for j in ranges[1].clone() {
+                for k in ranges[2].clone() {
+                    let _ = black_box(object.get_voxel(i, j, k));
+                }
+            }
+        }
+    });
 }
 
 pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let plane_displacement = 0.4 * object_radius;
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(object_radius as f32).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(object_radius as f32);
     let object = ChunkedVoxelObject::generate(&generator);
     let plane = Plane::new(
         UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
@@ -150,11 +139,7 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: imp
 pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(object_radius as f32).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(object_radius as f32);
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
         object.compute_aabb::<f64>().center()
@@ -171,14 +156,25 @@ pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     });
 }
 
+pub fn for_each_exposed_chunk_with_sdf(benchmarker: impl Benchmarker) {
+    let generator = create_sphere_generator(100.0);
+    let object = ChunkedVoxelObject::generate(&generator);
+    benchmarker.benchmark(&mut || {
+        let mut count = 0;
+        let mut sdf = VoxelChunkSignedDistanceField::default();
+        object.for_each_exposed_chunk_with_sdf(&mut sdf, &mut |chunk, sdf| {
+            black_box(chunk);
+            black_box(sdf);
+            count += 1;
+        });
+        black_box(count);
+    });
+}
+
 pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(object_radius as f32).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(object_radius as f32);
     let mut object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
         object.compute_aabb::<f64>().center()
@@ -193,7 +189,7 @@ pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
 }
 
 pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
-    let mut graph = SDFGraph::new();
+    let mut graph = SDFGraph::new_in(Global);
     let sphere_1_id = graph.add_node(SDFNode::new_sphere(50.0));
     let sphere_2_id = graph.add_node(SDFNode::new_sphere(50.0));
     let sphere_2_id = graph.add_node(SDFNode::new_translation(
@@ -201,7 +197,7 @@ pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
         vector![120.0, 0.0, 0.0],
     ));
     graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-    let sdf_generator = graph.build().unwrap();
+    let sdf_generator = graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -215,7 +211,7 @@ pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
 pub fn split_off_disconnected_region_with_inertial_property_transfer(
     benchmarker: impl Benchmarker,
 ) {
-    let mut graph = SDFGraph::new();
+    let mut graph = SDFGraph::new_in(Global);
     let sphere_1_id = graph.add_node(SDFNode::new_sphere(50.0));
     let sphere_2_id = graph.add_node(SDFNode::new_sphere(50.0));
     let sphere_2_id = graph.add_node(SDFNode::new_translation(
@@ -223,7 +219,7 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
         vector![120.0, 0.0, 0.0],
     ));
     graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-    let sdf_generator = graph.build().unwrap();
+    let sdf_generator = graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -260,11 +256,7 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
 pub fn update_mesh(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(object_radius as f32).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(object_radius as f32);
     let mut object = ChunkedVoxelObject::generate(&generator);
     let mut mesh = ChunkedVoxelObjectMesh::create(&object);
 
@@ -286,11 +278,7 @@ pub fn update_mesh(benchmarker: impl Benchmarker) {
 pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        SphereSDF::new(object_radius as f32).into(),
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
+    let generator = create_sphere_generator(object_radius as f32);
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(Position::origin(), sphere_radius);
     let transform_to_object_space = Isometry3::from_parts(
@@ -310,4 +298,16 @@ pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
             },
         );
     });
+}
+
+fn create_sphere_generator(radius: f32) -> SDFVoxelGenerator<Global> {
+    let mut graph = SDFGraph::new_in(Global);
+    graph.add_node(SDFNode::new_sphere(radius));
+    let sdf_generator = graph.build_in(Global).unwrap();
+
+    SDFVoxelGenerator::new(
+        1.0,
+        sdf_generator,
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+    )
 }

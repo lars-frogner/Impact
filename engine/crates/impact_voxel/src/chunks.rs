@@ -16,6 +16,7 @@ use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
+use impact_alloc::arena::ArenaPool;
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::Float;
@@ -202,10 +203,7 @@ impl ChunkedVoxelObject {
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
     /// and calls [`Self::update_occupied_voxel_ranges`] and
     /// [`Self::compute_all_derived_state`] on it.
-    pub fn generate<G>(generator: &G) -> Self
-    where
-        G: ChunkedVoxelGenerator + Sync,
-    {
+    pub fn generate(generator: &impl ChunkedVoxelGenerator) -> Self {
         let mut object = Self::generate_without_derived_state(generator);
         object.update_occupied_voxel_ranges();
         object.compute_all_derived_state();
@@ -230,12 +228,10 @@ impl ChunkedVoxelObject {
     }
 
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
-    pub fn generate_without_derived_state<G>(generator: &G) -> Self
-    where
-        G: ChunkedVoxelGenerator + Sync,
-    {
+    pub fn generate_without_derived_state(generator: &impl ChunkedVoxelGenerator) -> Self {
         Self::generate_without_derived_state_using_closure(
-            generator,
+            generator.voxel_extent(),
+            generator.grid_shape(),
             |chunk_counts, chunks, voxels| {
                 Self::generate_voxels_for_chunks(generator, chunk_counts, chunks, voxels);
             },
@@ -252,7 +248,8 @@ impl ChunkedVoxelObject {
         G: ChunkedVoxelGenerator + Sync,
     {
         Self::generate_without_derived_state_using_closure(
-            generator,
+            generator.voxel_extent(),
+            generator.grid_shape(),
             |chunk_counts, chunks, voxels| {
                 Self::generate_voxels_for_chunks_in_parallel(
                     thread_pool,
@@ -265,15 +262,12 @@ impl ChunkedVoxelObject {
         )
     }
 
-    fn generate_without_derived_state_using_closure<G>(
-        generator: &G,
+    fn generate_without_derived_state_using_closure(
+        voxel_extent: f64,
+        grid_shape: [usize; 3],
         generate_voxels_for_chunks: impl FnOnce([usize; 3], &mut [VoxelChunk], &mut [Voxel]),
-    ) -> Self
-    where
-        G: ChunkedVoxelGenerator + Sync,
-    {
-        let generator_grid_shape = generator.grid_shape();
-        let chunk_counts = generator_grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
+    ) -> Self {
+        let chunk_counts = grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
         let total_chunk_count = chunk_counts.iter().product();
 
         let mut chunks = vec![VoxelChunk::Empty; total_chunk_count];
@@ -289,8 +283,6 @@ impl ChunkedVoxelObject {
         } = Self::analyze_and_initialize_chunks(chunk_counts, &mut chunks);
 
         let compacted_voxels = Self::compact_voxels(&chunks, &voxels, non_uniform_chunk_count);
-
-        let voxel_extent = generator.voxel_extent();
 
         let chunk_idx_strides = [chunk_counts[2] * chunk_counts[1], chunk_counts[2], 1];
 
@@ -323,7 +315,12 @@ impl ChunkedVoxelObject {
     {
         assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
 
-        let mut generation_buffers = generator.create_buffers();
+        if chunks.is_empty() {
+            return;
+        }
+
+        let arena = ArenaPool::get_arena();
+        let mut generation_buffers = generator.create_buffers_in(&arena);
 
         chunks
             .iter_mut()
@@ -356,6 +353,10 @@ impl ChunkedVoxelObject {
 
         assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
 
+        if chunks.is_empty() {
+            return;
+        }
+
         let chunks_per_thread = chunks.len().div_ceil(thread_pool.num_threads().get());
 
         thread_pool.pool().install(|| {
@@ -365,7 +366,8 @@ impl ChunkedVoxelObject {
                 .zip(voxels.par_chunks_mut(chunks_per_thread * CHUNK_VOXEL_COUNT))
                 .enumerate()
                 .for_each(|(group_idx, (chunks, voxels))| {
-                    let mut generation_buffers = generator.create_buffers();
+                    let arena = ArenaPool::get_arena();
+                    let mut generation_buffers = generator.create_buffers_in(&arena);
 
                     chunks
                         .iter_mut()
@@ -2706,8 +2708,9 @@ fn extract_slice_segments_mut<T>(
 pub mod fuzzing {
     use super::*;
     use crate::generation::SDFVoxelGenerator;
+    use impact_alloc::Global;
 
-    pub fn fuzz_test_voxel_object_generation(generator: SDFVoxelGenerator) {
+    pub fn fuzz_test_voxel_object_generation(generator: SDFVoxelGenerator<Global>) {
         let object = ChunkedVoxelObject::generate(&generator);
         object.validate_occupied_voxel_ranges();
         object.validate_adjacencies();
@@ -2721,6 +2724,7 @@ mod tests {
     use super::*;
     use crate::voxel_types::VoxelType;
     use approx::assert_abs_diff_eq;
+    use impact_alloc::Allocator;
 
     pub struct OffsetBoxVoxelGenerator {
         shape: [usize; 3],
@@ -2778,7 +2782,7 @@ mod tests {
     }
 
     impl ChunkedVoxelGenerator for OffsetBoxVoxelGenerator {
-        type ChunkGenerationBuffers = ();
+        type ChunkGenerationBuffers<AB: Allocator> = ();
 
         fn voxel_extent(&self) -> f64 {
             0.25
@@ -2792,11 +2796,12 @@ mod tests {
             ]
         }
 
-        fn create_buffers(&self) -> Self::ChunkGenerationBuffers {}
+        fn create_buffers_in<AB: Allocator>(&self, _alloc: AB) -> Self::ChunkGenerationBuffers<AB> {
+        }
 
-        fn generate_chunk(
+        fn generate_chunk<AB: Allocator>(
             &self,
-            _buffers: &mut Self::ChunkGenerationBuffers,
+            _buffers: &mut Self::ChunkGenerationBuffers<AB>,
             voxels: &mut [Voxel],
             chunk_origin: &[usize; 3],
         ) {
@@ -2825,7 +2830,7 @@ mod tests {
     }
 
     impl<const N: usize> ChunkedVoxelGenerator for ManualVoxelGenerator<N> {
-        type ChunkGenerationBuffers = ();
+        type ChunkGenerationBuffers<AB: Allocator> = ();
 
         fn voxel_extent(&self) -> f64 {
             0.25
@@ -2835,11 +2840,12 @@ mod tests {
             [self.offset[0] + N, self.offset[1] + N, self.offset[2] + N]
         }
 
-        fn create_buffers(&self) -> Self::ChunkGenerationBuffers {}
+        fn create_buffers_in<AB: Allocator>(&self, _alloc: AB) -> Self::ChunkGenerationBuffers<AB> {
+        }
 
-        fn generate_chunk(
+        fn generate_chunk<AB: Allocator>(
             &self,
-            _buffers: &mut Self::ChunkGenerationBuffers,
+            _buffers: &mut Self::ChunkGenerationBuffers<AB>,
             voxels: &mut [Voxel],
             chunk_origin: &[usize; 3],
         ) {

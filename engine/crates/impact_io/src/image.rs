@@ -102,10 +102,10 @@ pub fn read_metadata_for_image_at_path(image_path: impl AsRef<Path>) -> Result<I
 /// Loads an image from the specified file path.
 ///
 /// Supports PNG and JPEG formats (when respective features are enabled).
-pub fn load_image_from_path<A>(alloc: A, image_path: impl AsRef<Path>) -> Result<Image<A>>
-where
-    A: Copy + Allocator,
-{
+pub fn load_image_from_path<A: Allocator>(
+    alloc: A,
+    image_path: impl AsRef<Path>,
+) -> Result<Image<A>> {
     let image_path = image_path.as_ref();
 
     impact_log::debug!("Loading image from {}", image_path.display());
@@ -142,10 +142,7 @@ pub fn read_image_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
 /// Loads an image from a byte buffer.
 ///
 /// Supports PNG and JPEG formats (when respective features are enabled).
-pub fn load_image_from_bytes<A>(alloc: A, bytes: &[u8]) -> Result<Image<A>>
-where
-    A: Copy + Allocator,
-{
+pub fn load_image_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>> {
     // Detect format based on magic bytes
     if bytes.starts_with(PNG_MAGIC_BYTES) {
         #[cfg(feature = "png")]
@@ -188,10 +185,7 @@ fn read_png_metadata_from_reader(reader: impl std::io::Read) -> Result<ImageMeta
 
 /// Loads a PNG image from a reader.
 #[cfg(feature = "png")]
-fn load_png_from_reader<A>(alloc: A, reader: impl std::io::Read) -> Result<Image<A>>
-where
-    A: Copy + Allocator,
-{
+fn load_png_from_reader<A: Allocator>(alloc: A, reader: impl std::io::Read) -> Result<Image<A>> {
     let decoder = png::Decoder::new(reader);
     let mut reader = decoder.read_info().context("Failed to read PNG info")?;
 
@@ -259,10 +253,7 @@ fn read_jpeg_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
 
 /// Loads a JPEG image from a byte buffer.
 #[cfg(feature = "jpeg")]
-fn load_jpeg_from_bytes<A>(alloc: A, bytes: &[u8]) -> Result<Image<A>>
-where
-    A: Copy + Allocator,
-{
+fn load_jpeg_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>> {
     use zune_jpeg::zune_core::colorspace::ColorSpace;
 
     let mut decoder = zune_jpeg::JpegDecoder::new(bytes);

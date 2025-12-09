@@ -10,6 +10,7 @@ use crate::{
     generation::sdf::meta::MetaSDFGraph,
     voxel_types::VoxelType,
 };
+use impact_alloc::Allocator;
 use impact_geometry::AxisAlignedBox;
 use impact_math::{hash64, stringhash64_newtype};
 use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
@@ -41,7 +42,7 @@ pub struct VoxelGeneratorRef<'a> {
 /// Represents a voxel generator that provides voxels for a chunked voxel
 /// object.
 pub trait ChunkedVoxelGenerator {
-    type ChunkGenerationBuffers;
+    type ChunkGenerationBuffers<AB: Allocator>;
 
     /// Returns the extent of single voxel.
     fn voxel_extent(&self) -> f64;
@@ -52,14 +53,14 @@ pub trait ChunkedVoxelGenerator {
 
     /// Creates temporary buffers used when generating chunks of voxels. They
     /// are meant to be reused across generation calls.
-    fn create_buffers(&self) -> Self::ChunkGenerationBuffers;
+    fn create_buffers_in<AB: Allocator>(&self, alloc: AB) -> Self::ChunkGenerationBuffers<AB>;
 
     /// Generates voxels for a single chunks with the given chunk origin (global
     /// voxel object indices of the lower chunk corner) and writes them into the
     /// given slice.
-    fn generate_chunk(
+    fn generate_chunk<AB: Allocator>(
         &self,
-        buffers: &mut Self::ChunkGenerationBuffers,
+        buffers: &mut Self::ChunkGenerationBuffers<AB>,
         voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
     );
@@ -67,17 +68,17 @@ pub trait ChunkedVoxelGenerator {
 
 /// Generator for a voxel object from a signed distance field.
 #[derive(Clone, Debug)]
-pub struct SDFVoxelGenerator {
+pub struct SDFVoxelGenerator<A: Allocator> {
     voxel_extent: f64,
     grid_shape: [usize; 3],
     shifted_grid_center: Point3<f32>,
-    sdf_generator: SDFGenerator,
+    sdf_generator: SDFGenerator<A>,
     voxel_type_generator: VoxelTypeGenerator,
 }
 
 #[derive(Clone, Debug)]
-pub struct SDFVoxelGeneratorChunkBuffers {
-    sdf: SDFGeneratorChunkBuffers,
+pub struct SDFVoxelGeneratorChunkBuffers<A: Allocator> {
+    sdf: SDFGeneratorChunkBuffers<A>,
     voxel_type: VoxelTypeGeneratorChunkBuffers,
 }
 
@@ -117,12 +118,12 @@ impl Resource for VoxelGenerator {
     type ID = VoxelGeneratorID;
 }
 
-impl SDFVoxelGenerator {
+impl<A: Allocator> SDFVoxelGenerator<A> {
     /// Creates a new voxel generator using the given signed distance field
     /// and voxel type generators.
     pub fn new(
         voxel_extent: f64,
-        sdf_generator: SDFGenerator,
+        sdf_generator: SDFGenerator<A>,
         voxel_type_generator: VoxelTypeGenerator,
     ) -> Self {
         assert!(voxel_extent > 0.0);
@@ -180,8 +181,8 @@ impl SDFVoxelGenerator {
     }
 }
 
-impl ChunkedVoxelGenerator for SDFVoxelGenerator {
-    type ChunkGenerationBuffers = SDFVoxelGeneratorChunkBuffers;
+impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
+    type ChunkGenerationBuffers<AB: Allocator> = SDFVoxelGeneratorChunkBuffers<AB>;
 
     fn voxel_extent(&self) -> f64 {
         self.voxel_extent
@@ -191,16 +192,16 @@ impl ChunkedVoxelGenerator for SDFVoxelGenerator {
         self.grid_shape
     }
 
-    fn create_buffers(&self) -> Self::ChunkGenerationBuffers {
+    fn create_buffers_in<AB: Allocator>(&self, alloc: AB) -> Self::ChunkGenerationBuffers<AB> {
         SDFVoxelGeneratorChunkBuffers {
-            sdf: self.sdf_generator.create_buffers_for_chunk(),
+            sdf: self.sdf_generator.create_buffers_for_chunk_in(alloc),
             voxel_type: self.voxel_type_generator.create_buffers(),
         }
     }
 
-    fn generate_chunk(
+    fn generate_chunk<AB: Allocator>(
         &self,
-        buffers: &mut Self::ChunkGenerationBuffers,
+        buffers: &mut Self::ChunkGenerationBuffers<AB>,
         voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
     ) {
@@ -276,7 +277,7 @@ pub mod fuzzing {
         voxel_types::VoxelTypeRegistry,
     };
     use arbitrary::{Arbitrary, MaxRecursionReached, Result, Unstructured, size_hint};
-    use impact_alloc::{AVec, Global};
+    use impact_alloc::Global;
     use std::mem;
 
     const MAX_SIZE: usize = 200;
@@ -289,7 +290,7 @@ pub mod fuzzing {
         Box(BoxSDF),
     }
 
-    impl<'a> Arbitrary<'a> for SDFVoxelGenerator {
+    impl<'a> Arbitrary<'a> for SDFVoxelGenerator<Global> {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let voxel_extent = 10.0 * arbitrary_norm_f64(u)?.max(1e-6);
             let sdf_generator = u.arbitrary()?;
@@ -312,16 +313,14 @@ pub mod fuzzing {
         }
     }
 
-    impl Arbitrary<'_> for SDFGenerator {
+    impl Arbitrary<'_> for SDFGenerator<Global> {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
             let primitive = match u.arbitrary()? {
                 ArbitrarySDFGeneratorNode::Sphere(generator) => SDFNode::Sphere(generator),
                 ArbitrarySDFGeneratorNode::Capsule(generator) => SDFNode::Capsule(generator),
                 ArbitrarySDFGeneratorNode::Box(generator) => SDFNode::Box(generator),
             };
-            let mut nodes = AVec::new();
-            nodes.push(primitive);
-            Ok(Self::new(Global, &nodes, 0).unwrap())
+            Ok(Self::new_in(Global, &[primitive], 0).unwrap())
         }
 
         fn size_hint(depth: usize) -> (usize, Option<usize>) {

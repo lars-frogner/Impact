@@ -217,8 +217,7 @@ impl Texture {
     /// - The row size (width times texel size) is not a multiple of 256 bytes
     ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
     ///   data between buffers and textures).
-    pub fn create<A>(
-        arena: A,
+    pub fn create(
         graphics_device: &GraphicsDevice,
         mipmapper_generator: Option<&MipmapperGenerator>,
         byte_buffer: &[u8],
@@ -229,10 +228,7 @@ impl Texture {
         is_cubemap: bool,
         texture_config: TextureConfig,
         label: &str,
-    ) -> Result<Self>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Self> {
         let texture_size = wgpu::Extent3d {
             width: u32::from(width),
             height: u32::from(height),
@@ -312,7 +308,6 @@ impl Texture {
 
         if let Some(mipmapper_generator) = mipmapper_generator {
             mipmapper_generator.update_texture_mipmaps(
-                arena,
                 graphics_device,
                 &texture,
                 Cow::Owned(label.to_string()),

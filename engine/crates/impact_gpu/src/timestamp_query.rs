@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use external::{ExternalGPUProfiler, ExternalGPUSpanGuard};
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, arena::ArenaPool};
 use std::{borrow::Cow, iter, num::NonZeroU32, time::Duration};
 
 /// Helper for performing timestamp GPU queries.
@@ -159,16 +159,14 @@ impl TimestampQueryManager {
     /// # Errors
     /// Returns an error if the recorded timestamps could not be read from the
     /// GPU buffer.
-    pub fn load_recorded_timing_results(
-        &mut self,
-        arena: impl Allocator,
-        graphics_device: &GraphicsDevice,
-    ) -> Result<()> {
+    pub fn load_recorded_timing_results(&mut self, graphics_device: &GraphicsDevice) -> Result<()> {
         self.last_timing_results.clear();
 
         if self.timestamp_pairs.is_empty() {
             return Ok(());
         }
+
+        let arena = ArenaPool::get_arena();
 
         self.last_timing_results
             .reserve(self.timestamp_pairs.len() + 2);
@@ -176,7 +174,7 @@ impl TimestampQueryManager {
         let timestamps = self.timestamp_result_buffer.map_and_process_buffer_bytes(
             graphics_device,
             |bytes| {
-                let mut timestamps = AVec::new_in(arena);
+                let mut timestamps = AVec::new_in(&arena);
                 timestamps.resize(2 * self.timestamp_pairs.len(), 0_u64);
                 let timestamp_bytes = bytemuck::cast_slice_mut(&mut timestamps);
                 timestamp_bytes.copy_from_slice(bytes);

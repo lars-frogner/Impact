@@ -4,11 +4,13 @@ use crate::editor::{
     layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     util::create_bezier_edge,
 };
-use impact::egui::{
-    Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Vec2, Window,
-    epaint::PathStroke, pos2, vec2,
+use impact::{
+    egui::{
+        Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Vec2, Window,
+        epaint::PathStroke, pos2, vec2,
+    },
+    impact_alloc::{AVec, Allocator, arena::ArenaPool},
 };
-use impact_alloc::{AVec, Allocator};
 use impact_voxel::generation::sdf::{SDFGraph, SDFNodeID};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(900.0, 22.0);
@@ -76,7 +78,7 @@ impl AtomicGraphCanvas {
         self.is_panning || self.dragging_node_id.is_some()
     }
 
-    pub fn show(&mut self, arena: impl Allocator, ctx: &Context, layout_requested: bool) {
+    pub fn show(&mut self, ctx: &Context, layout_requested: bool) {
         Window::new("Compiled SDF graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
@@ -95,7 +97,9 @@ impl AtomicGraphCanvas {
 
                 self.pan_zoom_state.handle_scroll(ui, canvas_rect);
 
-                let mut world_node_rects = AVec::with_capacity_in(self.nodes.len(), arena);
+                let arena = ArenaPool::get_arena();
+                let mut world_node_rects = AVec::with_capacity_in(self.nodes.len(), &arena);
+
                 for node in &mut self.nodes {
                     node.data.prepare_text(ui, self.pan_zoom_state.zoom);
 

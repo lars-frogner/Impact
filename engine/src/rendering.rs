@@ -8,7 +8,6 @@ use crate::{
     lock_order::OrderedRwLock, resource::ResourceManager, tasks::RenderToSurface, ui::UserInterface,
 };
 use anyhow::Result;
-use impact_alloc::Allocator;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -436,9 +435,9 @@ impl RenderingSystem {
     /// Loads the timestamps recorded during rendering. Call after
     /// [`Self::render_to_surface`]. This method will wait for the GPU to finish
     /// rendering.
-    pub fn load_recorded_timing_results(&mut self, arena: impl Allocator) -> Result<()> {
+    pub fn load_recorded_timing_results(&mut self) -> Result<()> {
         self.timestamp_query_manager
-            .load_recorded_timing_results(arena, &self.graphics_device)?;
+            .load_recorded_timing_results(&self.graphics_device)?;
         self.timestamp_query_manager.reset();
         Ok(())
     }

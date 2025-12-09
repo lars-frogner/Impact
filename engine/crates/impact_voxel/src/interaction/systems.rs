@@ -277,7 +277,6 @@ pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
 pub fn apply_absorption(
-    arena: impl Allocator,
     component_metadata_registry: &ComponentMetadataRegistry,
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
@@ -300,7 +299,6 @@ pub fn apply_absorption(
     };
 
     absorption::apply_absorption(
-        arena,
         &mut interaction_context,
         voxel_object_manager,
         voxel_type_registry,

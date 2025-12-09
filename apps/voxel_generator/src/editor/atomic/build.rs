@@ -1,5 +1,5 @@
 use super::AtomicNode;
-use impact_alloc::Allocator;
+use impact::impact_alloc::Allocator;
 use impact_voxel::generation::sdf::{
     MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFGraph, SDFIntersection, SDFNode,
     SDFNodeID, SDFRotation, SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion,

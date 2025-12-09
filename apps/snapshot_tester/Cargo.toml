@@ -116,6 +116,7 @@ ffi_utils = { path = "../../ffi_utils" }
 image = { version = "0.25", default-features = false, features = ["png"] }
 image-compare = "0.4"
 impact = { path = "../../engine", default-features = false }
+impact_log = { path = "../../engine/crates/impact_log" }
 inventory = "0.3"
 libloading = "0.8"
 parking_lot = "0.12"

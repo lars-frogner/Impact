@@ -11,8 +11,6 @@ pub mod headless {
         },
     };
     use anyhow::Result;
-    use impact_alloc::arena::Arena;
-    use impact_alloc::arena::TaskArenas;
     use std::sync::Arc;
 
     pub fn run(
@@ -21,14 +19,11 @@ pub mod headless {
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
     ) -> Result<()> {
-        let runtime = TaskArenas::with(|arena| {
-            create_runtime(arena, app, headless_config, runtime_config, engine_config)
-        })?;
+        let runtime = create_runtime(app, headless_config, runtime_config, engine_config)?;
         run_headless(runtime)
     }
 
     fn create_runtime(
-        arena: &Arena,
         app: Arc<dyn Application>,
         headless_config: HeadlessConfig,
         runtime_config: RuntimeConfig,
@@ -44,7 +39,7 @@ pub mod headless {
         runtime
             .engine()
             .app()
-            .on_engine_initialized(arena, runtime.arc_engine())?;
+            .on_engine_initialized(runtime.arc_engine())?;
 
         Ok(runtime)
     }
@@ -61,8 +56,6 @@ pub mod window {
         window::{Window, WindowConfig},
     };
     use anyhow::Result;
-    use impact_alloc::arena::Arena;
-    use impact_alloc::arena::TaskArenas;
     use std::sync::Arc;
 
     pub fn run(
@@ -72,18 +65,13 @@ pub mod window {
         engine_config: EngineConfig,
     ) -> Result<()> {
         let mut runtime_handler = WindowRuntimeHandler::new(
-            |window| {
-                TaskArenas::with(|arena| {
-                    create_runtime(arena, app, window, runtime_config, engine_config)
-                })
-            },
+            |window| create_runtime(app, window, runtime_config, engine_config),
             window_config,
         );
         runtime_handler.run()
     }
 
     fn create_runtime(
-        arena: &Arena,
         app: Arc<dyn Application>,
         window: Window,
         runtime_config: RuntimeConfig,
@@ -101,7 +89,7 @@ pub mod window {
         runtime
             .engine()
             .app()
-            .on_engine_initialized(arena, runtime.arc_engine())?;
+            .on_engine_initialized(runtime.arc_engine())?;
 
         Ok(runtime)
     }

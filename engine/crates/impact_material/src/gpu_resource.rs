@@ -5,7 +5,6 @@ use crate::{
     MaterialTextureGroup, MaterialTextureGroupID,
 };
 use anyhow::{Result, anyhow};
-use impact_alloc::Allocator;
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_resource::gpu::{GPUResource, GPUResourceMap};
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
@@ -37,15 +36,7 @@ pub struct GPUMaterialTextureGroup {
 impl<'a> GPUResource<'a, Material> for Material {
     type GPUContext = ();
 
-    fn create<A>(
-        _scratch: A,
-        _ctx: &(),
-        _id: MaterialID,
-        material: &Material,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    fn create(_ctx: &(), _id: MaterialID, material: &Material) -> Result<Option<Self>> {
         Ok(Some(material.clone()))
     }
 
@@ -113,15 +104,11 @@ impl GPUMaterialTemplate {
 impl<'a> GPUResource<'a, MaterialTemplate> for GPUMaterialTemplate {
     type GPUContext = GraphicsDevice;
 
-    fn create<A>(
-        _scratch: A,
+    fn create(
         graphics_device: &GraphicsDevice,
         id: MaterialTemplateID,
         template: &MaterialTemplate,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         Ok(Some(Self::create(
             graphics_device,
             template,
@@ -205,15 +192,11 @@ impl<'a> GPUResource<'a, MaterialTextureGroup> for GPUMaterialTextureGroup {
         &'a GPUMaterialTemplateMap,
     );
 
-    fn create<A>(
-        _scratch: A,
+    fn create(
         (graphics_device, textures, samplers, bind_group_layouts): &Self::GPUContext,
         id: MaterialTextureGroupID,
         group: &MaterialTextureGroup,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         Self::create(
             graphics_device,
             textures,

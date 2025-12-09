@@ -1,14 +1,14 @@
 //! Benchmarks for SDF generation.
 
 use super::benchmark_data_path;
-use impact_alloc::arena::Arena;
+use impact_alloc::{Global, arena::ArenaPool};
 use impact_profiling::benchmark::Benchmarker;
 use impact_thread::rayon::RayonThreadPool;
 use impact_voxel::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject},
     generation::{
         SDFVoxelGenerator, VoxelGenerator,
-        sdf::{BoxSDF, SDFGenerator, SDFGraph, SDFNode, SphereSDF},
+        sdf::{SDFGraph, SDFNode, SphereSDF},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     voxel_types::VoxelType,
@@ -17,16 +17,21 @@ use nalgebra::{Matrix4, Point3, UnitQuaternion, Vector3, vector};
 use std::{hint::black_box, num::NonZeroUsize};
 
 pub fn generate_box(benchmarker: impl Benchmarker) {
+    let mut graph = SDFGraph::new_in(Global);
+    graph.add_node(SDFNode::new_box([80.0; 3]));
+    let sdf_generator = graph.build_in(Global).unwrap();
+
     let generator = SDFVoxelGenerator::new(
         1.0,
-        BoxSDF::new([80.0; 3]).into(),
+        sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
+
     benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
 }
 
 pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
-    let mut graph = SDFGraph::new();
+    let mut graph = SDFGraph::new_in(Global);
     let sphere_1_id = graph.add_node(SDFNode::new_sphere(60.0));
     let sphere_2_id = graph.add_node(SDFNode::new_sphere(60.0));
     let sphere_2_id = graph.add_node(SDFNode::new_translation(
@@ -34,7 +39,7 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
         vector![50.0, 0.0, 0.0],
     ));
     graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-    let sdf_generator = graph.build().unwrap();
+    let sdf_generator = graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -45,7 +50,7 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_complex_object(benchmarker: impl Benchmarker) {
-    let mut graph = SDFGraph::new();
+    let mut graph = SDFGraph::new_in(Global);
     let sphere_id = graph.add_node(SDFNode::new_sphere(60.0));
     let sphere_id = graph.add_node(SDFNode::new_translation(sphere_id, vector![50.0, 0.0, 0.0]));
     let box_id = graph.add_node(SDFNode::new_box([50.0, 60.0, 70.0]));
@@ -55,7 +60,7 @@ pub fn generate_complex_object(benchmarker: impl Benchmarker) {
         UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 10.0),
     ));
     graph.add_node(SDFNode::new_union(sphere_id, box_id, 1.0));
-    let sdf_generator = graph.build().unwrap();
+    let sdf_generator = graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -66,12 +71,12 @@ pub fn generate_complex_object(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
-    let mut graph = SDFGraph::new();
+    let mut graph = SDFGraph::new_in(Global);
     let sphere_id = graph.add_node(SDFNode::new_sphere(80.0));
     graph.add_node(SDFNode::new_multifractal_noise(
         sphere_id, 8, 0.02, 2.0, 0.6, 4.0, 0,
     ));
-    let sdf_generator = graph.build().unwrap();
+    let sdf_generator = graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -82,12 +87,12 @@ pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_object_with_multiscale_spheres(benchmarker: impl Benchmarker) {
-    let mut graph = SDFGraph::new();
+    let mut graph = SDFGraph::new_in(Global);
     let sphere_id = graph.add_node(SDFNode::new_sphere(40.0));
     graph.add_node(SDFNode::new_multiscale_sphere(
         sphere_id, 4, 10.0, 0.5, 1.0, 1.0, 0.3, 0,
     ));
-    let sdf_generator = graph.build().unwrap();
+    let sdf_generator = graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -98,9 +103,13 @@ pub fn generate_object_with_multiscale_spheres(benchmarker: impl Benchmarker) {
 }
 
 pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarker) {
+    let mut graph = SDFGraph::new_in(Global);
+    graph.add_node(SDFNode::new_box([80.0; 3]));
+    let sdf_generator = graph.build_in(Global).unwrap();
+
     let generator = SDFVoxelGenerator::new(
         1.0,
-        BoxSDF::new([80.0; 3]).into(),
+        sdf_generator,
         GradientNoiseVoxelTypeGenerator::new(
             vec![
                 VoxelType::from_idx(0),
@@ -118,14 +127,12 @@ pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarke
 }
 
 pub fn compile_complex_meta_graph(benchmarker: impl Benchmarker) {
-    let mut arena = Arena::new();
-
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
     benchmarker.benchmark(&mut || {
-        black_box(generator.sdf_graph.build(&arena, 0).unwrap());
-        arena.reset();
+        let arena = ArenaPool::get_arena();
+        black_box(generator.sdf_graph.build_in(&arena, 0).unwrap());
     });
 }
 
@@ -133,14 +140,11 @@ pub fn build_complex_atomic_graph(benchmarker: impl Benchmarker) {
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
-    let arena_for_meta = Arena::new();
-    let atomic_graph = generator.sdf_graph.build(&arena_for_meta, 0).unwrap();
-
-    let mut arena = Arena::new();
+    let atomic_graph = generator.sdf_graph.build_in(Global, 0).unwrap();
 
     benchmarker.benchmark(&mut || {
-        black_box(atomic_graph.build_with_arena(&arena).unwrap());
-        arena.reset();
+        let arena = ArenaPool::get_arena();
+        black_box(atomic_graph.build_in(&arena).unwrap());
     });
 }
 
@@ -148,9 +152,8 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
-    let arena = Arena::new();
-    let atomic_graph = generator.sdf_graph.build(&arena, 0).unwrap();
-    let sdf_generator = atomic_graph.build_with_arena(&arena).unwrap();
+    let atomic_graph = generator.sdf_graph.build_in(Global, 0).unwrap();
+    let sdf_generator = atomic_graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(
         1.0,
@@ -171,9 +174,12 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
 }
 
 pub fn update_signed_distances_for_block(benchmarker: impl Benchmarker) {
-    let sphere_sdf = &SphereSDF::new(8.0);
-    let sdf_generator = SDFGenerator::from(sphere_sdf.clone());
-    let mut buffers = sdf_generator.create_buffers_for_chunk();
+    let mut graph = SDFGraph::new_in(Global);
+    let sphere_sdf = SphereSDF::new(8.0);
+    graph.add_node(SDFNode::Sphere(sphere_sdf.clone()));
+    let sdf_generator = graph.build_in(Global).unwrap();
+
+    let mut buffers = sdf_generator.create_buffers_for_chunk_in(Global);
 
     let transform = Matrix4::identity();
     let origin = Point3::origin();

@@ -7,7 +7,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::{HashMap, SlotKey, SlotMap};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
@@ -466,8 +466,9 @@ impl SceneGraph {
 
     /// Updates the transform from local space to the space of the root node for
     /// all group nodes in the scene graph.
-    pub fn update_all_group_to_root_transforms(&mut self, arena: impl Allocator) {
-        let mut operation_stack = AVec::with_capacity_in(32, arena);
+    pub fn update_all_group_to_root_transforms(&mut self) {
+        let arena = ArenaPool::get_arena();
+        let mut operation_stack = AVec::with_capacity_in(32, &arena);
 
         operation_stack.push((self.root_node_id, Isometry3::identity()));
 
@@ -499,7 +500,7 @@ impl SceneGraph {
 
     /// Updates the bounding spheres of all nodes in the scene graph (excluding
     /// contributions from hidden model instances).
-    pub fn update_all_bounding_spheres(&mut self, arena: impl Allocator) {
+    pub fn update_all_bounding_spheres(&mut self) {
         fn merge_spheres(accum: &mut Option<Sphere<f32>>, sphere: Sphere<f32>) {
             match accum {
                 None => {
@@ -511,7 +512,8 @@ impl SceneGraph {
             }
         }
 
-        let mut operation_stack = AVec::with_capacity_in(32, arena);
+        let arena = ArenaPool::get_arena();
+        let mut operation_stack = AVec::with_capacity_in(32, &arena);
 
         operation_stack.push(BoundingSphereUpdateOperation::VisitChildren(
             self.root_node_id,
@@ -1621,7 +1623,6 @@ impl From<SceneEntityFlags> for ModelInstanceFlags {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_alloc::Global;
     use impact_math::Hash64;
     use impact_model::InstanceFeatureStorage;
     use nalgebra::{Point3, Rotation3, Translation3, point};
@@ -1895,7 +1896,7 @@ mod tests {
         let group_3 = scene_graph.create_group_node(group_2, Isometry3::identity());
         let camera = scene_graph.create_camera_node(group_3, Isometry3::identity());
 
-        scene_graph.update_all_group_to_root_transforms(Global);
+        scene_graph.update_all_group_to_root_transforms();
 
         let transform = scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
@@ -1922,7 +1923,7 @@ mod tests {
             Isometry3::from_parts(Translation3::identity(), Rotation3::identity().into()),
         );
 
-        scene_graph.update_all_group_to_root_transforms(Global);
+        scene_graph.update_all_group_to_root_transforms();
 
         let root_to_camera_transform =
             scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
@@ -1961,7 +1962,7 @@ mod tests {
             ModelInstanceFlags::empty(),
         );
 
-        scene_graph.update_all_bounding_spheres(Global);
+        scene_graph.update_all_bounding_spheres();
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert_spheres_equal(
             root_bounding_sphere.unwrap(),
@@ -2009,7 +2010,7 @@ mod tests {
             ModelInstanceFlags::empty(),
         );
 
-        scene_graph.update_all_bounding_spheres(Global);
+        scene_graph.update_all_bounding_spheres();
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert_spheres_equal(
             root_bounding_sphere.unwrap(),
@@ -2069,7 +2070,7 @@ mod tests {
         let correct_root_bounding_sphere =
             correct_group_1_bounding_sphere.translated_and_rotated(&group_1_to_parent_transform);
 
-        scene_graph.update_all_bounding_spheres(Global);
+        scene_graph.update_all_bounding_spheres();
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
 
         assert_spheres_equal(root_bounding_sphere.unwrap(), &correct_root_bounding_sphere);
@@ -2099,7 +2100,7 @@ mod tests {
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(root, Isometry3::identity());
         let group_2 = scene_graph.create_group_node(group_1, Isometry3::identity());
-        scene_graph.update_all_bounding_spheres(Global);
+        scene_graph.update_all_bounding_spheres();
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();
         assert!(root_bounding_sphere.is_none());
         assert!(

@@ -44,7 +44,7 @@ impl ImageProcessing {
     /// processed image or [`None`] if there were no operations to perform.
     pub fn execute<A, IA>(&self, arena: A, image: &Image<IA>) -> Option<Image<A>>
     where
-        A: Copy + Allocator,
+        A: Allocator,
         IA: Allocator,
     {
         if self.is_none_for(&image.meta) {

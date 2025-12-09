@@ -15,10 +15,10 @@ use impact::{
     application::Application,
     egui,
     engine::{Engine, EngineConfig},
-    impact_alloc::arena::Arena,
+    impact_alloc::{Allocator, Global},
     impact_ecs::world::EntityID,
     impact_geometry::{ModelTransform, ReferenceFrame},
-    impact_io, impact_log,
+    impact_io,
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -26,7 +26,6 @@ use impact::{
     runtime::RuntimeConfig,
     window::WindowConfig,
 };
-use impact_alloc::Allocator;
 use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
 use impact_thread::rayon::RayonThreadPool;
 use impact_voxel::{
@@ -78,7 +77,7 @@ impl VoxelGeneratorApp {
 }
 
 impl Application for VoxelGeneratorApp {
-    fn on_engine_initialized(&self, arena: &Arena, engine: Arc<Engine>) -> Result<()> {
+    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
@@ -88,7 +87,6 @@ impl Application for VoxelGeneratorApp {
         impact_log::debug!("Setting up scene");
 
         let (voxel_object, model_transform) = generate_next_voxel_object_or_default(
-            arena,
             &self.thread_pool,
             &mut self.user_interface.write().editor,
         );
@@ -96,7 +94,6 @@ impl Application for VoxelGeneratorApp {
         let voxel_object_id = engine.add_voxel_object(voxel_object);
 
         engine.create_entity_with_id(
-            arena,
             OBJECT_ENTITY_ID,
             (
                 &voxel_object_id,
@@ -108,12 +105,10 @@ impl Application for VoxelGeneratorApp {
         scripting::setup_scene()
     }
 
-    fn on_new_frame(&self, arena: &Arena, engine: &Engine, _frame_number: u64) -> Result<()> {
-        if let Some((voxel_object, new_model_transform)) = generate_next_voxel_object(
-            arena,
-            &self.thread_pool,
-            &mut self.user_interface.write().editor,
-        ) {
+    fn on_new_frame(&self, engine: &Engine, _frame_number: u64) -> Result<()> {
+        if let Some((voxel_object, new_model_transform)) =
+            generate_next_voxel_object(&self.thread_pool, &mut self.user_interface.write().editor)
+        {
             engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
                 *model_transform = new_model_transform;
                 Ok(())
@@ -126,36 +121,35 @@ impl Application for VoxelGeneratorApp {
         Ok(())
     }
 
-    fn handle_keyboard_event(&self, _arena: &Arena, event: KeyboardEvent) -> Result<()> {
+    fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
         impact_log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
-    fn handle_mouse_button_event(&self, _arena: &Arena, event: MouseButtonEvent) -> Result<()> {
+    fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
         impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
-    fn handle_mouse_drag_event(&self, _arena: &Arena, event: MouseDragEvent) -> Result<()> {
+    fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
         impact_log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
     }
 
-    fn handle_mouse_scroll_event(&self, _arena: &Arena, event: MouseScrollEvent) -> Result<()> {
+    fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
         impact_log::trace!("Handling mouse scroll event {event:?}");
         scripting::handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(
         &self,
-        arena: &Arena,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
     ) -> egui::FullOutput {
         self.user_interface
             .write()
-            .run(arena, ctx, input, engine, &api::UI_COMMANDS)
+            .run(ctx, input, engine, &api::UI_COMMANDS)
     }
 }
 
@@ -225,32 +219,21 @@ impl UserInterface {
 
     pub fn run(
         &mut self,
-        arena: &Arena,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
         command_queue: &UICommandQueue,
     ) -> egui::FullOutput {
-        self.dev_ui.run_with_custom_panels(
-            arena,
-            ctx,
-            input,
-            engine,
-            command_queue,
-            &mut self.editor,
-        )
+        self.dev_ui
+            .run_with_custom_panels(ctx, input, engine, command_queue, &mut self.editor)
     }
 }
 
-fn generate_next_voxel_object<A>(
-    arena: A,
+fn generate_next_voxel_object(
     thread_pool: &RayonThreadPool,
     editor: &mut Editor,
-) -> Option<(MeshedChunkedVoxelObject, ModelTransform)>
-where
-    A: Allocator + Copy + std::fmt::Debug,
-{
-    let generator = editor.build_next_voxel_sdf_generator(arena)?;
+) -> Option<(MeshedChunkedVoxelObject, ModelTransform)> {
+    let generator = editor.build_next_voxel_sdf_generator(Global)?;
     Some((
         MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
             thread_pool,
@@ -260,15 +243,11 @@ where
     ))
 }
 
-fn generate_next_voxel_object_or_default<A>(
-    arena: A,
+fn generate_next_voxel_object_or_default(
     thread_pool: &RayonThreadPool,
     editor: &mut Editor,
-) -> (MeshedChunkedVoxelObject, ModelTransform)
-where
-    A: Allocator + Copy + std::fmt::Debug,
-{
-    let generator = editor.build_next_voxel_sdf_generator_or_default(arena);
+) -> (MeshedChunkedVoxelObject, ModelTransform) {
+    let generator = editor.build_next_voxel_sdf_generator_or_default(Global);
     (
         MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
             thread_pool,
@@ -278,7 +257,7 @@ where
     )
 }
 
-fn compute_model_transform(generator: &SDFVoxelGenerator) -> ModelTransform {
+fn compute_model_transform<A: Allocator>(generator: &SDFVoxelGenerator<A>) -> ModelTransform {
     ModelTransform::with_offset(generator.voxel_extent() as f32 * generator.grid_center().coords)
 }
 

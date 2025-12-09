@@ -1,7 +1,7 @@
 //! Mipmapping.
 
 use crate::device::GraphicsDevice;
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, Allocator, arena::ArenaPool};
 use impact_containers::HashMap;
 use std::{borrow::Cow, sync::Arc};
 
@@ -115,7 +115,7 @@ impl MipmapperGenerator {
         label: Cow<'static, str>,
     ) -> Option<Mipmapper<A>>
     where
-        A: Copy + Allocator,
+        A: Allocator,
     {
         if texture.mip_level_count() < 2 {
             return None;
@@ -198,16 +198,14 @@ impl MipmapperGenerator {
 
     /// Populates all mipmap levels of the given texture with the appropriately
     /// mipmapped versions of the full texture.
-    pub fn update_texture_mipmaps<A>(
+    pub fn update_texture_mipmaps(
         &self,
-        arena: A,
         graphics_device: &GraphicsDevice,
         texture: &wgpu::Texture,
         label: Cow<'static, str>,
-    ) where
-        A: Copy + Allocator,
-    {
-        if let Some(mipmapper) = self.generate_mipmapper(arena, graphics_device, texture, label) {
+    ) {
+        let arena = ArenaPool::get_arena();
+        if let Some(mipmapper) = self.generate_mipmapper(&arena, graphics_device, texture, label) {
             mipmapper.update_texture_mipmaps(graphics_device);
         }
     }

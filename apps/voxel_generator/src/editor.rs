@@ -10,9 +10,8 @@ use impact::{
         Vec2,
     },
     engine::Engine,
-    impact_log,
+    impact_alloc::{Allocator, arena::ArenaPool},
 };
-use impact_alloc::Allocator;
 use impact_dev_ui::{
     CustomPanels, UserInterfaceConfig as DevUserInterfaceConfig,
     option_panels::{
@@ -115,16 +114,18 @@ impl Editor {
         }
     }
 
-    pub fn build_next_voxel_sdf_generator<A>(&mut self, arena: A) -> Option<SDFVoxelGenerator>
-    where
-        A: Allocator + Copy + std::fmt::Debug,
-    {
+    pub fn build_next_voxel_sdf_generator<A: Allocator>(
+        &mut self,
+        alloc: A,
+    ) -> Option<SDFVoxelGenerator<A>> {
         if !(self.graph_needs_compilation || self.rebuild_generator) {
             return None;
         }
 
+        let arena = ArenaPool::get_arena();
+
         let compiled_graph = match build::build_sdf_graph(
-            arena,
+            &arena,
             &mut self.meta_canvas_scratch.build,
             &self.meta_graph_canvas.nodes,
         ) {
@@ -160,19 +161,19 @@ impl Editor {
             VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(self.voxel_type));
 
         let generator =
-            build::build_sdf_voxel_generator(arena, compiled_graph, voxel_type_generator);
+            build::build_sdf_voxel_generator(alloc, &compiled_graph, voxel_type_generator);
 
         self.graph_status = MetaGraphStatus::InSync;
 
         Some(generator)
     }
 
-    pub fn build_next_voxel_sdf_generator_or_default<A>(&mut self, arena: A) -> SDFVoxelGenerator
-    where
-        A: Allocator + Copy + std::fmt::Debug,
-    {
-        self.build_next_voxel_sdf_generator(arena)
-            .unwrap_or_else(build::default_sdf_voxel_generator)
+    pub fn build_next_voxel_sdf_generator_or_default<A: Allocator>(
+        &mut self,
+        alloc: A,
+    ) -> SDFVoxelGenerator<A> {
+        self.build_next_voxel_sdf_generator(alloc)
+            .unwrap_or_else(|| build::default_sdf_voxel_generator(alloc))
     }
 
     fn reset_canvas(&mut self) {
@@ -228,16 +229,13 @@ impl Editor {
         }
     }
 
-    fn save_graph_to_file(&mut self, arena: impl Allocator) {
+    fn save_graph_to_file(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter("Graph (*.graph.ron)", &["graph.ron"])
             .set_title("Save graph as")
             .save_file()
         {
-            if let Err(err) = self
-                .meta_graph_canvas
-                .save_graph(arena, &self.config, &path)
-            {
+            if let Err(err) = self.meta_graph_canvas.save_graph(&self.config, &path) {
                 impact_log::error!("Failed to save graph to {}: {err:#}", path.display());
             } else {
                 impact_log::info!("Saved graph to {}", path.display());
@@ -246,12 +244,9 @@ impl Editor {
         }
     }
 
-    fn save_graph_to_last_path(&mut self, arena: impl Allocator) {
+    fn save_graph_to_last_path(&mut self) {
         if let Some(path) = &self.last_graph_path {
-            if let Err(err) = self
-                .meta_graph_canvas
-                .save_graph(arena, &self.config, &path.path)
-            {
+            if let Err(err) = self.meta_graph_canvas.save_graph(&self.config, &path.path) {
                 impact_log::error!("Failed to save graph to {}: {err:#}", path.path_string);
             } else {
                 impact_log::info!("Saved graph to {}", path.path_string);
@@ -259,7 +254,7 @@ impl Editor {
         }
     }
 
-    fn save_subgraph_to_file(&mut self, arena: impl Allocator, root_node_id: MetaNodeID) {
+    fn save_subgraph_to_file(&mut self, root_node_id: MetaNodeID) {
         let file_name = self
             .meta_graph_canvas
             .nodes
@@ -275,7 +270,6 @@ impl Editor {
             .save_file()
         {
             if let Err(err) = self.meta_graph_canvas.save_subgraph(
-                arena,
                 &mut self.meta_canvas_scratch,
                 root_node_id,
                 &path,
@@ -316,15 +310,7 @@ impl CustomPanels for Editor {
         ui.toggle_value(&mut self.config.show_editor, "Voxel editor");
     }
 
-    fn run_panels<A>(
-        &mut self,
-        arena: A,
-        ctx: &Context,
-        config: &DevUserInterfaceConfig,
-        _engine: &Engine,
-    ) where
-        A: Allocator + Copy,
-    {
+    fn run_panels(&mut self, ctx: &Context, config: &DevUserInterfaceConfig, _engine: &Engine) {
         if !self.config.show_editor {
             return;
         }
@@ -355,14 +341,14 @@ impl CustomPanels for Editor {
                 }
 
                 if ui.button("Save As...").clicked() {
-                    self.save_graph_to_file(arena);
+                    self.save_graph_to_file();
                 }
 
                 if ui
                     .add_enabled(self.last_graph_path.is_some(), Button::new("Save"))
                     .clicked()
                 {
-                    self.save_graph_to_last_path(arena);
+                    self.save_graph_to_last_path();
                 };
 
                 if ui
@@ -587,7 +573,7 @@ impl CustomPanels for Editor {
 
                         if is_collapsed {
                             if ui.button("Save As...").clicked() {
-                                self.save_subgraph_to_file(arena, selected_node_id);
+                                self.save_subgraph_to_file(selected_node_id);
                                 selected_node = self.meta_graph_canvas.node_mut(selected_node_id);
                             }
                             ui.end_row();
@@ -625,7 +611,7 @@ impl CustomPanels for Editor {
             );
 
             if self.config.show_atomic_graph {
-                self.atomic_graph_canvas.show(arena, ctx, layout_requested);
+                self.atomic_graph_canvas.show(ctx, layout_requested);
             }
 
             self.graph_needs_compilation = self.graph_needs_compilation

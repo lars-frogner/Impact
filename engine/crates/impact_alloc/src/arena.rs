@@ -1,9 +1,9 @@
 //! Arena allocation.
 
 use bumpalo::Bump;
-use std::{cell::RefCell, ops::Deref};
+use std::cell::RefCell;
 
-pub type Arena = Bump;
+type Arena = Bump;
 
 thread_local! {
     static THREAD_LOCAL_ARENA_POOL: RefCell<ArenaPool> = RefCell::new(ArenaPool::new());
@@ -45,6 +45,7 @@ impl ArenaPool {
     ///
     /// # Warning
     /// Do not let any data allocated from the arena outlive the arena.
+    #[inline]
     pub fn get_arena() -> PoolArena {
         // Since `PoolArena` holds a raw pointer rather than a reference, we
         // avoid holding a borrow on the `RefCell`, which would lead to a panic
@@ -64,6 +65,7 @@ impl ArenaPool {
     ///
     /// # Warning
     /// Do not let any data allocated from the arena outlive the arena.
+    #[inline]
     pub fn get_arena_for_capacity(capacity: usize) -> PoolArena {
         // Since `PoolArena` holds a raw pointer rather than a reference, we
         // avoid holding a borrow on the `RefCell`, which would lead to a panic
@@ -79,6 +81,7 @@ impl ArenaPool {
     }
 
     /// Returns a the pointer and index of a free arena, creating one if needed.
+    #[inline]
     fn acquire(&mut self) -> PoolArena {
         let arena_idx = self.free_list.pop().unwrap_or_else(|| {
             let arena_idx = self.arenas.len();
@@ -95,6 +98,7 @@ impl ArenaPool {
     ///
     /// Will use the smallest arena with sufficient allocated space for the
     /// target capacity, or if all arenas are too small, the largest arena.
+    #[inline]
     fn acquire_for_capacity(&mut self, target_capacity: usize) -> PoolArena {
         let arena_idx = if self.free_list.is_empty() {
             let arena_idx = self.arenas.len();
@@ -137,6 +141,7 @@ impl ArenaPool {
     }
 
     /// Resets the arena at the given index and marks it as free.
+    #[inline]
     fn release(&mut self, arena_idx: usize) {
         self.arenas[arena_idx].reset();
         self.free_list.push(arena_idx);
@@ -144,18 +149,16 @@ impl ArenaPool {
 }
 
 impl PoolArena {
+    #[inline]
     fn new(arena_ptr: *const Arena, arena_idx: usize) -> Self {
         Self {
             arena_ptr,
             arena_idx,
         }
     }
-}
 
-impl Deref for PoolArena {
-    type Target = Arena;
-
-    fn deref(&self) -> &Self::Target {
+    #[inline]
+    fn arena(&self) -> &Arena {
         // SAFETY:
         // - The arena is never mutated (except for internal mutation).
         // - The arena is never removed from the `Vec` in `ArenaPool`.
@@ -167,7 +170,62 @@ impl Deref for PoolArena {
     }
 }
 
+// SAFETY: Just passing through to inner arena
+unsafe impl allocator_api2::alloc::Allocator for &PoolArena {
+    #[inline]
+    fn allocate(
+        &self,
+        layout: allocator_api2::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, allocator_api2::alloc::AllocError> {
+        self.arena().allocate(layout)
+    }
+
+    #[inline]
+    fn allocate_zeroed(
+        &self,
+        layout: allocator_api2::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, allocator_api2::alloc::AllocError> {
+        self.arena().allocate_zeroed(layout)
+    }
+
+    #[inline]
+    unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: allocator_api2::alloc::Layout) {
+        unsafe { self.arena().deallocate(ptr, layout) };
+    }
+
+    #[inline]
+    unsafe fn grow(
+        &self,
+        ptr: std::ptr::NonNull<u8>,
+        old_layout: allocator_api2::alloc::Layout,
+        new_layout: allocator_api2::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, allocator_api2::alloc::AllocError> {
+        unsafe { self.arena().grow(ptr, old_layout, new_layout) }
+    }
+
+    #[inline]
+    unsafe fn grow_zeroed(
+        &self,
+        ptr: std::ptr::NonNull<u8>,
+        old_layout: allocator_api2::alloc::Layout,
+        new_layout: allocator_api2::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, allocator_api2::alloc::AllocError> {
+        unsafe { self.arena().grow_zeroed(ptr, old_layout, new_layout) }
+    }
+
+    #[inline]
+    unsafe fn shrink(
+        &self,
+        ptr: std::ptr::NonNull<u8>,
+        old_layout: allocator_api2::alloc::Layout,
+        new_layout: allocator_api2::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, allocator_api2::alloc::AllocError> {
+        unsafe { self.arena().shrink(ptr, old_layout, new_layout) }
+    }
+}
+
 impl Drop for PoolArena {
+    #[inline]
     fn drop(&mut self) {
         THREAD_LOCAL_ARENA_POOL.with(|pool| {
             // Since the pool is thread-local and we only call `borrow_mut` to
@@ -179,6 +237,7 @@ impl Drop for PoolArena {
 }
 
 impl BoxedArena {
+    #[inline]
     fn new() -> Self {
         Self {
             arena: Box::new(Arena::new()),
@@ -186,10 +245,12 @@ impl BoxedArena {
         }
     }
 
+    #[inline]
     fn pointer(&self) -> *const Arena {
         self.arena.as_ref() as *const Arena
     }
 
+    #[inline]
     fn reset(&mut self) {
         let allocated_bytes = self.arena.allocated_bytes();
         self.arena.reset();
@@ -211,7 +272,7 @@ mod tests {
         let arena = ArenaPool::get_arena();
 
         // Arena should be usable
-        let allocated = arena.alloc_slice_copy(TEST_DATA);
+        let allocated = arena.arena().alloc_slice_copy(TEST_DATA);
         assert_eq!(allocated, TEST_DATA);
     }
 
@@ -220,7 +281,7 @@ mod tests {
         let arena = ArenaPool::get_arena_for_capacity(LARGE_SIZE);
 
         // Arena should be usable
-        let allocated = arena.alloc_slice_copy(TEST_DATA);
+        let allocated = arena.arena().alloc_slice_copy(TEST_DATA);
         assert_eq!(allocated, TEST_DATA);
     }
 
@@ -229,7 +290,7 @@ mod tests {
         let arena = ArenaPool::get_arena_for_capacity(0);
 
         // Arena should still be usable
-        let allocated = arena.alloc_slice_copy(TEST_DATA);
+        let allocated = arena.arena().alloc_slice_copy(TEST_DATA);
         assert_eq!(allocated, TEST_DATA);
     }
 
@@ -239,8 +300,8 @@ mod tests {
         let arena2 = ArenaPool::get_arena();
 
         // Both arenas should be independent and usable
-        let data1 = arena1.alloc_slice_copy(&[1u8; 32]);
-        let data2 = arena2.alloc_slice_copy(&[2u8; 32]);
+        let data1 = arena1.arena().alloc_slice_copy(&[1u8; 32]);
+        let data2 = arena2.arena().alloc_slice_copy(&[2u8; 32]);
 
         assert_eq!(data1, &[1u8; 32]);
         assert_eq!(data2, &[2u8; 32]);
@@ -256,13 +317,13 @@ mod tests {
         // First allocation to establish some usage
         {
             let arena = ArenaPool::get_arena();
-            reused_ptr = &*arena as *const Arena;
+            reused_ptr = arena.arena() as *const Arena;
         } // Arena drops here and returns to pool
 
         // Second allocation should reuse the same arena
         {
             let arena = ArenaPool::get_arena();
-            assert_eq!(&*arena as *const Arena, reused_ptr);
+            assert_eq!(arena.arena() as *const Arena, reused_ptr);
         }
     }
 
@@ -270,11 +331,11 @@ mod tests {
     fn arena_capacity_selection_prefers_smallest_sufficient() {
         // Get two arenas and allocate different sizes
         let arena1 = ArenaPool::get_arena();
-        let small_arena_ptr = &*arena1 as *const Arena;
-        let _small_alloc = arena1.alloc_slice_copy(&[1u8; SMALL_SIZE]);
+        let small_arena_ptr = arena1.arena() as *const Arena;
+        let _small_alloc = arena1.arena().alloc_slice_copy(&[1u8; SMALL_SIZE]);
 
         let arena2 = ArenaPool::get_arena();
-        let _large_alloc = arena2.alloc_slice_copy(&[2u8; LARGE_SIZE]);
+        let _large_alloc = arena2.arena().alloc_slice_copy(&[2u8; LARGE_SIZE]);
 
         // Drop both to return them to pool
         drop(arena1);
@@ -282,7 +343,7 @@ mod tests {
 
         // Request capacity that should prefer the smaller arena (SMALL_SIZE < LARGE_SIZE)
         let selected_arena = ArenaPool::get_arena_for_capacity(SMALL_SIZE);
-        let selected_ptr = &*selected_arena as *const Arena;
+        let selected_ptr = selected_arena.arena() as *const Arena;
 
         // Should have selected the small arena
         assert_eq!(selected_ptr, small_arena_ptr);
@@ -292,11 +353,11 @@ mod tests {
     fn arena_capacity_selection_uses_largest_when_none_sufficient() {
         // Get two arenas and allocate different sizes
         let arena1 = ArenaPool::get_arena();
-        let _small_alloc = arena1.alloc_slice_copy(&[1u8; SMALL_SIZE]);
+        let _small_alloc = arena1.arena().alloc_slice_copy(&[1u8; SMALL_SIZE]);
 
         let arena2 = ArenaPool::get_arena();
-        let large_arena_ptr = &*arena2 as *const Arena;
-        let _large_alloc = arena2.alloc_slice_copy(&[2u8; LARGE_SIZE]);
+        let large_arena_ptr = arena2.arena() as *const Arena;
+        let _large_alloc = arena2.arena().alloc_slice_copy(&[2u8; LARGE_SIZE]);
 
         // Drop both to return them to pool
         drop(arena1);
@@ -304,7 +365,7 @@ mod tests {
 
         // Request capacity larger than any existing arena
         let selected_arena = ArenaPool::get_arena_for_capacity(LARGE_SIZE * 2);
-        let selected_ptr = &*selected_arena as *const Arena;
+        let selected_ptr = selected_arena.arena() as *const Arena;
 
         // Should have selected the large arena (largest available)
         assert_eq!(selected_ptr, large_arena_ptr);

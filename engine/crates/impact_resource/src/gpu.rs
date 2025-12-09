@@ -2,14 +2,12 @@
 
 use crate::{
     MutableResource, Resource,
-    alloc::ResourceOperationArenas,
     registry::{
         ImmutableResourceRegistry, MutableResourceRegistry, ResourceChange, ResourceChangeKind,
         ResourceRegistry,
     },
 };
 use anyhow::Result;
-use impact_alloc::Allocator;
 use impact_containers::RandomState;
 use std::{
     collections::{HashMap, hash_map::Entry},
@@ -52,18 +50,7 @@ pub trait GPUResource<'a, R: Resource>: Sized {
 
     /// Creates a new GPU resource from the given CPU resource. Returns [`None`]
     /// if there is no GPU resource to create.
-    ///
-    /// # Warning
-    /// The passed allocator must only be used for allocations that don't
-    /// outlive this method call.
-    fn create<A>(
-        scratch: A,
-        gpu_context: &Self::GPUContext,
-        id: R::ID,
-        resource: &R,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator;
+    fn create(gpu_context: &Self::GPUContext, id: R::ID, resource: &R) -> Result<Option<Self>>;
 
     /// Performs cleanup for the GPU resource.
     fn cleanup(self, gpu_context: &Self::GPUContext, id: R::ID) -> Result<()>;
@@ -149,8 +136,7 @@ where
 
     fn ensure(&mut self, gpu_context: &Self::GPUContext, id: R::ID, resource: &R) -> Result<()> {
         if let Entry::Vacant(entry) = self.gpu_resources.entry(id)
-            && let Some(gpu_resource) =
-                ResourceOperationArenas::with(|arena| GR::create(arena, gpu_context, id, resource))?
+            && let Some(gpu_resource) = GR::create(gpu_context, id, resource)?
         {
             entry.insert(gpu_resource);
         }
@@ -189,9 +175,7 @@ where
     ) -> Result<()> {
         match self.gpu_resources.entry(id) {
             Entry::Vacant(entry) => {
-                if let Some(gpu_resource) = ResourceOperationArenas::with(|arena| {
-                    GR::create(arena, gpu_context, id, resource)
-                })? {
+                if let Some(gpu_resource) = GR::create(gpu_context, id, resource)? {
                     entry.insert(gpu_resource);
                 }
             }
@@ -441,15 +425,11 @@ mod tests {
     impl<'a> GPUResource<'a, TestResource> for TestGPUResource {
         type GPUContext = TestGPUContext;
 
-        fn create<A>(
-            _scratch: A,
+        fn create(
             gpu_context: &Self::GPUContext,
             id: TestResourceID,
             resource: &TestResource,
-        ) -> Result<Option<Self>>
-        where
-            A: Copy + Allocator,
-        {
+        ) -> Result<Option<Self>> {
             gpu_context.create_calls.borrow_mut().push(id);
             Ok(Some(Self {
                 id,
@@ -473,15 +453,11 @@ mod tests {
     impl<'a> GPUResource<'a, TestMutableResource> for TestMutableGPUResource {
         type GPUContext = TestGPUContext;
 
-        fn create<A>(
-            _scratch: A,
+        fn create(
             gpu_context: &Self::GPUContext,
             id: TestResourceID,
             resource: &TestMutableResource,
-        ) -> Result<Option<Self>>
-        where
-            A: Copy + Allocator,
-        {
+        ) -> Result<Option<Self>> {
             gpu_context.create_calls.borrow_mut().push(id);
             Ok(Some(Self {
                 id,

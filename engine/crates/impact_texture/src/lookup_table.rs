@@ -2,7 +2,6 @@
 
 use crate::{SamplerID, TextureID};
 use anyhow::{Result, bail};
-use impact_alloc::Allocator;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{
@@ -183,16 +182,11 @@ impl LookupTableValueType {
 /// Returns an error if the row size (width times data value size) is not a
 /// multiple of 256 bytes (`wgpu` requires that rows are a multiple of 256
 /// bytes for copying data between buffers and textures).
-pub fn create_texture_from_lookup_table<A, T>(
-    arena: A,
+pub fn create_texture_from_lookup_table<T: TexelType>(
     graphics_device: &GraphicsDevice,
     table: &LookupTable<T>,
     label: &str,
-) -> Result<Texture>
-where
-    A: Copy + Allocator,
-    T: TexelType,
-{
+) -> Result<Texture> {
     let byte_buffer = bytemuck::cast_slice(&table.values);
 
     let texture_config = TextureConfig {
@@ -201,7 +195,6 @@ where
     };
 
     Texture::create(
-        arena,
         graphics_device,
         None,
         byte_buffer,

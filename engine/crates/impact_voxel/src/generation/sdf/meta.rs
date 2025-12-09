@@ -6,14 +6,15 @@ pub mod params;
 
 use crate::{
     define_meta_node_params,
-    generation::sdf::{
-        SDFGenerator, SDFGeneratorBlockBuffers, SDFGraph, SDFNode, SDFNodeID,
-        meta::params::ParamScratch,
-    },
+    generation::sdf::{SDFGenerator, SDFGeneratorBlockBuffers, SDFGraph, SDFNode, SDFNodeID},
 };
 use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{
+    AVec, Allocator,
+    arena::{ArenaPool, PoolArena},
+    avec,
+};
 use impact_containers::FixedQueue;
 use impact_geometry::{
     Sphere, compute_uniformly_distributed_radial_directions, rotation_between_axes,
@@ -771,28 +772,23 @@ impl MetaSDFGraph {
         id
     }
 
-    pub fn build<A>(&self, arena: A, seed: u64) -> Result<SDFGraph<A>>
-    where
-        A: Allocator + Copy,
-    {
-        let mut graph = SDFGraph::new_in(arena);
+    pub fn build_in<A: Allocator>(&self, alloc: A, seed: u64) -> Result<SDFGraph<A>> {
+        let mut graph = SDFGraph::new_in(alloc);
 
         if self.nodes.is_empty() {
             return Ok(graph);
         }
 
-        let mut outputs = AVec::new_in(arena);
-        outputs.resize(self.nodes.len(), MetaSDFNodeOutput::<A>::SingleSDF(None));
+        let arena = ArenaPool::get_arena();
 
-        let mut states = AVec::new_in(arena);
-        states.resize(self.nodes.len(), MetaNodeBuildState::Unvisited);
+        let mut outputs =
+            avec![in &arena; MetaSDFNodeOutput::<&PoolArena>::SingleSDF(None); self.nodes.len()];
 
-        let mut stable_seeds = AVec::new_in(arena);
-        stable_seeds.resize(self.nodes.len(), 0u64);
+        let mut states = avec![in &arena; MetaNodeBuildState::Unvisited; self.nodes.len()];
 
-        let mut param_scratch = ParamScratch::new_in(arena);
+        let mut stable_seeds = avec![in &arena; 0u64; self.nodes.len()];
 
-        let mut operation_stack = AVec::with_capacity_in(3 * self.nodes.len(), arena);
+        let mut operation_stack = AVec::with_capacity_in(3 * self.nodes.len(), &arena);
 
         let root_node_id = (self.nodes.len() - 1) as MetaSDFNodeID;
         operation_stack.push(BuildOperation::VisitChildren(root_node_id));
@@ -910,8 +906,7 @@ impl MetaSDFGraph {
 
                     let seed = splitmix::random_u64_from_two_states(seed, stable_seed);
 
-                    outputs[node_idx] =
-                        node.resolve(arena, &mut param_scratch, &mut graph, &outputs, seed)?;
+                    outputs[node_idx] = node.resolve(&arena, &mut graph, &outputs, seed)?;
                 }
             }
         }
@@ -920,7 +915,7 @@ impl MetaSDFGraph {
             if let Some(id) = atomic_node_id {
                 graph.set_root_node(*id);
             } else {
-                return Ok(SDFGraph::new_in(arena));
+                return Ok(SDFGraph::new_in(alloc));
             }
         } else {
             bail!("Root meta node must have single SDF output");
@@ -1066,45 +1061,41 @@ impl MetaSDFNode {
         }
     }
 
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        param_scratch: &mut ParamScratch<A>,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         match self {
             Self::Points(node) => Ok(node.resolve(arena)),
             Self::Spheres(node) => node
-                .resolve(arena, param_scratch, seed)
+                .resolve(arena, seed)
                 .context("Failed to resolve Spheres node"),
             Self::Capsules(node) => node
-                .resolve(arena, param_scratch, seed)
+                .resolve(arena, seed)
                 .context("Failed to resolve Capsules node"),
             Self::Boxes(node) => node
-                .resolve(arena, param_scratch, seed)
+                .resolve(arena, seed)
                 .context("Failed to resolve Boxes node"),
             Self::Translation(node) => node
-                .resolve(arena, param_scratch, outputs, seed)
+                .resolve(arena, outputs, seed)
                 .context("Failed to resolve Translation node"),
             Self::Rotation(node) => node
-                .resolve(arena, param_scratch, outputs, seed)
+                .resolve(arena, outputs, seed)
                 .context("Failed to resolve Rotation node"),
             Self::Scaling(node) => node
-                .resolve(arena, param_scratch, outputs, seed)
+                .resolve(arena, outputs, seed)
                 .context("Failed to resolve Scaling node"),
             Self::Similarity(node) => node
-                .resolve(arena, param_scratch, outputs, seed)
+                .resolve(arena, outputs, seed)
                 .context("Failed to resolve Similarity node"),
             Self::StratifiedGridTransforms(node) => node
-                .resolve(arena, param_scratch, outputs, seed)
+                .resolve(arena, outputs, seed)
                 .context("Failed to resolve StratifiedGridTransforms node"),
             Self::SphereSurfaceTransforms(node) => node
-                .resolve(arena, param_scratch, outputs, seed)
+                .resolve(arena, outputs, seed)
                 .context("Failed to resolve SphereSurfaceTransforms node"),
             Self::ClosestTranslationToSurface(node) => node
                 .resolve(arena, graph, outputs)
@@ -1123,10 +1114,10 @@ impl MetaSDFNode {
                 .resolve(arena, graph, outputs)
                 .context("Failed to resolve TransformApplication node"),
             Self::MultifractalNoiseSDFModifier(node) => node
-                .resolve(arena, param_scratch, graph, outputs, seed)
+                .resolve(arena, graph, outputs, seed)
                 .context("Failed to resolve MultifractalNoiseSDFModifier node"),
             Self::MultiscaleSphereSDFModifier(node) => node
-                .resolve(arena, param_scratch, graph, outputs, seed)
+                .resolve(arena, graph, outputs, seed)
                 .context("Failed to resolve MultiscaleSphereSDFModifier node"),
             Self::SDFUnion(node) => node
                 .resolve(graph, outputs)
@@ -1168,36 +1159,20 @@ impl Instance {
 }
 
 impl MetaPoints {
-    fn resolve<A>(&self, arena: A) -> MetaSDFNodeOutput<A>
-    where
-        A: Allocator + Copy,
-    {
-        let mut instances = AVec::new_in(arena);
-
-        instances.resize(
-            self.count as usize,
-            Instance::shapeless(Similarity3::identity()),
-        );
-
-        MetaSDFNodeOutput::Instances(instances)
+    fn resolve<A: Allocator>(&self, arena: A) -> MetaSDFNodeOutput<A> {
+        MetaSDFNodeOutput::Instances(
+            avec![in arena; Instance::shapeless(Similarity3::identity()); self.count as usize],
+        )
     }
 }
 
 impl MetaSpheres {
-    fn resolve<A>(
-        &self,
-        arena: A,
-        param_scratch: &mut ParamScratch<A>,
-        seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> Result<MetaSDFNodeOutput<A>> {
         let mut rng = create_param_rng(seed);
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
-        let mut params = self.sample_params(param_scratch, &mut rng)?;
+        let mut params = self.sample_params(&mut rng)?;
 
         for idx in 0..self.count {
             instances.push(Instance {
@@ -1211,7 +1186,7 @@ impl MetaSpheres {
             });
 
             if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
-                params = self.sample_params(param_scratch, &mut rng)?;
+                params = self.sample_params(&mut rng)?;
             }
         }
 
@@ -1220,20 +1195,12 @@ impl MetaSpheres {
 }
 
 impl MetaCapsules {
-    fn resolve<A>(
-        &self,
-        arena: A,
-        param_scratch: &mut ParamScratch<A>,
-        seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> Result<MetaSDFNodeOutput<A>> {
         let mut rng = create_param_rng(seed);
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
-        let mut params = self.sample_params(param_scratch, &mut rng)?;
+        let mut params = self.sample_params(&mut rng)?;
 
         for idx in 0..self.count {
             instances.push(Instance {
@@ -1248,7 +1215,7 @@ impl MetaCapsules {
             });
 
             if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
-                params = self.sample_params(param_scratch, &mut rng)?;
+                params = self.sample_params(&mut rng)?;
             }
         }
 
@@ -1257,20 +1224,12 @@ impl MetaCapsules {
 }
 
 impl MetaBoxes {
-    fn resolve<A>(
-        &self,
-        arena: A,
-        param_scratch: &mut ParamScratch<A>,
-        seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> Result<MetaSDFNodeOutput<A>> {
         let mut rng = create_param_rng(seed);
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
 
-        let mut params = self.sample_params(param_scratch, &mut rng)?;
+        let mut params = self.sample_params(&mut rng)?;
 
         for idx in 0..self.count {
             instances.push(Instance {
@@ -1286,7 +1245,7 @@ impl MetaBoxes {
             });
 
             if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
-                params = self.sample_params(param_scratch, &mut rng)?;
+                params = self.sample_params(&mut rng)?;
             }
         }
 
@@ -1295,23 +1254,19 @@ impl MetaBoxes {
 }
 
 impl MetaTranslation {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
-        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_instance_op(
             arena,
             "Translation",
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| self.sample_params(param_scratch, rng),
+            |rng| self.sample_params(rng),
             |params, input_instance| {
                 let translation = Translation3::from([
                     params.translation_x,
@@ -1333,23 +1288,19 @@ impl MetaTranslation {
 }
 
 impl MetaRotation {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
-        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_instance_op(
             arena,
             "Rotation",
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| self.sample_params(param_scratch, rng),
+            |rng| self.sample_params(rng),
             |params, input_instance| {
                 let rotation = unit_quaternion_from_tilt_turn_roll(
                     Degrees(params.tilt_angle),
@@ -1371,23 +1322,19 @@ impl MetaRotation {
 }
 
 impl MetaScaling {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
-        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_instance_op(
             arena,
             "Scaling",
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| self.sample_params(param_scratch, rng),
+            |rng| self.sample_params(rng),
             |params, input_instance| {
                 let scaling = params.scaling.max(f32::EPSILON);
 
@@ -1403,23 +1350,19 @@ impl MetaScaling {
 }
 
 impl MetaSimilarity {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
-        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_instance_op(
             arena,
             "Similarity",
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| self.sample_params(param_scratch, rng),
+            |rng| self.sample_params(rng),
             |params, input_instance| {
                 let scaling = params.scale.max(f32::EPSILON);
 
@@ -1451,16 +1394,12 @@ impl MetaSimilarity {
 }
 
 impl MetaStratifiedGridTransforms {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
-        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<A>> {
         let input_instances = match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::Instances(instances) => instances,
             child_output => {
@@ -1487,7 +1426,7 @@ impl MetaStratifiedGridTransforms {
             cell_extent_y,
             cell_extent_z,
             jitter_fraction,
-        } = self.sample_params(param_scratch, &mut rng)?;
+        } = self.sample_params(&mut rng)?;
 
         let shape = [shape_x as usize, shape_y as usize, shape_z as usize];
         let cell_extents = [
@@ -1543,16 +1482,12 @@ impl MetaStratifiedGridTransforms {
 }
 
 impl MetaSphereSurfaceTransforms {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
-        param_scratch: &mut ParamScratch<A>,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<A>> {
         let input_instances = match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::Instances(instances) => instances,
             child_output => {
@@ -1574,7 +1509,7 @@ impl MetaSphereSurfaceTransforms {
         let MetaSphereSurfaceParams {
             radius,
             jitter_fraction,
-        } = self.sample_params(param_scratch, &mut rng)?;
+        } = self.sample_params(&mut rng)?;
 
         let radius = radius.max(0.0);
         let jitter_fraction = jitter_fraction.clamp(0.0, 1.0);
@@ -1625,15 +1560,12 @@ impl MetaSphereSurfaceTransforms {
 }
 
 impl MetaClosestTranslationToSurface {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let subject_instances = match &outputs[self.subject_id as usize] {
             MetaSDFNodeOutput::Instances(instances) => instances,
             subject_output => {
@@ -1657,8 +1589,8 @@ impl MetaClosestTranslationToSurface {
             }
         };
 
-        let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
-        let mut buffers = generator.create_buffers_for_block(arena);
+        let generator = SDFGenerator::new_in(arena, graph.nodes(), sdf_node_id)?;
+        let mut buffers = generator.create_buffers_for_block_in(arena);
 
         let surface_sdf_node_to_parent_transform =
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
@@ -1699,15 +1631,12 @@ impl MetaClosestTranslationToSurface {
 }
 
 impl MetaRayTranslationToSurface {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let subject_instances = match &outputs[self.subject_id as usize] {
             MetaSDFNodeOutput::Instances(instances) => instances,
             subject_output => {
@@ -1731,9 +1660,9 @@ impl MetaRayTranslationToSurface {
             }
         };
 
-        let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
-        let mut buffers_1x1x1 = generator.create_buffers_for_block::<1>(arena);
-        let mut buffers_2x2x2 = generator.create_buffers_for_block::<8>(arena);
+        let generator = SDFGenerator::new_in(arena, graph.nodes(), sdf_node_id)?;
+        let mut buffers_1x1x1 = generator.create_buffers_for_block_in::<1, _>(arena);
+        let mut buffers_2x2x2 = generator.create_buffers_for_block_in::<8, _>(arena);
 
         let surface_sdf_node_to_parent_transform =
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
@@ -1812,15 +1741,12 @@ impl MetaRayTranslationToSurface {
 }
 
 impl MetaRotationToGradient {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let subject_instances = match &outputs[self.subject_id as usize] {
             MetaSDFNodeOutput::Instances(instances) => instances,
             subject_output => {
@@ -1844,8 +1770,8 @@ impl MetaRotationToGradient {
             }
         };
 
-        let generator = SDFGenerator::new_in(arena, arena, graph.nodes(), sdf_node_id)?;
-        let mut buffers = generator.create_buffers_for_block(arena);
+        let generator = SDFGenerator::new_in(arena, graph.nodes(), sdf_node_id)?;
+        let mut buffers = generator.create_buffers_for_block_in(arena);
 
         let gradient_sdf_node_to_parent_transform =
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
@@ -1883,15 +1809,12 @@ impl MetaRotationToGradient {
 }
 
 impl MetaStochasticSelection {
-    fn resolve<A>(
+    fn resolve<A: Allocator>(
         &self,
         arena: A,
         outputs: &[MetaSDFNodeOutput<A>],
         seed: u64,
-    ) -> MetaSDFNodeOutput<A>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> MetaSDFNodeOutput<A> {
         let mut rng = create_param_rng(seed);
 
         let pick_count = self.min_pick_count..=self.max_pick_count.max(self.min_pick_count);
@@ -1931,15 +1854,12 @@ impl MetaStochasticSelection {
 }
 
 impl MetaSDFInstantiation {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let instances = match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::Instances(instances) => instances,
             child_output => {
@@ -2020,15 +1940,12 @@ impl MetaSDFInstantiation {
 }
 
 impl MetaTransformApplication {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let sdf_node_ids = match &outputs[self.sdf_id as usize] {
             MetaSDFNodeOutput::SingleSDF(sdf_node_id) => {
                 let mut sdf_node_ids = AVec::new_in(arena);
@@ -2091,17 +2008,13 @@ impl MetaTransformApplication {
 }
 
 impl MetaMultifractalNoiseSDFModifier {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        param_scratch: &mut ParamScratch<A>,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         resolve_unary_sdf_op(
             arena,
             graph,
@@ -2109,7 +2022,7 @@ impl MetaMultifractalNoiseSDFModifier {
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| Ok((self.sample_params(param_scratch, rng)?, rng.random::<u32>())),
+            |rng| Ok((self.sample_params(rng)?, rng.random::<u32>())),
             |(params, seed), input_node_id| {
                 SDFNode::new_multifractal_noise(
                     input_node_id,
@@ -2126,17 +2039,13 @@ impl MetaMultifractalNoiseSDFModifier {
 }
 
 impl MetaMultiscaleSphereSDFModifier {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        param_scratch: &mut ParamScratch<A>,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
         seed: u64,
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         resolve_unary_sdf_op(
             arena,
             graph,
@@ -2144,7 +2053,7 @@ impl MetaMultiscaleSphereSDFModifier {
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| Ok((self.sample_params(param_scratch, rng)?, rng.random::<u32>())),
+            |rng| Ok((self.sample_params(rng)?, rng.random::<u32>())),
             |(params, seed), input_node_id| {
                 SDFNode::new_multiscale_sphere(
                     input_node_id,
@@ -2162,14 +2071,11 @@ impl MetaMultiscaleSphereSDFModifier {
 }
 
 impl MetaSDFUnion {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let (input_node_1_id, input_node_2_id) = match (
             &outputs[self.child_1_id as usize],
             &outputs[self.child_2_id as usize],
@@ -2204,14 +2110,11 @@ impl MetaSDFUnion {
 }
 
 impl MetaSDFSubtraction {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let (input_node_1_id, input_node_2_id) = match (
             &outputs[self.child_1_id as usize],
             &outputs[self.child_2_id as usize],
@@ -2245,14 +2148,11 @@ impl MetaSDFSubtraction {
 }
 
 impl MetaSDFIntersection {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         let (input_node_1_id, input_node_2_id) = match (
             &outputs[self.child_1_id as usize],
             &outputs[self.child_2_id as usize],
@@ -2285,15 +2185,12 @@ impl MetaSDFIntersection {
 }
 
 impl MetaSDFGroupUnion {
-    fn resolve<A>(
+    fn resolve<AR: Allocator, AG: Allocator>(
         &self,
-        arena: A,
-        graph: &mut SDFGraph<A>,
-        outputs: &[MetaSDFNodeOutput<A>],
-    ) -> Result<MetaSDFNodeOutput<A>>
-    where
-        A: Allocator + Copy,
-    {
+        arena: AR,
+        graph: &mut SDFGraph<AG>,
+        outputs: &[MetaSDFNodeOutput<AR>],
+    ) -> Result<MetaSDFNodeOutput<AR>> {
         match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::SingleSDF(input_node_id) => {
                 Ok(MetaSDFNodeOutput::SingleSDF(*input_node_id))
@@ -2398,16 +2295,16 @@ fn resolve_unary_instance_op<A: Allocator, P>(
     Ok(MetaSDFNodeOutput::Instances(output_instances))
 }
 
-fn resolve_unary_sdf_op<A: Allocator, P>(
-    arena: A,
-    graph: &mut SDFGraph<A>,
+fn resolve_unary_sdf_op<AR: Allocator, AG: Allocator, P>(
+    arena: AR,
+    graph: &mut SDFGraph<AG>,
     name: &str,
     seed: u64,
-    child_output: &MetaSDFNodeOutput<A>,
+    child_output: &MetaSDFNodeOutput<AR>,
     sampling: ParameterSamplingMode,
     mut sample_params: impl FnMut(&mut ParamRng) -> Result<P>,
     create_atomic_node: impl Fn(&P, SDFNodeID) -> SDFNode,
-) -> Result<MetaSDFNodeOutput<A>> {
+) -> Result<MetaSDFNodeOutput<AR>> {
     match child_output {
         MetaSDFNodeOutput::SingleSDF(None) => Ok(MetaSDFNodeOutput::SingleSDF(None)),
         MetaSDFNodeOutput::SingleSDF(Some(input_node_id)) => {
