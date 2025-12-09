@@ -270,7 +270,7 @@ opt-level = 3
 workspace = true
 
 [profile.release]
-debug = "limited"
+debug = true
 
 [[bin]]
 name = "impact"

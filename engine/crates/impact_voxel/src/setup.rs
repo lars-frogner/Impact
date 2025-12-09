@@ -14,6 +14,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::Allocator;
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_math::Hash32;
 use impact_model::{
@@ -405,7 +406,7 @@ impl VoxelBox {
         [self.extent_x, self.extent_y, self.extent_z]
     }
 
-    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+    pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
         graph.add_node(SDFNode::new_box(self.extents_in_voxels()))
     }
 }
@@ -443,7 +444,7 @@ impl VoxelSphere {
         self.radius
     }
 
-    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+    pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
         graph.add_node(SDFNode::new_sphere(self.radius_in_voxels()))
     }
 }
@@ -499,7 +500,7 @@ impl VoxelSphereUnion {
         self.radius_2
     }
 
-    pub fn add(&self, graph: &mut SDFGraph) -> SDFNodeID {
+    pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
         let sphere_1_id = graph.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
         let sphere_2_id =
@@ -512,8 +513,8 @@ impl VoxelSphereUnion {
     }
 }
 
-pub fn apply_modifications(
-    graph: &mut SDFGraph,
+pub fn apply_modifications<A: Allocator>(
+    graph: &mut SDFGraph<A>,
     mut node_id: SDFNodeID,
     multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
     multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
@@ -561,13 +562,10 @@ pub fn apply_modifications(
     }
 }
 
-pub fn setup_voxel_object<G>(
+pub fn setup_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
-    generator: &G,
-) -> VoxelObjectID
-where
-    G: ChunkedVoxelGenerator + Sync,
-{
+    generator: &impl ChunkedVoxelGenerator,
+) -> VoxelObjectID {
     let voxel_object = ChunkedVoxelObject::generate(generator);
 
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);

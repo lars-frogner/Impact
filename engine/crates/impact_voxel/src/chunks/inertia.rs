@@ -668,10 +668,15 @@ mod tests {
     use super::*;
     use crate::{
         chunks::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
-        generation::{SDFVoxelGenerator, sdf::BoxSDF, voxel_type::SameVoxelTypeGenerator},
+        generation::{
+            SDFVoxelGenerator,
+            sdf::{SDFGraph, SDFNode},
+            voxel_type::SameVoxelTypeGenerator,
+        },
         voxel_types::VoxelType,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
+    use impact_alloc::Global;
     use nalgebra::{Similarity3, UnitQuaternion};
     use std::array;
 
@@ -728,9 +733,13 @@ mod tests {
         let extents = [22.0, 27.0, 19.0];
         let mass_densities = [0.5];
 
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_box(extents));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
         let generator = SDFVoxelGenerator::new(
             voxel_extent,
-            BoxSDF::new(extents).into(),
+            sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::from_idx(0)).into(),
         );
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);

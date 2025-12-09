@@ -770,6 +770,7 @@ pub mod fuzzing {
     };
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
+    use impact_alloc::Global;
     use nalgebra::{UnitVector3, vector};
     use std::mem;
 
@@ -843,7 +844,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane(
-        (generator, plane): (SDFVoxelGenerator, ArbitraryPlane),
+        (generator, plane): (SDFVoxelGenerator<Global>, ArbitraryPlane),
     ) {
         let object = ChunkedVoxelObject::generate(&generator);
         let mut indices_of_touched_voxels = HashSet::default();
@@ -877,7 +878,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_sphere(
-        (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
+        (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
         let object = ChunkedVoxelObject::generate(&generator);
         let mut indices_of_touched_voxels = HashSet::default();
@@ -902,7 +903,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_voxels_within_sphere(
-        (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
+        (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let mut indices_of_inside_voxels = HashSet::default();
@@ -930,7 +931,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_obtaining_voxels_within_capsule(
-        (generator, capsule): (SDFVoxelGenerator, ArbitraryCapsule),
+        (generator, capsule): (SDFVoxelGenerator<Global>, ArbitraryCapsule),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let mut indices_of_inside_voxels = HashSet::default();
@@ -958,7 +959,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_absorbing_voxels_within_sphere(
-        (generator, sphere): (SDFVoxelGenerator, ArbitrarySphere),
+        (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
@@ -998,7 +999,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_absorbing_voxels_within_capsule(
-        (generator, capsule): (SDFVoxelGenerator, ArbitraryCapsule),
+        (generator, capsule): (SDFVoxelGenerator<Global>, ArbitraryCapsule),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
@@ -1047,9 +1048,14 @@ pub mod fuzzing {
 mod tests {
     use super::*;
     use crate::{
-        generation::{SDFVoxelGenerator, sdf::SphereSDF, voxel_type::SameVoxelTypeGenerator},
+        generation::{
+            SDFVoxelGenerator,
+            sdf::{SDFGraph, SDFNode},
+            voxel_type::SameVoxelTypeGenerator,
+        },
         voxel_types::VoxelType,
     };
+    use impact_alloc::Global;
     use nalgebra::{UnitVector3, vector};
 
     #[test]
@@ -1057,9 +1063,13 @@ mod tests {
         let object_radius = 10.0;
         let plane_displacement = 0.8 * object_radius;
 
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDF::new(object_radius as f32).into(),
+            sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator);
@@ -1104,9 +1114,13 @@ mod tests {
         let object_radius = 10.0;
         let sphere_radius = 0.6 * object_radius;
 
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDF::new(object_radius as f32).into(),
+            sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let object = ChunkedVoxelObject::generate(&generator);
@@ -1143,9 +1157,13 @@ mod tests {
         let object_radius = 10.0;
         let sphere_radius = 0.4 * object_radius;
 
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDF::new(object_radius as f32).into(),
+            sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator);
@@ -1184,9 +1202,13 @@ mod tests {
         let capsule_vector = capsule_direction.scale(10.0);
         let capsule_radius = 0.4 * object_radius;
 
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
         let generator = SDFVoxelGenerator::new(
             0.5,
-            SphereSDF::new(object_radius as f32).into(),
+            sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
         let mut object = ChunkedVoxelObject::generate(&generator);

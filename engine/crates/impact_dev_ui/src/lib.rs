@@ -9,7 +9,6 @@ mod timing_panels;
 mod toolbar;
 
 pub use command::{UICommand, UICommandQueue};
-use impact_alloc::Allocator;
 
 use anyhow::Result;
 use impact::{
@@ -64,14 +63,7 @@ pub struct UserInterfaceConfig {
 pub trait CustomPanels {
     fn run_toolbar_buttons(&mut self, ui: &mut Ui);
 
-    fn run_panels<A>(
-        &mut self,
-        arena: A,
-        ctx: &Context,
-        config: &UserInterfaceConfig,
-        engine: &Engine,
-    ) where
-        A: Allocator + Copy;
+    fn run_panels(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine);
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -101,39 +93,24 @@ impl UserInterface {
         ));
     }
 
-    pub fn run<A>(
+    pub fn run(
         &mut self,
-        arena: A,
         ctx: &Context,
         input: RawInput,
         engine: &Engine,
         command_queue: &UICommandQueue,
-    ) -> FullOutput
-    where
-        A: Allocator + Copy,
-    {
-        self.run_with_custom_panels(
-            arena,
-            ctx,
-            input,
-            engine,
-            command_queue,
-            &mut NoCustomPanels,
-        )
+    ) -> FullOutput {
+        self.run_with_custom_panels(ctx, input, engine, command_queue, &mut NoCustomPanels)
     }
 
-    pub fn run_with_custom_panels<A>(
+    pub fn run_with_custom_panels(
         &mut self,
-        arena: A,
         ctx: &Context,
         input: RawInput,
         engine: &Engine,
         command_queue: &UICommandQueue,
         custom_panels: &mut impl CustomPanels,
-    ) -> FullOutput
-    where
-        A: Allocator + Copy,
-    {
+    ) -> FullOutput {
         let mut output = ctx.run(input, |ctx| {
             // Return without adding any output if we requested a screenshot in
             // the previous frame and should hide the UI
@@ -168,13 +145,12 @@ impl UserInterface {
                     self.gizmo_option_panel.run(ctx, &self.config, engine);
                 }
                 if self.config.show_task_timings {
-                    self.task_timing_panel.run(arena, ctx, &self.config, engine);
+                    self.task_timing_panel.run(ctx, &self.config, engine);
                 }
                 if self.config.show_render_pass_timings {
-                    self.render_pass_timing_panel
-                        .run(arena, ctx, &self.config, engine);
+                    self.render_pass_timing_panel.run(ctx, &self.config, engine);
                 }
-                custom_panels.run_panels(arena, ctx, &self.config, engine);
+                custom_panels.run_panels(ctx, &self.config, engine);
             }
 
             if self.config.show_time_overlay {
@@ -231,14 +207,5 @@ impl Default for UserInterfaceConfig {
 impl CustomPanels for NoCustomPanels {
     fn run_toolbar_buttons(&mut self, _ui: &mut Ui) {}
 
-    fn run_panels<A>(
-        &mut self,
-        _arena: A,
-        _ctx: &Context,
-        _config: &UserInterfaceConfig,
-        _engine: &Engine,
-    ) where
-        A: Allocator + Copy,
-    {
-    }
+    fn run_panels(&mut self, _ctx: &Context, _config: &UserInterfaceConfig, _engine: &Engine) {}
 }

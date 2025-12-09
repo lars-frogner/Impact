@@ -1,11 +1,11 @@
 //! Input/output of texture data.
 
 use crate::processing::ImageProcessing;
-use anyhow::{Result, anyhow, bail};
-use impact_alloc::{AVec, Allocator};
+use anyhow::{anyhow, bail, Result};
+use impact_alloc::{arena::ArenaPool, AVec};
 use impact_gpu::{
     device::GraphicsDevice,
-    texture::{Texture, TextureConfig, mipmap::MipmapperGenerator},
+    texture::{mipmap::MipmapperGenerator, Texture, TextureConfig},
     wgpu,
 };
 use impact_io::image;
@@ -24,22 +24,18 @@ use std::path::Path;
 ///   data between buffers and textures).
 /// - The image is grayscale and the color space in the configuration is not
 ///   linear.
-pub fn create_texture_from_image_path<A>(
-    arena: A,
+pub fn create_texture_from_image_path(
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
     image_path: impl AsRef<Path>,
     texture_config: TextureConfig,
     processing: &ImageProcessing,
     label: &str,
-) -> Result<Texture>
-where
-    A: Copy + Allocator,
-{
+) -> Result<Texture> {
     let image_path = image_path.as_ref();
-    let image = image::load_image_from_path(arena, image_path)?;
+    let arena = ArenaPool::get_arena();
+    let image = image::load_image_from_path(&arena, image_path)?;
     crate::create_texture_from_image(
-        arena,
         graphics_device,
         mipmapper_generator,
         &image,
@@ -57,18 +53,14 @@ where
 /// - The format of the given texture is not supported.
 /// - The mip level is invalid.
 /// - The texture array index is invalid.
-pub fn save_texture_as_png_file<A>(
-    arena: A,
+pub fn save_texture_as_png_file(
     graphics_device: &GraphicsDevice,
     texture: &wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
     already_gamma_corrected: bool,
     output_path: impl AsRef<Path>,
-) -> Result<()>
-where
-    A: Copy + Allocator,
-{
+) -> Result<()> {
     fn byte_to_float(byte: u8) -> f32 {
         f32::from(byte) / 255.0
     }
@@ -117,13 +109,15 @@ where
         .size()
         .mip_level_size(mip_level, texture.dimension());
 
+    let arena = ArenaPool::get_arena();
+
     match format {
         wgpu::TextureFormat::Rgba8Unorm
         | wgpu::TextureFormat::Rgba8UnormSrgb
         | wgpu::TextureFormat::Bgra8Unorm
         | wgpu::TextureFormat::Bgra8UnormSrgb
         | wgpu::TextureFormat::R8Unorm => {
-            let mut data = AVec::new_in(arena);
+            let mut data = AVec::new_in(&arena);
             impact_gpu::texture::extract_texture_data_into(
                 &mut data,
                 graphics_device.device(),
@@ -173,8 +167,8 @@ where
             }
         }
         wgpu::TextureFormat::Rgba16Float | wgpu::TextureFormat::R16Float => {
-            let mut data = AVec::new_in(arena);
-            impact_gpu::texture::extract_converted_texture_data_into::<A, half::f16, f32>(
+            let mut data = AVec::new_in(&arena);
+            impact_gpu::texture::extract_converted_texture_data_into::<_, half::f16, f32>(
                 &mut data,
                 graphics_device.device(),
                 graphics_device.queue(),
@@ -224,7 +218,7 @@ where
         | wgpu::TextureFormat::Rgba32Float
         | wgpu::TextureFormat::R32Float
         | wgpu::TextureFormat::Rg32Float => {
-            let mut data = AVec::<f32, A>::new_in(arena);
+            let mut data = AVec::<f32, _>::new_in(&arena);
             impact_gpu::texture::extract_texture_data_into(
                 &mut data,
                 graphics_device.device(),
@@ -238,7 +232,7 @@ where
                 let (rg_data, rem) = data.as_chunks::<2>();
                 assert!(rem.is_empty());
 
-                let mut rgba_data = AVec::new_in(arena);
+                let mut rgba_data = AVec::new_in(&arena);
                 rgba_data.resize(data.len() * 2, 0.0);
 
                 for (i, &[r, g]) in rg_data.iter().enumerate() {

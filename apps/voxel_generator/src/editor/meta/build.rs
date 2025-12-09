@@ -3,8 +3,10 @@ use super::{
     node_kind::{self},
 };
 use anyhow::Result;
-use impact::{impact_containers::HashMap, impact_log};
-use impact_alloc::{AVec, Allocator};
+use impact::{
+    impact_alloc::{AVec, Allocator, arena::ArenaPool},
+    impact_containers::HashMap,
+};
 use impact_voxel::{
     generation::{
         SDFVoxelGenerator,
@@ -45,15 +47,12 @@ impl BuildScratch {
     }
 }
 
-pub fn build_sdf_voxel_generator<A>(
-    arena: A,
-    compiled_graph: SDFGraphBuildResult<A>,
+pub fn build_sdf_voxel_generator<A: Allocator, AG: Allocator>(
+    alloc: A,
+    compiled_graph: &SDFGraphBuildResult<AG>,
     voxel_type_generator: VoxelTypeGenerator,
-) -> SDFVoxelGenerator
-where
-    A: Allocator + Copy,
-{
-    let sdf_generator = compiled_graph.graph.build_with_arena(arena).unwrap();
+) -> SDFVoxelGenerator<A> {
+    let sdf_generator = compiled_graph.graph.build_in(alloc).unwrap();
 
     SDFVoxelGenerator::new(
         f64::from(compiled_graph.voxel_extent),
@@ -62,9 +61,9 @@ where
     )
 }
 
-pub fn default_sdf_voxel_generator() -> SDFVoxelGenerator {
+pub fn default_sdf_voxel_generator<A: Allocator>(alloc: A) -> SDFVoxelGenerator<A> {
     let voxel_extent = node_kind::DEFAULT_VOXEL_EXTENT;
-    let sdf_generator = SDFGenerator::empty();
+    let sdf_generator = SDFGenerator::empty_in(alloc);
 
     let voxel_type_generator =
         VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0)));
@@ -72,14 +71,11 @@ pub fn default_sdf_voxel_generator() -> SDFVoxelGenerator {
     SDFVoxelGenerator::new(f64::from(voxel_extent), sdf_generator, voxel_type_generator)
 }
 
-pub fn build_sdf_graph<A>(
-    arena: A,
+pub fn build_sdf_graph<A: Allocator>(
+    alloc: A,
     scratch: &mut BuildScratch,
     nodes: &BTreeMap<MetaNodeID, MetaNode>,
-) -> Option<Result<SDFGraphBuildResult<A>>>
-where
-    A: Allocator + Copy,
-{
+) -> Option<Result<SDFGraphBuildResult<A>>> {
     let output_node = nodes.get(&0)?;
 
     let (voxel_extent, seed) =
@@ -91,7 +87,8 @@ where
     scratch.meta_graph.clear();
     scratch.id_map.clear();
 
-    let mut operation_stack = AVec::new_in(arena);
+    let arena = ArenaPool::get_arena();
+    let mut operation_stack = AVec::new_in(&arena);
     operation_stack.push(SDFBuildOperation::VisitChildren((root_node_id, root_node)));
 
     while let Some(operation) = operation_stack.pop() {
@@ -128,7 +125,7 @@ where
     Some(
         scratch
             .meta_graph
-            .build(arena, seed.into())
+            .build_in(alloc, seed.into())
             .map(|graph| SDFGraphBuildResult {
                 voxel_extent,
                 graph,

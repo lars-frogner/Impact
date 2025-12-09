@@ -121,6 +121,7 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
 impact = { path = "../../engine", features = ["window", "egui", "obj", "ply"] }
+impact_log = { path = "../../engine/crates/impact_log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 inventory = "0.3"
 libloading = "0.8"

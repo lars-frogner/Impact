@@ -38,7 +38,6 @@ pub use impact_geometry;
 pub use impact_gpu;
 pub use impact_io;
 pub use impact_light;
-pub use impact_log;
 pub use impact_material;
 pub use impact_math;
 pub use impact_mesh;

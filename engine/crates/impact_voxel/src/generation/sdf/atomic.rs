@@ -4,7 +4,11 @@
 use crate::{VoxelSignedDistance, chunks::ChunkedVoxelObject};
 use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_ne;
-use impact_alloc::{AVec, Allocator, Global};
+use impact_alloc::{
+    AVec, Allocator,
+    arena::{ArenaPool, PoolArena},
+    avec,
+};
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::Float;
 use nalgebra::{
@@ -25,7 +29,7 @@ use twox_hash::XxHash32;
 /// has correct distances only close to the surface, as this is what we
 /// typically care about.
 #[derive(Clone, Debug)]
-pub struct SDFGenerator<A: Allocator = Global> {
+pub struct SDFGenerator<A: Allocator> {
     /// Nodes in reverse depth-first order, with multi-parent subgraphs
     /// duplicated for each parent in order to unroll the DAG into a tree. The
     /// last node is the root.
@@ -44,10 +48,10 @@ pub struct SDFGeneratorBlockBuffers<const COUNT: usize, A: Allocator> {
 const CHUNK_SIZE: usize = ChunkedVoxelObject::chunk_size();
 const CHUNK_VOXEL_COUNT: usize = ChunkedVoxelObject::chunk_voxel_count();
 
-pub type SDFGeneratorChunkBuffers = SDFGeneratorBlockBuffers<CHUNK_VOXEL_COUNT, Global>;
+pub type SDFGeneratorChunkBuffers<A> = SDFGeneratorBlockBuffers<CHUNK_VOXEL_COUNT, A>;
 
 #[derive(Clone, Debug)]
-pub struct SDFGraph<A: Allocator = Global> {
+pub struct SDFGraph<A: Allocator> {
     nodes: AVec<SDFNode, A>,
     root_node_id: SDFNodeID,
 }
@@ -215,28 +219,20 @@ enum NodeBuildState {
     DomainDetermined,
 }
 
-impl SDFGenerator<Global> {
-    pub fn empty() -> Self {
-        Self::empty_in(Global)
-    }
-
-    pub fn new<AR>(arena: AR, nodes: &[SDFNode], root_node_id: SDFNodeID) -> Result<Self>
-    where
-        AR: Allocator + Copy,
-    {
-        Self::new_in(Global, arena, nodes, root_node_id)
-    }
-
-    pub fn create_buffers_for_chunk(&self) -> SDFGeneratorChunkBuffers {
-        self.create_buffers_for_block(Global)
-    }
-
-    pub fn compute_signed_distances_for_chunk(
+impl<A: Allocator> SDFGenerator<A> {
+    pub fn create_buffers_for_chunk_in<AB: Allocator>(
         &self,
-        buffers: &mut SDFGeneratorChunkBuffers,
+        alloc: AB,
+    ) -> SDFGeneratorChunkBuffers<AB> {
+        self.create_buffers_for_block_in(alloc)
+    }
+
+    pub fn compute_signed_distances_for_chunk<AB: Allocator>(
+        &self,
+        buffers: &mut SDFGeneratorChunkBuffers<AB>,
         chunk_aabb_in_root_space: &AxisAlignedBox<f32>,
     ) {
-        self.compute_signed_distances_for_block::<CHUNK_SIZE, CHUNK_VOXEL_COUNT>(
+        self.compute_signed_distances_for_block::<CHUNK_SIZE, CHUNK_VOXEL_COUNT, AB>(
             buffers,
             chunk_aabb_in_root_space,
         );
@@ -252,36 +248,26 @@ impl<A: Allocator> SDFGenerator<A> {
         }
     }
 
-    pub fn new_in<AR>(
-        alloc: A,
-        arena: AR,
-        nodes: &[SDFNode],
-        root_node_id: SDFNodeID,
-    ) -> Result<Self>
-    where
-        AR: Allocator + Copy,
-    {
+    pub fn new_in(alloc: A, nodes: &[SDFNode], root_node_id: SDFNodeID) -> Result<Self> {
         let mut processed_nodes = AVec::with_capacity_in(nodes.len(), alloc);
+
+        let arena = ArenaPool::get_arena();
 
         // The domains of each node computed from child domains, not accounting
         // for required padding due to soft combination operations
-        let mut domains = AVec::new_in(arena);
-        domains.resize(nodes.len(), zero_domain());
+        let mut domains = avec![in &arena; zero_domain(); nodes.len()];
 
         // The number of leaves below each node, for computing padding for
         // soft combination nodes
-        let mut leaf_counts = AVec::new_in(arena);
-        leaf_counts.resize(nodes.len(), 0_u32);
+        let mut leaf_counts = avec![in &arena; 0_u32; nodes.len()];
 
         // The padding we must add to each node's domain to account for soft
         // combination operations
-        let mut required_padding = AVec::new_in(arena);
-        required_padding.resize(nodes.len(), 0.0_f32);
+        let mut required_padding = avec![in &arena; 0.0_f32; nodes.len()];
 
-        let mut states = AVec::new_in(arena);
-        states.resize(nodes.len(), NodeBuildState::Unvisited);
+        let mut states = avec![in &arena; NodeBuildState::Unvisited; nodes.len()];
 
-        let mut operation_stack = AVec::with_capacity_in(3 * nodes.len(), arena);
+        let mut operation_stack = AVec::with_capacity_in(3 * nodes.len(), &arena);
 
         operation_stack.push(BuildOperation::VisitChildren(root_node_id));
 
@@ -530,7 +516,7 @@ impl<A: Allocator> SDFGenerator<A> {
 
         debug_assert_eq!(stack_top, 1);
 
-        Self::determine_transforms_and_margins(arena, &mut processed_nodes);
+        Self::determine_transforms_and_margins(&arena, &mut processed_nodes);
 
         let root_domain = domains[root_node_id as usize]
             .expanded_about_center(required_padding[root_node_id as usize]);
@@ -542,10 +528,7 @@ impl<A: Allocator> SDFGenerator<A> {
         })
     }
 
-    fn determine_transforms_and_margins<AR>(arena: AR, nodes: &mut [ProcessedSDFNode])
-    where
-        AR: Allocator + Copy,
-    {
+    fn determine_transforms_and_margins(arena: &PoolArena, nodes: &mut [ProcessedSDFNode]) {
         // We determine the transforms to node space by walking the graph from
         // parent to children, taking the parent transform and either
         // propagating it unchanged to the child or, if the child is a transform
@@ -557,11 +540,9 @@ impl<A: Allocator> SDFGenerator<A> {
         // margin the parent will need for its child in order to evaluate the
         // SDF correctly.
 
-        let mut transform_stack = AVec::new_in(arena);
-        transform_stack.resize(nodes.len(), Matrix4::zeros());
+        let mut transform_stack = avec![in arena; Matrix4::zeros(); nodes.len()];
 
-        let mut margin_stack = AVec::new_in(arena);
-        margin_stack.resize(nodes.len(), 0.0);
+        let mut margin_stack = avec![in arena; 0.0; nodes.len()];
 
         let mut stack_top = 0;
         transform_stack[stack_top] = Matrix4::identity();
@@ -669,15 +650,15 @@ impl<A: Allocator> SDFGenerator<A> {
         &self.domain
     }
 
-    pub fn create_buffers_for_block<const COUNT: usize>(
+    pub fn create_buffers_for_block_in<const COUNT: usize, AB: Allocator>(
         &self,
-        alloc: A,
-    ) -> SDFGeneratorBlockBuffers<COUNT, A> {
+        alloc: AB,
+    ) -> SDFGeneratorBlockBuffers<COUNT, AB> {
         // We only strictly need `self.required_forward_stack_size` signed
         // distance arrays, but we include one additional array for scratch
         // space at the end of the allocation
-        let mut signed_distance_stack = AVec::new_in(alloc);
-        signed_distance_stack.resize(self.required_forward_stack_size + 1, [0.0; COUNT]);
+        let signed_distance_stack =
+            avec![in alloc; [0.0; COUNT]; self.required_forward_stack_size + 1];
 
         SDFGeneratorBlockBuffers {
             signed_distance_stack,
@@ -688,9 +669,13 @@ impl<A: Allocator> SDFGenerator<A> {
     /// from node domain boundaries rather than evaluating them. If you need
     /// correct gradients, use
     /// [`Self::compute_signed_distances_for_block_preserving_gradients`].
-    pub fn compute_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
+    pub fn compute_signed_distances_for_block<
+        const SIZE: usize,
+        const COUNT: usize,
+        AB: Allocator,
+    >(
         &self,
-        buffers: &mut SDFGeneratorBlockBuffers<COUNT, A>,
+        buffers: &mut SDFGeneratorBlockBuffers<COUNT, AB>,
         block_aabb_in_root_space: &AxisAlignedBox<f32>,
     ) {
         if self.nodes.is_empty() {
@@ -1089,36 +1074,6 @@ impl<A: Allocator> SDFGenerator<A> {
     }
 }
 
-impl Default for SDFGenerator {
-    fn default() -> Self {
-        Self::empty()
-    }
-}
-
-impl From<SphereSDF> for SDFGenerator {
-    fn from(generator: SphereSDF) -> Self {
-        let mut nodes = AVec::new();
-        nodes.push(SDFNode::Sphere(generator));
-        Self::new(Global, &nodes, 0).unwrap()
-    }
-}
-
-impl From<CapsuleSDF> for SDFGenerator {
-    fn from(generator: CapsuleSDF) -> Self {
-        let mut nodes = AVec::new();
-        nodes.push(SDFNode::Capsule(generator));
-        Self::new(Global, &nodes, 0).unwrap()
-    }
-}
-
-impl From<BoxSDF> for SDFGenerator {
-    fn from(generator: BoxSDF) -> Self {
-        let mut nodes = AVec::new();
-        nodes.push(SDFNode::Box(generator));
-        Self::new(Global, &nodes, 0).unwrap()
-    }
-}
-
 impl<const COUNT: usize, A: Allocator> SDFGeneratorBlockBuffers<COUNT, A> {
     pub fn final_signed_distances(&self) -> &[f32; COUNT] {
         &self.signed_distance_stack[0]
@@ -1137,32 +1092,11 @@ impl<A: Allocator> SDFGraph<A> {
         }
     }
 
-    pub fn build(self) -> Result<SDFGenerator> {
-        self.build_with_arena(Global)
-    }
-
-    // Uses the arena only for temporary allocations during the build.
-    pub fn build_with_arena<AR>(&self, arena: AR) -> Result<SDFGenerator>
-    where
-        AR: Allocator + Copy,
-    {
+    pub fn build_in<AL: Allocator>(&self, alloc: AL) -> Result<SDFGenerator<AL>> {
         if self.nodes.is_empty() {
-            Ok(SDFGenerator::empty())
+            Ok(SDFGenerator::empty_in(alloc))
         } else {
-            SDFGenerator::new(arena, &self.nodes, self.root_node_id)
-        }
-    }
-
-    // Uses the arena both for temporary allocations during the build and for
-    // the final memory of the `SDFGenerator`.
-    pub fn build_temporary<AR>(self, arena: AR) -> Result<SDFGenerator<AR>>
-    where
-        AR: Allocator + Copy,
-    {
-        if self.nodes.is_empty() {
-            Ok(SDFGenerator::empty_in(arena))
-        } else {
-            SDFGenerator::new_in(arena, arena, &self.nodes, self.root_node_id)
+            SDFGenerator::new_in(alloc, &self.nodes, self.root_node_id)
         }
     }
 
@@ -1184,18 +1118,6 @@ impl<A: Allocator> SDFGraph<A> {
     pub fn set_root_node(&mut self, node_id: SDFNodeID) {
         assert!((node_id as usize) < self.nodes.len());
         self.root_node_id = node_id;
-    }
-}
-
-impl SDFGraph<Global> {
-    pub fn new() -> Self {
-        Self::new_in(Global)
-    }
-}
-
-impl Default for SDFGraph<Global> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

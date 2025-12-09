@@ -10,7 +10,6 @@ use crate::{
     setup,
 };
 use anyhow::{Result, anyhow};
-use impact_alloc::Allocator;
 use impact_ecs::{
     archetype::ArchetypeComponents,
     component::{
@@ -93,14 +92,12 @@ impl Engine {
             .stage_entity_for_removal(entity_id);
     }
 
-    pub fn create_entity_with_id<A, CA, E>(
+    pub fn create_entity_with_id<CA, E>(
         &self,
-        arena: A,
         entity_id: EntityID,
         components: impl TryInto<SingleInstance<ArchetypeComponents<CA>>, Error = E>,
     ) -> Result<()>
     where
-        A: Allocator + Copy,
         CA: ComponentArray,
         E: Into<anyhow::Error>,
     {
@@ -110,41 +107,37 @@ impl Engine {
             .into_inner()
             .into_storage();
 
-        setup::perform_setup_for_new_entities(arena, self, &mut components)?;
+        setup::perform_setup_for_new_entities(self, &mut components)?;
 
         self.ecs_world
             .owrite()
             .create_entity_with_id(entity_id, SingleInstance::new(components))
     }
 
-    pub fn create_entity<A, AC, E>(
+    pub fn create_entity<AC, E>(
         &self,
-        arena: A,
         components: impl TryInto<SingleInstance<ArchetypeComponents<AC>>, Error = E>,
     ) -> Result<EntityID>
     where
-        A: Allocator + Copy,
         AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
         Ok(self
-            .create_entities(arena, components.try_into().map_err(E::into)?.into_inner())?
+            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
             .pop()
             .unwrap())
     }
 
-    pub fn create_entities<A, AC, E>(
+    pub fn create_entities<AC, E>(
         &self,
-        arena: A,
         components: impl TryInto<ArchetypeComponents<AC>, Error = E>,
     ) -> Result<Vec<EntityID>>
     where
-        A: Allocator + Copy,
         AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
-        setup::perform_setup_for_new_entities(arena, self, &mut components)?;
+        setup::perform_setup_for_new_entities(self, &mut components)?;
         self.ecs_world.owrite().create_entities(components)
     }
 

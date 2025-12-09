@@ -8,7 +8,7 @@ pub mod processing;
 
 use anyhow::{Context, Result, anyhow, bail};
 use gpu_resource::SamplingTexture;
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, Allocator, arena::ArenaPool};
 use impact_containers::DefaultHasher;
 use impact_gpu::{
     device::GraphicsDevice,
@@ -271,21 +271,17 @@ impl ImageTextureSource {
 ///   data between buffers and textures).
 /// - The image is grayscale and the color space in the configuration is not
 ///   linear.
-pub fn create_texture_from_bytes<A>(
-    arena: A,
+pub fn create_texture_from_bytes(
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
     byte_buffer: &[u8],
     texture_config: TextureConfig,
     processing: &ImageProcessing,
     label: &str,
-) -> Result<Texture>
-where
-    A: Copy + Allocator,
-{
-    let image = impact_io::image::load_image_from_bytes(arena, byte_buffer)?;
+) -> Result<Texture> {
+    let arena = ArenaPool::get_arena();
+    let image = impact_io::image::load_image_from_bytes(&arena, byte_buffer)?;
     create_texture_from_image(
-        arena,
         graphics_device,
         mipmapper_generator,
         &image,
@@ -306,19 +302,14 @@ where
 ///   data between buffers and textures).
 /// - The image is grayscale and the color space in the configuration is not
 ///   linear.
-pub fn create_texture_from_image<A, IA>(
-    arena: A,
+pub fn create_texture_from_image<A: Allocator>(
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
-    image: &Image<IA>,
+    image: &Image<A>,
     texture_config: TextureConfig,
     processing: &ImageProcessing,
     label: &str,
-) -> Result<Texture>
-where
-    A: Copy + Allocator,
-    IA: Allocator,
-{
+) -> Result<Texture> {
     let (width, height) = image.dimensions();
     let width = NonZeroU32::new(width).ok_or_else(|| anyhow!("Image width is zero"))?;
     let height = NonZeroU32::new(height).ok_or_else(|| anyhow!("Image height is zero"))?;
@@ -327,7 +318,8 @@ where
     let texel_description =
         determine_valid_texel_description(image.meta.pixel_format, &texture_config)?;
 
-    let processed = processing.execute(arena, image);
+    let arena = ArenaPool::get_arena();
+    let processed = processing.execute(&arena, image);
 
     let data = processed.as_ref().map_or_else(
         || image.data.as_slice(),
@@ -335,7 +327,6 @@ where
     );
 
     Texture::create(
-        arena,
         graphics_device,
         Some(mipmapper_generator),
         data,
@@ -365,8 +356,7 @@ where
 /// - The row size (width times texel size) is not a multiple of 256 bytes
 ///   (`wgpu` requires that rows are a multiple of 256 bytes for copying
 ///   data between buffers and textures).
-pub fn create_texture_array_from_image_sources<'a, A, I, V>(
-    arena: A,
+pub fn create_texture_array_from_image_sources<'a, I, V>(
     graphics_device: &GraphicsDevice,
     mipmapper_generator: Option<&MipmapperGenerator>,
     image_sources: I,
@@ -377,7 +367,6 @@ pub fn create_texture_array_from_image_sources<'a, A, I, V>(
     label: &str,
 ) -> Result<Texture>
 where
-    A: Copy + Allocator,
     I: ExactSizeIterator<Item = &'a ImageSource>,
     V: Fn(&ImageMetadata) -> Result<()>,
 {
@@ -401,14 +390,17 @@ where
         Ok(meta.width as usize * meta.height as usize * texel_description.n_bytes() as usize)
     };
 
+    let arena = ArenaPool::get_arena();
+
     let (mut byte_buffer, meta) = match first_source {
         ImageSource::File(path) => {
-            let image = impact_io::image::load_image_from_path(arena, path).with_context(|| {
-                format!("Failed to load array texture image from {}", path.display())
-            })?;
+            let image =
+                impact_io::image::load_image_from_path(&arena, path).with_context(|| {
+                    format!("Failed to load array texture image from {}", path.display())
+                })?;
             verify_metadata(&image.meta)?;
 
-            let processed = processing.execute(arena, &image);
+            let processed = processing.execute(&arena, &image);
 
             let mut byte_buffer = processed.map_or(image.data, |processed| processed.data);
 
@@ -420,7 +412,7 @@ where
             verify_metadata(&image.meta)?;
 
             let mut byte_buffer =
-                AVec::with_capacity_in(n_images * image_size_from_meta(&image.meta)?, arena);
+                AVec::with_capacity_in(n_images * image_size_from_meta(&image.meta)?, &arena);
 
             byte_buffer.extend_from_slice(&image.data);
 
@@ -438,7 +430,7 @@ where
         let source_meta = match source {
             ImageSource::File(path) => {
                 let image =
-                    impact_io::image::load_image_from_path(arena, path).with_context(|| {
+                    impact_io::image::load_image_from_path(&arena, path).with_context(|| {
                         format!("Failed to load array texture image from {}", path.display())
                     })?;
 
@@ -469,7 +461,6 @@ where
     }
 
     Texture::create(
-        arena,
         graphics_device,
         mipmapper_generator,
         &byte_buffer,
@@ -504,16 +495,12 @@ where
 /// - [`create_texture_from_image`],
 /// - [`create_texture_array_from_image_sources`]
 /// - [`create_texture_from_lookup_table`](lookup_table::create_texture_from_lookup_table).
-pub(crate) fn create_texture_from_info<A>(
-    arena: A,
+pub(crate) fn create_texture_from_info(
     graphics_device: &GraphicsDevice,
     mipmapper_generator: &MipmapperGenerator,
     texture_info: &TextureCreateInfo,
     label: &str,
-) -> Result<SamplingTexture>
-where
-    A: Copy + Allocator,
-{
+) -> Result<SamplingTexture> {
     fn verify_image_metadata(from_info: &ImageMetadata, from_image: &ImageMetadata) -> Result<()> {
         if from_info != from_image {
             bail!(
@@ -538,6 +525,8 @@ where
         Ok(())
     }
 
+    let arena = ArenaPool::get_arena();
+
     let (texture, sampler_id) = match texture_info {
         TextureCreateInfo::Image(image_texture_info) => {
             let image_metadata = &image_texture_info.metadata;
@@ -547,15 +536,13 @@ where
 
             let texture = match &image_texture_info.source {
                 ImageTextureSource::Single(ImageSource::File(path)) => {
-                    let image =
-                        impact_io::image::load_image_from_path(arena, path).with_context(|| {
-                            format!("Failed to load texture image from {}", path.display())
-                        })?;
+                    let image = impact_io::image::load_image_from_path(&arena, path).with_context(
+                        || format!("Failed to load texture image from {}", path.display()),
+                    )?;
 
                     verify_image_metadata(image_metadata, &image.meta)?;
 
                     create_texture_from_image(
-                        arena,
                         graphics_device,
                         mipmapper_generator,
                         &image,
@@ -568,7 +555,6 @@ where
                     verify_image_metadata(image_metadata, &image.meta)?;
 
                     create_texture_from_image(
-                        arena,
                         graphics_device,
                         mipmapper_generator,
                         image,
@@ -584,7 +570,6 @@ where
                     };
 
                     create_texture_array_from_image_sources(
-                        arena,
                         graphics_device,
                         mipmapper_generator,
                         sources.iter(),
@@ -613,7 +598,6 @@ where
                             })?;
                         verify_table_metadata(metadata, table.metadata())?;
                         lookup_table::create_texture_from_lookup_table(
-                            arena,
                             graphics_device,
                             &table,
                             label,
@@ -626,7 +610,6 @@ where
                             })?;
                         verify_table_metadata(metadata, table.metadata())?;
                         lookup_table::create_texture_from_lookup_table(
-                            arena,
                             graphics_device,
                             &table,
                             label,

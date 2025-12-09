@@ -5,7 +5,7 @@ use impact::{
     egui::{Context, TextStyle, TextWrapMode},
     engine::Engine,
 };
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, arena::ArenaPool};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RenderPassTimingPanel;
@@ -14,10 +14,7 @@ const NUM_LABEL_COL_CHARS: usize = 24;
 const NUM_TIMING_COL_CHARS: usize = 8;
 
 impl RenderPassTimingPanel {
-    pub fn run<A>(&mut self, arena: A, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine)
-    where
-        A: Allocator,
-    {
+    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
         let style = ctx.style();
         let body_font = TextStyle::Body.resolve(&style);
         let mono_font = TextStyle::Monospace.resolve(&style);
@@ -33,7 +30,8 @@ impl RenderPassTimingPanel {
             "render_pass_timing_panel",
             default_panel_width,
             |ui| {
-                let mut timing_results = AVec::new_in(arena);
+                let arena = ArenaPool::get_arena();
+                let mut timing_results = AVec::new_in(&arena);
                 engine.collect_render_pass_timing_results(&mut timing_results);
 
                 let header_height = ui.spacing().interact_size.y;

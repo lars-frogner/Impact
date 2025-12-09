@@ -5,7 +5,6 @@ use crate::{
     lookup_table::{LookupTableBindingInfo, LookupTableID, LookupTableTextureCreateInfo},
 };
 use anyhow::{Context, Result, anyhow};
-use impact_alloc::Allocator;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -144,26 +143,16 @@ impl SamplerCreateInfo {
 impl<'a> GPUResource<'a, TextureCreateInfo> for SamplingTexture {
     type GPUContext = (&'a GraphicsDevice, &'a MipmapperGenerator);
 
-    fn create<A>(
-        scratch: A,
+    fn create(
         (graphics_device, mipmapper_generator): &Self::GPUContext,
         id: TextureID,
         texture_info: &TextureCreateInfo,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         let label = id.to_string();
         impact_log::debug!("Creating texture `{label}`");
-        crate::create_texture_from_info(
-            scratch,
-            graphics_device,
-            mipmapper_generator,
-            texture_info,
-            &label,
-        )
-        .with_context(|| format!("Failed creating texture: {label}"))
-        .map(Some)
+        crate::create_texture_from_info(graphics_device, mipmapper_generator, texture_info, &label)
+            .with_context(|| format!("Failed creating texture: {label}"))
+            .map(Some)
     }
 
     fn cleanup(self, _gpu_context: &Self::GPUContext, _id: TextureID) -> Result<()> {
@@ -174,15 +163,11 @@ impl<'a> GPUResource<'a, TextureCreateInfo> for SamplingTexture {
 impl GPUResource<'_, SamplerCreateInfo> for Sampler {
     type GPUContext = GraphicsDevice;
 
-    fn create<A>(
-        _scratch: A,
+    fn create(
         graphics_device: &GraphicsDevice,
         _id: SamplerID,
         sampler_info: &SamplerCreateInfo,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         Ok(Some(Sampler::create(
             graphics_device,
             sampler_info.config.clone(),
@@ -291,15 +276,11 @@ impl<'a> GPUResource<'a, LookupTableBindingInfo> for LookupTableBindGroup {
         &'a SamplerMap,
     );
 
-    fn create<A>(
-        _scratch: A,
+    fn create(
         (graphics_device, bind_group_layout_registry, textures, samplers): &Self::GPUContext,
         id: LookupTableID,
         binding_info: &LookupTableBindingInfo,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         Self::create_from_info(
             graphics_device,
             bind_group_layout_registry,

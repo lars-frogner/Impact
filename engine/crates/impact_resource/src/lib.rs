@@ -1,6 +1,5 @@
 //! Resource management.
 
-mod alloc;
 pub mod gpu;
 pub mod registry;
 

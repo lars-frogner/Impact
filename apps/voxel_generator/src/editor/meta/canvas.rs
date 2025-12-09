@@ -22,9 +22,9 @@ use impact::{
         Align, Color32, Context, CursorIcon, Direction, Id, Key, Label, Painter, PointerButton,
         Pos2, Rect, Sense, Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
     },
+    impact_alloc::{AVec, arena::ArenaPool},
     impact_containers::{BitVector, HashMap, HashSet, KeyIndexMapper},
 };
-use impact_alloc::{AVec, Allocator};
 use std::{collections::BTreeMap, path::Path};
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(281.0, 22.0);
@@ -1799,11 +1799,12 @@ impl MetaGraphCanvas {
 
     pub fn save_graph(
         &self,
-        arena: impl Allocator,
         editor_settings: impl Into<IOEditorSettings>,
         output_path: &Path,
     ) -> Result<()> {
-        let mut nodes = AVec::with_capacity_in(self.nodes.len(), arena);
+        let arena = ArenaPool::get_arena();
+        let mut nodes = AVec::with_capacity_in(self.nodes.len(), &arena);
+
         nodes.extend(self.nodes.iter().map(Into::into));
 
         let graph = IOMetaGraphRef {
@@ -1821,7 +1822,6 @@ impl MetaGraphCanvas {
 
     pub fn save_subgraph(
         &self,
-        arena: impl Allocator,
         scratch: &mut MetaCanvasScratch,
         root_node_id: MetaNodeID,
         output_path: &Path,
@@ -1843,7 +1843,8 @@ impl MetaGraphCanvas {
             .node_id_lookup
             .extend(scratch.subgraph_node_ids.iter().copied());
 
-        let mut nodes = AVec::with_capacity_in(scratch.subgraph_node_ids.len(), arena);
+        let arena = ArenaPool::get_arena();
+        let mut nodes = AVec::with_capacity_in(scratch.subgraph_node_ids.len(), &arena);
 
         nodes.extend(scratch.subgraph_node_ids.iter().map(|node_id| {
             let mut node: IOMetaNode = (node_id, &self.nodes[node_id]).into();

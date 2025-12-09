@@ -10,7 +10,6 @@ use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
 use anyhow::{Result, anyhow};
-use impact_alloc::Allocator;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     setup,
@@ -30,29 +29,19 @@ use parking_lot::RwLock;
 /// entities with the given components, and adds any additional components to
 /// the entities' components (except scene graph components, which are added
 /// by calling [`add_new_entities_to_scene_graph`].
-pub fn setup_scene_data_for_new_entities<A>(
-    arena: A,
+pub fn setup_scene_data_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
     components: &mut ArchetypeComponentStorage,
-) -> Result<()>
-where
-    A: Allocator + Copy,
-{
+) -> Result<()> {
     mesh::setup_meshes_for_new_entities(resource_manager, components)?;
 
     light::setup_lights_for_new_entities(scene, components);
 
     material::setup_materials_for_new_entities(resource_manager, components)?;
 
-    voxel::setup_voxel_objects_for_new_entities(
-        arena,
-        resource_manager,
-        scene,
-        simulator,
-        components,
-    )?;
+    voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, components)?;
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, components);
 

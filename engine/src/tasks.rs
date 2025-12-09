@@ -6,7 +6,6 @@ use crate::{
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
-use impact_alloc::arena::TaskArenas;
 use impact_scheduling::{define_execution_tag, define_task};
 
 // =============================================================================
@@ -41,9 +40,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Calling app", engine, {
             let frame_number = engine.game_loop_controller().oread().iteration();
-            TaskArenas::with(|arena| {
-                engine.app().on_new_frame(arena, engine, frame_number)
-            })
+            engine.app().on_new_frame(engine, frame_number)
         })
     }
 );
@@ -56,9 +53,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Handling input events", engine, {
-            TaskArenas::with(|arena| {
-                engine.handle_queued_input_events(arena)
-            })
+            engine.handle_queued_input_events()
         })
     }
 );
@@ -158,9 +153,7 @@ define_task!(
                 return Ok(());
             }
 
-            TaskArenas::with(|arena| {
-                renderer.load_recorded_timing_results(arena)
-            })?;
+            renderer.load_recorded_timing_results()?;
 
             renderer.downgrade().update_exposure()
         })
@@ -181,9 +174,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Saving requested screenshots", engine, {
-            TaskArenas::with(|arena| {
-                engine.save_requested_screenshots(arena)
-            })
+            engine.save_requested_screenshots()
         })
     }
 );
@@ -271,9 +262,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Processing user interface", engine, {
-            TaskArenas::with(|arena| {
-                ctx.user_interface().process(arena, engine)
-            })
+            ctx.user_interface().process(engine)
         })
     }
 );
@@ -295,9 +284,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Handling staged entities", engine, {
-            TaskArenas::with(|arena| {
-                engine.handle_staged_entities(arena)
-            })
+            engine.handle_staged_entities()
         })
     }
 );
@@ -531,9 +518,7 @@ define_task!(
         instrument_engine_task!("Updating scene object group-to-world transforms", engine, {
             let scene = engine.scene().oread();
             let mut scene_graph = scene.scene_graph().owrite();
-            TaskArenas::with(|arena| {
-                scene_graph.update_all_group_to_root_transforms(arena);
-            });
+            scene_graph.update_all_group_to_root_transforms();
             Ok(())
         })
     }
@@ -557,9 +542,7 @@ define_task!(
         instrument_engine_task!("Updating scene object bounding spheres", engine, {
             let scene = engine.scene().oread();
             let mut scene_graph = scene.scene_graph().owrite();
-            TaskArenas::with(|arena| {
-                scene_graph.update_all_bounding_spheres(arena);
-            });
+            scene_graph.update_all_bounding_spheres();
             Ok(())
         })
     }
@@ -1102,22 +1085,19 @@ define_task!(
             let force_generator_manager = simulator.force_generator_manager().oread();
             let collision_world = simulator.collision_world().oread();
 
-            TaskArenas::with(|arena| {
-                impact_voxel::interaction::systems::apply_absorption(
-                    arena,
-                    engine.component_metadata_registry(),
-                    &mut entity_stager,
-                    &ecs_world,
-                    &scene_graph,
-                    &mut voxel_object_manager,
-                    &resource_manager.voxel_types,
-                    &mut rigid_body_manager,
-                    &mut anchor_manager,
-                    &force_generator_manager,
-                    &collision_world,
-                    simulator.time_step_duration(),
-                );
-            });
+            impact_voxel::interaction::systems::apply_absorption(
+                engine.component_metadata_registry(),
+                &mut entity_stager,
+                &ecs_world,
+                &scene_graph,
+                &mut voxel_object_manager,
+                &resource_manager.voxel_types,
+                &mut rigid_body_manager,
+                &mut anchor_manager,
+                &force_generator_manager,
+                &collision_world,
+                simulator.time_step_duration(),
+            );
 
             Ok(())
         })

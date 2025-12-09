@@ -13,8 +13,7 @@ use impact::{
     application::Application,
     egui,
     engine::{Engine, EngineConfig},
-    impact_alloc::arena::Arena,
-    impact_io, impact_log,
+    impact_io,
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -63,7 +62,7 @@ impl BasicApp {
 }
 
 impl Application for BasicApp {
-    fn on_engine_initialized(&self, _arena: &Arena, engine: Arc<Engine>) -> Result<()> {
+    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
@@ -74,36 +73,35 @@ impl Application for BasicApp {
         scripting::setup_scene()
     }
 
-    fn handle_keyboard_event(&self, _arena: &Arena, event: KeyboardEvent) -> Result<()> {
+    fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
         impact_log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
-    fn handle_mouse_button_event(&self, _arena: &Arena, event: MouseButtonEvent) -> Result<()> {
+    fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
         impact_log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
-    fn handle_mouse_drag_event(&self, _arena: &Arena, event: MouseDragEvent) -> Result<()> {
+    fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
         impact_log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
     }
 
-    fn handle_mouse_scroll_event(&self, _arena: &Arena, event: MouseScrollEvent) -> Result<()> {
+    fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
         impact_log::trace!("Handling mouse scroll event {event:?}");
         scripting::handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(
         &self,
-        arena: &Arena,
         ctx: &egui::Context,
         input: egui::RawInput,
         engine: &Engine,
     ) -> egui::FullOutput {
         self.user_interface
             .write()
-            .run(arena, ctx, input, engine, &api::UI_COMMANDS)
+            .run(ctx, input, engine, &api::UI_COMMANDS)
     }
 }
 

@@ -6,19 +6,15 @@ pub mod scene;
 
 use crate::engine::Engine;
 use anyhow::Result;
-use impact_alloc::Allocator;
 use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 
-pub fn perform_setup_for_new_entities<A>(
-    arena: A,
+pub fn perform_setup_for_new_entities(
     engine: &Engine,
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()>
 where
-    A: Allocator + Copy,
 {
     scene::setup_scene_data_for_new_entities(
-        arena,
         engine.resource_manager(),
         engine.scene(),
         engine.simulator(),

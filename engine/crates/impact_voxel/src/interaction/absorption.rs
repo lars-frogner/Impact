@@ -11,7 +11,7 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_alloc::{AVec, Allocator};
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_geometry::{Capsule, Sphere};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
@@ -151,8 +151,7 @@ impl VoxelAbsorbingCapsule {
 
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
-pub fn apply_absorption<A, C>(
-    arena: A,
+pub fn apply_absorption<C>(
     context: &mut C,
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
@@ -160,7 +159,6 @@ pub fn apply_absorption<A, C>(
     anchor_manager: &mut AnchorManager,
     time_step_duration: fph,
 ) where
-    A: Allocator,
     C: VoxelObjectInteractionContext,
     <C as VoxelObjectInteractionContext>::EntityID: Clone,
 {
@@ -171,8 +169,9 @@ pub fn apply_absorption<A, C>(
         return;
     }
 
+    let arena = ArenaPool::get_arena();
     let mut voxel_object_entities =
-        AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), arena);
+        AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), &arena);
 
     context.gather_voxel_object_entities(&mut voxel_object_entities);
 

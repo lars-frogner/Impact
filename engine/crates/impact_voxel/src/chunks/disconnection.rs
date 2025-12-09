@@ -2721,14 +2721,17 @@ pub mod fuzzing {
         chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
     };
     use approx::assert_relative_eq;
+    use impact_alloc::Global;
     use nalgebra::Vector3;
 
-    pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator) {
+    pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator<Global>) {
         let object = ChunkedVoxelObject::generate(&generator);
         object.validate_region_count();
     }
 
-    pub fn fuzz_test_voxel_object_split_off_disconnected_region(generator: SDFVoxelGenerator) {
+    pub fn fuzz_test_voxel_object_split_off_disconnected_region(
+        generator: SDFVoxelGenerator<Global>,
+    ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
 
@@ -2797,26 +2800,32 @@ mod tests {
     use crate::{
         generation::{
             SDFVoxelGenerator,
-            sdf::{BoxSDF, SDFGraph, SDFNode},
+            sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
         voxel_types::VoxelType,
     };
+    use impact_alloc::Global;
 
     #[test]
     fn connected_region_count_is_correct_for_single_voxel() {
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_box([1.0; 3]));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
         let generator = SDFVoxelGenerator::new(
             1.0,
-            BoxSDF::new([1.0; 3]).into(),
+            sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
+
         let object = ChunkedVoxelObject::generate(&generator);
         object.validate_region_count();
     }
 
     #[test]
     fn should_split_off_disconnected_sphere() {
-        let mut graph = SDFGraph::new();
+        let mut graph = SDFGraph::new_in(Global);
         let sphere_1_id = graph.add_node(SDFNode::new_sphere(25.0));
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(25.0));
         let sphere_2_id = graph.add_node(SDFNode::new_translation(
@@ -2824,7 +2833,7 @@ mod tests {
             vector![60.0, 0.0, 0.0],
         ));
         graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
-        let sdf_generator = graph.build().unwrap();
+        let sdf_generator = graph.build_in(Global).unwrap();
 
         let generator = SDFVoxelGenerator::new(
             1.0,

@@ -8,7 +8,6 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::Pod;
-use impact_alloc::Allocator;
 use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
@@ -465,15 +464,11 @@ impl MeshGPUResource {
 impl GPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
     type GPUContext = GraphicsDevice;
 
-    fn create<A>(
-        _scratch: A,
+    fn create(
         graphics_device: &GraphicsDevice,
         id: TriangleMeshID,
         mesh: &TriangleMesh<f32>,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         Ok(Some(Self::for_triangle_mesh(
             graphics_device,
             mesh,
@@ -501,15 +496,11 @@ impl MutableGPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
 impl GPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
     type GPUContext = GraphicsDevice;
 
-    fn create<A>(
-        _scratch: A,
+    fn create(
         graphics_device: &GraphicsDevice,
         id: LineSegmentMeshID,
         mesh: &LineSegmentMesh<f32>,
-    ) -> Result<Option<Self>>
-    where
-        A: Copy + Allocator,
-    {
+    ) -> Result<Option<Self>> {
         Ok(Some(Self::for_line_segment_mesh(
             graphics_device,
             mesh,
