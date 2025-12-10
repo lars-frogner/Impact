@@ -308,7 +308,7 @@ impl VoxelTypeRegistry {
     /// Returns the voxel type with the given name hash, or [`None`] if no voxel
     /// type with the given name has been registered.
     pub fn voxel_type_for_name_hash(&self, name_hash: Hash32) -> Option<VoxelType> {
-        self.name_lookup_table.get(&name_hash.into()).copied()
+        self.name_lookup_table.get(&u32::from(name_hash)).copied()
     }
 
     /// Returns the name of the given voxel type.

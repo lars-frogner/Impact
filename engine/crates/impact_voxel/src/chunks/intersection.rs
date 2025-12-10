@@ -847,7 +847,7 @@ pub mod fuzzing {
         (generator, plane): (SDFVoxelGenerator<Global>, ArbitraryPlane),
     ) {
         let object = ChunkedVoxelObject::generate(&generator);
-        let mut indices_of_touched_voxels = HashSet::default();
+        let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
             &plane.0,
@@ -881,7 +881,7 @@ pub mod fuzzing {
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
         let object = ChunkedVoxelObject::generate(&generator);
-        let mut indices_of_touched_voxels = HashSet::default();
+        let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_sphere(
             &sphere.0,
@@ -906,7 +906,7 @@ pub mod fuzzing {
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
-        let mut indices_of_inside_voxels = HashSet::default();
+        let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
@@ -934,7 +934,7 @@ pub mod fuzzing {
         (generator, capsule): (SDFVoxelGenerator<Global>, ArbitraryCapsule),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
-        let mut indices_of_inside_voxels = HashSet::default();
+        let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         object.modify_voxels_within_capsule(&capsule.0, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
@@ -1079,7 +1079,7 @@ mod tests {
             plane_displacement,
         );
 
-        let mut indices_of_touched_voxels = HashSet::default();
+        let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
             &plane,
@@ -1131,7 +1131,7 @@ mod tests {
             sphere_radius,
         );
 
-        let mut indices_of_touched_voxels = HashSet::default();
+        let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_sphere(
             &sphere,
@@ -1174,7 +1174,7 @@ mod tests {
             sphere_radius,
         );
 
-        let mut indices_of_inside_voxels = HashSet::default();
+        let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         object.modify_voxels_within_sphere(&sphere, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
@@ -1219,7 +1219,7 @@ mod tests {
             capsule_radius,
         );
 
-        let mut indices_of_inside_voxels = HashSet::default();
+        let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {

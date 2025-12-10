@@ -11,8 +11,8 @@ use crate::{
     quantities::Position,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, TypedRigidBodyID},
 };
-use impact_containers::HashMap;
-use std::{collections::hash_map::Entry, fmt, hash::Hash};
+use impact_containers::{HashMap, hash_map::Entry};
+use std::{fmt, hash::Hash};
 use tinyvec::TinyVec;
 
 /// Identifier for a [`DynamicRigidBodyAnchor`].

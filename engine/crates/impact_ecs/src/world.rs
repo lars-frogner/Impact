@@ -10,10 +10,10 @@ use super::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
+use impact_containers::hash_map::Entry;
 use impact_containers::{NoHashKeyIndexMapper, NoHashMap};
 use parking_lot::{RwLock, RwLockReadGuard};
 use std::{
-    collections::hash_map::Entry,
     fmt,
     hash::{self, Hash},
     vec::Drain,

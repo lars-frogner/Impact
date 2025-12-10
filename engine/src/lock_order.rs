@@ -46,6 +46,7 @@ pub fn set_panic_on_violation(_enabled: bool) {}
 #[macro_use]
 mod inner {
     use super::*;
+    use impact_alloc::Global;
     use impact_containers::HashMap;
     use std::{
         backtrace::Backtrace,
@@ -281,7 +282,7 @@ mod inner {
 
     /// Checks that each registered lockable resource has a unique lock order.
     fn validate_declared_lockable_resources() {
-        let mut orders = HashMap::default();
+        let mut orders = HashMap::<_, _, Global>::default();
         for descriptor in inventory::iter::<LockOrderDescriptor> {
             if let Some(existing_name) = orders.get(&descriptor.order) {
                 panic!(

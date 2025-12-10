@@ -115,6 +115,7 @@ bitflags = "2.9"
 env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
 impact = { path = "../../engine", features = ["window", "egui"] }
+impact_containers = { path = "../../engine/crates/impact_containers", features = ["serde"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_io = { path = "../../engine/crates/impact_io", features = ["ron"] }
 impact_log = { path = "../../engine/crates/impact_log" }
