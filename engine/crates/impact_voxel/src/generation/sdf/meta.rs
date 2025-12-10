@@ -974,9 +974,49 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        Ok(Self {
-            nodes: AVec::deserialize(deserializer)?,
-        })
+        use serde::de::{self, MapAccess, Visitor};
+        use std::{fmt, marker::PhantomData};
+
+        struct MetaSDFGraphVisitor<A>(PhantomData<A>);
+
+        impl<'de, A> Visitor<'de> for MetaSDFGraphVisitor<A>
+        where
+            A: Allocator + Default,
+        {
+            type Value = MetaSDFGraph<A>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("struct MetaSDFGraph")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<MetaSDFGraph<A>, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut nodes = None;
+                while let Some(key) = map.next_key::<&str>()? {
+                    match key {
+                        "nodes" => {
+                            if nodes.is_some() {
+                                return Err(de::Error::duplicate_field("nodes"));
+                            }
+                            nodes = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _: serde::de::IgnoredAny = map.next_value()?;
+                        }
+                    }
+                }
+                let nodes = nodes.ok_or_else(|| de::Error::missing_field("nodes"))?;
+                Ok(MetaSDFGraph { nodes })
+            }
+        }
+
+        deserializer.deserialize_struct(
+            "MetaSDFGraph",
+            &["nodes"],
+            MetaSDFGraphVisitor(PhantomData),
+        )
     }
 }
 
