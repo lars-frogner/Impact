@@ -77,6 +77,15 @@ impl<A: Allocator> Image<A> {
     }
 }
 
+impl PixelFormat {
+    pub fn bytes_per_pixel(&self) -> usize {
+        match self {
+            Self::Rgba8 => 4,
+            Self::Luma8 => 1,
+        }
+    }
+}
+
 /// Reads the metadata of the image at the specified path.
 ///
 /// Supports PNG and JPEG formats (when respective features are enabled).

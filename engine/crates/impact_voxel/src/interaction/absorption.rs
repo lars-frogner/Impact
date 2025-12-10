@@ -20,6 +20,7 @@ use impact_physics::{
 };
 use nalgebra::{Isometry3, Point3, Translation3, Vector3};
 use roc_integration::roc;
+use std::mem;
 
 define_component_type! {
     /// A sphere that absorbs voxels it comes in contact with. The rate of
@@ -169,7 +170,10 @@ pub fn apply_absorption<C>(
         return;
     }
 
-    let arena = ArenaPool::get_arena();
+    let arena = ArenaPool::get_arena_for_capacity(
+        voxel_object_manager.voxel_object_count()
+            * mem::size_of::<VoxelObjectEntity<C::EntityID>>(),
+    );
     let mut voxel_object_entities =
         AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), &arena);
 

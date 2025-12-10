@@ -75,7 +75,7 @@ impl ImageProcessing {
         }
     }
 
-    fn is_none_for(&self, meta: &ImageMetadata) -> bool {
+    pub fn is_none_for(&self, meta: &ImageMetadata) -> bool {
         for conversion in &self.format_conversions {
             match conversion {
                 FormatConversion::NormalMap { from } => {
