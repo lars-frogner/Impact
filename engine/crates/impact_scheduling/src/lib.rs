@@ -5,7 +5,7 @@ pub mod macros;
 
 use anyhow::{Result, anyhow, bail};
 use impact_containers::{HashMap, HashSet, RandomState};
-use impact_math::Hash64;
+use impact_math::hash::Hash64;
 use impact_thread::{
     TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
 };

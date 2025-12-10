@@ -8,8 +8,8 @@ use crate::{
     UnidirectionalLightID,
     shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
 };
-use impact_containers::CollectionChange;
-use impact_geometry::{AxisAlignedBox, CubeMapper, Frustum, OrientedBox};
+use impact_containers::tracking::CollectionChange;
+use impact_geometry::{AxisAlignedBox, Frustum, OrientedBox, projection::CubeMapper};
 use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
@@ -19,7 +19,7 @@ use impact_gpu::{
     },
     wgpu,
 };
-use impact_math::ConstStringHash64;
+use impact_math::hash::ConstStringHash64;
 use nalgebra::{Scale3, Translation3};
 use std::{fmt, hash::Hash};
 

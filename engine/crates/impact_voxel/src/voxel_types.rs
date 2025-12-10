@@ -13,7 +13,7 @@ use impact_gpu::{
     },
 };
 use impact_io::image::{Image, ImageMetadata, PixelFormat};
-use impact_math::Hash32;
+use impact_math::hash::Hash32;
 use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
     TextureRegistry,

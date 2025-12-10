@@ -14,7 +14,7 @@ use impact::{
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
 };
-use impact_math::{Bounds, UpperExclusiveBounds};
+use impact_math::bounds::{Bounds, UpperExclusiveBounds};
 use impact_rendering::postprocessing::{
     capturing::{SensorSensitivity, dynamic_range_compression::ToneMappingMethod},
     render_attachment_visualization::RenderAttachmentVisualizationPasses,

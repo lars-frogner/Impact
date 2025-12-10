@@ -1,7 +1,7 @@
 //! Textures representing shadow maps.
 
 use anyhow::Result;
-use impact_geometry::CubemapFace;
+use impact_geometry::projection::CubemapFace;
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use std::path::Path;
 

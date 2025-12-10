@@ -19,7 +19,11 @@ use bytemuck::{Pod, Zeroable};
 use drag_load::AveragingDragLoad;
 use equirectangular_map::EquirectangularMap;
 use impact_containers::{HashMap, hash_map::Entry};
-use impact_math::{Angle, Float, Radians, stringhash64_newtype};
+use impact_math::{
+    Float,
+    angle::{Angle, Radians},
+    stringhash64_newtype,
+};
 use nalgebra::Point3;
 use roc_integration::roc;
 use simba::scalar::SubsetOf;

@@ -2,7 +2,7 @@
 
 use approx::assert_abs_diff_eq;
 use impact_geometry::{Plane, ReferenceFrame, Sphere};
-use impact_math::{Angle, Radians};
+use impact_math::angle::{Angle, Radians};
 use impact_physics::{
     anchor::AnchorManager,
     collision::{

@@ -9,7 +9,7 @@ use crate::{
     },
     lock_order::{OrderedMutex, OrderedRwLock},
 };
-use impact_math::{Angle, Radians};
+use impact_math::angle::{Angle, Radians};
 use std::num::NonZeroU32;
 use winit::event::{DeviceEvent, MouseScrollDelta, WindowEvent};
 

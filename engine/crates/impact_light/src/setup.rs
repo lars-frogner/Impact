@@ -8,7 +8,7 @@ use crate::{
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLight, UnidirectionalLightID,
 };
-use impact_math::Degrees;
+use impact_math::angle::Degrees;
 use nalgebra::{Isometry3, Point3, UnitQuaternion, UnitVector3};
 
 pub fn setup_ambient_light(

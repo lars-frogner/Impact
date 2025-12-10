@@ -1,6 +1,5 @@
-use impact::egui::ComboBox;
-use impact::egui::{DragValue, Response, Ui, emath::Numeric};
-use impact::impact_math::Hash64;
+use impact::egui::{ComboBox, DragValue, Response, Ui, emath::Numeric};
+use impact::impact_math::hash::Hash64;
 use impact_dev_ui::option_panels::{
     LabelAndHoverText, configurable_labeled_option, configurable_option_drag_value, labeled_option,
     option_drag_value, strong_option_label,

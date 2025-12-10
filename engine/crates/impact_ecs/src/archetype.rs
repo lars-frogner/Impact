@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap};
 use impact_ecs_macros::archetype_of;
-use impact_math::Hash32;
+use impact_math::hash::Hash32;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use pastey::paste;
 use std::{

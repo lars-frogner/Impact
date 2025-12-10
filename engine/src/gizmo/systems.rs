@@ -22,7 +22,7 @@ use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
 };
-use impact_math::Angle;
+use impact_math::angle::Angle;
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_physics::{
     anchor::AnchorManager,

@@ -3,27 +3,29 @@
 #[macro_use]
 mod macros;
 
-mod axis_aligned_box;
-mod capsule;
-mod frustum;
-mod model_transform;
-mod oriented_box;
-mod plane;
-mod projection;
-mod reference_frame;
-mod sphere;
+pub mod axis_aligned_box;
+pub mod capsule;
+pub mod frustum;
+pub mod model_transform;
+pub mod oriented_box;
+pub mod plane;
+pub mod projection;
+pub mod reference_frame;
+pub mod sphere;
 
 pub use axis_aligned_box::AxisAlignedBox;
 pub use capsule::Capsule;
 pub use frustum::Frustum;
 pub use model_transform::ModelTransform;
-pub use oriented_box::{OrientedBox, compute_box_intersection_bounds};
+pub use oriented_box::OrientedBox;
 pub use plane::Plane;
-pub use projection::{CubeMapper, CubemapFace, OrthographicTransform, PerspectiveTransform};
 pub use reference_frame::ReferenceFrame;
 pub use sphere::Sphere;
 
-use impact_math::{Angle, Float, Radians};
+use impact_math::{
+    Float,
+    angle::{Angle, Radians},
+};
 use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
 
 /// Anything that represents a 3D point.

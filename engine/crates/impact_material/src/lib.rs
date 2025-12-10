@@ -13,7 +13,10 @@ pub use values::register_material_feature_types;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::DefaultHasher;
 use impact_gpu::wgpu;
-use impact_math::{Hash64, StringHash64, hash64};
+use impact_math::{
+    hash::{Hash64, StringHash64, compute_hash_64_of_two_hash_64},
+    hash64,
+};
 use impact_mesh::VertexAttributeSet;
 use impact_model::InstanceFeatureTypeID;
 use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
@@ -153,7 +156,7 @@ pub struct MaterialTextureGroup {
     pub texture_ids: Vec<TextureID>,
 }
 
-#[roc(dependencies = [impact_math::Hash64])]
+#[roc(dependencies = [impact_math::hash::Hash64])]
 impl MaterialID {
     #[roc(body = "Hashing.hash_str_64(name)")]
     /// Creates a material ID hashed from the given name.
@@ -225,7 +228,7 @@ impl MaterialTextureGroupID {
         texture_ids
             .iter()
             .map(|texture_id| texture_id.0.hash())
-            .reduce(impact_math::compute_hash_64_of_two_hash_64)
+            .reduce(compute_hash_64_of_two_hash_64)
             .map_or_else(Self::empty, Self)
     }
 

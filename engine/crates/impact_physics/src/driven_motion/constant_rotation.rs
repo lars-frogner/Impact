@@ -111,7 +111,7 @@ mod tests {
     use crate::quantities::AngularVelocity;
     use crate::quantities::Direction;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use impact_math::{Float, Radians};
+    use impact_math::{Float, angle::Radians};
     use nalgebra::{Vector3, vector};
     use proptest::prelude::*;
 

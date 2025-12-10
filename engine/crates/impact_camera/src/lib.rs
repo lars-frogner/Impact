@@ -7,9 +7,16 @@ pub mod gpu_resource;
 pub mod setup;
 
 use approx::assert_abs_diff_ne;
-use impact_containers::EntityChangeTracker;
-use impact_geometry::{Frustum, OrthographicTransform, PerspectiveTransform};
-use impact_math::{Angle, Bounds, Float, Radians, UpperExclusiveBounds};
+use impact_containers::tracking::EntityChangeTracker;
+use impact_geometry::{
+    Frustum,
+    projection::{OrthographicTransform, PerspectiveTransform},
+};
+use impact_math::{
+    Float,
+    angle::{Angle, Radians},
+    bounds::{Bounds, UpperExclusiveBounds},
+};
 use nalgebra::Projective3;
 use std::fmt::Debug;
 
@@ -255,7 +262,7 @@ impl<F: Float> Camera<F> for OrthographicCamera<F> {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_math::Degrees;
+    use impact_math::angle::Degrees;
 
     #[test]
     #[should_panic]

@@ -9,7 +9,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::{HashMap, SlotKey, SlotMap, hash_map::Entry};
-use impact_geometry::{CubemapFace, Frustum, Sphere};
+use impact_geometry::{Frustum, Sphere, projection::CubemapFace};
 use impact_light::{
     LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
     ShadowableUnidirectionalLight, shadow_map::CascadeIdx,
@@ -1620,7 +1620,7 @@ impl From<SceneEntityFlags> for ModelInstanceFlags {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_math::Hash64;
+    use impact_math::hash::Hash64;
     use impact_model::InstanceFeatureStorage;
     use nalgebra::{Point3, Rotation3, Translation3, point};
 

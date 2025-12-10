@@ -19,7 +19,10 @@ use impact_containers::FixedQueue;
 use impact_geometry::{
     Sphere, compute_uniformly_distributed_radial_directions, rotation_between_axes,
 };
-use impact_math::{Angle, Degrees, splitmix};
+use impact_math::{
+    angle::{Angle, Degrees},
+    splitmix,
+};
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
 use rand::{

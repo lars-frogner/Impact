@@ -11,13 +11,18 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::LightGPUResources;
 use impact_geometry::{
-    AxisAlignedBox, CubeMapper, CubemapFace, Frustum, OrientedBox, OrthographicTransform, Sphere,
+    AxisAlignedBox, Frustum, OrientedBox, Sphere,
+    projection::{CubeMapper, CubemapFace, OrthographicTransform},
 };
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, uniform::UniformBuffer,
     wgpu,
 };
-use impact_math::{Angle, Degrees, Float, UpperExclusiveBounds};
+use impact_math::{
+    Float,
+    angle::{Angle, Degrees},
+    bounds::UpperExclusiveBounds,
+};
 use nalgebra::{
     self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
 };

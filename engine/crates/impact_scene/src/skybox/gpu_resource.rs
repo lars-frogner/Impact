@@ -10,7 +10,7 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_math::ConstStringHash64;
+use impact_math::hash::ConstStringHash64;
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::borrow::Cow;
 

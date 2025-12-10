@@ -5,7 +5,7 @@ use anyhow::{Result, bail};
 use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ReferenceFrame;
-use impact_math::UpperExclusiveBounds;
+use impact_math::bounds::UpperExclusiveBounds;
 use impact_scene::{SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle};
 use parking_lot::RwLock;
 

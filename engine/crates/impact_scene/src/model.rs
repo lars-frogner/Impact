@@ -2,7 +2,7 @@
 
 use bytemuck::Zeroable;
 use impact_material::MaterialID;
-use impact_math::Hash64;
+use impact_math::hash::{Hash64, compute_hash_64_of_two_hash_64};
 use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
 use std::{
     cmp, fmt,
@@ -31,8 +31,7 @@ impl ModelID {
         mesh_id: TriangleMeshID,
         material_id: MaterialID,
     ) -> Self {
-        let hash =
-            impact_math::compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
+        let hash = compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
         Self {
             mesh_id: MeshID::Triangle(mesh_id),
             material_id,
@@ -46,8 +45,7 @@ impl ModelID {
         mesh_id: LineSegmentMeshID,
         material_id: MaterialID,
     ) -> Self {
-        let hash =
-            impact_math::compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
+        let hash = compute_hash_64_of_two_hash_64(mesh_id.0.hash(), material_id.0.hash());
         Self {
             mesh_id: MeshID::LineSegment(mesh_id),
             material_id,

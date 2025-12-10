@@ -5,7 +5,7 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, StringHash64, hash64};
+use impact_math::{Float, hash::StringHash64, hash64};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
@@ -44,7 +44,7 @@ bitflags! {
     }
 }
 
-#[roc(dependencies = [impact_math::Hash64])]
+#[roc(dependencies = [impact_math::hash::Hash64])]
 impl LineSegmentMeshID {
     #[roc(body = "Hashing.hash_str_64(name)")]
     /// Creates a line segment mesh ID hashed from the given name.

@@ -11,7 +11,7 @@ use impact_gpu::{
     uniform::{self, UniformBufferable},
     wgpu,
 };
-use impact_math::{ConstStringHash64, HaltonSequence};
+use impact_math::{halton::HaltonSequence, hash::ConstStringHash64};
 use nalgebra::{Isometry3, Projective3, UnitQuaternion, Vector4};
 use std::{borrow::Cow, sync::LazyLock};
 

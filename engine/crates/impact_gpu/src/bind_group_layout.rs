@@ -1,7 +1,7 @@
 //! Centralized registry for bind group layouts.
 
 use impact_containers::NoHashMap;
-use impact_math::Hash64;
+use impact_math::hash::Hash64;
 use parking_lot::RwLock;
 
 /// A registry for bind group layouts that provides caching and proper cleanup.

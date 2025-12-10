@@ -298,7 +298,7 @@ pub fn compute_box_intersection_bounds<F: Float>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Frustum, OrthographicTransform};
+    use crate::{Frustum, projection::OrthographicTransform};
     use approx::assert_abs_diff_eq;
     use nalgebra::{point, vector};
     use std::f64::consts::PI;
