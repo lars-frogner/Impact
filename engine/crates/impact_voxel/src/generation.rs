@@ -139,9 +139,49 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        Ok(Self {
-            sdf_graph: MetaSDFGraph::deserialize(deserializer)?,
-        })
+        use serde::de::{self, MapAccess, Visitor};
+        use std::{fmt, marker::PhantomData};
+
+        struct VoxelGeneratorVisitor<A>(PhantomData<A>);
+
+        impl<'de, A> Visitor<'de> for VoxelGeneratorVisitor<A>
+        where
+            A: Allocator + Default,
+        {
+            type Value = VoxelGenerator<A>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("struct VoxelGenerator")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<VoxelGenerator<A>, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut sdf_graph = None;
+                while let Some(key) = map.next_key::<&str>()? {
+                    match key {
+                        "sdf_graph" => {
+                            if sdf_graph.is_some() {
+                                return Err(de::Error::duplicate_field("sdf_graph"));
+                            }
+                            sdf_graph = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _: serde::de::IgnoredAny = map.next_value()?;
+                        }
+                    }
+                }
+                let sdf_graph = sdf_graph.ok_or_else(|| de::Error::missing_field("sdf_graph"))?;
+                Ok(VoxelGenerator { sdf_graph })
+            }
+        }
+
+        deserializer.deserialize_struct(
+            "VoxelGenerator",
+            &["sdf_graph"],
+            VoxelGeneratorVisitor(PhantomData),
+        )
     }
 }
 
