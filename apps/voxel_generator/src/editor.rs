@@ -28,9 +28,9 @@ use impact_voxel::{
 use meta::{
     MetaNodeData, MetaNodeID, build,
     canvas::{
-        MetaCanvasScratch, MetaGraphCanvas, MetaGraphChanges, PendingNodeAddition,
-        PendingNodeCollapsedStateChange, PendingNodeKindChange, PendingNodeNameUpdate,
-        PendingNodeOperations, PendingNodeParentPortCountChange, PendingNodeRemoval,
+        MetaGraphCanvas, MetaGraphChanges, PendingNodeAddition, PendingNodeCollapsedStateChange,
+        PendingNodeKindChange, PendingNodeNameUpdate, PendingNodeOperations,
+        PendingNodeParentPortCountChange, PendingNodeRemoval,
     },
     node_kind::{MetaNodeKind, MetaNodeKindGroup},
 };
@@ -58,7 +58,6 @@ const PARENT_PORT_COUNT_OPTIONS: [(usize, &str); 8] = [
 #[derive(Clone, Debug)]
 pub struct Editor {
     meta_graph_canvas: MetaGraphCanvas,
-    meta_canvas_scratch: MetaCanvasScratch,
     atomic_graph_canvas: AtomicGraphCanvas,
     graph_needs_compilation: bool,
     rebuild_generator: bool,
@@ -103,7 +102,6 @@ impl Editor {
     pub fn new(config: EditorConfig) -> Self {
         Self {
             meta_graph_canvas: MetaGraphCanvas::new(),
-            meta_canvas_scratch: MetaCanvasScratch::new(),
             atomic_graph_canvas: AtomicGraphCanvas::new(),
             graph_needs_compilation: false,
             rebuild_generator: false,
@@ -124,11 +122,7 @@ impl Editor {
 
         let arena = ArenaPool::get_arena();
 
-        let compiled_graph = match build::build_sdf_graph(
-            &arena,
-            &mut self.meta_canvas_scratch.build,
-            &self.meta_graph_canvas.nodes,
-        ) {
+        let compiled_graph = match build::build_sdf_graph(&arena, &self.meta_graph_canvas.nodes) {
             Some(Ok(compiled_graph)) => compiled_graph,
             Some(Err(error)) => {
                 self.graph_needs_compilation = false;
@@ -188,10 +182,7 @@ impl Editor {
             .set_title("Load graph")
             .pick_file()
         {
-            match self
-                .meta_graph_canvas
-                .load_graph(&mut self.meta_canvas_scratch, ui, &path)
-            {
+            match self.meta_graph_canvas.load_graph(ui, &path) {
                 Ok(settings) => {
                     self.config.auto_generate = settings.auto_generate;
                     self.config.auto_attach = settings.auto_attach;
@@ -216,12 +207,10 @@ impl Editor {
             .set_title("Load subgraph")
             .pick_file()
         {
-            if let Err(err) = self.meta_graph_canvas.load_subgraph(
-                &mut self.meta_canvas_scratch,
-                ui,
-                &path,
-                self.config.auto_layout,
-            ) {
+            if let Err(err) =
+                self.meta_graph_canvas
+                    .load_subgraph(ui, &path, self.config.auto_layout)
+            {
                 impact_log::error!("Failed to load subgraph from {}: {err:#}", path.display());
             } else {
                 impact_log::info!("Loaded subgraph from {}", path.display());
@@ -269,11 +258,7 @@ impl Editor {
             .set_file_name(file_name)
             .save_file()
         {
-            if let Err(err) = self.meta_graph_canvas.save_subgraph(
-                &mut self.meta_canvas_scratch,
-                root_node_id,
-                &path,
-            ) {
+            if let Err(err) = self.meta_graph_canvas.save_subgraph(root_node_id, &path) {
                 impact_log::error!("Failed to save subgraph to {}: {err:#}", path.display());
             } else {
                 impact_log::info!("Saved subgraph to {}", path.display());
@@ -287,8 +272,11 @@ impl Editor {
             .set_title("Export as resource")
             .save_file()
         {
-            let sdf_graph = &self.meta_canvas_scratch.build.meta_graph;
-            let generator = VoxelGeneratorRef { sdf_graph };
+            let arena = ArenaPool::get_arena();
+            let sdf_graph = build::build_meta_graph(&arena, &self.meta_graph_canvas.nodes).unwrap();
+            let generator = VoxelGeneratorRef {
+                sdf_graph: &sdf_graph,
+            };
 
             if let Err(err) = impact_io::write_ron_file(&generator, &path) {
                 impact_log::error!(
@@ -600,7 +588,6 @@ impl CustomPanels for Editor {
             }
 
             self.meta_graph_canvas.show(
-                &mut self.meta_canvas_scratch,
                 ctx,
                 &self.graph_status,
                 pending_node_operations,

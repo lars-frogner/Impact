@@ -2,6 +2,7 @@ use super::{
     MetaNode, MetaNodeID, MetaNodeInputDataTypes, MetaPaletteColor, MetaPortShape,
     node_kind::{MetaChildPortKind, MetaNodeKind, MetaParentPortKind},
 };
+use impact::impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::NoHashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,11 +17,6 @@ pub enum EdgeDataType {
     Concrete(ConcreteEdgeDataType),
     #[default]
     Undefined,
-}
-
-#[derive(Clone, Debug)]
-pub struct DataTypeScratch {
-    stack: Vec<DataTypeResolveOperation>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -74,12 +70,6 @@ impl EdgeDataType {
     }
 }
 
-impl DataTypeScratch {
-    pub fn new() -> Self {
-        Self { stack: Vec::new() }
-    }
-}
-
 pub fn input_and_output_types_for_new_node(
     kind: MetaNodeKind,
 ) -> (MetaNodeInputDataTypes, EdgeDataType) {
@@ -105,35 +95,27 @@ pub fn input_and_output_types_for_new_node(
     (input_data_types, output_data_type)
 }
 
-pub fn update_edge_data_types(
-    scratch: &mut DataTypeScratch,
-    nodes: &mut NoHashMap<MetaNodeID, MetaNode>,
-) {
-    scratch.stack.clear();
+pub fn update_edge_data_types(nodes: &mut NoHashMap<MetaNodeID, MetaNode>) {
+    let arena = ArenaPool::get_arena();
+    let mut stack = AVec::new_in(&arena);
 
     for (&node_id, node) in nodes.iter() {
         if node.links_to_parents.iter().flatten().count() == 0 {
-            scratch
-                .stack
-                .push(DataTypeResolveOperation::VisitChildren(node_id));
+            stack.push(DataTypeResolveOperation::VisitChildren(node_id));
         }
     }
 
-    while let Some(operation) = scratch.stack.pop() {
+    while let Some(operation) = stack.pop() {
         match operation {
             DataTypeResolveOperation::VisitChildren(node_id) => {
                 let Some(node) = nodes.get(&node_id) else {
                     continue;
                 };
 
-                scratch
-                    .stack
-                    .push(DataTypeResolveOperation::ResolveDataTypes(node_id));
+                stack.push(DataTypeResolveOperation::ResolveDataTypes(node_id));
 
                 for link in node.links_to_children.iter().flatten() {
-                    scratch
-                        .stack
-                        .push(DataTypeResolveOperation::VisitChildren(link.to_node));
+                    stack.push(DataTypeResolveOperation::VisitChildren(link.to_node));
                 }
             }
             DataTypeResolveOperation::ResolveDataTypes(node_id) => {

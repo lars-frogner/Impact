@@ -10,7 +10,7 @@ use crate::{
     generation::sdf::meta::MetaSDFGraph,
     voxel_types::VoxelType,
 };
-use impact_alloc::Allocator;
+use impact_alloc::{Allocator, Global};
 use impact_geometry::AxisAlignedBox;
 use impact_math::{hash64, stringhash64_newtype};
 use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
@@ -27,16 +27,14 @@ stringhash64_newtype!(
     [pub] VoxelGeneratorID
 );
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct VoxelGenerator {
-    pub sdf_graph: MetaSDFGraph,
+pub struct VoxelGenerator<A: Allocator = Global> {
+    pub sdf_graph: MetaSDFGraph<A>,
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[derive(Clone, Debug)]
-pub struct VoxelGeneratorRef<'a> {
-    pub sdf_graph: &'a MetaSDFGraph,
+pub struct VoxelGeneratorRef<'a, A: Allocator> {
+    pub sdf_graph: &'a MetaSDFGraph<A>,
 }
 
 /// Represents a voxel generator that provides voxels for a chunked voxel
@@ -116,6 +114,49 @@ impl<'de> serde::Deserialize<'de> for VoxelGeneratorID {
 
 impl Resource for VoxelGenerator {
     type ID = VoxelGeneratorID;
+}
+
+#[cfg(feature = "serde")]
+impl<A: Allocator> serde::Serialize for VoxelGenerator<A> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut s = serializer.serialize_struct("VoxelGenerator", 1)?;
+        s.serialize_field("sdf_graph", &self.sdf_graph)?;
+        s.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, A> serde::Deserialize<'de> for VoxelGenerator<A>
+where
+    A: Allocator + Default,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            sdf_graph: MetaSDFGraph::deserialize(deserializer)?,
+        })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a, A: Allocator> serde::Serialize for VoxelGeneratorRef<'a, A> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut s = serializer.serialize_struct("VoxelGeneratorRef", 1)?;
+        s.serialize_field("sdf_graph", self.sdf_graph)?;
+        s.end()
+    }
 }
 
 impl<A: Allocator> SDFVoxelGenerator<A> {

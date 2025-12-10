@@ -1,7 +1,7 @@
 use super::{AtomicNode, AtomicPort, build::update_viewer_nodes};
 use crate::editor::{
     PanZoomState,
-    layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
+    layout::{LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     util::create_bezier_edge,
 };
 use impact::{
@@ -32,7 +32,6 @@ pub struct AtomicGraphCanvas {
     is_panning: bool,
     dragging_node_id: Option<SDFNodeID>,
     should_perform_layout: bool,
-    layout_scratch: LayoutScratch,
 }
 
 struct LayoutableAtomicGraph<'a> {
@@ -65,7 +64,6 @@ impl AtomicGraphCanvas {
             is_panning: false,
             dragging_node_id: None,
             should_perform_layout: false,
-            layout_scratch: LayoutScratch::new(),
         }
     }
 
@@ -113,7 +111,6 @@ impl AtomicGraphCanvas {
                         .screen_pos_to_world_space(canvas_origin, canvas_rect.center_top());
 
                     layout_vertical(
-                        &mut self.layout_scratch,
                         &mut LayoutableAtomicGraph {
                             nodes: &self.nodes,
                             rects: &mut world_node_rects,

@@ -5,6 +5,7 @@ use super::{
         MetaNodeParams, MetaUIntParam,
     },
 };
+use impact::impact_alloc::Allocator;
 use impact_containers::NoHashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
@@ -25,8 +26,8 @@ trait SpecificMetaNodeKind {
 
     fn params() -> MetaNodeParams;
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode>;
@@ -121,8 +122,8 @@ impl SpecificMetaNodeKind for MetaPoints {
         params
     }
 
-    fn build(
-        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -201,8 +202,8 @@ impl SpecificMetaNodeKind for MetaSpheres {
         params
     }
 
-    fn build(
-        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -297,8 +298,8 @@ impl SpecificMetaNodeKind for MetaCapsules {
         params
     }
 
-    fn build(
-        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -404,8 +405,8 @@ impl SpecificMetaNodeKind for MetaBoxes {
         params
     }
 
-    fn build(
-        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         _children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -495,8 +496,8 @@ impl SpecificMetaNodeKind for MetaTranslation {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -584,8 +585,8 @@ impl SpecificMetaNodeKind for MetaRotation {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -654,8 +655,8 @@ impl SpecificMetaNodeKind for MetaScaling {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -782,8 +783,8 @@ impl SpecificMetaNodeKind for MetaSimilarity {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -890,8 +891,8 @@ impl SpecificMetaNodeKind for MetaStratifiedGridTransforms {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -967,8 +968,8 @@ impl SpecificMetaNodeKind for MetaSphereSurfaceTransforms {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -998,8 +999,8 @@ impl SpecificMetaNodeKind for MetaClosestTranslationToSurface {
         MetaNodeParams::new()
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1038,8 +1039,8 @@ impl SpecificMetaNodeKind for MetaRayTranslationToSurface {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1068,8 +1069,8 @@ impl SpecificMetaNodeKind for MetaRotationToGradient {
         MetaNodeParams::new()
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1128,8 +1129,8 @@ impl SpecificMetaNodeKind for MetaStochasticSelection {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1157,8 +1158,8 @@ impl SpecificMetaNodeKind for MetaSDFInstantiation {
         MetaNodeParams::new()
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1182,8 +1183,8 @@ impl SpecificMetaNodeKind for MetaTransformApplication {
         MetaNodeParams::new()
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1285,8 +1286,8 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1402,8 +1403,8 @@ impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1448,8 +1449,8 @@ impl SpecificMetaNodeKind for MetaSDFUnion {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1487,8 +1488,8 @@ impl SpecificMetaNodeKind for MetaSDFSubtraction {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1526,8 +1527,8 @@ impl SpecificMetaNodeKind for MetaSDFIntersection {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1565,8 +1566,8 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
         params
     }
 
-    fn build(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+    fn build<A: Allocator>(
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1766,9 +1767,9 @@ impl MetaNodeKind {
         }
     }
 
-    pub fn build_sdf_generator_node(
+    pub fn build_sdf_generator_node<A: Allocator>(
         &self,
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
         children: &[Option<MetaNodeLink>],
         params: &[MetaNodeParam],
     ) -> Option<MetaSDFNode> {
@@ -1874,8 +1875,8 @@ fn output_node_params() -> MetaNodeParams {
     params
 }
 
-fn unary_child(
-    id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+fn unary_child<A: Allocator>(
+    id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
     children: &[Option<MetaNodeLink>],
 ) -> Option<MetaSDFNodeID> {
     assert_eq!(children.len(), 1);
@@ -1884,8 +1885,8 @@ fn unary_child(
         .map(|attachment| id_map[&attachment.to_node])
 }
 
-fn binary_children(
-    id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID>,
+fn binary_children<A: Allocator>(
+    id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
     children: &[Option<MetaNodeLink>],
 ) -> Option<(MetaSDFNodeID, MetaSDFNodeID)> {
     assert_eq!(children.len(), 2);
