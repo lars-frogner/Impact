@@ -279,7 +279,8 @@ pub fn create_texture_from_bytes(
     processing: &ImageProcessing,
     label: &str,
 ) -> Result<Texture> {
-    let arena = ArenaPool::get_arena();
+    // Estimate capacity for image decompression (4x byte buffer size)
+    let arena = ArenaPool::get_arena_for_capacity(byte_buffer.len() * 4);
     let image = impact_io::image::load_image_from_bytes(&arena, byte_buffer)?;
     create_texture_from_image(
         graphics_device,
@@ -318,7 +319,11 @@ pub fn create_texture_from_image<A: Allocator>(
     let texel_description =
         determine_valid_texel_description(image.meta.pixel_format, &texture_config)?;
 
-    let arena = ArenaPool::get_arena();
+    let arena = ArenaPool::get_arena_for_capacity(if processing.is_none_for(&image.meta) {
+        0
+    } else {
+        image.data.len()
+    });
     let processed = processing.execute(&arena, image);
 
     let data = processed.as_ref().map_or_else(
@@ -390,7 +395,13 @@ where
         Ok(meta.width as usize * meta.height as usize * texel_description.n_bytes() as usize)
     };
 
-    let arena = ArenaPool::get_arena();
+    // Estimate capacity for texture array processing
+    let estimated_bytes_per_image = match first_source {
+        ImageSource::File(_) => 4 * 1024 * 1024, // 4MB per image estimate
+        ImageSource::Bytes(bytes) => bytes.data.len() * 4, // 4x decompression
+    };
+    let capacity = n_images * estimated_bytes_per_image;
+    let arena = ArenaPool::get_arena_for_capacity(capacity);
 
     let (mut byte_buffer, meta) = match first_source {
         ImageSource::File(path) => {
@@ -525,7 +536,12 @@ pub(crate) fn create_texture_from_info(
         Ok(())
     }
 
-    let arena = ArenaPool::get_arena();
+    // Estimate capacity for texture creation
+    let capacity = match texture_info {
+        TextureCreateInfo::Image(_) => 4 * 1024 * 1024, // 4MB image estimate
+        TextureCreateInfo::LookupTable(_) => 1024 * 1024, // 1MB lookup table
+    };
+    let arena = ArenaPool::get_arena_for_capacity(capacity);
 
     let (texture, sampler_id) = match texture_info {
         TextureCreateInfo::Image(image_texture_info) => {

@@ -17,7 +17,7 @@ use nalgebra::{
 };
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
-use std::f32;
+use std::{f32, mem};
 use twox_hash::XxHash32;
 
 /// A signed distance field generator.
@@ -251,7 +251,9 @@ impl<A: Allocator> SDFGenerator<A> {
     pub fn new_in(alloc: A, nodes: &[SDFNode], root_node_id: SDFNodeID) -> Result<Self> {
         let mut processed_nodes = AVec::with_capacity_in(nodes.len(), alloc);
 
-        let arena = ArenaPool::get_arena();
+        // Estimate capacity based on node count for domain calculations and processing
+        let capacity = nodes.len() * (mem::size_of::<AxisAlignedBox<f32>>() + 64); // Domain + overhead per node
+        let arena = ArenaPool::get_arena_for_capacity(capacity);
 
         // The domains of each node computed from child domains, not accounting
         // for required padding due to soft combination operations

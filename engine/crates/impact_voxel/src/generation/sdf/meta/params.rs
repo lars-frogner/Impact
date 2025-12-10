@@ -9,7 +9,7 @@ use impact_math::{
 };
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg64Mcg;
-use std::f32::consts::PI;
+use std::{f32::consts::PI, mem};
 use tinyvec::TinyVec;
 
 pub type ParamRng = Pcg64Mcg;
@@ -260,7 +260,9 @@ fn compute_param_eval_order<const N: usize>(
 
     let n_params = specs.len();
 
-    let arena = ArenaPool::get_arena();
+    // Estimate capacity based on parameter count for dependency tracking
+    let capacity = n_params * (mem::size_of::<usize>() * 2 + 64); // dep_counts + queue + overhead
+    let arena = ArenaPool::get_arena_for_capacity(capacity);
 
     let mut dep_counts = avec![in &arena; 0; n_params];
 

@@ -30,7 +30,7 @@ use rand::{
     distr::{Distribution, Uniform},
     seq::IndexedRandom,
 };
-use std::{array, borrow::Cow, f32::consts::PI};
+use std::{array, borrow::Cow, f32::consts::PI, mem};
 
 #[derive(Clone, Debug)]
 pub struct MetaSDFGraph<A: Allocator = Global> {
@@ -793,7 +793,9 @@ impl<A: Allocator> MetaSDFGraph<A> {
             return Ok(graph);
         }
 
-        let arena = ArenaPool::get_arena();
+        // Estimate capacity based on node count for outputs and processing
+        let capacity = self.nodes.len() * (mem::size_of::<MetaSDFNodeOutput<&PoolArena>>() + 128); // Output + overhead per node
+        let arena = ArenaPool::get_arena_for_capacity(capacity);
 
         let mut outputs =
             avec![in &arena; MetaSDFNodeOutput::<&PoolArena>::SingleSDF(None); self.nodes.len()];

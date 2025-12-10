@@ -24,7 +24,10 @@ use impact_model::{
 };
 use nalgebra::{Isometry3, Similarity3};
 use roc_integration::roc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{
+    mem,
+    sync::atomic::{AtomicU32, Ordering},
+};
 use tinyvec::TinyVec;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world
@@ -464,7 +467,8 @@ impl SceneGraph {
     /// Updates the transform from local space to the space of the root node for
     /// all group nodes in the scene graph.
     pub fn update_all_group_to_root_transforms(&mut self) {
-        let arena = ArenaPool::get_arena();
+        let arena =
+            ArenaPool::get_arena_for_capacity(32 * mem::size_of::<(GroupNodeID, Isometry3<f32>)>());
         let mut operation_stack = AVec::with_capacity_in(32, &arena);
 
         operation_stack.push((self.root_node_id, Isometry3::identity()));
@@ -509,7 +513,8 @@ impl SceneGraph {
             }
         }
 
-        let arena = ArenaPool::get_arena();
+        let arena =
+            ArenaPool::get_arena_for_capacity(32 * mem::size_of::<BoundingSphereUpdateOperation>());
         let mut operation_stack = AVec::with_capacity_in(32, &arena);
 
         operation_stack.push(BoundingSphereUpdateOperation::VisitChildren(
