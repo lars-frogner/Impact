@@ -15,7 +15,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
-use impact_containers::{HashMap, HashSet};
+use impact_containers::{HashMap, HashSet, hash_map::Entry};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -27,7 +27,7 @@ use impact_material::{Material, gpu_resource::GPUMaterialTemplate};
 use impact_mesh::VertexAttributeSet;
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransformWithPrevious};
 use impact_scene::model::ModelID;
-use std::{borrow::Cow, collections::hash_map::Entry};
+use std::borrow::Cow;
 
 /// Pass for filling the G-buffer attachments and the depth and stencil map.
 #[derive(Debug)]

@@ -2,8 +2,9 @@
 //! an underlying [`Vec`].
 
 use anyhow::{Result, anyhow};
+use hashbrown::{HashMap, hash_map::Entry};
+use impact_alloc::{AVec, Allocator, Global};
 use rustc_hash::FxBuildHasher;
-use std::collections::{HashMap, hash_map::Entry};
 use std::fmt::{self, Debug};
 use std::hash::{BuildHasher, Hash};
 use std::iter;
@@ -15,19 +16,18 @@ use std::iter;
 /// don't want to sacrifice the compact data storage provided by a `Vec`. It
 /// also enables us to reorder items in the `Vec` (like doing a swap remove)
 /// without invalidating the keys used to access the items.
-#[derive(Clone)]
-pub struct KeyIndexMapper<K, S = FxBuildHasher> {
-    indices_for_keys: HashMap<K, usize, S>,
-    keys_at_indices: Vec<K>,
+pub struct KeyIndexMapper<K, S = FxBuildHasher, A: Allocator = Global> {
+    indices_for_keys: HashMap<K, usize, S, A>,
+    keys_at_indices: AVec<K, A>,
 }
 
-impl<K> KeyIndexMapper<K, FxBuildHasher>
+impl<K> KeyIndexMapper<K, FxBuildHasher, Global>
 where
     K: Copy + Hash + Eq + Debug,
 {
     /// Creates a new mapper with no keys.
     pub fn new() -> Self {
-        Self::default()
+        Self::with_capacity_and_hasher(0, FxBuildHasher)
     }
 
     /// Creates a new mapper with at least the specificed capacity and no keys.
@@ -50,7 +50,41 @@ where
     }
 }
 
-impl<K, S> KeyIndexMapper<K, S>
+impl<K, A> KeyIndexMapper<K, FxBuildHasher, A>
+where
+    K: Copy + Hash + Eq + Debug,
+    A: Allocator,
+{
+    /// Creates a new mapper with no keys. It will be allocated with the given
+    /// allocator.
+    pub fn new_in(alloc: A) -> Self {
+        Self::with_capacity_and_hasher_in(0, FxBuildHasher, alloc)
+    }
+
+    /// Creates a new mapper with at least the specificed capacity and no keys.
+    /// It will be allocated with the given allocator.
+    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+        Self::with_capacity_and_hasher_in(capacity, FxBuildHasher, alloc)
+    }
+
+    /// Creates a new mapper with the given key. It will be allocated with the
+    /// given allocator.
+    pub fn new_with_key_in(alloc: A, key: K) -> Self {
+        Self::with_hasher_and_key_in(FxBuildHasher, alloc, key)
+    }
+
+    /// Creates a new mapper with the given set of keys. It will be allocated
+    /// with the given allocator. The index of each key will correspond to the
+    /// position of the key in the provided iterator.
+    ///
+    /// # Panics
+    /// If the iterator has multiple occurences of the same key.
+    pub fn new_with_keys_in(alloc: A, key_iter: impl IntoIterator<Item = K>) -> Self {
+        Self::with_hasher_and_keys_in(FxBuildHasher, alloc, key_iter)
+    }
+}
+
+impl<K, S> KeyIndexMapper<K, S, Global>
 where
     K: Copy + Hash + Eq + Debug,
     S: BuildHasher + Default,
@@ -58,15 +92,12 @@ where
     /// Creates a new mapper with at least the specificed capacity, the given
     /// hasher and with no keys.
     pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
-        Self {
-            indices_for_keys: HashMap::with_capacity_and_hasher(capacity, hash_builder),
-            keys_at_indices: Vec::with_capacity(capacity),
-        }
+        Self::with_capacity_and_hasher_in(capacity, hash_builder, Global)
     }
 
     /// Creates a new mapper with the given hasher and the given key.
     pub fn with_hasher_and_key(hash_builder: S, key: K) -> Self {
-        Self::with_hasher_and_keys(hash_builder, iter::once(key))
+        Self::with_hasher_and_key_in(hash_builder, Global, key)
     }
 
     /// Creates a new mapper with the given hasher and the given set of keys.
@@ -76,9 +107,45 @@ where
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
     pub fn with_hasher_and_keys(hash_builder: S, key_iter: impl IntoIterator<Item = K>) -> Self {
+        Self::with_hasher_and_keys_in(hash_builder, Global, key_iter)
+    }
+}
+
+impl<K, S, A> KeyIndexMapper<K, S, A>
+where
+    K: Copy + Hash + Eq + Debug,
+    S: BuildHasher + Default,
+    A: Allocator,
+{
+    /// Creates a new mapper with at least the specificed capacity, the given
+    /// hasher and with no keys. It will be allocated with the given allocator.
+    pub fn with_capacity_and_hasher_in(capacity: usize, hash_builder: S, alloc: A) -> Self {
+        Self {
+            indices_for_keys: HashMap::with_capacity_and_hasher_in(capacity, hash_builder, alloc),
+            keys_at_indices: AVec::with_capacity_in(capacity, alloc),
+        }
+    }
+
+    /// Creates a new mapper with the given hasher and the given key. It will be
+    /// allocated with the given allocator.
+    pub fn with_hasher_and_key_in(hash_builder: S, alloc: A, key: K) -> Self {
+        Self::with_hasher_and_keys_in(hash_builder, alloc, iter::once(key))
+    }
+
+    /// Creates a new mapper with the given hasher and the given set of keys. It
+    /// will be allocated with the given allocator. The index of each key will
+    /// correspond to the position of the key in the provided iterator.
+    ///
+    /// # Panics
+    /// If the iterator has multiple occurences of the same key.
+    pub fn with_hasher_and_keys_in(
+        hash_builder: S,
+        alloc: A,
+        key_iter: impl IntoIterator<Item = K>,
+    ) -> Self {
         let key_iter = key_iter.into_iter();
         let capacity = key_iter.size_hint().0;
-        let mut mapper = Self::with_capacity_and_hasher(capacity, hash_builder);
+        let mut mapper = Self::with_capacity_and_hasher_in(capacity, hash_builder, alloc);
         for key in key_iter {
             mapper.push_key(key);
         }
@@ -93,12 +160,12 @@ where
     }
 
     /// Returns a reference to the [`HashMap`] of keys to indices.
-    pub fn as_map(&self) -> &HashMap<K, usize, S> {
+    pub fn as_map(&self) -> &HashMap<K, usize, S, A> {
         &self.indices_for_keys
     }
 
     /// Consumes the mapper and returns the [`HashMap`] of keys to indices.
-    pub fn into_map(self) -> HashMap<K, usize, S> {
+    pub fn into_map(self) -> HashMap<K, usize, S, A> {
         self.indices_for_keys
     }
 
@@ -243,13 +310,33 @@ where
     }
 }
 
-impl<K, S> Default for KeyIndexMapper<K, S>
+impl<K, S, A> Clone for KeyIndexMapper<K, S, A>
+where
+    K: Clone,
+    S: Clone,
+    A: Allocator + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            indices_for_keys: self.indices_for_keys.clone(),
+            keys_at_indices: self.keys_at_indices.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.indices_for_keys.clone_from(&source.indices_for_keys);
+        self.keys_at_indices.clone_from(&source.keys_at_indices);
+    }
+}
+
+impl<K, S, A> Default for KeyIndexMapper<K, S, A>
 where
     K: Copy + Hash + Eq + Debug,
     S: BuildHasher + Default,
+    A: Allocator + Default,
 {
     fn default() -> Self {
-        Self::with_capacity_and_hasher(0, S::default())
+        Self::with_capacity_and_hasher_in(0, S::default(), A::default())
     }
 }
 

@@ -18,15 +18,12 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use drag_load::AveragingDragLoad;
 use equirectangular_map::EquirectangularMap;
-use impact_containers::HashMap;
+use impact_containers::{HashMap, hash_map::Entry};
 use impact_math::{Angle, Float, Radians, stringhash64_newtype};
 use nalgebra::Point3;
 use roc_integration::roc;
 use simba::scalar::SubsetOf;
-use std::{
-    collections::hash_map::Entry,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 /// Manages all [`DetailedDragForceGenerator`]s.
 #[derive(Debug)]

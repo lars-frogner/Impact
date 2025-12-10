@@ -6,9 +6,9 @@ use crate::{
     texture::{Sampler, Texture},
     uniform::SingleUniformGPUBuffer,
 };
-use impact_containers::HashMap;
+use impact_alloc::Global;
+use impact_containers::{HashMap, RandomState, hash_map::Entry};
 use impact_math::stringhash64_newtype;
-use std::collections::hash_map::Entry;
 
 stringhash64_newtype!(
     /// Identifier for a specific GPU resource group. Wraps a
@@ -202,7 +202,7 @@ impl GPUResourceGroupManager {
     pub fn resource_group_entry(
         &mut self,
         resource_group_id: GPUResourceGroupID,
-    ) -> Entry<'_, GPUResourceGroupID, GPUResourceGroup> {
+    ) -> Entry<'_, GPUResourceGroupID, GPUResourceGroup, RandomState, Global> {
         self.resource_groups.entry(resource_group_id)
     }
 

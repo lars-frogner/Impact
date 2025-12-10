@@ -8,7 +8,7 @@ use crate::{
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
-use impact_containers::{HashMap, SlotKey, SlotMap};
+use impact_containers::{HashMap, SlotKey, SlotMap, hash_map::Entry};
 use impact_geometry::{CubemapFace, Frustum, Sphere};
 use impact_light::{
     LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES, ShadowableOmnidirectionalLight,
@@ -24,10 +24,7 @@ use impact_model::{
 };
 use nalgebra::{Isometry3, Similarity3};
 use roc_integration::roc;
-use std::{
-    collections::hash_map::Entry,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 use tinyvec::TinyVec;
 
 /// A tree structure that defines a spatial hierarchy of objects in the world

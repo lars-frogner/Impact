@@ -1,6 +1,7 @@
 //! Tests for the [`query`] macro.
 
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::Global;
 use impact_containers::HashSet;
 use impact_ecs::{
     Component, query,
@@ -489,7 +490,7 @@ fn correct_single_entity_is_included() {
 #[test]
 fn correct_two_entities_are_included() {
     let mut world = World::default();
-    let mut correct_included = HashSet::default();
+    let mut correct_included = HashSet::<_, Global>::default();
     world.create_entity((&BYTE, &RECT)).unwrap();
     correct_included.insert(world.create_entity((&BYTE, &POS, &Marked)).unwrap());
     world.create_entity(&POS).unwrap();
@@ -508,7 +509,7 @@ fn correct_two_entities_are_included() {
 #[test]
 fn correct_three_entities_are_included() {
     let mut world = World::default();
-    let mut correct_included = HashSet::default();
+    let mut correct_included = HashSet::<_, Global>::default();
     correct_included.insert(world.create_entity((&RECT, &POS)).unwrap());
     world.create_entity((&POS, &RECT, &Marked)).unwrap();
     world.create_entity(&RECT).unwrap();
@@ -531,7 +532,7 @@ fn correct_three_entities_are_included() {
 #[test]
 fn all_entities_are_included_when_no_comps_specified() {
     let mut world = World::default();
-    let mut correct_included = HashSet::default();
+    let mut correct_included = HashSet::<_, Global>::default();
     correct_included.insert(world.create_entity((&POS, &RECT, &Marked)).unwrap());
     correct_included.insert(world.create_entity((&BYTE, &RECT)).unwrap());
     correct_included.insert(world.create_entity((&BYTE, &POS, &Marked)).unwrap());

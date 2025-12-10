@@ -6,9 +6,10 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::HashMap;
+use impact_alloc::Global;
+use impact_containers::{HashMap, RandomState, hash_map::Entry};
 use impact_math::stringhash64_newtype;
-use std::{borrow::Cow, collections::hash_map::Entry, mem};
+use std::{borrow::Cow, mem};
 
 stringhash64_newtype!(
     /// Identifier for a specific storage buffer on the GPU. Wraps a
@@ -217,7 +218,7 @@ impl StorageGPUBufferManager {
     pub fn storage_buffer_entry(
         &mut self,
         buffer_id: StorageBufferID,
-    ) -> Entry<'_, StorageBufferID, StorageGPUBuffer> {
+    ) -> Entry<'_, StorageBufferID, StorageGPUBuffer, RandomState, Global> {
         self.buffers.entry(buffer_id)
     }
 

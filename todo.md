@@ -54,6 +54,8 @@
 
 - Pass arena when setting up entities.
 
+- Add custom allocator support for `AlignedByteVec`.
+
 ## ECS
 
 - Support querying only entities where certain components have changed.

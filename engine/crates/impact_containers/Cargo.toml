@@ -7,11 +7,13 @@ license = { workspace = true }
 
 [features]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
+serde = ["hashbrown/serde"]
 
 [dependencies]
 anyhow = { workspace = true }
 atomic_enum = "0.3"
 bytemuck = { workspace = true }
+hashbrown = "0.16"
 impact_alloc = { path = "../impact_alloc" }
 indexmap = "2.10"
 inventory = { workspace = true, optional = true }

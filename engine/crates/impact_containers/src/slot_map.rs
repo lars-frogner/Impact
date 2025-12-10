@@ -2,6 +2,7 @@
 //! deleted and reuses these locations when adding new items.
 
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::{AVec, Allocator, Global};
 use roc_integration::roc;
 use std::{cmp, fmt};
 
@@ -14,10 +15,10 @@ use std::{cmp, fmt};
 /// value is inserted. Every time a value is to be accessed, the generation of
 /// the key is compared to the current generation of the slot, and the access is
 /// rejected if the generations do not match.
-#[derive(Clone, Debug, Default)]
-pub struct SlotMap<V> {
-    slots: Vec<Slot<V>>,
-    free_slot_keys: Vec<SlotKey>,
+#[derive(Clone, Debug)]
+pub struct SlotMap<V, A: Allocator = Global> {
+    slots: AVec<Slot<V>, A>,
+    free_slot_keys: AVec<SlotKey, A>,
 }
 
 /// A key into a [`SlotMap`].
@@ -40,12 +41,19 @@ struct Slot<V> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 struct Generation(u32);
 
-impl<V> SlotMap<V> {
+impl<V> SlotMap<V, Global> {
     /// Creates a new empty map.
     pub fn new() -> Self {
+        Self::new_in(Global)
+    }
+}
+
+impl<V, A: Allocator> SlotMap<V, A> {
+    /// Creates a new empty map. It will be allocated with the given allocator.
+    pub fn new_in(alloc: A) -> Self {
         Self {
-            slots: Vec::new(),
-            free_slot_keys: Vec::new(),
+            slots: AVec::new_in(alloc),
+            free_slot_keys: AVec::new_in(alloc),
         }
     }
 
@@ -243,6 +251,15 @@ impl<V> SlotMap<V> {
                 slot.declare_free();
             }
         }
+    }
+}
+
+impl<V, A> Default for SlotMap<V, A>
+where
+    A: Allocator + Default,
+{
+    fn default() -> Self {
+        Self::new_in(A::default())
     }
 }
 

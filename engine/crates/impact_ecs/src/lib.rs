@@ -88,7 +88,8 @@ pub use impact_ecs_macros::archetype_of;
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
-/// # use impact_containers::HashSet;
+/// #
+/// # type HashSet<T> = impact_containers::HashSet<T, impact_alloc::Global>;
 /// #
 /// # #[repr(C)]
 /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]

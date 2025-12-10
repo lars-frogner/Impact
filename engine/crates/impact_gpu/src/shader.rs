@@ -5,10 +5,10 @@ pub mod template;
 use crate::device::GraphicsDevice;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::HashMap;
+use impact_containers::{HashMap, hash_map::Entry};
 use impact_math::Hash64;
 use naga::{Module, ShaderStage};
-use std::{borrow::Cow, collections::hash_map::Entry, fs, hash::Hash, path::Path};
+use std::{borrow::Cow, fs, hash::Hash, path::Path};
 use template::SpecificShaderTemplate;
 
 /// Identifier for specific shaders.

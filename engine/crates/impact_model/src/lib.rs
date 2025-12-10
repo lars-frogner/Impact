@@ -10,13 +10,14 @@ pub use transform::register_model_feature_types;
 
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::{InstanceFeatureGPUBuffer, ModelInstanceGPUBufferMap};
+use impact_containers::hash_map::Entry;
 use impact_containers::{
     AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap,
 };
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_math::{self, Hash64};
 use roc_integration::roc;
-use std::{borrow::Cow, collections::hash_map::Entry, fmt, hash::Hash, mem, ops::Range};
+use std::{borrow::Cow, fmt, hash::Hash, mem, ops::Range};
 
 /// Represents a piece of data associated with a model instance.
 pub trait InstanceFeature: Pod {
