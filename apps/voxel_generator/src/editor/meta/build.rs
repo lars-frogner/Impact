@@ -3,10 +3,8 @@ use super::{
     node_kind::{self},
 };
 use anyhow::Result;
-use impact::{
-    impact_alloc::{AVec, Allocator, arena::ArenaPool},
-    impact_containers::HashMap,
-};
+use impact::impact_alloc::{AVec, Allocator, arena::ArenaPool};
+use impact_containers::NoHashMap;
 use impact_voxel::{
     generation::{
         SDFVoxelGenerator,
@@ -18,7 +16,6 @@ use impact_voxel::{
     },
     voxel_types::VoxelType,
 };
-use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
 pub struct SDFGraphBuildResult<A: Allocator> {
@@ -29,7 +26,7 @@ pub struct SDFGraphBuildResult<A: Allocator> {
 #[derive(Clone, Debug)]
 pub struct BuildScratch {
     pub meta_graph: MetaSDFGraph,
-    id_map: HashMap<MetaNodeID, MetaSDFNodeID>,
+    id_map: NoHashMap<MetaNodeID, MetaSDFNodeID>,
 }
 
 #[derive(Debug)]
@@ -42,7 +39,7 @@ impl BuildScratch {
     pub fn new() -> Self {
         Self {
             meta_graph: MetaSDFGraph::new(),
-            id_map: HashMap::default(),
+            id_map: NoHashMap::default(),
         }
     }
 }
@@ -74,7 +71,7 @@ pub fn default_sdf_voxel_generator<A: Allocator>(alloc: A) -> SDFVoxelGenerator<
 pub fn build_sdf_graph<A: Allocator>(
     alloc: A,
     scratch: &mut BuildScratch,
-    nodes: &BTreeMap<MetaNodeID, MetaNode>,
+    nodes: &NoHashMap<MetaNodeID, MetaNode>,
 ) -> Option<Result<SDFGraphBuildResult<A>>> {
     let output_node = nodes.get(&0)?;
 

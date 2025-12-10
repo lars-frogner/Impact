@@ -1,5 +1,3 @@
-use crate::editor::EditorConfig;
-
 use super::{
     MetaNode, MetaNodeChildLinks, MetaNodeData, MetaNodeID, MetaNodeParentLinks,
     node_kind::MetaNodeKind,
@@ -8,8 +6,9 @@ use super::{
         ParamDistribution,
     },
 };
+use crate::editor::EditorConfig;
 use anyhow::{Error, bail};
-use impact::impact_containers::HashSet;
+use impact_containers::NoHashSet;
 use serde::{Deserialize, Serialize};
 use tinyvec::TinyVec;
 
@@ -17,14 +16,14 @@ use tinyvec::TinyVec;
 pub struct IOMetaGraph {
     pub kind: IOMetaGraphKind,
     pub nodes: Vec<IOMetaNode>,
-    pub collapsed_nodes: HashSet<MetaNodeID>,
+    pub collapsed_nodes: NoHashSet<MetaNodeID>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct IOMetaGraphRef<'a> {
     pub kind: IOMetaGraphKind,
     pub nodes: &'a [IOMetaNode],
-    pub collapsed_nodes: &'a HashSet<MetaNodeID>,
+    pub collapsed_nodes: &'a NoHashSet<MetaNodeID>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
