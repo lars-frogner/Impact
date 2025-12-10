@@ -1,12 +1,10 @@
 use super::{
     MetaNode, MetaNodeData, MetaNodeID, MetaNodeKind, MetaNodeLink, MetaPort,
-    build::BuildScratch,
-    data_type::{DataTypeScratch, update_edge_data_types},
-    show_port,
+    data_type::update_edge_data_types, show_port,
 };
 use crate::editor::{
     MAX_ZOOM, MIN_ZOOM, MetaGraphStatus, PanZoomState,
-    layout::{LayoutScratch, LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
+    layout::{LayoutableGraph, compute_delta_to_resolve_overlaps, layout_vertical},
     meta::{
         CollapsedMetaSubgraph, CollapsedMetaSubgraphChildPort, CollapsedMetaSubgraphParentPort,
         MetaPaletteColor,
@@ -22,7 +20,7 @@ use impact::{
         Align, Color32, Context, CursorIcon, Direction, Id, Key, Label, Painter, PointerButton,
         Pos2, Rect, Sense, Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
     },
-    impact_alloc::{AVec, Global, arena::ArenaPool},
+    impact_alloc::{AVec, Allocator, arena::ArenaPool},
 };
 use impact_containers::{BitVector, NoHashKeyIndexMapper, NoHashMap, NoHashSet};
 use std::path::Path;
@@ -66,22 +64,9 @@ pub struct MetaGraphCanvas {
 }
 
 #[derive(Clone, Debug)]
-pub struct MetaCanvasScratch {
-    world_node_rects: NoHashMap<MetaNodeID, Rect>,
-    screen_node_rects: NoHashMap<MetaNodeID, Rect>,
-    subgraph_node_ids: Vec<MetaNodeID>,
-    node_id_lookup: NoHashSet<MetaNodeID>,
-    layout_lut: MetaLayoutLookupTable,
-    search: SearchScratch,
-    data_type: DataTypeScratch,
-    layout: LayoutScratch,
-    pub build: BuildScratch,
-}
-
-#[derive(Clone, Debug)]
-struct SearchScratch {
-    stack: Vec<MetaNodeID>,
-    seen: BitVector,
+struct SearchScratch<A: Allocator> {
+    stack: AVec<MetaNodeID, A>,
+    seen: BitVector<A>,
 }
 
 bitflags! {
@@ -161,17 +146,16 @@ struct CollapseIndex {
     member_to_root: NoHashMap<MetaNodeID, MetaNodeID>,
 }
 
-#[derive(Debug)]
-struct LayoutableMetaGraph<'a> {
-    lut: &'a MetaLayoutLookupTable,
-    visible_node_rects: &'a mut NoHashMap<MetaNodeID, Rect>,
+struct LayoutableMetaGraph<'a, A: Allocator> {
+    lut: MetaLayoutLookupTable<A>,
+    visible_node_rects: &'a mut NoHashMap<MetaNodeID, Rect, A>,
 }
 
-#[derive(Clone, Debug)]
-struct MetaLayoutLookupTable {
-    visible_node_index_map: NoHashKeyIndexMapper<MetaNodeID>,
-    child_idx_offsets_and_counts: Vec<(usize, usize)>,
-    all_child_indices: Vec<usize>,
+#[derive(Clone)]
+struct MetaLayoutLookupTable<A: Allocator> {
+    visible_node_index_map: NoHashKeyIndexMapper<MetaNodeID, A>,
+    child_idx_offsets_and_counts: AVec<(usize, usize), A>,
+    all_child_indices: AVec<usize, A>,
 }
 
 #[derive(Clone, Debug)]
@@ -238,24 +222,23 @@ impl MetaGraphCanvas {
         node_id
     }
 
-    fn remove_node(
-        &mut self,
-        scratch: &mut MetaCanvasScratch,
-        node_id: MetaNodeID,
-        changes: &mut MetaGraphChanges,
-    ) {
+    fn remove_node(&mut self, node_id: MetaNodeID, changes: &mut MetaGraphChanges) {
         if self
             .collapse_index
             .node_is_visible_collapsed_subgraph_root(node_id)
         {
+            let arena = ArenaPool::get_arena();
+            let mut search_scratch = SearchScratch::new_in(&arena);
+            let mut subgraph_node_ids = AVec::new_in(&arena);
+
             obtain_subgraph(
-                &mut scratch.search,
+                &mut search_scratch,
                 &self.nodes,
                 self.node_id_counter,
-                &mut scratch.subgraph_node_ids,
+                &mut subgraph_node_ids,
                 node_id,
             );
-            for &node_id_to_remove in &scratch.subgraph_node_ids {
+            for node_id_to_remove in subgraph_node_ids {
                 self.remove_single_node(node_id_to_remove, changes);
             }
         } else {
@@ -299,7 +282,6 @@ impl MetaGraphCanvas {
 
     pub fn change_node_kind(
         &mut self,
-        scratch: &mut MetaCanvasScratch,
         node_id: MetaNodeID,
         new_kind: MetaNodeKind,
         changes: &mut MetaGraphChanges,
@@ -324,7 +306,7 @@ impl MetaGraphCanvas {
         // Since we have changed the kind, some existing links may no longer be
         // valid. But we need to update the data types based on the new node
         // kind before we can check for and remove invalid links.
-        self.update_edge_data_types(scratch);
+        self.update_edge_data_types();
 
         // Detach all children and parents with which the ports have become
         // incompatible
@@ -342,9 +324,9 @@ impl MetaGraphCanvas {
         true
     }
 
-    pub fn change_parent_port_count(
+    fn change_parent_port_count<A: Allocator>(
         &mut self,
-        scratch: &mut MetaCanvasScratch,
+        search_scratch: &mut SearchScratch<A>,
         node_id: MetaNodeID,
         new_count: usize,
         changes: &mut MetaGraphChanges,
@@ -368,7 +350,7 @@ impl MetaGraphCanvas {
                     for slot in 0..new_count {
                         if self.node(node_id).links_to_parents[slot].is_none() {
                             self.try_attach(
-                                &mut scratch.search,
+                                search_scratch,
                                 parent_node_id,
                                 child_slot_on_parent,
                                 node_id,
@@ -384,9 +366,9 @@ impl MetaGraphCanvas {
         }
     }
 
-    fn can_attach(
+    fn can_attach<A: Allocator>(
         &self,
-        search_scratch: &mut SearchScratch,
+        search_scratch: &mut SearchScratch<A>,
         parent_node_id: MetaNodeID,
         child_slot_on_parent: usize,
         child_node_id: MetaNodeID,
@@ -430,9 +412,9 @@ impl MetaGraphCanvas {
         )
     }
 
-    fn try_attach(
+    fn try_attach<A: Allocator>(
         &mut self,
-        search_scratch: &mut SearchScratch,
+        search_scratch: &mut SearchScratch<A>,
         parent_node_id: MetaNodeID,
         child_slot_on_parent: usize,
         child_node_id: MetaNodeID,
@@ -639,7 +621,6 @@ impl MetaGraphCanvas {
 
     pub fn show(
         &mut self,
-        scratch: &mut MetaCanvasScratch,
         ctx: &Context,
         graph_status: &MetaGraphStatus,
         pending_node_operations: PendingNodeOperations,
@@ -676,6 +657,22 @@ impl MetaGraphCanvas {
             .vscroll(false)
             .hscroll(false)
             .show(ctx, |ui| {
+                let arena = ArenaPool::get_arena();
+                let mut search_scratch = SearchScratch::new_in(&arena);
+                let mut subgraph_node_ids = AVec::new_in(&arena);
+                let mut world_node_rects =
+                    NoHashMap::<MetaNodeID, Rect, _>::with_capacity_and_hasher_in(
+                        self.nodes.len(),
+                        Default::default(),
+                        &arena,
+                    );
+                let mut screen_node_rects =
+                    NoHashMap::<MetaNodeID, Rect, _>::with_capacity_and_hasher_in(
+                        self.nodes.len(),
+                        Default::default(),
+                        &arena,
+                    );
+
                 let (canvas_rect, canvas_response) =
                     ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
 
@@ -720,7 +717,7 @@ impl MetaGraphCanvas {
 
                 if let Some(PendingNodeKindChange { node_id, kind }) =
                     pending_node_operations.kind_change
-                    && self.change_node_kind(scratch, node_id, kind, changes)
+                    && self.change_node_kind(node_id, kind, changes)
                 {
                     let zoom = self.pan_zoom_state.zoom;
                     self.node_mut(node_id).data.prepare_text(ui, zoom);
@@ -733,7 +730,12 @@ impl MetaGraphCanvas {
                     parent_port_count,
                 }) = pending_node_operations.parent_port_count_change
                 {
-                    self.change_parent_port_count(scratch, node_id, parent_port_count, changes);
+                    self.change_parent_port_count(
+                        &mut search_scratch,
+                        node_id,
+                        parent_port_count,
+                        changes,
+                    );
                 }
 
                 // Handle change in collapsed state
@@ -749,8 +751,8 @@ impl MetaGraphCanvas {
                 // collapsed subgraphs will get a rectangle
                 self.compute_world_and_screen_node_rects(
                     canvas_origin,
-                    &mut scratch.world_node_rects,
-                    &mut scratch.screen_node_rects,
+                    &mut world_node_rects,
+                    &mut screen_node_rects,
                 );
 
                 // Handle pending new node
@@ -764,7 +766,7 @@ impl MetaGraphCanvas {
                     let node_size = data.compute_standard_size();
 
                     let position = self
-                        .default_new_node_position(&scratch.world_node_rects, node_size)
+                        .default_new_node_position(&world_node_rects, node_size)
                         .unwrap_or_else(|| self.output_node_position(&canvas_rect, node_size));
 
                     let mut node = MetaNode::new(position, data);
@@ -782,7 +784,7 @@ impl MetaGraphCanvas {
                         {
                             let new_position = if *attach_as_child {
                                 self.position_relative_to_node(
-                                    &scratch.world_node_rects,
+                                    &world_node_rects,
                                     node_size,
                                     *parent_node_id,
                                     Direction::TopDown,
@@ -792,7 +794,7 @@ impl MetaGraphCanvas {
                                 )
                             } else {
                                 self.position_relative_to_node(
-                                    &scratch.world_node_rects,
+                                    &world_node_rects,
                                     node_size,
                                     *child_node_id,
                                     Direction::BottomUp,
@@ -809,12 +811,7 @@ impl MetaGraphCanvas {
                         }
 
                         let resolve_delta = compute_delta_to_resolve_overlaps(
-                            || {
-                                scratch
-                                    .world_node_rects
-                                    .iter()
-                                    .map(|(id, rect)| (*id, *rect))
-                            },
+                            || world_node_rects.iter().map(|(id, rect)| (*id, *rect)),
                             node_id,
                             world_node_rect,
                             MIN_NODE_SEPARATION,
@@ -828,7 +825,7 @@ impl MetaGraphCanvas {
                     let is_leaf = node.data.kind.n_child_slots() == 0;
 
                     self.nodes.insert(node_id, node);
-                    scratch.world_node_rects.insert(node_id, world_node_rect);
+                    world_node_rects.insert(node_id, world_node_rect);
 
                     changes.insert(MetaGraphChanges::NODE_ADDED);
 
@@ -842,7 +839,7 @@ impl MetaGraphCanvas {
                         }) = auto_attach_info
                     {
                         self.try_attach(
-                            &mut scratch.search,
+                            &mut search_scratch,
                             parent_node_id,
                             child_slot_on_parent,
                             child_node_id,
@@ -871,7 +868,7 @@ impl MetaGraphCanvas {
                     if hidden_added_node_id == Some(node_id) {
                         continue;
                     }
-                    let Some(node_rect) = scratch.screen_node_rects.get(&node_id).copied() else {
+                    let Some(node_rect) = screen_node_rects.get(&node_id).copied() else {
                         continue;
                     };
 
@@ -957,7 +954,7 @@ impl MetaGraphCanvas {
                         // Child is part of a collapsed subgraph, so skip it
                         continue;
                     }
-                    let Some(child_rect) = scratch.screen_node_rects.get(&child_node_id) else {
+                    let Some(child_rect) = screen_node_rects.get(&child_node_id) else {
                         continue;
                     };
 
@@ -984,8 +981,7 @@ impl MetaGraphCanvas {
                             // Parent is part of a collapsed subgraph, so skip it
                             continue;
                         }
-                        let Some(parent_rect) = scratch.screen_node_rects.get(&parent_node_id)
-                        else {
+                        let Some(parent_rect) = screen_node_rects.get(&parent_node_id) else {
                             continue;
                         };
 
@@ -1007,7 +1003,7 @@ impl MetaGraphCanvas {
                 // Now draw all edges starting or ending in a collapsed subgraph
                 for &root_node_id in self.collapse_index.visible_collapsed_subgraph_roots() {
                     let subgraph = self.collapse_index.subgraph(root_node_id);
-                    let subgraph_rect = &scratch.screen_node_rects[&root_node_id];
+                    let subgraph_rect = &screen_node_rects[&root_node_id];
 
                     for (parent_slot_on_subgraph, subgraph_parent_port) in
                         subgraph.exposed_parent_ports.iter().enumerate()
@@ -1028,7 +1024,7 @@ impl MetaGraphCanvas {
                         let Some(parent_node) = self.nodes.get(&parent_node_id) else {
                             continue;
                         };
-                        let parent_rect = &scratch.screen_node_rects[&parent_node_id];
+                        let parent_rect = &screen_node_rects[&parent_node_id];
 
                         draw_edge(
                             &painter,
@@ -1064,7 +1060,7 @@ impl MetaGraphCanvas {
                         let Some(child_node) = self.nodes.get(&child_node_id) else {
                             continue;
                         };
-                        let child_rect = &scratch.screen_node_rects[&child_node_id];
+                        let child_rect = &screen_node_rects[&child_node_id];
 
                         draw_edge(
                             &painter,
@@ -1085,7 +1081,7 @@ impl MetaGraphCanvas {
 
                 let mut pending_edge_port_color = Color32::BLACK;
 
-                for (&node_id, node_rect) in &scratch.screen_node_rects {
+                for (&node_id, node_rect) in &screen_node_rects {
                     if hidden_added_node_id == Some(node_id) {
                         continue;
                     }
@@ -1110,7 +1106,7 @@ impl MetaGraphCanvas {
                                 MetaPort::parent_center(node_rect, slot, parent_port_count);
 
                             self.handle_port(
-                                &mut scratch.search,
+                                &mut search_scratch,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -1134,7 +1130,7 @@ impl MetaGraphCanvas {
                                 MetaPort::child_center(node_rect, slot, child_port_count);
 
                             self.handle_port(
-                                &mut scratch.search,
+                                &mut search_scratch,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -1164,7 +1160,7 @@ impl MetaGraphCanvas {
                                 MetaPort::parent_center(node_rect, slot, parent_port_count);
 
                             self.handle_port(
-                                &mut scratch.search,
+                                &mut search_scratch,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -1187,7 +1183,7 @@ impl MetaGraphCanvas {
                                 MetaPort::child_center(node_rect, slot, child_port_count);
 
                             self.handle_port(
-                                &mut scratch.search,
+                                &mut search_scratch,
                                 ui,
                                 &painter,
                                 &mut pending_edge_port_color,
@@ -1207,7 +1203,7 @@ impl MetaGraphCanvas {
                 if let Some(pending_edge) = &self.pending_edge
                     && let Some(mouse_pos) = ui.input(|i| i.pointer.hover_pos())
                     && let Some(node) = self.nodes.get(&pending_edge.from_node)
-                    && let Some(node_rect) = scratch.screen_node_rects.get(&pending_edge.from_node)
+                    && let Some(node_rect) = screen_node_rects.get(&pending_edge.from_node)
                 {
                     let from = if self
                         .collapse_index
@@ -1278,13 +1274,13 @@ impl MetaGraphCanvas {
                 // Handle node deletion
 
                 if let Some(PendingNodeRemoval { node_id }) = pending_node_operations.removal {
-                    self.remove_node(scratch, node_id, changes);
+                    self.remove_node(node_id, changes);
                 }
                 if let Some(node_id) = self.selected_node_id
                     && ui.input(|i| i.key_pressed(Key::Delete))
                     && !ui.ctx().wants_keyboard_input()
                 {
-                    self.remove_node(scratch, node_id, changes);
+                    self.remove_node(node_id, changes);
                 }
 
                 // Update data types
@@ -1294,7 +1290,7 @@ impl MetaGraphCanvas {
                         | MetaGraphChanges::NODE_DETACHED
                         | MetaGraphChanges::KIND_CHANGED,
                 ) {
-                    self.update_edge_data_types(scratch);
+                    self.update_edge_data_types();
                 }
 
                 // Update collapsed view
@@ -1307,9 +1303,9 @@ impl MetaGraphCanvas {
                         | MetaGraphChanges::PARENT_PORT_COUNT_CHANGED
                         | MetaGraphChanges::COLLAPSED_STATE_CHANGED,
                 ) {
-                    self.rebuild_collapse_index(scratch);
+                    self.rebuild_collapse_index();
 
-                    self.compute_world_node_rects(&mut scratch.world_node_rects);
+                    self.compute_world_node_rects(&mut world_node_rects);
                 }
 
                 // Handle node dragging
@@ -1324,27 +1320,17 @@ impl MetaGraphCanvas {
 
                     if drag_subgraph {
                         obtain_subgraph(
-                            &mut scratch.search,
+                            &mut search_scratch,
                             &self.nodes,
                             self.node_id_counter,
-                            &mut scratch.subgraph_node_ids,
+                            &mut subgraph_node_ids,
                             node_id,
                         );
-                        for &node_id in &scratch.subgraph_node_ids {
-                            translate_node(
-                                &mut self.nodes,
-                                &mut scratch.world_node_rects,
-                                node_id,
-                                delta,
-                            );
+                        for &node_id in &subgraph_node_ids {
+                            translate_node(&mut self.nodes, &mut world_node_rects, node_id, delta);
                         }
                     } else {
-                        translate_node(
-                            &mut self.nodes,
-                            &mut scratch.world_node_rects,
-                            node_id,
-                            delta,
-                        );
+                        translate_node(&mut self.nodes, &mut world_node_rects, node_id, delta);
                     }
                 }
 
@@ -1357,18 +1343,14 @@ impl MetaGraphCanvas {
                     && !collapsed
                 {
                     obtain_subgraph(
-                        &mut scratch.search,
+                        &mut search_scratch,
                         &self.nodes,
                         self.node_id_counter,
-                        &mut scratch.subgraph_node_ids,
+                        &mut subgraph_node_ids,
                         node_id,
                     );
-                    for &node_id in &scratch.subgraph_node_ids {
-                        resolve_overlap_for_node(
-                            &mut self.nodes,
-                            &mut scratch.world_node_rects,
-                            node_id,
-                        );
+                    for &node_id in &subgraph_node_ids {
+                        resolve_overlap_for_node(&mut self.nodes, &mut world_node_rects, node_id);
                     }
                 }
 
@@ -1386,12 +1368,15 @@ impl MetaGraphCanvas {
                                 | MetaGraphChanges::COLLAPSED_STATE_CHANGED,
                         ))
                 {
-                    self.perform_layout(scratch);
+                    self.perform_layout(&arena, &mut world_node_rects);
                 }
             });
     }
 
-    fn compute_world_node_rects(&self, world_node_rects: &mut NoHashMap<MetaNodeID, Rect>) {
+    fn compute_world_node_rects<A: Allocator>(
+        &self,
+        world_node_rects: &mut NoHashMap<MetaNodeID, Rect, A>,
+    ) {
         world_node_rects.clear();
         for (&node_id, node) in &self.nodes {
             if let Some(world_rect) = self.compute_world_node_rect(node_id, node) {
@@ -1400,11 +1385,11 @@ impl MetaGraphCanvas {
         }
     }
 
-    fn compute_world_and_screen_node_rects(
+    fn compute_world_and_screen_node_rects<A: Allocator>(
         &self,
         canvas_origin: Pos2,
-        world_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
-        screen_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
+        world_node_rects: &mut NoHashMap<MetaNodeID, Rect, A>,
+        screen_node_rects: &mut NoHashMap<MetaNodeID, Rect, A>,
     ) {
         world_node_rects.clear();
         screen_node_rects.clear();
@@ -1435,9 +1420,9 @@ impl MetaGraphCanvas {
         Some(Rect::from_center_size(node.position, node_size))
     }
 
-    fn position_relative_to_node(
+    fn position_relative_to_node<A: Allocator>(
         &self,
-        world_node_rects: &NoHashMap<MetaNodeID, Rect>,
+        world_node_rects: &NoHashMap<MetaNodeID, Rect, A>,
         node_size: Vec2,
         reference_node_id: MetaNodeID,
         direction: Direction,
@@ -1492,9 +1477,9 @@ impl MetaGraphCanvas {
         Some(base_position + alignment_offset)
     }
 
-    fn default_new_node_position(
+    fn default_new_node_position<A: Allocator>(
         &self,
-        world_node_rects: &NoHashMap<MetaNodeID, Rect>,
+        world_node_rects: &NoHashMap<MetaNodeID, Rect, A>,
         node_size: Vec2,
     ) -> Option<Pos2> {
         let output_node_id = 0;
@@ -1552,9 +1537,9 @@ impl MetaGraphCanvas {
         None
     }
 
-    fn handle_port(
+    fn handle_port<A: Allocator>(
         &mut self,
-        search_scratch: &mut SearchScratch,
+        search_scratch: &mut SearchScratch<A>,
         ui: &mut Ui,
         painter: &Painter,
         pending_edge_port_color: &mut Color32,
@@ -1758,42 +1743,37 @@ impl MetaGraphCanvas {
         }
     }
 
-    fn perform_layout(&mut self, scratch: &mut MetaCanvasScratch) {
-        let origin = scratch
-            .world_node_rects
+    fn perform_layout<A: Allocator>(
+        &mut self,
+        arena: A,
+        world_node_rects: &mut NoHashMap<MetaNodeID, Rect, A>,
+    ) {
+        let origin = world_node_rects
             .get(&0)
             .map_or_else(Pos2::default, Rect::center_top);
 
-        let mut layoutable_graph = LayoutableMetaGraph::new(
-            &mut scratch.layout_lut,
-            &self.nodes,
-            &self.collapse_index,
-            &mut scratch.world_node_rects,
-        );
+        let mut layoutable_graph =
+            LayoutableMetaGraph::new_in(arena, &self.nodes, &self.collapse_index, world_node_rects);
+
         layout_vertical(
-            &mut scratch.layout,
             &mut layoutable_graph,
             origin,
             AUTO_LAYOUT_HORIZONTAL_GAP,
             AUTO_LAYOUT_VERTICAL_GAP,
         );
 
-        for (&node_id, node_rect) in &scratch.world_node_rects {
+        for (&node_id, node_rect) in &*world_node_rects {
             self.node_mut(node_id).position = node_rect.center();
         }
     }
 
-    pub fn update_edge_data_types(&mut self, scratch: &mut MetaCanvasScratch) {
-        update_edge_data_types(&mut scratch.data_type, &mut self.nodes);
+    pub fn update_edge_data_types(&mut self) {
+        update_edge_data_types(&mut self.nodes);
     }
 
-    pub fn rebuild_collapse_index(&mut self, scratch: &mut MetaCanvasScratch) {
-        self.collapse_index.rebuild(
-            scratch,
-            &self.nodes,
-            self.node_id_counter,
-            &self.collapsed_nodes,
-        );
+    pub fn rebuild_collapse_index(&mut self) {
+        self.collapse_index
+            .rebuild(&self.nodes, self.node_id_counter, &self.collapsed_nodes);
     }
 
     pub fn save_graph(
@@ -1819,38 +1799,38 @@ impl MetaGraphCanvas {
         impact_io::write_ron_file(&graph, output_path)
     }
 
-    pub fn save_subgraph(
-        &self,
-        scratch: &mut MetaCanvasScratch,
-        root_node_id: MetaNodeID,
-        output_path: &Path,
-    ) -> Result<()> {
+    pub fn save_subgraph(&self, root_node_id: MetaNodeID, output_path: &Path) -> Result<()> {
+        let arena = ArenaPool::get_arena();
+        let mut search_scratch = SearchScratch::new_in(&arena);
+        let mut subgraph_node_ids = AVec::new_in(&arena);
+
         obtain_subgraph(
-            &mut scratch.search,
+            &mut search_scratch,
             &self.nodes,
             self.node_id_counter,
-            &mut scratch.subgraph_node_ids,
+            &mut subgraph_node_ids,
             root_node_id,
         );
 
-        if scratch.subgraph_node_ids.is_empty() {
+        if subgraph_node_ids.is_empty() {
             bail!("Missing root node {root_node_id} when saving subgraph");
         }
 
-        scratch.node_id_lookup.clear();
-        scratch
-            .node_id_lookup
-            .extend(scratch.subgraph_node_ids.iter().copied());
+        let mut node_id_lookup = NoHashSet::with_capacity_and_hasher_in(
+            subgraph_node_ids.len(),
+            Default::default(),
+            &arena,
+        );
+        node_id_lookup.extend(subgraph_node_ids.iter().copied());
 
-        let arena = ArenaPool::get_arena();
-        let mut nodes = AVec::with_capacity_in(scratch.subgraph_node_ids.len(), &arena);
+        let mut nodes = AVec::with_capacity_in(subgraph_node_ids.len(), &arena);
 
-        nodes.extend(scratch.subgraph_node_ids.iter().map(|node_id| {
+        nodes.extend(subgraph_node_ids.iter().map(|node_id| {
             let mut node: IOMetaNode = (node_id, &self.nodes[node_id]).into();
 
             // Clear parent links to nodes outside the subgraph
             for link in &mut node.links_to_parents {
-                if link.is_some_and(|link| !scratch.node_id_lookup.contains(&link.to_node)) {
+                if link.is_some_and(|link| !node_id_lookup.contains(&link.to_node)) {
                     *link = None;
                 }
             }
@@ -1867,12 +1847,7 @@ impl MetaGraphCanvas {
         impact_io::write_ron_file(&graph, output_path)
     }
 
-    pub fn load_graph(
-        &mut self,
-        scratch: &mut MetaCanvasScratch,
-        ui: &Ui,
-        path: &Path,
-    ) -> Result<IOEditorSettings> {
+    pub fn load_graph(&mut self, ui: &Ui, path: &Path) -> Result<IOEditorSettings> {
         let graph: IOMetaGraph =
             impact_io::parse_ron_file(path).context("Failed to parse graph file")?;
 
@@ -1919,19 +1894,13 @@ impl MetaGraphCanvas {
         self.is_panning = false;
         self.dragging_node = None;
 
-        self.update_edge_data_types(scratch);
-        self.rebuild_collapse_index(scratch);
+        self.update_edge_data_types();
+        self.rebuild_collapse_index();
 
         Ok(editor_settings)
     }
 
-    pub fn load_subgraph(
-        &mut self,
-        scratch: &mut MetaCanvasScratch,
-        ui: &Ui,
-        path: &Path,
-        auto_layout: bool,
-    ) -> Result<()> {
+    pub fn load_subgraph(&mut self, ui: &Ui, path: &Path, auto_layout: bool) -> Result<()> {
         let subgraph: IOMetaGraph =
             impact_io::parse_ron_file(path).context("Failed to parse subgraph file")?;
 
@@ -1947,10 +1916,11 @@ impl MetaGraphCanvas {
 
         let id_offset = self.node_id_counter;
 
-        let mut subgraph_nodes = NoHashMap::<_, _, Global>::default();
-        let mut node_id_counter = 0;
+        let arena = ArenaPool::get_arena();
+        let mut subgraph_nodes = NoHashMap::with_hasher_in(Default::default(), &arena);
+        let mut subgraph_node_ids = AVec::new_in(&arena);
 
-        scratch.subgraph_node_ids.clear();
+        let mut node_id_counter = 0;
 
         for mut io_node in subgraph.nodes {
             let orig_node_id = io_node.id;
@@ -1965,7 +1935,7 @@ impl MetaGraphCanvas {
             node.data.prepare_text(ui, self.pan_zoom_state.zoom);
 
             subgraph_nodes.insert(node_id, node);
-            scratch.subgraph_node_ids.push(node_id);
+            subgraph_node_ids.push(node_id);
 
             node_id_counter = node_id_counter.max(node_id + 1);
         }
@@ -1980,32 +1950,33 @@ impl MetaGraphCanvas {
 
         self.collapsed_nodes.insert(root_node_id);
 
-        self.update_edge_data_types(scratch);
-        self.rebuild_collapse_index(scratch);
+        self.update_edge_data_types();
+        self.rebuild_collapse_index();
 
-        self.compute_world_node_rects(&mut scratch.world_node_rects);
+        let mut world_node_rects = NoHashMap::<MetaNodeID, Rect, _>::with_capacity_and_hasher_in(
+            self.nodes.len(),
+            Default::default(),
+            &arena,
+        );
+
+        self.compute_world_node_rects(&mut world_node_rects);
 
         if auto_layout {
-            self.perform_layout(scratch);
+            self.perform_layout(&arena, &mut world_node_rects);
         } else {
-            let root_node_size = scratch.world_node_rects[&root_node_id].size();
+            let root_node_size = world_node_rects[&root_node_id].size();
             let root_node_position = self
-                .default_new_node_position(&scratch.world_node_rects, root_node_size)
+                .default_new_node_position(&world_node_rects, root_node_size)
                 .unwrap();
 
             let orig_root_node_position = self.nodes[&root_node_id].position;
             let delta = root_node_position - orig_root_node_position;
 
-            translate_node(
-                &mut self.nodes,
-                &mut scratch.world_node_rects,
-                root_node_id,
-                delta,
-            );
+            translate_node(&mut self.nodes, &mut world_node_rects, root_node_id, delta);
 
             let final_delta = self.nodes[&root_node_id].position - orig_root_node_position;
 
-            for node_id in &scratch.subgraph_node_ids[1..] {
+            for node_id in &subgraph_node_ids[1..] {
                 self.nodes.get_mut(node_id).unwrap().position += final_delta;
             }
         }
@@ -2014,27 +1985,11 @@ impl MetaGraphCanvas {
     }
 }
 
-impl MetaCanvasScratch {
-    pub fn new() -> Self {
+impl<A: Allocator> SearchScratch<A> {
+    fn new_in(alloc: A) -> Self {
         Self {
-            world_node_rects: NoHashMap::default(),
-            screen_node_rects: NoHashMap::default(),
-            subgraph_node_ids: Vec::new(),
-            node_id_lookup: NoHashSet::default(),
-            layout_lut: MetaLayoutLookupTable::new(),
-            search: SearchScratch::new(),
-            data_type: DataTypeScratch::new(),
-            layout: LayoutScratch::new(),
-            build: BuildScratch::new(),
-        }
-    }
-}
-
-impl SearchScratch {
-    fn new() -> Self {
-        Self {
-            stack: Vec::new(),
-            seen: BitVector::new(),
+            stack: AVec::new_in(alloc),
+            seen: BitVector::new_in(alloc),
         }
     }
 }
@@ -2056,13 +2011,16 @@ impl CollapseIndex {
 
     fn rebuild(
         &mut self,
-        scratch: &mut MetaCanvasScratch,
         nodes: &NoHashMap<MetaNodeID, MetaNode>,
         node_id_counter: MetaNodeID,
         collapsed_nodes: &NoHashSet<MetaNodeID>,
     ) {
         self.member_to_root.clear();
         self.visible_subgraph_roots.clone_from(collapsed_nodes);
+
+        let arena = ArenaPool::get_arena();
+        let mut search_scratch = SearchScratch::new_in(&arena);
+        let mut subgraph_node_ids = AVec::new_in(&arena);
 
         for &root_node_id in collapsed_nodes {
             // If the root has already been established as a member of a
@@ -2077,14 +2035,14 @@ impl CollapseIndex {
             // subgraph will simply get overwritten.
 
             obtain_subgraph(
-                &mut scratch.search,
+                &mut search_scratch,
                 nodes,
                 node_id_counter,
-                &mut scratch.subgraph_node_ids,
+                &mut subgraph_node_ids,
                 root_node_id,
             );
 
-            for node_id in &scratch.subgraph_node_ids[1..] {
+            for node_id in &subgraph_node_ids[1..] {
                 // If any of the non-root subgraph members are also collapsed
                 // roots, their subgraphs should not be visible since they are
                 // part of this collapsed subgraph
@@ -2094,7 +2052,7 @@ impl CollapseIndex {
             }
 
             // Sort for consistent slot order and binary search
-            scratch.subgraph_node_ids.sort();
+            subgraph_node_ids.sort();
 
             let subgraph = self
                 .subgraphs_by_root
@@ -2107,7 +2065,7 @@ impl CollapseIndex {
                 .compute_collapsed_size()
                 .max(MIN_COLLAPSED_PROXY_NODE_SIZE);
 
-            for &node_id in &scratch.subgraph_node_ids {
+            for &node_id in &subgraph_node_ids {
                 // Since we skip subgraphs if we have established that they are
                 // encompassed by a larger subgraph and overwrite otherwise,
                 // `member_to_root` will always end up with the most top-level
@@ -2118,11 +2076,7 @@ impl CollapseIndex {
 
                 for (slot, &link) in node.links_to_parents.iter().enumerate() {
                     if let Some(link) = link {
-                        if scratch
-                            .subgraph_node_ids
-                            .binary_search(&link.to_node)
-                            .is_err()
-                        {
+                        if subgraph_node_ids.binary_search(&link.to_node).is_err() {
                             // The link is to a node outside this subgraph, so
                             // the port should be included among the subgraph's
                             // exposed ports and the link should be preserved.
@@ -2220,26 +2174,27 @@ impl CollapseIndex {
     }
 }
 
-impl<'a> LayoutableMetaGraph<'a> {
-    fn new(
-        lut: &'a mut MetaLayoutLookupTable,
+impl<'a, A: Allocator> LayoutableMetaGraph<'a, A> {
+    fn new_in(
+        alloc: A,
         all_nodes: &'a NoHashMap<MetaNodeID, MetaNode>,
         collapsed_index: &'a CollapseIndex,
-        visible_node_rects: &'a mut NoHashMap<MetaNodeID, Rect>,
+        visible_node_rects: &'a mut NoHashMap<MetaNodeID, Rect, A>,
     ) -> Self {
-        lut.build(
+        let lut = MetaLayoutLookupTable::build_in(
+            alloc,
             all_nodes,
             collapsed_index,
             visible_node_rects.keys().copied(),
         );
         Self {
-            lut: &*lut,
+            lut,
             visible_node_rects,
         }
     }
 }
 
-impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
+impl<'a, A: Allocator> LayoutableGraph for LayoutableMetaGraph<'a, A> {
     fn n_nodes(&self) -> usize {
         self.visible_node_rects.len()
     }
@@ -2254,40 +2209,35 @@ impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
     }
 }
 
-impl MetaLayoutLookupTable {
-    fn new() -> Self {
-        Self {
-            visible_node_index_map: NoHashKeyIndexMapper::default(),
-            child_idx_offsets_and_counts: Vec::new(),
-            all_child_indices: Vec::new(),
-        }
-    }
-
-    fn build(
-        &mut self,
+impl<A: Allocator> MetaLayoutLookupTable<A> {
+    fn build_in(
+        alloc: A,
         all_nodes: &NoHashMap<MetaNodeID, MetaNode>,
         collapsed_index: &CollapseIndex,
-        visible_node_ids: impl IntoIterator<Item = MetaNodeID>,
-    ) {
-        self.visible_node_index_map.clear();
-        self.child_idx_offsets_and_counts.clear();
-        self.all_child_indices.clear();
+        visible_node_ids: impl ExactSizeIterator<Item = MetaNodeID>,
+    ) -> Self {
+        let n_nodes = visible_node_ids.len();
+
+        let mut visible_node_index_map =
+            NoHashKeyIndexMapper::with_capacity_and_hasher_in(n_nodes, Default::default(), alloc);
+        let mut child_idx_offsets_and_counts = AVec::with_capacity_in(n_nodes, alloc);
+        let mut all_child_indices = AVec::with_capacity_in(n_nodes, alloc);
 
         for node_id in visible_node_ids {
-            self.visible_node_index_map.push_key(node_id);
+            visible_node_index_map.push_key(node_id);
         }
 
         let mut offset = 0;
 
-        for node_id in self.visible_node_index_map.key_at_each_idx() {
+        for node_id in visible_node_index_map.key_at_each_idx() {
             if collapsed_index.node_is_visible_collapsed_subgraph_root(node_id) {
                 let subgraph = collapsed_index.subgraph(node_id);
 
                 for child_node_idx in subgraph.exposed_child_ports.iter().filter_map(|port| {
                     port.link
-                        .map(|link| self.visible_node_index_map.idx(link.to_node))
+                        .map(|link| visible_node_index_map.idx(link.to_node))
                 }) {
-                    self.all_child_indices.push(child_node_idx);
+                    all_child_indices.push(child_node_idx);
                 }
             } else {
                 let node = &all_nodes[&node_id];
@@ -2298,16 +2248,22 @@ impl MetaLayoutLookupTable {
                             .root_if_in_collapsed_subgraph(link.to_node)
                             .unwrap_or(link.to_node);
 
-                        self.visible_node_index_map.idx(to_node)
+                        visible_node_index_map.idx(to_node)
                     })
                 }) {
-                    self.all_child_indices.push(child_node_idx);
+                    all_child_indices.push(child_node_idx);
                 }
             };
 
-            let count = self.all_child_indices.len() - offset;
-            self.child_idx_offsets_and_counts.push((offset, count));
+            let count = all_child_indices.len() - offset;
+            child_idx_offsets_and_counts.push((offset, count));
             offset += count;
+        }
+
+        Self {
+            visible_node_index_map,
+            child_idx_offsets_and_counts,
+            all_child_indices,
         }
     }
 
@@ -2319,8 +2275,8 @@ impl MetaLayoutLookupTable {
     }
 }
 
-fn node_can_reach_other(
-    scratch: &mut SearchScratch,
+fn node_can_reach_other<A: Allocator>(
+    scratch: &mut SearchScratch<A>,
     nodes: &NoHashMap<MetaNodeID, MetaNode>,
     node_id_counter: MetaNodeID,
     node_id: MetaNodeID,
@@ -2354,11 +2310,11 @@ fn node_can_reach_other(
     false
 }
 
-fn obtain_subgraph(
-    scratch: &mut SearchScratch,
+fn obtain_subgraph<A: Allocator>(
+    scratch: &mut SearchScratch<A>,
     nodes: &NoHashMap<MetaNodeID, MetaNode>,
     node_id_counter: MetaNodeID,
-    subgraph_node_ids: &mut Vec<MetaNodeID>,
+    subgraph_node_ids: &mut AVec<MetaNodeID, A>,
     node_id: MetaNodeID,
 ) {
     let stack = &mut scratch.stack;
@@ -2388,9 +2344,9 @@ fn obtain_subgraph(
     }
 }
 
-fn translate_node(
+fn translate_node<A: Allocator>(
     nodes: &mut NoHashMap<MetaNodeID, MetaNode>,
-    world_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
+    world_node_rects: &mut NoHashMap<MetaNodeID, Rect, A>,
     node_id: MetaNodeID,
     delta: Vec2,
 ) {
@@ -2413,9 +2369,9 @@ fn translate_node(
     }
 }
 
-fn resolve_overlap_for_node(
+fn resolve_overlap_for_node<A: Allocator>(
     nodes: &mut NoHashMap<MetaNodeID, MetaNode>,
-    world_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
+    world_node_rects: &mut NoHashMap<MetaNodeID, Rect, A>,
     node_id: MetaNodeID,
 ) {
     let (Some(node), Some(&node_rect)) = (nodes.get_mut(&node_id), world_node_rects.get(&node_id))

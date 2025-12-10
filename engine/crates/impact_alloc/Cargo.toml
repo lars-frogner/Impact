@@ -5,6 +5,9 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
+[features]
+serde = ["allocator-api2/serde"]
+
 [dependencies]
 allocator-api2 = "0.2.8"
 bumpalo = { version = "3.19", features = ["allocator-api2"] }

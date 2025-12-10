@@ -11,7 +11,7 @@ use crate::{
 use anyhow::{Context, Result, anyhow, bail};
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_alloc::{
-    AVec, Allocator,
+    AVec, Allocator, Global,
     arena::{ArenaPool, PoolArena},
     avec,
 };
@@ -32,10 +32,9 @@ use rand::{
 };
 use std::{array, borrow::Cow, f32::consts::PI};
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct MetaSDFGraph {
-    nodes: Vec<MetaSDFNode>,
+pub struct MetaSDFGraph<A: Allocator = Global> {
+    nodes: AVec<MetaSDFNode, A>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -758,14 +757,26 @@ pub enum SphereSurfaceRotation {
     RadialInwards,
 }
 
-impl MetaSDFGraph {
+impl MetaSDFGraph<Global> {
     pub fn new() -> Self {
-        Self { nodes: Vec::new() }
+        Self::new_in(Global)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
+        Self::with_capacity_in(capacity, Global)
+    }
+}
+
+impl<A: Allocator> MetaSDFGraph<A> {
+    pub fn new_in(alloc: A) -> Self {
         Self {
-            nodes: Vec::with_capacity(capacity),
+            nodes: AVec::new_in(alloc),
+        }
+    }
+
+    pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
+        Self {
+            nodes: AVec::with_capacity_in(capacity, alloc),
         }
     }
 
@@ -775,7 +786,7 @@ impl MetaSDFGraph {
         id
     }
 
-    pub fn build_in<A: Allocator>(&self, alloc: A, seed: u64) -> Result<SDFGraph<A>> {
+    pub fn build_in<AG: Allocator>(&self, alloc: AG, seed: u64) -> Result<SDFGraph<AG>> {
         let mut graph = SDFGraph::new_in(alloc);
 
         if self.nodes.is_empty() {
@@ -935,6 +946,35 @@ impl MetaSDFGraph {
 impl Default for MetaSDFGraph {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<A: Allocator> serde::Serialize for MetaSDFGraph<A> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut s = serializer.serialize_struct("MetaSDFGraph", 1)?;
+        s.serialize_field("nodes", &self.nodes)?;
+        s.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, A> serde::Deserialize<'de> for MetaSDFGraph<A>
+where
+    A: Allocator + Default,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self {
+            nodes: AVec::deserialize(deserializer)?,
+        })
     }
 }
 

@@ -27,7 +27,7 @@ fuzzing = ["arbitrary"]
 rayon = ["dep:rayon", "dep:impact_thread", "impact_thread/rayon"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 ron = ["impact_io/ron", "serde"]
-serde = ["dep:serde", "nalgebra/serde-serialize"]
+serde = ["dep:serde", "nalgebra/serde-serialize", "impact_alloc/serde"]
 unchecked = []
 
 [dependencies]
