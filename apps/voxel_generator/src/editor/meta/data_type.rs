@@ -2,7 +2,7 @@ use super::{
     MetaNode, MetaNodeID, MetaNodeInputDataTypes, MetaPaletteColor, MetaPortShape,
     node_kind::{MetaChildPortKind, MetaNodeKind, MetaParentPortKind},
 };
-use std::collections::BTreeMap;
+use impact_containers::NoHashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConcreteEdgeDataType {
@@ -107,7 +107,7 @@ pub fn input_and_output_types_for_new_node(
 
 pub fn update_edge_data_types(
     scratch: &mut DataTypeScratch,
-    nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
+    nodes: &mut NoHashMap<MetaNodeID, MetaNode>,
 ) {
     scratch.stack.clear();
 

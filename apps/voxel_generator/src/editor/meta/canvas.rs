@@ -22,10 +22,10 @@ use impact::{
         Align, Color32, Context, CursorIcon, Direction, Id, Key, Label, Painter, PointerButton,
         Pos2, Rect, Sense, Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
     },
-    impact_alloc::{AVec, arena::ArenaPool},
-    impact_containers::{BitVector, HashMap, HashSet, KeyIndexMapper},
+    impact_alloc::{AVec, Global, arena::ArenaPool},
 };
-use std::{collections::BTreeMap, path::Path};
+use impact_containers::{BitVector, NoHashKeyIndexMapper, NoHashMap, NoHashSet};
+use std::path::Path;
 
 const CANVAS_DEFAULT_POS: Pos2 = pos2(281.0, 22.0);
 const CANVAS_DEFAULT_SIZE: Vec2 = vec2(600.0, 700.0);
@@ -55,8 +55,8 @@ const MIN_COLLAPSED_PROXY_NODE_SIZE: Vec2 = vec2(80.0, 0.0);
 #[derive(Clone, Debug)]
 pub struct MetaGraphCanvas {
     pub pan_zoom_state: PanZoomState,
-    pub nodes: BTreeMap<MetaNodeID, MetaNode>,
-    pub collapsed_nodes: HashSet<MetaNodeID>,
+    pub nodes: NoHashMap<MetaNodeID, MetaNode>,
+    pub collapsed_nodes: NoHashSet<MetaNodeID>,
     pub selected_node_id: Option<MetaNodeID>,
     pub pending_edge: Option<PendingEdge>,
     pub is_panning: bool,
@@ -67,10 +67,10 @@ pub struct MetaGraphCanvas {
 
 #[derive(Clone, Debug)]
 pub struct MetaCanvasScratch {
-    world_node_rects: BTreeMap<MetaNodeID, Rect>,
-    screen_node_rects: BTreeMap<MetaNodeID, Rect>,
+    world_node_rects: NoHashMap<MetaNodeID, Rect>,
+    screen_node_rects: NoHashMap<MetaNodeID, Rect>,
     subgraph_node_ids: Vec<MetaNodeID>,
-    node_id_lookup: HashSet<MetaNodeID>,
+    node_id_lookup: NoHashSet<MetaNodeID>,
     layout_lut: MetaLayoutLookupTable,
     search: SearchScratch,
     data_type: DataTypeScratch,
@@ -156,20 +156,20 @@ pub struct PendingNodeCollapsedStateChange {
 
 #[derive(Clone, Debug)]
 struct CollapseIndex {
-    visible_subgraph_roots: HashSet<MetaNodeID>,
-    subgraphs_by_root: HashMap<MetaNodeID, CollapsedMetaSubgraph>,
-    member_to_root: HashMap<MetaNodeID, MetaNodeID>,
+    visible_subgraph_roots: NoHashSet<MetaNodeID>,
+    subgraphs_by_root: NoHashMap<MetaNodeID, CollapsedMetaSubgraph>,
+    member_to_root: NoHashMap<MetaNodeID, MetaNodeID>,
 }
 
 #[derive(Debug)]
 struct LayoutableMetaGraph<'a> {
     lut: &'a MetaLayoutLookupTable,
-    visible_node_rects: &'a mut BTreeMap<MetaNodeID, Rect>,
+    visible_node_rects: &'a mut NoHashMap<MetaNodeID, Rect>,
 }
 
 #[derive(Clone, Debug)]
 struct MetaLayoutLookupTable {
-    visible_node_index_map: KeyIndexMapper<MetaNodeID>,
+    visible_node_index_map: NoHashKeyIndexMapper<MetaNodeID>,
     child_idx_offsets_and_counts: Vec<(usize, usize)>,
     all_child_indices: Vec<usize>,
 }
@@ -187,8 +187,8 @@ impl MetaGraphCanvas {
     pub fn new() -> Self {
         Self {
             pan_zoom_state: PanZoomState::default(),
-            nodes: BTreeMap::new(),
-            collapsed_nodes: HashSet::default(),
+            nodes: NoHashMap::default(),
+            collapsed_nodes: NoHashSet::default(),
             selected_node_id: None,
             pending_edge: None,
             is_panning: false,
@@ -1391,7 +1391,7 @@ impl MetaGraphCanvas {
             });
     }
 
-    fn compute_world_node_rects(&self, world_node_rects: &mut BTreeMap<MetaNodeID, Rect>) {
+    fn compute_world_node_rects(&self, world_node_rects: &mut NoHashMap<MetaNodeID, Rect>) {
         world_node_rects.clear();
         for (&node_id, node) in &self.nodes {
             if let Some(world_rect) = self.compute_world_node_rect(node_id, node) {
@@ -1403,8 +1403,8 @@ impl MetaGraphCanvas {
     fn compute_world_and_screen_node_rects(
         &self,
         canvas_origin: Pos2,
-        world_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
-        screen_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+        world_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
+        screen_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
     ) {
         world_node_rects.clear();
         screen_node_rects.clear();
@@ -1437,7 +1437,7 @@ impl MetaGraphCanvas {
 
     fn position_relative_to_node(
         &self,
-        world_node_rects: &BTreeMap<MetaNodeID, Rect>,
+        world_node_rects: &NoHashMap<MetaNodeID, Rect>,
         node_size: Vec2,
         reference_node_id: MetaNodeID,
         direction: Direction,
@@ -1494,20 +1494,19 @@ impl MetaGraphCanvas {
 
     fn default_new_node_position(
         &self,
-        world_node_rects: &BTreeMap<MetaNodeID, Rect>,
+        world_node_rects: &NoHashMap<MetaNodeID, Rect>,
         node_size: Vec2,
     ) -> Option<Pos2> {
-        self.nodes.keys().next().and_then(|&output_node_id| {
-            self.position_relative_to_node(
-                world_node_rects,
-                node_size,
-                output_node_id,
-                Direction::LeftToRight,
-                Align::Center,
-                Align::Min,
-                NEW_NODE_GAP,
-            )
-        })
+        let output_node_id = 0;
+        self.position_relative_to_node(
+            world_node_rects,
+            node_size,
+            output_node_id,
+            Direction::LeftToRight,
+            Align::Center,
+            Align::Min,
+            NEW_NODE_GAP,
+        )
     }
 
     fn output_node_position(&self, canvas_rect: &Rect, node_size: Vec2) -> Pos2 {
@@ -1862,7 +1861,7 @@ impl MetaGraphCanvas {
         let graph = IOMetaGraphRef {
             kind: IOMetaGraphKind::Subgraph { root_node_id },
             nodes: nodes.as_slice(),
-            collapsed_nodes: &HashSet::default(),
+            collapsed_nodes: &NoHashSet::default(),
         };
 
         impact_io::write_ron_file(&graph, output_path)
@@ -1891,7 +1890,7 @@ impl MetaGraphCanvas {
 
         let pan_zoom_state = PanZoomState::new(pan.into(), zoom.clamp(MIN_ZOOM, MAX_ZOOM));
 
-        let mut nodes = BTreeMap::new();
+        let mut nodes = NoHashMap::default();
         let mut node_id_counter = 0;
 
         for io_node in graph.nodes {
@@ -1948,7 +1947,7 @@ impl MetaGraphCanvas {
 
         let id_offset = self.node_id_counter;
 
-        let mut subgraph_nodes = BTreeMap::new();
+        let mut subgraph_nodes = NoHashMap::<_, _, Global>::default();
         let mut node_id_counter = 0;
 
         scratch.subgraph_node_ids.clear();
@@ -2018,10 +2017,10 @@ impl MetaGraphCanvas {
 impl MetaCanvasScratch {
     pub fn new() -> Self {
         Self {
-            world_node_rects: BTreeMap::new(),
-            screen_node_rects: BTreeMap::new(),
+            world_node_rects: NoHashMap::default(),
+            screen_node_rects: NoHashMap::default(),
             subgraph_node_ids: Vec::new(),
-            node_id_lookup: HashSet::default(),
+            node_id_lookup: NoHashSet::default(),
             layout_lut: MetaLayoutLookupTable::new(),
             search: SearchScratch::new(),
             data_type: DataTypeScratch::new(),
@@ -2043,9 +2042,9 @@ impl SearchScratch {
 impl CollapseIndex {
     fn new() -> Self {
         Self {
-            visible_subgraph_roots: HashSet::default(),
-            subgraphs_by_root: HashMap::default(),
-            member_to_root: HashMap::default(),
+            visible_subgraph_roots: NoHashSet::default(),
+            subgraphs_by_root: NoHashMap::default(),
+            member_to_root: NoHashMap::default(),
         }
     }
 
@@ -2058,9 +2057,9 @@ impl CollapseIndex {
     fn rebuild(
         &mut self,
         scratch: &mut MetaCanvasScratch,
-        nodes: &BTreeMap<MetaNodeID, MetaNode>,
+        nodes: &NoHashMap<MetaNodeID, MetaNode>,
         node_id_counter: MetaNodeID,
-        collapsed_nodes: &HashSet<MetaNodeID>,
+        collapsed_nodes: &NoHashSet<MetaNodeID>,
     ) {
         self.member_to_root.clear();
         self.visible_subgraph_roots.clone_from(collapsed_nodes);
@@ -2190,7 +2189,7 @@ impl CollapseIndex {
 
     fn update_subgraph_node_size(
         &mut self,
-        nodes: &BTreeMap<MetaNodeID, MetaNode>,
+        nodes: &NoHashMap<MetaNodeID, MetaNode>,
         root_node_id: MetaNodeID,
     ) {
         self.subgraphs_by_root.get_mut(&root_node_id).unwrap().size = nodes[&root_node_id]
@@ -2199,7 +2198,7 @@ impl CollapseIndex {
             .max(MIN_COLLAPSED_PROXY_NODE_SIZE);
     }
 
-    fn visible_collapsed_subgraph_roots(&self) -> &HashSet<MetaNodeID> {
+    fn visible_collapsed_subgraph_roots(&self) -> &NoHashSet<MetaNodeID> {
         &self.visible_subgraph_roots
     }
 
@@ -2224,9 +2223,9 @@ impl CollapseIndex {
 impl<'a> LayoutableMetaGraph<'a> {
     fn new(
         lut: &'a mut MetaLayoutLookupTable,
-        all_nodes: &'a BTreeMap<MetaNodeID, MetaNode>,
+        all_nodes: &'a NoHashMap<MetaNodeID, MetaNode>,
         collapsed_index: &'a CollapseIndex,
-        visible_node_rects: &'a mut BTreeMap<MetaNodeID, Rect>,
+        visible_node_rects: &'a mut NoHashMap<MetaNodeID, Rect>,
     ) -> Self {
         lut.build(
             all_nodes,
@@ -2258,7 +2257,7 @@ impl<'a> LayoutableGraph for LayoutableMetaGraph<'a> {
 impl MetaLayoutLookupTable {
     fn new() -> Self {
         Self {
-            visible_node_index_map: KeyIndexMapper::new(),
+            visible_node_index_map: NoHashKeyIndexMapper::default(),
             child_idx_offsets_and_counts: Vec::new(),
             all_child_indices: Vec::new(),
         }
@@ -2266,7 +2265,7 @@ impl MetaLayoutLookupTable {
 
     fn build(
         &mut self,
-        all_nodes: &BTreeMap<MetaNodeID, MetaNode>,
+        all_nodes: &NoHashMap<MetaNodeID, MetaNode>,
         collapsed_index: &CollapseIndex,
         visible_node_ids: impl IntoIterator<Item = MetaNodeID>,
     ) {
@@ -2322,7 +2321,7 @@ impl MetaLayoutLookupTable {
 
 fn node_can_reach_other(
     scratch: &mut SearchScratch,
-    nodes: &BTreeMap<MetaNodeID, MetaNode>,
+    nodes: &NoHashMap<MetaNodeID, MetaNode>,
     node_id_counter: MetaNodeID,
     node_id: MetaNodeID,
     other_node_id: MetaNodeID,
@@ -2357,7 +2356,7 @@ fn node_can_reach_other(
 
 fn obtain_subgraph(
     scratch: &mut SearchScratch,
-    nodes: &BTreeMap<MetaNodeID, MetaNode>,
+    nodes: &NoHashMap<MetaNodeID, MetaNode>,
     node_id_counter: MetaNodeID,
     subgraph_node_ids: &mut Vec<MetaNodeID>,
     node_id: MetaNodeID,
@@ -2390,8 +2389,8 @@ fn obtain_subgraph(
 }
 
 fn translate_node(
-    nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
-    world_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    nodes: &mut NoHashMap<MetaNodeID, MetaNode>,
+    world_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
     node_id: MetaNodeID,
     delta: Vec2,
 ) {
@@ -2415,8 +2414,8 @@ fn translate_node(
 }
 
 fn resolve_overlap_for_node(
-    nodes: &mut BTreeMap<MetaNodeID, MetaNode>,
-    world_node_rects: &mut BTreeMap<MetaNodeID, Rect>,
+    nodes: &mut NoHashMap<MetaNodeID, MetaNode>,
+    world_node_rects: &mut NoHashMap<MetaNodeID, Rect>,
     node_id: MetaNodeID,
 ) {
     let (Some(node), Some(&node_rect)) = (nodes.get_mut(&node_id), world_node_rects.get(&node_id))
