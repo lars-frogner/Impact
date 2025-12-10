@@ -6,7 +6,7 @@ use crate::device::GraphicsDevice;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{HashMap, hash_map::Entry};
-use impact_math::Hash64;
+use impact_math::hash::Hash64;
 use naga::{Module, ShaderStage};
 use std::{borrow::Cow, fs, hash::Hash, path::Path};
 use template::SpecificShaderTemplate;

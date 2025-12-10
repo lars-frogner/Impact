@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_containers::HashSet;
-use impact_geometry::{CubemapFace, Frustum, OrientedBox};
+use impact_geometry::{Frustum, OrientedBox, projection::CubemapFace};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, shader::ShaderManager,
     timestamp_query::TimestampQueryRegistry, wgpu,

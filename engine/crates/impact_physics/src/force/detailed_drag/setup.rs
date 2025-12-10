@@ -17,7 +17,7 @@ use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::ModelTransform;
-use impact_math::StringHash64;
+use impact_math::hash::StringHash64;
 use nalgebra::Point3;
 use roc_integration::roc;
 use std::path::{Path, PathBuf};

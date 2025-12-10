@@ -16,7 +16,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_math::Hash32;
+use impact_math::hash::Hash32;
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -172,7 +172,7 @@ define_setup_type! {
     pub struct DynamicVoxels;
 }
 
-#[roc(dependencies = [impact_math::Hash64])]
+#[roc(dependencies = [impact_math::hash::Hash64])]
 impl GeneratedVoxelObject {
     #[roc(body = "{ generator_id: Hashing.hash_str_64(generator_name), voxel_extent, seed }")]
     pub fn new(generator_name: &str, voxel_extent: f64, seed: u64) -> Self {

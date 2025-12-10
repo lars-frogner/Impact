@@ -6,7 +6,7 @@ pub mod rayon;
 use anyhow::Error;
 use crossbeam_channel::{Receiver, Sender};
 use impact_containers::HashMap;
-use impact_math::Hash64;
+use impact_math::hash::Hash64;
 use impact_profiling::instrumentation;
 use parking_lot::{Condvar, Mutex};
 use std::{

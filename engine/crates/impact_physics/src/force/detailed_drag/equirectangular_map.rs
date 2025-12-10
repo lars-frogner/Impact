@@ -1,7 +1,10 @@
 //! Equirectangular mapping of direction-dependent data.
 
 use crate::fph;
-use impact_math::{Angle, Float, Radians};
+use impact_math::{
+    Float,
+    angle::{Angle, Radians},
+};
 
 /// A map of values as a function of all directions. The directions are
 /// discretized onto a 2D grid using an equirectangular projection (meaning the

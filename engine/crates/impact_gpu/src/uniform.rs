@@ -5,9 +5,11 @@ use crate::{
     device::GraphicsDevice,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{Alignment, KeyIndexMapper};
-use impact_containers::{CollectionChange, CollectionChangeTracker};
-use impact_math::ConstStringHash64;
+use impact_containers::{
+    Alignment, KeyIndexMapper,
+    tracking::{CollectionChange, CollectionChangeTracker},
+};
+use impact_math::hash::ConstStringHash64;
 use std::{
     borrow::Cow,
     fmt::Debug,

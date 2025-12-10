@@ -84,7 +84,7 @@ pub struct SDFVoxelGeneratorChunkBuffers<A: Allocator> {
 
 impl ResourceID for VoxelGeneratorID {}
 
-#[roc(dependencies = [impact_math::Hash64])]
+#[roc(dependencies = [impact_math::hash::Hash64])]
 impl VoxelGeneratorID {
     #[roc(body = "Hashing.hash_str_64(name)")]
     /// Creates a voxel generator ID hashed from the given name.

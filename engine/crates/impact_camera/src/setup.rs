@@ -1,7 +1,7 @@
 //! Camera setup.
 
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Angle, Radians};
+use impact_math::angle::{Angle, Radians};
 use roc_integration::roc;
 
 define_setup_type! {

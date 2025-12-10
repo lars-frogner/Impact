@@ -14,7 +14,7 @@ use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::ReferenceFrame;
-use impact_math::Angle;
+use impact_math::angle::Angle;
 use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3};
 use roc_integration::roc;
 
@@ -781,7 +781,7 @@ pub fn advance_orientation(
 mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use impact_math::{Float, Radians};
+    use impact_math::{Float, angle::Radians};
     use nalgebra::{Vector3, point, vector};
     use proptest::prelude::*;
 

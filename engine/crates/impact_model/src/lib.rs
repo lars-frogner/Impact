@@ -15,7 +15,7 @@ use impact_containers::{
     AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap,
 };
 use impact_gpu::{device::GraphicsDevice, wgpu};
-use impact_math::{self, Hash64};
+use impact_math::{self, hash::Hash64};
 use roc_integration::roc;
 use std::{borrow::Cow, fmt, hash::Hash, mem, ops::Range};
 

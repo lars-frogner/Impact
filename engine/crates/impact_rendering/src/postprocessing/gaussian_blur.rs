@@ -17,7 +17,7 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_math::{ConstStringHash64, hash64};
+use impact_math::{hash::ConstStringHash64, hash64};
 use nalgebra::Vector4;
 use std::{borrow::Cow, fmt::Display};
 

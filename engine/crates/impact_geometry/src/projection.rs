@@ -3,7 +3,11 @@
 use crate::{AxisAlignedBox, Frustum};
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Angle, Bounds, Float, Radians, UpperExclusiveBounds};
+use impact_math::{
+    Float,
+    angle::{Angle, Radians},
+    bounds::{Bounds, UpperExclusiveBounds},
+};
 use nalgebra::{
     Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
     UnitQuaternion, Vector3, point, vector,
@@ -563,7 +567,7 @@ impl CubemapFace {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_math::Degrees;
+    use impact_math::angle::Degrees;
     use nalgebra::{point, vector};
 
     #[test]

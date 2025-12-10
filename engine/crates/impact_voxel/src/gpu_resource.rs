@@ -24,7 +24,7 @@ use impact_gpu::{
     uniform::{self, UniformBufferable},
     wgpu,
 };
-use impact_math::{ConstStringHash64, Hash64};
+use impact_math::hash::{ConstStringHash64, Hash64};
 use impact_mesh::gpu_resource::{
     MeshVertexAttributeLocation, VertexBufferable, create_vertex_buffer_layout_for_vertex,
     new_vertex_gpu_buffer_with_spare_capacity_and_encoded_initialization,

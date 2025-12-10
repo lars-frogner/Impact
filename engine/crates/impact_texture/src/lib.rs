@@ -101,7 +101,7 @@ pub struct SamplerCreateInfo {
     pub config: SamplerConfig,
 }
 
-#[roc(dependencies = [impact_math::Hash64])]
+#[roc(dependencies = [impact_math::hash::Hash64])]
 impl TextureID {
     #[roc(body = "Hashing.hash_str_64(name)")]
     /// Creates a texture ID hashed from the given name.

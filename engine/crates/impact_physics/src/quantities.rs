@@ -3,7 +3,7 @@
 use crate::{fph, inertia::InertiaTensor};
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Angle, Radians};
+use impact_math::angle::{Angle, Radians};
 use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::ops::{Add, AddAssign, Sub, SubAssign};

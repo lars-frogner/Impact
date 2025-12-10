@@ -2,7 +2,10 @@
 
 use crate::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
-use impact_math::{Bounds, Float, UpperExclusiveBounds};
+use impact_math::{
+    Float,
+    bounds::{Bounds, UpperExclusiveBounds},
+};
 use nalgebra::{
     Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3, point, vector,
 };
@@ -505,9 +508,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{OrthographicTransform, PerspectiveTransform};
+    use crate::projection::{OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
-    use impact_math::Degrees;
+    use impact_math::angle::Degrees;
     use nalgebra::{Rotation3, Translation3, point};
 
     #[test]

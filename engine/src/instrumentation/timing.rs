@@ -1,6 +1,6 @@
 //! Measuring execution time.
 
-use impact_math::ConstStringHash64;
+use impact_math::hash::ConstStringHash64;
 use parking_lot::Mutex;
 use std::{
     mem,

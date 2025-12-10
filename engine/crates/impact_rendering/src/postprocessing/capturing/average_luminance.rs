@@ -24,7 +24,11 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_math::{Bounds, ConstStringHash64, UpperExclusiveBounds, hash64};
+use impact_math::{
+    bounds::{Bounds, UpperExclusiveBounds},
+    hash::ConstStringHash64,
+    hash64,
+};
 use std::{borrow::Cow, mem, sync::LazyLock};
 
 /// Configuration options for computing average captured luminance.

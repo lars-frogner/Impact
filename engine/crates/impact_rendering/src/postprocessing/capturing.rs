@@ -19,7 +19,7 @@ use impact_gpu::{
     resource_group::GPUResourceGroupManager, shader::ShaderManager,
     storage::StorageGPUBufferManager, timestamp_query::TimestampQueryRegistry, wgpu,
 };
-use impact_math::Bounds;
+use impact_math::bounds::Bounds;
 use roc_integration::roc;
 
 /// Configuration options for a capturing camera.
