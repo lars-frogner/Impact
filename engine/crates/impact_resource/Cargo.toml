@@ -13,7 +13,6 @@ bitflags = { workspace = true }
 bytemuck = { workspace = true }
 impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
-impact_log = { path = "../impact_log" }
 
 [lints]
 workspace = true
