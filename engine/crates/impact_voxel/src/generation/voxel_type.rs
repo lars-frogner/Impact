@@ -1,8 +1,10 @@
 //! Generation of voxel type distributions.
 
 use crate::{Voxel, chunks::ChunkedVoxelObject, voxel_types::VoxelType};
+use impact_alloc::{AVec, Allocator, avec};
 use nalgebra::Point3;
 use simdnoise::{NoiseBuilder, Settings};
+use std::mem;
 
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
@@ -12,8 +14,8 @@ pub enum VoxelTypeGenerator {
 }
 
 #[derive(Clone, Debug)]
-pub struct VoxelTypeGeneratorChunkBuffers {
-    gradient_noise: Vec<f32>,
+pub struct VoxelTypeGeneratorChunkBuffers<A: Allocator> {
+    gradient_noise: AVec<f32, A>,
 }
 
 /// Voxel type generator that always returns the same voxel type.
@@ -34,18 +36,25 @@ pub struct GradientNoiseVoxelTypeGenerator {
 }
 
 impl VoxelTypeGenerator {
-    pub fn create_buffers(&self) -> VoxelTypeGeneratorChunkBuffers {
+    pub fn total_buffer_size(&self) -> usize {
+        match self {
+            Self::Same(_) => 0,
+            Self::GradientNoise(generator) => generator.noise_buffer_size(),
+        }
+    }
+
+    pub fn create_buffers_in<A: Allocator>(&self, alloc: A) -> VoxelTypeGeneratorChunkBuffers<A> {
         let gradient_noise = match self {
-            Self::Same(_) => Vec::new(),
-            Self::GradientNoise(generator) => generator.create_noise_buffer(),
+            Self::Same(_) => AVec::new_in(alloc),
+            Self::GradientNoise(generator) => generator.create_noise_buffer_in(alloc),
         };
         VoxelTypeGeneratorChunkBuffers { gradient_noise }
     }
 
-    pub fn set_voxel_types_for_chunk(
+    pub fn set_voxel_types_for_chunk<A: Allocator>(
         &self,
         voxels: &mut [Voxel],
-        buffers: &mut VoxelTypeGeneratorChunkBuffers,
+        buffers: &mut VoxelTypeGeneratorChunkBuffers<A>,
         chunk_origin: &Point3<f32>,
     ) {
         match self {
@@ -101,14 +110,22 @@ impl GradientNoiseVoxelTypeGenerator {
         }
     }
 
-    fn create_noise_buffer(&self) -> Vec<f32> {
-        vec![0.0; ChunkedVoxelObject::chunk_voxel_count() * self.voxel_types.len()]
+    fn noise_buffer_size(&self) -> usize {
+        self.noise_buffer_len() * mem::size_of::<f32>()
     }
 
-    fn set_voxel_types_for_chunk(
+    fn noise_buffer_len(&self) -> usize {
+        ChunkedVoxelObject::chunk_voxel_count() * self.voxel_types.len()
+    }
+
+    fn create_noise_buffer_in<A: Allocator>(&self, alloc: A) -> AVec<f32, A> {
+        avec![in alloc; 0.0; self.noise_buffer_len()]
+    }
+
+    fn set_voxel_types_for_chunk<A: Allocator>(
         &self,
         voxels: &mut [Voxel],
-        buffers: &mut VoxelTypeGeneratorChunkBuffers,
+        buffers: &mut VoxelTypeGeneratorChunkBuffers<A>,
         chunk_origin: &Point3<f32>,
     ) {
         assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());

@@ -49,11 +49,14 @@ pub trait ChunkedVoxelGenerator {
     /// respectively.
     fn grid_shape(&self) -> [usize; 3];
 
+    /// The number of bytes that will be allocated by `create_buffers_in`.
+    fn total_buffer_size(&self) -> usize;
+
     /// Creates temporary buffers used when generating chunks of voxels. They
     /// are meant to be reused across generation calls.
     fn create_buffers_in<AB: Allocator>(&self, alloc: AB) -> Self::ChunkGenerationBuffers<AB>;
 
-    /// Generates voxels for a single chunks with the given chunk origin (global
+    /// Generates voxels for a single chunk with the given chunk origin (global
     /// voxel object indices of the lower chunk corner) and writes them into the
     /// given slice.
     fn generate_chunk<AB: Allocator>(
@@ -77,7 +80,7 @@ pub struct SDFVoxelGenerator<A: Allocator> {
 #[derive(Clone, Debug)]
 pub struct SDFVoxelGeneratorChunkBuffers<A: Allocator> {
     sdf: SDFGeneratorChunkBuffers<A>,
-    voxel_type: VoxelTypeGeneratorChunkBuffers,
+    voxel_type: VoxelTypeGeneratorChunkBuffers<A>,
 }
 
 impl ResourceID for VoxelGeneratorID {}
@@ -273,10 +276,15 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
         self.grid_shape
     }
 
+    fn total_buffer_size(&self) -> usize {
+        self.sdf_generator.total_buffer_size_for_chunk()
+            + self.voxel_type_generator.total_buffer_size()
+    }
+
     fn create_buffers_in<AB: Allocator>(&self, alloc: AB) -> Self::ChunkGenerationBuffers<AB> {
         SDFVoxelGeneratorChunkBuffers {
             sdf: self.sdf_generator.create_buffers_for_chunk_in(alloc),
-            voxel_type: self.voxel_type_generator.create_buffers(),
+            voxel_type: self.voxel_type_generator.create_buffers_in(alloc),
         }
     }
 
