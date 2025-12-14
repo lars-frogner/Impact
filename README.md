@@ -46,16 +46,6 @@ There is currently limited scripting support using the [Roc](https://www.roc-lan
 
 The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven development GUI.
 
-## Planned features
-
-- N-body gravity simulation.
-- Voxel object fracturing.
-- Procedural system for assigning materials to voxels.
-- Expanded scripting capabilities.
-- Expanded GUI.
-- Audio.
-- Let's see when we get here...
-
 ## Showcase
 
 ![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
@@ -65,6 +55,35 @@ The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven
 ![screenshot_3](showcase/screenshot_3.png "Screenshot 3")
 
 ![sdf_generation](showcase/sdf_generation.gif "SDF Generation")
+
+## Running the engine
+
+### Requirements
+
+- Rust (https://rustup.rs)
+- Roc (https://roc-lang.org/install/) for scripting. Applications do not have to use Roc, but the existing applications do.
+- Make, if you want to use the Makefiles.
+
+### Things to try
+
+Existing applications can be found in the `apps` directory.
+
+To try the SDF graph editor shown in the video above, navigate to the `apps/voxel_generator` directory and run `make run`. The graph created in the video can be loaded from the `voxel_generator/examples` directory.
+
+The `basic_app` application has a handful of simple scenes and physics experiments that can be switched between by editing `main.roc` in the `basic_app/scripts` directory. However, most of the scenes assume certain textures and meshes to be available, and those are not included in this repo. The `VoxelBoxTumber` scene used by default does not require any assets, and can be tried out by running `make run CONFIG_FILE=config/config_no_assets.ron` in the `apps/basic_app` directory.
+
+## Planned features
+
+- N-body gravity simulation.
+- Voxel object fracturing.
+- Procedural system for assigning materials to voxels.
+- Expanded scripting capabilities.
+- Expanded GUI.
+- Better asset management.
+- Audio.
+- Let's see when we get here...
+
+Once the engine has the sufficient features, a game will be developed in parallel with the engine. 
 
 ## How applications work
 
