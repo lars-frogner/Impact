@@ -26,6 +26,14 @@ The engine does physically based 3D rendering. The graphics system is built on [
 
 Voxel based objects have first-class support. The shape of these objects are defined by signed distance fields, which combined with Surface Nets-based meshing gives them a smooth appearance. An object can be comprised of voxels with many different materials, which are smoothly blended between during rendering. The objects can also be arbitrarily deformed or split up, which dynamically affects their physical behavior. See the video below for a demonstration.
 
+### SDF generation
+
+The engine includes a graph‑based system for procedurally generating signed distance fields (SDFs), which are used to define the shape of voxel objects. Each node in an SDF graph represents a simple operation, such as creating a primitive shape (sphere, capsule, box), applying a geometric transformation, adding gradient noise, or combining fields using smooth Boolean operators.
+
+In most cases, SDF graphs are not authored directly. Instead, they are generated from higher‑level *meta graphs*. Meta nodes provide more convenient and expressive building blocks, like creating multiple instances of a shape, arranging them in structured patterns (grids, sphere surfaces), or modifying shapes based on other fields (for example snapping to a surface or aligning to a gradient). Most node parameters can be randomized using different distributions, and parameters can also depend on each other.
+
+A visual editor is available for creating and editing graphs while viewing the results in real time. One of the videos below shows how the editor can be used to generate asteroids with crater distributions informed by real physical processes and empiric measurements.
+
 ### ECS
 
 The engine uses its own Entity-Component-System (ECS) implementation, which also serves as the main public API.
@@ -40,11 +48,11 @@ The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven
 
 ## Planned features
 
+- N-body gravity simulation.
+- Voxel object fracturing.
+- Procedural system for assigning materials to voxels.
 - Expanded scripting capabilities.
 - Expanded GUI.
-- Voxel object fracturing.
-- N-body gravity simulation.
-- More options for procedural voxel generation.
 - Audio.
 - Let's see when we get here...
 
@@ -55,6 +63,8 @@ The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven
 ![screenshot_2](showcase/screenshot_2.png "Screenshot 2")
 
 ![screenshot_3](showcase/screenshot_3.png "Screenshot 3")
+
+![sdf_generation](showcase/sdf_generation.gif "SDF Generation")
 
 ## How applications work
 
