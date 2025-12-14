@@ -220,6 +220,10 @@ enum NodeBuildState {
 }
 
 impl<A: Allocator> SDFGenerator<A> {
+    pub fn total_buffer_size_for_chunk(&self) -> usize {
+        self.total_buffer_size_for_block::<CHUNK_VOXEL_COUNT>()
+    }
+
     pub fn create_buffers_for_chunk_in<AB: Allocator>(
         &self,
         alloc: AB,
@@ -650,6 +654,10 @@ impl<A: Allocator> SDFGenerator<A> {
     /// center of the domain.
     pub fn domain(&self) -> &AxisAlignedBox<f32> {
         &self.domain
+    }
+
+    pub fn total_buffer_size_for_block<const COUNT: usize>(&self) -> usize {
+        mem::size_of::<f32>() * COUNT * (self.required_forward_stack_size + 1)
     }
 
     pub fn create_buffers_for_block_in<const COUNT: usize, AB: Allocator>(

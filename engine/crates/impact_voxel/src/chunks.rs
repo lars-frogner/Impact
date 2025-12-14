@@ -12,6 +12,7 @@ use crate::{
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use bitflags::bitflags;
+use bytemuck::Zeroable;
 use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
@@ -22,7 +23,7 @@ use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::Float;
 use nalgebra::{Point3, Vector3, point, vector};
 use num_traits::{NumCast, PrimInt};
-use std::{array, iter, ops::Range};
+use std::{array, iter, mem, ops::Range};
 
 /// An object represented by a grid of voxels.
 ///
@@ -232,8 +233,8 @@ impl ChunkedVoxelObject {
         Self::generate_without_derived_state_using_closure(
             generator.voxel_extent(),
             generator.grid_shape(),
-            |chunk_counts, chunks, voxels| {
-                Self::generate_voxels_for_chunks(generator, chunk_counts, chunks, voxels);
+            |chunk_counts, chunks| {
+                Self::generate_voxels_for_chunks(generator, chunk_counts, chunks)
             },
         )
     }
@@ -250,14 +251,13 @@ impl ChunkedVoxelObject {
         Self::generate_without_derived_state_using_closure(
             generator.voxel_extent(),
             generator.grid_shape(),
-            |chunk_counts, chunks, voxels| {
+            |chunk_counts, chunks| {
                 Self::generate_voxels_for_chunks_in_parallel(
                     thread_pool,
                     generator,
                     chunk_counts,
                     chunks,
-                    voxels,
-                );
+                )
             },
         )
     }
@@ -265,15 +265,14 @@ impl ChunkedVoxelObject {
     fn generate_without_derived_state_using_closure(
         voxel_extent: f64,
         grid_shape: [usize; 3],
-        generate_voxels_for_chunks: impl FnOnce([usize; 3], &mut [VoxelChunk], &mut [Voxel]),
+        generate_voxels_for_chunks: impl FnOnce([usize; 3], &mut [VoxelChunk]) -> Vec<Voxel>,
     ) -> Self {
         let chunk_counts = grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
         let total_chunk_count = chunk_counts.iter().product();
 
         let mut chunks = vec![VoxelChunk::Empty; total_chunk_count];
-        let mut voxels = vec![Voxel::default(); total_chunk_count * CHUNK_VOXEL_COUNT];
 
-        generate_voxels_for_chunks(chunk_counts, &mut chunks, &mut voxels);
+        let voxels = generate_voxels_for_chunks(chunk_counts, &mut chunks);
 
         let ChunkAnalysisResults {
             uniform_chunk_count,
@@ -281,8 +280,6 @@ impl ChunkedVoxelObject {
             occupied_chunk_ranges,
             occupied_voxel_ranges,
         } = Self::analyze_and_initialize_chunks(chunk_counts, &mut chunks);
-
-        let compacted_voxels = Self::compact_voxels(&chunks, &voxels, non_uniform_chunk_count);
 
         let chunk_idx_strides = [chunk_counts[2] * chunk_counts[1], chunk_counts[2], 1];
 
@@ -299,7 +296,7 @@ impl ChunkedVoxelObject {
             occupied_voxel_ranges,
             origin_offset_in_root,
             chunks,
-            voxels: compacted_voxels,
+            voxels,
             split_detector,
             invalidated_mesh_chunk_indices: HashSet::default(),
         }
@@ -309,31 +306,44 @@ impl ChunkedVoxelObject {
         generator: &G,
         chunk_counts: [usize; 3],
         chunks: &mut [VoxelChunk],
-        voxels: &mut [Voxel],
-    ) where
+    ) -> Vec<Voxel>
+    where
         G: ChunkedVoxelGenerator,
     {
-        assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
+        assert_eq!(chunks.len(), chunk_counts.iter().product::<usize>());
 
         if chunks.is_empty() {
-            return;
+            return Vec::new();
         }
 
-        let arena = ArenaPool::get_arena();
+        // Assume roughly one quarter of the chunks will be non-uniform
+        let estimated_voxel_count = (chunks.len() * CHUNK_VOXEL_COUNT) / 4;
+        let mut voxels = Vec::with_capacity(estimated_voxel_count * mem::size_of::<Voxel>());
+
+        let arena = ArenaPool::get_arena_for_capacity(generator.total_buffer_size());
         let mut generation_buffers = generator.create_buffers_in(&arena);
 
-        chunks
-            .iter_mut()
-            .zip(voxels.chunks_mut(CHUNK_VOXEL_COUNT))
-            .enumerate()
-            .for_each(|(chunk_idx, (chunk, chunk_voxels))| {
-                let origin =
-                    chunk_indices_from_linear_idx(&chunk_counts, chunk_idx).map(|i| i * CHUNK_SIZE);
+        for (chunk_idx, chunk) in chunks.iter_mut().enumerate() {
+            let origin =
+                chunk_indices_from_linear_idx(&chunk_counts, chunk_idx).map(|i| i * CHUNK_SIZE);
 
-                generator.generate_chunk(&mut generation_buffers, chunk_voxels, &origin);
+            let old_voxel_count = voxels.len();
+            let new_voxel_count = old_voxel_count + CHUNK_VOXEL_COUNT;
 
-                *chunk = VoxelChunk::for_voxels(chunk_voxels);
-            });
+            voxels.resize(new_voxel_count, Voxel::zeroed());
+
+            let chunk_voxels = &mut voxels[old_voxel_count..];
+
+            generator.generate_chunk(&mut generation_buffers, chunk_voxels, &origin);
+
+            *chunk = VoxelChunk::for_voxels(chunk_voxels);
+
+            if matches!(chunk, VoxelChunk::Empty | VoxelChunk::Uniform(_)) {
+                voxels.truncate(old_voxel_count);
+            }
+        }
+
+        voxels
     }
 
     #[cfg(feature = "rayon")]
@@ -342,42 +352,57 @@ impl ChunkedVoxelObject {
         generator: &G,
         chunk_counts: [usize; 3],
         chunks: &mut [VoxelChunk],
-        voxels: &mut [Voxel],
-    ) where
+    ) -> Vec<Voxel>
+    where
         G: ChunkedVoxelGenerator + Sync,
     {
         use rayon::{
-            iter::{IndexedParallelIterator, ParallelIterator},
+            iter::{IndexedParallelIterator, ParallelExtend, ParallelIterator},
             slice::ParallelSliceMut,
         };
 
-        assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
+        assert_eq!(chunks.len(), chunk_counts.iter().product::<usize>());
 
         if chunks.is_empty() {
-            return;
+            return Vec::new();
         }
 
-        let chunks_per_thread = chunks.len().div_ceil(thread_pool.num_threads().get());
+        let num_threads = thread_pool.num_threads().get();
+        let chunks_per_thread = chunks.len().div_ceil(num_threads);
+
+        let mut voxels_per_thread = Vec::with_capacity(num_threads);
 
         thread_pool.pool().install(|| {
-            chunks
-                // This can never produce more than `num_threads` iterations
-                .par_chunks_mut(chunks_per_thread)
-                .zip(voxels.par_chunks_mut(chunks_per_thread * CHUNK_VOXEL_COUNT))
-                .enumerate()
-                .for_each(|(group_idx, (chunks, voxels))| {
-                    let arena = ArenaPool::get_arena();
-                    let mut generation_buffers = generator.create_buffers_in(&arena);
+            voxels_per_thread.par_extend(
+                chunks
+                    // This can never produce more than `num_threads` iterations
+                    .par_chunks_mut(chunks_per_thread)
+                    .enumerate()
+                    .map(|(group_idx, chunks)| {
+                        let estimated_voxel_count = (chunks.len() * CHUNK_VOXEL_COUNT) / 4;
 
-                    chunks
-                        .iter_mut()
-                        .zip(voxels.chunks_mut(CHUNK_VOXEL_COUNT))
-                        .enumerate()
-                        .for_each(|(local_chunk_idx, (chunk, chunk_voxels))| {
+                        let arena = ArenaPool::get_arena_for_capacity(
+                            estimated_voxel_count * mem::size_of::<Voxel>()
+                                + generator.total_buffer_size(),
+                        );
+
+                        // Avoid pre-allocating in case we are in a region with all empty chunks
+                        let mut voxels = Vec::new();
+
+                        let mut generation_buffers = generator.create_buffers_in(&arena);
+
+                        for (local_chunk_idx, chunk) in chunks.iter_mut().enumerate() {
                             let chunk_idx = group_idx * chunks_per_thread + local_chunk_idx;
 
                             let origin = chunk_indices_from_linear_idx(&chunk_counts, chunk_idx)
                                 .map(|i| i * CHUNK_SIZE);
+
+                            let old_voxel_count = voxels.len();
+                            let new_voxel_count = old_voxel_count + CHUNK_VOXEL_COUNT;
+
+                            voxels.resize(new_voxel_count, Voxel::zeroed());
+
+                            let chunk_voxels = &mut voxels[old_voxel_count..];
 
                             generator.generate_chunk(
                                 &mut generation_buffers,
@@ -386,9 +411,25 @@ impl ChunkedVoxelObject {
                             );
 
                             *chunk = VoxelChunk::for_voxels(chunk_voxels);
-                        });
-                });
+
+                            if matches!(chunk, VoxelChunk::Empty | VoxelChunk::Uniform(_)) {
+                                voxels.truncate(old_voxel_count);
+                            }
+                        }
+
+                        voxels
+                    }),
+            );
         });
+
+        let mut voxels =
+            Vec::with_capacity(voxels_per_thread.iter().map(|v| v.len()).sum::<usize>());
+
+        for mut v in voxels_per_thread {
+            voxels.append(&mut v);
+        }
+
+        voxels
     }
 
     fn analyze_and_initialize_chunks(
@@ -448,30 +489,6 @@ impl ChunkedVoxelObject {
             occupied_chunk_ranges,
             occupied_voxel_ranges,
         }
-    }
-
-    fn compact_voxels(
-        chunks: &[VoxelChunk],
-        voxels: &[Voxel],
-        non_uniform_chunk_count: usize,
-    ) -> Vec<Voxel> {
-        assert_eq!(voxels.len(), chunks.len() * CHUNK_VOXEL_COUNT);
-
-        let mut compacted_voxels = Vec::with_capacity(non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
-
-        for (chunk_idx, chunk) in chunks.iter().enumerate() {
-            if let VoxelChunk::NonUniform(_) = chunk {
-                compacted_voxels.extend_from_slice(
-                    &voxels[chunk_idx * CHUNK_VOXEL_COUNT..(chunk_idx + 1) * CHUNK_VOXEL_COUNT],
-                );
-            }
-        }
-        assert_eq!(
-            compacted_voxels.len(),
-            non_uniform_chunk_count * CHUNK_VOXEL_COUNT
-        );
-
-        compacted_voxels
     }
 
     fn _find_voxel_types(chunks: &[VoxelChunk], voxels: &[Voxel]) -> Vec<VoxelType> {
@@ -2796,6 +2813,10 @@ mod tests {
             ]
         }
 
+        fn total_buffer_size(&self) -> usize {
+            0
+        }
+
         fn create_buffers_in<AB: Allocator>(&self, _alloc: AB) -> Self::ChunkGenerationBuffers<AB> {
         }
 
@@ -2838,6 +2859,10 @@ mod tests {
 
         fn grid_shape(&self) -> [usize; 3] {
             [self.offset[0] + N, self.offset[1] + N, self.offset[2] + N]
+        }
+
+        fn total_buffer_size(&self) -> usize {
+            0
         }
 
         fn create_buffers_in<AB: Allocator>(&self, _alloc: AB) -> Self::ChunkGenerationBuffers<AB> {
