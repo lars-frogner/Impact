@@ -1,11 +1,11 @@
 //! Input/output of texture data.
 
 use crate::processing::ImageProcessing;
-use anyhow::{anyhow, bail, Result};
-use impact_alloc::{arena::ArenaPool, AVec};
+use anyhow::{Result, anyhow, bail};
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_gpu::{
     device::GraphicsDevice,
-    texture::{mipmap::MipmapperGenerator, Texture, TextureConfig},
+    texture::{Texture, TextureConfig, mipmap::MipmapperGenerator},
     wgpu,
 };
 use impact_io::image;
