@@ -1,6 +1,6 @@
 //! Model instance transforms.
 
-use crate::{ModelInstanceManager, impl_InstanceFeatureForGPU};
+use crate::ModelInstanceManager;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
