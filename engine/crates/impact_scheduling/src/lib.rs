@@ -4,25 +4,31 @@
 pub mod macros;
 
 use anyhow::{Result, anyhow, bail};
-use impact_containers::{HashMap, HashSet, RandomState};
+use impact_containers::{HashMap, HashSet, NoHashMap, RandomState};
 use impact_math::hash::Hash64;
-use impact_thread::{
-    TaskClosureReturnValue, TaskError, TaskID, ThreadPool, ThreadPoolChannel, ThreadPoolResult,
-};
+use impact_thread::pool::{ThreadPool, ThreadPoolChannel, ThreadPoolError};
+use parking_lot::Mutex;
 use petgraph::{
     Directed,
     algo::{self, DfsSpace},
     graphmap::GraphMap,
 };
 use std::{
-    fmt::Debug,
+    backtrace::BacktraceStatus,
+    fmt::{self, Debug},
     marker::PhantomData,
     num::NonZeroUsize,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
+
+/// Type of ID used for identifying tasks in a [`TaskScheduler`].
+pub type TaskID = Hash64;
+
+/// Type of error produced by failed task executions in a [`TaskScheduler`].
+pub type TaskError = anyhow::Error;
 
 /// Represents a piece of work to be performed by a worker thread in a
 /// [`TaskScheduler`].
@@ -44,17 +50,6 @@ pub trait Task<S>: Sync + Send + Debug {
     /// Whether this task should be included in a [`TaskScheduler`] execution
     /// tagged with the given tags.
     fn should_execute(&self, execution_tags: &ExecutionTags) -> bool;
-
-    /// Like [`execute`](Self::execute), but the ID of the worker executing the
-    /// task is included as an argument. Useful for testing.
-    #[cfg(test)]
-    fn execute_with_worker(
-        &self,
-        _worker_id: impact_thread::WorkerID,
-        external_state: &S,
-    ) -> Result<()> {
-        self.execute(external_state)
-    }
 }
 
 /// A task manager that can schedule execution of multiple
@@ -74,6 +69,16 @@ pub type ExecutionTag = Hash64;
 
 /// A set of unique [`ExecutionTag`]s.
 pub type ExecutionTags = HashSet<ExecutionTag>;
+
+/// [`Result`] returned by execution of a set of tasks in a [`TaskScheduler`].
+pub type TaskSchedulerResult = Result<(), TaskErrors>;
+
+/// Container for a non-empty set of errors produced by executing tasks in a
+/// [`TaskScheduler`]. The errors can be looked up by [`TaskID`].
+#[derive(Debug)]
+pub struct TaskErrors {
+    errors: NoHashMap<TaskID, TaskError>,
+}
 
 type TaskPool<S> = HashMap<TaskID, Arc<dyn Task<S>>>;
 
@@ -99,31 +104,38 @@ struct TaskDependencyGraph<S> {
 struct TaskExecutor<S> {
     state: Arc<TaskExecutionState<S>>,
     thread_pool: TaskSchedulerThreadPool<S>,
+    is_executing: AtomicBool,
 }
 
 #[derive(Debug)]
 struct TaskExecutionState<S> {
     task_ordering: TaskOrdering<S>,
+    error_registry: TaskErrorRegistry,
     external_state: S,
 }
-
-/// A list of tasks ordered according to the following criteria:
-/// - All tasks without dependencies come first in the list.
-/// - Every task comes after all of the tasks it depends on.
+/// A list of tasks ordered according to the following criteria: - All tasks
+/// without dependencies come first in the list. - Every task comes after all of
+/// the tasks it depends on.
 #[derive(Debug)]
 struct TaskOrdering<S> {
     tasks: Vec<OrderedTask<S>>,
     n_dependencyless_tasks: usize,
 }
 
-/// A wrapper for a [`Task`] inside a [`TaskOrdering`] that
-/// includes some dependency information and state.
+/// A wrapper for a [`Task`] inside a [`TaskOrdering`] that includes some
+/// dependency information and state.
 #[derive(Debug)]
 struct OrderedTask<S> {
     task: Arc<dyn Task<S>>,
     n_dependencies: usize,
     indices_of_dependent_tasks: Vec<usize>,
     completed_dependency_count: AtomicUsize,
+}
+
+#[derive(Debug)]
+struct TaskErrorRegistry {
+    some_task_failed: AtomicBool,
+    errors_of_failed_tasks: Mutex<NoHashMap<TaskID, TaskError>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -149,8 +161,7 @@ where
         }
     }
 
-    /// Returns the number of worker threads that will be used to
-    /// execute tasks.
+    /// Returns the number of worker threads that will be used to execute tasks.
     pub fn n_workers(&self) -> usize {
         self.n_workers.get()
     }
@@ -161,25 +172,22 @@ where
     }
 
     /// Whether the given task is registered in the scheduler.
-    pub fn has_task(&self, task: impl Task<S>) -> bool {
+    pub fn has_task(&self, task: &impl Task<S>) -> bool {
         self.has_task_with_id(task.id())
     }
 
-    /// Whether a task with the given ID is registered in the
-    /// scheduler.
+    /// Whether a task with the given ID is registered in the scheduler.
     pub fn has_task_with_id(&self, task_id: TaskID) -> bool {
         self.tasks.contains_key(&task_id)
     }
 
-    /// Includes the given task in the pool of tasks that can be
-    /// scheduled for execution. The tasks that the given task
-    /// depends on do not have to be registered yet, but they
-    /// must have been registered prior to calling
+    /// Includes the given task in the pool of tasks that can be scheduled for
+    /// execution. The tasks that the given task depends on do not have to be
+    /// registered yet, but they must have been registered prior to calling
     /// [`complete_task_registration`](Self::complete_task_registration).
     ///
     /// # Errors
-    /// Returns an error if the given task has already been
-    /// registered.
+    /// Returns an error if the given task has already been registered.
     pub fn register_task(&mut self, task: impl Task<S> + 'static) -> Result<()> {
         let task_id = task.id();
         if self.tasks.contains_key(&task_id) {
@@ -196,10 +204,10 @@ where
         Ok(())
     }
 
-    /// Processes all registered tasks in preparation for execution.
-    /// Must be called between [`register_task`](Self::register_task)
-    /// and [`execute`](Self::execute) (or one of its variants),
-    /// otherwise the execution call will panic.
+    /// Processes all registered tasks in preparation for execution. Must be
+    /// called between [`register_task`](Self::register_task) and
+    /// [`execute`](Self::execute) (or one of its variants), otherwise the
+    /// execution call will panic.
     ///
     /// # Errors
     /// Returns an error if:
@@ -216,85 +224,78 @@ where
         Ok(())
     }
 
-    /// Executes all tasks that [`should_execute`](Task::should_execute)
-    /// for to the given execution tags on the main (calling) thread.
+    /// Executes all tasks that [`should_execute`](Task::should_execute) for to
+    /// the given execution tags, using [`n_workers`](Self::n_workers) worker
+    /// threads.
     ///
-    /// Each task is executed after all its dependencies, but will not
-    /// refrain from executing if a dependency does not execute due to
-    /// the execution tags.
+    /// Each task is executed after all its dependencies, but will not refrain
+    /// from executing if a dependency does not execute due to the execution
+    /// tags.
     ///
-    /// # Panics
-    /// If [`complete_task_registration`](Self::complete_task_registration)
-    /// has not been called after the last task was registered.
-    pub fn execute_on_main_thread(&self, execution_tags: &ExecutionTags) {
-        self.executor
-            .as_ref()
-            .expect("Called `execute_on_main_thread` before completing task registration")
-            .execute_on_main_thread(execution_tags);
-    }
-
-    /// Executes all tasks that [`should_execute`](Task::should_execute)
-    /// for to the given execution tags, using [`n_workers`](Self::n_workers)
-    /// worker threads.
-    ///
-    /// Each task is executed after all its dependencies, but will not
-    /// refrain from executing if a dependency does not execute due to
-    /// the execution tags.
-    ///
-    /// This function does not return until all tasks have been completed
-    /// or have failed with an error. To avoid blocking the calling thread,
-    /// use [`execute`](Self::execute) instead.
+    /// This function does not return until all tasks have been completed or
+    /// have failed with an error. To avoid blocking the calling thread, use
+    /// [`execute`](Self::execute) instead.
     ///
     /// # Errors
-    /// A [`ThreadPoolTaskErrors`](impact_thread::ThreadPoolTaskErrors)
+    /// If the task execution instructions could not be sent or any of the tasks
+    /// panicked, returns a [`ThreadPoolError`]. Otherwise, a [`TaskErrors`]
     /// containing the [`TaskError`] of each failed task is returned if any of
     /// the executed tasks failed.
     ///
     /// # Panics
-    /// If [`complete_task_registration`](Self::complete_task_registration)
-    /// has not been called after the last task was registered.
-    pub fn execute_and_wait(&self, execution_tags: &Arc<ExecutionTags>) -> ThreadPoolResult {
+    /// - If [`complete_task_registration`](Self::complete_task_registration) has
+    ///   not been called after the last task was registered.
+    /// - If the scheduler is already executing.
+    pub fn execute_and_wait(
+        &self,
+        execution_tags: &Arc<ExecutionTags>,
+    ) -> Result<TaskSchedulerResult, ThreadPoolError> {
         self.executor
             .as_ref()
             .expect("Called `execute_and_wait` before completing task registration")
             .execute_and_wait(execution_tags)
     }
 
-    /// Executes all tasks that [`should_execute`](Task::should_execute)
-    /// for to the given execution tags, using [`n_workers`](Self::n_workers)
-    /// worker threads.
+    /// Executes all tasks that [`should_execute`](Task::should_execute) for to
+    /// the given execution tags, using [`n_workers`](Self::n_workers) worker
+    /// threads.
     ///
-    /// Each task is executed after all its dependencies, but will not
-    /// refrain from executing if a dependency does not execute due to
-    /// the execution tags.
+    /// Each task is executed after all its dependencies, but will not refrain
+    /// from executing if a dependency does not execute due to the execution
+    /// tags.
     ///
-    /// This function returns as soon as the execution has been initiated.
-    /// To block the calling thread until all tasks have been completed,
-    /// call [`wait_until_done`](Self::wait_until_done).
+    /// This function returns as soon as the execution has been initiated. To
+    /// block the calling thread until all tasks have been completed, call
+    /// [`wait_until_done`](Self::wait_until_done).
+    ///
+    /// # Errors
+    /// If the task execution instructions could not be sent, returns a
+    /// [`ThreadPoolError`].
     ///
     /// # Panics
-    /// If [`complete_task_registration`](Self::complete_task_registration)
-    /// has not been called after the last task was registered.
-    pub fn execute(&self, execution_tags: &Arc<ExecutionTags>) {
+    /// - If [`complete_task_registration`](Self::complete_task_registration) has
+    ///   not been called after the last task was registered.
+    /// - If the scheduler is already executing.
+    pub fn execute(&self, execution_tags: &Arc<ExecutionTags>) -> Result<(), ThreadPoolError> {
         self.executor
             .as_ref()
             .expect("Called `execute` before completing task registration")
-            .execute(execution_tags);
+            .execute(execution_tags)
     }
 
-    /// Blocks the calling thread and returns as soon as all tasks
-    /// to be performed by the previous [`execute`](Self::execute)
-    /// call have been completed or have failed with an error.
+    /// Blocks the calling thread and returns as soon as all tasks to be
+    /// performed by the previous [`execute`](Self::execute) call have been
+    /// completed or have failed with an error.
     ///
     /// # Errors
-    /// A [`ThreadPoolTaskErrors`](impact_thread::ThreadPoolTaskErrors)
-    /// containing the [`TaskError`] of each failed task is returned if any of
-    /// the executed tasks failed.
+    /// If any of the tasks panicked, returns a [`ThreadPoolError`]. Otherwise,
+    /// a [`TaskErrors`] containing the [`TaskError`] of each failed task is
+    /// returned if any of the executed tasks failed.
     ///
     /// # Panics
-    /// If [`complete_task_registration`](Self::complete_task_registration)
-    /// has not been called after the last task was registered.
-    pub fn wait_until_done(&self) -> ThreadPoolResult {
+    /// If [`complete_task_registration`](Self::complete_task_registration) has
+    /// not been called after the last task was registered.
+    pub fn wait_until_done(&self) -> Result<TaskSchedulerResult, ThreadPoolError> {
         self.executor
             .as_ref()
             .expect("Called `wait_until_done` before completing task registration")
@@ -306,6 +307,54 @@ where
         self.executor.as_ref()
     }
 }
+
+impl TaskErrors {
+    fn new(task_errors: NoHashMap<TaskID, TaskError>) -> Self {
+        assert!(!task_errors.is_empty());
+        Self {
+            errors: task_errors,
+        }
+    }
+
+    /// Returns the number of errors present from executed tasks that failed.
+    /// Calling [`take_result_of`](Self::take_result_of) may reduce this number.
+    pub fn n_errors(&self) -> usize {
+        self.errors.len()
+    }
+
+    /// Returns a reference to the [`TaskError`] produced by the task with the
+    /// given ID if the task executed and failed, otherwise returns [`None`].
+    pub fn get_error_of(&self, task_id: TaskID) -> Option<&TaskError> {
+        self.errors.get(&task_id)
+    }
+
+    /// Clears the error record for the task with the given ID.
+    pub fn clear_error_of(&mut self, task_id: TaskID) {
+        self.errors.remove(&task_id);
+    }
+
+    /// Returns a [`Result`] that is either [`Ok`] if the task with the given ID
+    /// succeeded or was never executed, or [`Err`] containing the resulting
+    /// [`TaskError`] if it was executed and failed. In the latter case, the
+    /// record of the error is removed from this object.
+    pub fn take_result_of(&mut self, task_id: TaskID) -> Result<(), TaskError> {
+        match self.errors.remove(&task_id) {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+}
+
+impl fmt::Display for TaskErrors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (task_id, err) in &self.errors {
+            writeln!(f, "Error for task {task_id}: {err}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for TaskErrors {}
 
 impl<S> TaskDependencyGraph<S> {
     fn new() -> Self {
@@ -327,9 +376,8 @@ impl<S> TaskDependencyGraph<S> {
         let dependence_task_ids = task.depends_on();
 
         for &dependence_task_id in dependence_task_ids {
-            // Add edge directed from dependence to dependent.
-            // A node for the dependence task is added if it
-            // doesn't exist.
+            // Add edge directed from dependence to dependent. A node for the
+            // dependence task is added if it doesn't exist.
             let existing_edge = self.graph.add_edge(dependence_task_id, task_id, ());
 
             if existing_edge.is_some() {
@@ -351,8 +399,8 @@ impl<S> TaskDependencyGraph<S> {
         sorted_ids.extend(self.independent_tasks.iter());
 
         if n_tasks > self.independent_tasks.len() {
-            // Get task IDs sorted to topological order, meaning an order
-            // where each task comes after all its dependencies
+            // Get task IDs sorted to topological order, meaning an order where
+            // each task comes after all its dependencies
             let topologically_sorted_ids = algo::toposort(&self.graph, Some(&mut self.space))
                 .map_err(|_cycle| anyhow!("Found circular task dependencies"))?;
 
@@ -398,151 +446,131 @@ where
             queue_capacity,
             &Self::execute_task_and_schedule_dependencies,
         );
-        Ok(Self { state, thread_pool })
+        let is_executing = AtomicBool::new(false);
+        Ok(Self {
+            state,
+            thread_pool,
+            is_executing,
+        })
     }
 
     fn task_ordering(&self) -> &TaskOrdering<S> {
         self.state.task_ordering()
     }
 
-    fn execute_on_main_thread(&self, execution_tags: &ExecutionTags) {
-        // Iterate through all tasks in order and execute each task
-        // that should be
-        for ordered_task in self.task_ordering().tasks() {
-            let task = ordered_task.task();
-            if task.should_execute(execution_tags) {
-                task.execute(self.state.external_state())
-                    .expect("Task failed");
-            }
-        }
-    }
-
-    fn execute_and_wait(&self, execution_tags: &Arc<ExecutionTags>) -> ThreadPoolResult {
-        self.execute(execution_tags);
+    fn execute_and_wait(
+        &self,
+        execution_tags: &Arc<ExecutionTags>,
+    ) -> Result<TaskSchedulerResult, ThreadPoolError> {
+        self.execute(execution_tags)?;
         self.wait_until_done()
     }
 
-    fn execute(&self, execution_tags: &Arc<ExecutionTags>) {
-        // Make sure that the count of completed dependencies
-        // for each task is zeroed
+    fn execute(&self, execution_tags: &Arc<ExecutionTags>) -> Result<(), ThreadPoolError> {
+        if self.is_executing.swap(true, Ordering::AcqRel) {
+            panic!("Tried to execute task scheduler while already executing");
+        }
+
+        // Make sure that the count of completed dependencies for each task is
+        // zeroed
         self.task_ordering().reset();
 
-        // Start by scheduling all independent tasks (the ones at
-        // the beginning of the ordered list of tasks) for immediate
-        // execution. The execution of their dependencies will be
-        // scheduled by the worker threads.
-        self.thread_pool.execute(
+        // Start by scheduling all independent tasks (the ones at the beginning
+        // of the ordered list of tasks) for immediate execution. The execution
+        // of their dependencies will be scheduled by the worker threads.
+        let result = self.thread_pool.execute(
             (0..self.task_ordering().n_dependencyless_tasks())
                 .map(|task_idx| Self::create_message(&self.state, execution_tags, task_idx)),
         );
+
+        result
     }
 
-    fn wait_until_done(&self) -> ThreadPoolResult {
-        self.thread_pool.wait_until_done()
+    fn wait_until_done(&self) -> Result<TaskSchedulerResult, ThreadPoolError> {
+        let pool_result = self.thread_pool.wait_until_done();
+        let task_result = self.state.error_registry.fetch_result();
+
+        self.is_executing.store(false, Ordering::Release);
+
+        pool_result?;
+        Ok(task_result)
     }
 
-    /// This is the function called by worker threads in the
-    /// [`ThreadPool`] when they recieve an execution instruction.
+    /// This is the function called by worker threads in the [`ThreadPool`] when
+    /// they recieve an execution instruction.
     fn execute_task_and_schedule_dependencies(
         channel: &ThreadPoolChannel<TaskMessage<S>>,
-        (state, execution_tags, task_idx): TaskMessage<S>,
-    ) -> TaskClosureReturnValue {
-        let ordered_task = state.task_ordering().task(task_idx);
-        let task = ordered_task.task();
+        (state, execution_tags, mut task_idx): TaskMessage<S>,
+    ) {
+        loop {
+            let ordered_task = state.task_ordering().task(task_idx);
+            let task = ordered_task.task();
 
-        impact_log::trace!(
-            "Worker {} obtained task {}",
-            channel.owning_worker_id(),
-            task.id()
-        );
-
-        // Execute the task only if it thinks it should be based on
-        // the current execution tags
-        if task.should_execute(execution_tags.as_ref()) {
-            impact_log::with_trace_logging!("Worker {} executing task {}",
-                channel.owning_worker_id(),
-                task.id();
+            // Execute the task only if it thinks it should be based on the
+            // current execution tags
+            if task.should_execute(execution_tags.as_ref()) {
+                impact_log::with_trace_logging!("Executing task {}", task.id();
                 {
-                    let result = {
-                        cfg_if::cfg_if! {
-                            if #[cfg(test)] {
-                                task.execute_with_worker(channel.owning_worker_id(), state.external_state())
-                            } else {
-                                task.execute(state.external_state())
-                            }
-                        }
-                    };
-
-                    if let Err(error) = result {
-                        // Return immediately with the task ID and an error
-                        // if the task execution failed
-                        return TaskClosureReturnValue::failure(task.id(), error);
+                    if let Err(error) = task.execute(state.external_state()) {
+                        // Register the error and return immediately if the task
+                        // execution failed
+                        state.error_registry().register_error(task.id(), error);
+                        return;
                     }
-                }
-            );
-        } else {
-            impact_log::trace!(
-                "Worker {} skipped execution of task {}",
-                channel.owning_worker_id(),
-                task.id()
-            );
-        }
+                });
+            } else {
+                impact_log::trace!("Skipped execution of task {}", task.id());
+            }
 
-        // Find each of the tasks that depend on this one, and
-        // increment its count of completed dependencies. We keep
-        // track of any dependent tasks that have no uncompleted
-        // dependencies left as a result of completing this task.
-        let mut ready_dependent_task_indices = ordered_task
-            .indices_of_dependent_tasks()
-            .iter()
-            .filter_map(|&dependent_task_idx| {
-                let dependent_task = state.task_ordering().task(dependent_task_idx);
-                let task_ready = dependent_task.complete_dependency();
-                if task_ready == TaskReady::Yes {
-                    Some(dependent_task_idx)
-                } else {
-                    None
-                }
-            });
+            // Find each of the tasks that depend on this one, and increment its
+            // count of completed dependencies. We keep track of any dependent
+            // tasks that have no uncompleted dependencies left as a result of
+            // completing this task.
+            let mut ready_dependent_task_indices = ordered_task
+                .indices_of_dependent_tasks()
+                .iter()
+                .filter_map(|&dependent_task_idx| {
+                    let dependent_task = state.task_ordering().task(dependent_task_idx);
+                    let task_ready = dependent_task.complete_dependency();
+                    if task_ready == TaskReady::Yes {
+                        Some(dependent_task_idx)
+                    } else {
+                        None
+                    }
+                });
 
-        // Take the first ready task for this thread to start executing
-        // immediately
-        let first_ready_dependent_task_idx = ready_dependent_task_indices.next();
+            // Take the first ready task for this thread to start executing
+            // immediately
+            let first_ready_dependent_task_idx = ready_dependent_task_indices.next();
 
-        let mut n_additional_tasks = 0;
-
-        // Schedule each remaining ready task
-        for ready_dependent_task_idx in ready_dependent_task_indices {
-            impact_log::with_trace_logging!(
-                "Worker {} scheduling execution of task {}",
-                channel.owning_worker_id(),
-                state
+            // Schedule each remaining ready task
+            for ready_dependent_task_idx in ready_dependent_task_indices {
+                let task_id = state
                     .task_ordering()
                     .task(ready_dependent_task_idx)
                     .task()
                     .id();
-                {
-                    n_additional_tasks += 1;
-                    channel.send_execute_instruction(Self::create_message(
+                impact_log::with_trace_logging!("Scheduling execution of task {}", task_id; {
+                    if let Err(err) = channel.send_execute_instruction(Self::create_message(
                         &state,
                         &execution_tags,
                         ready_dependent_task_idx,
-                    ));
-                }
-            );
-        }
+                    )) {
+                        state.error_registry().register_error(task_id, anyhow!("Task could not be scheduled: {err}"));
+                        return;
+                    }
+                });
+            }
 
-        if let Some(ready_dependent_task_idx) = first_ready_dependent_task_idx {
-            n_additional_tasks += 1;
-            Self::execute_task_and_schedule_dependencies(
-                channel,
-                (state, execution_tags, ready_dependent_task_idx),
-            )
-            // Add the counts from this task execution to those returned from
-            // the dependent task
-            .add(1, n_additional_tasks)
-        } else {
-            TaskClosureReturnValue::success(n_additional_tasks)
+            match first_ready_dependent_task_idx {
+                Some(next_idx) => {
+                    // We loop again to execute the first task right away
+                    task_idx = next_idx;
+                }
+                None => {
+                    break;
+                }
+            }
         }
     }
 
@@ -562,14 +590,20 @@ impl<S> TaskExecutionState<S> {
         external_state: S,
     ) -> Result<Self> {
         let task_ordering = TaskOrdering::new(task_pool, dependency_graph)?;
+        let error_registry = TaskErrorRegistry::new();
         Ok(Self {
             task_ordering,
+            error_registry,
             external_state,
         })
     }
 
     fn task_ordering(&self) -> &TaskOrdering<S> {
         &self.task_ordering
+    }
+
+    fn error_registry(&self) -> &TaskErrorRegistry {
+        &self.error_registry
     }
 
     fn external_state(&self) -> &S {
@@ -593,10 +627,6 @@ impl<S> TaskOrdering<S> {
 
     fn task(&self, idx: usize) -> &OrderedTask<S> {
         &self.tasks[idx]
-    }
-
-    fn tasks(&self) -> &[OrderedTask<S>] {
-        &self.tasks
     }
 
     fn reset(&self) {
@@ -629,8 +659,8 @@ impl<S> TaskOrdering<S> {
                     .get(&task_id)
                     .ok_or_else(|| anyhow!("Dependency task (ID {}) missing", task_id))?;
 
-                // Find index into `ordered_task_ids` of each task
-                // that depends on this task
+                // Find index into `ordered_task_ids` of each task that depends
+                // on this task
                 let indices_of_dependent_tasks = dependency_graph
                     .find_dependent_task_ids(task_id)
                     .map(|dependent_task_id| indices_of_task_ids[&dependent_task_id]);
@@ -682,9 +712,8 @@ impl<S> OrderedTask<S> {
     /// Increments the count of completed dependencies.
     ///
     /// # Returns
-    /// An enum indicating whether the task has no
-    /// uncompleted dependencies left and is thus
-    /// ready for execution.
+    /// An enum indicating whether the task has no uncompleted dependencies left
+    /// and is thus ready for execution.
     fn complete_dependency(&self) -> TaskReady {
         let previous_count = self
             .completed_dependency_count
@@ -704,18 +733,54 @@ impl<S> OrderedTask<S> {
     }
 }
 
+impl TaskErrorRegistry {
+    fn new() -> Self {
+        let some_task_failed = AtomicBool::new(false);
+        let errors_of_failed_tasks = Mutex::new(NoHashMap::default());
+        Self {
+            some_task_failed,
+            errors_of_failed_tasks,
+        }
+    }
+
+    fn fetch_result(&self) -> TaskSchedulerResult {
+        // Check if a task failed and at the same time reset the flag to `false`
+        if self.some_task_failed.swap(false, Ordering::SeqCst) {
+            Err(TaskErrors::new(
+                // Move the `HashMap` of errors out of the mutex and replace
+                // with an empty one
+                std::mem::take(&mut *self.errors_of_failed_tasks.lock()),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn register_error(&self, task_id: TaskID, error: TaskError) {
+        impact_log::error!(
+            "Task {task_id} failed: {error:#}{}",
+            if error.backtrace().status() == BacktraceStatus::Captured {
+                format!("\nBacktrace:\n{}", error.backtrace())
+            } else {
+                String::new()
+            }
+        );
+        self.some_task_failed.store(true, Ordering::SeqCst);
+        self.errors_of_failed_tasks.lock().insert(task_id, error);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use impact_thread::WorkerID;
     use parking_lot::Mutex;
-    use std::{iter, thread, time::Duration};
+    use std::iter;
 
     const EXEC_ALL: ExecutionTag = ExecutionTag::from_str("all");
 
     #[derive(Debug)]
     struct TaskRecorder {
-        recorded_tasks: Mutex<Vec<(WorkerID, TaskID)>>,
+        recorded_tasks: Mutex<Vec<TaskID>>,
     }
 
     impl TaskRecorder {
@@ -726,16 +791,11 @@ mod tests {
         }
 
         fn get_recorded_task_ids(&self) -> Vec<TaskID> {
-            self.recorded_tasks
-                .lock()
-                .iter()
-                .map(|&(_, task_id)| task_id)
-                .collect()
+            self.recorded_tasks.lock().iter().copied().collect()
         }
 
-        fn record_task(&self, worker_id: WorkerID, task_id: TaskID) {
-            self.recorded_tasks.lock().push((worker_id, task_id));
-            thread::sleep(Duration::from_millis(1));
+        fn record_task(&self, task_id: TaskID) {
+            self.recorded_tasks.lock().push(task_id);
         }
     }
 
@@ -763,12 +823,8 @@ mod tests {
                     [EXEC_ALL, Self::EXEC_TAG].iter().any(|tag| execution_tags.contains(tag))
                 }
 
-                fn execute(&self, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
-                    unreachable!()
-                }
-
-                fn execute_with_worker(&self, worker_id: WorkerID, task_recorder: &Arc<TaskRecorder>) -> Result<()> {
-                    Ok(task_recorder.record_task(worker_id, self.id()))
+                fn execute(&self, task_recorder: &Arc<TaskRecorder>) -> Result<()> {
+                    Ok(task_recorder.record_task(self.id()))
                 }
             }
         };
@@ -796,10 +852,6 @@ mod tests {
                 }
 
                 fn execute(&self, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
-                    unreachable!()
-                }
-
-                fn execute_with_worker(&self, _worker_id: WorkerID, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
                     anyhow::bail!("{} always fails!", stringify!($task))
                 }
             }
@@ -829,10 +881,6 @@ mod tests {
                 }
 
                 fn execute(&self, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
-                    unreachable!()
-                }
-
-                fn execute_with_worker(&self, _worker_id: WorkerID, _task_recorder: &Arc<TaskRecorder>) -> Result<()> {
                     unreachable!("This task should be skipped")
                 }
             }
@@ -867,22 +915,22 @@ mod tests {
     fn registering_tasks_in_dependency_order_works() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(Task1).unwrap();
-        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(&Task1));
 
         scheduler.register_task(Task2).unwrap();
-        assert!(scheduler.has_task(Task1));
-        assert!(scheduler.has_task(Task2));
+        assert!(scheduler.has_task(&Task1));
+        assert!(scheduler.has_task(&Task2));
 
         scheduler.register_task(DepTask1).unwrap();
-        assert!(scheduler.has_task(Task1));
-        assert!(scheduler.has_task(Task1));
-        assert!(scheduler.has_task(DepTask1));
+        assert!(scheduler.has_task(&Task1));
+        assert!(scheduler.has_task(&Task1));
+        assert!(scheduler.has_task(&DepTask1));
 
         scheduler.register_task(DepDepTask1Task2).unwrap();
-        assert!(scheduler.has_task(Task1));
-        assert!(scheduler.has_task(Task1));
-        assert!(scheduler.has_task(DepTask1));
-        assert!(scheduler.has_task(DepDepTask1Task2));
+        assert!(scheduler.has_task(&Task1));
+        assert!(scheduler.has_task(&Task1));
+        assert!(scheduler.has_task(&DepTask1));
+        assert!(scheduler.has_task(&DepDepTask1Task2));
 
         scheduler.complete_task_registration().unwrap();
     }
@@ -891,22 +939,22 @@ mod tests {
     fn registering_tasks_out_of_dependency_order_works() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(DepDepTask1Task2).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2));
+        assert!(scheduler.has_task(&DepDepTask1Task2));
 
         scheduler.register_task(Task2).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2));
-        assert!(scheduler.has_task(Task2));
+        assert!(scheduler.has_task(&DepDepTask1Task2));
+        assert!(scheduler.has_task(&Task2));
 
         scheduler.register_task(DepTask1).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2));
-        assert!(scheduler.has_task(Task2));
-        assert!(scheduler.has_task(DepTask1));
+        assert!(scheduler.has_task(&DepDepTask1Task2));
+        assert!(scheduler.has_task(&Task2));
+        assert!(scheduler.has_task(&DepTask1));
 
         scheduler.register_task(Task1).unwrap();
-        assert!(scheduler.has_task(DepDepTask1Task2));
-        assert!(scheduler.has_task(Task2));
-        assert!(scheduler.has_task(DepTask1));
-        assert!(scheduler.has_task(Task1));
+        assert!(scheduler.has_task(&DepDepTask1Task2));
+        assert!(scheduler.has_task(&Task2));
+        assert!(scheduler.has_task(&DepTask1));
+        assert!(scheduler.has_task(&Task1));
 
         scheduler.complete_task_registration().unwrap();
     }
@@ -945,10 +993,12 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn executing_before_completing_task_reg_fails() {
+    fn executing_before_completing_task_registration_fails() {
         let mut scheduler = create_scheduler(1);
         scheduler.register_task(Task1).unwrap();
-        scheduler.execute(&Arc::new(ExecutionTags::default()));
+        scheduler
+            .execute(&Arc::new(ExecutionTags::default()))
+            .unwrap();
     }
 
     #[test]
@@ -962,107 +1012,6 @@ mod tests {
 
         scheduler.register_task(Task2).unwrap();
         assert!(scheduler.get_executor().is_none());
-    }
-
-    #[cfg(not(miri))] // Multi-threaded tests get flaky with `miri`
-    #[test]
-    fn executing_tasks_works() {
-        let mut scheduler = create_scheduler(2);
-        scheduler.register_task(DepDepTask1Task2).unwrap();
-        scheduler.register_task(Task2).unwrap();
-        scheduler.register_task(DepTask1).unwrap();
-        scheduler.register_task(Task1).unwrap();
-        scheduler.register_task(DepTask1Task2).unwrap();
-        scheduler.complete_task_registration().unwrap();
-
-        scheduler
-            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
-            .unwrap();
-        let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
-
-        // Verify that all tasks were executed
-        assert_eq!(recorded_task_ids.len(), 5);
-        assert!(recorded_task_ids.contains(&Task1::ID));
-        assert!(recorded_task_ids.contains(&Task2::ID));
-        assert!(recorded_task_ids.contains(&DepTask1::ID));
-        assert!(recorded_task_ids.contains(&DepTask1Task2::ID));
-        assert!(recorded_task_ids.contains(&DepDepTask1Task2::ID));
-
-        // Verify that dependency constraints are respected
-        let task1_pos = recorded_task_ids
-            .iter()
-            .position(|&id| id == Task1::ID)
-            .unwrap();
-        let task2_pos = recorded_task_ids
-            .iter()
-            .position(|&id| id == Task2::ID)
-            .unwrap();
-        let dep_task1_pos = recorded_task_ids
-            .iter()
-            .position(|&id| id == DepTask1::ID)
-            .unwrap();
-        let dep_task1_task2_pos = recorded_task_ids
-            .iter()
-            .position(|&id| id == DepTask1Task2::ID)
-            .unwrap();
-        let dep_dep_task1_task2_pos = recorded_task_ids
-            .iter()
-            .position(|&id| id == DepDepTask1Task2::ID)
-            .unwrap();
-
-        // DepTask1 must execute after Task1
-        assert!(
-            dep_task1_pos > task1_pos,
-            "DepTask1 should execute after Task1"
-        );
-
-        // DepTask1Task2 must execute after both Task1 and Task2
-        assert!(
-            dep_task1_task2_pos > task1_pos,
-            "DepTask1Task2 should execute after Task1"
-        );
-        assert!(
-            dep_task1_task2_pos > task2_pos,
-            "DepTask1Task2 should execute after Task2"
-        );
-
-        // DepDepTask1Task2 must execute after both DepTask1 and Task2
-        assert!(
-            dep_dep_task1_task2_pos > dep_task1_pos,
-            "DepDepTask1Task2 should execute after DepTask1"
-        );
-        assert!(
-            dep_dep_task1_task2_pos > task2_pos,
-            "DepDepTask1Task2 should execute after Task2"
-        );
-    }
-
-    #[cfg(not(miri))]
-    #[test]
-    fn filtering_execution_with_tags_works() {
-        let mut scheduler = create_scheduler(2);
-        scheduler.register_task(DepDepTask1Task2).unwrap();
-        scheduler.register_task(Task2).unwrap();
-        scheduler.register_task(DepTask1).unwrap();
-        scheduler.register_task(Task1).unwrap();
-        scheduler.register_task(DepTask1Task2).unwrap();
-        scheduler.complete_task_registration().unwrap();
-
-        scheduler
-            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([
-                Task2::EXEC_TAG,
-                DepTask1::EXEC_TAG,
-                DepDepTask1Task2::EXEC_TAG,
-            ])))
-            .unwrap();
-        let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
-
-        for task_id in [Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] {
-            assert!(recorded_task_ids.contains(&task_id));
-        }
-        for task_id in [Task1::ID, DepTask1Task2::ID] {
-            assert!(!recorded_task_ids.contains(&task_id));
-        }
     }
 
     #[test]
@@ -1227,7 +1176,9 @@ mod tests {
         scheduler.register_task(FailingTask).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+        let result = scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
+            .unwrap();
 
         let errors = result.unwrap_err();
         assert_eq!(errors.n_errors(), 1);
@@ -1241,7 +1192,9 @@ mod tests {
         scheduler.register_task(DependentOnFailingTask).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+        let result = scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
+            .unwrap();
 
         let errors = result.unwrap_err();
         assert_eq!(errors.n_errors(), 1);
@@ -1253,7 +1206,107 @@ mod tests {
         assert!(!recorded_tasks.contains(&DependentOnFailingTask::ID));
     }
 
-    #[cfg(not(miri))]
+    #[test]
+    fn executing_tasks_works() {
+        let mut scheduler = create_scheduler(2);
+        scheduler.register_task(DepDepTask1Task2).unwrap();
+        scheduler.register_task(Task2).unwrap();
+        scheduler.register_task(DepTask1).unwrap();
+        scheduler.register_task(Task1).unwrap();
+        scheduler.register_task(DepTask1Task2).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
+            .unwrap()
+            .unwrap();
+        let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
+
+        // Verify that all tasks were executed
+        assert_eq!(recorded_task_ids.len(), 5);
+        assert!(recorded_task_ids.contains(&Task1::ID));
+        assert!(recorded_task_ids.contains(&Task2::ID));
+        assert!(recorded_task_ids.contains(&DepTask1::ID));
+        assert!(recorded_task_ids.contains(&DepTask1Task2::ID));
+        assert!(recorded_task_ids.contains(&DepDepTask1Task2::ID));
+
+        // Verify that dependency constraints are respected
+        let task1_pos = recorded_task_ids
+            .iter()
+            .position(|&id| id == Task1::ID)
+            .unwrap();
+        let task2_pos = recorded_task_ids
+            .iter()
+            .position(|&id| id == Task2::ID)
+            .unwrap();
+        let dep_task1_pos = recorded_task_ids
+            .iter()
+            .position(|&id| id == DepTask1::ID)
+            .unwrap();
+        let dep_task1_task2_pos = recorded_task_ids
+            .iter()
+            .position(|&id| id == DepTask1Task2::ID)
+            .unwrap();
+        let dep_dep_task1_task2_pos = recorded_task_ids
+            .iter()
+            .position(|&id| id == DepDepTask1Task2::ID)
+            .unwrap();
+
+        // DepTask1 must execute after Task1
+        assert!(
+            dep_task1_pos > task1_pos,
+            "DepTask1 should execute after Task1"
+        );
+
+        // DepTask1Task2 must execute after both Task1 and Task2
+        assert!(
+            dep_task1_task2_pos > task1_pos,
+            "DepTask1Task2 should execute after Task1"
+        );
+        assert!(
+            dep_task1_task2_pos > task2_pos,
+            "DepTask1Task2 should execute after Task2"
+        );
+
+        // DepDepTask1Task2 must execute after both DepTask1 and Task2
+        assert!(
+            dep_dep_task1_task2_pos > dep_task1_pos,
+            "DepDepTask1Task2 should execute after DepTask1"
+        );
+        assert!(
+            dep_dep_task1_task2_pos > task2_pos,
+            "DepDepTask1Task2 should execute after Task2"
+        );
+    }
+
+    #[test]
+    fn filtering_execution_with_tags_works() {
+        let mut scheduler = create_scheduler(2);
+        scheduler.register_task(DepDepTask1Task2).unwrap();
+        scheduler.register_task(Task2).unwrap();
+        scheduler.register_task(DepTask1).unwrap();
+        scheduler.register_task(Task1).unwrap();
+        scheduler.register_task(DepTask1Task2).unwrap();
+        scheduler.complete_task_registration().unwrap();
+
+        scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([
+                Task2::EXEC_TAG,
+                DepTask1::EXEC_TAG,
+                DepDepTask1Task2::EXEC_TAG,
+            ])))
+            .unwrap()
+            .unwrap();
+        let recorded_task_ids = scheduler.external_state().get_recorded_task_ids();
+
+        for task_id in [Task2::ID, DepTask1::ID, DepDepTask1Task2::ID] {
+            assert!(recorded_task_ids.contains(&task_id));
+        }
+        for task_id in [Task1::ID, DepTask1Task2::ID] {
+            assert!(!recorded_task_ids.contains(&task_id));
+        }
+    }
+
     #[test]
     fn mixed_success_and_failure_tasks_complete_correctly() {
         let mut scheduler = create_scheduler(2);
@@ -1262,7 +1315,9 @@ mod tests {
         scheduler.register_task(DepTask1).unwrap(); // This depends on Task1 and should succeed
         scheduler.complete_task_registration().unwrap();
 
-        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+        let result = scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
+            .unwrap();
 
         let errors = result.unwrap_err();
         assert_eq!(errors.n_errors(), 1);
@@ -1290,7 +1345,9 @@ mod tests {
         scheduler.register_task(FinalTask).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+        let result = scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
+            .unwrap();
 
         let errors = result.unwrap_err();
         assert_eq!(errors.n_errors(), 1);
@@ -1302,7 +1359,6 @@ mod tests {
         assert!(!recorded_tasks.contains(&FinalTask::ID));
     }
 
-    #[cfg(not(miri))]
     #[test]
     fn multiple_failing_tasks_all_report_errors() {
         create_task_type!(name = FailingTask2, deps = [], fails);
@@ -1312,7 +1368,9 @@ mod tests {
         scheduler.register_task(FailingTask2).unwrap();
         scheduler.complete_task_registration().unwrap();
 
-        let result = scheduler.execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])));
+        let result = scheduler
+            .execute_and_wait(&Arc::new(ExecutionTags::from_iter([EXEC_ALL])))
+            .unwrap();
 
         let errors = result.unwrap_err();
         assert_eq!(errors.n_errors(), 2);
