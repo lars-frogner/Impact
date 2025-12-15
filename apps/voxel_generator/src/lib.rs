@@ -19,6 +19,7 @@ use impact::{
     impact_ecs::world::EntityID,
     impact_geometry::{ModelTransform, ReferenceFrame},
     impact_io,
+    impact_thread::pool::{DynamicThreadPool, ThreadPool},
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -27,7 +28,6 @@ use impact::{
     window::WindowConfig,
 };
 use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
-use impact_thread::rayon::RayonThreadPool;
 use impact_voxel::{
     chunks::ChunkedVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
@@ -48,7 +48,7 @@ const OBJECT_ENTITY_ID: EntityID = EntityID::hashed_from_str("object");
 #[derive(Debug)]
 pub struct VoxelGeneratorApp {
     user_interface: RwLock<UserInterface>,
-    thread_pool: RayonThreadPool,
+    thread_pool: DynamicThreadPool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -69,9 +69,11 @@ pub struct UserInterface {
 
 impl VoxelGeneratorApp {
     pub fn new(user_interface: UserInterface) -> Self {
+        let n_workers = num_threads();
+        let queue_capacity = NonZeroUsize::new(n_workers.get() * 64).unwrap();
         Self {
             user_interface: RwLock::new(user_interface),
-            thread_pool: RayonThreadPool::new(num_threads()),
+            thread_pool: ThreadPool::new_dynamic(n_workers, queue_capacity),
         }
     }
 }
@@ -230,7 +232,7 @@ impl UserInterface {
 }
 
 fn generate_next_voxel_object(
-    thread_pool: &RayonThreadPool,
+    thread_pool: &DynamicThreadPool,
     editor: &mut Editor,
 ) -> Option<(MeshedChunkedVoxelObject, ModelTransform)> {
     let generator = editor.build_next_voxel_sdf_generator(Global)?;
@@ -244,7 +246,7 @@ fn generate_next_voxel_object(
 }
 
 fn generate_next_voxel_object_or_default(
-    thread_pool: &RayonThreadPool,
+    thread_pool: &DynamicThreadPool,
     editor: &mut Editor,
 ) -> (MeshedChunkedVoxelObject, ModelTransform) {
     let generator = editor.build_next_voxel_sdf_generator_or_default(Global);

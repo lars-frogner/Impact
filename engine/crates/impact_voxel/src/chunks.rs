@@ -17,13 +17,18 @@ use cfg_if::cfg_if;
 use disconnection::{
     NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
 };
-use impact_alloc::arena::ArenaPool;
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::Float;
+use impact_thread::{
+    channel::{self, Sender},
+    pool::{DynamicTask, DynamicThreadPool},
+};
 use nalgebra::{Point3, Vector3, point, vector};
 use num_traits::{NumCast, PrimInt};
 use std::{array, iter, mem, ops::Range};
+use tinyvec::TinyVec;
 
 /// An object represented by a grid of voxels.
 ///
@@ -214,11 +219,7 @@ impl ChunkedVoxelObject {
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
     /// and calls [`Self::update_occupied_voxel_ranges`] and
     /// [`Self::compute_all_derived_state`] on it.
-    #[cfg(feature = "rayon")]
-    pub fn generate_in_parallel<G>(
-        thread_pool: &impact_thread::rayon::RayonThreadPool,
-        generator: &G,
-    ) -> Self
+    pub fn generate_in_parallel<G>(thread_pool: &DynamicThreadPool, generator: &G) -> Self
     where
         G: ChunkedVoxelGenerator + Sync,
     {
@@ -240,9 +241,8 @@ impl ChunkedVoxelObject {
     }
 
     /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
-    #[cfg(feature = "rayon")]
     pub fn generate_without_derived_state_in_parallel<G>(
-        thread_pool: &impact_thread::rayon::RayonThreadPool,
+        thread_pool: &DynamicThreadPool,
         generator: &G,
     ) -> Self
     where
@@ -318,7 +318,7 @@ impl ChunkedVoxelObject {
 
         // Assume roughly one quarter of the chunks will be non-uniform
         let estimated_voxel_count = (chunks.len() * CHUNK_VOXEL_COUNT) / 4;
-        let mut voxels = Vec::with_capacity(estimated_voxel_count * mem::size_of::<Voxel>());
+        let mut voxels = Vec::with_capacity(estimated_voxel_count);
 
         let arena = ArenaPool::get_arena_for_capacity(generator.total_buffer_size());
         let mut generation_buffers = generator.create_buffers_in(&arena);
@@ -346,9 +346,8 @@ impl ChunkedVoxelObject {
         voxels
     }
 
-    #[cfg(feature = "rayon")]
     fn generate_voxels_for_chunks_in_parallel<G>(
-        thread_pool: &impact_thread::rayon::RayonThreadPool,
+        thread_pool: &DynamicThreadPool,
         generator: &G,
         chunk_counts: [usize; 3],
         chunks: &mut [VoxelChunk],
@@ -356,78 +355,144 @@ impl ChunkedVoxelObject {
     where
         G: ChunkedVoxelGenerator + Sync,
     {
-        use rayon::{
-            iter::{IndexedParallelIterator, ParallelExtend, ParallelIterator},
-            slice::ParallelSliceMut,
-        };
-
         assert_eq!(chunks.len(), chunk_counts.iter().product::<usize>());
 
         if chunks.is_empty() {
             return Vec::new();
         }
 
-        let num_threads = thread_pool.num_threads().get();
-        let chunks_per_thread = chunks.len().div_ceil(num_threads);
+        let num_threads = thread_pool.n_workers().get();
+        let num_chunks = chunks.len();
+        let chunks_per_thread = num_chunks.div_ceil(num_threads);
+        // Number of slices `chunks.chunks_mut(chunks_per_thread)` will produce
+        let num_tasks = num_chunks / chunks_per_thread;
 
-        let mut voxels_per_thread = Vec::with_capacity(num_threads);
+        let mut voxels = Vec::new();
 
-        thread_pool.pool().install(|| {
-            voxels_per_thread.par_extend(
-                chunks
-                    // This can never produce more than `num_threads` iterations
-                    .par_chunks_mut(chunks_per_thread)
-                    .enumerate()
-                    .map(|(group_idx, chunks)| {
-                        let estimated_voxel_count = (chunks.len() * CHUNK_VOXEL_COUNT) / 4;
+        thread_pool
+            .with_scope(|scope| {
+                // Create channel for workers to send generated voxel counts to
+                // main thread
+                let (count_sender, count_receiver) = channel::bounded(num_tasks);
 
-                        let arena = ArenaPool::get_arena_for_capacity(
-                            estimated_voxel_count * mem::size_of::<Voxel>()
-                                + generator.total_buffer_size(),
-                        );
+                // Also create channels for the main thread to send mutable
+                // slices of the final `voxels` vector to the workers. We need a
+                // separate channel per worker.
+                let mut slice_senders =
+                    TinyVec::<[Option<Sender<&mut [Voxel]>>; 32]>::with_capacity(num_tasks);
+                let mut slice_receivers = TinyVec::<[_; 32]>::with_capacity(num_tasks);
 
-                        // Avoid pre-allocating in case we are in a region with all empty chunks
-                        let mut voxels = Vec::new();
+                for _ in 0..num_tasks {
+                    let (slice_sender, slice_receiver) = channel::bounded(1);
+                    slice_senders.push(Some(slice_sender));
+                    slice_receivers.push(Some(slice_receiver));
+                }
 
-                        let mut generation_buffers = generator.create_buffers_in(&arena);
+                scope
+                    .execute(
+                        chunks
+                            .chunks_mut(chunks_per_thread)
+                            .zip(slice_receivers)
+                            .enumerate()
+                            .map(|(task_idx, (chunks, slice_receiver))| {
+                                let count_sender = count_sender.clone();
+                                DynamicTask::new(move |_| {
+                                    // Assume roughly one quarter of the chunks
+                                    // will be non-uniform. This could be way
+                                    // off locally even if it is true on
+                                    // average, but since we are re-using arena
+                                    // memory this isn't that important to get
+                                    // right.
+                                    let estimated_voxel_count =
+                                        (chunks.len() * CHUNK_VOXEL_COUNT) / 4;
 
-                        for (local_chunk_idx, chunk) in chunks.iter_mut().enumerate() {
-                            let chunk_idx = group_idx * chunks_per_thread + local_chunk_idx;
+                                    let arena = ArenaPool::get_arena_for_capacity(
+                                        estimated_voxel_count * mem::size_of::<Voxel>()
+                                            + generator.total_buffer_size(),
+                                    );
 
-                            let origin = chunk_indices_from_linear_idx(&chunk_counts, chunk_idx)
-                                .map(|i| i * CHUNK_SIZE);
+                                    let mut voxels =
+                                        AVec::with_capacity_in(estimated_voxel_count, &arena);
 
-                            let old_voxel_count = voxels.len();
-                            let new_voxel_count = old_voxel_count + CHUNK_VOXEL_COUNT;
+                                    let mut generation_buffers =
+                                        generator.create_buffers_in(&arena);
 
-                            voxels.resize(new_voxel_count, Voxel::zeroed());
+                                    for (local_chunk_idx, chunk) in chunks.iter_mut().enumerate() {
+                                        let chunk_idx =
+                                            task_idx * chunks_per_thread + local_chunk_idx;
 
-                            let chunk_voxels = &mut voxels[old_voxel_count..];
+                                        let origin =
+                                            chunk_indices_from_linear_idx(&chunk_counts, chunk_idx)
+                                                .map(|i| i * CHUNK_SIZE);
 
-                            generator.generate_chunk(
-                                &mut generation_buffers,
-                                chunk_voxels,
-                                &origin,
-                            );
+                                        let old_voxel_count = voxels.len();
+                                        let new_voxel_count = old_voxel_count + CHUNK_VOXEL_COUNT;
 
-                            *chunk = VoxelChunk::for_voxels(chunk_voxels);
+                                        voxels.resize(new_voxel_count, Voxel::zeroed());
 
-                            if matches!(chunk, VoxelChunk::Empty | VoxelChunk::Uniform(_)) {
-                                voxels.truncate(old_voxel_count);
-                            }
-                        }
+                                        let chunk_voxels = &mut voxels[old_voxel_count..];
 
-                        voxels
-                    }),
-            );
-        });
+                                        generator.generate_chunk(
+                                            &mut generation_buffers,
+                                            chunk_voxels,
+                                            &origin,
+                                        );
 
-        let mut voxels =
-            Vec::with_capacity(voxels_per_thread.iter().map(|v| v.len()).sum::<usize>());
+                                        *chunk = VoxelChunk::for_voxels(chunk_voxels);
 
-        for mut v in voxels_per_thread {
-            voxels.append(&mut v);
-        }
+                                        // If the chunk turned out to be empty
+                                        // or uniform, we must truncate away the
+                                        // generated voxels
+                                        if matches!(
+                                            chunk,
+                                            VoxelChunk::Empty | VoxelChunk::Uniform(_)
+                                        ) {
+                                            voxels.truncate(old_voxel_count);
+                                        }
+                                    }
+
+                                    // Send the final number of voxels generated
+                                    // by this task to the main thread, along
+                                    // with the identifying task index
+                                    count_sender.send((task_idx, voxels.len())).unwrap();
+
+                                    // Wait for the main thread to send back the
+                                    // appropriate slice (not arena-allocated)
+                                    // to write the generated voxels into
+                                    let slice = slice_receiver.unwrap().recv().unwrap();
+                                    slice.copy_from_slice(&voxels);
+                                })
+                            }),
+                    )
+                    .unwrap();
+
+                // Generated voxel counts by task index
+                let mut counts = TinyVec::<[usize; 32]>::new();
+                counts.resize(num_tasks, 0);
+
+                let mut total_voxel_count = 0;
+
+                for _ in 0..num_tasks {
+                    let (task_idx, voxel_count_for_task) = count_receiver.recv().unwrap();
+                    counts[task_idx] = voxel_count_for_task;
+                    total_voxel_count += voxel_count_for_task;
+                }
+
+                // Resize the final voxel vector to the correct size, which we
+                // now know exactly
+                voxels.resize(total_voxel_count, Voxel::zeroed());
+
+                // Split up the voxel slice into the appropriate segments and
+                // send to the correct workers so they can write their results
+                // into them
+                let mut remaining_voxels = voxels.as_mut_slice();
+                for (count, slice_sender) in counts.into_iter().zip(slice_senders) {
+                    let (head, tail) = remaining_voxels.split_at_mut(count);
+                    remaining_voxels = tail;
+                    slice_sender.unwrap().send(head).unwrap();
+                }
+            })
+            .unwrap();
 
         voxels
     }
