@@ -60,10 +60,25 @@ pub struct ThreadPool<M> {
     workers: Vec<Worker>,
 }
 
-#[allow(missing_debug_implementations, clippy::type_complexity)]
-pub struct DynamicTask(Box<dyn FnOnce(&ThreadPoolChannel<DynamicTask>) + Send>);
+/// A [`ThreadPool`] where the message type `M` is a boxed closure, enabling
+/// tasks to be dynamically specified at execution time rather than at pool
+/// construction time.
+pub type DynamicThreadPool = ThreadPool<DynamicTask<'static>>;
 
-pub type DynamicThreadPool = ThreadPool<DynamicTask>;
+/// A boxed closure representing a [`DynamicThreadPool`] task with lifetime
+/// `'t`. Tasks executed directly on the `DynamicThreadPool` must have the
+/// static lifetime, but shorter lifetimes are allowed for tasks executed
+/// through a [`ThreadPoolScope`].
+#[allow(missing_debug_implementations, clippy::type_complexity)]
+pub struct DynamicTask<'t>(Box<dyn FnOnce(&ThreadPoolChannel<DynamicTask<'t>>) + Send + 't>);
+
+/// A scope of execution for a [`DynamicThreadPool`], obtainable by calling
+/// [`DynamicThreadPool::with_scope`]. Tasks executed through the scope can have
+/// any lifetime longer than that of the scope.
+#[allow(missing_debug_implementations)]
+pub struct ThreadPoolScope<'s> {
+    pool: &'s DynamicThreadPool,
+}
 
 pub type ThreadPoolResult = Result<(), ThreadPoolError>;
 
@@ -171,7 +186,14 @@ impl<M> ThreadPool<M> {
     /// return until all the given task executions as well as all additional
     /// executions initiated by those tasks have been completed. To avoid
     /// blocking the calling thread, use [`execute`](Self::execute) instead.
-    pub fn execute_and_wait(&self, messages: impl Iterator<Item = M>) -> ThreadPoolResult {
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The queue is full or has become disconnected.
+    /// - The pool is currently shutting down.
+    /// - Any task in the thread pool has panicked since the pool was created or
+    ///   [`Self::reset_panics`] was called.
+    pub fn execute_and_wait(&self, messages: impl IntoIterator<Item = M>) -> ThreadPoolResult {
         self.execute(messages)?;
         self.wait_until_done()
     }
@@ -182,7 +204,12 @@ impl<M> ThreadPool<M> {
     /// until all tasks (including the executions initiated by the given tasks
     /// executions) have been completed and obtain any errors produced by the
     /// executed tasks, call [`wait_until_done`](Self::wait_until_done).
-    pub fn execute(&self, messages: impl Iterator<Item = M>) -> ThreadPoolResult {
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The queue is full or has become disconnected.
+    /// - The pool is currently shutting down.
+    pub fn execute(&self, messages: impl IntoIterator<Item = M>) -> ThreadPoolResult {
         for message in messages {
             self.communicator
                 .channel()
@@ -195,23 +222,106 @@ impl<M> ThreadPool<M> {
     /// have been performed.
     ///
     /// # Errors
-    /// Returns an error if any of the tasks panicked.
+    /// Returns an error if any task in the thread pool has panicked since the
+    /// pool was created or [`Self::reset_panics`] was called.
     pub fn wait_until_done(&self) -> ThreadPoolResult {
         let execution_progress = self.communicator.execution_progress();
 
         execution_progress.wait_for_no_pending_tasks();
 
-        if execution_progress.take_panic_count() > 0 {
+        if execution_progress.panic_count() > 0 {
             Err(ThreadPoolError::WorkerPanic)
         } else {
             Ok(())
         }
     }
+
+    /// Forgets any panics registered for executed tasks.
+    pub fn reset_panics(&self) {
+        self.communicator.execution_progress().reset_panic_count();
+    }
 }
 
 impl DynamicThreadPool {
+    /// Creates a new [`DynamicThreadPool`] with the given number of workers and
+    /// capacity for the communication channel.
     pub fn new_dynamic(n_workers: NonZeroUsize, queue_capacity: NonZeroUsize) -> Self {
         Self::new(n_workers, queue_capacity, &|channel, task| task.0(channel))
+    }
+
+    /// Calls the given closure with a scope that can be used for executing
+    /// tasks that borrow values with non-static lifetimes as long as their
+    /// lifetimes exceed that of the scope.
+    ///
+    /// Once the closure returns, the main thread is blocked until there are no
+    /// more tasks to execute.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use impact_thread::pool::{DynamicTask, ThreadPool};
+    /// # use std::num::NonZeroUsize;
+    /// #
+    /// let n_workers = 2;
+    /// let queue_capacity = 256;
+    ///
+    /// let pool = ThreadPool::new_dynamic(
+    ///     NonZeroUsize::new(n_workers).unwrap(),
+    ///     NonZeroUsize::new(queue_capacity).unwrap(),
+    /// );
+    ///
+    /// let mut data = vec![0, 0, 0, 0];
+    ///
+    /// pool.with_scope(|scope| {
+    ///     // The tasks borrow from the local `data` variable,
+    ///     // which is okay because it outlives the scope
+    ///     let tasks = data.iter_mut().map(|value| {
+    ///         DynamicTask::new(|_| {
+    ///             *value += 1;
+    ///         })
+    ///     });
+    ///
+    ///     scope.execute(tasks).unwrap();
+    /// })
+    /// .unwrap();
+    ///
+    /// // All values should have been incremented
+    /// assert_eq!(data, vec![1, 1, 1, 1]);
+    /// ```
+    ///
+    /// # Returns
+    /// The return value of the closure, or an error if any task in the thread
+    /// pool has panicked since the pool was created or [`Self::reset_panics`]
+    /// was called.
+    pub fn with_scope<'p, 's, F, R>(&'p self, f: F) -> Result<R, ThreadPoolError>
+    where
+        F: FnOnce(ThreadPoolScope<'s>) -> R,
+        'p: 's,
+    {
+        // Create guard that will wait for no pending tasks when dropped
+        struct ScopeGuard<'a>(&'a DynamicThreadPool);
+
+        impl<'a> Drop for ScopeGuard<'a> {
+            fn drop(&mut self) {
+                self.0
+                    .communicator
+                    .execution_progress()
+                    .wait_for_no_pending_tasks();
+            }
+        }
+
+        let result = {
+            // The guard will drop even if `f` panics, ensuring that we always wait
+            // for completion
+            let _guard = ScopeGuard(self);
+
+            f(ThreadPoolScope::new(self))
+        };
+
+        if self.communicator.execution_progress().panic_count() > 0 {
+            Err(ThreadPoolError::WorkerPanic)
+        } else {
+            Ok(result)
+        }
     }
 }
 
@@ -241,12 +351,53 @@ impl<M> Drop for ThreadPool<M> {
     }
 }
 
-impl DynamicTask {
+impl<'t> DynamicTask<'t> {
+    /// Creates a new dynamic task represented by the given closure.
     pub fn new<F>(f: F) -> Self
     where
-        F: FnOnce(&ThreadPoolChannel<Self>) + Send + 'static,
+        F: FnOnce(&ThreadPoolChannel<DynamicTask<'t>>) + Send + 't,
     {
         Self(Box::new(f))
+    }
+}
+
+impl<'t> fmt::Debug for DynamicTask<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DynamicTask").finish()
+    }
+}
+
+impl<'s> ThreadPoolScope<'s> {
+    fn new(pool: &'s DynamicThreadPool) -> Self {
+        Self { pool }
+    }
+
+    /// Instructs worker threads in the pool to execute the given tasks. This
+    /// function returns as soon as all the tasks have been scheduled for
+    /// execution. The tasks can have any lifetime as long as they outlive the
+    /// scope.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The queue is full or has become disconnected.
+    /// - The pool is currently shutting down.
+    pub fn execute<'t>(&self, tasks: impl IntoIterator<Item = DynamicTask<'t>>) -> ThreadPoolResult
+    where
+        't: 's,
+    {
+        self.pool.execute(tasks.into_iter().map(|task|
+            // SAFETY: The lifetime constraint in this method ensures that
+            // values borrowed by the task will outlive the scope. Since the
+            // only way to obtain a `ThreadPoolScope` is through
+            // `DynamicThreadPool::with_scope`, which calls `wait_until_done` at
+            // the end of the scope's lifetime, once that lifetime ends this
+            // task must have been executed. Once a dynamic task has been
+            // executed it will not be stored anywhere in memory (the pool only
+            // stores pending tasks in the channel, and there is no way for a
+            // task to receive another task from the channel and store it), so
+            // any captured references in the task will never be dereferenced by
+            // a worker thread again.
+            unsafe { std::mem::transmute::<DynamicTask<'t>, DynamicTask<'static>>(task) }))
     }
 }
 
@@ -506,8 +657,12 @@ impl ExecutionProgress {
         self.panic_count.fetch_add(1, Ordering::AcqRel);
     }
 
-    fn take_panic_count(&self) -> usize {
-        self.panic_count.swap(0, Ordering::AcqRel)
+    fn panic_count(&self) -> usize {
+        self.panic_count.load(Ordering::Acquire)
+    }
+
+    fn reset_panic_count(&self) {
+        self.panic_count.store(0, Ordering::Release);
     }
 }
 
@@ -693,5 +848,63 @@ mod tests {
         pool.execute_and_wait(std::iter::once((Arc::clone(&counter), true)))
             .unwrap();
         assert_eq!(*counter.lock(), 2); // Original task + nested task
+    }
+
+    #[test]
+    fn scoped_execution_with_borrowed_data_works() {
+        let n_workers = 2;
+        let pool = ThreadPool::new_dynamic(
+            NonZeroUsize::new(n_workers).unwrap(),
+            NonZeroUsize::new(10).unwrap(),
+        );
+
+        let mut data = vec![0, 0, 0, 0];
+
+        pool.with_scope(|scope| {
+            let tasks = data.iter_mut().map(|value| {
+                DynamicTask::new(|_| {
+                    *value += 1;
+                })
+            });
+
+            scope.execute(tasks).unwrap();
+        })
+        .unwrap();
+
+        // All values should have been incremented
+        assert_eq!(data, vec![1, 1, 1, 1]);
+    }
+
+    #[test]
+    fn scoped_execution_with_nested_tasks_works() {
+        let n_workers = 2;
+        let pool = ThreadPool::new_dynamic(
+            NonZeroUsize::new(n_workers).unwrap(),
+            NonZeroUsize::new(10).unwrap(),
+        );
+
+        let mut vec1 = Vec::new();
+        let mut vec2 = Vec::new();
+
+        pool.with_scope(|scope| {
+            // First task spawns a nested task
+            let task = DynamicTask::new(|channel| {
+                vec1.push(0);
+
+                // Spawn a nested task
+                let nested_task = DynamicTask::new(|_| {
+                    vec2.push(1);
+                });
+
+                channel.send_execute_instruction(nested_task).unwrap();
+            });
+
+            scope.execute(std::iter::once(task)).unwrap();
+        })
+        .unwrap();
+
+        // First counter incremented by main task, second by nested task
+        assert_eq!(vec1, [0]);
+        assert_eq!(vec2, [1]);
     }
 }
