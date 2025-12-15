@@ -3,7 +3,7 @@
 use super::benchmark_data_path;
 use impact_alloc::{Global, arena::ArenaPool};
 use impact_profiling::benchmark::Benchmarker;
-use impact_thread::rayon::RayonThreadPool;
+use impact_thread::pool::ThreadPool;
 use impact_voxel::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject},
     generation::{
@@ -161,7 +161,10 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
 
-    let thread_pool = RayonThreadPool::new(NonZeroUsize::new(16).unwrap());
+    let thread_pool = ThreadPool::new_dynamic(
+        NonZeroUsize::new(8).unwrap(),
+        NonZeroUsize::new(256).unwrap(),
+    );
 
     benchmarker.benchmark(&mut || {
         black_box(

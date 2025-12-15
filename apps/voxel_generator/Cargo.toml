@@ -119,8 +119,7 @@ impact_containers = { path = "../../engine/crates/impact_containers", features =
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_io = { path = "../../engine/crates/impact_io", features = ["ron"] }
 impact_log = { path = "../../engine/crates/impact_log" }
-impact_thread = { path = "../../engine/crates/impact_thread", features = ["rayon"] }
-impact_voxel = { path = "../../engine/crates/impact_voxel", features = ["rayon"] }
+impact_voxel = { path = "../../engine/crates/impact_voxel" }
 inventory = "0.3"
 libloading = "0.8"
 parking_lot = "0.12"

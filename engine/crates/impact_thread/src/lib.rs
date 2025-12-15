@@ -2,5 +2,4 @@
 
 pub mod pool;
 
-#[cfg(feature = "rayon")]
-pub mod rayon;
+pub use crossbeam_channel as channel;

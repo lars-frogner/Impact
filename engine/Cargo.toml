@@ -52,7 +52,6 @@ num-traits = "0.2"
 parking_lot = "0.12"
 pastey = "0.1"
 rand = "0.9"
-rayon = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.9"
 tinyvec = { version = "1.9", features = ["alloc"] }
@@ -190,7 +189,7 @@ cli = ["dep:clap"]
 criterion = ["benchmark", "impact_profiling/criterion"]
 egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
 ply = ["impact_mesh/ply"]
-benchmark = ["impact_voxel/rayon"]
+benchmark = []
 obj = ["impact_mesh/obj"]
 unchecked = ["impact_voxel/unchecked"]
 tracy = ["impact_profiling/tracy"]

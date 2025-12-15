@@ -44,6 +44,8 @@ pub use impact_mesh;
 pub use impact_model;
 pub use impact_rendering;
 pub use impact_scene;
+pub use impact_thread;
+pub use impact_voxel;
 pub use roc_integration;
 
 #[cfg(feature = "egui")]
