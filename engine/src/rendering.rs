@@ -32,8 +32,7 @@ use impact_rendering::{
     surface::RenderingSurface,
 };
 use impact_scene::{camera::CameraManager, model::ModelInstanceManager};
-use impact_scheduling::Task;
-use impact_thread::ThreadPoolTaskErrors;
+use impact_scheduling::{Task, TaskErrors};
 use impact_voxel::VoxelObjectManager;
 use parking_lot::RwLock;
 use render_command::RenderCommandManager;
@@ -535,7 +534,7 @@ impl RenderingSystem {
 
     /// Identifies rendering-related errors that need special handling in the
     /// given set of task errors and handles them.
-    pub fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
+    pub fn handle_task_errors(&self, task_errors: &mut TaskErrors) {
         if let Some(render_error) = task_errors.get_error_of(RenderToSurface.id())
             && let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref()
         {

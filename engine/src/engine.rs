@@ -36,8 +36,8 @@ use impact_ecs::{
 use impact_gpu::device::GraphicsDevice;
 use impact_light::LightConfig;
 use impact_scene::{camera::CameraContext, model::ModelInstanceManager};
+use impact_scheduling::TaskErrors;
 use impact_texture::{SamplerRegistry, TextureRegistry};
-use impact_thread::ThreadPoolTaskErrors;
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -524,7 +524,7 @@ impl Engine {
 
     /// Identifies errors that need special handling in the given set of task
     /// errors and handles them.
-    pub(crate) fn handle_task_errors(&self, task_errors: &mut ThreadPoolTaskErrors) {
+    pub(crate) fn handle_task_errors(&self, task_errors: &mut TaskErrors) {
         self.renderer.oread().handle_task_errors(task_errors);
     }
 }

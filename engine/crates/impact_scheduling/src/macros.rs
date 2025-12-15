@@ -80,21 +80,21 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: ::impact_thread::TaskID = ::impact_thread::TaskID::from_str(stringify!($name));
+            $($pub)? const TASK_ID: ::impact_scheduling::TaskID = ::impact_scheduling::TaskID::from_str(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
-            const DEPENDENCY_IDS: [::impact_thread::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
+            const DEPENDENCY_IDS: [::impact_scheduling::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
 
             const N_EXECUTION_TAGS: usize = $crate::count_ident_args!($($tag),*);
             const EXECUTION_TAGS: [$crate::ExecutionTag; Self::N_EXECUTION_TAGS] = [$($tag::EXECUTION_TAG),*];
         }
 
         impl $crate::Task<$state_ty> for $name {
-            fn id(&self) -> ::impact_thread::TaskID {
+            fn id(&self) -> ::impact_scheduling::TaskID {
                 Self::TASK_ID
             }
 
-            fn depends_on(&self) -> &[::impact_thread::TaskID] {
+            fn depends_on(&self) -> &[::impact_scheduling::TaskID] {
                 &Self::DEPENDENCY_IDS
             }
 
