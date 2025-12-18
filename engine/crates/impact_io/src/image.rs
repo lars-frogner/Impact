@@ -133,7 +133,7 @@ pub fn read_image_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
     // Detect format based on magic bytes
     if bytes.starts_with(PNG_MAGIC_BYTES) {
         #[cfg(feature = "png")]
-        return read_png_metadata_from_reader(bytes);
+        return read_png_metadata_from_reader(std::io::Cursor::new(bytes));
 
         #[cfg(not(feature = "png"))]
         bail!("enable the `png` feature to load PNG images");
@@ -155,7 +155,7 @@ pub fn load_image_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Ima
     // Detect format based on magic bytes
     if bytes.starts_with(PNG_MAGIC_BYTES) {
         #[cfg(feature = "png")]
-        return load_png_from_reader(alloc, bytes);
+        return load_png_from_reader(alloc, std::io::Cursor::new(bytes));
 
         #[cfg(not(feature = "png"))]
         bail!("enable the `png` feature to load PNG images");
@@ -172,7 +172,10 @@ pub fn load_image_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Ima
 
 /// Reads the metadata of a PNG image from a reader.
 #[cfg(feature = "png")]
-fn read_png_metadata_from_reader(reader: impl std::io::Read) -> Result<ImageMetadata> {
+fn read_png_metadata_from_reader<R>(reader: R) -> Result<ImageMetadata>
+where
+    R: std::io::BufRead + std::io::Seek,
+{
     let decoder = png::Decoder::new(reader);
     let reader = decoder.read_info().context("Failed to read PNG info")?;
     let info = reader.info();
@@ -194,12 +197,20 @@ fn read_png_metadata_from_reader(reader: impl std::io::Read) -> Result<ImageMeta
 
 /// Loads a PNG image from a reader.
 #[cfg(feature = "png")]
-fn load_png_from_reader<A: Allocator>(alloc: A, reader: impl std::io::Read) -> Result<Image<A>> {
+fn load_png_from_reader<A: Allocator, R>(alloc: A, reader: R) -> Result<Image<A>>
+where
+    R: std::io::BufRead + std::io::Seek,
+{
     let decoder = png::Decoder::new(reader);
     let mut reader = decoder.read_info().context("Failed to read PNG info")?;
 
     let mut buf = AVec::new_in(alloc);
-    buf.resize(reader.output_buffer_size(), 0);
+    buf.resize(
+        reader
+            .output_buffer_size()
+            .ok_or_else(|| anyhow::anyhow!("PNG overflows available memory"))?,
+        0,
+    );
 
     let info = reader
         .next_frame(&mut buf)
@@ -234,14 +245,14 @@ fn load_png_from_reader<A: Allocator>(alloc: A, reader: impl std::io::Read) -> R
 /// Reads the metadata of a JPEG image from a byte buffer.
 #[cfg(feature = "jpeg")]
 fn read_jpeg_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
-    use zune_jpeg::zune_core::colorspace::ColorSpace;
+    use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace};
 
-    let mut decoder = zune_jpeg::JpegDecoder::new(bytes);
+    let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(bytes));
     decoder
         .decode_headers()
         .context("Failed to decode JPEG headers")?;
 
-    let colorspace = decoder.get_output_colorspace().unwrap();
+    let colorspace = decoder.output_colorspace().unwrap();
 
     let pixel_format = match colorspace {
         // Image data is converted to RGBA8 when read
@@ -263,9 +274,9 @@ fn read_jpeg_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
 /// Loads a JPEG image from a byte buffer.
 #[cfg(feature = "jpeg")]
 fn load_jpeg_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>> {
-    use zune_jpeg::zune_core::colorspace::ColorSpace;
+    use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace};
 
-    let mut decoder = zune_jpeg::JpegDecoder::new(bytes);
+    let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(bytes));
     decoder
         .decode_headers()
         .context("Failed to decode JPEG headers")?;
@@ -277,7 +288,7 @@ fn load_jpeg_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>
         .decode_into(&mut pixels)
         .context("Failed to decode JPEG data")?;
 
-    let colorspace = decoder.get_output_colorspace().unwrap();
+    let colorspace = decoder.output_colorspace().unwrap();
 
     let (data, format) = match colorspace {
         ColorSpace::RGB => {

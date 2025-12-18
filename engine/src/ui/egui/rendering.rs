@@ -26,9 +26,12 @@ impl EguiRenderer {
         let renderer = egui_wgpu::Renderer::new(
             graphics_device.device(),
             rendering_surface.texture_format(),
-            None,
-            1,
-            dithering,
+            egui_wgpu::RendererOptions {
+                msaa_samples: 1,
+                depth_stencil_format: None,
+                dithering,
+                ..Default::default()
+            },
         );
         Self { renderer }
     }
@@ -93,6 +96,7 @@ impl EguiRenderer {
     ) -> wgpu::RenderPassColorAttachment<'_> {
         wgpu::RenderPassColorAttachment {
             view: surface_texture_view,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,

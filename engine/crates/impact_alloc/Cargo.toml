@@ -9,7 +9,7 @@ license = { workspace = true }
 serde = ["allocator-api2/serde"]
 
 [dependencies]
-allocator-api2 = "0.2.8"
+allocator-api2 = "0.2"
 bumpalo = { version = "3.19", features = ["allocator-api2"] }
 
 [lints]

@@ -19,7 +19,7 @@ impl TimeOverlay {
         let label1 = format!("{simulation_time:.1} s");
         let label2 = format!("{fps:.0} FPS");
 
-        let (galley1, galley2) = ctx.fonts(|f| {
+        let (galley1, galley2) = ctx.fonts_mut(|f| {
             (
                 f.layout_no_wrap(label1.clone(), font_id.clone(), Default::default()),
                 f.layout_no_wrap(label2.clone(), font_id.clone(), Default::default()),

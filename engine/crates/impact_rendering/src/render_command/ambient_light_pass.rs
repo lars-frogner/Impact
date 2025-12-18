@@ -197,6 +197,7 @@ impl AmbientLightPass {
                 Some(wgpu::RenderPassColorAttachment {
                     view: texture.base_texture_view(),
                     resolve_target: None,
+                    depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: wgpu::StoreOp::Store,

@@ -246,6 +246,7 @@ impl<A: Allocator> Mipmapper<A> {
                         // Render to the view for the current mip level
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: texture_view,
+                            depth_slice: None,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),

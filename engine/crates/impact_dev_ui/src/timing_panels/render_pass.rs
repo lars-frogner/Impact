@@ -19,7 +19,7 @@ impl RenderPassTimingPanel {
         let body_font = TextStyle::Body.resolve(&style);
         let mono_font = TextStyle::Monospace.resolve(&style);
 
-        let mono_char_width = ctx.fonts(|fonts| fonts.glyph_width(&mono_font, '0'));
+        let mono_char_width = ctx.fonts_mut(|fonts| fonts.glyph_width(&mono_font, '0'));
         let timing_col_width = (NUM_TIMING_COL_CHARS as f32 * mono_char_width) + 2.0;
 
         let default_panel_width = timing_col_width + NUM_LABEL_COL_CHARS as f32 * body_font.size;

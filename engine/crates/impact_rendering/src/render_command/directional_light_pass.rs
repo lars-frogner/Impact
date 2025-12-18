@@ -283,6 +283,7 @@ impl DirectionalLightPass {
             .render_attachment_texture(self.output_render_attachment_quantity);
         wgpu::RenderPassColorAttachment {
             view: texture.base_texture_view(),
+                depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Load,

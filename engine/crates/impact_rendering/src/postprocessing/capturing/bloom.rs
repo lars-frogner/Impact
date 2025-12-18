@@ -330,6 +330,7 @@ impl BloomRenderCommands {
                 view: blurred_luminance_texture
                     .texture_view(output_mip_level)
                     .unwrap(),
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -424,6 +425,7 @@ impl BloomRenderCommands {
                 view: blurred_luminance_texture
                     .texture_view(output_mip_level)
                     .unwrap(),
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -490,6 +492,7 @@ impl BloomRenderCommands {
 
         let color_attachment = wgpu::RenderPassColorAttachment {
             view: blurred_luminance_texture.base_texture_view(),
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
