@@ -104,16 +104,19 @@ license = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["x11"]
 checked_lock_order = ["impact/checked_lock_order"]
 roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 tracy = ["impact/tracy"]
+wayland = ["impact/wayland"]
+x11 = ["impact/x11"]
 
 [dependencies]
 anyhow = "1.0"
 bitflags = "2.9"
 env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
-impact = { path = "../../engine", features = ["window", "egui"] }
+impact = { path = "../../engine", features = ["egui"] }
 impact_containers = { path = "../../engine/crates/impact_containers", features = ["serde"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_io = { path = "../../engine/crates/impact_io", features = ["ron"] }

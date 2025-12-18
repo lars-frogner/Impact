@@ -152,7 +152,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-default = ["window"]
+default = ["x11"]
 arbitrary = [
     "dep:arbitrary",
     "impact_controller/arbitrary",
@@ -192,6 +192,14 @@ obj = ["impact_mesh/obj"]
 unchecked = ["impact_voxel/unchecked"]
 tracy = ["impact_profiling/tracy"]
 window = ["dep:winit", "impact_rendering/window"]
+wayland = [
+    "window",
+    "winit/wayland",
+    "winit/wayland-dlopen",
+    "winit/wayland-csd-adwaita",
+    "egui-winit/wayland",
+]
+x11 = ["window", "winit/x11", "egui-winit/x11"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -204,10 +212,7 @@ egui = { version = "0.33", optional = true }
 egui-wgpu = { version = "0.33", optional = true, default-features = false, features = [
     "macos-window-resize-jitter-fix",
 ] }
-egui-winit = { version = "0.33", optional = true, default-features = false, features = [
-    "x11",
-    "wayland",
-] }
+egui-winit = { version = "0.33", optional = true, default-features = false }
 impact_alloc = { path = "crates/impact_alloc" }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }
@@ -255,7 +260,7 @@ regex = "1.12"
 roc_integration = { path = "../roc_integration" }
 serde = { workspace = true }
 tinyvec = { workspace = true }
-winit = { version = "0.30", features = ["serde"], optional = true }
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "serde"], optional = true }
 
 [profile.dev.package."regex"]
 opt-level = 3

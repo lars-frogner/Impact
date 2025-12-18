@@ -104,6 +104,7 @@ license = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [features]
+default = ["x11"]
 checked_lock_order = ["impact/checked_lock_order"]
 fuzzing = [
     "dep:arbitrary",
@@ -113,13 +114,15 @@ fuzzing = [
 ]
 roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 tracy = ["impact/tracy"]
+wayland = ["impact/wayland"]
+x11 = ["impact/x11"]
 
 [dependencies]
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 env_logger = "0.11"
 ffi_utils = { path = "../../ffi_utils" }
-impact = { path = "../../engine", features = ["window", "egui", "obj", "ply"] }
+impact = { path = "../../engine", features = ["egui", "obj", "ply"] }
 impact_log = { path = "../../engine/crates/impact_log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 inventory = "0.3"
