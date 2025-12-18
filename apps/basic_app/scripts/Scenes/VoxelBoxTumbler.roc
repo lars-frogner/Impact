@@ -157,7 +157,7 @@ ambient_light =
     |> Comp.AmbientEmission.add_new(Vector3.same(20000))
 
 create_voxel_boxes! = |voxel_extent, box_size, (nx, ny, nz), center|
-    box_extent = Num.to_f64(voxel_extent * box_size)
+    box_extent = voxel_extent * box_size
     half_extent_x = box_extent * Num.to_frac(nx)
     half_extent_y = box_extent * Num.to_frac(ny)
     half_extent_z = box_extent * Num.to_frac(nz)

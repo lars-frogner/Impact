@@ -3,7 +3,6 @@
 use crate::{
     collision::{CollidableID, collidable::plane::PlaneCollidable},
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
-    fph,
     material::ContactResponseParameters,
 };
 use impact_geometry::{Plane, Sphere};
@@ -11,19 +10,19 @@ use nalgebra::{Isometry3, UnitVector3, Vector3};
 
 #[derive(Clone, Debug)]
 pub struct SphereCollidable {
-    sphere: Sphere<fph>,
+    sphere: Sphere<f32>,
     response_params: ContactResponseParameters,
 }
 
 impl SphereCollidable {
-    pub fn new(sphere: Sphere<fph>, response_params: ContactResponseParameters) -> Self {
+    pub fn new(sphere: Sphere<f32>, response_params: ContactResponseParameters) -> Self {
         Self {
             sphere,
             response_params,
         }
     }
 
-    pub fn sphere(&self) -> &Sphere<fph> {
+    pub fn sphere(&self) -> &Sphere<f32> {
         &self.sphere
     }
 
@@ -31,7 +30,7 @@ impl SphereCollidable {
         &self.response_params
     }
 
-    pub fn transformed(&self, transform: &Isometry3<fph>) -> Self {
+    pub fn transformed(&self, transform: &Isometry3<f32>) -> Self {
         Self {
             sphere: self.sphere.translated_and_rotated(transform),
             response_params: self.response_params,
@@ -99,8 +98,8 @@ pub fn generate_sphere_plane_contact_manifold(
 }
 
 pub fn determine_sphere_sphere_contact_geometry(
-    sphere_a: &Sphere<fph>,
-    sphere_b: &Sphere<fph>,
+    sphere_a: &Sphere<f32>,
+    sphere_b: &Sphere<f32>,
 ) -> Option<ContactGeometry> {
     let center_displacement = sphere_a.center() - sphere_b.center();
     let squared_center_distance = center_displacement.norm_squared();
@@ -120,7 +119,7 @@ pub fn determine_sphere_sphere_contact_geometry(
 
     let position = sphere_b.center() + surface_normal.scale(sphere_b.radius());
 
-    let penetration_depth = fph::max(
+    let penetration_depth = f32::max(
         0.0,
         (sphere_a.radius() + sphere_b.radius()) - center_distance,
     );
@@ -133,8 +132,8 @@ pub fn determine_sphere_sphere_contact_geometry(
 }
 
 pub fn determine_sphere_plane_contact_geometry(
-    sphere: &Sphere<fph>,
-    plane: &Plane<fph>,
+    sphere: &Sphere<f32>,
+    plane: &Plane<f32>,
 ) -> Option<ContactGeometry> {
     let signed_distance = plane.compute_signed_distance(sphere.center());
     let penetration_depth = sphere.radius() - signed_distance;

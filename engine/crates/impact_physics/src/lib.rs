@@ -25,10 +25,6 @@ use force::ForceGeneratorManager;
 use medium::UniformMedium;
 use rigid_body::RigidBodyManager;
 
-/// Floating point type used for physics simulation.
-#[allow(non_camel_case_types)]
-pub type fph = f64;
-
 /// Advances the physics simulation by one time step.
 pub fn perform_physics_step<C: Collidable>(
     rigid_body_manager: &mut RigidBodyManager,
@@ -39,8 +35,8 @@ pub fn perform_physics_step<C: Collidable>(
     collision_world: &mut CollisionWorld<C>,
     collidable_context: &C::Context,
     medium: &UniformMedium,
-    current_simulation_time: fph,
-    step_duration: fph,
+    current_simulation_time: f32,
+    step_duration: f32,
 ) {
     let new_simulation_time = current_simulation_time + step_duration;
 

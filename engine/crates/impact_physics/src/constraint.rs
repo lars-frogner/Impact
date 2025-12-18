@@ -7,7 +7,6 @@ pub mod spherical_joint;
 use crate::{
     anchor::{AnchorManager, TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
     collision::{Collidable, Collision, CollisionWorld},
-    fph,
     quantities::{Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager, TypedRigidBodyID},
 };
@@ -82,7 +81,7 @@ trait PreparedTwoBodyConstraint {
         + Zero
         + Add<Output = Self::Impulses>
         + Sub<Output = Self::Impulses>
-        + Mul<fph, Output = Self::Impulses>;
+        + Mul<f32, Output = Self::Impulses>;
 
     /// Whether the accumulated [`Self::Impulses`] from the other constraint can
     /// be used to kick start the solution of this constraint. It should be
@@ -117,7 +116,7 @@ trait PreparedTwoBodyConstraint {
         &self,
         body_a: &mut ConstrainedBody,
         body_b: &mut ConstrainedBody,
-        correction_factor: fph,
+        correction_factor: f32,
     );
 }
 
@@ -126,9 +125,9 @@ trait PreparedTwoBodyConstraint {
 #[derive(Clone, Debug)]
 struct ConstrainedBody {
     /// Inverse of the body's mass.
-    pub inverse_mass: fph,
+    pub inverse_mass: f32,
     /// Inverse of the body's inertia tensor (in world space).
-    pub inverse_inertia_tensor: Matrix3<fph>,
+    pub inverse_inertia_tensor: Matrix3<f32>,
     /// Position of the body's center of mass (in world space).
     pub position: Position,
     /// Orientation of the body's reference frame (in world space).
@@ -136,7 +135,7 @@ struct ConstrainedBody {
     /// Linear velocity of the body' center of mass (in world space).
     pub velocity: Velocity,
     /// Angular velocity of the body about its center of mass (in world space).
-    pub angular_velocity: Vector3<fph>,
+    pub angular_velocity: Vector3<f32>,
 }
 
 impl ConstraintManager {

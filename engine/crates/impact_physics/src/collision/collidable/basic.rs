@@ -12,7 +12,6 @@ use crate::{
         },
     },
     constraint::contact::ContactManifold,
-    fph,
 };
 use nalgebra::Isometry3;
 
@@ -36,7 +35,7 @@ impl collision::Collidable for Collidable {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3<fph>,
+        transform_to_world_space: &Isometry3<f32>,
     ) -> Self {
         match descriptor.local_collidable() {
             Self::Local::Sphere(sphere) => {

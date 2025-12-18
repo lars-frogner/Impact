@@ -3,7 +3,6 @@
 use crate::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID, KinematicRigidBodyAnchorID},
     force::ForceGeneratorRegistry,
-    fph,
     quantities::Position,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
@@ -71,11 +70,11 @@ define_setup_type! {
     pub struct DynamicDynamicSpringForceProperties {
         /// The first dynamic rigid body the spring is attached to.
         pub rigid_body_1: DynamicRigidBodyID,
+        /// The second dynamic rigid body the spring is attached to.
+        pub rigid_body_2: DynamicRigidBodyID,
         /// The point where the spring is attached to the first body, in that
         /// body's model space.
         pub attachment_point_1: Position,
-        /// The second dynamic rigid body the spring is attached to.
-        pub rigid_body_2: DynamicRigidBodyID,
         /// The point where the spring is attached to the second body, in that
         /// body's model space.
         pub attachment_point_2: Position,
@@ -93,11 +92,11 @@ define_setup_type! {
     pub struct DynamicKinematicSpringForceProperties {
         /// The dynamic rigid body the spring is attached to.
         pub rigid_body_1: DynamicRigidBodyID,
+        /// The kinematic rigid body the spring is attached to.
+        pub rigid_body_2: KinematicRigidBodyID,
         /// The point where the spring is attached to the first (dynamic) body,
         /// in that body's model space.
         pub attachment_point_1: Position,
-        /// The kinematic rigid body the spring is attached to.
-        pub rigid_body_2: KinematicRigidBodyID,
         /// The point where the spring is attached to the second (kinematic)
         /// body, in that body's model space.
         pub attachment_point_2: Position,
@@ -112,13 +111,13 @@ define_setup_type! {
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct Spring {
     /// The spring constant representing the stiffness of the spring.
-    pub stiffness: fph,
+    pub stiffness: f32,
     /// The spring damping coefficient.
-    pub damping: fph,
+    pub damping: f32,
     /// The length for which the spring is in equilibrium.
-    pub rest_length: fph,
+    pub rest_length: f32,
     /// The length below which the spring force is always zero.
-    pub slack_length: fph,
+    pub slack_length: f32,
 }
 
 impl From<u64> for DynamicDynamicSpringForceGeneratorID {
@@ -155,7 +154,7 @@ impl DynamicDynamicSpringForceGenerator {
             rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
 
         let Some((spring_direction, length)) =
-            UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
+            UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, f32::EPSILON)
         else {
             return;
         };
@@ -206,7 +205,7 @@ impl DynamicKinematicSpringForceGenerator {
             rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
 
         let Some((spring_direction, length)) =
-            UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, fph::EPSILON)
+            UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, f32::EPSILON)
         else {
             return;
         };
@@ -280,7 +279,7 @@ impl Spring {
         rest_length,
         slack_length,
     }"#)]
-    pub fn new(stiffness: fph, damping: fph, rest_length: fph, slack_length: fph) -> Self {
+    pub fn new(stiffness: f32, damping: f32, rest_length: f32, slack_length: f32) -> Self {
         Self {
             stiffness,
             damping,
@@ -291,19 +290,19 @@ impl Spring {
 
     /// Creates a standard spring (no slack).
     #[roc(body = "new(stiffness, damping, rest_length, 0)")]
-    pub fn standard(stiffness: fph, damping: fph, rest_length: fph) -> Self {
+    pub fn standard(stiffness: f32, damping: f32, rest_length: f32) -> Self {
         Self::new(stiffness, damping, rest_length, 0.0)
     }
 
     /// Creates an elastic band that is slack below a given length.
     #[roc(body = "new(stiffness, damping, slack_length, slack_length)")]
-    pub fn elastic_band(stiffness: fph, damping: fph, slack_length: fph) -> Self {
+    pub fn elastic_band(stiffness: f32, damping: f32, slack_length: f32) -> Self {
         Self::new(stiffness, damping, slack_length, slack_length)
     }
 
     /// Computes the force along the spring axis for the given length and rate
     /// of change in length. A positive force is directed outward.
-    pub fn scalar_force(&self, length: fph, rate_of_length_change: fph) -> fph {
+    pub fn scalar_force(&self, length: f32, rate_of_length_change: f32) -> f32 {
         if length <= self.slack_length {
             0.0
         } else {
@@ -311,11 +310,11 @@ impl Spring {
         }
     }
 
-    fn compute_spring_force(&self, length: fph) -> fph {
+    fn compute_spring_force(&self, length: f32) -> f32 {
         -self.stiffness * (length - self.rest_length)
     }
 
-    fn compute_damping_force(&self, rate_of_length_change: fph) -> fph {
+    fn compute_damping_force(&self, rate_of_length_change: f32) -> f32 {
         -self.damping * rate_of_length_change
     }
 }

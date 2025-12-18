@@ -2,7 +2,6 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    fph,
     quantities::{Orientation, Position, Velocity},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
@@ -44,7 +43,7 @@ define_setup_type! {
     pub struct CircularTrajectory {
         /// When (in simulation time) the body should be at the initial position
         /// on the circle.
-        pub initial_time: fph,
+        pub initial_time: f32,
         /// The orientation of the orbit. The first axis of the circle's reference
         /// frame will coincide with the direction from the center to the position
         /// of the body at the initial time, the second with the direction of the
@@ -54,9 +53,9 @@ define_setup_type! {
         /// The position of the center of the circle.
         pub center_position: Position,
         /// The radius of the circle.
-        pub radius: fph,
+        pub radius: f32,
         /// The duration of one revolution.
-        pub period: fph,
+        pub period: f32,
     }
 }
 
@@ -80,7 +79,7 @@ impl CircularTrajectoryDriver {
 
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: fph) {
+    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
         let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
         else {
             return;
@@ -107,11 +106,11 @@ impl CircularTrajectory {
     }
     "#)]
     pub fn new(
-        initial_time: fph,
+        initial_time: f32,
         orientation: Orientation,
         center_position: Position,
-        radius: fph,
-        period: fph,
+        radius: f32,
+        period: f32,
     ) -> Self {
         Self {
             initial_time,
@@ -127,7 +126,7 @@ impl CircularTrajectory {
     /// # Panics
     /// - If the radius does not exceed zero.
     /// - If the period is zero.
-    pub fn compute_position_and_velocity(&self, time: fph) -> (Position, Velocity) {
+    pub fn compute_position_and_velocity(&self, time: f32) -> (Position, Velocity) {
         assert!(
             self.radius > 0.0,
             "Radius of circular trajectory does not exceed zero"
@@ -161,22 +160,22 @@ impl CircularTrajectory {
         (world_space_circular_position, world_space_circular_velocity)
     }
 
-    fn compute_angular_speed(period: fph) -> fph {
-        fph::TWO_PI / period
+    fn compute_angular_speed(period: f32) -> f32 {
+        f32::TWO_PI / period
     }
 
-    fn compute_angle(initial_time: fph, angular_speed: fph, time: fph) -> fph {
-        angular_speed * (time - initial_time) % fph::TWO_PI
+    fn compute_angle(initial_time: f32, angular_speed: f32, time: f32) -> f32 {
+        angular_speed * (time - initial_time) % f32::TWO_PI
     }
 
-    fn compute_circular_displacement(radius: fph, cos_angle: fph, sin_angle: fph) -> Position {
+    fn compute_circular_displacement(radius: f32, cos_angle: f32, sin_angle: f32) -> Position {
         point![radius * cos_angle, radius * sin_angle, 0.0]
     }
 
     fn compute_circular_velocity(
-        cos_angle: fph,
-        sin_angle: fph,
-        tangential_speed: fph,
+        cos_angle: f32,
+        sin_angle: f32,
+        tangential_speed: f32,
     ) -> Velocity {
         vector![
             -tangential_speed * sin_angle,
@@ -192,11 +191,11 @@ mod tests {
     use crate::quantities::{Direction, Orientation};
     use approx::abs_diff_eq;
     use impact_math::Float;
-    use nalgebra::{point, vector};
+    use nalgebra::{UnitVector3, point, vector};
     use proptest::prelude::*;
 
     prop_compose! {
-        fn position_strategy(max_position_coord: fph)(
+        fn position_strategy(max_position_coord: f32)(
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
@@ -207,22 +206,22 @@ mod tests {
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..fph::TWO_PI,
-            theta in 0.0..fph::PI,
+            phi in 0.0..f32::TWO_PI,
+            theta in 0.0..f32::PI,
         ) -> Direction {
             Direction::new_normalize(vector![
-                fph::cos(phi) * fph::sin(theta),
-                fph::sin(phi) * fph::sin(theta),
-                fph::cos(theta)
+                f32::cos(phi) * f32::sin(theta),
+                f32::sin(phi) * f32::sin(theta),
+                f32::cos(theta)
             ])
         }
     }
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..fph::TWO_PI,
-            rotation_pitch in -fph::FRAC_PI_2..fph::FRAC_PI_2,
-            rotation_yaw in 0.0..fph::TWO_PI,
+            rotation_roll in 0.0..f32::TWO_PI,
+            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
+            rotation_yaw in 0.0..f32::TWO_PI,
         ) -> Orientation {
             Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
         }
@@ -255,12 +254,12 @@ mod tests {
     proptest! {
         #[test]
         fn should_get_antiparallel_velocities_at_half_period_offset(
-            initial_time in -1e2..1e2,
+            initial_time in -1e2..1e2_f32,
             orientation in orientation_strategy(),
             center_position in position_strategy(1e2),
-            radius in 1e-2..1e2,
-            period in 1e-2..1e2,
-            time in -1e2..1e2,
+            radius in 1e-2..1e2_f32,
+            period in 1e-2..1e2_f32,
+            time in -1e2..1e2_f32,
         ) {
             let trajectory = CircularTrajectory::new(
                 initial_time,
@@ -291,12 +290,12 @@ mod tests {
     proptest! {
         #[test]
         fn should_get_circular_position_and_velocity(
-            initial_time in -1e2..1e2,
+            initial_time in -1e2..1e2_f32,
             orientation in orientation_strategy(),
             center_position in position_strategy(1e2),
-            radius in 1e-2..1e2,
-            period in 1e-2..1e2,
-            time in -1e2..1e2,
+            radius in 1e-2..1e2_f32,
+            period in 1e-2..1e2_f32,
+            time in -1e2..1e2_f32,
         ) {
             let trajectory = CircularTrajectory::new(
                 initial_time,
@@ -309,16 +308,16 @@ mod tests {
             let (position, velocity) = trajectory.compute_position_and_velocity(time);
             let displacement = position - center_position;
 
-            prop_assert!(abs_diff_eq!(displacement.norm(), radius, epsilon = 1e-7 * radius));
+            prop_assert!(abs_diff_eq!(displacement.norm(), radius, epsilon = 1e-3 * radius));
             prop_assert!(abs_diff_eq!(
                 velocity.norm(),
-                fph::TWO_PI * radius / period,
-                epsilon = 1e-6 * radius / period
+                f32::TWO_PI * radius / period,
+                epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(
-                velocity.dot(&displacement),
+                UnitVector3::new_normalize(velocity).dot(&UnitVector3::new_normalize(displacement)),
                 0.0,
-                epsilon = 1e-6
+                epsilon = 1e-4
             ));
         }
     }

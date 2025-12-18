@@ -644,7 +644,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         let world_sphere_from_unit_sphere_transform = Similarity3::from_parts(
             frame.position.coords.cast().into(),
             UnitQuaternion::identity(),
-            radius as f32,
+            radius,
         );
 
         let view_sphere_from_unit_sphere_transform =
@@ -714,16 +714,16 @@ fn buffer_transforms_for_dynamics_gizmos(
     }
 }
 
-fn sphere_radius_from_mass_and_density(mass: f64, density: f64) -> f64 {
-    f64::cbrt(3.0 * mass / (4.0 * std::f64::consts::PI * density))
+fn sphere_radius_from_mass_and_density(mass: f32, density: f32) -> f32 {
+    f32::cbrt(3.0 * mass / (4.0 * std::f32::consts::PI * density))
 }
 
 fn model_view_transform_for_vector_gizmo(
     scene_camera: &SceneCamera,
     camera_position: &Point3<f32>,
-    position: Point3<f64>,
-    direction: UnitVector3<f64>,
-    length: f64,
+    position: Point3<f32>,
+    direction: UnitVector3<f32>,
+    length: f32,
 ) -> InstanceModelViewTransform {
     let rotation = compute_rotation_to_camera_space_for_cylindrical_billboard(
         camera_position.cast(),
@@ -734,7 +734,7 @@ fn model_view_transform_for_vector_gizmo(
     let model_to_world_transform = Similarity3::from_parts(
         position.coords.cast().into(),
         rotation.cast(),
-        length as f32,
+        length,
     );
 
     (scene_camera.view_transform() * model_to_world_transform).into()
@@ -746,10 +746,10 @@ fn model_view_transform_for_vector_gizmo(
 /// - The z-axis in the billboard's model space points as directly as possible
 ///   towards the camera.
 fn compute_rotation_to_camera_space_for_cylindrical_billboard(
-    camera_position: Point3<f64>,
-    billboard_position: Point3<f64>,
-    billboard_axis: UnitVector3<f64>,
-) -> UnitQuaternion<f64> {
+    camera_position: Point3<f32>,
+    billboard_position: Point3<f32>,
+    billboard_axis: UnitVector3<f32>,
+) -> UnitQuaternion<f32> {
     let y_axis = billboard_axis;
 
     let to_camera = UnitVector3::new_normalize(camera_position - billboard_position);
@@ -818,7 +818,7 @@ fn buffer_transforms_for_collider_gizmos(
             let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
                 sphere.center().coords.cast().into(),
                 UnitQuaternion::identity(),
-                sphere.radius() as f32,
+                sphere.radius(),
             );
 
             let model_to_camera_transform =
@@ -870,7 +870,7 @@ fn buffer_transforms_for_collider_gizmos(
 
             let rotation_from_object_to_camera_space =
                 transform_from_object_to_camera_space.rotation.cast();
-            let scaling_from_object_to_camera_space = voxel_radius as f32;
+            let scaling_from_object_to_camera_space = voxel_radius;
 
             let mut transforms = Vec::with_capacity(voxel_object.surface_voxel_count_heuristic());
 
@@ -941,7 +941,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             )
         };
 
-    let voxel_extent = voxel_object.object().voxel_extent() as f32;
+    let voxel_extent = voxel_object.object().voxel_extent();
 
     voxel_object
         .object()
@@ -953,7 +953,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             };
 
             let chunk_offset_in_voxels =
-                CHUNK_SIZE as f64 * vector![chunk_i as f64, chunk_j as f64, chunk_k as f64];
+                CHUNK_SIZE as f32 * vector![chunk_i as f32, chunk_j as f32, chunk_k as f32];
 
             let chunk_transform = model_view_transform.prepend_scaling(voxel_extent)
                 * Translation3::from(chunk_offset_in_voxels.cast());
@@ -1021,15 +1021,15 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     };
 
     let transform_from_a_to_camera_space =
-        scene_camera.view_transform().cast::<f64>() * transform_from_world_to_a.inverse();
+        scene_camera.view_transform() * transform_from_world_to_a.inverse();
 
     let transform_from_b_to_camera_space =
-        scene_camera.view_transform().cast::<f64>() * transform_from_world_to_b.inverse();
+        scene_camera.view_transform() * transform_from_world_to_b.inverse();
 
     let mut transforms = Vec::with_capacity(256);
 
     let mut add_transforms = |voxel_object: &ChunkedVoxelObject,
-                              transform_from_object_to_camera_space: &Isometry3<f64>,
+                              transform_from_object_to_camera_space: &Isometry3<f32>,
                               i,
                               j,
                               k| {
@@ -1040,9 +1040,9 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
             transform_from_object_to_camera_space.transform_point(&voxel_center_in_object_space);
 
         let model_to_camera_transform = InstanceModelViewTransform {
-            translation: voxel_center_in_camera_space.coords.cast::<f32>(),
-            rotation: transform_from_object_to_camera_space.rotation.cast::<f32>(),
-            scaling: 0.5 * voxel_object.voxel_extent() as f32,
+            translation: voxel_center_in_camera_space.coords,
+            rotation: transform_from_object_to_camera_space.rotation,
+            scaling: 0.5 * voxel_object.voxel_extent(),
         };
 
         transforms.push(model_to_camera_transform);

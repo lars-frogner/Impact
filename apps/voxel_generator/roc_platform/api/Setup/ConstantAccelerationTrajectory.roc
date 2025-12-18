@@ -1,8 +1,8 @@
-# Hash: ac1c189c27e10a77fc0a82a27d15dbeb5ca54cf76771afbb18fb17aa35a94a02
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: da7ff5bf85ea8690d064cbc2e57bdff081e011be21e0400b7113657b55622e3e
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectory
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ConstantAccelerationTrajectory,
     new,
@@ -26,17 +26,17 @@ import core.Vector3
 ## A trajectory with constant acceleration.
 ConstantAccelerationTrajectory : {
     ## When (in simulation time) the body should be at the initial position.
-    initial_time : F64,
+    initial_time : F32,
     ## The position of the body at the initial time.
-    initial_position : Point3.Point3 Binary64,
+    initial_position : Point3.Point3 Binary32,
     ## The velocity of the body at the initial time.
-    initial_velocity : Vector3.Vector3 Binary64,
+    initial_velocity : Vector3.Vector3 Binary32,
     ## The constant acceleration of the body.
-    acceleration : Vector3.Vector3 Binary64,
+    acceleration : Vector3.Vector3 Binary32,
 }
 
 ## Creates a new constant acceleration trajectory with the given properties.
-new : F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64 -> ConstantAccelerationTrajectory
+new : F32, Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> ConstantAccelerationTrajectory
 new = |initial_time, initial_position, initial_velocity, acceleration|
     {
         initial_time,
@@ -47,14 +47,14 @@ new = |initial_time, initial_position, initial_velocity, acceleration|
 
 ## Creates a new constant acceleration trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64, Vector3.Vector3 Binary64 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> Entity.ComponentData
 add_new = |entity_data, initial_time, initial_position, initial_velocity, acceleration|
     add(entity_data, new(initial_time, initial_position, initial_velocity, acceleration))
 
 ## Creates a new constant acceleration trajectory with the given properties.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, initial_time, initial_position, initial_velocity, acceleration|
     add_multiple(
         entity_data,
@@ -67,7 +67,7 @@ add_multiple_new = |entity_data, initial_time, initial_position, initial_velocit
 
 ## Creates a new constant velocity trajectory (no acceleration) with the
 ## given properties.
-with_constant_velocity : F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64 -> ConstantAccelerationTrajectory
+with_constant_velocity : F32, Point3.Point3 Binary32, Vector3.Vector3 Binary32 -> ConstantAccelerationTrajectory
 with_constant_velocity = |initial_time, initial_position, velocity|
     new(
         initial_time,
@@ -79,7 +79,7 @@ with_constant_velocity = |initial_time, initial_position, velocity|
 ## Creates a new constant velocity trajectory (no acceleration) with the
 ## given properties.
 ## Adds the component to the given entity's data.
-add_with_constant_velocity : Entity.ComponentData, F64, Point3.Point3 Binary64, Vector3.Vector3 Binary64 -> Entity.ComponentData
+add_with_constant_velocity : Entity.ComponentData, F32, Point3.Point3 Binary32, Vector3.Vector3 Binary32 -> Entity.ComponentData
 add_with_constant_velocity = |entity_data, initial_time, initial_position, velocity|
     add(entity_data, with_constant_velocity(initial_time, initial_position, velocity))
 
@@ -87,7 +87,7 @@ add_with_constant_velocity = |entity_data, initial_time, initial_position, veloc
 ## given properties.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_with_constant_velocity : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_with_constant_velocity : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_with_constant_velocity = |entity_data, initial_time, initial_position, velocity|
     add_multiple(
         entity_data,
@@ -122,8 +122,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, ConstantAccelerationTrajectory -> List U8
 write_packet = |bytes, val|
     type_id = 12430862769938531894
-    size = 80
-    alignment = 8
+    size = 40
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -134,8 +134,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List ConstantAccelerationTrajectory -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 12430862769938531894
-    size = 80
-    alignment = 8
+    size = 40
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -155,11 +155,11 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, ConstantAccelerationTrajectory -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(80)
-    |> Builtin.write_bytes_f64(value.initial_time)
-    |> Point3.write_bytes_64(value.initial_position)
-    |> Vector3.write_bytes_64(value.initial_velocity)
-    |> Vector3.write_bytes_64(value.acceleration)
+    |> List.reserve(40)
+    |> Builtin.write_bytes_f32(value.initial_time)
+    |> Point3.write_bytes_32(value.initial_position)
+    |> Vector3.write_bytes_32(value.initial_velocity)
+    |> Vector3.write_bytes_32(value.acceleration)
 
 ## Deserializes a value of [ConstantAccelerationTrajectory] from its bytes in the
 ## representation used by the engine.
@@ -167,16 +167,16 @@ from_bytes : List U8 -> Result ConstantAccelerationTrajectory _
 from_bytes = |bytes|
     Ok(
         {
-            initial_time: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            initial_position: bytes |> List.sublist({ start: 8, len: 24 }) |> Point3.from_bytes_64?,
-            initial_velocity: bytes |> List.sublist({ start: 32, len: 24 }) |> Vector3.from_bytes_64?,
-            acceleration: bytes |> List.sublist({ start: 56, len: 24 }) |> Vector3.from_bytes_64?,
+            initial_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            initial_position: bytes |> List.sublist({ start: 4, len: 12 }) |> Point3.from_bytes_32?,
+            initial_velocity: bytes |> List.sublist({ start: 16, len: 12 }) |> Vector3.from_bytes_32?,
+            acceleration: bytes |> List.sublist({ start: 28, len: 12 }) |> Vector3.from_bytes_32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 80 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 40 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

@@ -6,14 +6,14 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use impact_physics::{constraint::solver::ConstraintSolverConfig, fph};
+use impact_physics::constraint::solver::ConstraintSolverConfig;
 
 #[derive(Clone, Debug)]
 pub enum PhysicsCommand {
     SetSimulation(ToActiveState),
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),
-    SetTimeStepDuration(fph),
+    SetTimeStepDuration(f32),
     SetMatchFrameDuration(ToActiveState),
     SetConstraintSolverConfig(ConstraintSolverConfig),
 }
@@ -29,7 +29,7 @@ pub enum ToSubstepCount {
 pub enum ToSimulationSpeedMultiplier {
     Higher,
     Lower,
-    Specific(fph),
+    Specific(f32),
 }
 
 impl PartialEq for ToSimulationSpeedMultiplier {
@@ -69,10 +69,10 @@ pub fn set_simulation_substep_count(simulator: &mut PhysicsSimulator, to: ToSubs
 pub fn set_simulation_speed(
     simulator: &mut PhysicsSimulator,
     to: ToSimulationSpeedMultiplier,
-) -> fph {
+) -> f32 {
     impact_log::info!("Setting simulation speed to {to:?}");
-    const INCREMENT_FACTOR: fph = 1.1;
-    const MIN_ABS_MULTIPLIER: fph = 1e-9;
+    const INCREMENT_FACTOR: f32 = 1.1;
+    const MIN_ABS_MULTIPLIER: f32 = 1e-9;
 
     let mut new_multiplier = match to {
         ToSimulationSpeedMultiplier::Higher => {
@@ -95,7 +95,7 @@ pub fn set_simulation_speed(
 pub fn set_simulation_speed_and_compensate_controller_movement_speed(
     engine: &Engine,
     to: ToSimulationSpeedMultiplier,
-) -> f64 {
+) -> f32 {
     let mut simulator = engine.simulator().owrite();
     let old_multiplier = simulator.simulation_speed_multiplier();
     let new_multiplier = set_simulation_speed(&mut simulator, to);
@@ -114,7 +114,7 @@ pub fn set_simulation_speed_and_compensate_controller_movement_speed(
     new_multiplier
 }
 
-pub fn set_time_step_duration(simulator: &mut PhysicsSimulator, duration: fph) -> fph {
+pub fn set_time_step_duration(simulator: &mut PhysicsSimulator, duration: f32) -> f32 {
     impact_log::info!("Setting time step duration to {duration:?}");
     *simulator.time_step_duration_mut() = duration;
     duration

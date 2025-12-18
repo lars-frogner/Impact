@@ -9,7 +9,6 @@ use impact_physics::{
         setup::SphericalCollidable,
     },
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
-    fph,
     inertia::InertialProperties,
     material::ContactResponseParameters,
     quantities::{Motion, Position, Velocity},
@@ -105,13 +104,13 @@ pub fn correct_contact_configurations(benchmarker: impl Benchmarker) {
 }
 
 struct SphereBody {
-    sphere: Sphere<fph>,
-    mass_density: fph,
+    sphere: Sphere<f32>,
+    mass_density: f32,
     velocity: Velocity,
 }
 
 impl SphereBody {
-    fn new(sphere: Sphere<fph>, mass_density: fph, velocity: Velocity) -> Self {
+    fn new(sphere: Sphere<f32>, mass_density: f32, velocity: Velocity) -> Self {
         Self {
             sphere,
             mass_density,
@@ -119,7 +118,7 @@ impl SphereBody {
         }
     }
 
-    fn stationary(sphere: Sphere<fph>, mass_density: fph) -> Self {
+    fn stationary(sphere: Sphere<f32>, mass_density: f32) -> Self {
         Self::new(sphere, mass_density, Velocity::zeros())
     }
 }
@@ -179,7 +178,7 @@ fn setup_stationary_overlapping_spheres(
         rigid_body_manager,
         collision_world,
         (0..500).map(|i| {
-            SphereBody::stationary(Sphere::new(point![fph::from(i) - 0.05, 0.0, 0.0], 0.5), 1.0)
+            SphereBody::stationary(Sphere::new(point![i as f32 - 0.05, 0.0, 0.0], 0.5), 1.0)
         }),
     );
 

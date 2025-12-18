@@ -7,7 +7,7 @@ pub mod harmonic_oscillation;
 pub mod orbit;
 pub mod setup;
 
-use crate::{fph, rigid_body::RigidBodyManager};
+use crate::rigid_body::RigidBodyManager;
 use circular::CircularTrajectoryRegistry;
 use constant_acceleration::ConstantAccelerationTrajectoryRegistry;
 use constant_rotation::ConstantRotationRegistry;
@@ -47,7 +47,7 @@ impl MotionDriverManager {
     /// Sets the positions, velocities, orientations and angular velocities of
     /// all driven kinematic rigid bodies to the values for the given simulation
     /// time.
-    pub fn apply_motion(&self, rigid_body_manager: &mut RigidBodyManager, simulation_time: fph) {
+    pub fn apply_motion(&self, rigid_body_manager: &mut RigidBodyManager, simulation_time: f32) {
         // By first resetting the properties and then applying them additively,
         // multiple drivers can affect the same body.
 

@@ -364,7 +364,7 @@ impl Engine {
             );
             orientation_controller
                 .olock()
-                .update_orientation_change(delta_x, delta_y);
+                .update_orientation_change(delta_x as f32, delta_y as f32);
         }
     }
 

@@ -20,7 +20,7 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelCollidable {
-        kind: u64,
+        kind: u32,
         response_params: ContactResponseParameters,
     }
 }
@@ -38,13 +38,13 @@ impl VoxelCollidable {
     }"#)]
     pub fn new(kind: CollidableKind, response_params: ContactResponseParameters) -> Self {
         Self {
-            kind: kind.to_u64(),
+            kind: kind.to_u32(),
             response_params,
         }
     }
 
     pub fn kind(&self) -> CollidableKind {
-        CollidableKind::from_u64(self.kind).unwrap()
+        CollidableKind::from_u32(self.kind).unwrap()
     }
 
     pub fn response_params(&self) -> &ContactResponseParameters {

@@ -3,7 +3,6 @@
 pub mod setup;
 
 use crate::{
-    fph,
     inertia::InertiaTensor,
     quantities::{
         self, AngularMomentum, AngularVelocity, Force, Momentum, Motion, Orientation, Position,
@@ -68,7 +67,7 @@ pub struct RigidBodyManager {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct DynamicRigidBody {
-    mass: fph,
+    mass: f32,
     inertia_tensor: InertiaTensor,
     position: Position,
     orientation: Orientation,
@@ -296,7 +295,7 @@ impl RigidBodyManager {
     }
 
     /// Advances the linear and angular momentum of all dynamic rigid bodies.
-    pub fn advance_dynamic_rigid_body_momenta(&mut self, step_duration: fph) {
+    pub fn advance_dynamic_rigid_body_momenta(&mut self, step_duration: f32) {
         for body in &mut self.dynamic_bodies {
             body.advance_momentum(step_duration);
             body.advance_angular_momentum(step_duration);
@@ -304,7 +303,7 @@ impl RigidBodyManager {
     }
 
     /// Advances the position and orientation of all dynamic rigid bodies.
-    pub fn advance_dynamic_rigid_body_configurations(&mut self, step_duration: fph) {
+    pub fn advance_dynamic_rigid_body_configurations(&mut self, step_duration: f32) {
         for body in &mut self.dynamic_bodies {
             body.advance_position(step_duration);
             body.advance_orientation(step_duration);
@@ -312,7 +311,7 @@ impl RigidBodyManager {
     }
 
     /// Advances the position and orientation of all kinematic rigid bodies.
-    pub fn advance_kinematic_rigid_body_configurations(&mut self, step_duration: fph) {
+    pub fn advance_kinematic_rigid_body_configurations(&mut self, step_duration: f32) {
         for body in &mut self.kinematic_bodies {
             body.advance_position(step_duration);
             body.advance_orientation(step_duration);
@@ -349,7 +348,7 @@ impl Default for RigidBodyManager {
 impl DynamicRigidBody {
     /// Creates a new dynamic rigid body with the given properties.
     pub fn new(
-        mass: fph,
+        mass: f32,
         inertia_tensor: InertiaTensor,
         position: Position,
         orientation: Orientation,
@@ -372,7 +371,7 @@ impl DynamicRigidBody {
     }
 
     /// Returns the mass of the body.
-    pub fn mass(&self) -> fph {
+    pub fn mass(&self) -> f32 {
         self.mass
     }
 
@@ -426,28 +425,28 @@ impl DynamicRigidBody {
     }
 
     /// Transforms a vector from the body-fixed frame to world space.
-    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
+    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
         transform_vector_from_body_to_world_space(&self.orientation, vector)
     }
 
     /// Transforms a vector from world space to the body-fixed frame.
-    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
+    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
         transform_vector_from_world_to_body_space(&self.orientation, vector)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
-    pub fn transform_point_from_body_to_world_space(&self, point: &Point3<fph>) -> Point3<fph> {
+    pub fn transform_point_from_body_to_world_space(&self, point: &Point3<f32>) -> Point3<f32> {
         transform_point_from_body_to_world_space(&self.position, &self.orientation, point)
     }
 
     /// Transforms a point from world space to the body-fixed frame.
-    pub fn transform_point_from_world_to_body_space(&self, point: &Point3<fph>) -> Point3<fph> {
+    pub fn transform_point_from_world_to_body_space(&self, point: &Point3<f32>) -> Point3<f32> {
         transform_point_from_world_to_body_space(&self.position, &self.orientation, point)
     }
 
     /// Computes the velocity of the given world space point on the body due to the
     /// body's linear and rotational motion.
-    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3<fph>) -> Velocity {
+    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3<f32>) -> Velocity {
         compute_velocity_of_world_space_point_on_body(
             &self.position,
             &self.compute_velocity(),
@@ -490,7 +489,7 @@ impl DynamicRigidBody {
     }
 
     /// Sets the given inertial properties for the body.
-    pub fn set_inertial_properties(&mut self, mass: fph, inertia_tensor: InertiaTensor) {
+    pub fn set_inertial_properties(&mut self, mass: f32, inertia_tensor: InertiaTensor) {
         self.mass = mass;
         self.inertia_tensor = inertia_tensor;
     }
@@ -524,25 +523,25 @@ impl DynamicRigidBody {
     /// Advances the linear momentum of the body based on the total force
     /// applied to the body since
     /// [`reset_total_force`](Self::reset_total_force) was called.
-    pub fn advance_momentum(&mut self, step_duration: fph) {
+    pub fn advance_momentum(&mut self, step_duration: f32) {
         self.momentum += self.total_force() * step_duration;
     }
 
     /// Advances the angular momentum of the body based on the total torque
     /// applied to the body since
     /// [`reset_total_torque`](Self::reset_total_torque) was called.
-    pub fn advance_angular_momentum(&mut self, step_duration: fph) {
+    pub fn advance_angular_momentum(&mut self, step_duration: f32) {
         self.angular_momentum += self.total_torque() * step_duration;
     }
 
     /// Advances the position of the body based on the current linear velocity.
-    pub fn advance_position(&mut self, step_duration: fph) {
+    pub fn advance_position(&mut self, step_duration: f32) {
         let velocity = self.compute_velocity();
         self.position = advance_position(&self.position, &velocity, step_duration);
     }
 
     /// Advances the orientation of the body based on the current angular velocity.
-    pub fn advance_orientation(&mut self, step_duration: fph) {
+    pub fn advance_orientation(&mut self, step_duration: f32) {
         let angular_velocity = self.compute_angular_velocity();
         self.orientation = advance_orientation(&self.orientation, &angular_velocity, step_duration);
     }
@@ -565,14 +564,14 @@ impl DynamicRigidBody {
 }
 
 impl AbsDiffEq for DynamicRigidBody {
-    type Epsilon = <fph as AbsDiffEq>::Epsilon;
+    type Epsilon = <f32 as AbsDiffEq>::Epsilon;
 
     fn default_epsilon() -> Self::Epsilon {
-        fph::default_epsilon()
+        f32::default_epsilon()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        fph::abs_diff_eq(&self.mass, &other.mass, epsilon)
+        f32::abs_diff_eq(&self.mass, &other.mass, epsilon)
             && InertiaTensor::abs_diff_eq(&self.inertia_tensor, &other.inertia_tensor, epsilon)
             && Position::abs_diff_eq(&self.position, &other.position, epsilon)
             && Orientation::abs_diff_eq(&self.orientation, &other.orientation, epsilon)
@@ -624,28 +623,28 @@ impl KinematicRigidBody {
     }
 
     /// Transforms a vector from the body-fixed frame to world space.
-    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
+    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
         transform_vector_from_body_to_world_space(&self.orientation, vector)
     }
 
     /// Transforms a vector from world space to the body-fixed frame.
-    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<fph>) -> Vector3<fph> {
+    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
         transform_vector_from_world_to_body_space(&self.orientation, vector)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
-    pub fn transform_point_from_body_to_world_space(&self, point: &Point3<fph>) -> Point3<fph> {
+    pub fn transform_point_from_body_to_world_space(&self, point: &Point3<f32>) -> Point3<f32> {
         transform_point_from_body_to_world_space(&self.position, &self.orientation, point)
     }
 
     /// Transforms a point from world space to the body-fixed frame.
-    pub fn transform_point_from_world_to_body_space(&self, point: &Point3<fph>) -> Point3<fph> {
+    pub fn transform_point_from_world_to_body_space(&self, point: &Point3<f32>) -> Point3<f32> {
         transform_point_from_world_to_body_space(&self.position, &self.orientation, point)
     }
 
     /// Computes the velocity of the given world space point on the body due to the
     /// body's linear and rotational motion.
-    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3<fph>) -> Velocity {
+    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3<f32>) -> Velocity {
         compute_velocity_of_world_space_point_on_body(
             &self.position,
             &self.velocity,
@@ -675,22 +674,22 @@ impl KinematicRigidBody {
     }
 
     /// Advances the position of the body based on the current linear velocity.
-    pub fn advance_position(&mut self, step_duration: fph) {
+    pub fn advance_position(&mut self, step_duration: f32) {
         self.position = advance_position(&self.position, &self.velocity, step_duration);
     }
 
     /// Advances the orientation of the body based on the current angular velocity.
-    pub fn advance_orientation(&mut self, step_duration: fph) {
+    pub fn advance_orientation(&mut self, step_duration: f32) {
         self.orientation =
             advance_orientation(&self.orientation, &self.angular_velocity, step_duration);
     }
 }
 
 impl AbsDiffEq for KinematicRigidBody {
-    type Epsilon = <fph as AbsDiffEq>::Epsilon;
+    type Epsilon = <f32 as AbsDiffEq>::Epsilon;
 
     fn default_epsilon() -> Self::Epsilon {
-        fph::default_epsilon()
+        f32::default_epsilon()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -708,16 +707,16 @@ impl AbsDiffEq for KinematicRigidBody {
 /// Transforms a vector from the body-fixed frame to world space.
 pub fn transform_vector_from_body_to_world_space(
     body_orientation: &Orientation,
-    vector: &Vector3<fph>,
-) -> Vector3<fph> {
+    vector: &Vector3<f32>,
+) -> Vector3<f32> {
     body_orientation.transform_vector(vector)
 }
 
 /// Transforms a vector from world space to the body-fixed frame.
 pub fn transform_vector_from_world_to_body_space(
     body_orientation: &Orientation,
-    vector: &Vector3<fph>,
-) -> Vector3<fph> {
+    vector: &Vector3<f32>,
+) -> Vector3<f32> {
     body_orientation.inverse_transform_vector(vector)
 }
 
@@ -725,8 +724,8 @@ pub fn transform_vector_from_world_to_body_space(
 pub fn transform_point_from_body_to_world_space(
     body_position: &Position,
     body_orientation: &Orientation,
-    point: &Point3<fph>,
-) -> Point3<fph> {
+    point: &Point3<f32>,
+) -> Point3<f32> {
     body_position + body_orientation.transform_point(point).coords
 }
 
@@ -734,8 +733,8 @@ pub fn transform_point_from_body_to_world_space(
 pub fn transform_point_from_world_to_body_space(
     body_position: &Position,
     body_orientation: &Orientation,
-    point: &Point3<fph>,
-) -> Point3<fph> {
+    point: &Point3<f32>,
+) -> Point3<f32> {
     body_orientation.inverse_transform_point(&Point3::from(point - body_position))
 }
 
@@ -755,7 +754,7 @@ pub fn compute_velocity_of_world_space_point_on_body(
 
 /// Evolves the given [`Position`] linearly with the given [`Velocity`] for the
 /// given duration.
-pub fn advance_position(position: &Position, velocity: &Velocity, duration: fph) -> Position {
+pub fn advance_position(position: &Position, velocity: &Velocity, duration: f32) -> Position {
     position + velocity * duration
 }
 
@@ -764,7 +763,7 @@ pub fn advance_position(position: &Position, velocity: &Velocity, duration: fph)
 pub fn advance_orientation(
     orientation: &Orientation,
     angular_velocity: &AngularVelocity,
-    duration: fph,
+    duration: f32,
 ) -> Orientation {
     let angle = angular_velocity.angular_speed().radians() * duration;
     let (sin_half_angle, cos_half_angle) = (0.5 * angle).sin_cos();
@@ -786,7 +785,7 @@ mod tests {
     use proptest::prelude::*;
 
     prop_compose! {
-        fn position_strategy(max_position_coord: fph)(
+        fn position_strategy(max_position_coord: f32)(
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
@@ -797,16 +796,16 @@ mod tests {
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..fph::TWO_PI,
-            rotation_pitch in -fph::FRAC_PI_2..fph::FRAC_PI_2,
-            rotation_yaw in 0.0..fph::TWO_PI,
+            rotation_roll in 0.0..f32::TWO_PI,
+            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
+            rotation_yaw in 0.0..f32::TWO_PI,
         ) -> Orientation {
             Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
         }
     }
 
     prop_compose! {
-        fn force_strategy(max_force_coord: fph)(
+        fn force_strategy(max_force_coord: f32)(
             force_coord_x in -max_force_coord..max_force_coord,
             force_coord_y in -max_force_coord..max_force_coord,
             force_coord_z in -max_force_coord..max_force_coord,
@@ -816,7 +815,7 @@ mod tests {
     }
 
     prop_compose! {
-        fn torque_strategy(max_torque_coord: fph)(
+        fn torque_strategy(max_torque_coord: f32)(
             torque_coord_x in -max_torque_coord..max_torque_coord,
             torque_coord_y in -max_torque_coord..max_torque_coord,
             torque_coord_z in -max_torque_coord..max_torque_coord,

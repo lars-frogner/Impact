@@ -1,28 +1,25 @@
 //! Calculation of forces and torques due to drag.
 
-use crate::{
-    fph,
-    quantities::{Direction, Force, Orientation, Position, Torque},
-};
+use crate::quantities::{Direction, Force, Orientation, Position, Torque};
 use impact_math::Float;
 use nalgebra::{Point3, UnitVector3, Vector3};
-use simba::scalar::SubsetOf;
 use std::ops::{Add, AddAssign, Div, Mul};
 
 /// A load (force and torque) due to drag.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, Default)]
-pub struct DragLoad<F: Float> {
+pub struct DragLoad {
     /// The drag force on the center of mass.
-    pub force: Vector3<F>,
+    pub force: Vector3<f32>,
     /// The drag torque around the center of mass.
-    pub torque: Vector3<F>,
+    pub torque: Vector3<f32>,
 }
 
 /// Helper struct for accumulating drag loads and averaging them.
 #[derive(Clone, Debug, Default)]
-pub struct AveragingDragLoad<F: Float> {
-    summed_load: DragLoad<F>,
-    summed_weight: F,
+pub struct AveragingDragLoad {
+    summed_load: DragLoad,
+    summed_weight: f32,
 }
 
 /// The properties of a mesh triangle relevant for computign the drag force on
@@ -30,26 +27,23 @@ pub struct AveragingDragLoad<F: Float> {
 #[derive(Clone, Debug)]
 pub struct MeshTriangleDragProperties {
     center: Position,
-    normal_vector: UnitVector3<fph>,
-    area: fph,
+    normal_vector: UnitVector3<f32>,
+    area: f32,
 }
 
-impl<F: Float> DragLoad<F> {
+impl DragLoad {
     /// Computes the total drag force and torque in world space for a body with
     /// this drag load, given the scale factor for its mesh, its drag
     /// coefficient and orientation, and the square of its speed relative to the
     /// medium.
     pub fn compute_world_space_drag_force_and_torque(
         &self,
-        mesh_scaling: fph,
-        medium_mass_density: fph,
-        drag_coefficient: fph,
+        mesh_scaling: f32,
+        medium_mass_density: f32,
+        drag_coefficient: f32,
         body_orientation: &Orientation,
-        squared_body_speed_relative_to_medium: fph,
-    ) -> (Force, Torque)
-    where
-        F: SubsetOf<fph>,
-    {
+        squared_body_speed_relative_to_medium: f32,
+    ) -> (Force, Torque) {
         // The force is proportional to mesh area, medium mass density, drag
         // coefficient and squared speed
         let force_scaling = mesh_scaling.powi(2)
@@ -61,16 +55,16 @@ impl<F: Float> DragLoad<F> {
         let torque_scaling = mesh_scaling * force_scaling;
 
         let world_space_force =
-            force_scaling * body_orientation.transform_vector(&self.force.cast::<fph>());
+            force_scaling * body_orientation.transform_vector(&self.force.cast::<f32>());
         let world_space_torque =
-            torque_scaling * body_orientation.transform_vector(&self.torque.cast::<fph>());
+            torque_scaling * body_orientation.transform_vector(&self.torque.cast::<f32>());
 
         (world_space_force, world_space_torque)
     }
 }
 
-impl<F: Float> Add for &DragLoad<F> {
-    type Output = DragLoad<F>;
+impl Add for &DragLoad {
+    type Output = DragLoad;
 
     fn add(self, rhs: Self) -> Self::Output {
         DragLoad {
@@ -80,16 +74,16 @@ impl<F: Float> Add for &DragLoad<F> {
     }
 }
 
-impl<F: Float> AddAssign for DragLoad<F> {
+impl AddAssign for DragLoad {
     fn add_assign(&mut self, rhs: Self) {
         *self = self.add(&rhs);
     }
 }
 
-impl<F: Float> Mul<F> for &DragLoad<F> {
-    type Output = DragLoad<F>;
+impl Mul<f32> for &DragLoad {
+    type Output = DragLoad;
 
-    fn mul(self, factor: F) -> Self::Output {
+    fn mul(self, factor: f32) -> Self::Output {
         DragLoad {
             force: self.force * factor,
             torque: self.torque * factor,
@@ -97,49 +91,21 @@ impl<F: Float> Mul<F> for &DragLoad<F> {
     }
 }
 
-impl<F: Float> Div<F> for &DragLoad<F> {
-    type Output = DragLoad<F>;
+impl Div<f32> for &DragLoad {
+    type Output = DragLoad;
 
-    fn div(self, divisor: F) -> Self::Output {
-        let inv_divisor = F::ONE / divisor;
-        self * inv_divisor
+    fn div(self, divisor: f32) -> Self::Output {
+        DragLoad {
+            force: self.force / divisor,
+            torque: self.torque / divisor,
+        }
     }
 }
 
-#[cfg(feature = "serde")]
-impl<F: Float + serde::Serialize + serde::de::DeserializeOwned> serde::Serialize for DragLoad<F> {
-    fn serialize<S>(&self, serializer: S) -> anyhow::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        (
-            &(self.force.x, self.force.y, self.force.z),
-            &(self.torque.x, self.torque.y, self.torque.z),
-        )
-            .serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, F: Float + serde::Deserialize<'de>> serde::Deserialize<'de> for DragLoad<F> {
-    fn deserialize<D>(deserializer: D) -> anyhow::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let ((force_x, force_y, force_z), (torque_x, torque_y, torque_z)) =
-            <((F, F, F), (F, F, F))>::deserialize(deserializer)?;
-
-        Ok(DragLoad {
-            force: Vector3::new(force_x, force_y, force_z),
-            torque: Vector3::new(torque_x, torque_y, torque_z),
-        })
-    }
-}
-
-impl<F: Float> AveragingDragLoad<F> {
+impl AveragingDragLoad {
     /// Adds the given drag load for averaging with the given weight. All
     /// weights need not sum up to one.
-    pub fn add_sample(&mut self, load: &DragLoad<F>, weight: F) {
+    pub fn add_sample(&mut self, load: &DragLoad, weight: f32) {
         self.summed_load += load * weight;
         self.summed_weight += weight;
     }
@@ -147,28 +113,19 @@ impl<F: Float> AveragingDragLoad<F> {
     /// Evaluates the weighted average of the drag loads accumulated by calling
     /// [`add_sample`](Self::add_sample). The returned average drag load can be
     /// cast to a different floating point type.
-    pub fn into_average_load<FNEW>(self) -> DragLoad<FNEW>
-    where
-        F: SubsetOf<FNEW>,
-        FNEW: Float,
-    {
+    pub fn into_average_load(self) -> DragLoad {
         let Self {
             summed_load,
             summed_weight,
         } = self;
 
-        let average_load = if summed_weight > F::ZERO {
+        let average_load = if summed_weight > 0.0 {
             (&summed_load) / summed_weight
         } else {
             summed_load
         };
 
-        let DragLoad { force, torque } = average_load;
-
-        DragLoad {
-            force: force.cast::<FNEW>(),
-            torque: torque.cast::<FNEW>(),
-        }
+        average_load
     }
 }
 
@@ -180,14 +137,11 @@ impl<F: Float> AveragingDragLoad<F> {
 /// # Returns
 /// A [`Vec`] with each pair of direction (against the relative flow of the
 /// medium) and aggregate drag load.
-pub fn compute_aggregate_drag_loads_for_uniformly_distributed_directions<'a, F>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<F>; 3]>,
+pub fn compute_aggregate_drag_loads_for_uniformly_distributed_directions<'a>(
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
     center_of_mass: &Position,
     n_direction_samples: usize,
-) -> Vec<(Direction, DragLoad<fph>)>
-where
-    F: Float + SubsetOf<fph>,
-{
+) -> Vec<(Direction, DragLoad)> {
     let mesh_triangles = compute_mesh_triangle_drag_properties(triangle_vertex_positions);
 
     impact_geometry::compute_uniformly_distributed_radial_directions(n_direction_samples)
@@ -210,7 +164,7 @@ pub fn compute_aggregate_drag_load_for_direction(
     mesh_triangles: &[MeshTriangleDragProperties],
     center_of_mass: &Position,
     direction_against_flow: &Direction,
-) -> DragLoad<fph> {
+) -> DragLoad {
     let mut total_force = Force::zeros();
     let mut total_torque = Torque::zeros();
 
@@ -241,25 +195,22 @@ pub fn compute_aggregate_drag_load_for_direction(
 
 /// Computes the properties required for calculating drag for each
 /// non-degenerate triangle in the given iterator and returns them in an array.
-pub fn compute_mesh_triangle_drag_properties<'a, F>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<F>; 3]>,
-) -> Vec<MeshTriangleDragProperties>
-where
-    F: Float + SubsetOf<fph>,
-{
+pub fn compute_mesh_triangle_drag_properties<'a>(
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+) -> Vec<MeshTriangleDragProperties> {
     triangle_vertex_positions
         .into_iter()
         .filter_map(|[vertex_1, vertex_2, vertex_3]| {
-            let vertex_1 = vertex_1.cast::<fph>();
-            let vertex_2 = vertex_2.cast::<fph>();
-            let vertex_3 = vertex_3.cast::<fph>();
+            let vertex_1 = vertex_1.cast::<f32>();
+            let vertex_2 = vertex_2.cast::<f32>();
+            let vertex_3 = vertex_3.cast::<f32>();
 
             let edge_1 = vertex_2 - vertex_1;
             let edge_2 = vertex_3 - vertex_1;
 
-            UnitVector3::try_new_and_get(edge_1.cross(&edge_2), fph::EPSILON).map(
+            UnitVector3::try_new_and_get(edge_1.cross(&edge_2), f32::EPSILON).map(
                 |(normal_vector, twice_area)| {
-                    let center = fph::ONE_THIRD * (vertex_1 + vertex_2.coords + vertex_3.coords);
+                    let center = f32::ONE_THIRD * (vertex_1 + vertex_2.coords + vertex_3.coords);
                     MeshTriangleDragProperties {
                         center,
                         normal_vector,
@@ -280,13 +231,13 @@ mod tests {
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..fph::TWO_PI,
-            theta in 0.0..fph::PI,
+            phi in 0.0..f32::TWO_PI,
+            theta in 0.0..f32::PI,
         ) -> Direction {
             Direction::new_normalize(Vector3::new(
-                fph::cos(phi) * fph::sin(theta),
-                fph::sin(phi) * fph::sin(theta),
-                fph::cos(theta)
+                f32::cos(phi) * f32::sin(theta),
+                f32::sin(phi) * f32::sin(theta),
+                f32::cos(theta)
             ))
         }
     }
@@ -316,7 +267,7 @@ mod tests {
             // factor comes from using the projected triangle area. So the force
             // accumulation corresponds to integrating cos(theta)^2 over the
             // hemisphere, giving (2/3)*pi*r^2.
-            let correct_force = fph::ONE_THIRD * fph::TWO_PI * (0.5_f64).powi(2);
+            let correct_force = f32::ONE_THIRD * f32::TWO_PI * 0.5_f32.powi(2);
 
             prop_assert!(abs_diff_eq!(force_direction, -direction, epsilon = 1e-3));
             prop_assert!(abs_diff_eq!(force, correct_force, epsilon = 1e-3));

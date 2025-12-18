@@ -33,10 +33,10 @@ impl ChunkedVoxelObject {
     /// that are fully outside the negative halfspace of the plane.
     pub fn for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &self,
-        plane: &Plane<f64>,
+        plane: &Plane<f32>,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
-        let normalized_plane = plane.scaled(self.voxel_extent.recip());
+        let normalized_plane = plane.scaled(self.inverse_voxel_extent);
         let included_voxel_ranges = self.voxel_ranges_in_object_within_plane(&normalized_plane);
         self.for_each_surface_voxel_in_voxel_ranges(included_voxel_ranges, f);
     }
@@ -54,12 +54,11 @@ impl ChunkedVoxelObject {
     /// that are fully outside the sphere.
     pub fn for_each_surface_voxel_maybe_intersecting_sphere(
         &self,
-        sphere: &Sphere<f64>,
+        sphere: &Sphere<f32>,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
-        let normalized_sphere = sphere.scaled(self.voxel_extent.recip());
-        let touched_voxel_ranges =
-            self.voxel_ranges_in_object_touching_aab(&normalized_sphere.compute_aabb());
+        let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
+        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_sphere(&normalized_sphere);
         self.for_each_surface_voxel_in_voxel_ranges(touched_voxel_ranges, f);
     }
 
@@ -154,13 +153,12 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_sphere(
         &mut self,
-        sphere: &Sphere<f64>,
-        modify_voxel: &mut impl FnMut([usize; 3], f64, &mut Voxel),
+        sphere: &Sphere<f32>,
+        modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
-        let normalized_sphere = sphere.scaled(self.voxel_extent.recip());
+        let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
 
-        let touched_voxel_ranges =
-            self.voxel_ranges_in_object_touching_aab(&normalized_sphere.compute_aabb());
+        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_sphere(&normalized_sphere);
 
         if touched_voxel_ranges.iter().any(Range::is_empty) {
             return;
@@ -293,10 +291,10 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_capsule(
         &mut self,
-        capsule: &Capsule<f64>,
-        modify_voxel: &mut impl FnMut([usize; 3], f64, &mut Voxel),
+        capsule: &Capsule<f32>,
+        modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
-        let normalized_capsule = capsule.scaled(self.voxel_extent.recip());
+        let normalized_capsule = capsule.scaled(self.inverse_voxel_extent);
 
         let touched_voxel_ranges =
             self.voxel_ranges_in_object_touching_aab(&normalized_capsule.compute_aabb());
@@ -425,7 +423,7 @@ impl ChunkedVoxelObject {
         i: usize,
         j: usize,
         k: usize,
-    ) -> Point3<f64> {
+    ) -> Point3<f32> {
         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
@@ -436,7 +434,7 @@ impl ChunkedVoxelObject {
         i: usize,
         j: usize,
         k: usize,
-    ) -> AxisAlignedBox<f64> {
+    ) -> AxisAlignedBox<f32> {
         voxel_aabb_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
@@ -508,7 +506,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
         &self,
-        plane: &Plane<f64>,
+        plane: &Plane<f32>,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -532,7 +530,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_sphere_brute_force(
         &self,
-        sphere: &Sphere<f64>,
+        sphere: &Sphere<f32>,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -555,7 +553,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_sphere_brute_force(
         &self,
-        sphere: &Sphere<f64>,
+        sphere: &Sphere<f32>,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -576,7 +574,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_capsule_brute_force(
         &self,
-        capsule: &Capsule<f64>,
+        capsule: &Capsule<f32>,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         let containment_tester = capsule.create_point_containment_tester();
@@ -597,23 +595,35 @@ impl ChunkedVoxelObject {
 
     /// The AAB should be in normalized voxel object space (where voxel extent
     /// is 1.0).
-    fn voxel_ranges_in_object_touching_aab(
+    pub fn voxel_ranges_in_object_touching_aab(
         &self,
-        normalized_aab: &AxisAlignedBox<f64>,
+        normalized_aab: &AxisAlignedBox<f32>,
     ) -> VoxelRanges {
         voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), normalized_aab)
     }
 
+    /// The sphere should be in normalized voxel object space (where voxel
+    /// extent is 1.0).
+    pub fn voxel_ranges_in_object_touching_sphere(
+        &self,
+        normalized_sphere: &Sphere<f32>,
+    ) -> VoxelRanges {
+        voxel_ranges_touching_sphere(self.occupied_voxel_ranges.clone(), normalized_sphere)
+    }
+
     /// The plane should be in normalized voxel object space (where voxel extent
     /// is 1.0).
-    fn voxel_ranges_in_object_within_plane(&self, normalized_plane: &Plane<f64>) -> VoxelRanges {
+    pub fn voxel_ranges_in_object_within_plane(
+        &self,
+        normalized_plane: &Plane<f32>,
+    ) -> VoxelRanges {
         voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), normalized_plane)
     }
 
     pub fn determine_voxel_ranges_encompassing_intersection(
         object_a: &Self,
         object_b: &Self,
-        transform_from_b_to_a: &Isometry3<f64>,
+        transform_from_b_to_a: &Isometry3<f32>,
     ) -> Option<(VoxelRanges, VoxelRanges)> {
         let object_a_aabb = normalized_aabb_from_voxel_ranges(&object_a.occupied_voxel_ranges)
             .scaled(object_a.voxel_extent);
@@ -634,12 +644,12 @@ impl ChunkedVoxelObject {
 
         let intersection_voxel_ranges_in_a = voxel_ranges_touching_aab(
             object_a.occupied_voxel_ranges.clone(),
-            &intersection_aabb_in_a.scaled(object_a.voxel_extent.recip()),
+            &intersection_aabb_in_a.scaled(object_a.inverse_voxel_extent),
         );
 
         let intersection_voxel_ranges_in_b = voxel_ranges_touching_aab(
             object_b.occupied_voxel_ranges.clone(),
-            &intersection_aabb_in_b.scaled(object_b.voxel_extent.recip()),
+            &intersection_aabb_in_b.scaled(object_b.inverse_voxel_extent),
         );
 
         Some((
@@ -659,7 +669,7 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
 /// is 1.0).
 fn voxel_ranges_within_plane(
     max_voxel_ranges: VoxelRanges,
-    normalized_plane: &Plane<f64>,
+    normalized_plane: &Plane<f32>,
 ) -> VoxelRanges {
     let normalized_aabb = normalized_aabb_from_voxel_ranges(&max_voxel_ranges);
 
@@ -673,7 +683,7 @@ fn voxel_ranges_within_plane(
 /// 1.0).
 fn voxel_ranges_touching_aab(
     max_voxel_ranges: VoxelRanges,
-    normalized_aab: &AxisAlignedBox<f64>,
+    normalized_aab: &AxisAlignedBox<f32>,
 ) -> VoxelRanges {
     let lower_corner = normalized_aab.lower_corner();
     let upper_corner = normalized_aab.upper_corner();
@@ -689,16 +699,25 @@ fn voxel_ranges_touching_aab(
     touched_voxel_ranges
 }
 
+/// The sphere should be in normalized voxel object space (where voxel extent is
+/// 1.0).
+fn voxel_ranges_touching_sphere(
+    max_voxel_ranges: VoxelRanges,
+    normalized_sphere: &Sphere<f32>,
+) -> VoxelRanges {
+    voxel_ranges_touching_aab(max_voxel_ranges, &normalized_sphere.compute_aabb())
+}
+
 fn voxel_center_position_from_object_voxel_indices(
-    voxel_extent: f64,
+    voxel_extent: f32,
     i: usize,
     j: usize,
     k: usize,
-) -> Point3<f64> {
+) -> Point3<f32> {
     point![
-        (i as f64 + 0.5) * voxel_extent,
-        (j as f64 + 0.5) * voxel_extent,
-        (k as f64 + 0.5) * voxel_extent
+        (i as f32 + 0.5) * voxel_extent,
+        (j as f32 + 0.5) * voxel_extent,
+        (k as f32 + 0.5) * voxel_extent
     ]
 }
 
@@ -706,60 +725,60 @@ fn normalized_voxel_center_position_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> Point3<f64> {
-    point![(i as f64 + 0.5), (j as f64 + 0.5), (k as f64 + 0.5)]
+) -> Point3<f32> {
+    point![(i as f32 + 0.5), (j as f32 + 0.5), (k as f32 + 0.5)]
 }
 
 fn normalized_chunk_aabb_from_chunk_indices(
     chunk_i: usize,
     chunk_j: usize,
     chunk_k: usize,
-) -> AxisAlignedBox<f64> {
+) -> AxisAlignedBox<f32> {
     AxisAlignedBox::new(
         point![
-            (chunk_i * CHUNK_SIZE) as f64,
-            (chunk_j * CHUNK_SIZE) as f64,
-            (chunk_k * CHUNK_SIZE) as f64
+            (chunk_i * CHUNK_SIZE) as f32,
+            (chunk_j * CHUNK_SIZE) as f32,
+            (chunk_k * CHUNK_SIZE) as f32
         ],
         point![
-            ((chunk_i + 1) * CHUNK_SIZE) as f64,
-            ((chunk_j + 1) * CHUNK_SIZE) as f64,
-            ((chunk_k + 1) * CHUNK_SIZE) as f64
+            ((chunk_i + 1) * CHUNK_SIZE) as f32,
+            ((chunk_j + 1) * CHUNK_SIZE) as f32,
+            ((chunk_k + 1) * CHUNK_SIZE) as f32
         ],
     )
 }
 
 fn voxel_aabb_from_object_voxel_indices(
-    voxel_extent: f64,
+    voxel_extent: f32,
     i: usize,
     j: usize,
     k: usize,
-) -> AxisAlignedBox<f64> {
+) -> AxisAlignedBox<f32> {
     AxisAlignedBox::new(
         point![
-            i as f64 * voxel_extent,
-            j as f64 * voxel_extent,
-            k as f64 * voxel_extent
+            i as f32 * voxel_extent,
+            j as f32 * voxel_extent,
+            k as f32 * voxel_extent
         ],
         point![
-            (i as f64 + 1.0) * voxel_extent,
-            (j as f64 + 1.0) * voxel_extent,
-            (k as f64 + 1.0) * voxel_extent
+            (i as f32 + 1.0) * voxel_extent,
+            (j as f32 + 1.0) * voxel_extent,
+            (k as f32 + 1.0) * voxel_extent
         ],
     )
 }
 
-fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox<f64> {
+fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox<f32> {
     let lower_corner = point![
-        voxel_ranges[0].start as f64,
-        voxel_ranges[1].start as f64,
-        voxel_ranges[2].start as f64
+        voxel_ranges[0].start as f32,
+        voxel_ranges[1].start as f32,
+        voxel_ranges[2].start as f32
     ];
 
     let upper_corner = point![
-        voxel_ranges[0].end as f64,
-        voxel_ranges[1].end as f64,
-        voxel_ranges[2].end as f64
+        voxel_ranges[0].end as f32,
+        voxel_ranges[1].end as f32,
+        voxel_ranges[2].end as f32
     ];
 
     AxisAlignedBox::new(lower_corner, upper_corner)
@@ -778,20 +797,20 @@ pub mod fuzzing {
     use std::mem;
 
     #[derive(Clone, Debug)]
-    pub struct ArbitraryPlane(Plane<f64>);
+    pub struct ArbitraryPlane(Plane<f32>);
 
     #[derive(Clone, Debug)]
-    pub struct ArbitrarySphere(Sphere<f64>);
+    pub struct ArbitrarySphere(Sphere<f32>);
 
     #[derive(Clone, Debug)]
-    pub struct ArbitraryCapsule(Capsule<f64>);
+    pub struct ArbitraryCapsule(Capsule<f32>);
 
     impl Arbitrary<'_> for ArbitraryPlane {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let displacement = 1e3 * (2.0 * arbitrary_norm_f64(u)? - 1.0);
-            let nx = 2.0 * arbitrary_norm_f64(u)? - 1.0;
-            let ny = 2.0 * arbitrary_norm_f64(u)? - 1.0;
-            let mut nz = 2.0 * arbitrary_norm_f64(u)? - 1.0;
+            let displacement = 1e3 * (2.0 * arbitrary_norm_f32(u)? - 1.0);
+            let nx = 2.0 * arbitrary_norm_f32(u)? - 1.0;
+            let ny = 2.0 * arbitrary_norm_f32(u)? - 1.0;
+            let mut nz = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             if abs_diff_eq!(nx, 0.0) && abs_diff_eq!(ny, 0.0) && abs_diff_eq!(nz, 0.0) {
                 nz = 1e-3;
             }
@@ -809,10 +828,10 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for ArbitrarySphere {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let radius = u.arbitrary_len::<usize>()?.min(1000) as f64 + arbitrary_norm_f64(u)?;
-            let x = 1e3 * arbitrary_norm_f64(u)?;
-            let y = 1e3 * arbitrary_norm_f64(u)?;
-            let z = 1e3 * arbitrary_norm_f64(u)?;
+            let radius = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
+            let x = 1e3 * arbitrary_norm_f32(u)?;
+            let y = 1e3 * arbitrary_norm_f32(u)?;
+            let z = 1e3 * arbitrary_norm_f32(u)?;
             Ok(Self(Sphere::new(point![x, y, z], radius)))
         }
 
@@ -824,18 +843,18 @@ pub mod fuzzing {
 
     impl Arbitrary<'_> for ArbitraryCapsule {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-            let start_x = 1e3 * arbitrary_norm_f64(u)?;
-            let start_y = 1e3 * arbitrary_norm_f64(u)?;
-            let start_z = 1e3 * arbitrary_norm_f64(u)?;
+            let start_x = 1e3 * arbitrary_norm_f32(u)?;
+            let start_y = 1e3 * arbitrary_norm_f32(u)?;
+            let start_z = 1e3 * arbitrary_norm_f32(u)?;
             let segment_start = point![start_x, start_y, start_z];
 
-            let dir_x = 2.0 * arbitrary_norm_f64(u)? - 1.0;
-            let dir_y = 2.0 * arbitrary_norm_f64(u)? - 1.0;
-            let dir_z = 2.0 * arbitrary_norm_f64(u)? - 1.0;
-            let length = u.arbitrary_len::<usize>()?.min(1000) as f64 + arbitrary_norm_f64(u)?;
+            let dir_x = 2.0 * arbitrary_norm_f32(u)? - 1.0;
+            let dir_y = 2.0 * arbitrary_norm_f32(u)? - 1.0;
+            let dir_z = 2.0 * arbitrary_norm_f32(u)? - 1.0;
+            let length = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
             let segment_vector = vector![dir_x, dir_y, dir_z].normalize() * length;
 
-            let radius = u.arbitrary_len::<usize>()?.min(1000) as f64 + arbitrary_norm_f64(u)?;
+            let radius = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
 
             Ok(Self(Capsule::new(segment_start, segment_vector, radius)))
         }
@@ -981,7 +1000,7 @@ pub mod fuzzing {
                 let signed_distance_delta =
                     3.0 * (1.0 - squared_distance * sphere.0.radius_squared().recip());
 
-                voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
                     if !was_empty {
                         inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
                     }
@@ -1021,7 +1040,7 @@ pub mod fuzzing {
                 let signed_distance_delta =
                     3.0 * (1.0 - squared_distance * capsule.0.radius().powi(2).recip());
 
-                voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+                voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
                     if !was_empty {
                         inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
                     }
@@ -1041,8 +1060,8 @@ pub mod fuzzing {
         }
     }
 
-    fn arbitrary_norm_f64(u: &mut Unstructured<'_>) -> Result<f64> {
-        Ok(f64::from(u.int_in_range(0..=1000000)?) / 1000000.0)
+    fn arbitrary_norm_f32(u: &mut Unstructured<'_>) -> Result<f32> {
+        Ok((f64::from(u.int_in_range(0..=1000000)?) / 1000000.0) as f32)
     }
 }
 
@@ -1067,7 +1086,7 @@ mod tests {
         let plane_displacement = 0.8 * object_radius;
 
         let mut graph = SDFGraph::new_in(Global);
-        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        graph.add_node(SDFNode::new_sphere(object_radius));
         let sdf_generator = graph.build_in(Global).unwrap();
 
         let generator = SDFVoxelGenerator::new(
@@ -1118,7 +1137,7 @@ mod tests {
         let sphere_radius = 0.6 * object_radius;
 
         let mut graph = SDFGraph::new_in(Global);
-        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        graph.add_node(SDFNode::new_sphere(object_radius));
         let sdf_generator = graph.build_in(Global).unwrap();
 
         let generator = SDFVoxelGenerator::new(
@@ -1129,7 +1148,7 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
-            object.compute_aabb::<f64>().center()
+            object.compute_aabb::<f32>().center()
                 - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
             sphere_radius,
         );
@@ -1161,7 +1180,7 @@ mod tests {
         let sphere_radius = 0.4 * object_radius;
 
         let mut graph = SDFGraph::new_in(Global);
-        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        graph.add_node(SDFNode::new_sphere(object_radius));
         let sdf_generator = graph.build_in(Global).unwrap();
 
         let generator = SDFVoxelGenerator::new(
@@ -1172,7 +1191,7 @@ mod tests {
         let mut object = ChunkedVoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
-            object.compute_aabb::<f64>().center()
+            object.compute_aabb::<f32>().center()
                 - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
             sphere_radius,
         );
@@ -1206,7 +1225,7 @@ mod tests {
         let capsule_radius = 0.4 * object_radius;
 
         let mut graph = SDFGraph::new_in(Global);
-        graph.add_node(SDFNode::new_sphere(object_radius as f32));
+        graph.add_node(SDFNode::new_sphere(object_radius));
         let sdf_generator = graph.build_in(Global).unwrap();
 
         let generator = SDFVoxelGenerator::new(
@@ -1217,7 +1236,7 @@ mod tests {
         let mut object = ChunkedVoxelObject::generate(&generator);
 
         let capsule = Capsule::new(
-            object.compute_aabb::<f64>().center() - capsule_direction.scale(-object_radius),
+            object.compute_aabb::<f32>().center() - capsule_direction.scale(-object_radius),
             capsule_vector,
             capsule_radius,
         );

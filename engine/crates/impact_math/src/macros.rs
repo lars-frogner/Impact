@@ -25,7 +25,7 @@ macro_rules! hash64 {
 }
 
 /// Defines a new type with the given name that is a wrapper
-/// around a [`StringHash32`](crate::StringHash32).
+/// around a [`StringHash32`](crate::hash::StringHash32).
 #[macro_export]
 macro_rules! stringhash32_newtype {
     (
@@ -35,7 +35,7 @@ macro_rules! stringhash32_newtype {
         $(#[$attributes])*
         #[repr(C)]
         #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Zeroable, bytemuck::Pod)]
-        $($pub)? struct $name($($pub)? $crate::StringHash32);
+        $($pub)? struct $name($($pub)? $crate::hash::StringHash32);
 
         impl ::std::fmt::Display for $name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -46,7 +46,7 @@ macro_rules! stringhash32_newtype {
 }
 
 /// Defines a new type with the given name that is a wrapper
-/// around a [`StringHash64`](crate::StringHash64).
+/// around a [`StringHash64`](crate::hash::StringHash64).
 #[macro_export]
 macro_rules! stringhash64_newtype {
     (

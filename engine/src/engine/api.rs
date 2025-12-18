@@ -18,7 +18,7 @@ use impact_ecs::{
     },
     world::EntityID,
 };
-use impact_physics::{constraint::solver::ConstraintSolverConfig, fph};
+use impact_physics::constraint::solver::ConstraintSolverConfig;
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::RenderAttachmentQuantity,
@@ -403,7 +403,7 @@ impl Engine {
     }
 
     /// Returns the current simulation time.
-    pub fn simulation_time(&self) -> f64 {
+    pub fn simulation_time(&self) -> f32 {
         self.simulator().oread().current_simulation_time()
     }
 
@@ -441,7 +441,7 @@ impl Engine {
     }
 
     /// Returns the current simulation speed multiplier.
-    pub fn simulation_speed_multiplier(&self) -> fph {
+    pub fn simulation_speed_multiplier(&self) -> f32 {
         self.simulator().oread().simulation_speed_multiplier()
     }
 
@@ -451,7 +451,7 @@ impl Engine {
     }
 
     /// Returns the current time step duration.
-    pub fn time_step_duration(&self) -> fph {
+    pub fn time_step_duration(&self) -> f32 {
         self.simulator().oread().time_step_duration()
     }
 

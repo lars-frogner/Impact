@@ -1,8 +1,8 @@
-# Hash: 054526910b3565649f4d5f5ebeca2ae1ba7ddc008f79af2064e201539721949f
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 24a0216adeda5ea2daf5614814af7f8ca197be4b2080f6d758f74f1f42f1dfc2
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::force::detailed_drag::DragLoadMapID
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     DragLoadMapID,
     write_bytes,
@@ -12,16 +12,16 @@ module [
 import core.Hashing
 
 ## Identifier for a [`DragLoadMap`].
-## Wraps a [`StringHash64`](impact_math::StringHash64).
-DragLoadMapID : Hashing.StringHash64
+## Wraps a [`StringHash32`](impact_math::StringHash32).
+DragLoadMapID : Hashing.StringHash32
 
 ## Serializes a value of [DragLoadMapID] into the binary representation
 ## expected by the engine and appends the bytes to the list.
 write_bytes : List U8, DragLoadMapID -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(8)
-    |> Hashing.write_bytes_string_hash_64(value)
+    |> List.reserve(4)
+    |> Hashing.write_bytes_string_hash_32(value)
 
 ## Deserializes a value of [DragLoadMapID] from its bytes in the
 ## representation used by the engine.
@@ -29,13 +29,13 @@ from_bytes : List U8 -> Result DragLoadMapID _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 8 }) |> Hashing.from_bytes_string_hash_64?,
+            bytes |> List.sublist({ start: 0, len: 4 }) |> Hashing.from_bytes_string_hash_32?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

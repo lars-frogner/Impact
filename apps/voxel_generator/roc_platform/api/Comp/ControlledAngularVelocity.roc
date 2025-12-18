@@ -1,8 +1,8 @@
-# Hash: 9fc677e974dc1c07fc9d4533e398974076748765f48921517ef1ac5292fb00fb
-# Generated: 2025-09-20T15:19:09+00:00
+# Hash: 7385eaba1bf0bfcf34b8cecd9f6a8bbce729ecff6ddb14aa5d1dda30b1ef6d6c
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_controller::orientation::ControlledAngularVelocity
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ControlledAngularVelocity,
     new,
@@ -105,8 +105,8 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, ControlledAngularVelocity -> List U8
 write_packet = |bytes, val|
     type_id = 15898146010921466381
-    size = 32
-    alignment = 8
+    size = 16
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -117,8 +117,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List ControlledAngularVelocity -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 15898146010921466381
-    size = 32
-    alignment = 8
+    size = 16
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -138,7 +138,7 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, ControlledAngularVelocity -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(32)
+    |> List.reserve(16)
     |> Physics.AngularVelocity.write_bytes(value)
 
 ## Deserializes a value of [ControlledAngularVelocity] from its bytes in the
@@ -147,13 +147,13 @@ from_bytes : List U8 -> Result ControlledAngularVelocity _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 32 }) |> Physics.AngularVelocity.from_bytes?,
+            bytes |> List.sublist({ start: 0, len: 16 }) |> Physics.AngularVelocity.from_bytes?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

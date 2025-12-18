@@ -167,6 +167,12 @@ pub trait RocPod: Roc + bytemuck::Pod {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RocTypeID(u64);
 
+// Use hash map and hash set consitent with Engine
+#[cfg(feature = "roc_codegen")]
+type HashMap<K, V> = hashbrown::HashMap<K, V, rustc_hash::FxBuildHasher>;
+#[cfg(feature = "roc_codegen")]
+type HashSet<T> = hashbrown::HashSet<T, rustc_hash::FxBuildHasher>;
+
 impl RocTypeID {
     pub const fn hashed_from_str(input: &str) -> Self {
         // WARNING: we guarantee that this matches

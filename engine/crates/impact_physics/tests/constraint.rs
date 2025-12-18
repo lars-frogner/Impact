@@ -11,7 +11,6 @@ use impact_physics::{
         setup::{PlanarCollidable, SphericalCollidable},
     },
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
-    fph,
     inertia::InertialProperties,
     material::ContactResponseParameters,
     quantities::{Motion, Orientation, Position, Velocity},
@@ -21,25 +20,25 @@ use nalgebra::{point, vector};
 
 #[derive(Clone, Debug)]
 struct SphereBody {
-    sphere: Sphere<fph>,
+    sphere: Sphere<f32>,
     velocity: Velocity,
-    mass_density: fph,
-    restitution_coef: fph,
+    mass_density: f32,
+    restitution_coef: f32,
 }
 
 #[derive(Clone, Debug)]
 struct PlaneBody {
     origin: Position,
     orientation: Orientation,
-    restitution_coef: fph,
+    restitution_coef: f32,
 }
 
 impl SphereBody {
     fn new(
-        sphere: Sphere<fph>,
+        sphere: Sphere<f32>,
         velocity: Velocity,
-        mass_density: fph,
-        restitution_coef: fph,
+        mass_density: f32,
+        restitution_coef: f32,
     ) -> Self {
         Self {
             sphere,
@@ -55,7 +54,7 @@ impl SphereBody {
 }
 
 impl PlaneBody {
-    fn new(origin: Position, orientation: Orientation, restitution_coef: fph) -> Self {
+    fn new(origin: Position, orientation: Orientation, restitution_coef: f32) -> Self {
         Self {
             origin,
             orientation,
@@ -351,7 +350,7 @@ fn grazing_sphere_collision() {
     let speed = 0.5;
     let mass_density = 1.0;
     let restitution = 1.0;
-    let offset = fph::sqrt(2.0) * radius; // Gives 90 degree deflection
+    let offset = f32::sqrt(2.0) * radius; // Gives 90 degree deflection
 
     test_binary_sphere_collision(
         SphereBody::new(
@@ -466,7 +465,7 @@ fn position_correction_of_interpenetrating_spheres() {
         let body = rigid_body_manager.dynamic_rigid_body(id);
         assert_abs_diff_eq!(
             body.position(),
-            &point![2.0 * radius * (idx as fph), 0.0, 0.0],
+            &point![2.0 * radius * (idx as f32), 0.0, 0.0],
             epsilon = 1e-6
         );
         assert_eq!(body.orientation(), &Orientation::identity());

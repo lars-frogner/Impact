@@ -142,12 +142,12 @@ struct WorkerID(u64);
 
 impl<M> ThreadPool<M> {
     /// Creates a new thread pool containing the given number of worker threads
-    /// configured to execute a specified task. When a thread receives a
-    /// [`WorkerInstruction`] to execute the task, the given `execute_task`
-    /// closure is called. The closure is supplied with the message contained in
-    /// the execution instruction as well as a reference to a
-    /// [`ThreadPoolChannel`] that can be used to send messages to other worker
-    /// threads from the closure.
+    /// configured to execute a specified task. When a thread receives an
+    /// instruction to execute the task, the given `execute_task` closure is
+    /// called. The closure is supplied with the message contained in the
+    /// execution instruction as well as a reference to a [`ThreadPoolChannel`]
+    /// that can be used to send messages to other worker threads from the
+    /// closure.
     pub fn new<T>(
         n_workers: NonZeroUsize,
         queue_capacity: NonZeroUsize,

@@ -30,10 +30,10 @@ pub fn setup_constant_acceleration(
 ) -> ConstantAccelerationGeneratorID {
     force_generator_manager
         .constant_accelerations_mut()
-        .insert_generator(ConstantAccelerationGenerator {
+        .insert_generator(ConstantAccelerationGenerator::new(
             rigid_body_id,
             acceleration,
-        })
+        ))
 }
 
 pub fn setup_local_force(

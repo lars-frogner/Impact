@@ -1,8 +1,8 @@
-# Hash: f479ba0f1250b69859c482e62a00e971b4c11005aa9cef6b5d66d5e9acb8d5bb
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 665936600bdd9212c2af9ef7e9337d962660902f409ac09e65926b1e6ce10ab1
+# Generated: 2025-12-17T23:58:42+00:00
 # Rust type: impact_physics::rigid_body::setup::DynamicRigidBodySubstance
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     DynamicRigidBodySubstance,
     add,
@@ -17,7 +17,7 @@ import core.Builtin
 
 ## The properties of the substance making up a dynamic rigid body.
 DynamicRigidBodySubstance : {
-    mass_density : F64,
+    mass_density : F32,
 }
 
 ## Adds a value of the [DynamicRigidBodySubstance] component to an entity's data.
@@ -44,8 +44,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, DynamicRigidBodySubstance -> List U8
 write_packet = |bytes, val|
     type_id = 1126963077143087020
-    size = 8
-    alignment = 8
+    size = 4
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -56,8 +56,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List DynamicRigidBodySubstance -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 1126963077143087020
-    size = 8
-    alignment = 8
+    size = 4
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -77,8 +77,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, DynamicRigidBodySubstance -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(8)
-    |> Builtin.write_bytes_f64(value.mass_density)
+    |> List.reserve(4)
+    |> Builtin.write_bytes_f32(value.mass_density)
 
 ## Deserializes a value of [DynamicRigidBodySubstance] from its bytes in the
 ## representation used by the engine.
@@ -86,13 +86,13 @@ from_bytes : List U8 -> Result DynamicRigidBodySubstance _
 from_bytes = |bytes|
     Ok(
         {
-            mass_density: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
+            mass_density: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

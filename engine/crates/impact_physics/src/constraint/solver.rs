@@ -11,7 +11,6 @@ use crate::{
         contact::{ContactID, PreparedContact},
         spherical_joint::{PreparedSphericalJoint, SphericalJoint},
     },
-    fph,
     quantities::AngularVelocity,
     rigid_body::{RigidBodyManager, TypedRigidBodyID},
 };
@@ -50,13 +49,13 @@ pub struct ConstraintSolverConfig {
     /// How to scale the still-valid accumulated impulses from the previous
     /// frame before using them as the initial impulses for the current frame.
     /// Set to zero to disable warm starting.
-    pub old_impulse_weight: fph,
+    pub old_impulse_weight: f32,
     /// The number of iterations to use for positional correction after the
     /// velocity constraints have been solved.
     pub n_positional_correction_iterations: u32,
     /// The fraction of the current positional error the solver should try to
     /// correct.
-    pub positional_correction_factor: fph,
+    pub positional_correction_factor: f32,
 }
 
 /// Container for constraints of a specific type that manages their lifetime
@@ -417,7 +416,7 @@ where
         &mut self,
         key: K,
         prepared_constraint: BodyPairConstraint<C>,
-        old_impulse_weight: fph,
+        old_impulse_weight: f32,
     ) {
         if let Some(idx) = self.constraint_index_map.get(key) {
             // We know this constraint from the previous solve
@@ -538,7 +537,7 @@ fn apply_positional_corrections_sequentially_for_body_pair_constraints<
 >(
     bodies: &mut [ConstrainedBody],
     constraints: &[BodyPairConstraint<P>],
-    correction_factor: fph,
+    correction_factor: f32,
 ) {
     for constraint in constraints {
         let (body_a, body_b) =

@@ -1,8 +1,8 @@
-# Hash: 9c91002c32179ff701c9a4d316bd9fd3a498c005dd25a3bc2ee171c1ddc7e905
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: d92069edbe1eddea3c6bafab39dbd3ad4504a735374390033d3eca0b17595247
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectoryDriver
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     HarmonicOscillatorTrajectoryDriver,
     write_bytes,
@@ -11,6 +11,7 @@ module [
 
 import Comp.KinematicRigidBodyID
 import Setup.HarmonicOscillatorTrajectory
+import core.Builtin
 
 ## Driver for imposing a harmonically oscillating trajectory on a kinematic
 ## rigid body.
@@ -19,6 +20,7 @@ HarmonicOscillatorTrajectoryDriver : {
     rigid_body_id : Comp.KinematicRigidBodyID.KinematicRigidBodyID,
     ## The harmonic oscillator trajectory imposed on the body.
     trajectory : Setup.HarmonicOscillatorTrajectory.HarmonicOscillatorTrajectory,
+    padding : F32,
 }
 
 ## Serializes a value of [HarmonicOscillatorTrajectoryDriver] into the binary representation
@@ -26,9 +28,10 @@ HarmonicOscillatorTrajectoryDriver : {
 write_bytes : List U8, HarmonicOscillatorTrajectoryDriver -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(80)
+    |> List.reserve(48)
     |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
     |> Setup.HarmonicOscillatorTrajectory.write_bytes(value.trajectory)
+    |> Builtin.write_bytes_f32(value.padding)
 
 ## Deserializes a value of [HarmonicOscillatorTrajectoryDriver] from its bytes in the
 ## representation used by the engine.
@@ -37,13 +40,14 @@ from_bytes = |bytes|
     Ok(
         {
             rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
-            trajectory: bytes |> List.sublist({ start: 8, len: 72 }) |> Setup.HarmonicOscillatorTrajectory.from_bytes?,
+            trajectory: bytes |> List.sublist({ start: 8, len: 36 }) |> Setup.HarmonicOscillatorTrajectory.from_bytes?,
+            padding: bytes |> List.sublist({ start: 44, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 80 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 48 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

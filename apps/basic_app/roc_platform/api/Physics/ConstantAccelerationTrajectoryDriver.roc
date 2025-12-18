@@ -1,8 +1,8 @@
-# Hash: 3166646218bb8c629cd0a588f191c294e4db35028bf14fd895fe2395197d499f
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 1e8008b6bd09783d25ac0fc77d418b70a3a4151df38bd53247b386d9a4f5620b
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectoryDriver
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ConstantAccelerationTrajectoryDriver,
     write_bytes,
@@ -26,7 +26,7 @@ ConstantAccelerationTrajectoryDriver : {
 write_bytes : List U8, ConstantAccelerationTrajectoryDriver -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(88)
+    |> List.reserve(48)
     |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
     |> Setup.ConstantAccelerationTrajectory.write_bytes(value.trajectory)
 
@@ -37,13 +37,13 @@ from_bytes = |bytes|
     Ok(
         {
             rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
-            trajectory: bytes |> List.sublist({ start: 8, len: 80 }) |> Setup.ConstantAccelerationTrajectory.from_bytes?,
+            trajectory: bytes |> List.sublist({ start: 8, len: 40 }) |> Setup.ConstantAccelerationTrajectory.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 88 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 48 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

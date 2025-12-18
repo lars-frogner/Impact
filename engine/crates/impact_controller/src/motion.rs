@@ -4,10 +4,7 @@ use super::{MotionChanged, MotionController};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
-use impact_physics::{
-    fph,
-    quantities::{Orientation, Velocity},
-};
+use impact_physics::quantities::{Orientation, Velocity};
 use nalgebra::vector;
 use roc_integration::roc;
 
@@ -23,7 +20,7 @@ define_component_type! {
 /// entity's local coordinate system (`W-A-S-D` type motion).
 #[derive(Clone, Debug)]
 pub struct SemiDirectionalMotionController {
-    movement_speed: fph,
+    movement_speed: f32,
     vertical_control: bool,
     state: SemiDirectionalMotionState,
     local_velocity: Velocity,
@@ -40,7 +37,7 @@ pub enum MotionControllerConfig {
 #[derive(Clone, Debug)]
 pub struct SemiDirectionalMotionControllerConfig {
     /// The speed at which the controlled entity can move.
-    pub movement_speed: fph,
+    pub movement_speed: f32,
     /// Whether the controller can move the entity in the vertical direction.
     pub vertical_control: bool,
 }
@@ -120,17 +117,17 @@ impl SemiDirectionalMotionController {
     /// system.
     fn compute_local_velocity(&self) -> Velocity {
         if self.state.motion_state() == MotionState::Still
-            || abs_diff_eq!(self.movement_speed, fph::ZERO)
+            || abs_diff_eq!(self.movement_speed, f32::ZERO)
         {
             Velocity::zeros()
         } else {
             // For scaling the magnitude to unity
-            let mut n_nonzero_components = fph::ZERO;
+            let mut n_nonzero_components = f32::ZERO;
 
             let velocity_x = if self.state.right == self.state.left {
-                fph::ZERO
+                f32::ZERO
             } else {
-                n_nonzero_components += fph::ONE;
+                n_nonzero_components += f32::ONE;
                 if self.state.right.is_moving() {
                     self.movement_speed
                 } else {
@@ -139,9 +136,9 @@ impl SemiDirectionalMotionController {
             };
 
             let velocity_y = if self.state.up == self.state.down {
-                fph::ZERO
+                f32::ZERO
             } else {
-                n_nonzero_components += fph::ONE;
+                n_nonzero_components += f32::ONE;
                 if self.state.up.is_moving() {
                     self.movement_speed
                 } else {
@@ -150,9 +147,9 @@ impl SemiDirectionalMotionController {
             };
 
             let velocity_z = if self.state.forwards == self.state.backwards {
-                fph::ZERO
+                f32::ZERO
             } else {
-                n_nonzero_components += fph::ONE;
+                n_nonzero_components += f32::ONE;
                 if self.state.forwards.is_moving() {
                     self.movement_speed
                 } else {
@@ -161,9 +158,9 @@ impl SemiDirectionalMotionController {
             };
 
             // We should have motion in this branch
-            assert_abs_diff_ne!(n_nonzero_components, fph::ZERO);
+            assert_abs_diff_ne!(n_nonzero_components, f32::ZERO);
 
-            let magnitude_scale = fph::ONE / fph::sqrt(n_nonzero_components);
+            let magnitude_scale = f32::ONE / f32::sqrt(n_nonzero_components);
 
             vector![velocity_x, velocity_y, velocity_z] * magnitude_scale
         }
@@ -171,7 +168,7 @@ impl SemiDirectionalMotionController {
 }
 
 impl MotionController for SemiDirectionalMotionController {
-    fn movement_speed(&self) -> fph {
+    fn movement_speed(&self) -> f32 {
         self.movement_speed
     }
 
@@ -191,7 +188,7 @@ impl MotionController for SemiDirectionalMotionController {
         result
     }
 
-    fn set_movement_speed(&mut self, movement_speed: fph) -> MotionChanged {
+    fn set_movement_speed(&mut self, movement_speed: f32) -> MotionChanged {
         if movement_speed != self.movement_speed {
             self.movement_speed = movement_speed;
             self.local_velocity = self.compute_local_velocity();
@@ -301,7 +298,7 @@ mod tests {
     use MotionDirection::{Backwards, Down, Forwards, Left, Up};
     use MotionState::{Moving, Still};
     use approx::assert_abs_diff_eq;
-    use std::f64::consts::SQRT_2;
+    use std::f32::consts::SQRT_2;
 
     #[test]
     fn updating_semi_directional_motion_works() {
@@ -345,7 +342,7 @@ mod tests {
         assert_abs_diff_eq!(
             controller.local_velocity,
             vector![0.0, speed, -speed] / SQRT_2, // Magnitude should be `speed`
-            epsilon = 1e-9
+            epsilon = 1e-6
         );
 
         assert!(controller.update_motion(Still, Up).motion_changed());

@@ -94,7 +94,7 @@ impl OrientationController for CameraOrientationController {
         self.orientation_has_changed
     }
 
-    fn update_orientation_change(&mut self, delta_x: f64, delta_y: f64) {
+    fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32) {
         self.orientation_change *= compute_pitch_rotation(delta_y) * compute_yaw_rotation(-delta_x);
 
         self.orientation_has_changed = true;
@@ -132,7 +132,7 @@ impl OrientationController for RollFreeCameraOrientationController {
         self.orientation_has_changed
     }
 
-    fn update_orientation_change(&mut self, delta_x: f64, delta_y: f64) {
+    fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32) {
         self.yaw_change = compute_yaw_rotation(-delta_x) * self.yaw_change;
         self.pitch_change *= compute_pitch_rotation(delta_y);
         self.orientation_has_changed = true;
@@ -151,10 +151,10 @@ impl Default for RollFreeCameraOrientationController {
     }
 }
 
-fn compute_yaw_rotation(angular_displacement_x: f64) -> Orientation {
+fn compute_yaw_rotation(angular_displacement_x: f32) -> Orientation {
     UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angular_displacement_x)
 }
 
-fn compute_pitch_rotation(angular_displacement_y: f64) -> Orientation {
+fn compute_pitch_rotation(angular_displacement_y: f32) -> Orientation {
     UnitQuaternion::from_axis_angle(&Vector3::x_axis(), angular_displacement_y)
 }

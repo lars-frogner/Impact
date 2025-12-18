@@ -1,8 +1,8 @@
-# Hash: 192c71bc09fdfb1ff5d6ddb2b2e80e34b8f009d08fe3b0ab6c56c41ad23c71bf
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 095767549d7cd379f565ea8ca3e6fd60c1f46a7e2ff22affe155638c16035191
+# Generated: 2025-12-17T23:58:42+00:00
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectory
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     CircularTrajectory,
     new,
@@ -23,23 +23,23 @@ import core.UnitQuaternion
 CircularTrajectory : {
     ## When (in simulation time) the body should be at the initial position
     ## on the circle.
-    initial_time : F64,
+    initial_time : F32,
     ## The orientation of the orbit. The first axis of the circle's reference
     ## frame will coincide with the direction from the center to the position
     ## of the body at the initial time, the second with the direction of the
     ## velocity at the initial time and the third with the normal of the
     ## circle's plane.
-    orientation : UnitQuaternion.UnitQuaternion Binary64,
+    orientation : UnitQuaternion.UnitQuaternion Binary32,
     ## The position of the center of the circle.
-    center_position : Point3.Point3 Binary64,
+    center_position : Point3.Point3 Binary32,
     ## The radius of the circle.
-    radius : F64,
+    radius : F32,
     ## The duration of one revolution.
-    period : F64,
+    period : F32,
 }
 
 ## Creates a new circular trajectory with the given properties.
-new : F64, UnitQuaternion.UnitQuaternion Binary64, Point3.Point3 Binary64, F64, F64 -> CircularTrajectory
+new : F32, UnitQuaternion.UnitQuaternion Binary32, Point3.Point3 Binary32, F32, F32 -> CircularTrajectory
 new = |initial_time, orientation, center_position, radius, period|
     {
         initial_time,
@@ -51,7 +51,7 @@ new = |initial_time, orientation, center_position, radius, period|
 
 ## Creates a new circular trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F64, UnitQuaternion.UnitQuaternion Binary64, Point3.Point3 Binary64, F64, F64 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion Binary32, Point3.Point3 Binary32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, initial_time, orientation, center_position, radius, period|
     add(entity_data, new(initial_time, orientation, center_position, radius, period))
 
@@ -79,8 +79,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, CircularTrajectory -> List U8
 write_packet = |bytes, val|
     type_id = 11253132944081296891
-    size = 80
-    alignment = 8
+    size = 40
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -91,8 +91,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List CircularTrajectory -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 11253132944081296891
-    size = 80
-    alignment = 8
+    size = 40
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -112,12 +112,12 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, CircularTrajectory -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(80)
-    |> Builtin.write_bytes_f64(value.initial_time)
-    |> UnitQuaternion.write_bytes_64(value.orientation)
-    |> Point3.write_bytes_64(value.center_position)
-    |> Builtin.write_bytes_f64(value.radius)
-    |> Builtin.write_bytes_f64(value.period)
+    |> List.reserve(40)
+    |> Builtin.write_bytes_f32(value.initial_time)
+    |> UnitQuaternion.write_bytes_32(value.orientation)
+    |> Point3.write_bytes_32(value.center_position)
+    |> Builtin.write_bytes_f32(value.radius)
+    |> Builtin.write_bytes_f32(value.period)
 
 ## Deserializes a value of [CircularTrajectory] from its bytes in the
 ## representation used by the engine.
@@ -125,17 +125,17 @@ from_bytes : List U8 -> Result CircularTrajectory _
 from_bytes = |bytes|
     Ok(
         {
-            initial_time: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            orientation: bytes |> List.sublist({ start: 8, len: 32 }) |> UnitQuaternion.from_bytes_64?,
-            center_position: bytes |> List.sublist({ start: 40, len: 24 }) |> Point3.from_bytes_64?,
-            radius: bytes |> List.sublist({ start: 64, len: 8 }) |> Builtin.from_bytes_f64?,
-            period: bytes |> List.sublist({ start: 72, len: 8 }) |> Builtin.from_bytes_f64?,
+            initial_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            orientation: bytes |> List.sublist({ start: 4, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            center_position: bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes_32?,
+            radius: bytes |> List.sublist({ start: 32, len: 4 }) |> Builtin.from_bytes_f32?,
+            period: bytes |> List.sublist({ start: 36, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 80 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 40 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

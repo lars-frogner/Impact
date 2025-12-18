@@ -1,8 +1,8 @@
-# Hash: a86c3a221921a7c850c7ec145cef802dfb4e7e4ca277635bc44d921c543c28ca
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: fee9b7f7641ec5ac66f3becf4cc3c6759aef7755051c1451f6b54dc9a8540630
+# Generated: 2025-12-17T23:58:42+00:00
 # Rust type: impact_physics::quantities::AngularVelocity
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     AngularVelocity,
     new,
@@ -19,19 +19,19 @@ import core.Vector3
 ## An angular velocity in 3D space, represented by an axis of rotation and an
 ## angular speed.
 AngularVelocity : {
-    axis_of_rotation : UnitVector3.UnitVector3 Binary64,
-    angular_speed : Radians.Radians Binary64,
+    axis_of_rotation : UnitVector3.UnitVector3 Binary32,
+    angular_speed : Radians.Radians Binary32,
 }
 
 ## Creates a new [`AngularVelocity`] with the given axis of rotation and
 ## angular speed.
-new : UnitVector3.UnitVector3 Binary64, Radians.Radians Binary64 -> AngularVelocity
+new : UnitVector3.UnitVector3 Binary32, Radians.Radians Binary32 -> AngularVelocity
 new = |axis_of_rotation, angular_speed|
     { axis_of_rotation, angular_speed }
 
 ## Creates a new [`AngularVelocity`] from the given angular velocity
 ## vector.
-from_vector : Vector3.Vector3 Binary64 -> AngularVelocity
+from_vector : Vector3.Vector3 Binary32 -> AngularVelocity
 from_vector = |angular_velocity_vector|
     when UnitVector3.try_from_and_get(angular_velocity_vector, 1e-15) is
         Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
@@ -47,9 +47,9 @@ zero = |{}|
 write_bytes : List U8, AngularVelocity -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(32)
-    |> UnitVector3.write_bytes_64(value.axis_of_rotation)
-    |> Radians.write_bytes_64(value.angular_speed)
+    |> List.reserve(16)
+    |> UnitVector3.write_bytes_32(value.axis_of_rotation)
+    |> Radians.write_bytes_32(value.angular_speed)
 
 ## Deserializes a value of [AngularVelocity] from its bytes in the
 ## representation used by the engine.
@@ -57,14 +57,14 @@ from_bytes : List U8 -> Result AngularVelocity _
 from_bytes = |bytes|
     Ok(
         {
-            axis_of_rotation: bytes |> List.sublist({ start: 0, len: 24 }) |> UnitVector3.from_bytes_64?,
-            angular_speed: bytes |> List.sublist({ start: 24, len: 8 }) |> Radians.from_bytes_64?,
+            axis_of_rotation: bytes |> List.sublist({ start: 0, len: 12 }) |> UnitVector3.from_bytes_32?,
+            angular_speed: bytes |> List.sublist({ start: 12, len: 4 }) |> Radians.from_bytes_32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

@@ -9,10 +9,7 @@ pub mod orientation;
 #[cfg(feature = "ecs")]
 pub mod systems;
 
-use impact_physics::{
-    fph,
-    quantities::{Orientation, Velocity},
-};
+use impact_physics::quantities::{Orientation, Velocity};
 use motion::{
     MotionControllerConfig, MotionDirection, MotionState, SemiDirectionalMotionController,
 };
@@ -24,7 +21,7 @@ use orientation::{
 /// the movement of entities.
 pub trait MotionController: Send + Sync + std::fmt::Debug {
     /// Returns the current movement speed.
-    fn movement_speed(&self) -> fph;
+    fn movement_speed(&self) -> f32;
 
     /// Computes the world space velocity that should be added to the controlled
     /// entity's velocity when in motion.
@@ -45,7 +42,7 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
     /// # Returns
     /// An enum indicating whether the update caused the local velocity to
     /// change.
-    fn set_movement_speed(&mut self, movement_speed: fph) -> MotionChanged;
+    fn set_movement_speed(&mut self, movement_speed: f32) -> MotionChanged;
 
     /// Stops the controlled motion of the entity.
     ///
@@ -69,7 +66,7 @@ pub trait OrientationController: Send + Sync + std::fmt::Debug {
     /// Determines and registers the change in orientation of the controlled
     /// entity based on the given angular displacement of the mouse, expressed
     /// in radians across the field of view.
-    fn update_orientation_change(&mut self, delta_x: f64, delta_y: f64);
+    fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32);
 
     /// Resets the change in orientation accumulated by
     /// [`update_orientation_change`](Self::update_orientation_change).

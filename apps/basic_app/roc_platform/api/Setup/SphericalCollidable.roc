@@ -1,8 +1,8 @@
-# Hash: 4c48e31511da92a5ec1ed92624e0b067da81fd2863174c16bea3de7293b06ee1
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 454e0b121f143cdcf912c9b430de0458c8e7c924aa3e797f4e231ef60083ccb5
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::collision::setup::SphericalCollidable
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     SphericalCollidable,
     new,
@@ -23,12 +23,12 @@ import core.Sphere
 
 ## A spherical collidable.
 SphericalCollidable : {
-    kind : U64,
-    sphere : Sphere.Sphere Binary64,
+    kind : U32,
+    sphere : Sphere.Sphere Binary32,
     response_params : Physics.ContactResponseParameters.ContactResponseParameters,
 }
 
-new : Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary64, Physics.ContactResponseParameters.ContactResponseParameters -> SphericalCollidable
+new : Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> SphericalCollidable
 new = |kind, sphere, response_params|
     {
         kind:
@@ -40,11 +40,11 @@ new = |kind, sphere, response_params|
         response_params,
     }
 
-add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary64, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
+add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
 add_new = |entity_data, kind, sphere, response_params|
     add(entity_data, new(kind, sphere, response_params))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Sphere.Sphere Binary64), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Sphere.Sphere Binary32), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, kind, sphere, response_params|
     add_multiple(
         entity_data,
@@ -79,8 +79,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, SphericalCollidable -> List U8
 write_packet = |bytes, val|
     type_id = 13734759680866586936
-    size = 64
-    alignment = 8
+    size = 32
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -91,8 +91,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List SphericalCollidable -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 13734759680866586936
-    size = 64
-    alignment = 8
+    size = 32
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -112,9 +112,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, SphericalCollidable -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(64)
-    |> Builtin.write_bytes_u64(value.kind)
-    |> Sphere.write_bytes_64(value.sphere)
+    |> List.reserve(32)
+    |> Builtin.write_bytes_u32(value.kind)
+    |> Sphere.write_bytes_32(value.sphere)
     |> Physics.ContactResponseParameters.write_bytes(value.response_params)
 
 ## Deserializes a value of [SphericalCollidable] from its bytes in the
@@ -123,15 +123,15 @@ from_bytes : List U8 -> Result SphericalCollidable _
 from_bytes = |bytes|
     Ok(
         {
-            kind: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_u64?,
-            sphere: bytes |> List.sublist({ start: 8, len: 32 }) |> Sphere.from_bytes_64?,
-            response_params: bytes |> List.sublist({ start: 40, len: 24 }) |> Physics.ContactResponseParameters.from_bytes?,
+            kind: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
+            sphere: bytes |> List.sublist({ start: 4, len: 16 }) |> Sphere.from_bytes_32?,
+            response_params: bytes |> List.sublist({ start: 20, len: 12 }) |> Physics.ContactResponseParameters.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 64 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

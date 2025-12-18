@@ -223,22 +223,22 @@ pub struct GizmoVisibilities {
 pub struct GizmoParameters {
     /// The density used to calculate the size of the center of mass sphere from
     /// the mass of the body.
-    pub center_of_mass_sphere_density: f64,
+    pub center_of_mass_sphere_density: f32,
     /// The scale factor used to calculate the length of the linear velocity
     /// arrow based on the entity's speed.
-    pub linear_velocity_scale: f64,
+    pub linear_velocity_scale: f32,
     /// The scale factor used to calculate the length of the angular velocity
     /// arrow based on the entity's angular speed.
-    pub angular_velocity_scale: f64,
+    pub angular_velocity_scale: f32,
     /// The scale factor used to calculate the length of the angular momentum
     /// arrow based on the magnitude of the body's angular momentum.
-    pub angular_momentum_scale: f64,
+    pub angular_momentum_scale: f32,
     /// The scale factor used to calculate the length of the force arrow based
     /// on the magnitude of the force on the body.
-    pub force_scale: f64,
+    pub force_scale: f32,
     /// The scale factor used to calculate the length of the torque arrow based
     /// on the magnitude of the torque on the body.
-    pub torque_scale: f64,
+    pub torque_scale: f32,
     /// Whether the cubes outlining voxel chunks should show through obscuring
     /// geometry, making the interior chunks visible.
     pub show_interior_chunks: bool,

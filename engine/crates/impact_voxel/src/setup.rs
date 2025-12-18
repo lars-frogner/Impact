@@ -42,8 +42,8 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct GeneratedVoxelObject {
         pub generator_id: VoxelGeneratorID,
-        pub voxel_extent: f64,
-        pub seed: u64,
+        pub voxel_extent: f32,
+        pub seed: u32,
     }
 }
 
@@ -175,12 +175,16 @@ define_setup_type! {
 #[roc(dependencies = [impact_math::hash::Hash64])]
 impl GeneratedVoxelObject {
     #[roc(body = "{ generator_id: Hashing.hash_str_64(generator_name), voxel_extent, seed }")]
-    pub fn new(generator_name: &str, voxel_extent: f64, seed: u64) -> Self {
+    pub fn new(generator_name: &str, voxel_extent: f32, seed: u32) -> Self {
         Self {
             generator_id: VoxelGeneratorID::from_name(generator_name),
             voxel_extent,
             seed,
         }
+    }
+
+    pub fn seed(&self) -> u64 {
+        u64::from(self.seed)
     }
 }
 
@@ -398,8 +402,8 @@ impl VoxelBox {
         }
     }
 
-    pub fn voxel_extent(&self) -> f64 {
-        f64::from(self.voxel_extent)
+    pub fn voxel_extent(&self) -> f32 {
+        self.voxel_extent
     }
 
     pub fn extents_in_voxels(&self) -> [f32; 3] {
@@ -436,8 +440,8 @@ impl VoxelSphere {
         }
     }
 
-    pub fn voxel_extent(&self) -> f64 {
-        f64::from(self.voxel_extent)
+    pub fn voxel_extent(&self) -> f32 {
+        self.voxel_extent
     }
 
     pub fn radius_in_voxels(&self) -> f32 {
@@ -488,8 +492,8 @@ impl VoxelSphereUnion {
         }
     }
 
-    pub fn voxel_extent(&self) -> f64 {
-        f64::from(self.voxel_extent)
+    pub fn voxel_extent(&self) -> f32 {
+        self.voxel_extent
     }
 
     pub fn radius_1_in_voxels(&self) -> f32 {

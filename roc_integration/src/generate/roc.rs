@@ -2,9 +2,8 @@
 //! [`roc`](crate::roc) attribute.
 
 use super::get_field_type;
-use crate::{RegisteredType, RocTypeID, ir};
+use crate::{HashMap, HashSet, RegisteredType, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow};
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::{
     borrow::Cow,
     fmt::{Display, Write},

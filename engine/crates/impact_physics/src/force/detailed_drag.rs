@@ -9,7 +9,6 @@ pub use drag_load::DragLoad;
 
 use crate::{
     force::ForceGeneratorRegistry,
-    fph,
     medium::UniformMedium,
     quantities::{Direction, Position},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
@@ -22,17 +21,16 @@ use impact_containers::{HashMap, hash_map::Entry};
 use impact_math::{
     Float,
     angle::{Angle, Radians},
-    stringhash64_newtype,
+    stringhash32_newtype,
 };
 use nalgebra::Point3;
 use roc_integration::roc;
-use simba::scalar::SubsetOf;
 use std::path::{Path, PathBuf};
 
 /// Manages all [`DetailedDragForceGenerator`]s.
 #[derive(Debug)]
 pub struct DetailedDragForceRegistry {
-    drag_load_map_repository: DragLoadMapRepository<f32>,
+    drag_load_map_repository: DragLoadMapRepository,
     generators: ForceGeneratorRegistry<DetailedDragForceGeneratorID, DetailedDragForceGenerator>,
 }
 
@@ -53,6 +51,7 @@ pub struct DetailedDragForceGenerator {
     pub body: DynamicRigidBodyID,
     /// The drag force on the body.
     pub force: DetailedDragForce,
+    padding: f32,
 }
 
 /// A shape-dependent drag force on a dynamic rigid body.
@@ -61,18 +60,18 @@ pub struct DetailedDragForceGenerator {
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct DetailedDragForce {
     /// The drag coefficient of the body.
-    pub drag_coefficient: fph,
+    pub drag_coefficient: f32,
     /// The ID of the [`DragLoadMap`] encoding the shape-dependence of the drag
     /// force.
     pub drag_load_map: DragLoadMapID,
     /// The scale of the body relative to the mesh the drag load map was
     /// computed from.
-    pub scaling: fph,
+    pub scaling: f32,
 }
 
-stringhash64_newtype!(
+stringhash32_newtype!(
     /// Identifier for a [`DragLoadMap`].
-    /// Wraps a [`StringHash64`](impact_math::StringHash64).
+    /// Wraps a [`StringHash32`](impact_math::StringHash32).
     #[roc(parents = "Physics")]
     [pub] DragLoadMapID
 );
@@ -81,14 +80,14 @@ stringhash64_newtype!(
 /// medium. The directions are discretized onto a 2D grid using an
 /// equirectangular projection (meaning the grid coordinates are the spherical
 /// azimuthal angle phi and polar angle theta).
-pub type DragLoadMap<F> = EquirectangularMap<DragLoad<F>>;
+pub type DragLoadMap = EquirectangularMap<DragLoad>;
 
 /// Repository where [`DragLoadMap`]s are stored under a unique
 /// [`DragLoadMapID`].
 #[derive(Debug)]
-pub struct DragLoadMapRepository<F: Float> {
+pub struct DragLoadMapRepository {
     config: DragLoadMapConfig,
-    drag_load_maps: HashMap<DragLoadMapID, DragLoadMap<F>>,
+    drag_load_maps: HashMap<DragLoadMapID, DragLoadMap>,
 }
 
 /// Configuration parameters for the generation of drag load maps.
@@ -116,7 +115,7 @@ pub struct DragLoadMapConfig {
     /// For values lower than one, there may be locations with a default zero
     /// drag load because there is no sufficiently close direction sample, so
     /// this should be avoided.
-    pub smoothness: fph,
+    pub smoothness: f32,
     /// Whether to store newly generated maps as files on disk.
     pub save_generated_maps: bool,
     /// Whether to overwrite any existing map file with the same name when
@@ -137,7 +136,7 @@ impl DetailedDragForceRegistry {
         })
     }
 
-    pub fn drag_load_map_repository_mut(&mut self) -> &mut DragLoadMapRepository<f32> {
+    pub fn drag_load_map_repository_mut(&mut self) -> &mut DragLoadMapRepository {
         &mut self.drag_load_map_repository
     }
 
@@ -168,12 +167,20 @@ impl From<u64> for DetailedDragForceGeneratorID {
 }
 
 impl DetailedDragForceGenerator {
+    pub fn new(body: DynamicRigidBodyID, force: DetailedDragForce) -> Self {
+        Self {
+            body,
+            force,
+            padding: 0.0,
+        }
+    }
+
     /// Applies the drag force to the appropriate dynamic rigid body.
     pub fn apply(
         &self,
         rigid_body_manager: &mut RigidBodyManager,
         medium: &UniformMedium,
-        drag_load_map_repository: &DragLoadMapRepository<f32>,
+        drag_load_map_repository: &DragLoadMapRepository,
     ) {
         let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(self.body) else {
             return;
@@ -188,7 +195,7 @@ impl DetailedDragForce {
     pub fn apply(
         &self,
         medium: &UniformMedium,
-        drag_load_map_repository: &DragLoadMapRepository<f32>,
+        drag_load_map_repository: &DragLoadMapRepository,
         rigid_body: &mut DynamicRigidBody,
     ) {
         let velocity = rigid_body.compute_velocity();
@@ -202,7 +209,7 @@ impl DetailedDragForce {
 
             let body_space_direction_of_motion_relative_to_medium = Direction::new_unchecked(
                 body_space_velocity_relative_to_medium
-                    / fph::sqrt(squared_body_speed_relative_to_medium),
+                    / f32::sqrt(squared_body_speed_relative_to_medium),
             );
 
             let phi = compute_phi(&body_space_direction_of_motion_relative_to_medium);
@@ -226,7 +233,7 @@ impl DetailedDragForce {
     }
 }
 
-impl<F: Float> DragLoadMapRepository<F> {
+impl DragLoadMapRepository {
     /// Creates a new empty drag load map repository with the given
     /// configuration parameters.
     ///
@@ -249,14 +256,14 @@ impl<F: Float> DragLoadMapRepository<F> {
     ///
     /// # Panics
     /// If no map with the given ID is present.
-    pub fn drag_load_map(&self, id: DragLoadMapID) -> &DragLoadMap<F> {
+    pub fn drag_load_map(&self, id: DragLoadMapID) -> &DragLoadMap {
         self.get_drag_load_map(id)
             .expect("Tried to obtain missing drag load map")
     }
 
     /// Returns a reference to the [`DragLoadMap`] with the given ID, or
     /// [`None`] if the map is not present.
-    pub fn get_drag_load_map(&self, id: DragLoadMapID) -> Option<&DragLoadMap<F>> {
+    pub fn get_drag_load_map(&self, id: DragLoadMapID) -> Option<&DragLoadMap> {
         self.drag_load_maps.get(&id)
     }
 
@@ -270,7 +277,7 @@ impl<F: Float> DragLoadMapRepository<F> {
     /// # Errors
     /// Returns an error if a map with the given ID already exists. The
     /// repository will remain unchanged.
-    pub fn add_drag_load_map(&mut self, id: DragLoadMapID, map: DragLoadMap<F>) -> Result<()> {
+    pub fn add_drag_load_map(&mut self, id: DragLoadMapID, map: DragLoadMap) -> Result<()> {
         match self.drag_load_maps.entry(id) {
             Entry::Vacant(entry) => {
                 entry.insert(map);
@@ -285,7 +292,7 @@ impl<F: Float> DragLoadMapRepository<F> {
 
     /// Includes the given drag load map in the repository under the given ID,
     /// unless a map with the same ID is already present.
-    pub fn add_drag_load_map_unless_present(&mut self, id: DragLoadMapID, map: DragLoadMap<F>) {
+    pub fn add_drag_load_map_unless_present(&mut self, id: DragLoadMapID, map: DragLoadMap) {
         let _ = self.add_drag_load_map(id, map);
     }
 
@@ -336,24 +343,20 @@ impl Default for DragLoadMapConfig {
     }
 }
 
-impl<F: Float> DragLoadMap<F> {
+impl DragLoadMap {
     /// Computes a drag load map for the mesh with the given triangles and
     /// center of mass, using the given number of direction samples and map
     /// resoulution and smoothness.
     ///
     /// # Panics
     /// If the given number of direction samples or theta coordinates is zero.
-    pub fn compute_from_mesh<'a, FMESH>(
-        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<FMESH>; 3]>,
+    pub fn compute_from_mesh<'a>(
+        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
         center_of_mass: &Position,
         n_direction_samples: usize,
         n_theta_coords: usize,
-        smoothness: fph,
-    ) -> Self
-    where
-        FMESH: Float + SubsetOf<fph>,
-        fph: SubsetOf<F>,
-    {
+        smoothness: f32,
+    ) -> Self {
         assert_ne!(
             n_direction_samples, 0,
             "Tried to compute drag load map based on zero direction samples"
@@ -383,19 +386,15 @@ impl<F: Float> DragLoadMap<F> {
     }
 }
 
-fn generate_map_from_drag_loads<F>(
-    drag_loads: &[(Direction, DragLoad<fph>)],
+fn generate_map_from_drag_loads(
+    drag_loads: &[(Direction, DragLoad)],
     n_theta_coords: usize,
-    angular_interpolation_distance: Radians<fph>,
-) -> DragLoadMap<F>
-where
-    F: Float,
-    fph: SubsetOf<F>,
-{
+    angular_interpolation_distance: Radians<f32>,
+) -> DragLoadMap {
     let angular_interpolation_distance = angular_interpolation_distance.radians();
     assert!(angular_interpolation_distance > 0.0);
 
-    let mut averaging_map = EquirectangularMap::<AveragingDragLoad<fph>>::empty(n_theta_coords);
+    let mut averaging_map = EquirectangularMap::<AveragingDragLoad>::empty(n_theta_coords);
 
     for (direction, load) in drag_loads {
         let direction_phi = compute_phi(direction);
@@ -408,7 +407,7 @@ where
         // maximum factor of four to prevent the samples near the poles from
         // becoming too influential.
         let scaled_angular_interpolation_distance =
-            angular_interpolation_distance / (1.0 - 0.75 * fph::abs(direction.z));
+            angular_interpolation_distance / (1.0 - 0.75 * f32::abs(direction.z));
 
         let inverse_scaled_angular_interpolation_distance =
             1.0 / scaled_angular_interpolation_distance;
@@ -433,26 +432,26 @@ where
     averaging_map.map_values(|averaging_load| averaging_load.into_average_load())
 }
 
-fn compute_phi(direction: &Direction) -> Radians<fph> {
-    Radians(fph::atan2(direction.y, direction.x))
+fn compute_phi(direction: &Direction) -> Radians<f32> {
+    Radians(f32::atan2(direction.y, direction.x))
 }
 
-fn compute_theta(direction: &Direction) -> Radians<fph> {
-    Radians(fph::acos(direction.z))
+fn compute_theta(direction: &Direction) -> Radians<f32> {
+    Radians(f32::acos(direction.z))
 }
 
 fn compute_angular_interpolation_distance_from_smoothness(
-    smoothness: fph,
+    smoothness: f32,
     n_direction_samples: usize,
-) -> Radians<fph> {
+) -> Radians<f32> {
     // For a smoothness of one, the angular areas covered by the quadratic
     // angular regions surrounding the direction samples add exactly up to the
     // total angular area of the sphere
-    Radians(smoothness * fph::sqrt(4.0 * fph::PI / (n_direction_samples as fph)))
+    Radians(smoothness * f32::sqrt(4.0 * f32::PI / (n_direction_samples as f32)))
 }
 
-fn compute_weight(normalized_angular_distance: fph) -> fph {
+fn compute_weight(normalized_angular_distance: f32) -> f32 {
     // Use a quartic weighting function with finite support (it reaches zero
     // when normalized angular distance reaches unity)
-    fph::max(0.0, 1.0 - normalized_angular_distance.powi(2)).powi(2)
+    f32::max(0.0, 1.0 - normalized_angular_distance.powi(2)).powi(2)
 }

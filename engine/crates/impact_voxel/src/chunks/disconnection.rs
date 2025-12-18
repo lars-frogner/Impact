@@ -687,7 +687,7 @@ impl ChunkedVoxelObject {
     }
 
     fn create_disconnected_voxel_object_in_single_chunk_if_possible(
-        voxel_extent: f64,
+        voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         origin_offset_in_parent: [usize; 3],
         chunk_counts: [usize; 3],
@@ -840,7 +840,7 @@ impl ChunkedVoxelObject {
     }
 
     fn create_disconnected_voxel_object(
-        voxel_extent: f64,
+        voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         origin_offset_in_parent: [usize; 3],
         chunk_counts: [usize; 3],
@@ -862,6 +862,7 @@ impl ChunkedVoxelObject {
 
         let mut voxel_object = Self {
             voxel_extent,
+            inverse_voxel_extent: voxel_extent.recip(),
             chunk_counts,
             chunk_idx_strides,
             occupied_chunk_ranges: offset_chunk_ranges,
@@ -2782,7 +2783,7 @@ pub mod fuzzing {
             );
 
             disconnected_inertial_property_manager.offset_reference_point_by(&Vector3::from(
-                origin_offset.map(|offset| offset as f64 * object.voxel_extent()),
+                origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
             ));
 
             disconnected_inertial_property_manager

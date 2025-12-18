@@ -43,7 +43,7 @@ pub trait ChunkedVoxelGenerator {
     type ChunkGenerationBuffers<AB: Allocator>;
 
     /// Returns the extent of single voxel.
-    fn voxel_extent(&self) -> f64;
+    fn voxel_extent(&self) -> f32;
 
     /// Returns the number of voxels along the x-, y- and z-axis of the grid,
     /// respectively.
@@ -70,7 +70,7 @@ pub trait ChunkedVoxelGenerator {
 /// Generator for a voxel object from a signed distance field.
 #[derive(Clone, Debug)]
 pub struct SDFVoxelGenerator<A: Allocator> {
-    voxel_extent: f64,
+    voxel_extent: f32,
     grid_shape: [usize; 3],
     shifted_grid_center: Point3<f32>,
     sdf_generator: SDFGenerator<A>,
@@ -206,7 +206,7 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
     /// Creates a new voxel generator using the given signed distance field
     /// and voxel type generators.
     pub fn new(
-        voxel_extent: f64,
+        voxel_extent: f32,
         sdf_generator: SDFGenerator<A>,
         voxel_type_generator: VoxelTypeGenerator,
     ) -> Self {
@@ -268,7 +268,7 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
 impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
     type ChunkGenerationBuffers<AB: Allocator> = SDFVoxelGeneratorChunkBuffers<AB>;
 
-    fn voxel_extent(&self) -> f64 {
+    fn voxel_extent(&self) -> f32 {
         self.voxel_extent
     }
 
@@ -381,7 +381,7 @@ pub mod fuzzing {
 
     impl<'a> Arbitrary<'a> for SDFVoxelGenerator<Global> {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let voxel_extent = 10.0 * arbitrary_norm_f64(u)?.max(1e-6);
+            let voxel_extent = 10.0 * arbitrary_norm_f32(u)?.max(1e-6);
             let sdf_generator = u.arbitrary()?;
             let voxel_type_generator = u.arbitrary()?;
             Ok(Self::new(voxel_extent, sdf_generator, voxel_type_generator))

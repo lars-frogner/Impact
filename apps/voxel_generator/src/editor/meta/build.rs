@@ -34,7 +34,7 @@ pub fn build_sdf_voxel_generator<A: Allocator, AG: Allocator>(
     let sdf_generator = compiled_graph.graph.build_in(alloc).unwrap();
 
     SDFVoxelGenerator::new(
-        f64::from(compiled_graph.voxel_extent),
+        compiled_graph.voxel_extent,
         sdf_generator,
         voxel_type_generator,
     )
@@ -47,7 +47,7 @@ pub fn default_sdf_voxel_generator<A: Allocator>(alloc: A) -> SDFVoxelGenerator<
     let voxel_type_generator =
         VoxelTypeGenerator::Same(SameVoxelTypeGenerator::new(VoxelType::from_idx(0)));
 
-    SDFVoxelGenerator::new(f64::from(voxel_extent), sdf_generator, voxel_type_generator)
+    SDFVoxelGenerator::new(voxel_extent, sdf_generator, voxel_type_generator)
 }
 
 pub fn build_meta_graph<A: Allocator>(

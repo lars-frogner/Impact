@@ -1,6 +1,6 @@
 //! Physical quantities.
 
-use crate::{fph, inertia::InertiaTensor};
+use crate::inertia::InertiaTensor;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::angle::{Angle, Radians};
@@ -26,38 +26,38 @@ define_component_type! {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct AngularVelocity {
     axis_of_rotation: Direction,
-    angular_speed: Radians<fph>,
+    angular_speed: Radians<f32>,
 }
 
 /// A unit vector in 3D space.
-pub type Direction = Unit<Vector3<fph>>;
+pub type Direction = Unit<Vector3<f32>>;
 
 /// A position in 3D space.
-pub type Position = Point3<fph>;
+pub type Position = Point3<f32>;
 
 /// A velocity in 3D space.
-pub type Velocity = Vector3<fph>;
+pub type Velocity = Vector3<f32>;
 
 /// An orientation in 3D space.
-pub type Orientation = UnitQuaternion<fph>;
+pub type Orientation = UnitQuaternion<f32>;
 
 /// A momentum in 3D space.
-pub type Momentum = Vector3<fph>;
+pub type Momentum = Vector3<f32>;
 
 /// An angular momentum in 3D space.
-pub type AngularMomentum = Vector3<fph>;
+pub type AngularMomentum = Vector3<f32>;
 
 /// An acceleration in 3D space.
-pub type Acceleration = Vector3<fph>;
+pub type Acceleration = Vector3<f32>;
 
 /// An angular acceleration in 3D space.
-pub type AngularAcceleration = Vector3<fph>;
+pub type AngularAcceleration = Vector3<f32>;
 
 /// A 3D force.
-pub type Force = Vector3<fph>;
+pub type Force = Vector3<f32>;
 
 /// A 3D torque.
-pub type Torque = Vector3<fph>;
+pub type Torque = Vector3<f32>;
 
 #[roc]
 impl Motion {
@@ -92,12 +92,12 @@ impl Motion {
     }
 }
 
-#[roc(dependencies=[Vector3<fph>])]
+#[roc(dependencies=[Vector3<f32>])]
 impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
     /// angular speed.
     #[roc(body = "{ axis_of_rotation, angular_speed }")]
-    pub fn new(axis_of_rotation: Direction, angular_speed: Radians<fph>) -> Self {
+    pub fn new(axis_of_rotation: Direction, angular_speed: Radians<f32>) -> Self {
         Self {
             axis_of_rotation,
             angular_speed,
@@ -111,9 +111,9 @@ impl AngularVelocity {
         Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
         None -> zero({})
     "#)]
-    pub fn from_vector(angular_velocity_vector: Vector3<fph>) -> Self {
+    pub fn from_vector(angular_velocity_vector: Vector3<f32>) -> Self {
         if let Some((axis_of_rotation, angular_speed)) =
-            UnitVector3::try_new_and_get(angular_velocity_vector, fph::EPSILON)
+            UnitVector3::try_new_and_get(angular_velocity_vector, f32::EPSILON)
         {
             Self::new(axis_of_rotation, Radians(angular_speed))
         } else {
@@ -127,7 +127,7 @@ impl AngularVelocity {
     pub fn from_consecutive_orientations(
         first_orientation: &Orientation,
         second_orientation: &Orientation,
-        duration: fph,
+        duration: f32,
     ) -> Self {
         let difference = second_orientation * first_orientation.inverse();
         if let Some((axis, angle)) = difference.axis_angle() {
@@ -152,12 +152,12 @@ impl AngularVelocity {
     }
 
     /// Returns the angular speed.
-    pub fn angular_speed(&self) -> Radians<fph> {
+    pub fn angular_speed(&self) -> Radians<f32> {
         self.angular_speed
     }
 
     /// Computes the corresponding angular velocity vector.
-    pub fn as_vector(&self) -> Vector3<fph> {
+    pub fn as_vector(&self) -> Vector3<f32> {
         self.axis_of_rotation.as_ref() * self.angular_speed.radians()
     }
 }
@@ -197,10 +197,10 @@ impl Default for AngularVelocity {
 }
 
 impl AbsDiffEq for AngularVelocity {
-    type Epsilon = <fph as AbsDiffEq>::Epsilon;
+    type Epsilon = <f32 as AbsDiffEq>::Epsilon;
 
     fn default_epsilon() -> Self::Epsilon {
-        fph::default_epsilon()
+        f32::default_epsilon()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -213,8 +213,8 @@ impl AbsDiffEq for AngularVelocity {
 /// the given [`Orientation`] for a body with the given angular velocity.
 pub fn compute_orientation_derivative(
     orientation: &Orientation,
-    angular_velocity_vector: &Vector3<fph>,
-) -> Quaternion<fph> {
+    angular_velocity_vector: &Vector3<f32>,
+) -> Quaternion<f32> {
     Quaternion::from_imag(0.5 * angular_velocity_vector) * orientation.as_ref()
 }
 
@@ -250,19 +250,19 @@ pub fn compute_angular_acceleration(
 /// Computes the total kinetic energy (translational and rotational) of a
 /// body with the given properties.
 pub fn compute_total_kinetic_energy(
-    mass: fph,
+    mass: f32,
     inertia_tensor: &InertiaTensor,
     orientation: &Orientation,
     velocity: &Velocity,
     angular_velocity: &AngularVelocity,
-) -> fph {
+) -> f32 {
     compute_translational_kinetic_energy(mass, velocity)
         + compute_rotational_kinetic_energy(inertia_tensor, orientation, angular_velocity)
 }
 
 /// Computes the translational kinetic energy of a body with the given
 /// properties.
-pub fn compute_translational_kinetic_energy(mass: fph, velocity: &Velocity) -> fph {
+pub fn compute_translational_kinetic_energy(mass: f32, velocity: &Velocity) -> f32 {
     0.5 * mass * velocity.norm_squared()
 }
 
@@ -271,7 +271,7 @@ pub fn compute_rotational_kinetic_energy(
     inertia_tensor: &InertiaTensor,
     orientation: &Orientation,
     angular_velocity: &AngularVelocity,
-) -> fph {
+) -> f32 {
     let angular_momentum = compute_angular_momentum(inertia_tensor, orientation, angular_velocity);
     0.5 * angular_velocity.as_vector().dot(&angular_momentum)
 }
