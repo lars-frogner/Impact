@@ -731,11 +731,8 @@ fn model_view_transform_for_vector_gizmo(
         direction,
     );
 
-    let model_to_world_transform = Similarity3::from_parts(
-        position.coords.cast().into(),
-        rotation.cast(),
-        length,
-    );
+    let model_to_world_transform =
+        Similarity3::from_parts(position.coords.cast().into(), rotation.cast(), length);
 
     (scene_camera.view_transform() * model_to_world_transform).into()
 }
