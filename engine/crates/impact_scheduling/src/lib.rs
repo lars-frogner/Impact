@@ -1,22 +1,20 @@
 //! Task scheduling.
 
+mod dependency_graph;
+
 #[macro_use]
 pub mod macros;
 
 use anyhow::{Result, anyhow, bail};
-use impact_containers::{HashMap, HashSet, NoHashMap, RandomState};
+use dependency_graph::TaskDependencyGraph;
+use impact_alloc::arena::ArenaPool;
+use impact_containers::{HashMap, HashSet, NoHashMap};
 use impact_math::hash::Hash64;
 use impact_thread::pool::{ThreadPool, ThreadPoolChannel, ThreadPoolError};
 use parking_lot::Mutex;
-use petgraph::{
-    Directed,
-    algo::{self, DfsSpace},
-    graphmap::GraphMap,
-};
 use std::{
     backtrace::BacktraceStatus,
     fmt::{self, Debug},
-    marker::PhantomData,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -90,15 +88,6 @@ type TaskMessage<S> = (
 );
 
 type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
-
-/// A graph describing the dependencies between separate tasks.
-#[derive(Debug)]
-struct TaskDependencyGraph<S> {
-    graph: GraphMap<TaskID, (), Directed, RandomState>,
-    space: DfsSpace<TaskID, hashbrown::HashSet<TaskID>>,
-    independent_tasks: HashSet<TaskID>,
-    _phantom: PhantomData<S>,
-}
 
 #[derive(Debug)]
 struct TaskExecutor<S> {
@@ -356,75 +345,6 @@ impl fmt::Display for TaskErrors {
 
 impl std::error::Error for TaskErrors {}
 
-impl<S> TaskDependencyGraph<S> {
-    fn new() -> Self {
-        let graph = GraphMap::new();
-        let space = DfsSpace::new(&graph);
-        let independent_tasks = HashSet::default();
-        Self {
-            graph,
-            space,
-            independent_tasks,
-            _phantom: PhantomData,
-        }
-    }
-
-    fn add_task(&mut self, task: &impl Task<S>) {
-        let task_id = task.id();
-        self.graph.add_node(task_id);
-
-        let dependence_task_ids = task.depends_on();
-
-        for &dependence_task_id in dependence_task_ids {
-            // Add edge directed from dependence to dependent. A node for the
-            // dependence task is added if it doesn't exist.
-            let existing_edge = self.graph.add_edge(dependence_task_id, task_id, ());
-
-            if existing_edge.is_some() {
-                panic!("Task {task_id} depends on same task ({dependence_task_id}) multiple times");
-            }
-        }
-
-        // Keep track of independent tasks separately as well
-        if dependence_task_ids.is_empty() {
-            self.independent_tasks.insert(task_id);
-        }
-    }
-
-    fn obtain_ordered_task_ids(&mut self) -> Result<Vec<TaskID>> {
-        let n_tasks = self.graph.node_count();
-        let mut sorted_ids = Vec::with_capacity(n_tasks);
-
-        // Make sure all tasks without dependencies come first
-        sorted_ids.extend(self.independent_tasks.iter());
-
-        if n_tasks > self.independent_tasks.len() {
-            // Get task IDs sorted to topological order, meaning an order where
-            // each task comes after all its dependencies
-            let topologically_sorted_ids = algo::toposort(&self.graph, Some(&mut self.space))
-                .map_err(|_cycle| anyhow!("Found circular task dependencies"))?;
-
-            // Add all tasks with dependencies in topological order
-            sorted_ids.extend(
-                topologically_sorted_ids
-                    .into_iter()
-                    .filter(|task_id| !self.independent_tasks.contains(task_id)),
-            );
-        }
-
-        assert_eq!(sorted_ids.len(), n_tasks);
-
-        Ok(sorted_ids)
-    }
-
-    fn find_dependent_task_ids(&self, task_id: TaskID) -> impl Iterator<Item = TaskID> {
-        // Find outgoing edges, i.e. to tasks depending on this one
-        self.graph
-            .edges(task_id)
-            .map(|(_task_id, dependent_task_id, _)| dependent_task_id)
-    }
-}
-
 impl<S> TaskExecutor<S>
 where
     S: Sync + Send + Clone + 'static,
@@ -643,14 +563,22 @@ impl<S> TaskOrdering<S> {
         task_pool: &TaskPool<S>,
         dependency_graph: &mut TaskDependencyGraph<S>,
     ) -> Result<Vec<OrderedTask<S>>> {
-        let ordered_task_ids = dependency_graph.obtain_ordered_task_ids()?;
+        let arena = ArenaPool::get_arena();
+
+        let ordered_task_ids = dependency_graph.obtain_ordered_task_ids(&arena)?;
 
         // Create map from task ID to index in `ordered_task_ids`
-        let indices_of_task_ids: HashMap<_, _> = ordered_task_ids
-            .iter()
-            .enumerate()
-            .map(|(idx, &task_id)| (task_id, idx))
-            .collect();
+        let mut indices_of_task_ids = HashMap::with_capacity_and_hasher_in(
+            ordered_task_ids.len(),
+            Default::default(),
+            &arena,
+        );
+        indices_of_task_ids.extend(
+            ordered_task_ids
+                .iter()
+                .enumerate()
+                .map(|(idx, &task_id)| (task_id, idx)),
+        );
 
         ordered_task_ids
             .into_iter()
@@ -663,7 +591,8 @@ impl<S> TaskOrdering<S> {
                 // on this task
                 let indices_of_dependent_tasks = dependency_graph
                     .find_dependent_task_ids(task_id)
-                    .map(|dependent_task_id| indices_of_task_ids[&dependent_task_id]);
+                    .iter()
+                    .map(|dependent_task_id| indices_of_task_ids[dependent_task_id]);
 
                 Ok(OrderedTask::new(
                     Arc::clone(task),
@@ -773,6 +702,7 @@ impl TaskErrorRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use impact_alloc::Global;
     use parking_lot::Mutex;
     use std::iter;
 
@@ -1078,7 +1008,7 @@ mod tests {
         dependency_graph.add_task(&DepTask1Task2);
         dependency_graph.add_task(&Task2);
 
-        let ordered_task_ids = dependency_graph.obtain_ordered_task_ids().unwrap();
+        let ordered_task_ids = dependency_graph.obtain_ordered_task_ids(Global).unwrap();
 
         match ordered_task_ids[..] {
             [
@@ -1137,16 +1067,12 @@ mod tests {
         dependency_graph.add_task(&Task2);
         dependency_graph.add_task(&DepDepTask1);
 
-        let dependent_task_ids: Vec<_> = dependency_graph
-            .find_dependent_task_ids(Task1::ID)
-            .collect();
+        let dependent_task_ids = dependency_graph.find_dependent_task_ids(Task1::ID);
         assert_eq!(dependent_task_ids.len(), 2);
         assert!(dependent_task_ids.contains(&DepTask1::ID));
         assert!(dependent_task_ids.contains(&DepTask1Task2::ID));
 
-        let dependent_task_ids: Vec<_> = dependency_graph
-            .find_dependent_task_ids(Task2::ID)
-            .collect();
+        let dependent_task_ids = dependency_graph.find_dependent_task_ids(Task2::ID);
         assert_eq!(dependent_task_ids.len(), 2);
         assert!(dependent_task_ids.contains(&DepTask1Task2::ID));
         assert!(dependent_task_ids.contains(&DepDepTask1Task2::ID));

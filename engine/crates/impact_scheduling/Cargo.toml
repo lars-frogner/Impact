@@ -8,15 +8,13 @@ license = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 cfg-if = { workspace = true }
-hashbrown = "0.15"
+impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_thread = { path = "../impact_thread" }
 parking_lot = { workspace = true }
-petgraph = { version = "0.8", default-features = false, features = [
-    "graphmap",
-] }
+tinyvec = { workspace = true }
 
 [lints]
 workspace = true
