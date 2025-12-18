@@ -18,6 +18,8 @@
 
 - Check out Reddit shadow mapping article.
 
+- Look into mesh shading (could be useful for voxel rendering).
+
 ## Physics
 
 - Support disabling rigid bodies.
