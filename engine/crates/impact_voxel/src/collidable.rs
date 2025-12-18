@@ -6,10 +6,7 @@ pub mod setup;
 #[cfg(feature = "ecs")]
 pub mod systems;
 
-use crate::{
-    Voxel, VoxelObjectID, VoxelObjectManager, VoxelPlacement, VoxelSurfacePlacement,
-    chunks::ChunkedVoxelObject,
-};
+use crate::{VoxelObjectID, VoxelObjectManager, VoxelSurfacePlacement, chunks::ChunkedVoxelObject};
 use impact_geometry::{Plane, Sphere};
 use impact_physics::{
     collision::{
