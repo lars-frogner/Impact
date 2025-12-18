@@ -7,7 +7,7 @@ license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary"]
-bincode = ["dep:bincode", "serde"]
+postcard = ["dep:postcard", "serde"]
 ecs = ["dep:inventory", "dep:impact_ecs", "impact_geometry/ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde", "nalgebra/serde-serialize"]
@@ -16,7 +16,7 @@ serde = ["dep:serde", "nalgebra/serde-serialize"]
 anyhow = { workspace = true }
 approx = { workspace = true }
 arbitrary = { workspace = true, optional = true }
-bincode = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
 bitflags = { workspace = true }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }

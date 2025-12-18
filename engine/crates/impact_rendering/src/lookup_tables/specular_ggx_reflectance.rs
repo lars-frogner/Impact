@@ -26,7 +26,7 @@ pub fn lookup_table_id() -> LookupTableID {
 /// # Errors
 /// Returns an error if a computed table can not be saved to file.
 pub fn initialize(lookup_table_dir: &Path) -> Result<LookupTableDeclaration> {
-    let table_path = lookup_table_dir.join(NAME).with_extension("bc");
+    let table_path = lookup_table_dir.join(NAME).with_extension("pc");
 
     if !table_path.exists() {
         let table = brdf::create_specular_ggx_reflectance_lookup_tables(256, 64);

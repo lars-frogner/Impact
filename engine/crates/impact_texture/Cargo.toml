@@ -7,7 +7,7 @@ license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary", "impact_math/arbitrary"]
-bincode = ["dep:bincode", "serde"]
+postcard = ["dep:postcard", "serde"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = [
     "dep:serde",
@@ -19,7 +19,7 @@ serde = [
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
-bincode = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 half = { version = "2.6", features = ["bytemuck"] }
 impact_alloc = { path = "../impact_alloc" }

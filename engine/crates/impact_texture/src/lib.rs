@@ -522,7 +522,7 @@ pub(crate) fn create_texture_from_info(
         Ok(())
     }
 
-    #[cfg(feature = "bincode")]
+    #[cfg(feature = "postcard")]
     fn verify_table_metadata(
         from_info: &lookup_table::LookupTableMetadata,
         from_file: &lookup_table::LookupTableMetadata,
@@ -605,7 +605,7 @@ pub(crate) fn create_texture_from_info(
             sampler_config,
         }) => {
             let texture = {
-                #[cfg(feature = "bincode")]
+                #[cfg(feature = "postcard")]
                 match metadata.value_type {
                     lookup_table::LookupTableValueType::Float32 => {
                         let table = io::read_lookup_table_from_file::<f32>(table_path)
@@ -632,9 +632,9 @@ pub(crate) fn create_texture_from_info(
                         )
                     }
                 }
-                #[cfg(not(feature = "bincode"))]
+                #[cfg(not(feature = "postcard"))]
                 Err(anyhow!(
-                    "Enable the `bincode` feature to create lookup table textures"
+                    "Enable the `postcard` feature to create lookup table textures"
                 ))
             }?;
             (texture, Some(SamplerID::from(sampler_config)))

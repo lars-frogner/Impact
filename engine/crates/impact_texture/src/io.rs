@@ -298,19 +298,22 @@ pub fn save_texture_as_png_file(
     Ok(())
 }
 
-/// Loads and returns the `Bincode` serialized metadata header of the lookup
+/// Loads and returns the `Postcard` serialized metadata header of the lookup
 /// table at the given path.
 ///
 /// # Errors
 /// Returns an error if:
 /// - The file cannot be opened or read.
-/// - The file does not contain valid `Bincode` serialized metadata.
-#[cfg(feature = "bincode")]
+/// - The file does not contain valid `Postcard` serialized metadata.
+#[cfg(feature = "postcard")]
 pub fn read_lookup_table_metadata_from_file(
     file_path: impl AsRef<Path>,
 ) -> Result<crate::lookup_table::LookupTableMetadata> {
     use anyhow::Context;
-    use std::{fs::File, io::BufReader};
+    use std::{
+        fs::File,
+        io::{BufReader, Read},
+    };
 
     let file_path = file_path.as_ref();
 
@@ -325,18 +328,20 @@ pub fn read_lookup_table_metadata_from_file(
             file_path.display()
         )
     })?;
-    let reader = BufReader::new(file);
-    let metadata = bincode::serde::decode_from_reader(reader, bincode::config::standard())?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+    reader.read_to_end(&mut buffer)?;
+    let metadata = postcard::from_bytes(&buffer)?;
     Ok(metadata)
 }
 
-/// Loads and returns the `Bincode` serialized lookup table at the given path.
+/// Loads and returns the `Postcard` serialized lookup table at the given path.
 ///
 /// # Errors
 /// Returns an error if:
 /// - The file cannot be opened or read.
-/// - The file does not contain valid `Bincode` serialized lookup table data.
-#[cfg(feature = "bincode")]
+/// - The file does not contain valid `Postcard` serialized lookup table data.
+#[cfg(feature = "postcard")]
 pub fn read_lookup_table_from_file<T>(
     file_path: impl AsRef<Path>,
 ) -> Result<crate::lookup_table::LookupTable<T>>
@@ -364,19 +369,19 @@ where
     let mut buffer = Vec::new();
     reader.read_to_end(&mut buffer)?;
 
-    let (table, _) = bincode::serde::decode_from_slice(&buffer, bincode::config::standard())?;
+    let table = postcard::from_bytes(&buffer)?;
 
     Ok(table)
 }
 
-/// Serializes a lookup table into the `Bincode` format and saves it at the
+/// Serializes a lookup table into the `Postcard` format and saves it at the
 /// given path.
 ///
 /// # Errors
 /// Returns an error if:
-/// - The lookup table cannot be serialized to `Bincode` format.
+/// - The lookup table cannot be serialized to `Postcard` format.
 /// - The serialized data cannot be written to the specified path.
-#[cfg(feature = "bincode")]
+#[cfg(feature = "postcard")]
 pub fn save_lookup_table_to_file<T>(
     table: &crate::lookup_table::LookupTable<T>,
     output_file_path: impl AsRef<Path>,
@@ -384,7 +389,7 @@ pub fn save_lookup_table_to_file<T>(
 where
     T: impact_gpu::texture::TexelType + serde::Serialize,
 {
-    let byte_buffer = bincode::serde::encode_to_vec(table, bincode::config::standard())?;
+    let byte_buffer = postcard::to_allocvec(table)?;
     impact_io::save_data_as_binary(output_file_path, &byte_buffer)?;
     Ok(())
 }
