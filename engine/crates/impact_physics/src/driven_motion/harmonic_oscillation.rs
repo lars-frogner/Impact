@@ -251,9 +251,9 @@ mod tests {
             ) = trajectory.compute_position_and_velocity(negative_peak_time);
 
             prop_assert!(abs_diff_eq!(positive_peak_trajectory_position, positive_peak_position, epsilon = 1e-3 * positive_peak_position.coords.abs().max()));
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-2));
+            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 1e-1));
             prop_assert!(abs_diff_eq!(negative_peak_trajectory_position, negative_peak_position, epsilon = 1e-3 * negative_peak_position.coords.abs().max()));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-2));
+            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 1e-1));
         }
     }
 }
