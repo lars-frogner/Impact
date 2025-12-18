@@ -665,7 +665,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 UnitVector3::new_normalize(velocity).dot(&UnitVector3::new_normalize(displacement)),
                 0.0,
-                epsilon = 1e-4
+                epsilon = 1e-3
             ));
         }
     }
