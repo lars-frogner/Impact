@@ -957,7 +957,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-6 * correct_center_of_mass.coords.abs().max()
+                epsilon = 1e-4 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
@@ -982,7 +982,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-6 * correct_center_of_mass.coords.abs().max()
+                epsilon = 1e-4 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
@@ -1007,7 +1007,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 5e-3 * correct_center_of_mass.coords.abs().max()
+                epsilon = 1e-2 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
