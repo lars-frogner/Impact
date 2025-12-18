@@ -1,6 +1,6 @@
 //! Physical media objects can interact with.
 
-use crate::{fph, quantities::Velocity};
+use crate::quantities::Velocity;
 use roc_integration::roc;
 
 /// A physical medium with the same properties and state everywhere.
@@ -9,7 +9,7 @@ use roc_integration::roc;
 #[derive(Clone, Debug)]
 pub struct UniformMedium {
     /// The mass density of the medium.
-    pub mass_density: fph,
+    pub mass_density: f32,
     /// The velocity of the medium.
     pub velocity: Velocity,
 }
@@ -18,15 +18,15 @@ pub struct UniformMedium {
 impl UniformMedium {
     /// Earth air mass density at sea level and room temperature [kg/m^3].
     #[roc(expr = "1.2")]
-    pub const SEA_LEVEL_AIR_MASS_DENSITY: fph = 1.2;
+    pub const SEA_LEVEL_AIR_MASS_DENSITY: f32 = 1.2;
 
     /// Water mass density [kg/m^3].
     #[roc(expr = "1e3")]
-    pub const WATER_MASS_DENSITY: fph = 1e3;
+    pub const WATER_MASS_DENSITY: f32 = 1e3;
 
     /// Creates a new uniform medium with the given mass density and velocity.
     #[roc(body = "{ mass_density, velocity }")]
-    pub fn new(mass_density: fph, velocity: Velocity) -> Self {
+    pub fn new(mass_density: f32, velocity: Velocity) -> Self {
         Self {
             mass_density,
             velocity,
@@ -85,13 +85,13 @@ impl Eq for UniformMedium {}
 impl<'a> arbitrary::Arbitrary<'a> for UniformMedium {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self {
-            mass_density: fph::arbitrary(u)?,
-            velocity: Velocity::new(fph::arbitrary(u)?, fph::arbitrary(u)?, fph::arbitrary(u)?),
+            mass_density: f32::arbitrary(u)?,
+            velocity: Velocity::new(f32::arbitrary(u)?, f32::arbitrary(u)?, f32::arbitrary(u)?),
         })
     }
 
     fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-        let size = 4 * std::mem::size_of::<fph>();
+        let size = 4 * std::mem::size_of::<f32>();
         (size, Some(size))
     }
 }

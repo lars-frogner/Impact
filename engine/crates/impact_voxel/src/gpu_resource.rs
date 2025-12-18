@@ -76,7 +76,7 @@ pub struct VoxelObjectGPUResources {
 /// GPU buffers for a [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject).
 #[derive(Debug)]
 pub struct VoxelObjectGPUBuffers {
-    chunk_extent: f64,
+    chunk_extent: f32,
     origin_offset_in_root: [f32; 3],
     position_buffer: GPUBuffer,
     normal_vector_buffer: GPUBuffer,
@@ -600,7 +600,7 @@ impl VoxelObjectGPUBuffers {
     }
 
     /// Returns the extent of a single voxel chunk in the object.
-    pub fn chunk_extent(&self) -> f64 {
+    pub fn chunk_extent(&self) -> f32 {
         self.chunk_extent
     }
 

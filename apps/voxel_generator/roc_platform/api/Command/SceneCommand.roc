@@ -1,8 +1,8 @@
-# Hash: 7a6b8c44ec95c205002e05d47d7affadc0e73c64cf216ff80be68afe43dd3482
-# Generated: 2025-09-24T18:05:42+00:00
+# Hash: 7cd0c83204356aad3a97f6de23c847e9ffcc1328bab5cc2b30a1b9445b9f7732
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact::command::scene::SceneCommand
 # Type category: Inline
-# Commit: ea3946bf (dirty)
+# Commit: 7d41822d (dirty)
 module [
     SceneCommand,
     write_bytes,
@@ -30,30 +30,29 @@ write_bytes = |bytes, value|
     when value is
         SetSkybox(val) ->
             bytes
-            |> List.reserve(33)
+            |> List.reserve(17)
             |> List.append(0)
             |> Skybox.write_bytes(val)
-            |> List.concat(List.repeat(0, 16))
 
         SetMedium(val) ->
             bytes
-            |> List.reserve(33)
+            |> List.reserve(17)
             |> List.append(1)
             |> Physics.UniformMedium.write_bytes(val)
 
         SetSceneEntityActiveState { entity_id, state } ->
             bytes
-            |> List.reserve(33)
+            |> List.reserve(17)
             |> List.append(2)
             |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
-            |> List.concat(List.repeat(0, 23))
+            |> List.concat(List.repeat(0, 7))
 
 ## Deserializes a value of [SceneCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result SceneCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 33 then
+    if List.len(bytes) != 17 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -67,7 +66,7 @@ from_bytes = |bytes|
             [1, .. as data_bytes] ->
                 Ok(
                     SetMedium(
-                        data_bytes |> List.sublist({ start: 0, len: 32 }) |> Physics.UniformMedium.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 16 }) |> Physics.UniformMedium.from_bytes?,
                     ),
                 )
 

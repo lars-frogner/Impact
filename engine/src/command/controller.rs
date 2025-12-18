@@ -2,7 +2,6 @@
 
 use crate::{command::uils::ToActiveState, engine::Engine, lock_order::OrderedMutex};
 use impact_controller::motion::{MotionDirection, MotionState};
-use impact_physics::fph;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -14,7 +13,7 @@ pub enum ControllerCommand {
         direction: MotionDirection,
     },
     StopMotion,
-    SetMovementSpeed(fph),
+    SetMovementSpeed(f32),
 }
 
 #[derive(Clone, Debug)]
@@ -66,7 +65,7 @@ pub fn stop_motion(engine: &Engine) {
     }
 }
 
-pub fn set_movement_speed(engine: &Engine, speed: fph) {
+pub fn set_movement_speed(engine: &Engine, speed: f32) {
     if let Some(motion_controller) = engine.motion_controller() {
         impact_log::info!("Setting movement speed to {speed:?}");
         motion_controller.olock().set_movement_speed(speed);

@@ -18,7 +18,6 @@ use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
-    fph,
     quantities::{AngularVelocity, Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
@@ -77,13 +76,13 @@ pub struct NewVoxelObjectEntity {
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingSphereEntity {
     pub sphere: VoxelAbsorbingSphere,
-    pub sphere_to_world_transform: Isometry3<f64>,
+    pub sphere_to_world_transform: Isometry3<f32>,
 }
 
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingCapsuleEntity {
     pub capsule: VoxelAbsorbingCapsule,
-    pub capsule_to_world_transform: Isometry3<f64>,
+    pub capsule_to_world_transform: Isometry3<f32>,
 }
 
 #[derive(Debug)]
@@ -146,7 +145,7 @@ fn handle_voxel_object_after_removing_voxels(
     inertial_property_manager: &mut VoxelObjectInertialPropertyManager,
     rigid_body_id: DynamicRigidBodyID,
     rigid_body: &mut DynamicRigidBody,
-    original_local_center_of_mass: Vector3<fph>,
+    original_local_center_of_mass: Vector3<f32>,
 ) -> VoxelRemovalOutcome {
     if voxel_object.is_effectively_empty() {
         return VoxelRemovalOutcome {
@@ -310,7 +309,7 @@ fn handle_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
     disconnected_object: DisconnectedVoxelObject,
     mut inertial_property_manager: VoxelObjectInertialPropertyManager,
-    original_local_center_of_mass: Vector3<fph>,
+    original_local_center_of_mass: Vector3<f32>,
     original_position: Position,
     orientation: Orientation,
     original_linear_velocity: Velocity,
@@ -357,7 +356,7 @@ fn handle_disconnected_voxel_object(
     } = disconnected_object;
 
     let origin_offset_in_voxel_object_space = Vector3::from(
-        origin_offset_in_parent.map(|offset| offset as fph * voxel_object.voxel_extent()),
+        origin_offset_in_parent.map(|offset| offset as f32 * voxel_object.voxel_extent()),
     );
 
     // The inertial properties are assumed defined with respect to the lower
@@ -398,8 +397,8 @@ fn handle_anchors_for_original_voxel_object_after_removing_voxels(
     anchor_manager: &mut AnchorManager,
     voxel_object: &ChunkedVoxelObject,
     rigid_body_id: DynamicRigidBodyID,
-    original_local_center_of_mass: &Vector3<fph>,
-    new_local_center_of_mass: &Vector3<fph>,
+    original_local_center_of_mass: &Vector3<f32>,
+    new_local_center_of_mass: &Vector3<f32>,
 ) -> Anchors {
     let mut lost_anchors = Anchors::new();
 
@@ -447,9 +446,9 @@ fn handle_anchors_for_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
     lost_anchors: Anchors,
     disconnected_object: &ChunkedVoxelObject,
-    original_local_center_of_mass: &Vector3<fph>,
-    origin_offset_in_voxel_object_space: &Vector3<fph>,
-    new_local_center_of_mass: &Vector3<fph>,
+    original_local_center_of_mass: &Vector3<f32>,
+    origin_offset_in_voxel_object_space: &Vector3<f32>,
+    new_local_center_of_mass: &Vector3<f32>,
 ) -> Anchors {
     // Determine the coordinates of the original center of mass of the original
     // object relative to the origin of the disconnected object (in model space,

@@ -9,7 +9,6 @@ use impact_mesh::{
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_physics::{
-    fph,
     inertia::InertialProperties,
     quantities::Motion,
     rigid_body::{
@@ -67,9 +66,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             let motion = motion.copied().unwrap_or_default();
 
             let inertial_properties = InertialProperties::of_uniform_box(
-                fph::from(mesh.extent_x * model_transform.scale),
-                fph::from(mesh.extent_y * model_transform.scale),
-                fph::from(mesh.extent_z * model_transform.scale),
+                mesh.extent_x * model_transform.scale,
+                mesh.extent_y * model_transform.scale,
+                mesh.extent_z * model_transform.scale,
                 substance.mass_density,
             );
 
@@ -107,8 +106,8 @@ pub fn setup_rigid_bodies_for_new_entities(
             let motion = motion.copied().unwrap_or_default();
 
             let inertial_properties = InertialProperties::of_uniform_cylinder(
-                fph::from(mesh.length * model_transform.scale),
-                fph::from(mesh.diameter * model_transform.scale),
+                mesh.length * model_transform.scale,
+                mesh.diameter * model_transform.scale,
                 substance.mass_density,
             );
 
@@ -146,8 +145,8 @@ pub fn setup_rigid_bodies_for_new_entities(
             let motion = motion.copied().unwrap_or_default();
 
             let inertial_properties = InertialProperties::of_uniform_cone(
-                fph::from(mesh.length * model_transform.scale),
-                fph::from(mesh.max_diameter * model_transform.scale),
+                mesh.length * model_transform.scale,
+                mesh.max_diameter * model_transform.scale,
                 substance.mass_density,
             );
 
@@ -186,7 +185,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             let radius = 0.5; // The sphere mesh has a diameter of 1.0
 
             let inertial_properties = InertialProperties::of_uniform_sphere(
-                fph::from(radius * model_transform.scale),
+                radius * model_transform.scale,
                 substance.mass_density,
             );
 
@@ -226,7 +225,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             let radius = 0.5; // The hemisphere mesh has a diameter of 1.0
 
             let inertial_properties = InertialProperties::of_uniform_hemisphere(
-                fph::from(radius * model_transform.scale),
+                radius * model_transform.scale,
                 substance.mass_density,
             );
 
@@ -274,7 +273,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 triangle_mesh.triangle_vertex_positions(),
                 substance.mass_density,
             );
-            inertial_properties.scale(fph::from(model_transform.scale));
+            inertial_properties.scale(model_transform.scale);
 
             // Offset the model to put the center of mass at the origin of this
             // entity's space

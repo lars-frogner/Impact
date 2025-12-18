@@ -41,7 +41,8 @@ use tinyvec::TinyVec;
 /// voxels contain the exact same information only stores that single voxel.
 #[derive(Clone, Debug)]
 pub struct ChunkedVoxelObject {
-    voxel_extent: f64,
+    voxel_extent: f32,
+    inverse_voxel_extent: f32,
     chunk_counts: [usize; 3],
     chunk_idx_strides: [usize; 3],
     occupied_chunk_ranges: [Range<usize>; 3],
@@ -206,8 +207,9 @@ impl ChunkedVoxelObject {
         CHUNK_VOXEL_COUNT
     }
 
-    /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
-    /// and calls [`Self::update_occupied_voxel_ranges`] and
+    /// Generates a new `ChunkedVoxelObject` using the given
+    /// [`ChunkedVoxelGenerator`] and calls
+    /// [`Self::update_occupied_voxel_ranges`] and
     /// [`Self::compute_all_derived_state`] on it.
     pub fn generate(generator: &impl ChunkedVoxelGenerator) -> Self {
         let mut object = Self::generate_without_derived_state(generator);
@@ -216,8 +218,9 @@ impl ChunkedVoxelObject {
         object
     }
 
-    /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`]
-    /// and calls [`Self::update_occupied_voxel_ranges`] and
+    /// Generates a new `ChunkedVoxelObject` using the given
+    /// [`ChunkedVoxelGenerator`] and calls
+    /// [`Self::update_occupied_voxel_ranges`] and
     /// [`Self::compute_all_derived_state`] on it.
     pub fn generate_in_parallel<G>(thread_pool: &DynamicThreadPool, generator: &G) -> Self
     where
@@ -229,7 +232,8 @@ impl ChunkedVoxelObject {
         object
     }
 
-    /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
+    /// Generates a new `ChunkedVoxelObject` using the given
+    /// [`ChunkedVoxelGenerator`].
     pub fn generate_without_derived_state(generator: &impl ChunkedVoxelGenerator) -> Self {
         Self::generate_without_derived_state_using_closure(
             generator.voxel_extent(),
@@ -240,7 +244,8 @@ impl ChunkedVoxelObject {
         )
     }
 
-    /// Generates a new `ChunkedVoxelObject` using the given [`VoxelGenerator`].
+    /// Generates a new `ChunkedVoxelObject` using the given
+    /// [`ChunkedVoxelGenerator`].
     pub fn generate_without_derived_state_in_parallel<G>(
         thread_pool: &DynamicThreadPool,
         generator: &G,
@@ -263,7 +268,7 @@ impl ChunkedVoxelObject {
     }
 
     fn generate_without_derived_state_using_closure(
-        voxel_extent: f64,
+        voxel_extent: f32,
         grid_shape: [usize; 3],
         generate_voxels_for_chunks: impl FnOnce([usize; 3], &mut [VoxelChunk]) -> Vec<Voxel>,
     ) -> Self {
@@ -290,6 +295,7 @@ impl ChunkedVoxelObject {
 
         Self {
             voxel_extent,
+            inverse_voxel_extent: voxel_extent.recip(),
             chunk_counts,
             chunk_idx_strides,
             occupied_chunk_ranges,
@@ -582,13 +588,13 @@ impl ChunkedVoxelObject {
     }
 
     /// Returns the extent of single voxel in the object.
-    pub fn voxel_extent(&self) -> f64 {
+    pub fn voxel_extent(&self) -> f32 {
         self.voxel_extent
     }
 
     /// Returns the extent of single voxel chunk in the object.
-    pub fn chunk_extent(&self) -> f64 {
-        self.voxel_extent * CHUNK_SIZE as f64
+    pub fn chunk_extent(&self) -> f32 {
+        self.voxel_extent * CHUNK_SIZE as f32
     }
 
     /// Returns the number of chunks along each axis of the object's voxel
@@ -651,7 +657,7 @@ impl ChunkedVoxelObject {
     /// larger object, the offsets are zero.
     pub fn origin_offset_in_root(&self) -> [f32; 3] {
         self.origin_offset_in_root
-            .map(|offset| self.voxel_extent as f32 * offset as f32)
+            .map(|offset| self.voxel_extent * offset as f32)
     }
 
     /// Determines the exact range of indices along each axis of the object's
@@ -769,7 +775,7 @@ impl ChunkedVoxelObject {
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
     /// the object.
     pub fn compute_aabb<F: Float>(&self) -> AxisAlignedBox<F> {
-        let voxel_extent = F::from_f64(self.voxel_extent()).unwrap();
+        let voxel_extent = F::from_f32(self.voxel_extent()).unwrap();
 
         let lower_corner = point![
             F::from_usize(self.occupied_voxel_ranges[0].start).unwrap() * voxel_extent,
@@ -794,7 +800,7 @@ impl ChunkedVoxelObject {
         // If we add the distance from the center to the corner of a voxel, the
         // bounding sphere will encompass all voxels
         let additional_radius =
-            F::ONE_HALF * F::THREE.sqrt() * F::from_f64(self.voxel_extent()).unwrap();
+            F::ONE_HALF * F::THREE.sqrt() * F::from_f32(self.voxel_extent()).unwrap();
 
         Sphere::new(
             *bounding_sphere_for_outer_voxel_centers.center(),
@@ -860,11 +866,10 @@ impl ChunkedVoxelObject {
     /// coordinates (fractional indices scaled by the voxel extent) in the
     /// object's voxel grid, or [`None`] if the voxel is empty or the
     /// coordinates are out of bounds.
-    pub fn get_voxel_at_coords(&self, x: f64, y: f64, z: f64) -> Option<&Voxel> {
-        let inverse_voxel_extent = self.voxel_extent.recip();
-        let i = (x * inverse_voxel_extent) as i64;
-        let j = (y * inverse_voxel_extent) as i64;
-        let k = (z * inverse_voxel_extent) as i64;
+    pub fn get_voxel_at_coords(&self, x: f32, y: f32, z: f32) -> Option<&Voxel> {
+        let i = (x * self.inverse_voxel_extent) as i64;
+        let j = (y * self.inverse_voxel_extent) as i64;
+        let k = (z * self.inverse_voxel_extent) as i64;
         self.get_voxel(i, j, k)
     }
 
@@ -890,6 +895,19 @@ impl ChunkedVoxelObject {
         let j = NumCast::from(j).unwrap();
         let k = NumCast::from(k).unwrap();
 
+        self.get_voxel_inside(i, j, k)
+    }
+
+    /// Returns a reference to the voxel at the given indices in the object's
+    /// voxel grid, or [`None`] if the voxel is empty.
+    ///
+    /// Despite the organization of voxels into chunks, this lookup is
+    /// relatively efficient because we can perform simple bit manipulations
+    /// to determine the chunk containing the voxel.
+    ///
+    /// # Panics
+    /// If the indices are outside the object's voxel grid.
+    pub fn get_voxel_inside(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
         let chunk_idx = self.linear_chunk_idx_from_object_voxel_indices(i, j, k);
         let chunk = &self.chunks[chunk_idx];
         match &chunk {
@@ -2866,7 +2884,7 @@ mod tests {
     impl ChunkedVoxelGenerator for OffsetBoxVoxelGenerator {
         type ChunkGenerationBuffers<AB: Allocator> = ();
 
-        fn voxel_extent(&self) -> f64 {
+        fn voxel_extent(&self) -> f32 {
             0.25
         }
 
@@ -2918,7 +2936,7 @@ mod tests {
     impl<const N: usize> ChunkedVoxelGenerator for ManualVoxelGenerator<N> {
         type ChunkGenerationBuffers<AB: Allocator> = ();
 
-        fn voxel_extent(&self) -> f64 {
+        fn voxel_extent(&self) -> f32 {
             0.25
         }
 
@@ -3346,9 +3364,9 @@ mod tests {
             // The occupied voxel range has chunk granularity, so the AABB will never be smaller
             // than a single chunk
             &point![
-                generator.voxel_extent() * CHUNK_SIZE as f64,
-                generator.voxel_extent() * CHUNK_SIZE as f64,
-                generator.voxel_extent() * CHUNK_SIZE as f64
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+                generator.voxel_extent() * CHUNK_SIZE as f32
             ]
         );
     }
@@ -3362,9 +3380,9 @@ mod tests {
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             &point![
-                generator.voxel_extent() * CHUNK_SIZE as f64,
-                generator.voxel_extent() * CHUNK_SIZE as f64,
-                generator.voxel_extent() * CHUNK_SIZE as f64
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+                generator.voxel_extent() * CHUNK_SIZE as f32
             ]
         );
     }
@@ -3380,9 +3398,9 @@ mod tests {
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             &point![
-                generator.voxel_extent() * (2 * CHUNK_SIZE) as f64,
-                generator.voxel_extent() * (3 * CHUNK_SIZE) as f64,
-                generator.voxel_extent() * (4 * CHUNK_SIZE) as f64
+                generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
+                generator.voxel_extent() * (3 * CHUNK_SIZE) as f32,
+                generator.voxel_extent() * (4 * CHUNK_SIZE) as f32
             ]
         );
     }
@@ -3444,17 +3462,17 @@ mod tests {
         assert_abs_diff_eq!(
             aabb.lower_corner(),
             &point![
-                generator.voxel_extent() * CHUNK_SIZE as f64,
-                generator.voxel_extent() * CHUNK_SIZE as f64,
-                generator.voxel_extent() * CHUNK_SIZE as f64
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+                generator.voxel_extent() * CHUNK_SIZE as f32
             ]
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             &point![
-                generator.voxel_extent() * (2 * CHUNK_SIZE) as f64,
-                generator.voxel_extent() * (2 * CHUNK_SIZE) as f64,
-                generator.voxel_extent() * (2 * CHUNK_SIZE) as f64
+                generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
+                generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
+                generator.voxel_extent() * (2 * CHUNK_SIZE) as f32
             ]
         );
     }

@@ -3,11 +3,10 @@
 
 mod roc;
 
-use crate::{RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
+use crate::{HashMap, HashSet, RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::{SecondsFormat, Utc};
 use roc::OptionalExports;
-use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::{
     borrow::Cow,
     fmt::{self, Display},

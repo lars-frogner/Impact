@@ -2,7 +2,6 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    fph,
     quantities::{Acceleration, Position, Velocity},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
@@ -42,7 +41,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct ConstantAccelerationTrajectory {
         /// When (in simulation time) the body should be at the initial position.
-        pub initial_time: fph,
+        pub initial_time: f32,
         /// The position of the body at the initial time.
         pub initial_position: Position,
         /// The velocity of the body at the initial time.
@@ -71,7 +70,7 @@ impl ConstantAccelerationTrajectoryDriver {
 
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: fph) {
+    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
         let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
         else {
             return;
@@ -97,7 +96,7 @@ impl ConstantAccelerationTrajectory {
     }
     "#)]
     pub fn new(
-        initial_time: fph,
+        initial_time: f32,
         initial_position: Position,
         initial_velocity: Velocity,
         acceleration: Acceleration,
@@ -121,7 +120,7 @@ impl ConstantAccelerationTrajectory {
     )
     "#)]
     pub fn with_constant_velocity(
-        initial_time: fph,
+        initial_time: f32,
         initial_position: Position,
         velocity: Velocity,
     ) -> Self {
@@ -134,7 +133,7 @@ impl ConstantAccelerationTrajectory {
     }
 
     /// Computes the position and velocity for the trajectory at the given time.
-    pub fn compute_position_and_velocity(&self, time: fph) -> (Position, Velocity) {
+    pub fn compute_position_and_velocity(&self, time: f32) -> (Position, Velocity) {
         let time_offset = time - self.initial_time;
 
         let position = self.initial_position
@@ -155,7 +154,7 @@ mod tests {
     use proptest::prelude::*;
 
     prop_compose! {
-        fn position_strategy(max_position_coord: fph)(
+        fn position_strategy(max_position_coord: f32)(
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
@@ -165,7 +164,7 @@ mod tests {
     }
 
     prop_compose! {
-        fn velocity_strategy(max_velocity_coord: fph)(
+        fn velocity_strategy(max_velocity_coord: f32)(
             velocity_coord_x in -max_velocity_coord..max_velocity_coord,
             velocity_coord_y in -max_velocity_coord..max_velocity_coord,
             velocity_coord_z in -max_velocity_coord..max_velocity_coord,
@@ -175,7 +174,7 @@ mod tests {
     }
 
     prop_compose! {
-        fn acceleration_strategy(max_acceleration_coord: fph)(
+        fn acceleration_strategy(max_acceleration_coord: f32)(
             acceleration_coord_x in -max_acceleration_coord..max_acceleration_coord,
             acceleration_coord_y in -max_acceleration_coord..max_acceleration_coord,
             acceleration_coord_z in -max_acceleration_coord..max_acceleration_coord,
@@ -216,7 +215,7 @@ mod tests {
     proptest! {
         #[test]
         fn should_get_initial_position_and_velocity_at_initial_time(
-            time in -1e2..1e2,
+            time in -1e2..1e2_f32,
             position in position_strategy(1e3),
             velocity in velocity_strategy(1e3),
             acceleration in acceleration_strategy(1e2),

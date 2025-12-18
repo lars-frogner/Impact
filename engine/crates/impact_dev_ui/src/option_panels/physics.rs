@@ -48,8 +48,8 @@ mod simulation {
     pub mod ranges {
         use std::ops::RangeInclusive;
 
-        pub const SPEED_MULTIPLIER: RangeInclusive<f64> = 0.0..=1000.0;
-        pub const TIME_STEP_DURATION: RangeInclusive<f64> = 0.0..=1000.0;
+        pub const SPEED_MULTIPLIER: RangeInclusive<f32> = 0.0..=1000.0;
+        pub const TIME_STEP_DURATION: RangeInclusive<f32> = 0.0..=1000.0;
         pub const N_SUBSTEPS: RangeInclusive<u32> = 1..=64;
     }
 }
@@ -92,9 +92,9 @@ mod constraint_solving {
         use std::ops::RangeInclusive;
 
         pub const N_ITERATIONS: RangeInclusive<u32> = 0..=100;
-        pub const OLD_IMPULSE_WEIGHT: RangeInclusive<f64> = 0.0..=1.0;
+        pub const OLD_IMPULSE_WEIGHT: RangeInclusive<f32> = 0.0..=1.0;
         pub const N_POSITIONAL_CORRECTION_ITERATIONS: RangeInclusive<u32> = 0..=100;
-        pub const POSITIONAL_CORRECTION_FACTOR: RangeInclusive<f64> = 0.0..=1.0;
+        pub const POSITIONAL_CORRECTION_FACTOR: RangeInclusive<f32> = 0.0..=1.0;
     }
 }
 

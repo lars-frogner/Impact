@@ -2,7 +2,6 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    fph,
     quantities::{AngularVelocity, Orientation},
     rigid_body::advance_orientation,
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
@@ -31,6 +30,7 @@ pub struct ConstantRotationDriver {
     pub rigid_body_id: KinematicRigidBodyID,
     /// The constant rotation imposed on the body.
     pub rotation: ConstantRotation,
+    padding: f32,
 }
 
 define_setup_type! {
@@ -41,7 +41,7 @@ define_setup_type! {
     pub struct ConstantRotation {
         /// When (in simulation time) the body should have the initial
         /// orientation.
-        pub initial_time: fph,
+        pub initial_time: f32,
         /// The orientation of the body at the initial time.
         pub initial_orientation: Orientation,
         /// The angular velocity of the body.
@@ -56,9 +56,17 @@ impl From<u64> for ConstantRotationDriverID {
 }
 
 impl ConstantRotationDriver {
+    pub fn new(rigid_body_id: KinematicRigidBodyID, rotation: ConstantRotation) -> Self {
+        Self {
+            rigid_body_id,
+            rotation,
+            padding: 0.0,
+        }
+    }
+
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: fph) {
+    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
         let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
         else {
             return;
@@ -83,7 +91,7 @@ impl ConstantRotation {
     }
     "#)]
     pub fn new(
-        initial_time: fph,
+        initial_time: f32,
         initial_orientation: Orientation,
         angular_velocity: AngularVelocity,
     ) -> Self {
@@ -95,7 +103,7 @@ impl ConstantRotation {
     }
 
     /// Computes the orientation at the given time.
-    pub fn compute_orientation(&self, time: fph) -> Orientation {
+    pub fn compute_orientation(&self, time: f32) -> Orientation {
         let time_offset = time - self.initial_time;
         advance_orientation(
             &self.initial_orientation,
@@ -117,29 +125,29 @@ mod tests {
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..fph::TWO_PI,
-            theta in 0.0..fph::PI,
+            phi in 0.0..f32::TWO_PI,
+            theta in 0.0..f32::PI,
         ) -> Direction {
             Direction::new_normalize(vector![
-                fph::cos(phi) * fph::sin(theta),
-                fph::sin(phi) * fph::sin(theta),
-                fph::cos(theta)
+                f32::cos(phi) * f32::sin(theta),
+                f32::sin(phi) * f32::sin(theta),
+                f32::cos(theta)
             ])
         }
     }
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..fph::TWO_PI,
-            rotation_pitch in -fph::FRAC_PI_2..fph::FRAC_PI_2,
-            rotation_yaw in 0.0..fph::TWO_PI,
+            rotation_roll in 0.0..f32::TWO_PI,
+            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
+            rotation_yaw in 0.0..f32::TWO_PI,
         ) -> Orientation {
             Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
         }
     }
 
     prop_compose! {
-        fn angular_velocity_strategy(max_angular_speed: fph)(
+        fn angular_velocity_strategy(max_angular_speed: f32)(
             angular_speed in -max_angular_speed..max_angular_speed,
             axis in direction_strategy(),
         ) -> AngularVelocity {
@@ -168,7 +176,7 @@ mod tests {
     proptest! {
         #[test]
         fn should_get_initial_orientation_at_initial_time(
-            time in -1e2..1e2,
+            time in -1e2..1e2_f32,
             orientation in orientation_strategy(),
             angular_velocity in angular_velocity_strategy(1e2),
         ) {

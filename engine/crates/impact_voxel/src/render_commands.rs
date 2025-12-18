@@ -575,11 +575,11 @@ impl VoxelChunkCullingPass {
 
     fn compute_transform_from_frustum_space_to_normalized_voxel_object_space(
         voxel_object_to_frustum_transform: InstanceModelViewTransform,
-        voxel_extent: f64,
+        voxel_extent: f32,
     ) -> Similarity3<f32> {
         let mut frustum_to_voxel_object_transform =
             Similarity3::from(voxel_object_to_frustum_transform);
-        frustum_to_voxel_object_transform.prepend_scaling_mut(voxel_extent as f32);
+        frustum_to_voxel_object_transform.prepend_scaling_mut(voxel_extent);
         frustum_to_voxel_object_transform.inverse_mut();
         frustum_to_voxel_object_transform
     }

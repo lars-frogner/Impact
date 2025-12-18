@@ -1,8 +1,8 @@
-# Hash: 29846aaea8b68905a760f2cbfa3f5477037a88dca5c3ef825fdd45e36c5efe3a
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: f24718dcd55fe8b498be36dfad151e95cb5573b3e039b7e69960c426219e1349
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::force::detailed_drag::setup::DetailedDragProperties
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     DetailedDragProperties,
     new,
@@ -21,18 +21,18 @@ import core.Builtin
 ## The properties governing the effect of a shape-dependent drag on a body.
 DetailedDragProperties : {
     ## The drag coefficient of the body.
-    drag_coefficient : F64,
+    drag_coefficient : F32,
 }
 
-new : F64 -> DetailedDragProperties
+new : F32 -> DetailedDragProperties
 new = |drag_coefficient|
     { drag_coefficient }
 
-add_new : Entity.ComponentData, F64 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32 -> Entity.ComponentData
 add_new = |entity_data, drag_coefficient|
     add(entity_data, new(drag_coefficient))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, drag_coefficient|
     add_multiple(
         entity_data,
@@ -67,8 +67,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, DetailedDragProperties -> List U8
 write_packet = |bytes, val|
     type_id = 7526283440430984683
-    size = 8
-    alignment = 8
+    size = 4
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -79,8 +79,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List DetailedDragProperties -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 7526283440430984683
-    size = 8
-    alignment = 8
+    size = 4
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -100,8 +100,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, DetailedDragProperties -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(8)
-    |> Builtin.write_bytes_f64(value.drag_coefficient)
+    |> List.reserve(4)
+    |> Builtin.write_bytes_f32(value.drag_coefficient)
 
 ## Deserializes a value of [DetailedDragProperties] from its bytes in the
 ## representation used by the engine.
@@ -109,13 +109,13 @@ from_bytes : List U8 -> Result DetailedDragProperties _
 from_bytes = |bytes|
     Ok(
         {
-            drag_coefficient: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
+            drag_coefficient: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 8 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

@@ -4,6 +4,7 @@ use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::Reso
 use anyhow::{Result, anyhow};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ModelTransform;
+use impact_math::hash::StringHash32;
 use impact_mesh::TriangleMeshID;
 use impact_physics::{
     force::{
@@ -126,7 +127,7 @@ pub fn setup_forces_for_new_entities(
                 *drag_properties,
                 *rigid_body_id,
                 model_transform,
-                (*mesh_id).into(),
+                StringHash32::new(mesh_id.to_string()),
                 triangle_mesh.triangle_vertex_positions(),
             )
         }

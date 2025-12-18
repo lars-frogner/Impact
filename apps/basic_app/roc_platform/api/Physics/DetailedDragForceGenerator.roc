@@ -1,8 +1,8 @@
-# Hash: afeb42141aba079b88aed8d0c41cb3f148c9ff47354313ea04799fb707e4e10c
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 3323a0ba50380b47f12ccb30c214396de32a103e636192094584e1ff2b459fdf
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::force::detailed_drag::DetailedDragForceGenerator
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     DetailedDragForceGenerator,
     write_bytes,
@@ -11,6 +11,7 @@ module [
 
 import Comp.DynamicRigidBodyID
 import Physics.DetailedDragForce
+import core.Builtin
 
 ## Generator for a shape-dependent drag force on a dynamic rigid body.
 DetailedDragForceGenerator : {
@@ -18,6 +19,7 @@ DetailedDragForceGenerator : {
     body : Comp.DynamicRigidBodyID.DynamicRigidBodyID,
     ## The drag force on the body.
     force : Physics.DetailedDragForce.DetailedDragForce,
+    padding : F32,
 }
 
 ## Serializes a value of [DetailedDragForceGenerator] into the binary representation
@@ -25,9 +27,10 @@ DetailedDragForceGenerator : {
 write_bytes : List U8, DetailedDragForceGenerator -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(32)
+    |> List.reserve(24)
     |> Comp.DynamicRigidBodyID.write_bytes(value.body)
     |> Physics.DetailedDragForce.write_bytes(value.force)
+    |> Builtin.write_bytes_f32(value.padding)
 
 ## Deserializes a value of [DetailedDragForceGenerator] from its bytes in the
 ## representation used by the engine.
@@ -36,13 +39,14 @@ from_bytes = |bytes|
     Ok(
         {
             body: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.DynamicRigidBodyID.from_bytes?,
-            force: bytes |> List.sublist({ start: 8, len: 24 }) |> Physics.DetailedDragForce.from_bytes?,
+            force: bytes |> List.sublist({ start: 8, len: 12 }) |> Physics.DetailedDragForce.from_bytes?,
+            padding: bytes |> List.sublist({ start: 20, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

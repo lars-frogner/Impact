@@ -83,7 +83,7 @@ impl ModelTransform {
         let displacement_in_frame = offset - self.offset;
         let displacement_in_parent_frame = entity_frame
             .orientation
-            .transform_vector(&(f64::from(self.scale) * displacement_in_frame.cast()));
+            .transform_vector(&(self.scale * displacement_in_frame));
         self.offset = offset;
         entity_frame.position += displacement_in_parent_frame;
     }

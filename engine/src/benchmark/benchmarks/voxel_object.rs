@@ -120,7 +120,7 @@ pub fn get_each_voxel(benchmarker: impl Benchmarker) {
 pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let plane_displacement = 0.4 * object_radius;
-    let generator = create_sphere_generator(object_radius as f32);
+    let generator = create_sphere_generator(object_radius);
     let object = ChunkedVoxelObject::generate(&generator);
     let plane = Plane::new(
         UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
@@ -139,10 +139,10 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: imp
 pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = create_sphere_generator(object_radius as f32);
+    let generator = create_sphere_generator(object_radius);
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
-        object.compute_aabb::<f64>().center()
+        object.compute_aabb().center()
             - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
         sphere_radius,
     );
@@ -174,10 +174,10 @@ pub fn for_each_exposed_chunk_with_sdf(benchmarker: impl Benchmarker) {
 pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = create_sphere_generator(object_radius as f32);
+    let generator = create_sphere_generator(object_radius);
     let mut object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
-        object.compute_aabb::<f64>().center()
+        object.compute_aabb().center()
             - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
         sphere_radius,
     );
@@ -256,12 +256,12 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
 pub fn update_mesh(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = create_sphere_generator(object_radius as f32);
+    let generator = create_sphere_generator(object_radius);
     let mut object = ChunkedVoxelObject::generate(&generator);
     let mut mesh = ChunkedVoxelObjectMesh::create(&object);
 
     let sphere = Sphere::new(
-        object.compute_aabb::<f64>().center()
+        object.compute_aabb().center()
             - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
         sphere_radius,
     );
@@ -278,12 +278,12 @@ pub fn update_mesh(benchmarker: impl Benchmarker) {
 pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
-    let generator = create_sphere_generator(object_radius as f32);
+    let generator = create_sphere_generator(object_radius);
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(Position::origin(), sphere_radius);
     let transform_to_object_space = Isometry3::from_parts(
         Translation::from(
-            object.compute_aabb::<f64>().center()
+            object.compute_aabb().center()
                 - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
         ),
         UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),

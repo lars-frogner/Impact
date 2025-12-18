@@ -1,8 +1,8 @@
-# Hash: 829c1f4e834c74adb6d1b480dff935c3c0ad9221eedebacfe87a0efd65f9e829
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 3a60e26a51cd851fca9b9a73051c8dc4462e631b16877fb15886ac2b868d77a4
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact::command::controller::ControllerCommand
 # Type category: Inline
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ControllerCommand,
     write_bytes,
@@ -19,7 +19,7 @@ ControllerCommand : [
             direction : Control.MotionDirection.MotionDirection,
         },
     StopMotion,
-    SetMovementSpeed F64,
+    SetMovementSpeed F32,
 ]
 
 ## Serializes a value of [ControllerCommand] into the binary representation
@@ -29,29 +29,29 @@ write_bytes = |bytes, value|
     when value is
         SetMotion { state, direction } ->
             bytes
-            |> List.reserve(9)
+            |> List.reserve(5)
             |> List.append(0)
             |> Control.MotionState.write_bytes(state)
             |> Control.MotionDirection.write_bytes(direction)
-            |> List.concat(List.repeat(0, 6))
+            |> List.concat(List.repeat(0, 2))
 
         StopMotion ->
             bytes
-            |> List.reserve(9)
+            |> List.reserve(5)
             |> List.append(1)
-            |> List.concat(List.repeat(0, 8))
+            |> List.concat(List.repeat(0, 4))
 
         SetMovementSpeed(val) ->
             bytes
-            |> List.reserve(9)
+            |> List.reserve(5)
             |> List.append(2)
-            |> Builtin.write_bytes_f64(val)
+            |> Builtin.write_bytes_f32(val)
 
 ## Deserializes a value of [ControllerCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result ControllerCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 9 then
+    if List.len(bytes) != 5 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -67,7 +67,7 @@ from_bytes = |bytes|
             [2, .. as data_bytes] ->
                 Ok(
                     SetMovementSpeed(
-                        data_bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
+                        data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
                     ),
                 )
 

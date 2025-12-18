@@ -1,8 +1,8 @@
-# Hash: ee398359351f9ee6763e61efefa8d0bba15c8e444c297aa4d860319eba1c465a
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: 7067bc0e84efe9d8551327df805dd5170d8b6b966383d7574c99d4240f94805d
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -32,17 +32,17 @@ import core.Vector3
 ## [`impact_geometry::ReferenceFrame`].
 VoxelAbsorbingSphere : {
     ## The offset of the sphere in the reference frame of the entity.
-    offset : Vector3.Vector3 Binary64,
+    offset : Vector3.Vector3 Binary32,
     ## The radius of the sphere.
-    radius : F64,
+    radius : F32,
     ## The maximum rate of absorption (at the center of the sphere).
-    rate : F64,
+    rate : F32,
 }
 
 ## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
 ## in the reference frame of the entity and the given maximum absorption
 ## rate (at the center of the sphere).
-new : Vector3.Vector3 Binary64, F64, F64 -> VoxelAbsorbingSphere
+new : Vector3.Vector3 Binary32, F32, F32 -> VoxelAbsorbingSphere
 new = |offset, radius, rate|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
@@ -57,7 +57,7 @@ new = |offset, radius, rate|
 ## in the reference frame of the entity and the given maximum absorption
 ## rate (at the center of the sphere).
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3 Binary64, F64, F64 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3 Binary32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, offset, radius, rate|
     add(entity_data, new(offset, radius, rate))
 
@@ -66,7 +66,7 @@ add_new = |entity_data, offset, radius, rate|
 ## rate (at the center of the sphere).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (F64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, offset, radius, rate|
     add_multiple(
         entity_data,
@@ -131,8 +131,8 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, VoxelAbsorbingSphere -> List U8
 write_packet = |bytes, val|
     type_id = 13800759532896143647
-    size = 40
-    alignment = 8
+    size = 20
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -143,8 +143,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelAbsorbingSphere -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 13800759532896143647
-    size = 40
-    alignment = 8
+    size = 20
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -164,10 +164,10 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelAbsorbingSphere -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(40)
-    |> Vector3.write_bytes_64(value.offset)
-    |> Builtin.write_bytes_f64(value.radius)
-    |> Builtin.write_bytes_f64(value.rate)
+    |> List.reserve(20)
+    |> Vector3.write_bytes_32(value.offset)
+    |> Builtin.write_bytes_f32(value.radius)
+    |> Builtin.write_bytes_f32(value.rate)
 
 ## Deserializes a value of [VoxelAbsorbingSphere] from its bytes in the
 ## representation used by the engine.
@@ -175,15 +175,15 @@ from_bytes : List U8 -> Result VoxelAbsorbingSphere _
 from_bytes = |bytes|
     Ok(
         {
-            offset: bytes |> List.sublist({ start: 0, len: 24 }) |> Vector3.from_bytes_64?,
-            radius: bytes |> List.sublist({ start: 24, len: 8 }) |> Builtin.from_bytes_f64?,
-            rate: bytes |> List.sublist({ start: 32, len: 8 }) |> Builtin.from_bytes_f64?,
+            offset: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            radius: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
+            rate: bytes |> List.sublist({ start: 16, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 40 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 20 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

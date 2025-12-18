@@ -207,7 +207,7 @@ impl ChunkedVoxelObjectMesh {
                 Self::vertex_position_offset_for_chunk(voxel_object, chunk_indices);
 
             sdf.compute_surface_nets_mesh(
-                voxel_object.voxel_extent() as f32,
+                voxel_object.voxel_extent(),
                 &vertex_position_offset,
                 &mut surface_nets_buffer,
             );
@@ -269,7 +269,7 @@ impl ChunkedVoxelObjectMesh {
                     Self::vertex_position_offset_for_chunk(voxel_object, chunk_indices);
 
                 self.sdf_buffer.compute_surface_nets_mesh(
-                    voxel_object.voxel_extent() as f32,
+                    voxel_object.voxel_extent(),
                     &vertex_position_offset,
                     &mut self.surface_nets_buffer,
                 );
@@ -421,8 +421,8 @@ impl ChunkedVoxelObjectMesh {
         voxel_object: &ChunkedVoxelObject,
         chunk_indices: &[usize; 3],
     ) -> Vec3A {
-        let voxel_extent = voxel_object.voxel_extent() as f32;
-        let chunk_extent = voxel_object.chunk_extent() as f32;
+        let voxel_extent = voxel_object.voxel_extent();
+        let chunk_extent = voxel_object.chunk_extent();
 
         // Since the `VoxelChunkSignedDistanceField` has a 1-voxel padding
         // around the chunk boundary, we need to subtract the voxel extent

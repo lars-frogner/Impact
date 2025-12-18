@@ -1,6 +1,5 @@
 //! Equirectangular mapping of direction-dependent data.
 
-use crate::fph;
 use impact_math::{
     Float,
     angle::{Angle, Radians},
@@ -16,8 +15,8 @@ pub struct EquirectangularMap<V> {
     values: Vec<V>,
     n_phi_coords: usize,
     n_theta_coords: usize,
-    grid_cell_size: fph,
-    inverse_grid_cell_size: fph,
+    grid_cell_size: f32,
+    inverse_grid_cell_size: f32,
 }
 
 impl<V: Clone + Default> EquirectangularMap<V> {
@@ -34,7 +33,7 @@ impl<V: Clone + Default> EquirectangularMap<V> {
         let n_phi_coords = 2 * n_theta_coords;
         let n_values = n_phi_coords * n_theta_coords;
 
-        let grid_cell_size = fph::PI / (n_theta_coords as fph);
+        let grid_cell_size = f32::PI / (n_theta_coords as f32);
         let inverse_grid_cell_size = 1.0 / grid_cell_size;
 
         Self {
@@ -58,20 +57,20 @@ impl<V: Clone + Default> EquirectangularMap<V> {
 
     /// Returns the angular extent of a single grid cell. The extent is the same
     /// along both the azimuthal and polar axis.
-    pub fn grid_cell_size(&self) -> Radians<fph> {
+    pub fn grid_cell_size(&self) -> Radians<f32> {
         Radians(self.grid_cell_size)
     }
 
     /// Returns a reference to the value at the given spherical coordinates (phi
     /// is the azimuthal angle and theta is the polar angle).
-    pub fn value<A: Angle<fph>>(&self, phi: A, theta: A) -> &V {
+    pub fn value<A: Angle<f32>>(&self, phi: A, theta: A) -> &V {
         let idx = self.compute_linear_idx_from_angles(phi, theta);
         &self.values[idx]
     }
 
     /// Returns a mutable reference to the value at the given spherical
     /// coordinates (phi is the azimuthal angle and theta is the polar angle).
-    pub fn value_mut<A: Angle<fph>>(&mut self, phi: A, theta: A) -> &mut V {
+    pub fn value_mut<A: Angle<f32>>(&mut self, phi: A, theta: A) -> &mut V {
         let idx = self.compute_linear_idx_from_angles(phi, theta);
         &mut self.values[idx]
     }
@@ -84,15 +83,15 @@ impl<V: Clone + Default> EquirectangularMap<V> {
 
     /// Computes the index corresponding to the given phi (azimuthal) angle. Any
     /// value for the
-    pub fn compute_phi_idx<A: Angle<fph>>(&self, phi: A) -> usize {
-        self.compute_idx(phi.radians().rem_euclid(fph::TWO_PI))
+    pub fn compute_phi_idx<A: Angle<f32>>(&self, phi: A) -> usize {
+        self.compute_idx(phi.radians().rem_euclid(f32::TWO_PI))
     }
 
     /// Computes the index corresponding to the given theta (polar) angle.
-    pub fn compute_theta_idx<A: Angle<fph>>(&self, theta: A) -> usize {
-        let mut theta = theta.radians().rem_euclid(fph::TWO_PI);
-        if theta > fph::PI {
-            theta = fph::TWO_PI - theta;
+    pub fn compute_theta_idx<A: Angle<f32>>(&self, theta: A) -> usize {
+        let mut theta = theta.radians().rem_euclid(f32::TWO_PI);
+        if theta > f32::PI {
+            theta = f32::TWO_PI - theta;
         }
         // Prevent roundoff errors from producing a too large index
         usize::min(self.n_theta_coords - 1, self.compute_idx(theta))
@@ -106,12 +105,12 @@ impl<V: Clone + Default> EquirectangularMap<V> {
     ///
     /// # Panics
     /// If the given half extent does not exceed zero.
-    pub fn find_angle_indices_and_angular_distances_for_region<A: Angle<fph>>(
+    pub fn find_angle_indices_and_angular_distances_for_region<A: Angle<f32>>(
         &self,
         center_phi: A,
         center_theta: A,
         region_half_extent: A,
-    ) -> impl Iterator<Item = (usize, usize, Radians<fph>)> + use<A, V> {
+    ) -> impl Iterator<Item = (usize, usize, Radians<f32>)> + use<A, V> {
         let center_phi = center_phi.radians();
         let center_theta = center_theta.radians();
         let region_half_extent = region_half_extent.radians();
@@ -120,7 +119,7 @@ impl<V: Clone + Default> EquirectangularMap<V> {
 
         let half_grid_cell_size = 0.5 * self.grid_cell_size;
 
-        let region_half_extent = fph::max(half_grid_cell_size, region_half_extent);
+        let region_half_extent = f32::max(half_grid_cell_size, region_half_extent);
 
         let n_angles_across = (2.0 * region_half_extent / self.grid_cell_size).ceil() as usize;
 
@@ -130,7 +129,7 @@ impl<V: Clone + Default> EquirectangularMap<V> {
         #[allow(clippy::needless_collect)]
         let theta_values: Vec<_> = (0..n_angles_across)
             .map(|region_theta_idx| {
-                let theta = start_theta + (region_theta_idx as fph) * self.grid_cell_size;
+                let theta = start_theta + (region_theta_idx as f32) * self.grid_cell_size;
                 let theta_idx = self.compute_theta_idx(Radians(theta));
                 let (sin_theta, cos_theta) = theta.sin_cos();
                 (sin_theta, cos_theta, theta_idx)
@@ -139,7 +138,7 @@ impl<V: Clone + Default> EquirectangularMap<V> {
 
         let phi_values: Vec<_> = (0..n_angles_across)
             .map(|region_phi_idx| {
-                let phi = start_phi + (region_phi_idx as fph) * self.grid_cell_size;
+                let phi = start_phi + (region_phi_idx as f32) * self.grid_cell_size;
                 let phi_idx = self.compute_phi_idx(Radians(phi));
                 (phi, phi_idx)
             })
@@ -151,9 +150,9 @@ impl<V: Clone + Default> EquirectangularMap<V> {
             .into_iter()
             .flat_map(move |(sin_theta, cos_theta, theta_idx)| {
                 phi_values.clone().into_iter().map(move |(phi, phi_idx)| {
-                    let angular_distance = fph::acos(
+                    let angular_distance = f32::acos(
                         sin_center_theta * sin_theta
-                            + cos_center_theta * cos_theta * fph::cos(phi - center_phi),
+                            + cos_center_theta * cos_theta * f32::cos(phi - center_phi),
                     );
                     (phi_idx, theta_idx, Radians(angular_distance))
                 })
@@ -182,13 +181,13 @@ impl<V: Clone + Default> EquirectangularMap<V> {
         }
     }
 
-    fn compute_linear_idx_from_angles<A: Angle<fph>>(&self, phi: A, theta: A) -> usize {
+    fn compute_linear_idx_from_angles<A: Angle<f32>>(&self, phi: A, theta: A) -> usize {
         let phi_idx = self.compute_phi_idx(phi);
         let theta_idx = self.compute_theta_idx(theta);
         self.compute_linear_idx(phi_idx, theta_idx)
     }
 
-    fn compute_idx(&self, angle: fph) -> usize {
+    fn compute_idx(&self, angle: f32) -> usize {
         (angle * self.inverse_grid_cell_size).floor() as usize
     }
 
@@ -229,7 +228,7 @@ mod tests {
 
     #[test]
     fn should_compute_correct_phi_idx() {
-        let map = EquirectangularMap::<fph>::empty(3);
+        let map = EquirectangularMap::<f32>::empty(3);
         let half_grid_cell_size = map.grid_cell_size() * 0.5;
         assert_eq!(map.compute_phi_idx(half_grid_cell_size), 0);
         assert_eq!(map.compute_phi_idx(half_grid_cell_size * 3.0), 1);
@@ -238,29 +237,29 @@ mod tests {
             map.n_phi_coords() - 1
         );
         assert_eq!(
-            map.compute_phi_idx(Radians(fph::TWO_PI) + half_grid_cell_size),
+            map.compute_phi_idx(Radians(f32::TWO_PI) + half_grid_cell_size),
             0
         );
         assert!(map.compute_phi_idx(Radians(0.0)) < map.n_phi_coords());
-        assert!(map.compute_phi_idx(Radians(fph::TWO_PI)) < map.n_phi_coords());
+        assert!(map.compute_phi_idx(Radians(f32::TWO_PI)) < map.n_phi_coords());
     }
 
     #[test]
     fn should_compute_correct_theta_idx() {
-        let map = EquirectangularMap::<fph>::empty(3);
+        let map = EquirectangularMap::<f32>::empty(3);
         let half_grid_cell_size = map.grid_cell_size() * 0.5;
         assert_eq!(map.compute_theta_idx(half_grid_cell_size), 0);
         assert_eq!(map.compute_theta_idx(half_grid_cell_size * -1.0), 0);
         assert_eq!(map.compute_theta_idx(half_grid_cell_size * 3.0), 1);
         assert_eq!(
-            map.compute_theta_idx(Radians(fph::PI) - half_grid_cell_size),
+            map.compute_theta_idx(Radians(f32::PI) - half_grid_cell_size),
             map.n_theta_coords() - 1
         );
         assert_eq!(
-            map.compute_theta_idx(Radians(fph::PI) + half_grid_cell_size),
+            map.compute_theta_idx(Radians(f32::PI) + half_grid_cell_size),
             map.n_theta_coords() - 1
         );
         assert!(map.compute_theta_idx(Radians(0.0)) < map.n_theta_coords());
-        assert!(map.compute_theta_idx(Radians(fph::PI)) < map.n_theta_coords());
+        assert!(map.compute_theta_idx(Radians(f32::PI)) < map.n_theta_coords());
     }
 }

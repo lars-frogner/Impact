@@ -1,8 +1,8 @@
-# Hash: 68a05ace627808fa830c1a68b6e876a5a65049d704e3c959f427ee415e07c34b
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: fad3b6b111e5d9b964b4b39ca74a6972233820d3e474f30f681a32688cf4a16b
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_physics::force::constant_acceleration::ConstantAcceleration
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ConstantAcceleration,
     earth_downward_acceleration,
@@ -27,21 +27,21 @@ import core.Builtin
 import core.Vector3
 
 ## A constant acceleration vector.
-ConstantAcceleration : Vector3.Vector3 Binary64
+ConstantAcceleration : Vector3.Vector3 Binary32
 
 ## The downward acceleration at the surface of Earth [m/s^2].
-earth_downward_acceleration : F64
+earth_downward_acceleration : F32
 earth_downward_acceleration = 9.81
 
-new : Vector3.Vector3 Binary64 -> ConstantAcceleration
+new : Vector3.Vector3 Binary32 -> ConstantAcceleration
 new = |acceleration|
     (acceleration,)
 
-add_new : Entity.ComponentData, Vector3.Vector3 Binary64 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3 Binary32 -> Entity.ComponentData
 add_new = |entity_data, acceleration|
     add(entity_data, new(acceleration))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, acceleration|
     add_multiple(
         entity_data,
@@ -53,20 +53,20 @@ add_multiple_new = |entity_data, acceleration|
     )
 
 ## Constant acceleration in the negative y-direction.
-downward : F64 -> ConstantAcceleration
+downward : F32 -> ConstantAcceleration
 downward = |acceleration|
     new((0.0, -acceleration, 0.0))
 
 ## Constant acceleration in the negative y-direction.
 ## Adds the component to the given entity's data.
-add_downward : Entity.ComponentData, F64 -> Entity.ComponentData
+add_downward : Entity.ComponentData, F32 -> Entity.ComponentData
 add_downward = |entity_data, acceleration|
     add(entity_data, downward(acceleration))
 
 ## Constant acceleration in the negative y-direction.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_downward : Entity.MultiComponentData, Entity.Arg.Broadcasted (F64) -> Result Entity.MultiComponentData Str
+add_multiple_downward : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_downward = |entity_data, acceleration|
     add_multiple(
         entity_data,
@@ -125,8 +125,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, ConstantAcceleration -> List U8
 write_packet = |bytes, val|
     type_id = 7546236152181188141
-    size = 24
-    alignment = 8
+    size = 12
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -137,8 +137,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List ConstantAcceleration -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 7546236152181188141
-    size = 24
-    alignment = 8
+    size = 12
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -158,8 +158,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, ConstantAcceleration -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(24)
-    |> Vector3.write_bytes_64(value)
+    |> List.reserve(12)
+    |> Vector3.write_bytes_32(value)
 
 ## Deserializes a value of [ConstantAcceleration] from its bytes in the
 ## representation used by the engine.
@@ -167,13 +167,13 @@ from_bytes : List U8 -> Result ConstantAcceleration _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 24 }) |> Vector3.from_bytes_64?,
+            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 12 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

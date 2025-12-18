@@ -2,7 +2,6 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    fph,
     quantities::{Direction, Position, Velocity},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
@@ -33,6 +32,7 @@ pub struct HarmonicOscillatorTrajectoryDriver {
     pub rigid_body_id: KinematicRigidBodyID,
     /// The harmonic oscillator trajectory imposed on the body.
     pub trajectory: HarmonicOscillatorTrajectory,
+    padding: f32,
 }
 
 define_setup_type! {
@@ -43,15 +43,15 @@ define_setup_type! {
     pub struct HarmonicOscillatorTrajectory {
         /// A simulation time when the body should be at the center of
         /// oscillation.
-        pub center_time: fph,
+        pub center_time: f32,
         /// The position of the center of oscillation.
         pub center_position: Position,
         /// The direction in which the body is oscillating back and forth.
         pub direction: Direction,
         /// The maximum distance of the body from the center position.
-        pub amplitude: fph,
+        pub amplitude: f32,
         /// The duration of one full oscillation.
-        pub period: fph,
+        pub period: f32,
     }
 }
 
@@ -62,6 +62,17 @@ impl From<u64> for HarmonicOscillatorTrajectoryDriverID {
 }
 
 impl HarmonicOscillatorTrajectoryDriver {
+    pub fn new(
+        rigid_body_id: KinematicRigidBodyID,
+        trajectory: HarmonicOscillatorTrajectory,
+    ) -> Self {
+        Self {
+            rigid_body_id,
+            trajectory,
+            padding: 0.0,
+        }
+    }
+
     /// Resets the appropriate properties of the driven rigid body in
     /// preparation for applying driven properties.
     pub fn reset(&self, rigid_body_manager: &mut RigidBodyManager) {
@@ -75,7 +86,7 @@ impl HarmonicOscillatorTrajectoryDriver {
 
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: fph) {
+    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
         let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
         else {
             return;
@@ -103,11 +114,11 @@ impl HarmonicOscillatorTrajectory {
     }
     "#)]
     pub fn new(
-        center_time: fph,
+        center_time: f32,
         center_position: Position,
         direction: Direction,
-        amplitude: fph,
-        period: fph,
+        amplitude: f32,
+        period: f32,
     ) -> Self {
         Self {
             center_time,
@@ -122,21 +133,21 @@ impl HarmonicOscillatorTrajectory {
     ///
     /// # Panics
     /// If the period is zero.
-    pub fn compute_position_and_velocity(&self, time: fph) -> (Position, Velocity) {
+    pub fn compute_position_and_velocity(&self, time: f32) -> (Position, Velocity) {
         assert!(
             abs_diff_ne!(self.period, 0.0),
             "Period of harmonically oscillating trajectory is zero"
         );
 
         let center_time_offset = time - self.center_time;
-        let angular_frequency = fph::TWO_PI / self.period;
+        let angular_frequency = f32::TWO_PI / self.period;
 
         let position = self.center_position
-            + (self.amplitude * fph::sin(angular_frequency * center_time_offset))
+            + (self.amplitude * f32::sin(angular_frequency * center_time_offset))
                 * self.direction.as_ref();
 
         let velocity = ((self.amplitude * angular_frequency)
-            * fph::cos(angular_frequency * center_time_offset))
+            * f32::cos(angular_frequency * center_time_offset))
             * self.direction.as_ref();
 
         (position, velocity)
@@ -153,7 +164,7 @@ mod tests {
     use proptest::prelude::*;
 
     prop_compose! {
-        fn position_strategy(max_position_coord: fph)(
+        fn position_strategy(max_position_coord: f32)(
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
@@ -164,13 +175,13 @@ mod tests {
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..fph::TWO_PI,
-            theta in 0.0..fph::PI,
+            phi in 0.0..f32::TWO_PI,
+            theta in 0.0..f32::PI,
         ) -> Direction {
             Direction::new_normalize(vector![
-                fph::cos(phi) * fph::sin(theta),
-                fph::sin(phi) * fph::sin(theta),
-                fph::cos(theta)
+                f32::cos(phi) * f32::sin(theta),
+                f32::sin(phi) * f32::sin(theta),
+                f32::cos(theta)
             ])
         }
     }
@@ -186,12 +197,12 @@ mod tests {
     proptest! {
         #[test]
         fn should_get_center_position_at_half_periods_from_center_time(
-            center_time in -1e2..1e2,
+            center_time in -1e1..1e1_f32,
             center_position in position_strategy(1e2),
             direction in direction_strategy(),
-            amplitude in -1e2..1e2,
-            period in 1e-2..1e2,
-            n_half_periods in 0..100,
+            amplitude in -1e2..1e2_f32,
+            period in 1e-1..1e2_f32,
+            n_half_periods in 0..20,
         ) {
             let trajectory = HarmonicOscillatorTrajectory::new(
                 center_time,
@@ -200,21 +211,21 @@ mod tests {
                 amplitude,
                 period,
             );
-            let time = center_time + fph::from(n_half_periods) * 0.5 * period;
+            let time = center_time + n_half_periods as f32 * 0.5 * period;
             let (trajectory_position, _) = trajectory.compute_position_and_velocity(time);
-            prop_assert!(abs_diff_eq!(trajectory_position, center_position, epsilon = 1e-6));
+            prop_assert!(abs_diff_eq!(trajectory_position, center_position, epsilon = 1e-3 * center_position.coords.abs().max()));
         }
     }
 
     proptest! {
         #[test]
         fn should_get_peak_position_and_zero_velocity_at_quarter_periods_from_center_time(
-            center_time in -1e2..1e2,
+            center_time in -1e1..1e1_f32,
             center_position in position_strategy(1e2),
             direction in direction_strategy(),
-            amplitude in -1e2..1e2,
-            period in 1e-2..1e2,
-            n_periods in 0..100,
+            amplitude in -1e2..1e2_f32,
+            period in 1e-1..1e2_f32,
+            n_periods in 0..20,
         ) {
             let trajectory = HarmonicOscillatorTrajectory::new(
                 center_time,
@@ -223,7 +234,7 @@ mod tests {
                 amplitude,
                 period,
             );
-            let center_time = center_time + fph::from(n_periods) * period;
+            let center_time = center_time + n_periods as f32 * period;
             let positive_peak_time = center_time + 0.25 * period;
             let negative_peak_time = center_time - 0.25 * period;
 
@@ -239,10 +250,10 @@ mod tests {
                 negative_peak_trajectory_velocity,
             ) = trajectory.compute_position_and_velocity(negative_peak_time);
 
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_position, positive_peak_position, epsilon = 1e-6));
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 1e-6));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_position, negative_peak_position, epsilon = 1e-6));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 1e-6));
+            prop_assert!(abs_diff_eq!(positive_peak_trajectory_position, positive_peak_position, epsilon = 1e-3 * positive_peak_position.coords.abs().max()));
+            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-2));
+            prop_assert!(abs_diff_eq!(negative_peak_trajectory_position, negative_peak_position, epsilon = 1e-3 * negative_peak_position.coords.abs().max()));
+            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-2));
         }
     }
 }

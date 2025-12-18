@@ -5,7 +5,6 @@ pub mod setup;
 
 use crate::{
     constraint::contact::ContactManifold,
-    fph,
     rigid_body::{RigidBodyManager, TypedRigidBodyID},
 };
 use bytemuck::{Pod, Zeroable};
@@ -20,7 +19,7 @@ pub trait Collidable: Sized + fmt::Debug {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3<fph>,
+        transform_to_world_space: &Isometry3<f32>,
     ) -> Self;
 
     fn generate_contact_manifold(
@@ -327,11 +326,11 @@ impl<C: Collidable> CollidableDescriptor<C> {
 }
 
 impl CollidableKind {
-    pub fn to_u64(self) -> u64 {
-        self as u64
+    pub fn to_u32(self) -> u32 {
+        self as u32
     }
 
-    pub fn from_u64(number: u64) -> Option<Self> {
+    pub fn from_u32(number: u32) -> Option<Self> {
         match number {
             0 => Some(Self::Dynamic),
             1 => Some(Self::Static),

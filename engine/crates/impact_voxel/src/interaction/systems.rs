@@ -22,7 +22,6 @@ use impact_physics::{
     anchor::AnchorManager,
     collision::CollidableID,
     force::{ForceGeneratorManager, constant_acceleration::ConstantAccelerationGeneratorID},
-    fph,
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_scene::{
@@ -97,8 +96,8 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
                 let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let sphere_to_world_transform = parent_node.group_to_root_transform().cast()
-                    * reference_frame.create_transform_to_parent_space::<f64>();
+                let sphere_to_world_transform = parent_node.group_to_root_transform()
+                    * reference_frame.create_transform_to_parent_space();
 
                 entities.push(VoxelAbsorbingSphereEntity {
                     sphere: *sphere,
@@ -143,8 +142,8 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
                 let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let capsule_to_world_transform = parent_node.group_to_root_transform().cast()
-                    * reference_frame.create_transform_to_parent_space::<f64>();
+                let capsule_to_world_transform = parent_node.group_to_root_transform()
+                    * reference_frame.create_transform_to_parent_space();
 
                 entities.push(VoxelAbsorbingCapsuleEntity {
                     capsule: *capsule,
@@ -287,7 +286,7 @@ pub fn apply_absorption(
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &ForceGeneratorManager,
     collision_world: &CollisionWorld,
-    time_step_duration: fph,
+    time_step_duration: f32,
 ) {
     let mut interaction_context = ECSVoxelObjectInteractionContext {
         component_metadata_registry,

@@ -55,10 +55,7 @@ pub fn setup_constant_rotation(
 ) -> ConstantRotationDriverID {
     motion_driver_manager
         .constant_rotations_mut()
-        .insert_driver(ConstantRotationDriver {
-            rigid_body_id,
-            rotation,
-        })
+        .insert_driver(ConstantRotationDriver::new(rigid_body_id, rotation))
 }
 
 pub fn setup_harmonic_oscillator_trajectory(
@@ -68,10 +65,10 @@ pub fn setup_harmonic_oscillator_trajectory(
 ) -> HarmonicOscillatorTrajectoryDriverID {
     motion_driver_manager
         .harmonic_oscillator_trajectories_mut()
-        .insert_driver(HarmonicOscillatorTrajectoryDriver {
+        .insert_driver(HarmonicOscillatorTrajectoryDriver::new(
             rigid_body_id,
             trajectory,
-        })
+        ))
 }
 
 pub fn setup_orbital_trajectory(
@@ -81,8 +78,5 @@ pub fn setup_orbital_trajectory(
 ) -> OrbitalTrajectoryDriverID {
     motion_driver_manager
         .orbital_trajectories_mut()
-        .insert_driver(OrbitalTrajectoryDriver {
-            rigid_body_id,
-            trajectory,
-        })
+        .insert_driver(OrbitalTrajectoryDriver::new(rigid_body_id, trajectory))
 }

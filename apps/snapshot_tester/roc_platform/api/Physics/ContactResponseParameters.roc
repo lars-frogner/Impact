@@ -1,8 +1,8 @@
-# Hash: 97b65094bd37680d256056da2f5eccaed0332b1cc434056fe45f5815abb1722b
-# Generated: 2025-07-27T14:53:54+00:00
+# Hash: 10f880a13fff5bb31a36a046d3066ffe6edf255ec849ba391214d77b0a0162d7
+# Generated: 2025-12-17T23:58:42+00:00
 # Rust type: impact_physics::material::ContactResponseParameters
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ContactResponseParameters,
     new,
@@ -18,16 +18,16 @@ ContactResponseParameters : {
     ## The elasticity of collisions with the body, typically between 0 (fully
     ## inelastic, the bodies stay together) and 1 (elastic, the bodies bounce
     ## maximally apart).
-    restitution_coef : F64,
+    restitution_coef : F32,
     ## The strength of friction at the contact when the touching surfaces are
     ## not sliding across each other.
-    static_friction_coef : F64,
+    static_friction_coef : F32,
     ## The strength of friction at the contact when the touching surfaces are
     ## sliding across each other.
-    dynamic_friction_coef : F64,
+    dynamic_friction_coef : F32,
 }
 
-new : F64, F64, F64 -> ContactResponseParameters
+new : F32, F32, F32 -> ContactResponseParameters
 new = |restitution_coef, static_friction_coef, dynamic_friction_coef|
     { restitution_coef, static_friction_coef, dynamic_friction_coef }
 
@@ -36,10 +36,10 @@ new = |restitution_coef, static_friction_coef, dynamic_friction_coef|
 write_bytes : List U8, ContactResponseParameters -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(24)
-    |> Builtin.write_bytes_f64(value.restitution_coef)
-    |> Builtin.write_bytes_f64(value.static_friction_coef)
-    |> Builtin.write_bytes_f64(value.dynamic_friction_coef)
+    |> List.reserve(12)
+    |> Builtin.write_bytes_f32(value.restitution_coef)
+    |> Builtin.write_bytes_f32(value.static_friction_coef)
+    |> Builtin.write_bytes_f32(value.dynamic_friction_coef)
 
 ## Deserializes a value of [ContactResponseParameters] from its bytes in the
 ## representation used by the engine.
@@ -47,15 +47,15 @@ from_bytes : List U8 -> Result ContactResponseParameters _
 from_bytes = |bytes|
     Ok(
         {
-            restitution_coef: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            static_friction_coef: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            dynamic_friction_coef: bytes |> List.sublist({ start: 16, len: 8 }) |> Builtin.from_bytes_f64?,
+            restitution_coef: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            static_friction_coef: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
+            dynamic_friction_coef: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 12 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

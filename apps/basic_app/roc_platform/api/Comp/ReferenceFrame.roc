@@ -1,8 +1,8 @@
-# Hash: 23bfa8b3833e413f34978a3ae751d8be21b4ecd192492911a17b97571fb5bcc5
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: fba83fcbf5d810d48200dfb4a4760c1e3ecfc1e4cd9bc2b345918ceac86da4bd
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ReferenceFrame,
     new,
@@ -35,26 +35,26 @@ import core.UnitQuaternion
 ReferenceFrame : {
     ## The coordinates of the origin of the entity's reference frame measured
     ## in the parent space.
-    position : Point3.Point3 Binary64,
+    position : Point3.Point3 Binary32,
     ## The 3D orientation of the entity's reference frame in the parent space.
-    orientation : UnitQuaternion.UnitQuaternion Binary64,
+    orientation : UnitQuaternion.UnitQuaternion Binary32,
 }
 
 ## Creates a new reference frame with the given position and orientation.
-new : Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
+new : Point3.Point3 Binary32, UnitQuaternion.UnitQuaternion Binary32 -> ReferenceFrame
 new = |position, orientation|
     { position, orientation }
 
 ## Creates a new reference frame with the given position and orientation.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Point3.Point3 Binary64, UnitQuaternion.UnitQuaternion Binary64 -> Entity.ComponentData
+add_new : Entity.ComponentData, Point3.Point3 Binary32, UnitQuaternion.UnitQuaternion Binary32 -> Entity.ComponentData
 add_new = |entity_data, position, orientation|
     add(entity_data, new(position, orientation))
 
 ## Creates a new reference frame with the given position and orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary64), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, position, orientation|
     add_multiple(
         entity_data,
@@ -67,14 +67,14 @@ add_multiple_new = |entity_data, position, orientation|
 
 ## Creates a new reference frame with the given position and the identity
 ## orientation.
-unoriented : Point3.Point3 Binary64 -> ReferenceFrame
+unoriented : Point3.Point3 Binary32 -> ReferenceFrame
 unoriented = |position|
     new(position, UnitQuaternion.identity)
 
 ## Creates a new reference frame with the given position and the identity
 ## orientation.
 ## Adds the component to the given entity's data.
-add_unoriented : Entity.ComponentData, Point3.Point3 Binary64 -> Entity.ComponentData
+add_unoriented : Entity.ComponentData, Point3.Point3 Binary32 -> Entity.ComponentData
 add_unoriented = |entity_data, position|
     add(entity_data, unoriented(position))
 
@@ -82,7 +82,7 @@ add_unoriented = |entity_data, position|
 ## orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_unoriented : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_unoriented : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_unoriented = |entity_data, position|
     add_multiple(
         entity_data,
@@ -95,14 +95,14 @@ add_multiple_unoriented = |entity_data, position|
 
 ## Creates a new reference frame with the given orientation, located at the
 ## origin.
-unlocated : UnitQuaternion.UnitQuaternion Binary64 -> ReferenceFrame
+unlocated : UnitQuaternion.UnitQuaternion Binary32 -> ReferenceFrame
 unlocated = |orientation|
     new(Point3.origin, orientation)
 
 ## Creates a new reference frame with the given orientation, located at the
 ## origin.
 ## Adds the component to the given entity's data.
-add_unlocated : Entity.ComponentData, UnitQuaternion.UnitQuaternion Binary64 -> Entity.ComponentData
+add_unlocated : Entity.ComponentData, UnitQuaternion.UnitQuaternion Binary32 -> Entity.ComponentData
 add_unlocated = |entity_data, orientation|
     add(entity_data, unlocated(orientation))
 
@@ -110,7 +110,7 @@ add_unlocated = |entity_data, orientation|
 ## origin.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_unlocated : Entity.MultiComponentData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_unlocated : Entity.MultiComponentData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_unlocated = |entity_data, orientation|
     add_multiple(
         entity_data,
@@ -175,8 +175,8 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, ReferenceFrame -> List U8
 write_packet = |bytes, val|
     type_id = 13511111226856695413
-    size = 56
-    alignment = 8
+    size = 28
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -187,8 +187,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List ReferenceFrame -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 13511111226856695413
-    size = 56
-    alignment = 8
+    size = 28
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -208,9 +208,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, ReferenceFrame -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(56)
-    |> Point3.write_bytes_64(value.position)
-    |> UnitQuaternion.write_bytes_64(value.orientation)
+    |> List.reserve(28)
+    |> Point3.write_bytes_32(value.position)
+    |> UnitQuaternion.write_bytes_32(value.orientation)
 
 ## Deserializes a value of [ReferenceFrame] from its bytes in the
 ## representation used by the engine.
@@ -218,14 +218,14 @@ from_bytes : List U8 -> Result ReferenceFrame _
 from_bytes = |bytes|
     Ok(
         {
-            position: bytes |> List.sublist({ start: 0, len: 24 }) |> Point3.from_bytes_64?,
-            orientation: bytes |> List.sublist({ start: 24, len: 32 }) |> UnitQuaternion.from_bytes_64?,
+            position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes_32?,
+            orientation: bytes |> List.sublist({ start: 12, len: 16 }) |> UnitQuaternion.from_bytes_32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 56 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 28 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

@@ -1,8 +1,8 @@
-# Hash: 29909de29ad6e8103ff184b526ffce2abeead9259102a36e39a8a0e5fc7d915c
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 634423dc90e9f3a0468b8ba5b382dc22fa04dfd49cfabf08440df37e7292a8ed
+# Generated: 2025-12-17T23:58:42+00:00
 # Rust type: impact_physics::collision::setup::PlanarCollidable
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     PlanarCollidable,
     new,
@@ -23,12 +23,12 @@ import core.Plane
 
 ## A planar collidable.
 PlanarCollidable : {
-    kind : U64,
-    plane : Plane.Plane Binary64,
+    kind : U32,
+    plane : Plane.Plane Binary32,
     response_params : Physics.ContactResponseParameters.ContactResponseParameters,
 }
 
-new : Physics.CollidableKind.CollidableKind, Plane.Plane Binary64, Physics.ContactResponseParameters.ContactResponseParameters -> PlanarCollidable
+new : Physics.CollidableKind.CollidableKind, Plane.Plane Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> PlanarCollidable
 new = |kind, plane, response_params|
     {
         kind:
@@ -40,11 +40,11 @@ new = |kind, plane, response_params|
         response_params,
     }
 
-add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Plane.Plane Binary64, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
+add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Plane.Plane Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
 add_new = |entity_data, kind, plane, response_params|
     add(entity_data, new(kind, plane, response_params))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Plane.Plane Binary64), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Plane.Plane Binary32), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, kind, plane, response_params|
     add_multiple(
         entity_data,
@@ -79,8 +79,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, PlanarCollidable -> List U8
 write_packet = |bytes, val|
     type_id = 13177454990089127351
-    size = 64
-    alignment = 8
+    size = 32
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -91,8 +91,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List PlanarCollidable -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 13177454990089127351
-    size = 64
-    alignment = 8
+    size = 32
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -112,9 +112,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, PlanarCollidable -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(64)
-    |> Builtin.write_bytes_u64(value.kind)
-    |> Plane.write_bytes_64(value.plane)
+    |> List.reserve(32)
+    |> Builtin.write_bytes_u32(value.kind)
+    |> Plane.write_bytes_32(value.plane)
     |> Physics.ContactResponseParameters.write_bytes(value.response_params)
 
 ## Deserializes a value of [PlanarCollidable] from its bytes in the
@@ -123,15 +123,15 @@ from_bytes : List U8 -> Result PlanarCollidable _
 from_bytes = |bytes|
     Ok(
         {
-            kind: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_u64?,
-            plane: bytes |> List.sublist({ start: 8, len: 32 }) |> Plane.from_bytes_64?,
-            response_params: bytes |> List.sublist({ start: 40, len: 24 }) |> Physics.ContactResponseParameters.from_bytes?,
+            kind: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
+            plane: bytes |> List.sublist({ start: 4, len: 16 }) |> Plane.from_bytes_32?,
+            response_params: bytes |> List.sublist({ start: 20, len: 12 }) |> Physics.ContactResponseParameters.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 64 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

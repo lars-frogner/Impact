@@ -1,8 +1,8 @@
-# Hash: af437ed9cf19b46f8a42f5bbe25a363db3918b28b4af232058ee9cec13ea86b5
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 2e2f38ad45d965b7d007ec8c63e6d5a896c0a31cea3a72e13b3be671236673b3
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBody
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     KinematicRigidBody,
     write_bytes,
@@ -18,9 +18,9 @@ import core.Vector3
 ## modified. It does not have any inertial properties, and is not affected by
 ## forces or torques.
 KinematicRigidBody : {
-    position : Point3.Point3 Binary64,
-    orientation : UnitQuaternion.UnitQuaternion Binary64,
-    velocity : Vector3.Vector3 Binary64,
+    position : Point3.Point3 Binary32,
+    orientation : UnitQuaternion.UnitQuaternion Binary32,
+    velocity : Vector3.Vector3 Binary32,
     angular_velocity : Physics.AngularVelocity.AngularVelocity,
 }
 
@@ -29,10 +29,10 @@ KinematicRigidBody : {
 write_bytes : List U8, KinematicRigidBody -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(112)
-    |> Point3.write_bytes_64(value.position)
-    |> UnitQuaternion.write_bytes_64(value.orientation)
-    |> Vector3.write_bytes_64(value.velocity)
+    |> List.reserve(56)
+    |> Point3.write_bytes_32(value.position)
+    |> UnitQuaternion.write_bytes_32(value.orientation)
+    |> Vector3.write_bytes_32(value.velocity)
     |> Physics.AngularVelocity.write_bytes(value.angular_velocity)
 
 ## Deserializes a value of [KinematicRigidBody] from its bytes in the
@@ -41,16 +41,16 @@ from_bytes : List U8 -> Result KinematicRigidBody _
 from_bytes = |bytes|
     Ok(
         {
-            position: bytes |> List.sublist({ start: 0, len: 24 }) |> Point3.from_bytes_64?,
-            orientation: bytes |> List.sublist({ start: 24, len: 32 }) |> UnitQuaternion.from_bytes_64?,
-            velocity: bytes |> List.sublist({ start: 56, len: 24 }) |> Vector3.from_bytes_64?,
-            angular_velocity: bytes |> List.sublist({ start: 80, len: 32 }) |> Physics.AngularVelocity.from_bytes?,
+            position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes_32?,
+            orientation: bytes |> List.sublist({ start: 12, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            velocity: bytes |> List.sublist({ start: 28, len: 12 }) |> Vector3.from_bytes_32?,
+            angular_velocity: bytes |> List.sublist({ start: 40, len: 16 }) |> Physics.AngularVelocity.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 112 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 56 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

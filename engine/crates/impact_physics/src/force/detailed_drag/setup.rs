@@ -8,7 +8,6 @@ use crate::{
             DragLoadMap, DragLoadMapConfig, DragLoadMapID,
         },
     },
-    fph,
     quantities::Position,
     rigid_body::DynamicRigidBodyID,
 };
@@ -17,7 +16,7 @@ use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::ModelTransform;
-use impact_math::hash::StringHash64;
+use impact_math::hash::StringHash32;
 use nalgebra::Point3;
 use roc_integration::roc;
 use std::path::{Path, PathBuf};
@@ -30,14 +29,14 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct DetailedDragProperties {
         /// The drag coefficient of the body.
-        pub drag_coefficient: fph,
+        pub drag_coefficient: f32,
     }
 }
 
 #[roc]
 impl DetailedDragProperties {
     #[roc(body = "{ drag_coefficient }")]
-    pub fn new(drag_coefficient: fph) -> Self {
+    pub fn new(drag_coefficient: f32) -> Self {
         Self { drag_coefficient }
     }
 }
@@ -47,7 +46,7 @@ pub fn setup_detailed_drag_force<'a>(
     drag_properties: DetailedDragProperties,
     rigid_body_id: DynamicRigidBodyID,
     model_transform: &ModelTransform,
-    drag_load_map_id: StringHash64,
+    drag_load_map_id: StringHash32,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
 ) -> Result<DetailedDragForceGeneratorID> {
     let drag_load_map_id = DragLoadMapID(drag_load_map_id);
@@ -65,7 +64,7 @@ pub fn setup_detailed_drag_force<'a>(
             #[cfg(not(feature = "bincode"))]
             anyhow::bail!("Enable the `bincode` feature to read drag load maps");
             #[cfg(feature = "bincode")]
-            DragLoadMap::<f32>::read_from_file(&map_path).with_context(|| {
+            DragLoadMap::read_from_file(&map_path).with_context(|| {
                 format!(
                     "Failed to load drag load map from file `{}`",
                     map_path.display()
@@ -102,14 +101,14 @@ pub fn setup_detailed_drag_force<'a>(
 
     let generator_id = detailed_drag_force_registry
         .generators_mut()
-        .insert_generator(DetailedDragForceGenerator {
-            body: rigid_body_id,
-            force: DetailedDragForce {
+        .insert_generator(DetailedDragForceGenerator::new(
+            rigid_body_id,
+            DetailedDragForce {
                 drag_coefficient: drag_properties.drag_coefficient,
                 drag_load_map: drag_load_map_id,
-                scaling: fph::from(model_transform.scale),
+                scaling: model_transform.scale,
             },
-        });
+        ));
 
     Ok(generator_id)
 }
@@ -119,7 +118,7 @@ fn generate_map<'a>(
     center_of_mass: &Position,
     drag_load_map_id: DragLoadMapID,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
-) -> Result<DragLoadMap<f32>> {
+) -> Result<DragLoadMap> {
     impact_log::info!("Generating drag load map: {drag_load_map_id}");
 
     let map = impact_log::with_timing_info_logging!(
@@ -128,7 +127,7 @@ fn generate_map<'a>(
         drag_load_map_id,
         config.smoothness,
         config.n_direction_samples; {
-        DragLoadMap::<f32>::compute_from_mesh(
+        DragLoadMap::compute_from_mesh(
             triangle_vertex_positions,
             center_of_mass,
             config.n_direction_samples,

@@ -7,7 +7,6 @@ use impact_physics::{
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     driven_motion::MotionDriverManager,
     force::{ForceGenerationConfig, ForceGeneratorManager},
-    fph,
     medium::UniformMedium,
     rigid_body::RigidBodyManager,
 };
@@ -28,9 +27,9 @@ pub struct PhysicsSimulator {
     constraint_manager: RwLock<ConstraintManager>,
     collision_world: RwLock<CollisionWorld>,
     medium: UniformMedium,
-    simulation_time: fph,
-    time_step_duration: fph,
-    simulation_speed_multiplier: fph,
+    simulation_time: f32,
+    time_step_duration: f32,
+    simulation_speed_multiplier: f32,
 }
 
 /// Configuration parameters for physics.
@@ -58,7 +57,7 @@ pub struct SimulatorConfig {
     /// improve accuracy.
     pub n_substeps: u32,
     /// The duration to use for the first time step.
-    pub initial_time_step_duration: fph,
+    pub initial_time_step_duration: f32,
     /// If `true`, the time step duration will be updated regularly to match the
     /// frame duration. This gives "real-time" simulation.
     pub match_frame_duration: bool,
@@ -66,7 +65,7 @@ pub struct SimulatorConfig {
     /// above this value. This means it will lag behind real-time for
     /// sufficiently long frame times, but it can prevent the simulation from
     /// becoming unstable during stuttering.
-    pub max_auto_time_step_duration: Option<fph>,
+    pub max_auto_time_step_duration: Option<f32>,
 }
 
 impl PhysicsSimulator {
@@ -115,34 +114,34 @@ impl PhysicsSimulator {
 
     /// The current base duration used for each time step (without the
     /// simulation speed multiplier).
-    pub fn time_step_duration(&self) -> fph {
+    pub fn time_step_duration(&self) -> f32 {
         self.time_step_duration
     }
 
     /// The current base duration used for each time step (without the
     /// simulation speed multiplier).
-    pub fn time_step_duration_mut(&mut self) -> &mut fph {
+    pub fn time_step_duration_mut(&mut self) -> &mut f32 {
         &mut self.time_step_duration
     }
 
     /// The current multiplier for the simulation speed.
-    pub fn simulation_speed_multiplier(&self) -> fph {
+    pub fn simulation_speed_multiplier(&self) -> f32 {
         self.simulation_speed_multiplier
     }
 
     /// The current multiplier for the simulation speed.
-    pub fn simulation_speed_multiplier_mut(&mut self) -> &mut fph {
+    pub fn simulation_speed_multiplier_mut(&mut self) -> &mut f32 {
         &mut self.simulation_speed_multiplier
     }
 
     /// The actual duration used for each time step (including the
     /// simulation speed multiplier).
-    pub fn scaled_time_step_duration(&self) -> fph {
+    pub fn scaled_time_step_duration(&self) -> f32 {
         self.time_step_duration * self.simulation_speed_multiplier
     }
 
     /// The time that have elapsed within the simulation.
-    pub fn current_simulation_time(&self) -> fph {
+    pub fn current_simulation_time(&self) -> f32 {
         self.simulation_time
     }
 
@@ -172,7 +171,7 @@ impl PhysicsSimulator {
     /// above this value. This means it will lag behind real-time for
     /// sufficiently long frame times, but it can prevent the simulation from
     /// becoming unstable during stuttering.
-    pub fn max_auto_time_step_duration(&self) -> Option<fph> {
+    pub fn max_auto_time_step_duration(&self) -> Option<f32> {
         self.config.max_auto_time_step_duration
     }
 
@@ -225,7 +224,7 @@ impl PhysicsSimulator {
     /// duration, provided it doesn't exceed the configured maximum.
     pub fn update_time_step_duration(&mut self, frame_duration: &Duration) {
         if self.config.enabled && self.config.match_frame_duration {
-            let new_step_duration = frame_duration.as_secs_f64();
+            let new_step_duration = frame_duration.as_secs_f32();
             if self
                 .config
                 .max_auto_time_step_duration
@@ -237,7 +236,7 @@ impl PhysicsSimulator {
     }
 
     /// Will use the given duration as the time step duration.
-    pub fn set_time_step_duration(&mut self, time_step_duration: fph) {
+    pub fn set_time_step_duration(&mut self, time_step_duration: f32) {
         self.time_step_duration = time_step_duration;
     }
 
@@ -293,8 +292,8 @@ impl PhysicsSimulator {
         collision_world.synchronize_collidables_with_rigid_bodies(&rigid_body_manager);
     }
 
-    fn compute_substep_duration(&self) -> fph {
-        self.scaled_time_step_duration() / fph::from_u32(self.n_substeps()).unwrap()
+    fn compute_substep_duration(&self) -> f32 {
+        self.scaled_time_step_duration() / f32::from_u32(self.n_substeps()).unwrap()
     }
 }
 

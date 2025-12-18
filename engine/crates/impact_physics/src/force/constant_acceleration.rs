@@ -2,7 +2,6 @@
 
 use crate::{
     force::ForceGeneratorRegistry,
-    fph,
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
@@ -31,6 +30,7 @@ pub struct ConstantAccelerationGenerator {
     pub rigid_body_id: DynamicRigidBodyID,
     /// The acceleration of the body's center of mass in world space.
     pub acceleration: ConstantAcceleration,
+    padding: f32,
 }
 
 define_setup_type! {
@@ -39,7 +39,7 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ConstantAcceleration(Vector3<fph>);
+    pub struct ConstantAcceleration(Vector3<f32>);
 }
 
 impl From<u64> for ConstantAccelerationGeneratorID {
@@ -49,6 +49,14 @@ impl From<u64> for ConstantAccelerationGeneratorID {
 }
 
 impl ConstantAccelerationGenerator {
+    pub fn new(rigid_body_id: DynamicRigidBodyID, acceleration: ConstantAcceleration) -> Self {
+        Self {
+            rigid_body_id,
+            acceleration,
+            padding: 0.0,
+        }
+    }
+
     /// Applies the acceleration to the appropriate dynamic rigid body.
     pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager) {
         let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(self.rigid_body_id)
@@ -63,16 +71,16 @@ impl ConstantAccelerationGenerator {
 impl ConstantAcceleration {
     /// The downward acceleration at the surface of Earth [m/s^2].
     #[roc(expr = "9.81")]
-    pub const EARTH_DOWNWARD_ACCELERATION: fph = 9.81;
+    pub const EARTH_DOWNWARD_ACCELERATION: f32 = 9.81;
 
     #[roc(body = "(acceleration,)")]
-    pub fn new(acceleration: Vector3<fph>) -> Self {
+    pub fn new(acceleration: Vector3<f32>) -> Self {
         Self(acceleration)
     }
 
     /// Constant acceleration in the negative y-direction.
     #[roc(body = "new((0.0, -acceleration, 0.0))")]
-    pub fn downward(acceleration: fph) -> Self {
+    pub fn downward(acceleration: f32) -> Self {
         Self::new(vector![0.0, -acceleration, 0.0])
     }
 

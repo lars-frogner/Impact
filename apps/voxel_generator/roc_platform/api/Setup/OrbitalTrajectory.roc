@@ -1,8 +1,8 @@
-# Hash: 03a0432285e13995604800963fc3081ae43601abfb426335eb4186181be4ff4d
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: 62599acf09cbf1451940a7ace372154cacb9a33e0798730fbd9d83aacadeec5b
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_physics::driven_motion::orbit::OrbitalTrajectory
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     OrbitalTrajectory,
     new,
@@ -23,25 +23,25 @@ import core.UnitQuaternion
 OrbitalTrajectory : {
     ## When (in simulation time) the orbiting body should be at the periapsis
     ## (the closest point to the orbited body).
-    periapsis_time : F64,
+    periapsis_time : F32,
     ## The orientation of the orbit. The first axis of the oriented orbit frame
     ## will coincide with the direction from the orbited body to the periapsis,
     ## the second with the direction of the velocity at the periapsis and the
     ## third with the normal of the orbital plane.
-    orientation : UnitQuaternion.UnitQuaternion Binary64,
+    orientation : UnitQuaternion.UnitQuaternion Binary32,
     ## The position of the focal point where the body being orbited would be
     ## located.
-    focal_position : Point3.Point3 Binary64,
+    focal_position : Point3.Point3 Binary32,
     ## Half the longest diameter of the orbital ellipse.
-    semi_major_axis : F64,
+    semi_major_axis : F32,
     ## The eccentricity of the orbital ellipse (0 is circular, 1 is a line).
-    eccentricity : F64,
+    eccentricity : F32,
     ## The orbital period.
-    period : F64,
+    period : F32,
 }
 
 ## Creates a new orbital trajectory with the given properties.
-new : F64, UnitQuaternion.UnitQuaternion Binary64, Point3.Point3 Binary64, F64, F64, F64 -> OrbitalTrajectory
+new : F32, UnitQuaternion.UnitQuaternion Binary32, Point3.Point3 Binary32, F32, F32, F32 -> OrbitalTrajectory
 new = |periapsis_time, orientation, focal_position, semi_major_axis, eccentricity, period|
     {
         periapsis_time,
@@ -54,7 +54,7 @@ new = |periapsis_time, orientation, focal_position, semi_major_axis, eccentricit
 
 ## Creates a new orbital trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F64, UnitQuaternion.UnitQuaternion Binary64, Point3.Point3 Binary64, F64, F64, F64 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion Binary32, Point3.Point3 Binary32, F32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, periapsis_time, orientation, focal_position, semi_major_axis, eccentricity, period|
     add(entity_data, new(periapsis_time, orientation, focal_position, semi_major_axis, eccentricity, period))
 
@@ -82,8 +82,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, OrbitalTrajectory -> List U8
 write_packet = |bytes, val|
     type_id = 6364739483624798862
-    size = 88
-    alignment = 8
+    size = 44
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -94,8 +94,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List OrbitalTrajectory -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 6364739483624798862
-    size = 88
-    alignment = 8
+    size = 44
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -115,13 +115,13 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, OrbitalTrajectory -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(88)
-    |> Builtin.write_bytes_f64(value.periapsis_time)
-    |> UnitQuaternion.write_bytes_64(value.orientation)
-    |> Point3.write_bytes_64(value.focal_position)
-    |> Builtin.write_bytes_f64(value.semi_major_axis)
-    |> Builtin.write_bytes_f64(value.eccentricity)
-    |> Builtin.write_bytes_f64(value.period)
+    |> List.reserve(44)
+    |> Builtin.write_bytes_f32(value.periapsis_time)
+    |> UnitQuaternion.write_bytes_32(value.orientation)
+    |> Point3.write_bytes_32(value.focal_position)
+    |> Builtin.write_bytes_f32(value.semi_major_axis)
+    |> Builtin.write_bytes_f32(value.eccentricity)
+    |> Builtin.write_bytes_f32(value.period)
 
 ## Deserializes a value of [OrbitalTrajectory] from its bytes in the
 ## representation used by the engine.
@@ -129,18 +129,18 @@ from_bytes : List U8 -> Result OrbitalTrajectory _
 from_bytes = |bytes|
     Ok(
         {
-            periapsis_time: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            orientation: bytes |> List.sublist({ start: 8, len: 32 }) |> UnitQuaternion.from_bytes_64?,
-            focal_position: bytes |> List.sublist({ start: 40, len: 24 }) |> Point3.from_bytes_64?,
-            semi_major_axis: bytes |> List.sublist({ start: 64, len: 8 }) |> Builtin.from_bytes_f64?,
-            eccentricity: bytes |> List.sublist({ start: 72, len: 8 }) |> Builtin.from_bytes_f64?,
-            period: bytes |> List.sublist({ start: 80, len: 8 }) |> Builtin.from_bytes_f64?,
+            periapsis_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            orientation: bytes |> List.sublist({ start: 4, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            focal_position: bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes_32?,
+            semi_major_axis: bytes |> List.sublist({ start: 32, len: 4 }) |> Builtin.from_bytes_f32?,
+            eccentricity: bytes |> List.sublist({ start: 36, len: 4 }) |> Builtin.from_bytes_f32?,
+            period: bytes |> List.sublist({ start: 40, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 88 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 44 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

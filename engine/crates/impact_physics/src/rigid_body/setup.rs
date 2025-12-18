@@ -1,7 +1,6 @@
 //! Management of rigid bodies for entities.
 
 use crate::{
-    fph,
     inertia::InertialProperties,
     quantities::Motion,
     rigid_body::{
@@ -21,7 +20,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct DynamicRigidBodySubstance {
         // The mass density of the body's substance.
-        pub mass_density: fph,
+        pub mass_density: f32,
     }
 }
 

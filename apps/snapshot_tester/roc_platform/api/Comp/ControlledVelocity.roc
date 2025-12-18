@@ -1,8 +1,8 @@
-# Hash: 3b3e3ad931e0d7d43099609e15a8be9ed0a89d1ca03cf162560ec203257dba7c
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: ac35c6327c2307d2c534a2cd818bd8f0b9091188cd11d82f0bac617336bbc94f
+# Generated: 2025-12-17T23:58:42+00:00
 # Rust type: impact_controller::motion::ControlledVelocity
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     ControlledVelocity,
     new,
@@ -25,7 +25,7 @@ import core.Builtin
 import core.Vector3
 
 ## Velocity controller by a user.
-ControlledVelocity : Vector3.Vector3 Binary64
+ControlledVelocity : Vector3.Vector3 Binary32
 
 ## Creates a new controlled velocity.
 new : {} -> ControlledVelocity
@@ -105,8 +105,8 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, ControlledVelocity -> List U8
 write_packet = |bytes, val|
     type_id = 8336497689488528547
-    size = 24
-    alignment = 8
+    size = 12
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -117,8 +117,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List ControlledVelocity -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 8336497689488528547
-    size = 24
-    alignment = 8
+    size = 12
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -138,8 +138,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, ControlledVelocity -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(24)
-    |> Vector3.write_bytes_64(value)
+    |> List.reserve(12)
+    |> Vector3.write_bytes_32(value)
 
 ## Deserializes a value of [ControlledVelocity] from its bytes in the
 ## representation used by the engine.
@@ -147,13 +147,13 @@ from_bytes : List U8 -> Result ControlledVelocity _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 24 }) |> Vector3.from_bytes_64?,
+            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
         ),
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 12 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

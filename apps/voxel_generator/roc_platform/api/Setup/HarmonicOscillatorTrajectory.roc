@@ -1,8 +1,8 @@
-# Hash: 948b19c1f266bc108a2d5c75d54db40ad3e13b3c02b2d85577f34f2c3e3a5059
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: 703a6837c5560c67643db4b4e3c0d44d31c6bfcd41d0f8b949697c222ced407b
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectory
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     HarmonicOscillatorTrajectory,
     new,
@@ -23,20 +23,20 @@ import core.UnitVector3
 HarmonicOscillatorTrajectory : {
     ## A simulation time when the body should be at the center of
     ## oscillation.
-    center_time : F64,
+    center_time : F32,
     ## The position of the center of oscillation.
-    center_position : Point3.Point3 Binary64,
+    center_position : Point3.Point3 Binary32,
     ## The direction in which the body is oscillating back and forth.
-    direction : UnitVector3.UnitVector3 Binary64,
+    direction : UnitVector3.UnitVector3 Binary32,
     ## The maximum distance of the body from the center position.
-    amplitude : F64,
+    amplitude : F32,
     ## The duration of one full oscillation.
-    period : F64,
+    period : F32,
 }
 
 ## Creates a new harmonically oscillating trajectory with the given
 ## properties.
-new : F64, Point3.Point3 Binary64, UnitVector3.UnitVector3 Binary64, F64, F64 -> HarmonicOscillatorTrajectory
+new : F32, Point3.Point3 Binary32, UnitVector3.UnitVector3 Binary32, F32, F32 -> HarmonicOscillatorTrajectory
 new = |center_time, center_position, direction, amplitude, period|
     {
         center_time,
@@ -49,7 +49,7 @@ new = |center_time, center_position, direction, amplitude, period|
 ## Creates a new harmonically oscillating trajectory with the given
 ## properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F64, Point3.Point3 Binary64, UnitVector3.UnitVector3 Binary64, F64, F64 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, Point3.Point3 Binary32, UnitVector3.UnitVector3 Binary32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, center_time, center_position, direction, amplitude, period|
     add(entity_data, new(center_time, center_position, direction, amplitude, period))
 
@@ -77,8 +77,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, HarmonicOscillatorTrajectory -> List U8
 write_packet = |bytes, val|
     type_id = 1880855804954852557
-    size = 72
-    alignment = 8
+    size = 36
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -89,8 +89,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List HarmonicOscillatorTrajectory -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 1880855804954852557
-    size = 72
-    alignment = 8
+    size = 36
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -110,12 +110,12 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, HarmonicOscillatorTrajectory -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(72)
-    |> Builtin.write_bytes_f64(value.center_time)
-    |> Point3.write_bytes_64(value.center_position)
-    |> UnitVector3.write_bytes_64(value.direction)
-    |> Builtin.write_bytes_f64(value.amplitude)
-    |> Builtin.write_bytes_f64(value.period)
+    |> List.reserve(36)
+    |> Builtin.write_bytes_f32(value.center_time)
+    |> Point3.write_bytes_32(value.center_position)
+    |> UnitVector3.write_bytes_32(value.direction)
+    |> Builtin.write_bytes_f32(value.amplitude)
+    |> Builtin.write_bytes_f32(value.period)
 
 ## Deserializes a value of [HarmonicOscillatorTrajectory] from its bytes in the
 ## representation used by the engine.
@@ -123,17 +123,17 @@ from_bytes : List U8 -> Result HarmonicOscillatorTrajectory _
 from_bytes = |bytes|
     Ok(
         {
-            center_time: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            center_position: bytes |> List.sublist({ start: 8, len: 24 }) |> Point3.from_bytes_64?,
-            direction: bytes |> List.sublist({ start: 32, len: 24 }) |> UnitVector3.from_bytes_64?,
-            amplitude: bytes |> List.sublist({ start: 56, len: 8 }) |> Builtin.from_bytes_f64?,
-            period: bytes |> List.sublist({ start: 64, len: 8 }) |> Builtin.from_bytes_f64?,
+            center_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            center_position: bytes |> List.sublist({ start: 4, len: 12 }) |> Point3.from_bytes_32?,
+            direction: bytes |> List.sublist({ start: 16, len: 12 }) |> UnitVector3.from_bytes_32?,
+            amplitude: bytes |> List.sublist({ start: 28, len: 4 }) |> Builtin.from_bytes_f32?,
+            period: bytes |> List.sublist({ start: 32, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 72 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 36 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

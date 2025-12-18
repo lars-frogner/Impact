@@ -1,8 +1,8 @@
-# Hash: e3be272194ebec8e785ffd73b3d5ab89e46ded76bb5d13a90a7c78a1f64cfdbf
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 3acc57f68bb196cb32f6fc3ffd21566f5914d742275c11421e4808193eec14cc
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_physics::rigid_body::DynamicRigidBody
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     DynamicRigidBody,
     write_bytes,
@@ -27,14 +27,14 @@ import core.Vector3
 ## body's linear or angular momentum has to be updated whenever something
 ## manually modifies the linear or angular velocity, respectively.
 DynamicRigidBody : {
-    mass : F64,
+    mass : F32,
     inertia_tensor : Physics.InertiaTensor.InertiaTensor,
-    position : Point3.Point3 Binary64,
-    orientation : UnitQuaternion.UnitQuaternion Binary64,
-    momentum : Vector3.Vector3 Binary64,
-    angular_momentum : Vector3.Vector3 Binary64,
-    total_force : Vector3.Vector3 Binary64,
-    total_torque : Vector3.Vector3 Binary64,
+    position : Point3.Point3 Binary32,
+    orientation : UnitQuaternion.UnitQuaternion Binary32,
+    momentum : Vector3.Vector3 Binary32,
+    angular_momentum : Vector3.Vector3 Binary32,
+    total_force : Vector3.Vector3 Binary32,
+    total_torque : Vector3.Vector3 Binary32,
 }
 
 ## Serializes a value of [DynamicRigidBody] into the binary representation
@@ -42,15 +42,15 @@ DynamicRigidBody : {
 write_bytes : List U8, DynamicRigidBody -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(304)
-    |> Builtin.write_bytes_f64(value.mass)
+    |> List.reserve(152)
+    |> Builtin.write_bytes_f32(value.mass)
     |> Physics.InertiaTensor.write_bytes(value.inertia_tensor)
-    |> Point3.write_bytes_64(value.position)
-    |> UnitQuaternion.write_bytes_64(value.orientation)
-    |> Vector3.write_bytes_64(value.momentum)
-    |> Vector3.write_bytes_64(value.angular_momentum)
-    |> Vector3.write_bytes_64(value.total_force)
-    |> Vector3.write_bytes_64(value.total_torque)
+    |> Point3.write_bytes_32(value.position)
+    |> UnitQuaternion.write_bytes_32(value.orientation)
+    |> Vector3.write_bytes_32(value.momentum)
+    |> Vector3.write_bytes_32(value.angular_momentum)
+    |> Vector3.write_bytes_32(value.total_force)
+    |> Vector3.write_bytes_32(value.total_torque)
 
 ## Deserializes a value of [DynamicRigidBody] from its bytes in the
 ## representation used by the engine.
@@ -58,20 +58,20 @@ from_bytes : List U8 -> Result DynamicRigidBody _
 from_bytes = |bytes|
     Ok(
         {
-            mass: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_f64?,
-            inertia_tensor: bytes |> List.sublist({ start: 8, len: 144 }) |> Physics.InertiaTensor.from_bytes?,
-            position: bytes |> List.sublist({ start: 152, len: 24 }) |> Point3.from_bytes_64?,
-            orientation: bytes |> List.sublist({ start: 176, len: 32 }) |> UnitQuaternion.from_bytes_64?,
-            momentum: bytes |> List.sublist({ start: 208, len: 24 }) |> Vector3.from_bytes_64?,
-            angular_momentum: bytes |> List.sublist({ start: 232, len: 24 }) |> Vector3.from_bytes_64?,
-            total_force: bytes |> List.sublist({ start: 256, len: 24 }) |> Vector3.from_bytes_64?,
-            total_torque: bytes |> List.sublist({ start: 280, len: 24 }) |> Vector3.from_bytes_64?,
+            mass: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            inertia_tensor: bytes |> List.sublist({ start: 4, len: 72 }) |> Physics.InertiaTensor.from_bytes?,
+            position: bytes |> List.sublist({ start: 76, len: 12 }) |> Point3.from_bytes_32?,
+            orientation: bytes |> List.sublist({ start: 88, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            momentum: bytes |> List.sublist({ start: 104, len: 12 }) |> Vector3.from_bytes_32?,
+            angular_momentum: bytes |> List.sublist({ start: 116, len: 12 }) |> Vector3.from_bytes_32?,
+            total_force: bytes |> List.sublist({ start: 128, len: 12 }) |> Vector3.from_bytes_32?,
+            total_torque: bytes |> List.sublist({ start: 140, len: 12 }) |> Vector3.from_bytes_32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 304 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 152 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

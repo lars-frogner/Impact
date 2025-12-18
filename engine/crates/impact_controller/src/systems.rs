@@ -7,7 +7,6 @@ use crate::{
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_physics::{
-    fph,
     quantities::{AngularVelocity, Motion},
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
@@ -69,7 +68,7 @@ pub fn update_controlled_entity_angular_velocities(
     ecs_world: &ECSWorld,
     rigid_body_manager: &mut RigidBodyManager,
     orientation_controller: &mut (impl OrientationController + ?Sized),
-    time_step_duration: fph,
+    time_step_duration: f32,
 ) {
     query!(
         ecs_world,

@@ -25,15 +25,23 @@ handle_button_event! = |_event|
 handle_drag_event! : MouseDragEvent => Result {} Str
 handle_drag_event! = |event|
     if Buttons.contains(event.pressed, Buttons.left) then
-        rotate_object!(event.ang_delta_x, event.ang_delta_y, event.cursor.ang_x, event.cursor.ang_y)
+        rotate_object!(
+            Num.to_f32(event.ang_delta_x),
+            Num.to_f32(event.ang_delta_y),
+            Num.to_f32(event.cursor.ang_x),
+            Num.to_f32(event.cursor.ang_y),
+        )
     else if Buttons.contains(event.pressed, Buttons.right) then
-        pan_object!(event.ang_delta_x, event.ang_delta_y)
+        pan_object!(
+            Num.to_f32(event.ang_delta_x),
+            Num.to_f32(event.ang_delta_y),
+        )
     else
         Ok({})
 
 handle_scroll_event! : MouseScrollEvent => Result {} Str
 handle_scroll_event! = |event|
-    zoom_object!(event.delta_y)
+    zoom_object!(Num.to_f32(event.delta_y))
 
 rotate_object! = |ang_delta_x, ang_delta_y, ang_x, ang_y|
     camera_frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.camera)?

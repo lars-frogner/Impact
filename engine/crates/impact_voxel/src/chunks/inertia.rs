@@ -7,10 +7,7 @@ use crate::{
 };
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::Float;
-use impact_physics::{
-    fph,
-    inertia::{InertiaTensor, InertialProperties},
-};
+use impact_physics::inertia::{InertiaTensor, InertialProperties};
 use nalgebra::{Matrix3, Point3, Vector3, vector};
 use std::ops::Range;
 
@@ -22,10 +19,10 @@ use std::ops::Range;
 /// `m * x * y`, `m * y * z`, `m * z * x`) integrated over all voxels.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VoxelObjectInertialPropertyManager {
-    mass: fph,
-    moments: Vector3<fph>,
-    moments_of_inertia: Vector3<fph>,
-    products_of_inertia: Vector3<fph>,
+    mass: f32,
+    moments: Vector3<f32>,
+    moments_of_inertia: Vector3<f32>,
+    products_of_inertia: Vector3<f32>,
 }
 
 /// Helper for updating the inertial properties of a voxel object.
@@ -33,9 +30,9 @@ pub struct VoxelObjectInertialPropertyManager {
 pub struct VoxelObjectInertialPropertyUpdater<'a, 'b> {
     parent: &'a mut VoxelObjectInertialPropertyManager,
     voxel_type_densities: &'b [f32],
-    voxel_extent: f64,
-    voxel_extent_pow_2: f64,
-    voxel_extent_pow_3: f64,
+    voxel_extent: f32,
+    voxel_extent_pow_2: f32,
+    voxel_extent_pow_3: f32,
 }
 
 /// Helper for updating the inertial properties of two voxel objects when voxels
@@ -45,22 +42,22 @@ pub struct VoxelObjectInertialPropertyTransferrer<'a, 'b> {
     source: &'a mut VoxelObjectInertialPropertyManager,
     destination: &'a mut VoxelObjectInertialPropertyManager,
     voxel_type_densities: &'b [f32],
-    voxel_extent: f64,
-    voxel_extent_pow_2: f64,
-    voxel_extent_pow_3: f64,
+    voxel_extent: f32,
+    voxel_extent_pow_2: f32,
+    voxel_extent_pow_3: f32,
 }
 
 impl VoxelChunk {
     fn accumulate_moments(
         &self,
-        voxel_extent: f64,
+        voxel_extent: f32,
         voxels: &[Voxel],
         voxel_type_densities: &[f32],
         chunk_indices: &[usize; 3],
-        mass: &mut fph,
-        moments: &mut Vector3<fph>,
-        moments_of_inertia: &mut Vector3<fph>,
-        products_of_inertia: &mut Vector3<fph>,
+        mass: &mut f32,
+        moments: &mut Vector3<f32>,
+        moments_of_inertia: &mut Vector3<f32>,
+        products_of_inertia: &mut Vector3<f32>,
     ) {
         match self {
             Self::NonUniform(chunk) => {
@@ -129,10 +126,10 @@ impl VoxelObjectInertialPropertyManager {
     }
 
     fn new(
-        mass: fph,
-        moments: Vector3<fph>,
-        moments_of_inertia: Vector3<fph>,
-        products_of_inertia: Vector3<fph>,
+        mass: f32,
+        moments: Vector3<f32>,
+        moments_of_inertia: Vector3<f32>,
+        products_of_inertia: Vector3<f32>,
     ) -> Self {
         Self {
             mass,
@@ -157,7 +154,7 @@ impl VoxelObjectInertialPropertyManager {
 
     /// Computes the center of mass corresponding to the current inertial
     /// properties in the manager.
-    pub fn derive_center_of_mass(&self) -> Vector3<fph> {
+    pub fn derive_center_of_mass(&self) -> Vector3<f32> {
         self.moments / self.mass
     }
 
@@ -169,7 +166,7 @@ impl VoxelObjectInertialPropertyManager {
     /// slice.
     pub fn begin_update<'a, 'b>(
         &'a mut self,
-        voxel_extent: f64,
+        voxel_extent: f32,
         voxel_type_densities: &'b [f32],
     ) -> VoxelObjectInertialPropertyUpdater<'a, 'b> {
         let voxel_extent_pow_2 = voxel_extent.powi(2);
@@ -194,7 +191,7 @@ impl VoxelObjectInertialPropertyManager {
     pub fn begin_transfer_to<'a, 'b>(
         &'a mut self,
         other: &'a mut Self,
-        voxel_extent: f64,
+        voxel_extent: f32,
         voxel_type_densities: &'b [f32],
     ) -> VoxelObjectInertialPropertyTransferrer<'a, 'b> {
         let voxel_extent_pow_2 = voxel_extent.powi(2);
@@ -224,7 +221,7 @@ impl VoxelObjectInertialPropertyManager {
     /// Converts the inertial properties to be defined with respect to the
     /// reference point at the given offset from the point they are currently
     /// defined with respect to.
-    pub fn offset_reference_point_by(&mut self, offset: &Vector3<f64>) {
+    pub fn offset_reference_point_by(&mut self, offset: &Vector3<f32>) {
         let (moment_of_inertia_deltas, product_of_inertia_deltas) =
             InertiaTensor::compute_delta_to_moments_and_products_of_inertia_defined_relative_to_point(
                 self.mass,
@@ -246,10 +243,10 @@ impl VoxelObjectInertialPropertyManager {
     }
 
     fn compute_inertial_properties_from_moments(
-        mass: fph,
-        moments: &Vector3<fph>,
-        moments_of_inertia: &Vector3<fph>,
-        products_of_inertia: &Vector3<fph>,
+        mass: f32,
+        moments: &Vector3<f32>,
+        moments_of_inertia: &Vector3<f32>,
+        products_of_inertia: &Vector3<f32>,
     ) -> InertialProperties {
         let center_of_mass = Point3::from(moments / mass);
 
@@ -265,21 +262,21 @@ impl VoxelObjectInertialPropertyManager {
         let com_inertia_tensor_matrix = inertia_tensor_matrix
             + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, &center_of_mass.coords);
 
-        let inertia_tensor = InertiaTensor::from_matrix(com_inertia_tensor_matrix);
+        let inertia_tensor = InertiaTensor::from_matrix(com_inertia_tensor_matrix.cast::<f64>());
 
         InertialProperties::new(mass, center_of_mass, inertia_tensor)
     }
 }
 
 impl AbsDiffEq for VoxelObjectInertialPropertyManager {
-    type Epsilon = <fph as AbsDiffEq>::Epsilon;
+    type Epsilon = <f32 as AbsDiffEq>::Epsilon;
 
     fn default_epsilon() -> Self::Epsilon {
-        fph::default_epsilon()
+        f32::default_epsilon()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        fph::abs_diff_eq(&self.mass, &other.mass, epsilon)
+        f32::abs_diff_eq(&self.mass, &other.mass, epsilon)
             && Vector3::abs_diff_eq(&self.moments, &other.moments, epsilon)
             && Vector3::abs_diff_eq(&self.moments_of_inertia, &other.moments_of_inertia, epsilon)
             && Vector3::abs_diff_eq(
@@ -292,7 +289,7 @@ impl AbsDiffEq for VoxelObjectInertialPropertyManager {
 
 impl RelativeEq for VoxelObjectInertialPropertyManager {
     fn default_max_relative() -> Self::Epsilon {
-        fph::default_max_relative()
+        f32::default_max_relative()
     }
 
     fn relative_eq(
@@ -301,7 +298,7 @@ impl RelativeEq for VoxelObjectInertialPropertyManager {
         epsilon: Self::Epsilon,
         max_relative: Self::Epsilon,
     ) -> bool {
-        fph::relative_eq(&self.mass, &other.mass, epsilon, max_relative)
+        f32::relative_eq(&self.mass, &other.mass, epsilon, max_relative)
             && Vector3::relative_eq(&self.moments, &other.moments, epsilon, max_relative)
             && Vector3::relative_eq(
                 &self.moments_of_inertia,
@@ -431,16 +428,16 @@ impl disconnection::PropertyTransferrer for VoxelObjectInertialPropertyTransferr
 
 /// This uses the equations for the integrated inertial properties of a cube.
 fn compute_moments_for_voxel(
-    voxel_extent: f64,
-    voxel_extent_pow_2: f64,
-    voxel_extent_pow_3: f64,
+    voxel_extent: f32,
+    voxel_extent_pow_2: f32,
+    voxel_extent_pow_3: f32,
     voxel_type_densities: &[f32],
     object_voxel_indices: &[usize; 3],
     voxel: Voxel,
-) -> (fph, Vector3<fph>, Vector3<fph>, Vector3<fph>) {
-    let voxel_density = fph::from(voxel_type_densities[voxel.voxel_type().idx()]);
+) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    let voxel_density = voxel_type_densities[voxel.voxel_type().idx()];
 
-    let lower_coords = Vector3::from(object_voxel_indices.map(|index| voxel_extent * index as f64));
+    let lower_coords = Vector3::from(object_voxel_indices.map(|index| voxel_extent * index as f32));
     let upper_coords = lower_coords.add_scalar(voxel_extent);
 
     let lower_coords_squared = lower_coords.component_mul(&lower_coords);
@@ -454,16 +451,16 @@ fn compute_moments_for_voxel(
 
     let mass = voxel_extent_pow_3 * voxel_density;
 
-    let moments = (f64::ONE_HALF * voxel_extent_pow_2 * voxel_density) * squared_coord_diff;
+    let moments = (f32::ONE_HALF * voxel_extent_pow_2 * voxel_density) * squared_coord_diff;
 
-    let moments_of_inertia = (f64::ONE_THIRD * voxel_extent_pow_2 * voxel_density)
+    let moments_of_inertia = (f32::ONE_THIRD * voxel_extent_pow_2 * voxel_density)
         * vector![
             cubed_coord_diff[1] + cubed_coord_diff[2],
             cubed_coord_diff[0] + cubed_coord_diff[2],
             cubed_coord_diff[0] + cubed_coord_diff[1]
         ];
 
-    let products_of_inertia = (f64::ONE_FOURTH * voxel_extent * voxel_density)
+    let products_of_inertia = (f32::ONE_FOURTH * voxel_extent * voxel_density)
         * vector![
             squared_coord_diff[0] * squared_coord_diff[1],
             squared_coord_diff[1] * squared_coord_diff[2],
@@ -476,20 +473,20 @@ fn compute_moments_for_voxel(
 /// This uses the equations for the integrated inertial properties of a cube to
 /// compute the properties of each voxel, which is summed up over all voxels.
 fn compute_moments_for_non_uniform_chunk(
-    voxel_extent: f64,
+    voxel_extent: f32,
     chunk_voxels: &[Voxel],
     voxel_type_densities: &[f32],
     chunk_indices: &[usize; 3],
-) -> (fph, Vector3<fph>, Vector3<fph>, Vector3<fph>) {
+) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let mut mass = 0.0;
     let mut moments = Vector3::zeros();
     let mut moments_of_inertia = Vector3::zeros();
     let mut products_of_inertia = Vector3::zeros();
 
     // Position of the lower corner of the voxel in the lower chunk corner
-    let x0 = ((chunk_indices[0] * CHUNK_SIZE) as f64) * voxel_extent;
-    let y0 = ((chunk_indices[1] * CHUNK_SIZE) as f64) * voxel_extent;
-    let z0 = ((chunk_indices[2] * CHUNK_SIZE) as f64) * voxel_extent;
+    let x0 = ((chunk_indices[0] * CHUNK_SIZE) as f32) * voxel_extent;
+    let y0 = ((chunk_indices[1] * CHUNK_SIZE) as f32) * voxel_extent;
+    let z0 = ((chunk_indices[2] * CHUNK_SIZE) as f32) * voxel_extent;
 
     let mut voxel_idx = 0;
 
@@ -528,7 +525,7 @@ fn compute_moments_for_non_uniform_chunk(
                     let zh2_sub_zl2 = zh2 - zl2;
                     let zh3_sub_zl3 = zh3 - zl3;
 
-                    let voxel_density = fph::from(voxel_type_densities[voxel.voxel_type().idx()]);
+                    let voxel_density = voxel_type_densities[voxel.voxel_type().idx()];
 
                     mass += voxel_density;
                     moments += voxel_density * vector![xh2_sub_xl2, yh2_sub_yl2, zh2_sub_zl2];
@@ -560,25 +557,25 @@ fn compute_moments_for_non_uniform_chunk(
     let voxel_extent_pow_3 = voxel_extent_pow_2 * voxel_extent;
 
     mass *= voxel_extent_pow_3;
-    moments *= f64::ONE_HALF * voxel_extent_pow_2;
-    moments_of_inertia *= f64::ONE_THIRD * voxel_extent_pow_2;
-    products_of_inertia *= f64::ONE_FOURTH * voxel_extent;
+    moments *= f32::ONE_HALF * voxel_extent_pow_2;
+    moments_of_inertia *= f32::ONE_THIRD * voxel_extent_pow_2;
+    products_of_inertia *= f32::ONE_FOURTH * voxel_extent;
 
     (mass, moments, moments_of_inertia, products_of_inertia)
 }
 
 /// This uses the equations for the integrated inertial properties of a cube.
 fn compute_moments_for_uniform_chunk(
-    voxel_extent: f64,
+    voxel_extent: f32,
     voxel_type_densities: &[f32],
     chunk_voxel: Voxel,
     chunk_indices: &[usize; 3],
-) -> (fph, Vector3<fph>, Vector3<fph>, Vector3<fph>) {
-    let density = fph::from(voxel_type_densities[chunk_voxel.voxel_type().idx()]);
+) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    let density = voxel_type_densities[chunk_voxel.voxel_type().idx()];
 
-    let chunk_extent = (CHUNK_SIZE as f64) * voxel_extent;
+    let chunk_extent = (CHUNK_SIZE as f32) * voxel_extent;
 
-    let xl = (chunk_indices[0] as f64) * chunk_extent;
+    let xl = (chunk_indices[0] as f32) * chunk_extent;
     let xh = xl + chunk_extent;
     let xl2 = xl * xl;
     let xh2 = xh * xh;
@@ -587,7 +584,7 @@ fn compute_moments_for_uniform_chunk(
     let xh2_sub_xl2 = xh2 - xl2;
     let xh3_sub_xl3 = xh3 - xl3;
 
-    let yl = (chunk_indices[1] as f64) * chunk_extent;
+    let yl = (chunk_indices[1] as f32) * chunk_extent;
     let yh = yl + chunk_extent;
     let yl2 = yl * yl;
     let yh2 = yh * yh;
@@ -596,7 +593,7 @@ fn compute_moments_for_uniform_chunk(
     let yh2_sub_yl2 = yh2 - yl2;
     let yh3_sub_yl3 = yh3 - yl3;
 
-    let zl = (chunk_indices[2] as f64) * chunk_extent;
+    let zl = (chunk_indices[2] as f32) * chunk_extent;
     let zh = zl + chunk_extent;
     let zl2 = zl * zl;
     let zh2 = zh * zh;
@@ -609,15 +606,15 @@ fn compute_moments_for_uniform_chunk(
     let chunk_extent_pow_3 = chunk_extent_pow_2 * chunk_extent;
 
     let mass = chunk_extent_pow_3 * density;
-    let moments = (f64::ONE_HALF * chunk_extent_pow_2 * density)
+    let moments = (f32::ONE_HALF * chunk_extent_pow_2 * density)
         * vector![xh2_sub_xl2, yh2_sub_yl2, zh2_sub_zl2];
-    let moments_of_inertia = (f64::ONE_THIRD * chunk_extent_pow_2 * density)
+    let moments_of_inertia = (f32::ONE_THIRD * chunk_extent_pow_2 * density)
         * vector![
             yh3_sub_yl3 + zh3_sub_zl3,
             xh3_sub_xl3 + zh3_sub_zl3,
             xh3_sub_xl3 + yh3_sub_yl3
         ];
-    let products_of_inertia = (f64::ONE_FOURTH * chunk_extent * density)
+    let products_of_inertia = (f32::ONE_FOURTH * chunk_extent * density)
         * vector![
             xh2_sub_xl2 * yh2_sub_yl2,
             yh2_sub_yl2 * zh2_sub_zl2,
@@ -628,13 +625,13 @@ fn compute_moments_for_uniform_chunk(
 }
 
 fn compute_inertial_property_moments_for_object(
-    voxel_extent: f64,
+    voxel_extent: f32,
     occupied_chunk_ranges: &[Range<usize>; 3],
     chunk_idx_strides: &[usize; 3],
     chunks: &[VoxelChunk],
     voxels: &[Voxel],
     voxel_type_densities: &[f32],
-) -> (fph, Vector3<fph>, Vector3<fph>, Vector3<fph>) {
+) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let mut mass = 0.0;
     let mut moments = Vector3::zeros();
     let mut moments_of_inertia = Vector3::zeros();
@@ -712,17 +709,17 @@ mod tests {
             &chunk_indices,
         );
 
-        assert_relative_eq!(non_uniform_mass, uniform_mass, epsilon = 1e-6);
-        assert_relative_eq!(non_uniform_moments, uniform_moments, epsilon = 1e-6);
+        assert_relative_eq!(non_uniform_mass, uniform_mass, epsilon = 1e-3);
+        assert_relative_eq!(non_uniform_moments, uniform_moments, epsilon = 1e-3);
         assert_relative_eq!(
             non_uniform_moments_of_inertia,
             uniform_moments_of_inertia,
-            epsilon = 1e-6
+            epsilon = 1e-3
         );
         assert_relative_eq!(
             non_uniform_products_of_inertia,
             uniform_products_of_inertia,
-            epsilon = 1e-6
+            epsilon = 1e-3
         );
     }
 
@@ -747,10 +744,10 @@ mod tests {
         let occupied_voxel_ranges = object.determine_tight_occupied_voxel_ranges();
         let occupied_voxel_extents = occupied_voxel_ranges
             .clone()
-            .map(|range| voxel_extent * range.len() as fph);
+            .map(|range| voxel_extent * range.len() as f32);
         let occupied_voxel_range_centers = occupied_voxel_ranges
             .clone()
-            .map(|range| 0.5 * voxel_extent * (range.start + range.end) as fph);
+            .map(|range| 0.5 * voxel_extent * (range.start + range.end) as f32);
 
         let object_inertial_properties =
             VoxelObjectInertialPropertyManager::initialized_from(&object, &mass_densities)
@@ -760,7 +757,7 @@ mod tests {
             occupied_voxel_extents[0],
             occupied_voxel_extents[1],
             occupied_voxel_extents[2],
-            fph::from(mass_densities[0]),
+            mass_densities[0],
         );
 
         box_inertial_properties.transform(&Similarity3::from_parts(
@@ -772,7 +769,7 @@ mod tests {
         assert_relative_eq!(
             object_inertial_properties,
             box_inertial_properties,
-            epsilon = 1e-6
+            epsilon = 1e-3
         );
     }
 
@@ -814,21 +811,21 @@ mod tests {
             );
         } // <- `updater` drops here
 
-        assert_abs_diff_eq!(inertial_property_manager.mass, 0.0, epsilon = 1e-8);
+        assert_abs_diff_eq!(inertial_property_manager.mass, 0.0, epsilon = 1e-3);
         assert_abs_diff_eq!(
             inertial_property_manager.moments,
             Vector3::zeros(),
-            epsilon = 1e-8
+            epsilon = 1e-3
         );
         assert_abs_diff_eq!(
             inertial_property_manager.moments_of_inertia,
             Vector3::zeros(),
-            epsilon = 1e-8
+            epsilon = 1e-3
         );
         assert_abs_diff_eq!(
             inertial_property_manager.products_of_inertia,
             Vector3::zeros(),
-            epsilon = 1e-8
+            epsilon = 1e-3
         );
     }
 }

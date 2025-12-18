@@ -15,7 +15,6 @@ use impact_alloc::{AVec, arena::ArenaPool};
 use impact_geometry::{Capsule, Sphere};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
-    fph,
     rigid_body::RigidBodyManager,
 };
 use nalgebra::{Isometry3, Point3, Translation3, Vector3};
@@ -34,11 +33,11 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
     pub struct VoxelAbsorbingSphere {
         /// The offset of the sphere in the reference frame of the entity.
-        offset: Vector3<f64>,
+        offset: Vector3<f32>,
         /// The radius of the sphere.
-        radius: f64,
+        radius: f32,
         /// The maximum rate of absorption (at the center of the sphere).
-        rate: f64,
+        rate: f32,
     }
 }
 
@@ -55,15 +54,15 @@ define_component_type! {
     pub struct VoxelAbsorbingCapsule {
         /// The offset of the starting point of the capsule's central line segment
         /// in the reference frame of the entity.
-        offset_to_segment_start: Vector3<f64>,
+        offset_to_segment_start: Vector3<f32>,
         /// The displacement vector from the start to the end of the capsule's
         /// central line segment in the reference frame of the entity.
-        segment_vector: Vector3<f64>,
+        segment_vector: Vector3<f32>,
         /// The radius of the capsule.
-        radius: f64,
+        radius: f32,
         /// The maximum rate of absorption (at the central line segment of the
         /// capsule).
-        rate: f64,
+        rate: f32,
     }
 }
 
@@ -81,7 +80,7 @@ impl VoxelAbsorbingSphere {
         radius,
         rate,
     }"#)]
-    pub fn new(offset: Vector3<f64>, radius: f64, rate: f64) -> Self {
+    pub fn new(offset: Vector3<f32>, radius: f32, rate: f32) -> Self {
         assert!(radius >= 0.0);
         assert!(rate >= 0.0);
         Self {
@@ -92,12 +91,12 @@ impl VoxelAbsorbingSphere {
     }
 
     /// Returns the sphere in the reference frame of the entity.
-    pub fn sphere(&self) -> Sphere<f64> {
+    pub fn sphere(&self) -> Sphere<f32> {
         Sphere::new(Point3::from(self.offset), self.radius)
     }
 
     /// Returns the maximum absorption rate.
-    pub fn rate(&self) -> f64 {
+    pub fn rate(&self) -> f32 {
         self.rate
     }
 }
@@ -120,10 +119,10 @@ impl VoxelAbsorbingCapsule {
         rate,
     }"#)]
     pub fn new(
-        offset_to_segment_start: Vector3<f64>,
-        segment_vector: Vector3<f64>,
-        radius: f64,
-        rate: f64,
+        offset_to_segment_start: Vector3<f32>,
+        segment_vector: Vector3<f32>,
+        radius: f32,
+        rate: f32,
     ) -> Self {
         assert!(radius >= 0.0);
         assert!(rate >= 0.0);
@@ -136,7 +135,7 @@ impl VoxelAbsorbingCapsule {
     }
 
     /// Returns the capsule in the reference frame of the entity.
-    pub fn capsule(&self) -> Capsule<f64> {
+    pub fn capsule(&self) -> Capsule<f32> {
         Capsule::new(
             Point3::from(self.offset_to_segment_start),
             self.segment_vector,
@@ -145,7 +144,7 @@ impl VoxelAbsorbingCapsule {
     }
 
     /// Returns the maximum absorption rate.
-    pub fn rate(&self) -> f64 {
+    pub fn rate(&self) -> f32 {
         self.rate
     }
 }
@@ -158,7 +157,7 @@ pub fn apply_absorption<C>(
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
-    time_step_duration: fph,
+    time_step_duration: f32,
 ) where
     C: VoxelObjectInteractionContext,
     <C as VoxelObjectInteractionContext>::EntityID: Clone,
@@ -299,12 +298,12 @@ pub fn apply_absorption<C>(
 }
 
 fn apply_sphere_absorption(
-    time_step_duration: f64,
+    time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
-    world_to_voxel_object_transform: &Isometry3<f64>,
+    world_to_voxel_object_transform: &Isometry3<f32>,
     absorbing_sphere: &VoxelAbsorbingSphere,
-    sphere_to_world_transform: &Isometry3<f64>,
+    sphere_to_world_transform: &Isometry3<f32>,
 ) {
     let sphere_in_voxel_object_space = absorbing_sphere
         .sphere()
@@ -323,7 +322,7 @@ fn apply_sphere_absorption(
             let signed_distance_delta =
                 absorption_rate_per_frame * (1.0 - squared_distance * inverse_radius_squared);
 
-            voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+            voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
                 if !was_empty {
                     inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
                 }
@@ -333,12 +332,12 @@ fn apply_sphere_absorption(
 }
 
 fn apply_capsule_absorption(
-    time_step_duration: f64,
+    time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
-    world_to_voxel_object_transform: &Isometry3<f64>,
+    world_to_voxel_object_transform: &Isometry3<f32>,
     absorbing_capsule: &VoxelAbsorbingCapsule,
-    capsule_to_world_transform: &Isometry3<f64>,
+    capsule_to_world_transform: &Isometry3<f32>,
 ) {
     let capsule_in_voxel_object_space = absorbing_capsule
         .capsule()
@@ -357,7 +356,7 @@ fn apply_capsule_absorption(
             let signed_distance_delta =
                 absorption_rate_per_frame * (1.0 - squared_distance * inverse_radius_squared);
 
-            voxel.increase_signed_distance(signed_distance_delta as f32, &mut |voxel| {
+            voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
                 if !was_empty {
                     inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
                 }

@@ -1,8 +1,8 @@
-# Hash: 8e750a705f4288a758ebff30a675ce4e4b2aac6f8d24997846a5f010013e0e18
-# Generated: 2025-12-03T23:16:45+00:00
+# Hash: c88f6df6c2e61eab30e4b22fd29d8a16771d6247c526e311ccf2d02006a23609
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_voxel::setup::GeneratedVoxelObject
 # Type category: Component
-# Commit: b393e25e (dirty)
+# Commit: 7d41822d (dirty)
 module [
     GeneratedVoxelObject,
     new,
@@ -23,19 +23,19 @@ import core.Hashing
 ## A generated voxel object.
 GeneratedVoxelObject : {
     generator_id : Voxel.VoxelGeneratorID.VoxelGeneratorID,
-    voxel_extent : F64,
-    seed : U64,
+    voxel_extent : F32,
+    seed : U32,
 }
 
-new : Str, F64, U64 -> GeneratedVoxelObject
+new : Str, F32, U32 -> GeneratedVoxelObject
 new = |generator_name, voxel_extent, seed|
     { generator_id: Hashing.hash_str_64(generator_name), voxel_extent, seed }
 
-add_new : Entity.ComponentData, Str, F64, U64 -> Entity.ComponentData
+add_new : Entity.ComponentData, Str, F32, U32 -> Entity.ComponentData
 add_new = |entity_data, generator_name, voxel_extent, seed|
     add(entity_data, new(generator_name, voxel_extent, seed))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Str), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (U64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Str), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (U32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, generator_name, voxel_extent, seed|
     add_multiple(
         entity_data,
@@ -70,7 +70,7 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, GeneratedVoxelObject -> List U8
 write_packet = |bytes, val|
     type_id = 7102113392894755801
-    size = 24
+    size = 16
     alignment = 8
     bytes
     |> List.reserve(24 + size)
@@ -82,7 +82,7 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List GeneratedVoxelObject -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 7102113392894755801
-    size = 24
+    size = 16
     alignment = 8
     count = List.len(vals)
     bytes_with_header =
@@ -103,10 +103,10 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, GeneratedVoxelObject -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(24)
+    |> List.reserve(16)
     |> Voxel.VoxelGeneratorID.write_bytes(value.generator_id)
-    |> Builtin.write_bytes_f64(value.voxel_extent)
-    |> Builtin.write_bytes_u64(value.seed)
+    |> Builtin.write_bytes_f32(value.voxel_extent)
+    |> Builtin.write_bytes_u32(value.seed)
 
 ## Deserializes a value of [GeneratedVoxelObject] from its bytes in the
 ## representation used by the engine.
@@ -115,14 +115,14 @@ from_bytes = |bytes|
     Ok(
         {
             generator_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Voxel.VoxelGeneratorID.from_bytes?,
-            voxel_extent: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            seed: bytes |> List.sublist({ start: 16, len: 8 }) |> Builtin.from_bytes_u64?,
+            voxel_extent: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
+            seed: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_u32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

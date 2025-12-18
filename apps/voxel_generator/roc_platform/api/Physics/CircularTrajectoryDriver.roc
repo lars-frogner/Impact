@@ -1,8 +1,8 @@
-# Hash: 4942d9dfe218db8fa5bae82e988990443e455195af231e29d2e58861a9359e99
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: c845b3719c6decd0cdbb7a0956e6388041f62be32f80a2f57b5620888a16cdf6
+# Generated: 2025-12-17T23:54:08+00:00
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectoryDriver
 # Type category: POD
-# Commit: 397d36d3 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     CircularTrajectoryDriver,
     write_bytes,
@@ -26,7 +26,7 @@ CircularTrajectoryDriver : {
 write_bytes : List U8, CircularTrajectoryDriver -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(88)
+    |> List.reserve(48)
     |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
     |> Setup.CircularTrajectory.write_bytes(value.trajectory)
 
@@ -37,13 +37,13 @@ from_bytes = |bytes|
     Ok(
         {
             rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
-            trajectory: bytes |> List.sublist({ start: 8, len: 80 }) |> Setup.CircularTrajectory.from_bytes?,
+            trajectory: bytes |> List.sublist({ start: 8, len: 40 }) |> Setup.CircularTrajectory.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 88 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 48 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

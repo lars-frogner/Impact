@@ -1,8 +1,8 @@
-# Hash: 9683260111abc724cf59e5768552317117d458fbf3fb67144c329f8ce49ffb4e
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 5c22c04494b22eb28a2c1c8d42e44f919797add4a6d333cca07b6915a9f0e6b1
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_physics::force::local_force::LocalForce
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     LocalForce,
     new,
@@ -24,20 +24,20 @@ import core.Vector3
 ## body-fixed frame.
 LocalForce : {
     ## The force vector in the body-fixed frame.
-    force : Vector3.Vector3 Binary64,
+    force : Vector3.Vector3 Binary32,
     ## The point where the force is applied, in the body's model space.
-    point : Point3.Point3 Binary64,
+    point : Point3.Point3 Binary32,
 }
 
-new : Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> LocalForce
+new : Vector3.Vector3 Binary32, Point3.Point3 Binary32 -> LocalForce
 new = |force, point|
     { force, point }
 
-add_new : Entity.ComponentData, Vector3.Vector3 Binary64, Point3.Point3 Binary64 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3 Binary32, Point3.Point3 Binary32 -> Entity.ComponentData
 add_new = |entity_data, force, point|
     add(entity_data, new(force, point))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary64), Entity.Arg.Broadcasted (Point3.Point3 Binary64) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Point3.Point3 Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, force, point|
     add_multiple(
         entity_data,
@@ -72,8 +72,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, LocalForce -> List U8
 write_packet = |bytes, val|
     type_id = 16434524121723371577
-    size = 48
-    alignment = 8
+    size = 24
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -84,8 +84,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List LocalForce -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 16434524121723371577
-    size = 48
-    alignment = 8
+    size = 24
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -105,9 +105,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, LocalForce -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(48)
-    |> Vector3.write_bytes_64(value.force)
-    |> Point3.write_bytes_64(value.point)
+    |> List.reserve(24)
+    |> Vector3.write_bytes_32(value.force)
+    |> Point3.write_bytes_32(value.point)
 
 ## Deserializes a value of [LocalForce] from its bytes in the
 ## representation used by the engine.
@@ -115,14 +115,14 @@ from_bytes : List U8 -> Result LocalForce _
 from_bytes = |bytes|
     Ok(
         {
-            force: bytes |> List.sublist({ start: 0, len: 24 }) |> Vector3.from_bytes_64?,
-            point: bytes |> List.sublist({ start: 24, len: 24 }) |> Point3.from_bytes_64?,
+            force: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            point: bytes |> List.sublist({ start: 12, len: 12 }) |> Point3.from_bytes_32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 48 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 24 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

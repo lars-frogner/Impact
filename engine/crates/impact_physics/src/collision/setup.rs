@@ -5,7 +5,6 @@ use crate::{
         Collidable, CollidableID, CollidableKind, CollisionWorld,
         collidable::{plane::PlaneCollidable, sphere::SphereCollidable},
     },
-    fph,
     material::ContactResponseParameters,
     rigid_body::TypedRigidBodyID,
 };
@@ -20,8 +19,8 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SphericalCollidable {
-        kind: u64,
-        sphere: Sphere<fph>,
+        kind: u32,
+        sphere: Sphere<f32>,
         response_params: ContactResponseParameters,
     }
 }
@@ -33,8 +32,8 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PlanarCollidable {
-        kind: u64,
-        plane: Plane<fph>,
+        kind: u32,
+        plane: Plane<f32>,
         response_params: ContactResponseParameters,
     }
 }
@@ -53,21 +52,21 @@ impl SphericalCollidable {
     }"#)]
     pub fn new(
         kind: CollidableKind,
-        sphere: Sphere<fph>,
+        sphere: Sphere<f32>,
         response_params: ContactResponseParameters,
     ) -> Self {
         Self {
-            kind: kind.to_u64(),
+            kind: kind.to_u32(),
             sphere,
             response_params,
         }
     }
 
     pub fn kind(&self) -> CollidableKind {
-        CollidableKind::from_u64(self.kind).unwrap()
+        CollidableKind::from_u32(self.kind).unwrap()
     }
 
-    pub fn sphere(&self) -> &Sphere<fph> {
+    pub fn sphere(&self) -> &Sphere<f32> {
         &self.sphere
     }
 
@@ -90,21 +89,21 @@ impl PlanarCollidable {
     }"#)]
     pub fn new(
         kind: CollidableKind,
-        plane: Plane<fph>,
+        plane: Plane<f32>,
         response_params: ContactResponseParameters,
     ) -> Self {
         Self {
-            kind: kind.to_u64(),
+            kind: kind.to_u32(),
             plane,
             response_params,
         }
     }
 
     pub fn kind(&self) -> CollidableKind {
-        CollidableKind::from_u64(self.kind).unwrap()
+        CollidableKind::from_u32(self.kind).unwrap()
     }
 
-    pub fn plane(&self) -> &Plane<fph> {
+    pub fn plane(&self) -> &Plane<f32> {
         &self.plane
     }
 

@@ -1,8 +1,8 @@
-# Hash: be265e2b64b3687ad6953faafa9d6fd86f26754ae7ce0e5fcc118a509af950b3
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: a80fc21cbe3b994b285b9356234d33bbfe378c92c5fcd98a53c5380b6cf45082
+# Generated: 2025-12-17T23:58:02+00:00
 # Rust type: impact_voxel::collidable::setup::VoxelCollidable
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 7d41822d (dirty)
 module [
     VoxelCollidable,
     new,
@@ -22,7 +22,7 @@ import core.Builtin
 
 ## A voxel object-based collidable.
 VoxelCollidable : {
-    kind : U64,
+    kind : U32,
     response_params : Physics.ContactResponseParameters.ContactResponseParameters,
 }
 
@@ -76,8 +76,8 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, VoxelCollidable -> List U8
 write_packet = |bytes, val|
     type_id = 1220584796427340799
-    size = 32
-    alignment = 8
+    size = 16
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -88,8 +88,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelCollidable -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 1220584796427340799
-    size = 32
-    alignment = 8
+    size = 16
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -109,8 +109,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelCollidable -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(32)
-    |> Builtin.write_bytes_u64(value.kind)
+    |> List.reserve(16)
+    |> Builtin.write_bytes_u32(value.kind)
     |> Physics.ContactResponseParameters.write_bytes(value.response_params)
 
 ## Deserializes a value of [VoxelCollidable] from its bytes in the
@@ -119,14 +119,14 @@ from_bytes : List U8 -> Result VoxelCollidable _
 from_bytes = |bytes|
     Ok(
         {
-            kind: bytes |> List.sublist({ start: 0, len: 8 }) |> Builtin.from_bytes_u64?,
-            response_params: bytes |> List.sublist({ start: 8, len: 24 }) |> Physics.ContactResponseParameters.from_bytes?,
+            kind: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
+            response_params: bytes |> List.sublist({ start: 4, len: 12 }) |> Physics.ContactResponseParameters.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

@@ -2,7 +2,6 @@
 
 use super::{ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint};
 use crate::{
-    fph,
     material::ContactResponseParameters,
     quantities::{self, Orientation, Position, Velocity},
 };
@@ -47,11 +46,11 @@ pub struct ContactGeometry {
     /// deepest into body A.
     pub position: Position,
     /// The world space surface normal of body B at [`Self::position`].
-    pub surface_normal: UnitVector3<fph>,
+    pub surface_normal: UnitVector3<f32>,
     /// The distance between the deepest penetration points on A and B
     /// along [`Self::surface_normal`]. This is always non-negative when the
     /// bodies are in contact.
-    pub penetration_depth: fph,
+    pub penetration_depth: f32,
 }
 
 /// Derived information about a contact useful for solving the perpendicular
@@ -67,28 +66,28 @@ pub struct PreparedContact {
     local_position_on_b: Position,
     /// The world space surface normal of body B at
     /// [`Self::local_position_on_b`].
-    normal: UnitVector3<fph>,
+    normal: UnitVector3<f32>,
     /// A world space tangent direction of the surface of body B at
     /// [`Self::local_position_on_b`].
-    tangent: UnitVector3<fph>,
+    tangent: UnitVector3<f32>,
     /// The world space tangent direction completing the right-handed
     /// coordinate system defined by [`Self::normal`] and
     /// [`Self::tangent`].
-    bitangent: UnitVector3<fph>,
-    effective_mass_normal: fph,
-    effective_mass_tangent: fph,
-    effective_mass_bitangent: fph,
-    restitution_coef: fph,
-    friction_coef: fph,
+    bitangent: UnitVector3<f32>,
+    effective_mass_normal: f32,
+    effective_mass_tangent: f32,
+    effective_mass_bitangent: f32,
+    restitution_coef: f32,
+    friction_coef: f32,
 }
 
 /// Impulses along the three axes of a surface-aligned coordinate system for a
 /// contact.
 #[derive(Clone, Copy, Debug)]
 pub struct ContactImpulses {
-    normal: fph,
-    tangent: fph,
-    bitangent: fph,
+    normal: f32,
+    tangent: f32,
+    bitangent: f32,
 }
 
 impl ContactManifold {
@@ -240,7 +239,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
     fn can_use_warm_impulses_from(&self, other: &Self) -> bool {
         // `max_deviation_angle = acos(1 - threshold)`
-        const THRESHOLD: fph = 1e-2;
+        const THRESHOLD: f32 = 1e-2;
 
         let normal_matches = self.normal.dot(&other.normal) > 1.0 - THRESHOLD;
 
@@ -291,14 +290,14 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
     fn clamp_impulses(&self, impulses: ContactImpulses) -> ContactImpulses {
         // This ensures that the total normal impulse can only push the bodies apart
-        let clamped_normal_impulse = fph::max(0.0, impulses.normal);
+        let clamped_normal_impulse = f32::max(0.0, impulses.normal);
 
         // The impulse version of Coulomb's friction law determines the maximum
         // frictional impulse
         let max_tangent_impulse_magnitude = self.friction_coef * clamped_normal_impulse;
 
         let tangent_impulse_magnitude =
-            fph::sqrt(impulses.tangent.powi(2) + impulses.bitangent.powi(2));
+            f32::sqrt(impulses.tangent.powi(2) + impulses.bitangent.powi(2));
 
         // The tangential impulse must be scaled down if it exceeds the maximum
         let tangent_impulse_scaling = if tangent_impulse_magnitude > max_tangent_impulse_magnitude {
@@ -345,7 +344,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         &self,
         body_a: &mut ConstrainedBody,
         body_b: &mut ConstrainedBody,
-        correction_factor: fph,
+        correction_factor: f32,
     ) {
         // We are now correcting body positions and orientations iteratively.
         // In principle, we should rerun collision detection to obtain the new
@@ -441,10 +440,10 @@ impl Sub for ContactImpulses {
     }
 }
 
-impl Mul<fph> for ContactImpulses {
+impl Mul<f32> for ContactImpulses {
     type Output = Self;
 
-    fn mul(self, rhs: fph) -> Self::Output {
+    fn mul(self, rhs: f32) -> Self::Output {
         Self {
             normal: self.normal * rhs,
             tangent: self.tangent * rhs,
@@ -453,17 +452,17 @@ impl Mul<fph> for ContactImpulses {
     }
 }
 
-fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3<fph>) -> Velocity {
+fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3<f32>) -> Velocity {
     body.velocity + body.angular_velocity.cross(disp)
 }
 
 fn compute_effective_mass(
     body_a: &ConstrainedBody,
     body_b: &ConstrainedBody,
-    disp_a: &Vector3<fph>,
-    disp_b: &Vector3<fph>,
-    direction: &UnitVector3<fph>,
-) -> fph {
+    disp_a: &Vector3<f32>,
+    disp_b: &Vector3<f32>,
+    direction: &UnitVector3<f32>,
+) -> f32 {
     let disp_a_cross_dir = disp_a.cross(direction);
     let disp_b_cross_dir = disp_b.cross(direction);
 
@@ -474,9 +473,9 @@ fn compute_effective_mass(
 }
 
 fn construct_tangent_vectors(
-    surface_normal: &UnitVector3<fph>,
-) -> (UnitVector3<fph>, UnitVector3<fph>) {
-    const INV_SQRT_THREE: fph = 0.57735;
+    surface_normal: &UnitVector3<f32>,
+) -> (UnitVector3<f32>, UnitVector3<f32>) {
+    const INV_SQRT_THREE: f32 = 0.57735;
 
     let tangent_1 = UnitVector3::new_normalize(if surface_normal.x.abs() < INV_SQRT_THREE {
         // Since the normal is relatively close to lying in the yz-plane, we
@@ -498,7 +497,7 @@ fn construct_tangent_vectors(
 
 fn pseudo_advance_orientation(
     orientation: &mut Orientation,
-    pseudo_angular_velocity: &Vector3<fph>,
+    pseudo_angular_velocity: &Vector3<f32>,
 ) {
     *orientation = UnitQuaternion::new_normalize(
         orientation.as_ref()
