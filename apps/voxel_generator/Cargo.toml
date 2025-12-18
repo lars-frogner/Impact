@@ -104,12 +104,16 @@ license = { workspace = true }
 crate-type = ["cdylib", "rlib"]
 
 [features]
+
 default = ["x11"]
-checked_lock_order = ["impact/checked_lock_order"]
-roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
-tracy = ["impact/tracy"]
+
 wayland = ["impact/wayland"]
 x11 = ["impact/x11"]
+
+tracy = ["impact/tracy"]
+
+checked_lock_order = ["impact/checked_lock_order"]
+roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 
 [dependencies]
 anyhow = "1.0"

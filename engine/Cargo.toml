@@ -152,7 +152,53 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
+
+# Defaults
 default = ["x11"]
+
+# Windowing
+x11 = [
+    "window",
+    "winit/x11",
+    "egui-winit/x11",
+]
+wayland = [
+    "window",
+    "winit/wayland",
+    "winit/wayland-dlopen",
+    "winit/wayland-csd-adwaita",
+    "egui-winit/wayland",
+]
+window = ["dep:winit", "impact_rendering/window"]
+
+# UI
+egui = [
+    "dep:egui",
+    "dep:egui-wgpu",
+    "dep:egui-winit",
+    "window",
+]
+
+# CLI
+cli = ["dep:clap"]
+
+# Profiling / benchmarking
+benchmark = []
+criterion = [
+    "benchmark",
+    "impact_profiling/criterion",
+]
+tracy = ["impact_profiling/tracy"]
+
+# Asset / file format support
+obj = ["impact_mesh/obj"]
+ply = ["impact_mesh/ply"]
+
+# Safety / correctness
+unchecked = ["impact_voxel/unchecked"]
+checked_lock_order = []
+
+# Fuzzing
 arbitrary = [
     "dep:arbitrary",
     "impact_controller/arbitrary",
@@ -164,7 +210,8 @@ arbitrary = [
     "impact_texture/arbitrary",
     "impact_voxel/arbitrary",
 ]
-checked_lock_order = []
+
+# Code generation / scripting integration
 roc_codegen = [
     "impact_containers/roc_codegen",
     "impact_controller/roc_codegen",
@@ -183,23 +230,6 @@ roc_codegen = [
     "impact_voxel/roc_codegen",
     "roc_integration/roc_codegen",
 ]
-cli = ["dep:clap"]
-criterion = ["benchmark", "impact_profiling/criterion"]
-egui = ["dep:egui", "dep:egui-wgpu", "dep:egui-winit", "window"]
-ply = ["impact_mesh/ply"]
-benchmark = []
-obj = ["impact_mesh/obj"]
-unchecked = ["impact_voxel/unchecked"]
-tracy = ["impact_profiling/tracy"]
-window = ["dep:winit", "impact_rendering/window"]
-wayland = [
-    "window",
-    "winit/wayland",
-    "winit/wayland-dlopen",
-    "winit/wayland-csd-adwaita",
-    "egui-winit/wayland",
-]
-x11 = ["window", "winit/x11", "egui-winit/x11"]
 
 [dependencies]
 anyhow = { workspace = true }
