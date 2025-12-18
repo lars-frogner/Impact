@@ -781,7 +781,6 @@ mod tests {
             NonZeroUsize::new(n_workers).unwrap(),
             NonZeroUsize::new(queue_capacity).unwrap(),
             &|_, rx: Receiver<()>| {
-                // Wait for message
                 rx.recv().unwrap();
             },
         );
@@ -790,7 +789,10 @@ mod tests {
         let result = pool.execute((0..queue_capacity + 2).map(|_| rx.clone()));
 
         // Send messages so that the tasks can complete
-        for _ in 0..queue_capacity {
+        // We need to send messages for all tasks that were actually submitted,
+        // which may be more than queue_capacity due to worker processing
+        let pending_tasks = pool.communicator.execution_progress().pending_task_count();
+        for _ in 0..pending_tasks {
             sx.send(()).unwrap();
         }
 
