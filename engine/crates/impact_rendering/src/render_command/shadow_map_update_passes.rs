@@ -214,7 +214,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
         vec![Some(wgpu::RenderPassColorAttachment {
             view: shadow_cubemap_face_texture_view,
-                depth_slice: None,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(Self::CLEAR_COLOR),
@@ -570,7 +570,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
     ) -> Vec<Option<wgpu::RenderPassColorAttachment<'_>>> {
         vec![Some(wgpu::RenderPassColorAttachment {
             view: shadow_map_cascade_texture_view,
-                depth_slice: None,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(Self::CLEAR_COLOR),
