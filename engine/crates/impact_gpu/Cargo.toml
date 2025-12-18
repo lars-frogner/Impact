@@ -29,6 +29,7 @@ regex = "1.11"
 serde = { workspace = true, optional = true }
 tinyvec = { workspace = true }
 wgpu = { version = "27.0", default-features = false, features = [
+    "std",
     "dx12",
     "metal",
     "vulkan",
