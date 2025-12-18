@@ -216,7 +216,7 @@ pub fn create_texture_from_lookup_table<T: TexelType>(
 /// Returns an error if:
 /// - A lookup table or texture with the same ID already is loaded.
 /// - The metadata for the lookup table file can not be read.
-#[cfg(feature = "bincode")]
+#[cfg(feature = "postcard")]
 pub fn load_declared_lookup_table(
     texture_registry: &mut crate::TextureRegistry,
     sampler_registry: &mut crate::SamplerRegistry,

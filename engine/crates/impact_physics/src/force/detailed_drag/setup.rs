@@ -11,7 +11,7 @@ use crate::{
     quantities::Position,
     rigid_body::DynamicRigidBodyID,
 };
-#[cfg(feature = "bincode")]
+#[cfg(feature = "postcard")]
 use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -61,9 +61,9 @@ pub fn setup_detailed_drag_force<'a>(
         let map_file_exists = map_path.exists();
 
         let map = if config.use_saved_maps && map_file_exists {
-            #[cfg(not(feature = "bincode"))]
-            anyhow::bail!("Enable the `bincode` feature to read drag load maps");
-            #[cfg(feature = "bincode")]
+            #[cfg(not(feature = "postcard"))]
+            anyhow::bail!("Enable the `postcard` feature to read drag load maps");
+            #[cfg(feature = "postcard")]
             DragLoadMap::read_from_file(&map_path).with_context(|| {
                 format!(
                     "Failed to load drag load map from file `{}`",
@@ -82,9 +82,9 @@ pub fn setup_detailed_drag_force<'a>(
             if config.save_generated_maps
                 && (config.overwrite_existing_map_files || !map_file_exists)
             {
-                #[cfg(not(feature = "bincode"))]
-                anyhow::bail!("Enable the `bincode` feature to save drag load maps");
-                #[cfg(feature = "bincode")]
+                #[cfg(not(feature = "postcard"))]
+                anyhow::bail!("Enable the `postcard` feature to save drag load maps");
+                #[cfg(feature = "postcard")]
                 map.save_to_file(&map_path).with_context(|| {
                     format!(
                         "Failed to save drag load map to file `{}`",
@@ -144,5 +144,5 @@ fn generate_map_path(directory: &Path, drag_load_map_id: DragLoadMapID) -> PathB
     let sanitized_map_name = format!("{drag_load_map_id}")
         .replace('/', "_")
         .replace('\\', "_");
-    directory.join(format!("{sanitized_map_name}.bc"))
+    directory.join(format!("{sanitized_map_name}.pc"))
 }

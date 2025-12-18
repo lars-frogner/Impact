@@ -36,9 +36,8 @@ license = "Apache-2.0"
 anyhow = "1.0"
 approx = "0.5"
 arbitrary = { version = "1.4", features = ["derive"] }
-bincode = { version = "2.0", default-features = false, features = [
-    "std",
-    "serde",
+postcard = { version = "1.1", default-features = false, features = [
+    "alloc",
 ] }
 bitflags = { version = "2.10", features = ["bytemuck"] }
 bytemuck = { version = "1.24", features = ["derive"] }
@@ -225,7 +224,7 @@ impact_math = { path = "crates/impact_math", features = ["serde"] }
 impact_mesh = { path = "crates/impact_mesh", features = ["ecs", "serde"] }
 impact_model = { path = "crates/impact_model" }
 impact_physics = { path = "crates/impact_physics", features = [
-    "bincode",
+    "postcard",
     "ecs",
     "serde",
 ] }
@@ -235,7 +234,7 @@ impact_resource = { path = "crates/impact_resource" }
 impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
 impact_scheduling = { path = "crates/impact_scheduling" }
 impact_texture = { path = "crates/impact_texture", features = [
-    "bincode",
+    "postcard",
     "serde",
 ] }
 impact_thread = { path = "crates/impact_thread" }
