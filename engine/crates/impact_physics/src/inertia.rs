@@ -1020,7 +1020,7 @@ mod tests {
             mass_density in 1e-2..1e2_f32,
             transform in similarity_transform_strategy(1e2, 1e-2..1e2),
         ) {
-            let mut sphere_mesh = TriangleMesh::<f64>::create_sphere(30);
+            let mut sphere_mesh = TriangleMesh::<f64>::create_sphere(40);
             let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
             sphere_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
@@ -1046,7 +1046,7 @@ mod tests {
             mass_density in 1e-2..1e2_f32,
             transform in similarity_transform_strategy(1e2, 1e-2..1e2),
         ) {
-            let mut hemisphere_mesh = TriangleMesh::<f64>::create_hemisphere(15);
+            let mut hemisphere_mesh = TriangleMesh::<f64>::create_hemisphere(20);
             let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
 
             hemisphere_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
