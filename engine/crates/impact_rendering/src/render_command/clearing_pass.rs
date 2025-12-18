@@ -37,7 +37,7 @@ impl AttachmentClearingPass {
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
                         view: texture.base_texture_view(),
-                depth_slice: None,
+                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(texture.quantity().clear_color().unwrap()),
