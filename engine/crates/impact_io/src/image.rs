@@ -245,14 +245,17 @@ where
 /// Reads the metadata of a JPEG image from a byte buffer.
 #[cfg(feature = "jpeg")]
 fn read_jpeg_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
-    use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace};
+    use zune_jpeg::zune_core::{
+        bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions,
+    };
 
     let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(bytes));
     decoder
         .decode_headers()
         .context("Failed to decode JPEG headers")?;
 
-    let colorspace = decoder.output_colorspace().unwrap();
+    let colorspace = decoder.input_colorspace().unwrap();
+    decoder.set_options(DecoderOptions::default().jpeg_set_out_colorspace(colorspace));
 
     let pixel_format = match colorspace {
         // Image data is converted to RGBA8 when read
@@ -274,12 +277,17 @@ fn read_jpeg_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
 /// Loads a JPEG image from a byte buffer.
 #[cfg(feature = "jpeg")]
 fn load_jpeg_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>> {
-    use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace};
+    use zune_jpeg::zune_core::{
+        bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions,
+    };
 
     let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(bytes));
     decoder
         .decode_headers()
         .context("Failed to decode JPEG headers")?;
+
+    let colorspace = decoder.input_colorspace().unwrap();
+    decoder.set_options(DecoderOptions::default().jpeg_set_out_colorspace(colorspace));
 
     let mut pixels = AVec::new_in(alloc);
     pixels.resize(decoder.output_buffer_size().unwrap(), 0);
