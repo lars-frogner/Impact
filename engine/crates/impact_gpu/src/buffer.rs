@@ -824,7 +824,7 @@ pub fn encode_buffer_to_buffer_copy_command(
 pub fn map_buffer_slice_to_cpu<'a>(
     device: &wgpu::Device,
     buffer_slice: wgpu::BufferSlice<'a>,
-) -> Result<wgpu::BufferView<'a>> {
+) -> Result<wgpu::BufferView> {
     let map_result_sender = Arc::new(Mutex::new(None));
     let map_result_receiver = Arc::clone(&map_result_sender);
 
@@ -832,7 +832,7 @@ pub fn map_buffer_slice_to_cpu<'a>(
         *map_result_sender.lock() = Some(result);
     });
 
-    device.poll(wgpu::PollType::Wait)?;
+    device.poll(wgpu::PollType::wait_indefinitely())?;
 
     map_result_receiver.lock().take().unwrap()?;
 

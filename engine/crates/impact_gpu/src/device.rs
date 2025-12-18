@@ -57,6 +57,7 @@ impl GraphicsDevice {
                 memory_hints,
                 label: None,
                 trace: wgpu::Trace::Off,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
             })
             .await?;
 

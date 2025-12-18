@@ -40,8 +40,8 @@ bincode = { version = "2.0", default-features = false, features = [
     "std",
     "serde",
 ] }
-bitflags = { version = "2.9", features = ["bytemuck"] }
-bytemuck = { version = "1.23", features = ["derive"] }
+bitflags = { version = "2.10", features = ["bytemuck"] }
+bytemuck = { version = "1.24", features = ["derive"] }
 cfg-if = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 const-fnv1a-hash = "1.1"
@@ -50,11 +50,11 @@ nalgebra = "0.33"
 nohash-hasher = "0.2"
 num-traits = "0.2"
 parking_lot = "0.12"
-pastey = "0.1"
+pastey = "0.2"
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.9"
-tinyvec = { version = "1.9", features = ["alloc"] }
+tinyvec = { version = "1.10", features = ["alloc"] }
 
 [workspace.lints.rust]
 future_incompatible = "warn"
@@ -201,9 +201,9 @@ arbitrary = { workspace = true, optional = true }
 bitflags = { workspace = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
-egui = { version = "0.32", features = ["log"], optional = true }
-egui-wgpu = { version = "0.32", optional = true }
-egui-winit = { version = "0.32", optional = true }
+egui = { version = "0.33", optional = true }
+egui-wgpu = { version = "0.33", optional = true }
+egui-winit = { version = "0.33", optional = true }
 impact_alloc = { path = "crates/impact_alloc" }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }
@@ -247,7 +247,7 @@ num-traits = { workspace = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 pollster = "0.4"
-regex = "1.11"
+regex = "1.12"
 roc_integration = { path = "../roc_integration" }
 serde = { workspace = true }
 tinyvec = { workspace = true }

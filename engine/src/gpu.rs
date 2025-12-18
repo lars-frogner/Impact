@@ -59,6 +59,7 @@ pub fn create_wgpu_instance() -> wgpu::Instance {
     wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         flags: wgpu::InstanceFlags::default(),
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
         backend_options: wgpu::BackendOptions::default(),
     })
 }
@@ -79,7 +80,6 @@ pub fn connect_to_graphics_device_for_rendering(
             | wgpu::Features::DEPTH32FLOAT_STENCIL8
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::FLOAT32_FILTERABLE
-            | wgpu::Features::MULTI_DRAW_INDIRECT
             | wgpu::Features::INDIRECT_FIRST_INSTANCE,
         wgpu::Features::POLYGON_MODE_LINE
             | wgpu::Features::TIMESTAMP_QUERY

@@ -120,10 +120,10 @@ impact_io = { path = "../../engine/crates/impact_io", features = ["ron"] }
 impact_log = { path = "../../engine/crates/impact_log" }
 impact_voxel = { path = "../../engine/crates/impact_voxel" }
 inventory = "0.3"
-libloading = "0.8"
+libloading = "0.9"
 parking_lot = "0.12"
-pastey = "0.1"
-rfd = "0.15"
+pastey = "0.2"
+rfd = "0.16"
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }
 tinyvec = { version = "1.9", features = ["alloc", "serde"] }

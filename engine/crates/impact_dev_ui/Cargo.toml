@@ -12,7 +12,7 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
-egui_extras = "0.32"
+egui_extras = "0.33"
 impact_alloc = { path = "../impact_alloc" }
 inventory = { workspace = true, optional = true }
 impact = { path = "../..", features = ["egui"] }

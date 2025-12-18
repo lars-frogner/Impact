@@ -199,6 +199,7 @@ impl PostprocessingRenderPass {
                 .map(|texture| {
                     Some(wgpu::RenderPassColorAttachment {
                         view: texture.base_texture_view(),
+                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -213,6 +214,7 @@ impl PostprocessingRenderPass {
                 view: surface_texture_view.expect(
                     "Postprocessing pass that write to surface needs a surface texture view",
                 ),
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),

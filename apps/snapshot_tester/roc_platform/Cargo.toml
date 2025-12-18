@@ -11,8 +11,8 @@ crate-type = ["staticlib"]
 anyhow = "1.0"
 ffi_utils = { path = "../../../ffi_utils" }
 impact_log = { path = "../../../engine/crates/impact_log" }
-libloading = "0.8"
-pastey = "0.1"
+libloading = "0.9"
+pastey = "0.2"
 roc_platform_core = { path = "../../../roc_platform/core" }
 
 [profile.release]

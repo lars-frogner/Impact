@@ -123,9 +123,9 @@ impact = { path = "../../engine", features = ["window", "egui", "obj", "ply"] }
 impact_log = { path = "../../engine/crates/impact_log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 inventory = "0.3"
-libloading = "0.8"
+libloading = "0.9"
 parking_lot = "0.12"
-pastey = "0.1"
+pastey = "0.2"
 rand = { version = "0.9", optional = true }
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }

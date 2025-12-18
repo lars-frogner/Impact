@@ -538,7 +538,7 @@ impl CollapsedMetaSubgraph {
 }
 
 fn prepare_text(ui: &Ui, text: String, font_id: FontId, color: Color32) -> Arc<Galley> {
-    ui.fonts(|f| f.layout_no_wrap(text, font_id, color))
+    ui.fonts_mut(|f| f.layout_no_wrap(text, font_id, color))
 }
 
 fn show_port(
