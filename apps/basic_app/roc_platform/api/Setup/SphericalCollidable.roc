@@ -1,8 +1,8 @@
-# Hash: 454e0b121f143cdcf912c9b430de0458c8e7c924aa3e797f4e231ef60083ccb5
-# Generated: 2025-12-17T23:58:02+00:00
+# Hash: a171023544346377c7363d043f7a85ea971268fd67e096c96cefb0934de3161b
+# Generated: 2025-12-19T22:40:56+00:00
 # Rust type: impact_physics::collision::setup::SphericalCollidable
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: 2214e649 (dirty)
 module [
     SphericalCollidable,
     new,
@@ -24,11 +24,11 @@ import core.Sphere
 ## A spherical collidable.
 SphericalCollidable : {
     kind : U32,
-    sphere : Sphere.Sphere Binary32,
+    sphere : Sphere.Sphere,
     response_params : Physics.ContactResponseParameters.ContactResponseParameters,
 }
 
-new : Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> SphericalCollidable
+new : Physics.CollidableKind.CollidableKind, Sphere.Sphere, Physics.ContactResponseParameters.ContactResponseParameters -> SphericalCollidable
 new = |kind, sphere, response_params|
     {
         kind:
@@ -40,11 +40,11 @@ new = |kind, sphere, response_params|
         response_params,
     }
 
-add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Sphere.Sphere Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
+add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Sphere.Sphere, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
 add_new = |entity_data, kind, sphere, response_params|
     add(entity_data, new(kind, sphere, response_params))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Sphere.Sphere Binary32), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Sphere.Sphere), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, kind, sphere, response_params|
     add_multiple(
         entity_data,
@@ -114,7 +114,7 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(32)
     |> Builtin.write_bytes_u32(value.kind)
-    |> Sphere.write_bytes_32(value.sphere)
+    |> Sphere.write_bytes(value.sphere)
     |> Physics.ContactResponseParameters.write_bytes(value.response_params)
 
 ## Deserializes a value of [SphericalCollidable] from its bytes in the
@@ -124,7 +124,7 @@ from_bytes = |bytes|
     Ok(
         {
             kind: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
-            sphere: bytes |> List.sublist({ start: 4, len: 16 }) |> Sphere.from_bytes_32?,
+            sphere: bytes |> List.sublist({ start: 4, len: 16 }) |> Sphere.from_bytes?,
             response_params: bytes |> List.sublist({ start: 20, len: 12 }) |> Physics.ContactResponseParameters.from_bytes?,
         },
     )

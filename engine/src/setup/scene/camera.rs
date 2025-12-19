@@ -55,7 +55,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
          camera_props: &setup::PerspectiveCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
-            let camera = PerspectiveCamera::<f32>::new(
+            let camera = PerspectiveCamera::new(
                 camera_manager.camera_context().aspect_ratio,
                 camera_props.vertical_field_of_view(),
                 UpperExclusiveBounds::new(
@@ -113,7 +113,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
          camera_props: &setup::OrthographicCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
-            let camera = OrthographicCamera::<f32>::new(
+            let camera = OrthographicCamera::new(
                 camera_manager.camera_context().aspect_ratio,
                 camera_props.vertical_field_of_view(),
                 UpperExclusiveBounds::new(

@@ -18,7 +18,7 @@ use std::{borrow::Cow, sync::LazyLock};
 /// Represents a camera that can buffered in a GPU buffer.
 pub trait BufferableCamera {
     /// Returns a reference to the underlying [`Camera`].
-    fn camera(&self) -> &dyn Camera<f32>;
+    fn camera(&self) -> &dyn Camera;
 
     /// Returns a reference to the camera's view transform.
     fn view_transform(&self) -> &Isometry3<f32>;
@@ -39,7 +39,7 @@ const JITTER_BASES: (u64, u64) = (2, 3);
 #[derive(Debug)]
 pub struct CameraGPUResource {
     view_transform: Isometry3<f32>,
-    view_frustum: Frustum<f32>,
+    view_frustum: Frustum,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
     jitter_enabled: bool,
@@ -129,7 +129,7 @@ impl CameraGPUResource {
     }
 
     /// Returns the frustum representing the view volume of the camera.
-    pub fn view_frustum(&self) -> &Frustum<f32> {
+    pub fn view_frustum(&self) -> &Frustum {
         &self.view_frustum
     }
 
@@ -255,7 +255,7 @@ impl CameraProjectionUniform {
         }
     }
 
-    fn compute_far_plane_corners(view_frustum: &Frustum<f32>) -> [Vector4<f32>; 4] {
+    fn compute_far_plane_corners(view_frustum: &Frustum) -> [Vector4<f32>; 4] {
         let corners = view_frustum.compute_corners();
         [
             Vector4::new(corners[1].x, corners[1].y, corners[1].z, 0.0), // lower left

@@ -104,13 +104,13 @@ pub fn correct_contact_configurations(benchmarker: impl Benchmarker) {
 }
 
 struct SphereBody {
-    sphere: Sphere<f32>,
+    sphere: Sphere,
     mass_density: f32,
     velocity: Velocity,
 }
 
 impl SphereBody {
-    fn new(sphere: Sphere<f32>, mass_density: f32, velocity: Velocity) -> Self {
+    fn new(sphere: Sphere, mass_density: f32, velocity: Velocity) -> Self {
         Self {
             sphere,
             mass_density,
@@ -118,7 +118,7 @@ impl SphereBody {
         }
     }
 
-    fn stationary(sphere: Sphere<f32>, mass_density: f32) -> Self {
+    fn stationary(sphere: Sphere, mass_density: f32) -> Self {
         Self::new(sphere, mass_density, Velocity::zeros())
     }
 }

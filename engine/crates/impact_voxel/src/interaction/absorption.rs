@@ -91,7 +91,7 @@ impl VoxelAbsorbingSphere {
     }
 
     /// Returns the sphere in the reference frame of the entity.
-    pub fn sphere(&self) -> Sphere<f32> {
+    pub fn sphere(&self) -> Sphere {
         Sphere::new(Point3::from(self.offset), self.radius)
     }
 
@@ -135,7 +135,7 @@ impl VoxelAbsorbingCapsule {
     }
 
     /// Returns the capsule in the reference frame of the entity.
-    pub fn capsule(&self) -> Capsule<f32> {
+    pub fn capsule(&self) -> Capsule {
         Capsule::new(
             Point3::from(self.offset_to_segment_start),
             self.segment_vector,

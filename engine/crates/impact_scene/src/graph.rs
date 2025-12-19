@@ -120,7 +120,7 @@ pub struct GroupNode {
     child_group_node_ids: ChildGroupNodeIds,
     child_model_instance_node_ids: ChildModelInstanceNodeIds,
     child_camera_node_ids: ChildCameraNodeIds,
-    bounding_sphere: Option<Sphere<f32>>,
+    bounding_sphere: Option<Sphere>,
     group_to_root_transform: Isometry3<f32>,
 }
 
@@ -130,7 +130,7 @@ pub struct GroupNode {
 #[derive(Debug)]
 pub struct ModelInstanceNode {
     parent_node_id: GroupNodeID,
-    model_bounding_sphere: Option<Sphere<f32>>,
+    model_bounding_sphere: Option<Sphere>,
     model_to_parent_transform: Similarity3<f32>,
     model_id: ModelID,
     feature_ids_for_rendering: FeatureIDSet,
@@ -253,7 +253,7 @@ impl SceneGraph {
         parent_node_id: GroupNodeID,
         model_to_parent_transform: Similarity3<f32>,
         model_id: ModelID,
-        frustum_culling_bounding_sphere: Option<Sphere<f32>>,
+        frustum_culling_bounding_sphere: Option<Sphere>,
         feature_ids_for_rendering: FeatureIDSet,
         feature_ids_for_shadow_mapping: FeatureIDSet,
         flags: ModelInstanceFlags,
@@ -442,7 +442,7 @@ impl SceneGraph {
     pub fn set_model_instance_bounding_sphere(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
-        bounding_sphere: Option<Sphere<f32>>,
+        bounding_sphere: Option<Sphere>,
     ) {
         if let Some(node) = self
             .model_instance_nodes
@@ -502,7 +502,7 @@ impl SceneGraph {
     /// Updates the bounding spheres of all nodes in the scene graph (excluding
     /// contributions from hidden model instances).
     pub fn update_all_bounding_spheres(&mut self) {
-        fn merge_spheres(accum: &mut Option<Sphere<f32>>, sphere: Sphere<f32>) {
+        fn merge_spheres(accum: &mut Option<Sphere>, sphere: Sphere) {
             match accum {
                 None => {
                     *accum = Some(sphere);
@@ -699,7 +699,7 @@ impl SceneGraph {
         material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
         current_frame_number: u32,
-        camera_space_view_frustum: &Frustum<f32>,
+        camera_space_view_frustum: &Frustum,
         group_node: &GroupNode,
         group_to_camera_transform: &Isometry3<f32>,
     ) where
@@ -920,7 +920,7 @@ impl SceneGraph {
         model_instance_manager: &mut ModelInstanceManager,
         omnidirectional_light: &ShadowableOmnidirectionalLight,
         face: CubemapFace,
-        camera_space_face_frustum: &Frustum<f32>,
+        camera_space_face_frustum: &Frustum,
         group_node: &GroupNode,
         group_to_camera_transform: &Isometry3<f32>,
     ) {
@@ -1365,7 +1365,7 @@ impl GroupNode {
         &self.child_camera_node_ids
     }
 
-    fn get_bounding_sphere(&self) -> Option<&Sphere<f32>> {
+    fn get_bounding_sphere(&self) -> Option<&Sphere> {
         self.bounding_sphere.as_ref()
     }
 
@@ -1438,7 +1438,7 @@ impl GroupNode {
         }
     }
 
-    fn set_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<f32>>) {
+    fn set_bounding_sphere(&mut self, bounding_sphere: Option<Sphere>) {
         self.bounding_sphere = bounding_sphere;
     }
 
@@ -1458,13 +1458,13 @@ impl SceneGraphNode for GroupNode {
 }
 
 impl ModelInstanceNode {
-    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Option<Sphere<f32>>) {
+    pub fn set_model_bounding_sphere(&mut self, bounding_sphere: Option<Sphere>) {
         self.model_bounding_sphere = bounding_sphere;
     }
 
     fn new(
         parent_node_id: GroupNodeID,
-        model_bounding_sphere: Option<Sphere<f32>>,
+        model_bounding_sphere: Option<Sphere>,
         model_to_parent_transform: Similarity3<f32>,
         model_id: ModelID,
         feature_ids_for_rendering: FeatureIDSet,
@@ -1531,7 +1531,7 @@ impl ModelInstanceNode {
 
     /// Returns the bounding sphere of the model instance, or [`None`] if it has
     /// no bounding sphere.
-    pub fn get_model_bounding_sphere(&self) -> Option<&Sphere<f32>> {
+    pub fn get_model_bounding_sphere(&self) -> Option<&Sphere> {
         self.model_bounding_sphere.as_ref()
     }
 
@@ -1937,7 +1937,7 @@ mod tests {
         );
     }
 
-    fn assert_spheres_equal(sphere_1: &Sphere<f32>, sphere_2: &Sphere<f32>) {
+    fn assert_spheres_equal(sphere_1: &Sphere, sphere_2: &Sphere) {
         assert_abs_diff_eq!(sphere_1.center(), sphere_2.center());
         assert_abs_diff_eq!(sphere_1.radius(), sphere_2.radius());
     }

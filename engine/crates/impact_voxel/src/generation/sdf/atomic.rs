@@ -35,7 +35,7 @@ pub struct SDFGenerator<A: Allocator> {
     /// last node is the root.
     nodes: AVec<ProcessedSDFNode, A>,
     required_forward_stack_size: usize,
-    domain: AxisAlignedBox<f32>,
+    domain: AxisAlignedBox,
 }
 
 #[derive(Clone, Debug)]
@@ -96,7 +96,7 @@ struct ProcessedSDFNode {
     /// evaluating the SDF there. Note that this does leave an invalid SDF
     /// though, since the gradient becomes zero. But as long as we don't need
     /// the gradient, that is OK.
-    domain_with_margin: AxisAlignedBox<f32>,
+    domain_with_margin: AxisAlignedBox,
     domain_margin: f32,
     leaf_count: u32,
 }
@@ -234,7 +234,7 @@ impl<A: Allocator> SDFGenerator<A> {
     pub fn compute_signed_distances_for_chunk<AB: Allocator>(
         &self,
         buffers: &mut SDFGeneratorChunkBuffers<AB>,
-        chunk_aabb_in_root_space: &AxisAlignedBox<f32>,
+        chunk_aabb_in_root_space: &AxisAlignedBox,
     ) {
         self.compute_signed_distances_for_block::<CHUNK_SIZE, CHUNK_VOXEL_COUNT, AB>(
             buffers,
@@ -256,7 +256,7 @@ impl<A: Allocator> SDFGenerator<A> {
         let mut processed_nodes = AVec::with_capacity_in(nodes.len(), alloc);
 
         // Estimate capacity based on node count for domain calculations and processing
-        let capacity = nodes.len() * (mem::size_of::<AxisAlignedBox<f32>>() + 64); // Domain + overhead per node
+        let capacity = nodes.len() * (mem::size_of::<AxisAlignedBox>() + 64); // Domain + overhead per node
         let arena = ArenaPool::get_arena_for_capacity(capacity);
 
         // The domains of each node computed from child domains, not accounting
@@ -652,7 +652,7 @@ impl<A: Allocator> SDFGenerator<A> {
     /// voxel grid coordinates relative to the origin of the root SDF coordinate
     /// space. If the domain is not translated, the origin coincides with the
     /// center of the domain.
-    pub fn domain(&self) -> &AxisAlignedBox<f32> {
+    pub fn domain(&self) -> &AxisAlignedBox {
         &self.domain
     }
 
@@ -686,7 +686,7 @@ impl<A: Allocator> SDFGenerator<A> {
     >(
         &self,
         buffers: &mut SDFGeneratorBlockBuffers<COUNT, AB>,
-        block_aabb_in_root_space: &AxisAlignedBox<f32>,
+        block_aabb_in_root_space: &AxisAlignedBox,
     ) {
         if self.nodes.is_empty() {
             buffers.signed_distance_stack[0].fill(VoxelSignedDistance::MAX_F32);
@@ -1261,13 +1261,13 @@ impl SphereSDF {
     }
 
     #[inline]
-    pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+    pub fn domain_bounds(&self) -> AxisAlignedBox {
         let half_extents = Vector3::repeat(self.radius);
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
 
     #[inline]
-    fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
+    fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
         let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
 
         let expanded_half_extents = Vector3::repeat(extent_of_internal_box_in_sphere + margin);
@@ -1308,14 +1308,14 @@ impl CapsuleSDF {
     }
 
     #[inline]
-    pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+    pub fn domain_bounds(&self) -> AxisAlignedBox {
         let mut half_extents = Vector3::repeat(self.radius);
         half_extents.y += self.half_segment_length;
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
 
     #[inline]
-    fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
+    fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
         let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
 
         let mut expanded_half_extents = Vector3::repeat(extent_of_internal_box_in_sphere + margin);
@@ -1356,12 +1356,12 @@ impl BoxSDF {
     }
 
     #[inline]
-    pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
+    pub fn domain_bounds(&self) -> AxisAlignedBox {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
     #[inline]
-    fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
+    fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
         let expanded_half_extents = self.half_extents + Vector3::repeat(margin);
         AxisAlignedBox::new(
             (-expanded_half_extents).into(),
@@ -1844,7 +1844,7 @@ impl From<f32> for Smoothness {
 }
 
 #[inline]
-fn zero_domain() -> AxisAlignedBox<f32> {
+fn zero_domain() -> AxisAlignedBox {
     AxisAlignedBox::new(Point3::origin(), Point3::origin())
 }
 

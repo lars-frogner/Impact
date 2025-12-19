@@ -26,7 +26,7 @@ pub struct CameraContext {
 /// [`SceneGraph`](crate::graph::SceneGraph).
 #[derive(Debug)]
 pub struct SceneCamera {
-    camera: Box<dyn Camera<f32>>,
+    camera: Box<dyn Camera>,
     view_transform: Isometry3<f32>,
     scene_graph_node_id: CameraNodeID,
     jitter_enabled: bool,
@@ -76,11 +76,7 @@ impl CameraManager {
 
     /// Creates a [`SceneCamera`] for the given camera and camera node and sets
     /// it as the active camera.
-    pub fn set_active_camera(
-        &mut self,
-        camera: impl Camera<f32>,
-        scene_graph_node_id: CameraNodeID,
-    ) {
+    pub fn set_active_camera(&mut self, camera: impl Camera, scene_graph_node_id: CameraNodeID) {
         self.active_camera = Some(SceneCamera::new(
             camera,
             scene_graph_node_id,
@@ -148,7 +144,7 @@ impl SceneCamera {
     /// camera node with the given ID in the
     /// [`SceneGraph`](crate::graph::SceneGraph).
     pub fn new(
-        camera: impl Camera<f32>,
+        camera: impl Camera,
         scene_graph_node_id: CameraNodeID,
         jitter_enabled: bool,
     ) -> Self {
@@ -161,7 +157,7 @@ impl SceneCamera {
     }
 
     /// Returns a reference to the underlying [`Camera`].
-    pub fn camera(&self) -> &dyn Camera<f32> {
+    pub fn camera(&self) -> &dyn Camera {
         self.camera.as_ref()
     }
 
@@ -203,7 +199,7 @@ impl SceneCamera {
 }
 
 impl BufferableCamera for SceneCamera {
-    fn camera(&self) -> &dyn Camera<f32> {
+    fn camera(&self) -> &dyn Camera {
         self.camera()
     }
 

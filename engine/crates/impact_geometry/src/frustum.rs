@@ -2,10 +2,7 @@
 
 use crate::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
-use impact_math::{
-    Float,
-    bounds::{Bounds, UpperExclusiveBounds},
-};
+use impact_math::bounds::{Bounds, UpperExclusiveBounds};
 use nalgebra::{
     Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3, point, vector,
 };
@@ -17,21 +14,21 @@ use nalgebra::{
 /// The planes are created in such a way that their negative
 /// halfspaces correspond to the space outside the frustum.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Frustum<F: Float> {
-    planes: [Plane<F>; 6],
+pub struct Frustum {
+    planes: [Plane; 6],
     largest_signed_dist_aab_corner_indices_for_planes: [usize; 6],
-    transform_matrix: Matrix4<F>,
-    inverse_transform_matrix: Matrix4<F>,
+    transform_matrix: Matrix4<f32>,
+    inverse_transform_matrix: Matrix4<f32>,
 }
 
-impl<F: Float> Frustum<F> {
+impl Frustum {
     /// Creates the frustum representing the clip space of the
     /// given transform.
     ///
     /// This function uses the method of Gribb and Hartmann (2001)
     /// "Fast Extraction of Viewing Frustum Planes from the
     /// World-View-Projection Matrix".
-    pub fn from_transform(transform: &Projective3<F>) -> Self {
+    pub fn from_transform(transform: &Projective3<f32>) -> Self {
         let planes = Self::planes_from_transform_matrix(transform.matrix());
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -48,8 +45,8 @@ impl<F: Float> Frustum<F> {
     /// Creates the frustum representing the clip space of the given transform
     /// matrix, using the given matrix inverse rather than computing it.
     pub fn from_transform_matrix_with_inverse(
-        transform_matrix: Matrix4<F>,
-        inverse_transform_matrix: Matrix4<F>,
+        transform_matrix: Matrix4<f32>,
+        inverse_transform_matrix: Matrix4<f32>,
     ) -> Self {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
@@ -65,77 +62,73 @@ impl<F: Float> Frustum<F> {
     }
 
     /// Returns the planes defining the faces of the frustum.
-    pub fn planes(&self) -> &[Plane<F>; 6] {
+    pub fn planes(&self) -> &[Plane; 6] {
         &self.planes
     }
 
     /// Returns the plane defining the left face of the frustum.
-    pub fn left_plane(&self) -> &Plane<F> {
+    pub fn left_plane(&self) -> &Plane {
         &self.planes[0]
     }
 
     /// Returns the plane defining the right face of the frustum.
-    pub fn right_plane(&self) -> &Plane<F> {
+    pub fn right_plane(&self) -> &Plane {
         &self.planes[1]
     }
 
     /// Returns the plane defining the bottom face of the frustum.
-    pub fn bottom_plane(&self) -> &Plane<F> {
+    pub fn bottom_plane(&self) -> &Plane {
         &self.planes[2]
     }
 
     /// Returns the plane defining the top face of the frustum.
-    pub fn top_plane(&self) -> &Plane<F> {
+    pub fn top_plane(&self) -> &Plane {
         &self.planes[3]
     }
 
     /// Returns the near plane of the frustum.
-    pub fn near_plane(&self) -> &Plane<F> {
+    pub fn near_plane(&self) -> &Plane {
         &self.planes[4]
     }
 
     /// Returns the far plane of the frustum.
-    pub fn far_plane(&self) -> &Plane<F> {
+    pub fn far_plane(&self) -> &Plane {
         &self.planes[5]
     }
 
     /// Returns the matrix of the transform into the clip space
     /// that this frustum represents.
-    pub fn transform_matrix(&self) -> &Matrix4<F> {
+    pub fn transform_matrix(&self) -> &Matrix4<f32> {
         &self.transform_matrix
     }
 
     /// Returns the distance from the frustum apex to the near plane.
-    pub fn near_distance(&self) -> F {
+    pub fn near_distance(&self) -> f32 {
         self.near_plane().displacement()
     }
 
     /// Returns the distance from the frustum apex to the far plane.
-    pub fn far_distance(&self) -> F {
+    pub fn far_distance(&self) -> f32 {
         -self.far_plane().displacement()
     }
 
     /// Computes the vertical height of the frustum at the given distance from
     /// the apex towards the far plane.
-    pub fn height_at_distance(&self, distance: F) -> F {
+    pub fn height_at_distance(&self, distance: f32) -> f32 {
         let clip_space_depth = self.convert_view_distance_to_clip_space_depth(distance);
 
-        let top_point = self.inverse_transform_matrix.transform_point(&point![
-            F::ZERO,
-            F::ONE,
-            clip_space_depth
-        ]);
-        let bottom_point = self.inverse_transform_matrix.transform_point(&point![
-            F::ZERO,
-            -F::ONE,
-            clip_space_depth
-        ]);
+        let top_point =
+            self.inverse_transform_matrix
+                .transform_point(&point![0.0, 1.0, clip_space_depth]);
+        let bottom_point =
+            self.inverse_transform_matrix
+                .transform_point(&point![0.0, -1.0, clip_space_depth]);
 
         (top_point.y - bottom_point.y).abs()
     }
 
     /// Whether the given point is strictly inside the frustum.
-    pub fn contains_point(&self, point: &Point3<F>) -> bool {
+    pub fn contains_point(&self, point: &Point3<f32>) -> bool {
         self.planes
             .iter()
             .all(|plane| plane.point_lies_in_positive_halfspace(point))
@@ -146,7 +139,7 @@ impl<F: Float> Frustum<F> {
     /// even if the sphere is really outside. However, this method is will
     /// always return `true` if the sphere is really inside. If the boundaries
     /// exactly touch each other, the sphere is considered inside.
-    pub fn could_contain_part_of_sphere(&self, sphere: &Sphere<F>) -> bool {
+    pub fn could_contain_part_of_sphere(&self, sphere: &Sphere) -> bool {
         self.planes
             .iter()
             .all(|plane| plane.compute_signed_distance(sphere.center()) >= -sphere.radius())
@@ -159,7 +152,7 @@ impl<F: Float> Frustum<F> {
     /// exactly touch each other, the box is considered inside.
     pub fn could_contain_part_of_axis_aligned_box(
         &self,
-        axis_aligned_box: &AxisAlignedBox<F>,
+        axis_aligned_box: &AxisAlignedBox,
     ) -> bool {
         self.planes
             .iter()
@@ -170,29 +163,29 @@ impl<F: Float> Frustum<F> {
             .all(|(plane, &largest_signed_dist_corner_idx)| {
                 plane.compute_signed_distance(
                     &axis_aligned_box.corner(largest_signed_dist_corner_idx),
-                ) >= F::ZERO
+                ) >= 0.0
             })
     }
 
     /// Computes the 8 corners of the frustum.
-    pub fn compute_corners(&self) -> [Point3<F>; 8] {
+    pub fn compute_corners(&self) -> [Point3<f32>; 8] {
         [
             self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, -F::ONE, F::ZERO]),
+                .transform_point(&point![-1.0, -1.0, 0.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, -F::ONE, F::ONE]),
+                .transform_point(&point![-1.0, -1.0, 1.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, F::ONE, F::ZERO]),
+                .transform_point(&point![-1.0, 1.0, 0.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![-F::ONE, F::ONE, F::ONE]),
+                .transform_point(&point![-1.0, 1.0, 1.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, -F::ONE, F::ZERO]),
+                .transform_point(&point![1.0, -1.0, 0.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, -F::ONE, F::ONE]),
+                .transform_point(&point![1.0, -1.0, 1.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, F::ONE, F::ZERO]),
+                .transform_point(&point![1.0, 1.0, 0.0]),
             self.inverse_transform_matrix
-                .transform_point(&point![F::ONE, F::ONE, F::ONE]),
+                .transform_point(&point![1.0, 1.0, 1.0]),
         ]
     }
 
@@ -200,8 +193,8 @@ impl<F: Float> Frustum<F> {
     /// given linear (as opposed to clip space-) depths.
     pub fn compute_corners_of_subfrustum(
         &self,
-        clip_space_depth_limits: UpperExclusiveBounds<F>,
-    ) -> [Point3<F>; 8] {
+        clip_space_depth_limits: UpperExclusiveBounds<f32>,
+    ) -> [Point3<f32>; 8] {
         let (lower_linear_depth, upper_linear_depth) = clip_space_depth_limits.bounds();
         let lower_clip_space_depth =
             self.convert_linear_depth_to_clip_space_depth(lower_linear_depth);
@@ -209,43 +202,43 @@ impl<F: Float> Frustum<F> {
             self.convert_linear_depth_to_clip_space_depth(upper_linear_depth);
         [
             self.inverse_transform_matrix.transform_point(&point![
-                -F::ONE,
-                -F::ONE,
+                -1.0,
+                -1.0,
                 lower_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                -F::ONE,
-                -F::ONE,
+                -1.0,
+                -1.0,
                 upper_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                -F::ONE,
-                F::ONE,
+                -1.0,
+                1.0,
                 lower_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                -F::ONE,
-                F::ONE,
+                -1.0,
+                1.0,
                 upper_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                F::ONE,
-                -F::ONE,
+                1.0,
+                -1.0,
                 lower_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                F::ONE,
-                -F::ONE,
+                1.0,
+                -1.0,
                 upper_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                F::ONE,
-                F::ONE,
+                1.0,
+                1.0,
                 lower_clip_space_depth
             ]),
             self.inverse_transform_matrix.transform_point(&point![
-                F::ONE,
-                F::ONE,
+                1.0,
+                1.0,
                 upper_clip_space_depth
             ]),
         ]
@@ -253,7 +246,7 @@ impl<F: Float> Frustum<F> {
 
     /// Computes the clip space depth corresponding to the given distance from
     /// the frustum apex along the view direction.
-    pub fn convert_view_distance_to_clip_space_depth(&self, distance: F) -> F {
+    pub fn convert_view_distance_to_clip_space_depth(&self, distance: f32) -> f32 {
         self.transform_matrix
             .transform_point(&Point3::from(
                 self.near_plane().unit_normal().as_ref() * distance,
@@ -262,35 +255,35 @@ impl<F: Float> Frustum<F> {
     }
 
     /// Computes the view distance corresponding to the given clip space depth.
-    pub fn convert_clip_space_depth_to_view_distance(&self, clip_space_depth: F) -> F {
+    pub fn convert_clip_space_depth_to_view_distance(&self, clip_space_depth: f32) -> f32 {
         self.inverse_transform_matrix
-            .transform_point(&point![F::ZERO, F::ZERO, clip_space_depth])
+            .transform_point(&point![0.0, 0.0, clip_space_depth])
             .z
     }
 
     /// Computes the linear depth, which increases linearly with distance from 0
     /// at the frustum apex to 1 at the base, corresponding to the given
     /// distance from the frustum apex along the view direction.
-    pub fn convert_view_distance_to_linear_depth(&self, distance: F) -> F {
+    pub fn convert_view_distance_to_linear_depth(&self, distance: f32) -> f32 {
         distance / self.far_distance()
     }
 
     /// Computes the distance from the frustum apex along the view direction
     /// corresponding to the given linear depth (which increases linearly with
     /// distance from 0 at the frustum apex to 1 at the base).
-    pub fn convert_linear_depth_to_view_distance(&self, linear_depth: F) -> F {
+    pub fn convert_linear_depth_to_view_distance(&self, linear_depth: f32) -> f32 {
         linear_depth * self.far_distance()
     }
 
     /// Computes the clip space depth corresponding to the given linear depth.
-    pub fn convert_linear_depth_to_clip_space_depth(&self, linear_depth: F) -> F {
+    pub fn convert_linear_depth_to_clip_space_depth(&self, linear_depth: f32) -> f32 {
         self.convert_view_distance_to_clip_space_depth(
             self.convert_linear_depth_to_view_distance(linear_depth),
         )
     }
 
     /// Computes the center point of the frustum.
-    pub fn compute_center(&self) -> Point3<F> {
+    pub fn compute_center(&self) -> Point3<f32> {
         let corners = self.compute_corners();
         let n_corners = corners.len();
 
@@ -298,11 +291,11 @@ impl<F: Float> Frustum<F> {
             .into_iter()
             .reduce(|accum, point| accum + point.coords)
             .unwrap()
-            / (F::from_usize(n_corners).unwrap())
+            / (n_corners as f32)
     }
 
     /// Computes the frustum's axis-aligned bounding box.
-    pub fn compute_aabb(&self) -> AxisAlignedBox<F> {
+    pub fn compute_aabb(&self) -> AxisAlignedBox {
         AxisAlignedBox::aabb_for_point_array(&self.compute_corners())
     }
 
@@ -310,8 +303,8 @@ impl<F: Float> Frustum<F> {
     /// between the given linear (as opposed to clip space-) depths.
     pub fn compute_aabb_for_subfrustum(
         &self,
-        linear_depth_limits: UpperExclusiveBounds<F>,
-    ) -> AxisAlignedBox<F> {
+        linear_depth_limits: UpperExclusiveBounds<f32>,
+    ) -> AxisAlignedBox {
         AxisAlignedBox::aabb_for_point_array(
             &self.compute_corners_of_subfrustum(linear_depth_limits),
         )
@@ -319,7 +312,7 @@ impl<F: Float> Frustum<F> {
 
     /// Computes the frustum resulting from rotating this frustum with the given
     /// rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
         let rotated_planes = [
             self.planes[0].rotated(rotation),
             self.planes[1].rotated(rotation),
@@ -348,7 +341,7 @@ impl<F: Float> Frustum<F> {
 
     /// Computes the frustum resulting from transforming this frustum with the
     /// given similarity transform.
-    pub fn transformed(&self, transformation: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transformation: &Similarity3<f32>) -> Self {
         let transformed_planes = self.transformed_planes(transformation);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -372,7 +365,7 @@ impl<F: Float> Frustum<F> {
 
     /// Computes the planes of the frustum resulting from transforming this
     /// frustum with the given similarity transform.
-    pub fn transformed_planes(&self, transformation: &Similarity3<F>) -> [Plane<F>; 6] {
+    pub fn transformed_planes(&self, transformation: &Similarity3<f32>) -> [Plane; 6] {
         [
             self.planes[0].transformed(transformation),
             self.planes[1].transformed(transformation),
@@ -383,7 +376,7 @@ impl<F: Float> Frustum<F> {
         ]
     }
 
-    fn planes_from_transform_matrix(transform_matrix: &Matrix4<F>) -> [Plane<F>; 6] {
+    fn planes_from_transform_matrix(transform_matrix: &Matrix4<f32>) -> [Plane; 6] {
         let m = transform_matrix;
 
         let left = Self::plane_from_unnormalized_coefficients(
@@ -424,11 +417,11 @@ impl<F: Float> Frustum<F> {
     }
 
     fn plane_from_unnormalized_coefficients(
-        normal_x: F,
-        normal_y: F,
-        normal_z: F,
-        displacement: F,
-    ) -> Plane<F> {
+        normal_x: f32,
+        normal_y: f32,
+        normal_z: f32,
+        displacement: f32,
+    ) -> Plane {
         let (unit_normal, magnitude) =
             UnitVector3::new_and_get(vector![normal_x, normal_y, normal_z]);
 
@@ -436,7 +429,7 @@ impl<F: Float> Frustum<F> {
     }
 
     #[cfg(test)]
-    fn from_transform_matrix(transform_matrix: Matrix4<F>) -> Self {
+    fn from_transform_matrix(transform_matrix: Matrix4<f32>) -> Self {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -454,7 +447,7 @@ impl<F: Float> Frustum<F> {
     /// the largest signed distance in the space of the given plane. The corner
     /// is represented by an index following the convention of
     /// [`AxisAlignedBox::corner`].
-    pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane<F>) -> usize {
+    pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane) -> usize {
         let normal = plane.unit_normal();
         match (
             normal.x.is_sign_negative(),
@@ -473,23 +466,20 @@ impl<F: Float> Frustum<F> {
     }
 
     fn determine_largest_signed_dist_aab_corner_indices_for_all_planes(
-        planes: [Plane<F>; 6],
+        planes: [Plane; 6],
     ) -> [usize; 6] {
         planes.map(|plane| Self::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
     }
 }
 
-impl<F: Float + AbsDiffEq> AbsDiffEq for Frustum<F>
-where
-    F::Epsilon: Copy,
-{
-    type Epsilon = F::Epsilon;
+impl AbsDiffEq for Frustum {
+    type Epsilon = f32;
 
-    fn default_epsilon() -> F::Epsilon {
-        F::default_epsilon()
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
     }
 
-    fn abs_diff_eq(&self, other: &Self, epsilon: F::Epsilon) -> bool {
+    fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
         self.planes[0].abs_diff_eq(&other.planes[0], epsilon)
             && self.planes[1].abs_diff_eq(&other.planes[1], epsilon)
             && self.planes[2].abs_diff_eq(&other.planes[2], epsilon)
@@ -517,13 +507,13 @@ mod tests {
     fn computing_frustum_near_and_far_distance_works() {
         let near = 0.21;
         let far = 160.2;
-        let frustum = Frustum::<f64>::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(near, far))
                 .as_projective(),
         );
 
-        assert_abs_diff_eq!(frustum.near_distance(), near, epsilon = 1e-9);
-        assert_abs_diff_eq!(frustum.far_distance(), far, epsilon = 1e-9);
+        assert_abs_diff_eq!(frustum.near_distance(), near, epsilon = 1e-2);
+        assert_abs_diff_eq!(frustum.far_distance(), far, epsilon = 1e-2);
     }
 
     #[test]
@@ -567,12 +557,12 @@ mod tests {
                             continue;
                         }
                         (_, 0, 0) | (0, _, 0) | (0, 0, _) => 1.0,
-                        (0, _, _) | (_, 0, _) | (_, _, 0) => f64::sqrt(2.0),
-                        _ => f64::sqrt(3.0),
+                        (0, _, _) | (_, 0, _) | (_, _, 0) => f32::sqrt(2.0),
+                        _ => f32::sqrt(3.0),
                     };
                     for dist_fraction in [0.5, 0.3, 0.1] {
                         let sphere = Sphere::new(
-                            point![f64::from(x), f64::from(y), f64::from(z)],
+                            point![x as f32, y as f32, z as f32],
                             dist_fraction * dist_to_frustum,
                         );
                         assert!(!frustum.could_contain_part_of_sphere(&sphere));
@@ -595,11 +585,11 @@ mod tests {
                             continue;
                         }
                         (_, 0, 0) | (0, _, 0) | (0, 0, _) => 1.0,
-                        (0, _, _) | (_, 0, _) | (_, _, 0) => f64::sqrt(2.0),
-                        _ => f64::sqrt(3.0),
+                        (0, _, _) | (_, 0, _) | (_, _, 0) => f32::sqrt(2.0),
+                        _ => f32::sqrt(3.0),
                     };
                     let sphere = Sphere::new(
-                        point![f64::from(x), f64::from(y), f64::from(z)],
+                        point![x as f32, y as f32, z as f32],
                         1.001 * dist_to_frustum,
                     );
                     assert!(frustum.could_contain_part_of_sphere(&sphere));
@@ -643,7 +633,7 @@ mod tests {
                         if x == 0 && y == 0 && z == 0 {
                             continue;
                         }
-                        let center = point![f64::from(x), f64::from(y), f64::from(z)];
+                        let center = point![x as f32, y as f32, z as f32];
                         let corner_offset =
                             vector![offset_fraction, offset_fraction, offset_fraction];
                         let aab =
@@ -663,7 +653,7 @@ mod tests {
         for x in [-2, 0, 2] {
             for y in [-2, 0, 2] {
                 for z in [-2, 0, 2] {
-                    let center = point![f64::from(x), f64::from(y), f64::from(z)];
+                    let center = point![x as f32, y as f32, z as f32];
                     let corner_offset = vector![1.0, 1.0, 1.0] * 1.001;
                     let aab = AxisAlignedBox::new(center - corner_offset, center + corner_offset);
                     assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
@@ -689,7 +679,7 @@ mod tests {
 
     #[test]
     fn corners_of_transformed_frustum_equal_transformed_corners_of_original_frustum() {
-        let frustum = Frustum::<f64>::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
                 .as_projective(),
         );
@@ -708,13 +698,13 @@ mod tests {
             .zip(transformed_frustum.compute_corners())
         {
             let transformed_corner = transformation.transform_point(corner);
-            assert_abs_diff_eq!(transformed_corner, corner_of_transformed, epsilon = 1e-6);
+            assert_abs_diff_eq!(transformed_corner, corner_of_transformed, epsilon = 1e-3);
         }
     }
 
     #[test]
     fn transforming_frustum_and_then_transforming_with_inverse_gives_original_frustum() {
-        let frustum = Frustum::<f64>::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
                 .as_projective(),
         );
@@ -729,12 +719,12 @@ mod tests {
 
         let untransformed_frustum = transformed_frustum.transformed(&transformation.inverse());
 
-        assert_abs_diff_eq!(frustum, untransformed_frustum, epsilon = 1e-6);
+        assert_abs_diff_eq!(frustum, untransformed_frustum, epsilon = 1e-4);
     }
 
     #[test]
     fn creating_frustum_for_transform_of_transformed_frustum_gives_transformed_frustum() {
-        let frustum = Frustum::<f64>::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
                 .as_projective(),
         );
@@ -748,12 +738,12 @@ mod tests {
         let transformed_frustum = frustum.transformed(&transformation);
 
         let frustum_from_transformed =
-            Frustum::<f64>::from_transform_matrix(*transformed_frustum.transform_matrix());
+            Frustum::from_transform_matrix(*transformed_frustum.transform_matrix());
 
         assert_abs_diff_eq!(
             transformed_frustum,
             frustum_from_transformed,
-            epsilon = 1e-9
+            epsilon = 1e-1
         );
     }
 
@@ -766,14 +756,14 @@ mod tests {
 
         let corners = frustum.compute_corners();
 
-        assert_abs_diff_eq!(corners[0], point![left, bottom, near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[1], point![left, bottom, far], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[2], point![left, top, near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[3], point![left, top, far], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[4], point![right, bottom, near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[5], point![right, bottom, far], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[6], point![right, top, near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[7], point![right, top, far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[0], point![left, bottom, near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[1], point![left, bottom, far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[2], point![left, top, near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[3], point![left, top, far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[4], point![right, bottom, near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[5], point![right, bottom, far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[6], point![right, top, near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[7], point![right, top, far], epsilon = 1e-5);
     }
 
     #[test]
@@ -793,14 +783,14 @@ mod tests {
             new_far_linear_depth,
         ));
 
-        assert_abs_diff_eq!(corners[0], point![left, bottom, new_near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[1], point![left, bottom, new_far], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[2], point![left, top, new_near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[3], point![left, top, new_far], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[4], point![right, bottom, new_near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[5], point![right, bottom, new_far], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[6], point![right, top, new_near], epsilon = 1e-9);
-        assert_abs_diff_eq!(corners[7], point![right, top, new_far], epsilon = 1e-9);
+        assert_abs_diff_eq!(corners[0], point![left, bottom, new_near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[1], point![left, bottom, new_far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[2], point![left, top, new_near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[3], point![left, top, new_far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[4], point![right, bottom, new_near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[5], point![right, bottom, new_far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[6], point![right, top, new_near], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[7], point![right, top, new_far], epsilon = 1e-5);
     }
 
     #[test]
@@ -819,7 +809,7 @@ mod tests {
                 0.5 * (bottom + top),
                 0.5 * (near + far)
             ],
-            epsilon = 1e-9
+            epsilon = 1e-5
         );
     }
 
@@ -835,12 +825,12 @@ mod tests {
         assert_abs_diff_eq!(
             aabb.lower_corner(),
             &point![left, bottom, near],
-            epsilon = 1e-9
+            epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             &point![right, top, far],
-            epsilon = 1e-9
+            epsilon = 1e-5
         );
     }
 
@@ -864,12 +854,12 @@ mod tests {
         assert_abs_diff_eq!(
             aabb.lower_corner(),
             &point![left, bottom, new_near],
-            epsilon = 1e-9
+            epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             &point![right, top, new_far],
-            epsilon = 1e-9
+            epsilon = 1e-5
         );
     }
 

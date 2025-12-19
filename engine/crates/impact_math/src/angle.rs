@@ -347,8 +347,8 @@ pub fn degrees_to_radians<F: Float>(degrees: F) -> F {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consts::f32::PI;
     use approx::assert_abs_diff_eq;
-    use std::f64::consts::PI;
 
     #[test]
     fn degrees_to_radians_for_special_angles_work() {

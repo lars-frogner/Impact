@@ -495,10 +495,7 @@ impl ChunkSubmesh {
 impl CullingFrustum {
     /// Gathers the given frustum planes and apex position into a
     /// `CullingFrustum`.
-    pub fn from_planes_and_apex_position(
-        planes: [Plane<f32>; 6],
-        apex_position: Point3<f32>,
-    ) -> Self {
+    pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3<f32>) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.map(|plane| {
             u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
                 .unwrap()
@@ -522,10 +519,7 @@ impl CullingFrustum {
     ///
     /// The frustum is assumed to be in the space where the apex is at the
     /// origin before transformation.
-    pub fn for_transformed_frustum(
-        frustum: &Frustum<f32>,
-        transformation: &Similarity3<f32>,
-    ) -> Self {
+    pub fn for_transformed_frustum(frustum: &Frustum, transformation: &Similarity3<f32>) -> Self {
         Self::from_planes_and_apex_position(
             frustum.transformed_planes(transformation),
             transformation.isometry.translation.vector.into(),
@@ -544,7 +538,7 @@ impl CullingFrustum {
     /// infinity for an orthographic frustum, this can be emulated by
     /// passing in a sufficiently large distance.
     pub fn for_transformed_orthographic_frustum(
-        orthographic_frustum: &OrientedBox<f32>,
+        orthographic_frustum: &OrientedBox,
         transformation: &Similarity3<f32>,
         apex_distance: f32,
     ) -> Self {

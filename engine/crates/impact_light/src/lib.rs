@@ -1274,8 +1274,8 @@ impl ShadowableOmnidirectionalLight {
     /// unnecessary draw calls.
     pub fn orient_and_scale_cubemap_for_shadow_casting_models(
         &mut self,
-        camera_space_bounding_sphere: &Sphere<f32>,
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<f32>>,
+        camera_space_bounding_sphere: &Sphere,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox>,
     ) {
         let bounding_sphere_center_distance = na::distance(
             &self.camera_space_position,
@@ -1330,12 +1330,12 @@ impl ShadowableOmnidirectionalLight {
 
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum<f32> {
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
         CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
     }
 
     /// Computes the frustum for the given cubemap face in camera space.
-    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum<f32> {
+    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum {
         CubeMapper::compute_transformed_frustum_for_face(
             face,
             &self.create_camera_to_light_space_transform(),
@@ -1363,8 +1363,8 @@ impl ShadowableOmnidirectionalLight {
 
     /// Whether the given cubemap face frustum may contain any visible models.
     pub fn camera_space_frustum_for_face_may_contain_visible_models(
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox<f32>>,
-        camera_space_face_frustum: &Frustum<f32>,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox>,
+        camera_space_face_frustum: &Frustum,
     ) -> bool {
         if let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models {
             !camera_space_face_frustum
@@ -1515,7 +1515,7 @@ impl ShadowableUnidirectionalLight {
     pub fn create_light_space_orthographic_aabb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBox<f32> {
+    ) -> AxisAlignedBox {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
     }
 
@@ -1525,7 +1525,7 @@ impl ShadowableUnidirectionalLight {
     pub fn create_light_space_orthographic_obb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> OrientedBox<f32> {
+    ) -> OrientedBox {
         OrientedBox::from_axis_aligned_box(
             &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
         )
@@ -1573,8 +1573,8 @@ impl ShadowableUnidirectionalLight {
     /// the near and far distance required for encompassing visible models.
     pub fn update_cascade_partition_depths(
         &mut self,
-        camera_space_view_frustum: &Frustum<f32>,
-        camera_space_bounding_sphere: &Sphere<f32>,
+        camera_space_view_frustum: &Frustum,
+        camera_space_bounding_sphere: &Sphere,
     ) {
         const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
 
@@ -1634,8 +1634,8 @@ impl ShadowableUnidirectionalLight {
     /// into each cascade, will be included in the clip space for that cascade.
     pub fn bound_orthographic_transforms_to_cascaded_view_frustum(
         &mut self,
-        camera_space_view_frustum: &Frustum<f32>,
-        camera_space_bounding_sphere: &Sphere<f32>,
+        camera_space_view_frustum: &Frustum,
+        camera_space_bounding_sphere: &Sphere,
     ) {
         // Rotate to light space, where the light direction is -z
         let light_space_view_frustum =
@@ -1696,7 +1696,7 @@ impl ShadowableUnidirectionalLight {
     pub fn bounding_sphere_may_cast_visible_shadow_in_cascade(
         &self,
         cascade_idx: CascadeIdx,
-        camera_space_bounding_sphere: &Sphere<f32>,
+        camera_space_bounding_sphere: &Sphere,
     ) -> bool {
         let light_space_bounding_sphere =
             camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
@@ -1742,7 +1742,7 @@ impl OrthographicTranslationAndScaling {
         }
     }
 
-    fn compute_aabb(&self) -> AxisAlignedBox<f32> {
+    fn compute_aabb(&self) -> AxisAlignedBox {
         compute_orthographic_transform_aabb(&self.translation, &self.scaling)
     }
 }
@@ -1760,7 +1760,7 @@ fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> f32
 fn compute_orthographic_transform_aabb(
     translation: &Translation3<f32>,
     scaling: &Scale3<f32>,
-) -> AxisAlignedBox<f32> {
+) -> AxisAlignedBox {
     let (orthographic_center, orthographic_half_extents) =
         OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(
             translation,

@@ -795,19 +795,17 @@ impl ChunkedVoxelObject {
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
     /// the object.
     #[inline]
-    pub fn compute_aabb<F: Float>(&self) -> AxisAlignedBox<F> {
-        let voxel_extent = F::from_f32(self.voxel_extent()).unwrap();
-
+    pub fn compute_aabb(&self) -> AxisAlignedBox {
         let lower_corner = point![
-            F::from_usize(self.occupied_voxel_ranges[0].start).unwrap() * voxel_extent,
-            F::from_usize(self.occupied_voxel_ranges[1].start).unwrap() * voxel_extent,
-            F::from_usize(self.occupied_voxel_ranges[2].start).unwrap() * voxel_extent
+            self.occupied_voxel_ranges[0].start as f32 * self.voxel_extent,
+            self.occupied_voxel_ranges[1].start as f32 * self.voxel_extent,
+            self.occupied_voxel_ranges[2].start as f32 * self.voxel_extent
         ];
 
         let upper_corner = point![
-            F::from_usize(self.occupied_voxel_ranges[0].end).unwrap() * voxel_extent,
-            F::from_usize(self.occupied_voxel_ranges[1].end).unwrap() * voxel_extent,
-            F::from_usize(self.occupied_voxel_ranges[2].end).unwrap() * voxel_extent
+            self.occupied_voxel_ranges[0].end as f32 * self.voxel_extent,
+            self.occupied_voxel_ranges[1].end as f32 * self.voxel_extent,
+            self.occupied_voxel_ranges[2].end as f32 * self.voxel_extent
         ];
 
         AxisAlignedBox::new(lower_corner, upper_corner)
@@ -815,14 +813,13 @@ impl ChunkedVoxelObject {
 
     /// Computes a sphere enclosing all non-empty voxels in the object.
     #[inline]
-    pub fn compute_bounding_sphere<F: Float>(&self) -> Sphere<F> {
+    pub fn compute_bounding_sphere(&self) -> Sphere {
         let bounding_sphere_for_outer_voxel_centers =
             Sphere::bounding_sphere_for_points(&self.compute_occupied_voxel_range_corner_centers());
 
         // If we add the distance from the center to the corner of a voxel, the
         // bounding sphere will encompass all voxels
-        let additional_radius =
-            F::ONE_HALF * F::THREE.sqrt() * F::from_f32(self.voxel_extent()).unwrap();
+        let additional_radius = 0.5 * f32::sqrt(3.0) * self.voxel_extent();
 
         Sphere::new(
             *bounding_sphere_for_outer_voxel_centers.center(),

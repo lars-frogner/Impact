@@ -4,7 +4,6 @@ use crate::{AxisAlignedBox, Frustum};
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    Float,
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
 };
@@ -12,30 +11,30 @@ use nalgebra::{
     Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
     UnitQuaternion, Vector3, point, vector,
 };
-use std::fmt::Debug;
+use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
 /// A perspective transformation that maps points in a view frustum pointing
 /// along the negative z-axis into the cube spanning from -1 to 1 in x and y and
 /// from 0 to 1 in z in normalized device coordinates.
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct PerspectiveTransform<F: Float> {
-    matrix: Matrix4<F>,
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct PerspectiveTransform {
+    matrix: Matrix4<f32>,
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct OrthographicTransform<F: Float> {
-    matrix: Matrix4<F>,
+#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+pub struct OrthographicTransform {
+    matrix: Matrix4<f32>,
 }
 
 /// Projects 3D points onto a face of a cubemap.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub struct CubeMapper<F: Float> {
+pub struct CubeMapper {
     /// Rotations bringing points that lie in front of each cube face to the
     /// same relative locations with respect to the positive z face.
-    pub rotations_to_positive_z_face: [UnitQuaternion<F>; 6],
+    pub rotations_to_positive_z_face: [UnitQuaternion<f32>; 6],
 }
 
 /// One of the six faces of a cubemap. The enum value corresponds to the
@@ -50,7 +49,7 @@ pub enum CubemapFace {
     NegativeZ = 5,
 }
 
-impl<F: Float> PerspectiveTransform<F> {
+impl PerspectiveTransform {
     /// Creates a new perspective transformation.
     ///
     /// # Note
@@ -59,10 +58,10 @@ impl<F: Float> PerspectiveTransform<F> {
     /// # Panics
     /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
     /// zero.
-    pub fn new<A: Angle<F>>(
-        aspect_ratio: F,
+    pub fn new<A: Angle<f32>>(
+        aspect_ratio: f32,
         vertical_field_of_view: A,
-        near_and_far_distance: UpperExclusiveBounds<F>,
+        near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let mut transform = Self {
             matrix: Matrix4::identity(),
@@ -72,45 +71,45 @@ impl<F: Float> PerspectiveTransform<F> {
         transform.set_aspect_ratio(aspect_ratio);
         transform.set_near_and_far_distance(near_and_far_distance);
 
-        transform.matrix.m43 = -F::ONE;
-        transform.matrix.m44 = F::ZERO;
+        transform.matrix.m43 = -1.0;
+        transform.matrix.m44 = 0.0;
 
         transform
     }
 
     /// Returns a reference to perspective transformation seen as a
     /// [`Projective3`].
-    pub fn as_projective(&self) -> &Projective3<F> {
-        unsafe { &*(self as *const Self).cast::<Projective3<F>>() }
+    pub fn as_projective(&self) -> &Projective3<f32> {
+        unsafe { &*(self as *const Self).cast::<Projective3<f32>>() }
     }
 
     /// Returns the perspective transformation as a [`Projective3`].
-    pub fn to_projective(self) -> Projective3<F> {
+    pub fn to_projective(self) -> Projective3<f32> {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
     /// Returns the ratio of width to height of the view frustum.
-    pub fn aspect_ratio(&self) -> F {
+    pub fn aspect_ratio(&self) -> f32 {
         self.matrix.m22 / self.matrix.m11
     }
 
     /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<F> {
-        Radians(F::TWO * F::atan(F::ONE / self.matrix.m22))
+    pub fn vertical_field_of_view(&self) -> Radians<f32> {
+        Radians(2.0 * (1.0 / self.matrix.m22).atan())
     }
 
     /// Returns the near distance of the view frustum.
-    pub fn near_distance(&self) -> F {
+    pub fn near_distance(&self) -> f32 {
         self.matrix.m34 / self.matrix.m33
     }
 
     /// Returns the far distance of the view frustum.
-    pub fn far_distance(&self) -> F {
-        self.matrix.m34 / (F::ONE + self.matrix.m33)
+    pub fn far_distance(&self) -> f32 {
+        self.matrix.m34 / (1.0 + self.matrix.m33)
     }
 
-    pub fn transform_point(&self, point: &Point3<F>) -> Point3<F> {
-        let inverse_denom = -F::ONE / point.z;
+    pub fn transform_point(&self, point: &Point3<f32>) -> Point3<f32> {
+        let inverse_denom = -1.0 / point.z;
         Point3::new(
             self.matrix.m11 * point.x * inverse_denom,
             self.matrix.m22 * point.y * inverse_denom,
@@ -118,8 +117,8 @@ impl<F: Float> PerspectiveTransform<F> {
         )
     }
 
-    pub fn transform_vector(&self, vector: &Vector3<F>) -> Vector3<F> {
-        let inverse_denom = -F::ONE / vector.z;
+    pub fn transform_vector(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+        let inverse_denom = -1.0 / vector.z;
         Vector3::new(
             self.matrix.m11 * vector.x * inverse_denom,
             self.matrix.m22 * vector.y * inverse_denom,
@@ -131,8 +130,8 @@ impl<F: Float> PerspectiveTransform<F> {
     ///
     /// # Panics
     /// If `aspect_ratio` is zero.
-    pub fn set_aspect_ratio(&mut self, aspect_ratio: F) {
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
+    pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
+        assert_abs_diff_ne!(aspect_ratio, 0.0);
         self.matrix.m11 = self.matrix.m22 / aspect_ratio;
     }
 
@@ -140,31 +139,31 @@ impl<F: Float> PerspectiveTransform<F> {
     ///
     /// # Panics
     /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle<F>>(&mut self, vertical_field_of_view: A) {
+    pub fn set_vertical_field_of_view<A: Angle<f32>>(&mut self, vertical_field_of_view: A) {
         let vertical_field_of_view = vertical_field_of_view.radians();
-        assert_abs_diff_ne!(vertical_field_of_view, F::ZERO);
+        assert_abs_diff_ne!(vertical_field_of_view, 0.0);
 
         let old_m22 = self.matrix.m22;
-        let new_m22 = F::ONE / F::tan(F::ONE_HALF * vertical_field_of_view);
+        let new_m22 = 1.0 / (0.5 * vertical_field_of_view).tan();
         self.matrix.m22 = new_m22;
         self.matrix.m11 *= new_m22 / old_m22;
     }
 
-    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
+    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<f32>) {
         let (near_distance, far_distance) = near_and_far_distance.bounds();
-        assert_abs_diff_ne!(near_distance, F::ZERO);
+        assert_abs_diff_ne!(near_distance, 0.0);
 
         self.matrix.m33 = -far_distance / (far_distance - near_distance);
         self.matrix.m34 = self.matrix.m33 * near_distance;
     }
 }
 
-impl<F: Float> OrthographicTransform<F> {
+impl OrthographicTransform {
     /// Creates a new orthographic transformation.
     ///
     /// # Panics
     /// If the extent of the view box along any axis is zero.
-    pub fn new(left: F, right: F, bottom: F, top: F, near: F, far: F) -> Self {
+    pub fn new(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         let mut transform = Self {
             matrix: Matrix4::identity(),
         };
@@ -183,17 +182,17 @@ impl<F: Float> OrthographicTransform<F> {
     ///
     /// # Panics
     /// If `aspect_ratio` or `vertical_field_of_view` is zero
-    pub fn with_field_of_view<A: Angle<F>>(
-        aspect_ratio: F,
+    pub fn with_field_of_view<A: Angle<f32>>(
+        aspect_ratio: f32,
         vertical_field_of_view: A,
-        near_and_far_distance: UpperExclusiveBounds<F>,
+        near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let vertical_field_of_view = vertical_field_of_view.radians();
-        assert_abs_diff_ne!(vertical_field_of_view, F::ZERO);
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
+        assert_abs_diff_ne!(vertical_field_of_view, 0.0);
+        assert_abs_diff_ne!(aspect_ratio, 0.0);
 
         let (near_distance, far_distance) = near_and_far_distance.bounds();
-        let half_height = far_distance * F::tan(vertical_field_of_view);
+        let half_height = far_distance * vertical_field_of_view.tan();
         let half_width = half_height / aspect_ratio;
 
         Self::new(
@@ -208,7 +207,7 @@ impl<F: Float> OrthographicTransform<F> {
 
     /// Creates a new orthographic transformation with the given axis-aligned
     /// box as the view box.
-    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox<F>) -> Self {
+    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox) -> Self {
         let lower = axis_aligned_box.lower_corner();
         let upper = axis_aligned_box.upper_corner();
         Self::new(lower.x, upper.x, lower.y, upper.y, lower.z, upper.z)
@@ -218,13 +217,13 @@ impl<F: Float> OrthographicTransform<F> {
     /// orthographic transformation. Applying the translation followed by the
     /// scaling corresponds to applying the orthograpic transformation.
     pub fn compute_orthographic_translation_and_scaling(
-        left: F,
-        right: F,
-        bottom: F,
-        top: F,
-        near: F,
-        far: F,
-    ) -> (Translation3<F>, Scale3<F>) {
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near: f32,
+        far: f32,
+    ) -> (Translation3<f32>, Scale3<f32>) {
         (
             Translation3::new(
                 Self::compute_translation_x(left, right),
@@ -242,35 +241,31 @@ impl<F: Float> OrthographicTransform<F> {
     /// Computes the center and half extents of the orthographic view frustum
     /// represented by the given translation and nonuniform scaling.
     pub fn compute_center_and_half_extents_from_translation_and_scaling(
-        translation: &Translation3<F>,
-        scaling: &Scale3<F>,
-    ) -> (Point3<F>, Vector3<F>) {
+        translation: &Translation3<f32>,
+        scaling: &Scale3<f32>,
+    ) -> (Point3<f32>, Vector3<f32>) {
         (
             point![
                 -translation.x,
                 -translation.y,
-                F::ONE_HALF * (F::ONE / scaling.z - F::TWO * translation.z)
+                0.5 * (1.0 / scaling.z - 2.0 * translation.z)
             ],
-            vector![
-                F::ONE / scaling.x,
-                F::ONE / scaling.y,
-                -F::ONE_HALF / scaling.z
-            ],
+            vector![1.0 / scaling.x, 1.0 / scaling.y, -0.5 / scaling.z],
         )
     }
 
     /// Returns a reference to orthographic transformation seen as a
     /// [`Projective3`].
-    pub fn as_projective(&self) -> &Projective3<F> {
-        unsafe { &*(self as *const Self).cast::<Projective3<F>>() }
+    pub fn as_projective(&self) -> &Projective3<f32> {
+        unsafe { &*(self as *const Self).cast::<Projective3<f32>>() }
     }
 
     /// Returns the orthographic transformation as a [`Projective3`].
-    pub fn to_projective(self) -> Projective3<F> {
+    pub fn to_projective(self) -> Projective3<f32> {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
-    pub fn transform_point(&self, point: &Point3<F>) -> Point3<F> {
+    pub fn transform_point(&self, point: &Point3<f32>) -> Point3<f32> {
         Point3::new(
             self.matrix.m11 * point.x + self.matrix.m14,
             self.matrix.m22 * point.y + self.matrix.m24,
@@ -278,7 +273,7 @@ impl<F: Float> OrthographicTransform<F> {
         )
     }
 
-    pub fn transform_vector(&self, vector: &Vector3<F>) -> Vector3<F> {
+    pub fn transform_vector(&self, vector: &Vector3<f32>) -> Vector3<f32> {
         Vector3::new(
             self.matrix.m11 * vector.x,
             self.matrix.m22 * vector.y,
@@ -286,7 +281,7 @@ impl<F: Float> OrthographicTransform<F> {
         )
     }
 
-    pub fn set_left_and_right(&mut self, left: F, right: F) {
+    pub fn set_left_and_right(&mut self, left: f32, right: f32) {
         assert_abs_diff_ne!(left, right);
         let translation_x = Self::compute_translation_x(left, right);
         let scaling_x = Self::compute_scaling_x(left, right);
@@ -294,7 +289,7 @@ impl<F: Float> OrthographicTransform<F> {
         self.matrix.m14 = scaling_x * translation_x;
     }
 
-    pub fn set_bottom_and_top(&mut self, bottom: F, top: F) {
+    pub fn set_bottom_and_top(&mut self, bottom: f32, top: f32) {
         assert_abs_diff_ne!(bottom, top);
         let translation_y = Self::compute_translation_y(bottom, top);
         let scaling_y = Self::compute_scaling_y(bottom, top);
@@ -302,7 +297,7 @@ impl<F: Float> OrthographicTransform<F> {
         self.matrix.m24 = scaling_y * translation_y;
     }
 
-    pub fn set_near_and_far(&mut self, near: F, far: F) {
+    pub fn set_near_and_far(&mut self, near: f32, far: f32) {
         assert_abs_diff_ne!(near, far);
         let translation_z = Self::compute_translation_z(near, far);
         let scaling_z = Self::compute_scaling_z(near, far);
@@ -310,92 +305,76 @@ impl<F: Float> OrthographicTransform<F> {
         self.matrix.m34 = scaling_z * translation_z;
     }
 
-    fn compute_translation_x(left: F, right: F) -> F {
-        -F::ONE_HALF * (left + right)
+    fn compute_translation_x(left: f32, right: f32) -> f32 {
+        -0.5 * (left + right)
     }
 
-    fn compute_translation_y(bottom: F, top: F) -> F {
-        -F::ONE_HALF * (bottom + top)
+    fn compute_translation_y(bottom: f32, top: f32) -> f32 {
+        -0.5 * (bottom + top)
     }
 
-    fn compute_translation_z(near: F, _far: F) -> F {
+    fn compute_translation_z(near: f32, _far: f32) -> f32 {
         -near
     }
 
-    fn compute_scaling_x(left: F, right: F) -> F {
-        F::TWO / (right - left)
+    fn compute_scaling_x(left: f32, right: f32) -> f32 {
+        2.0 / (right - left)
     }
 
-    fn compute_scaling_y(bottom: F, top: F) -> F {
-        F::TWO / (top - bottom)
+    fn compute_scaling_y(bottom: f32, top: f32) -> f32 {
+        2.0 / (top - bottom)
     }
 
-    fn compute_scaling_z(near: F, far: F) -> F {
-        F::ONE / (far - near)
+    fn compute_scaling_z(near: f32, far: f32) -> f32 {
+        1.0 / (far - near)
     }
 }
 
-unsafe impl<F: Float> Zeroable for PerspectiveTransform<F> {}
-unsafe impl<F: Float> Pod for PerspectiveTransform<F> {}
-
-unsafe impl<F: Float> Zeroable for OrthographicTransform<F> {}
-unsafe impl<F: Float> Pod for OrthographicTransform<F> {}
-
-impl<F: Float> CubeMapper<F> {
+impl CubeMapper {
     /// Quaternions representing the rotation from each of the six cube faces to
     /// the positive z face. That is, a point with a certain texture coordinate
     /// within a cube face would, after being rotated with the corresponding
     /// rotation here, have the same texture coordinate within the positive z
     /// face.
-    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion<F>; 6] = [
+    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion<f32>; 6] = [
         // From positive x face:
-        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -F::ONE_HALF * F::PI())
+        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -0.5 * PI)
         UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
-            F::ZERO,
-            F::NEG_FRAC_1_SQRT_2,
-            F::ZERO,
-            <F as Float>::FRAC_1_SQRT_2
+            0.0,
+            -FRAC_1_SQRT_2,
+            0.0,
+            FRAC_1_SQRT_2
         ])),
         // From negative x face:
-        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), F::ONE_HALF * F::PI())
+        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.5 * PI)
         UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
-            F::ZERO,
-            <F as Float>::FRAC_1_SQRT_2,
-            F::ZERO,
-            <F as Float>::FRAC_1_SQRT_2
+            0.0,
+            FRAC_1_SQRT_2,
+            0.0,
+            FRAC_1_SQRT_2
         ])),
         // From positive y face:
-        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), F::ONE_HALF * F::PI())
+        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.5 * PI)
         UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
-            <F as Float>::FRAC_1_SQRT_2,
-            F::ZERO,
-            F::ZERO,
-            <F as Float>::FRAC_1_SQRT_2
+            FRAC_1_SQRT_2,
+            0.0,
+            0.0,
+            FRAC_1_SQRT_2
         ])),
         // From negative y face:
-        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -F::ONE_HALF * F::PI())
+        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.5 * PI)
         UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
-            F::NEG_FRAC_1_SQRT_2,
-            F::ZERO,
-            F::ZERO,
-            <F as Float>::FRAC_1_SQRT_2
+            -FRAC_1_SQRT_2,
+            0.0,
+            0.0,
+            FRAC_1_SQRT_2
         ])),
         // From positive z face:
         // UnitQuaternion::identity()
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
-            F::ZERO,
-            F::ZERO,
-            F::ZERO,
-            F::ONE
-        ])),
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![0.0, 0.0, 0.0, 1.0])),
         // From negative z face:
-        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), F::PI())
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
-            F::ZERO,
-            F::ONE,
-            F::ZERO,
-            F::ZERO
-        ])),
+        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![0.0, 1.0, 0.0, 0.0])),
     ];
 
     /// Returns a quaternion representing the rotation from the given cube face
@@ -403,13 +382,13 @@ impl<F: Float> CubeMapper<F> {
     /// coordinate within the given cube face would, after being rotated with
     /// the returned rotation, have the same texture coordinate within the
     /// positive z face.
-    pub const fn rotation_to_positive_z_face_from_face(face: CubemapFace) -> UnitQuaternion<F> {
+    pub const fn rotation_to_positive_z_face_from_face(face: CubemapFace) -> UnitQuaternion<f32> {
         Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]
     }
 
     /// Computes the cubemap-space frustum for the positive z cubemap face,
     /// using the given near and far distance.
-    pub fn compute_frustum_for_positive_z_face(near_distance: F, far_distance: F) -> Frustum<F> {
+    pub fn compute_frustum_for_positive_z_face(near_distance: f32, far_distance: f32) -> Frustum {
         let (projection_matrix, inverse_projection_matrix) =
             Self::create_projection_matrix_and_inverse_for_positive_z_face(
                 near_distance,
@@ -424,10 +403,10 @@ impl<F: Float> CubeMapper<F> {
     /// full cubemap in the parent space) and the given near and far distance.
     pub fn compute_transformed_frustum_for_face(
         face: CubemapFace,
-        transform_to_cube_space: &Similarity3<F>,
-        near_distance: F,
-        far_distance: F,
-    ) -> Frustum<F> {
+        transform_to_cube_space: &Similarity3<f32>,
+        near_distance: f32,
+        far_distance: f32,
+    ) -> Frustum {
         let (view_projection_matrix, inverse_view_projection_matrix) =
             Self::compute_view_projection_matrix_and_inverse_for_face(
                 face,
@@ -446,7 +425,7 @@ impl<F: Float> CubeMapper<F> {
     ///
     /// The given rotation to cube space will be applied to each point prior to
     /// projection onto a cubemap face.
-    pub fn new(rotation_to_cube_space: UnitQuaternion<F>) -> Self {
+    pub fn new(rotation_to_cube_space: UnitQuaternion<f32>) -> Self {
         let rotations_to_positive_z_face = [
             Self::ROTATIONS_TO_POSITIVE_Z_FACE[0] * rotation_to_cube_space,
             Self::ROTATIONS_TO_POSITIVE_Z_FACE[1] * rotation_to_cube_space,
@@ -476,7 +455,7 @@ impl<F: Float> CubeMapper<F> {
     ///
     /// If the x- or y-coordinate after projection lies outside the -1.0 to 1.0
     /// range, the point belongs to another face.
-    pub fn map_point_onto_face(&self, face: CubemapFace, point: &Point3<F>) -> Point2<F> {
+    pub fn map_point_onto_face(&self, face: CubemapFace, point: &Point3<f32>) -> Point2<f32> {
         let rotated_point =
             self.rotations_to_positive_z_face[face.as_idx_usize()].transform_point(point);
         Self::map_point_to_positive_z_face(&rotated_point)
@@ -484,10 +463,10 @@ impl<F: Float> CubeMapper<F> {
 
     fn compute_view_projection_matrix_and_inverse_for_face(
         face: CubemapFace,
-        view_transform: &Similarity3<F>,
-        near_distance: F,
-        far_distance: F,
-    ) -> (Matrix4<F>, Matrix4<F>) {
+        view_transform: &Similarity3<f32>,
+        near_distance: f32,
+        far_distance: f32,
+    ) -> (Matrix4<f32>, Matrix4<f32>) {
         let (projection_matrix_for_positive_z_face, inverse_projection_matrix_for_positive_z_face) =
             Self::create_projection_matrix_and_inverse_for_positive_z_face(
                 near_distance,
@@ -507,32 +486,32 @@ impl<F: Float> CubeMapper<F> {
     }
 
     fn create_projection_matrix_and_inverse_for_positive_z_face(
-        near_distance: F,
-        far_distance: F,
-    ) -> (Matrix4<F>, Matrix4<F>) {
+        near_distance: f32,
+        far_distance: f32,
+    ) -> (Matrix4<f32>, Matrix4<f32>) {
         let mut matrix = Matrix4::identity();
 
-        let inverse_distance_span = F::ONE / (far_distance - near_distance);
+        let inverse_distance_span = 1.0 / (far_distance - near_distance);
 
         matrix.m33 = far_distance * inverse_distance_span;
         matrix.m34 = -matrix.m33 * near_distance;
 
-        matrix.m43 = F::ONE;
-        matrix.m44 = F::ZERO;
+        matrix.m43 = 1.0;
+        matrix.m44 = 0.0;
 
         let mut inverse_matrix = Matrix4::identity();
 
-        inverse_matrix.m33 = F::ZERO;
-        inverse_matrix.m34 = F::ONE;
+        inverse_matrix.m33 = 0.0;
+        inverse_matrix.m34 = 1.0;
 
-        inverse_matrix.m43 = F::ONE / matrix.m34;
+        inverse_matrix.m43 = 1.0 / matrix.m34;
         inverse_matrix.m44 = -matrix.m33 * inverse_matrix.m43;
 
         (matrix, inverse_matrix)
     }
 
-    fn map_point_to_positive_z_face(point: &Point3<F>) -> Point2<F> {
-        let inverse_point_z = F::ONE / point.z;
+    fn map_point_to_positive_z_face(point: &Point3<f32>) -> Point2<f32> {
+        let inverse_point_z = 1.0 / point.z;
         Point2::new(point.x * inverse_point_z, point.y * inverse_point_z)
     }
 }
@@ -605,10 +584,10 @@ mod tests {
         let mut transform =
             PerspectiveTransform::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(transform.near_distance(), 0.1);
-        assert_abs_diff_eq!(transform.far_distance(), 100.0, epsilon = 1e-7);
+        assert_abs_diff_eq!(transform.far_distance(), 100.0, epsilon = 1e-4);
         transform.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
         assert_abs_diff_eq!(transform.near_distance(), 42.0);
-        assert_abs_diff_eq!(transform.far_distance(), 256.0, epsilon = 1e-7);
+        assert_abs_diff_eq!(transform.far_distance(), 256.0, epsilon = 1e-4);
     }
 
     #[test]
@@ -621,7 +600,7 @@ mod tests {
         assert_abs_diff_eq!(
             transform.transform_point(&point),
             transform.as_projective().transform_point(&point),
-            epsilon = 1e-9
+            epsilon = 1e-6
         );
     }
 
@@ -635,7 +614,7 @@ mod tests {
         assert_abs_diff_eq!(
             transform.transform_vector(&vector),
             transform.as_projective().transform_vector(&vector),
-            epsilon = 1e-9
+            epsilon = 1e-6
         );
     }
 
@@ -1062,23 +1041,23 @@ mod tests {
         let positive_z_frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveZ,
             &Similarity3::identity(),
-            0.01,
-            100.0,
+            0.1,
+            10.0,
         );
 
         for face in CubemapFace::all() {
             let frustum_rotated_to_positive_z = CubeMapper::compute_transformed_frustum_for_face(
                 face,
                 &Similarity3::identity(),
-                0.01,
-                100.0,
+                0.1,
+                10.0,
             )
             .rotated(&CubeMapper::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]);
 
             assert_abs_diff_eq!(
                 &frustum_rotated_to_positive_z,
                 &positive_z_frustum,
-                epsilon = 1e-9
+                epsilon = 1e-4
             );
         }
     }

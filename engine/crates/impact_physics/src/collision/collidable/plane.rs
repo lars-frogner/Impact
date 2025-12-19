@@ -6,19 +6,19 @@ use nalgebra::Isometry3;
 
 #[derive(Clone, Debug)]
 pub struct PlaneCollidable {
-    plane: Plane<f32>,
+    plane: Plane,
     response_params: ContactResponseParameters,
 }
 
 impl PlaneCollidable {
-    pub fn new(plane: Plane<f32>, response_params: ContactResponseParameters) -> Self {
+    pub fn new(plane: Plane, response_params: ContactResponseParameters) -> Self {
         Self {
             plane,
             response_params,
         }
     }
 
-    pub fn plane(&self) -> &Plane<f32> {
+    pub fn plane(&self) -> &Plane {
         &self.plane
     }
 

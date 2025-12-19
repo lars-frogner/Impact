@@ -20,7 +20,7 @@ use nalgebra::{point, vector};
 
 #[derive(Clone, Debug)]
 struct SphereBody {
-    sphere: Sphere<f32>,
+    sphere: Sphere,
     velocity: Velocity,
     mass_density: f32,
     restitution_coef: f32,
@@ -34,12 +34,7 @@ struct PlaneBody {
 }
 
 impl SphereBody {
-    fn new(
-        sphere: Sphere<f32>,
-        velocity: Velocity,
-        mass_density: f32,
-        restitution_coef: f32,
-    ) -> Self {
+    fn new(sphere: Sphere, velocity: Velocity, mass_density: f32, restitution_coef: f32) -> Self {
         Self {
             sphere,
             velocity,

@@ -978,7 +978,7 @@ impl LightMetadata for OmnidirectionalLightMetadata {
 impl ShadowableOmnidirectionalLightMetadata {
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum<f32> {
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
         CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
     }
 }
@@ -1016,7 +1016,7 @@ impl ShadowableUnidirectionalLightMetadata {
     pub fn create_light_space_orthographic_aabb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBox<f32> {
+    ) -> AxisAlignedBox {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
     }
 
@@ -1026,7 +1026,7 @@ impl ShadowableUnidirectionalLightMetadata {
     pub fn create_light_space_orthographic_obb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> OrientedBox<f32> {
+    ) -> OrientedBox {
         OrientedBox::from_axis_aligned_box(
             &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
         )
@@ -1053,7 +1053,7 @@ impl LightMetadata for ShadowableUnidirectionalLightMetadata {
 }
 
 impl PackedOrthographicTranslationAndScaling {
-    fn compute_aabb(&self) -> AxisAlignedBox<f32> {
+    fn compute_aabb(&self) -> AxisAlignedBox {
         crate::compute_orthographic_transform_aabb(&self.translation, &self.scaling)
     }
 }
