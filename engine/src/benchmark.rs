@@ -27,6 +27,9 @@ impact_profiling::define_target_enum! {
         split_off_disconnected_region,
         split_off_disconnected_region_with_inertial_property_transfer,
         update_mesh,
+        obtain_sphere_voxel_object_contacts,
+        obtain_plane_voxel_object_contacts,
+        obtain_mutual_voxel_object_contacts,
     },
     model => {
         add_feature_to_dynamic_instance_buffer_from_storage,

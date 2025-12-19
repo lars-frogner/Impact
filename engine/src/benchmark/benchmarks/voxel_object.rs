@@ -300,6 +300,57 @@ pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     });
 }
 
+pub fn obtain_plane_voxel_object_contacts(benchmarker: impl Benchmarker) {
+    let object_radius = 100.0;
+    let plane_displacement = -0.92 * object_radius;
+    let generator = create_sphere_generator(object_radius);
+    let object = ChunkedVoxelObject::generate(&generator);
+    let plane = Plane::new(Vector3::y_axis(), plane_displacement);
+    let transform_to_object_space =
+        Isometry3::from(Translation::from(object.compute_aabb().center()));
+
+    benchmarker.benchmark(&mut || {
+        collidable::for_each_voxel_object_plane_contact(
+            &object,
+            &transform_to_object_space,
+            &plane,
+            &mut |indices, geometry| {
+                black_box((indices, geometry));
+            },
+        );
+    });
+}
+
+pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
+    let object_a_radius = 100.0;
+    let object_b_radius = 0.15 * object_a_radius;
+    let generator_a = create_sphere_generator(object_a_radius);
+    let generator_b = create_sphere_generator(object_b_radius);
+    let object_a = ChunkedVoxelObject::generate(&generator_a);
+    let object_b = ChunkedVoxelObject::generate(&generator_b);
+    let transform_to_object_a_space = Isometry3::from_parts(
+        Translation::from(
+            object_a.compute_aabb().center()
+                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_a_radius),
+        ),
+        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
+    );
+    let transform_to_object_b_space =
+        Isometry3::from(Translation::from(object_b.compute_aabb().center()));
+
+    benchmarker.benchmark(&mut || {
+        collidable::for_each_mutual_voxel_object_contact(
+            &object_a,
+            &object_b,
+            &transform_to_object_a_space,
+            &transform_to_object_b_space,
+            &mut |indices_a, indices_b, geometry| {
+                black_box((indices_a, indices_b, geometry));
+            },
+        );
+    });
+}
+
 fn create_sphere_generator(radius: f32) -> SDFVoxelGenerator<Global> {
     let mut graph = SDFGraph::new_in(Global);
     graph.add_node(SDFNode::new_sphere(radius));

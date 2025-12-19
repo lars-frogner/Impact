@@ -25,6 +25,8 @@ define_criterion_target!(
 );
 define_criterion_target!(voxel_object, update_mesh);
 define_criterion_target!(voxel_object, obtain_sphere_voxel_object_contacts);
+define_criterion_target!(voxel_object, obtain_plane_voxel_object_contacts);
+define_criterion_target!(voxel_object, obtain_mutual_voxel_object_contacts);
 
 criterion::criterion_group!(
     name = benches;
@@ -50,5 +52,7 @@ criterion::criterion_group!(
         split_off_disconnected_region_with_inertial_property_transfer,
         update_mesh,
         obtain_sphere_voxel_object_contacts,
+        obtain_plane_voxel_object_contacts,
+        obtain_mutual_voxel_object_contacts,
 );
 criterion::criterion_main!(benches);
