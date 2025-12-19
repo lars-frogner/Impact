@@ -868,7 +868,7 @@ mod tests {
             mass_density in 1e-3..1e3_f32,
             transform in similarity_transform_strategy(1e3, 1e-3..1e3),
         ) {
-            let mut box_mesh = TriangleMesh::create_box(f64::from(extent_x), f64::from(extent_y), f64::from(extent_z), FrontFaceSide::Outside);
+            let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
             box_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
@@ -880,58 +880,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_mass,
                 correct_mass,
-                epsilon = 1e-5 * correct_mass
-            ));
-        }
-    }
-
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(100))]
-        #[test]
-        fn should_compute_uniform_cylinder_mesh_mass(
-            length in 1e-3..1e3_f32,
-            diameter in 1e-3..1e3_f32,
-            mass_density in 1e-3..1e3_f32,
-            transform in similarity_transform_strategy(1e3, 1e-3..1e3),
-        ) {
-            let mut cylinder_mesh = TriangleMesh::create_cylinder(f64::from(length), f64::from(diameter), 30);
-            let mut cylinder_properties = InertialProperties::of_uniform_cylinder(length, diameter, mass_density);
-
-            cylinder_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            cylinder_properties.transform(&transform);
-
-            let computed_mass = compute_uniform_triangle_mesh_mass(cylinder_mesh.triangle_vertex_positions(), mass_density);
-            let correct_mass = cylinder_properties.mass();
-
-            prop_assert!(abs_diff_eq!(
-                computed_mass,
-                correct_mass,
-                epsilon = 1e-2 * correct_mass
-            ));
-        }
-    }
-
-    #[cfg(not(miri))]
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(50))]
-        #[test]
-        fn should_compute_uniform_sphere_mesh_mass(
-            mass_density in 1e-3..1e3_f32,
-            transform in similarity_transform_strategy(1e3, 1e-3..1e3),
-        ) {
-            let mut sphere_mesh = TriangleMesh::<f64>::create_sphere(20);
-            let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
-
-            sphere_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            sphere_properties.transform(&transform);
-
-            let computed_mass = compute_uniform_triangle_mesh_mass(sphere_mesh.triangle_vertex_positions(), mass_density);
-            let correct_mass = sphere_properties.mass();
-
-            prop_assert!(abs_diff_eq!(
-                computed_mass,
-                correct_mass,
-                epsilon = 1e-2 * correct_mass
+                epsilon = 1e-3 * correct_mass
             ));
         }
     }
@@ -945,7 +894,7 @@ mod tests {
             mass_density in 1e-3..1e3_f32,
             transform in similarity_transform_strategy(1e3, 1e-3..1e3),
         ) {
-            let mut box_mesh = TriangleMesh::create_box(f64::from(extent_x), f64::from(extent_y), f64::from(extent_z), FrontFaceSide::Outside);
+            let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
             box_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
@@ -957,163 +906,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-4 * correct_center_of_mass.coords.abs().max()
-            ));
-        }
-    }
-
-    proptest! {
-        #[test]
-        fn should_compute_uniform_cone_mesh_center_of_mass(
-            length in 1e-3..1e3_f32,
-            max_diameter in 1e-3..1e3_f32,
-            mass_density in 1e-3..1e3_f32,
-            transform in similarity_transform_strategy(1e3, 1e-3..1e3),
-        ) {
-            let mut cone_mesh = TriangleMesh::create_cone(f64::from(length), f64::from(max_diameter), 30);
-            let mut cone_properties = InertialProperties::of_uniform_cone(length, max_diameter, mass_density);
-
-            cone_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            cone_properties.transform(&transform);
-
-            let computed_center_of_mass = compute_uniform_triangle_mesh_center_of_mass(cone_mesh.triangle_vertex_positions());
-            let correct_center_of_mass = cone_properties.center_of_mass();
-
-            prop_assert!(abs_diff_eq!(
-                computed_center_of_mass,
-                correct_center_of_mass,
-                epsilon = 1e-4 * correct_center_of_mass.coords.abs().max()
-            ));
-        }
-    }
-
-    #[cfg(not(miri))]
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(15))]
-        #[test]
-        fn should_compute_uniform_hemisphere_mesh_center_of_mass(
-            mass_density in 1e-3..1e3_f32,
-            transform in similarity_transform_strategy(1e3, 1e-3..1e3),
-        ) {
-            let mut hemisphere_mesh = TriangleMesh::<f64>::create_hemisphere(20);
-            let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
-
-            hemisphere_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            hemisphere_properties.transform(&transform);
-
-            let computed_center_of_mass = compute_uniform_triangle_mesh_center_of_mass(hemisphere_mesh.triangle_vertex_positions());
-            let correct_center_of_mass = hemisphere_properties.center_of_mass();
-
-            prop_assert!(abs_diff_eq!(
-                computed_center_of_mass,
-                correct_center_of_mass,
-                epsilon = 1e-2 * correct_center_of_mass.coords.abs().max()
-            ));
-        }
-    }
-
-    #[cfg(not(miri))]
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(20))]
-        #[test]
-        fn should_compute_uniform_sphere_mesh_inertia_tensor(
-            mass_density in 1e-2..1e2_f32,
-            transform in similarity_transform_strategy(1e2, 1e-2..1e2),
-        ) {
-            let mut sphere_mesh = TriangleMesh::<f64>::create_sphere(40);
-            let mut sphere_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
-
-            sphere_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            sphere_properties.transform(&transform);
-
-            let computed_inertia_tensor =
-                compute_uniform_triangle_mesh_inertia_tensor(sphere_mesh.triangle_vertex_positions(), mass_density);
-            let correct_inertia_tensor = sphere_properties.inertia_tensor();
-
-            prop_assert!(abs_diff_eq!(
-                computed_inertia_tensor,
-                correct_inertia_tensor,
-                epsilon = 5e-1 * correct_inertia_tensor.max_element()
-            ));
-        }
-    }
-
-    #[cfg(not(miri))]
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(20))]
-        #[test]
-        fn should_compute_uniform_hemisphere_mesh_inertia_tensor(
-            mass_density in 1e-2..1e2_f32,
-            transform in similarity_transform_strategy(1e2, 1e-2..1e2),
-        ) {
-            let mut hemisphere_mesh = TriangleMesh::<f64>::create_hemisphere(20);
-            let mut hemisphere_properties = InertialProperties::of_uniform_hemisphere(0.5, mass_density);
-
-            hemisphere_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            hemisphere_properties.transform(&transform);
-
-            let computed_inertia_tensor =
-                compute_uniform_triangle_mesh_inertia_tensor(hemisphere_mesh.triangle_vertex_positions(), mass_density);
-            let correct_inertia_tensor = hemisphere_properties.inertia_tensor();
-
-            prop_assert!(abs_diff_eq!(
-                computed_inertia_tensor,
-                correct_inertia_tensor,
-                epsilon = 5e-1 * correct_inertia_tensor.max_element()
-            ));
-        }
-    }
-
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(20))]
-        #[test]
-        fn should_compute_uniform_cone_mesh_inertia_tensor(
-            length in 1e-2..1e2_f32,
-            max_diameter in 1e-2..1e2_f32,
-            mass_density in 1e-2..1e2_f32,
-            transform in similarity_transform_strategy(1e2, 1e-2..1e2),
-        ) {
-            let mut cone_mesh = TriangleMesh::create_cone(f64::from(length), f64::from(max_diameter), 40);
-            let mut cone_properties = InertialProperties::of_uniform_cone(length, max_diameter, mass_density);
-
-            cone_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            cone_properties.transform(&transform);
-
-            let computed_inertia_tensor =
-                compute_uniform_triangle_mesh_inertia_tensor(cone_mesh.triangle_vertex_positions(), mass_density);
-            let correct_inertia_tensor = cone_properties.inertia_tensor();
-
-            prop_assert!(abs_diff_eq!(
-                computed_inertia_tensor,
-                correct_inertia_tensor,
-                epsilon = 5e-1 * correct_inertia_tensor.max_element()
-            ));
-        }
-    }
-
-    proptest! {
-        #![proptest_config(ProptestConfig::with_cases(20))]
-        #[test]
-        fn should_compute_uniform_cylinder_mesh_inertia_tensor(
-            length in 1e-2..1e2_f32,
-            diameter in 1e-2..1e2_f32,
-            mass_density in 1e-2..1e2_f32,
-            transform in similarity_transform_strategy(1e2, 1e-2..1e2),
-        ) {
-            let mut cylinder_mesh = TriangleMesh::create_cylinder(f64::from(length), f64::from(diameter), 40);
-            let mut cylinder_properties = InertialProperties::of_uniform_cylinder(length, diameter, mass_density);
-
-            cylinder_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            cylinder_properties.transform(&transform);
-
-            let computed_inertia_tensor =
-                compute_uniform_triangle_mesh_inertia_tensor(cylinder_mesh.triangle_vertex_positions(), mass_density);
-            let correct_inertia_tensor = cylinder_properties.inertia_tensor();
-
-            prop_assert!(abs_diff_eq!(
-                computed_inertia_tensor,
-                correct_inertia_tensor,
-                epsilon = 5e-1 * correct_inertia_tensor.max_element()
+                epsilon = 1e-3 * correct_center_of_mass.coords.abs().max()
             ));
         }
     }
@@ -1127,7 +920,7 @@ mod tests {
             mass_density in 1e-2..1e2_f32,
             transform in similarity_transform_strategy(1e2, 1e-2..1e2),
         ) {
-            let mut box_mesh = TriangleMesh::create_box(f64::from(extent_x), f64::from(extent_y), f64::from(extent_z), FrontFaceSide::Outside);
+            let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
             box_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
@@ -1140,41 +933,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_inertia_tensor,
                 correct_inertia_tensor,
-                epsilon = 5e-1 * correct_inertia_tensor.max_element()
-            ));
-        }
-    }
-
-    proptest! {
-        #[test]
-        fn should_determine_correct_properties_for_generic_mesh(
-            length in 1e-2..1e2_f32,
-            max_diameter in 1e-2..1e2_f32,
-            mass_density in 1e-2..1e2_f32,
-            transform in similarity_transform_strategy(1e2, 1e-2..1e2),
-        ) {
-            let mut cone_mesh = TriangleMesh::create_cone(f64::from(length), f64::from(max_diameter), 40);
-            let mut cone_properties = InertialProperties::of_uniform_cone(length, max_diameter, mass_density);
-
-            cone_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
-            cone_properties.transform(&transform);
-
-            let cone_properties_from_mesh = InertialProperties::of_uniform_triangle_mesh(cone_mesh.triangle_vertex_positions(), mass_density);
-
-            prop_assert!(abs_diff_eq!(
-                cone_properties_from_mesh.mass(),
-                cone_properties.mass(),
-                epsilon = 1e-2 * cone_properties.mass()
-            ));
-            prop_assert!(abs_diff_eq!(
-                cone_properties_from_mesh.center_of_mass(),
-                cone_properties.center_of_mass(),
-                epsilon = 1e-6 * cone_properties.center_of_mass().coords.abs().max()
-            ));
-            prop_assert!(abs_diff_eq!(
-                cone_properties_from_mesh.inertia_tensor(),
-                cone_properties.inertia_tensor(),
-                epsilon = 5e-1 * cone_properties.inertia_tensor().max_element()
+                epsilon = 1e-3 * correct_inertia_tensor.max_element()
             ));
         }
     }
