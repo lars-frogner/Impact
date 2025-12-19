@@ -97,7 +97,7 @@ fn load_triangle_mesh_from_file(
         bail!("Tried to load triangle mesh under already existing ID: {mesh_id}");
     }
 
-    let mut mesh: TriangleMesh<f32> = match file_format {
+    let mut mesh: TriangleMesh = match file_format {
         #[cfg(feature = "obj")]
         TriangleMeshFileFormat::Obj => crate::io::obj::read_mesh_from_obj_file(file_path),
         #[cfg(not(feature = "obj"))]
@@ -153,7 +153,7 @@ fn load_triangle_mesh_from_template(
                 registry,
                 template,
                 Some(mesh_id),
-                Option::<&PlanarTextureProjection<f32>>::None,
+                Option::<&PlanarTextureProjection>::None,
             );
         }
         Some(TextureProjectionDeclaration::Planar {

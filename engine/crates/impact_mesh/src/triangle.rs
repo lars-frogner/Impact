@@ -8,7 +8,7 @@ use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::{Float, hash::StringHash64, hash64};
+use impact_math::{hash::StringHash64, hash64};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
@@ -25,7 +25,7 @@ define_component_type! {
 }
 
 /// A registry of loaded [`TriangleMesh`]es.
-pub type TriangleMeshRegistry = MutableResourceRegistry<TriangleMesh<f32>>;
+pub type TriangleMeshRegistry = MutableResourceRegistry<TriangleMesh>;
 
 /// A 3D mesh of triangles represented by vertices and indices.
 ///
@@ -33,12 +33,12 @@ pub type TriangleMeshRegistry = MutableResourceRegistry<TriangleMesh<f32>>;
 /// potentially other attributes. Each index refers to a vertex, and the
 /// sequence of indices describes the triangles making up the mesh faces.
 #[derive(Clone, Debug)]
-pub struct TriangleMesh<F: Float> {
-    positions: Vec<VertexPosition<F>>,
-    normal_vectors: Vec<VertexNormalVector<F>>,
-    texture_coords: Vec<VertexTextureCoords<F>>,
-    tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
-    colors: Vec<VertexColor<F>>,
+pub struct TriangleMesh {
+    positions: Vec<VertexPosition>,
+    normal_vectors: Vec<VertexNormalVector>,
+    texture_coords: Vec<VertexTextureCoords>,
+    tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion>,
+    colors: Vec<VertexColor>,
     indices: Vec<u32>,
 }
 
@@ -99,7 +99,7 @@ impl<'de> serde::Deserialize<'de> for TriangleMeshID {
     }
 }
 
-impl<F: Float> TriangleMesh<F> {
+impl TriangleMesh {
     /// Creates a new mesh described by the given vertex attributes and indices.
     ///
     /// # Panics
@@ -107,11 +107,11 @@ impl<F: Float> TriangleMesh<F> {
     /// `tangent_space_quaternions` and `colors` are neither zero nor equal to
     /// the length of `positions`.
     pub fn new(
-        positions: Vec<VertexPosition<F>>,
-        normal_vectors: Vec<VertexNormalVector<F>>,
-        texture_coords: Vec<VertexTextureCoords<F>>,
-        tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion<F>>,
-        colors: Vec<VertexColor<F>>,
+        positions: Vec<VertexPosition>,
+        normal_vectors: Vec<VertexNormalVector>,
+        texture_coords: Vec<VertexTextureCoords>,
+        tangent_space_quaternions: Vec<VertexTangentSpaceQuaternion>,
+        colors: Vec<VertexColor>,
         indices: Vec<u32>,
     ) -> Self {
         let n_vertices = positions.len();
@@ -159,27 +159,27 @@ impl<F: Float> TriangleMesh<F> {
     }
 
     /// Returns a slice with the positions of the mesh vertices.
-    pub fn positions(&self) -> &[VertexPosition<F>] {
+    pub fn positions(&self) -> &[VertexPosition] {
         &self.positions
     }
 
     /// Returns a slice with the normal vectors of the mesh vertices.
-    pub fn normal_vectors(&self) -> &[VertexNormalVector<F>] {
+    pub fn normal_vectors(&self) -> &[VertexNormalVector] {
         &self.normal_vectors
     }
 
     /// Returns a slice with the texture coordinates of the mesh vertices.
-    pub fn texture_coords(&self) -> &[VertexTextureCoords<F>] {
+    pub fn texture_coords(&self) -> &[VertexTextureCoords] {
         &self.texture_coords
     }
 
     /// Returns a slice with the tangent space quaternions of the mesh vertices.
-    pub fn tangent_space_quaternions(&self) -> &[VertexTangentSpaceQuaternion<F>] {
+    pub fn tangent_space_quaternions(&self) -> &[VertexTangentSpaceQuaternion] {
         &self.tangent_space_quaternions
     }
 
     /// Returns a slice with the colors of the mesh vertices.
-    pub fn colors(&self) -> &[VertexColor<F>] {
+    pub fn colors(&self) -> &[VertexColor] {
         &self.colors
     }
 
@@ -233,7 +233,7 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Returns an iterator over the mesh triangles, each item containing the
     /// three triangle vertex positions.
-    pub fn triangle_vertex_positions(&self) -> impl Iterator<Item = [&Point3<F>; 3]> {
+    pub fn triangle_vertex_positions(&self) -> impl Iterator<Item = [&Point3<f32>; 3]> {
         self.triangle_indices().map(|[i, j, k]| {
             [
                 &self.positions[i].0,
@@ -245,7 +245,7 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Computes the axis-aligned bounding box enclosing all vertices in the
     /// mesh, or returns [`None`] if the mesh has no vertices.
-    pub fn compute_aabb(&self) -> Option<AxisAlignedBox<F>> {
+    pub fn compute_aabb(&self) -> Option<AxisAlignedBox<f32>> {
         if self.has_positions() {
             Some(AxisAlignedBox::aabb_for_points(self.positions()))
         } else {
@@ -255,7 +255,7 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Finds a sphere enclosing all vertices in the mesh, or returns [`None`]
     /// if the mesh has no vertices.
-    pub fn compute_bounding_sphere(&self) -> Option<Sphere<F>> {
+    pub fn compute_bounding_sphere(&self) -> Option<Sphere<f32>> {
         if self.has_positions() {
             Some(Sphere::bounding_sphere_for_points(self.positions()))
         } else {
@@ -301,7 +301,7 @@ impl<F: Float> TriangleMesh<F> {
     /// If the mesh misses positions.
     pub fn generate_texture_coords(
         &mut self,
-        projection: &impl TextureProjection<F>,
+        projection: &impl TextureProjection,
         dirty_mask: &mut TriangleMeshDirtyMask,
     ) {
         assert!(self.has_positions());
@@ -383,7 +383,7 @@ impl<F: Float> TriangleMesh<F> {
                 q2 = p2 - p0;
             }
 
-            let inv_denom = F::ONE / (st1.x * st2.y - st2.x * st1.y);
+            let inv_denom = 1.0 / (st1.x * st2.y - st2.x * st1.y);
 
             // Skip the triangle altogether if no solution is possible (happens
             // if the triangle is perpendicular to the UV-plane)
@@ -419,7 +419,7 @@ impl<F: Float> TriangleMesh<F> {
                 summed_tangent - normal.0.as_ref() * normal.0.dot(&summed_tangent);
 
             let inv_orthogonal_tangent_squared_length =
-                F::ONE / orthogonal_tangent.magnitude_squared();
+                1.0 / orthogonal_tangent.magnitude_squared();
 
             let tangent;
             let mut bitangent;
@@ -433,13 +433,13 @@ impl<F: Float> TriangleMesh<F> {
                             * inv_orthogonal_tangent_squared_length);
 
                 tangent = UnitVector3::new_unchecked(
-                    orthogonal_tangent * F::sqrt(inv_orthogonal_tangent_squared_length),
+                    orthogonal_tangent * f32::sqrt(inv_orthogonal_tangent_squared_length),
                 );
 
                 bitangent = UnitVector3::new_normalize(orthogonal_bitangent);
 
                 // Check if basis is left-handed
-                if tangent.cross(&bitangent).dot(&normal.0) < F::ZERO {
+                if tangent.cross(&bitangent).dot(&normal.0) < 0.0 {
                     // Make sure tangent, bitangent and normal form a
                     // right-handed bases, as this is required for converting
                     // the basis to a rotation quaternion. But we note the fact
@@ -449,7 +449,7 @@ impl<F: Float> TriangleMesh<F> {
                     is_lefthanded = true;
                 }
             } else {
-                if abs_diff_ne!(normal.0.x.abs(), F::ONE) {
+                if abs_diff_ne!(normal.0.x.abs(), 1.0) {
                     tangent =
                         UnitVector3::new_normalize(Vector3::x() - normal.0.as_ref() * normal.0.x);
                 } else {
@@ -471,7 +471,7 @@ impl<F: Float> TriangleMesh<F> {
 
             // Make sure real component is always positive initially (negating a
             // quaternion gives same rotation)
-            if tangent_space_quaternion.w < F::ZERO {
+            if tangent_space_quaternion.w < 0.0 {
                 tangent_space_quaternion = -tangent_space_quaternion;
             }
 
@@ -505,7 +505,7 @@ impl<F: Float> TriangleMesh<F> {
     }
 
     /// Applies the given scaling factor to the vertex positions of the mesh.
-    pub fn scale(&mut self, scaling: F, dirty_mask: &mut TriangleMeshDirtyMask) {
+    pub fn scale(&mut self, scaling: f32, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.scaled(scaling);
         }
@@ -513,7 +513,11 @@ impl<F: Float> TriangleMesh<F> {
     }
 
     /// Adds the given translation to the vertex positions of the mesh.
-    pub fn translate(&mut self, translation: &Vector3<F>, dirty_mask: &mut TriangleMeshDirtyMask) {
+    pub fn translate(
+        &mut self,
+        translation: &Vector3<f32>,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.translated(translation);
         }
@@ -522,7 +526,11 @@ impl<F: Float> TriangleMesh<F> {
 
     /// Applies the given rotation quaternion to the mesh, rotating vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn rotate(&mut self, rotation: &UnitQuaternion<F>, dirty_mask: &mut TriangleMeshDirtyMask) {
+    pub fn rotate(
+        &mut self,
+        rotation: &UnitQuaternion<f32>,
+        dirty_mask: &mut TriangleMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }
@@ -544,7 +552,7 @@ impl<F: Float> TriangleMesh<F> {
     /// positions, normal vectors and tangent space quaternions.
     pub fn transform(
         &mut self,
-        transform: &Similarity3<F>,
+        transform: &Similarity3<f32>,
         dirty_mask: &mut TriangleMeshDirtyMask,
     ) {
         for position in &mut self.positions {
@@ -568,21 +576,13 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// If the number of colors differs from the number of vertices.
-    pub fn set_colors(
-        &mut self,
-        colors: Vec<VertexColor<F>>,
-        dirty_mask: &mut TriangleMeshDirtyMask,
-    ) {
+    pub fn set_colors(&mut self, colors: Vec<VertexColor>, dirty_mask: &mut TriangleMeshDirtyMask) {
         self.colors = colors;
         *dirty_mask |= TriangleMeshDirtyMask::COLORS;
     }
 
     /// Sets the color of every vertex to the given color.
-    pub fn set_same_color(
-        &mut self,
-        color: VertexColor<F>,
-        dirty_mask: &mut TriangleMeshDirtyMask,
-    ) {
+    pub fn set_same_color(&mut self, color: VertexColor, dirty_mask: &mut TriangleMeshDirtyMask) {
         self.set_colors(vec![color; self.positions.len()], dirty_mask);
     }
 
@@ -635,11 +635,11 @@ impl<F: Float> TriangleMesh<F> {
     }
 }
 
-impl Resource for TriangleMesh<f32> {
+impl Resource for TriangleMesh {
     type ID = TriangleMeshID;
 }
 
-impl MutableResource for TriangleMesh<f32> {
+impl MutableResource for TriangleMesh {
     type DirtyMask = TriangleMeshDirtyMask;
 }
 

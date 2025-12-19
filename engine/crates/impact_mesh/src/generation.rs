@@ -1,11 +1,12 @@
 //! Generation of meshes representing geometrical objects.
 
+use std::f32::consts::{FRAC_PI_2, PI};
+
 use crate::{
     FrontFaceSide, LineSegmentMesh, LineSegmentMeshDirtyMask, TriangleMesh, TriangleMeshDirtyMask,
     VertexColor,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
-use impact_math::Float;
 use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
@@ -23,16 +24,16 @@ macro_rules! normal {
     };
 }
 
-impl<F: Float> TriangleMesh<F> {
+impl TriangleMesh {
     /// Creates a mesh with vertex positions directly in clip space coordinates,
     /// consisting of two triangles at zero depth that will exactly fill the
     /// view.
     pub fn create_screen_filling_quad() -> Self {
         let positions = vec![
-            pos![-F::ONE, -F::ONE, F::ZERO],
-            pos![F::ONE, -F::ONE, F::ZERO],
-            pos![F::ONE, F::ONE, F::ZERO],
-            pos![-F::ONE, F::ONE, F::ZERO],
+            pos![-1.0, -1.0, 0.0],
+            pos![1.0, -1.0, 0.0],
+            pos![1.0, 1.0, 0.0],
+            pos![-1.0, 1.0, 0.0],
         ];
 
         let indices = vec![1, 3, 0, 2, 3, 1];
@@ -54,24 +55,24 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// If any of the given extents are negative.
-    pub fn create_rectangle(extent_x: F, extent_z: F) -> Self {
+    pub fn create_rectangle(extent_x: f32, extent_z: f32) -> Self {
         assert!(
-            extent_x >= F::ZERO,
+            extent_x >= 0.0,
             "Tried to create rectangle mesh with negative x-extent"
         );
         assert!(
-            extent_z >= F::ZERO,
+            extent_z >= 0.0,
             "Tried to create rectangle mesh with negative y-extent"
         );
 
-        let hex = extent_x * F::ONE_HALF;
-        let hez = extent_z * F::ONE_HALF;
+        let hex = extent_x * 0.5;
+        let hez = extent_z * 0.5;
 
         let positions = vec![
-            pos![-hex, F::ZERO, -hez],
-            pos![hex, F::ZERO, -hez],
-            pos![hex, F::ZERO, hez],
-            pos![-hex, F::ZERO, hez],
+            pos![-hex, 0.0, -hez],
+            pos![hex, 0.0, -hez],
+            pos![hex, 0.0, hez],
+            pos![-hex, 0.0, hez],
         ];
 
         let normal_vectors = vec![normal![Vector3::y_axis()]; 4];
@@ -97,27 +98,27 @@ impl<F: Float> TriangleMesh<F> {
     /// # Panics
     /// If any of the given extents are negative.
     pub fn create_box(
-        extent_x: F,
-        extent_y: F,
-        extent_z: F,
+        extent_x: f32,
+        extent_y: f32,
+        extent_z: f32,
         front_face_side: FrontFaceSide,
     ) -> Self {
         assert!(
-            extent_x >= F::ZERO,
+            extent_x >= 0.0,
             "Tried to create box mesh with negative x-extent"
         );
         assert!(
-            extent_y >= F::ZERO,
+            extent_y >= 0.0,
             "Tried to create box mesh with negative y-extent"
         );
         assert!(
-            extent_z >= F::ZERO,
+            extent_z >= 0.0,
             "Tried to create box mesh with negative z-extent"
         );
 
-        let hw = extent_x * F::ONE_HALF;
-        let hh = extent_y * F::ONE_HALF;
-        let hd = extent_z * F::ONE_HALF;
+        let hw = extent_x * 0.5;
+        let hh = extent_y * 0.5;
+        let hd = extent_z * 0.5;
 
         let mut positions = Vec::with_capacity(24);
         let mut normal_vectors = Vec::with_capacity(24);
@@ -218,7 +219,7 @@ impl<F: Float> TriangleMesh<F> {
     /// # Panics
     /// - If any of the given extents are negative.
     /// - If `n_circumference_vertices` is smaller than 2.
-    pub fn create_cylinder(length: F, diameter: F, n_circumference_vertices: usize) -> Self {
+    pub fn create_cylinder(length: f32, diameter: f32, n_circumference_vertices: usize) -> Self {
         Self::create_circular_frustum(length, diameter, diameter, n_circumference_vertices)
     }
 
@@ -233,8 +234,8 @@ impl<F: Float> TriangleMesh<F> {
     /// # Panics
     /// - If any of the given extents are negative.
     /// - If `n_circumference_vertices` is smaller than 2.
-    pub fn create_cone(length: F, max_diameter: F, n_circumference_vertices: usize) -> Self {
-        Self::create_circular_frustum(length, max_diameter, F::ZERO, n_circumference_vertices)
+    pub fn create_cone(length: f32, max_diameter: f32, n_circumference_vertices: usize) -> Self {
+        Self::create_circular_frustum(length, max_diameter, 0.0, n_circumference_vertices)
     }
 
     /// Creates a mesh representing a y-axis aligned circular frustum with the
@@ -251,21 +252,21 @@ impl<F: Float> TriangleMesh<F> {
     /// - If any of the given extents are negative.
     /// - If `n_circumference_vertices` is smaller than 2.
     pub fn create_circular_frustum(
-        length: F,
-        bottom_diameter: F,
-        top_diameter: F,
+        length: f32,
+        bottom_diameter: f32,
+        top_diameter: f32,
         n_circumference_vertices: usize,
     ) -> Self {
         assert!(
-            length >= F::ZERO,
+            length >= 0.0,
             "Tried to create circular frustum mesh with negative length"
         );
         assert!(
-            bottom_diameter >= F::ZERO,
+            bottom_diameter >= 0.0,
             "Tried to create circular frustum mesh with negative bottom diameter"
         );
         assert!(
-            top_diameter >= F::ZERO,
+            top_diameter >= 0.0,
             "Tried to create circular frustum mesh with negative top diameter"
         );
         assert!(
@@ -273,8 +274,8 @@ impl<F: Float> TriangleMesh<F> {
             "Tried to create circular frustum mesh with fewer than two vertices around circumference"
         );
 
-        let bottom_radius = bottom_diameter * F::ONE_HALF;
-        let top_radius = top_diameter * F::ONE_HALF;
+        let bottom_radius = bottom_diameter * 0.5;
+        let top_radius = top_diameter * 0.5;
 
         let mut positions = Vec::with_capacity(4 * n_circumference_vertices + 2);
         let mut normal_vectors = Vec::with_capacity(positions.capacity());
@@ -282,29 +283,29 @@ impl<F: Float> TriangleMesh<F> {
 
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let angle_between_vertices = F::TWO_PI / F::from_u32(n_circumference_vertices).unwrap();
+        let angle_between_vertices = 2.0 * PI / n_circumference_vertices as f32;
 
-        let tan_slope_angle = if abs_diff_eq!(length, F::ZERO) {
-            F::ZERO
+        let tan_slope_angle = if abs_diff_eq!(length, 0.0) {
+            0.0
         } else {
             (bottom_radius - top_radius) / length
         };
-        let cos_slope_angle = F::ONE / F::sqrt(F::ONE + F::powi(tan_slope_angle, 2));
+        let cos_slope_angle = 1.0 / f32::sqrt(1.0 + f32::powi(tan_slope_angle, 2));
         let sin_slope_angle = cos_slope_angle * tan_slope_angle;
 
         // First bottom side vertex
-        let bottom_pos = pos![bottom_radius, F::ZERO, F::ZERO];
+        let bottom_pos = pos![bottom_radius, 0.0, 0.0];
         positions.push(bottom_pos);
 
         // First top side vertex
-        let top_pos = pos![top_radius, length, F::ZERO];
+        let top_pos = pos![top_radius, length, 0.0];
         positions.push(top_pos);
 
         // Normal direction at first side vertices
         let normal_direction = normal!(UnitVector3::new_unchecked(vector![
             cos_slope_angle,
             sin_slope_angle,
-            F::ZERO
+            0.0
         ]));
         normal_vectors.push(normal_direction);
         normal_vectors.push(normal_direction);
@@ -314,12 +315,12 @@ impl<F: Float> TriangleMesh<F> {
         let mut polar_angle = angle_between_vertices;
 
         for _ in 1..n_circumference_vertices {
-            let cos_polar_angle = F::cos(polar_angle);
-            let sin_polar_angle = F::sin(polar_angle);
+            let cos_polar_angle = f32::cos(polar_angle);
+            let sin_polar_angle = f32::sin(polar_angle);
 
             let bottom_pos = pos![
                 bottom_radius * cos_polar_angle,
-                F::ZERO,
+                0.0,
                 bottom_radius * sin_polar_angle
             ];
             positions.push(bottom_pos);
@@ -369,21 +370,21 @@ impl<F: Float> TriangleMesh<F> {
 
         let mut create_horizontal_disk = |radius, y, front_is_up| {
             // Center vertex
-            positions.push(pos![F::ZERO, y, F::ZERO]);
+            positions.push(pos![0.0, y, 0.0]);
 
             idx += 1;
             let center_idx = idx;
 
             // First side vertex
-            positions.push(pos![radius, y, F::ZERO]);
+            positions.push(pos![radius, y, 0.0]);
 
             idx += 1;
 
             let mut polar_angle = angle_between_vertices;
 
             for _ in 1..n_circumference_vertices {
-                let cos_polar_angle = F::cos(polar_angle);
-                let sin_polar_angle = F::sin(polar_angle);
+                let cos_polar_angle = f32::cos(polar_angle);
+                let sin_polar_angle = f32::sin(polar_angle);
 
                 positions.push(pos![radius * cos_polar_angle, y, radius * sin_polar_angle]);
 
@@ -414,11 +415,11 @@ impl<F: Float> TriangleMesh<F> {
             ]);
         };
 
-        if abs_diff_ne!(bottom_diameter, F::ZERO) {
-            create_horizontal_disk(bottom_radius, F::ZERO, false);
+        if abs_diff_ne!(bottom_diameter, 0.0) {
+            create_horizontal_disk(bottom_radius, 0.0, false);
         }
 
-        if abs_diff_ne!(top_diameter, F::ZERO) {
+        if abs_diff_ne!(top_diameter, 0.0) {
             create_horizontal_disk(top_radius, length, true);
         }
 
@@ -445,7 +446,7 @@ impl<F: Float> TriangleMesh<F> {
     pub fn create_sphere(n_rings: usize) -> Self {
         assert!(n_rings > 0, "Tried to create sphere mesh with no rings");
 
-        let radius = F::ONE_HALF;
+        let radius = 0.5;
 
         let n_circumference_vertices = 2 * n_rings + 2;
 
@@ -456,29 +457,29 @@ impl<F: Float> TriangleMesh<F> {
         let n_rings = u32::try_from(n_rings).unwrap();
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let delta_phi = F::TWO_PI / F::from_u32(n_circumference_vertices).unwrap();
-        let delta_theta = <F as Float>::PI / F::from_u32(n_rings + 1).unwrap();
+        let delta_phi = 2.0 * PI / n_circumference_vertices as f32;
+        let delta_theta = PI / (n_rings + 1) as f32;
 
         // Top vertex
-        positions.push(pos![F::ZERO, radius, F::ZERO]);
+        positions.push(pos![0.0, radius, 0.0]);
         normal_vectors.push(normal!(Vector3::y_axis()));
 
         // Bottom vertex
-        positions.push(pos![F::ZERO, -radius, F::ZERO]);
+        positions.push(pos![0.0, -radius, 0.0]);
         normal_vectors.push(normal!(-Vector3::y_axis()));
 
         let mut theta = delta_theta;
 
         for _ in 0..n_rings {
-            let sin_theta = F::sin(theta);
-            let cos_theta = F::cos(theta);
+            let sin_theta = f32::sin(theta);
+            let cos_theta = f32::cos(theta);
             let y = radius * cos_theta;
 
-            let mut phi = F::ZERO;
+            let mut phi = 0.0;
 
             for _ in 0..n_circumference_vertices {
-                let cos_phi_sin_theta = F::cos(phi) * sin_theta;
-                let sin_phi_sin_theta = F::sin(phi) * sin_theta;
+                let cos_phi_sin_theta = f32::cos(phi) * sin_theta;
+                let sin_phi_sin_theta = f32::sin(phi) * sin_theta;
 
                 positions.push(pos![
                     radius * cos_phi_sin_theta,
@@ -563,7 +564,7 @@ impl<F: Float> TriangleMesh<F> {
     pub fn create_hemisphere(n_rings: usize) -> Self {
         assert!(n_rings > 0, "Tried to create hemisphere mesh with no rings");
 
-        let radius = F::ONE_HALF;
+        let radius = 0.5;
 
         let n_circumference_vertices = 4 * n_rings + 2;
 
@@ -574,29 +575,29 @@ impl<F: Float> TriangleMesh<F> {
         let n_rings = u32::try_from(n_rings).unwrap();
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let delta_phi = F::TWO_PI / F::from_u32(n_circumference_vertices).unwrap();
-        let delta_theta = <F as Float>::FRAC_PI_2 / F::from_u32(n_rings).unwrap();
+        let delta_phi = 2.0 * PI / n_circumference_vertices as f32;
+        let delta_theta = FRAC_PI_2 / n_rings as f32;
 
         // Top vertex
-        positions.push(pos![F::ZERO, radius, F::ZERO]);
+        positions.push(pos![0.0, radius, 0.0]);
         normal_vectors.push(normal!(Vector3::y_axis()));
 
         // Vertex at center of disk
-        positions.push(pos![F::ZERO, F::ZERO, F::ZERO]);
+        positions.push(pos![0.0, 0.0, 0.0]);
         normal_vectors.push(normal!(-Vector3::y_axis()));
 
         let mut theta = delta_theta;
 
         for _ in 0..n_rings {
-            let sin_theta = F::sin(theta);
-            let cos_theta = F::cos(theta);
+            let sin_theta = f32::sin(theta);
+            let cos_theta = f32::cos(theta);
             let y = radius * cos_theta;
 
-            let mut phi = F::ZERO;
+            let mut phi = 0.0;
 
             for _ in 0..n_circumference_vertices {
-                let cos_phi_sin_theta = F::cos(phi) * sin_theta;
-                let sin_phi_sin_theta = F::sin(phi) * sin_theta;
+                let cos_phi_sin_theta = f32::cos(phi) * sin_theta;
+                let sin_phi_sin_theta = f32::sin(phi) * sin_theta;
 
                 positions.push(pos![
                     radius * cos_phi_sin_theta,
@@ -686,7 +687,7 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// - If `n_rings` is zero.
-    pub fn create_spherical_light_volume(n_rings: usize) -> TriangleMesh<F> {
+    pub fn create_spherical_light_volume(n_rings: usize) -> TriangleMesh {
         let mut mesh = Self::create_sphere(n_rings);
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
@@ -694,7 +695,7 @@ impl<F: Float> TriangleMesh<F> {
         mesh.remove_normal_vectors(&mut dirty_mask);
 
         // Scale to unit radius
-        mesh.scale(F::TWO, &mut dirty_mask);
+        mesh.scale(2.0, &mut dirty_mask);
 
         // Flip triangle winding order to make the front faces point inward
         mesh.flip_triangle_winding_order(&mut dirty_mask);
@@ -707,13 +708,13 @@ impl<F: Float> TriangleMesh<F> {
     /// centered on the origin and with all vertices having the given color.
     ///
     /// The generated mesh will only contain positions and colors.
-    pub fn create_vertical_square_with_color(extent: F, color: VertexColor<F>) -> Self {
+    pub fn create_vertical_square_with_color(extent: f32, color: VertexColor) -> Self {
         let mut square = Self::create_rectangle(extent, extent);
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         square.remove_normal_vectors(&mut dirty_mask);
         square.rotate(
-            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2),
             &mut dirty_mask,
         );
         square.set_same_color(color, &mut dirty_mask);
@@ -727,7 +728,7 @@ impl<F: Float> TriangleMesh<F> {
     /// right, bottom, top, front and back face respectively.
     ///
     /// The generated mesh will only contain positions and colors.
-    pub fn create_cube_with_face_colors(extent: F, face_colors: &[VertexColor<F>; 6]) -> Self {
+    pub fn create_cube_with_face_colors(extent: f32, face_colors: &[VertexColor; 6]) -> Self {
         let mut cube = Self::create_box(extent, extent, extent, FrontFaceSide::Outside);
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
@@ -752,12 +753,12 @@ impl<F: Float> TriangleMesh<F> {
     ///
     /// # Panics
     /// - If `n_rings` is zero.
-    pub fn create_unit_sphere_with_color(n_rings: usize, color: VertexColor<F>) -> Self {
+    pub fn create_unit_sphere_with_color(n_rings: usize, color: VertexColor) -> Self {
         let mut sphere = Self::create_sphere(n_rings);
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         sphere.remove_normal_vectors(&mut dirty_mask);
-        sphere.scale(F::TWO, &mut dirty_mask);
+        sphere.scale(2.0, &mut dirty_mask);
         sphere.set_same_color(color, &mut dirty_mask);
 
         sphere
@@ -768,17 +769,13 @@ impl<F: Float> TriangleMesh<F> {
     /// width, height and depth axes are aligned with the x-, y- and z-axis.
     ///
     /// The generated mesh will only contain positions and colors.
-    pub fn create_voxel_chunk_cube_with_color(extent: F, color: VertexColor<F>) -> Self {
+    pub fn create_voxel_chunk_cube_with_color(extent: f32, color: VertexColor) -> Self {
         let mut cube = Self::create_box(extent, extent, extent, FrontFaceSide::Outside);
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         cube.remove_normal_vectors(&mut dirty_mask);
         cube.translate(
-            &vector![
-                F::ONE_HALF * extent,
-                F::ONE_HALF * extent,
-                F::ONE_HALF * extent
-            ],
+            &vector![0.5 * extent, 0.5 * extent, 0.5 * extent],
             &mut dirty_mask,
         );
         cube.set_same_color(color, &mut dirty_mask);
@@ -787,22 +784,22 @@ impl<F: Float> TriangleMesh<F> {
     }
 }
 
-impl<F: Float> LineSegmentMesh<F> {
+impl LineSegmentMesh {
     /// Creates a mesh containing an arrow going from the origin to (0, 1, 0).
     /// The two line segments making up the arrow head lie in the xy-plane.
     ///
     /// The generated mesh will only contain positions.
     pub fn create_unit_arrow_y() -> Self {
-        let arrow_length = F::from_f64(0.1).unwrap();
-        let arrow_width = F::from_f64(0.05).unwrap();
+        let arrow_length = 0.1;
+        let arrow_width = 0.05;
 
         let positions = vec![
-            pos![F::ZERO, F::ZERO, F::ZERO],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![-arrow_width, F::ONE - arrow_length, F::ZERO],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![arrow_width, F::ONE - arrow_length, F::ZERO],
+            pos![0.0, 0.0, 0.0],
+            pos![0.0, 1.0, 0.0],
+            pos![0.0, 1.0, 0.0],
+            pos![-arrow_width, 1.0 - arrow_length, 0.0],
+            pos![0.0, 1.0, 0.0],
+            pos![arrow_width, 1.0 - arrow_length, 0.0],
         ];
 
         Self::new(positions, Vec::new())
@@ -813,12 +810,12 @@ impl<F: Float> LineSegmentMesh<F> {
     /// blue.
     pub fn create_reference_frame_axes() -> Self {
         let positions = vec![
-            pos![F::ZERO, F::ZERO, F::ZERO],
-            pos![F::ONE, F::ZERO, F::ZERO],
-            pos![F::ZERO, F::ZERO, F::ZERO],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![F::ZERO, F::ZERO, F::ZERO],
-            pos![F::ZERO, F::ZERO, F::ONE],
+            pos![0.0, 0.0, 0.0],
+            pos![1.0, 0.0, 0.0],
+            pos![0.0, 0.0, 0.0],
+            pos![0.0, 1.0, 0.0],
+            pos![0.0, 0.0, 0.0],
+            pos![0.0, 0.0, 1.0],
         ];
 
         let colors = vec![
@@ -841,20 +838,20 @@ impl<F: Float> LineSegmentMesh<F> {
     pub fn create_unit_cubemap_frusta() -> Self {
         let mut down_diagonals = Self::create_baseless_unit_pyramid();
         let mut dirty_mask = LineSegmentMeshDirtyMask::empty();
-        down_diagonals.translate(&vector![F::ZERO, -F::ONE, F::ZERO], &mut dirty_mask);
+        down_diagonals.translate(&vector![0.0, -1.0, 0.0], &mut dirty_mask);
 
         let mut up_diagonals = Self::create_baseless_unit_pyramid();
         up_diagonals.transform(
             &Similarity3::from_parts(
-                vector![F::ZERO, F::ONE, F::ZERO].into(),
-                UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::PI),
-                F::ONE,
+                vector![0.0, 1.0, 0.0].into(),
+                UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI),
+                1.0,
             ),
             &mut LineSegmentMeshDirtyMask::empty(),
         );
 
         let mut far_plane_edges = Self::create_unit_cube();
-        far_plane_edges.scale(F::TWO, &mut LineSegmentMeshDirtyMask::empty());
+        far_plane_edges.scale(2.0, &mut LineSegmentMeshDirtyMask::empty());
 
         let mut frusta = down_diagonals;
         frusta.merge_with(&up_diagonals, &mut dirty_mask);
@@ -870,24 +867,12 @@ impl<F: Float> LineSegmentMesh<F> {
     pub fn create_unit_cube() -> Self {
         let corners = [
             [
-                [
-                    pos![-F::ONE_HALF, -F::ONE_HALF, -F::ONE_HALF],
-                    pos![-F::ONE_HALF, -F::ONE_HALF, F::ONE_HALF],
-                ],
-                [
-                    pos![-F::ONE_HALF, F::ONE_HALF, -F::ONE_HALF],
-                    pos![-F::ONE_HALF, F::ONE_HALF, F::ONE_HALF],
-                ],
+                [pos![-0.5, -0.5, -0.5], pos![-0.5, -0.5, 0.5]],
+                [pos![-0.5, 0.5, -0.5], pos![-0.5, 0.5, 0.5]],
             ],
             [
-                [
-                    pos![F::ONE_HALF, -F::ONE_HALF, -F::ONE_HALF],
-                    pos![F::ONE_HALF, -F::ONE_HALF, F::ONE_HALF],
-                ],
-                [
-                    pos![F::ONE_HALF, F::ONE_HALF, -F::ONE_HALF],
-                    pos![F::ONE_HALF, F::ONE_HALF, F::ONE_HALF],
-                ],
+                [pos![0.5, -0.5, -0.5], pos![0.5, -0.5, 0.5]],
+                [pos![0.5, 0.5, -0.5], pos![0.5, 0.5, 0.5]],
             ],
         ];
 
@@ -930,22 +915,22 @@ impl<F: Float> LineSegmentMesh<F> {
     /// The generated mesh will only contain positions.
     pub fn create_unit_pyramid() -> Self {
         let positions = vec![
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![-F::ONE, F::ZERO, -F::ONE],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![-F::ONE, F::ZERO, F::ONE],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![F::ONE, F::ZERO, -F::ONE],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![F::ONE, F::ZERO, F::ONE],
-            pos![-F::ONE, F::ZERO, -F::ONE],
-            pos![-F::ONE, F::ZERO, F::ONE],
-            pos![-F::ONE, F::ZERO, F::ONE],
-            pos![F::ONE, F::ZERO, F::ONE],
-            pos![F::ONE, F::ZERO, F::ONE],
-            pos![F::ONE, F::ZERO, -F::ONE],
-            pos![F::ONE, F::ZERO, -F::ONE],
-            pos![-F::ONE, F::ZERO, -F::ONE],
+            pos![0.0, 1.0, 0.0],
+            pos![-1.0, 0.0, -1.0],
+            pos![0.0, 1.0, 0.0],
+            pos![-1.0, 0.0, 1.0],
+            pos![0.0, 1.0, 0.0],
+            pos![1.0, 0.0, -1.0],
+            pos![0.0, 1.0, 0.0],
+            pos![1.0, 0.0, 1.0],
+            pos![-1.0, 0.0, -1.0],
+            pos![-1.0, 0.0, 1.0],
+            pos![-1.0, 0.0, 1.0],
+            pos![1.0, 0.0, 1.0],
+            pos![1.0, 0.0, 1.0],
+            pos![1.0, 0.0, -1.0],
+            pos![1.0, 0.0, -1.0],
+            pos![-1.0, 0.0, -1.0],
         ];
 
         Self::new(positions, Vec::new())
@@ -958,14 +943,14 @@ impl<F: Float> LineSegmentMesh<F> {
     /// The generated mesh will only contain positions.
     pub fn create_baseless_unit_pyramid() -> Self {
         let positions = vec![
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![-F::ONE, F::ZERO, -F::ONE],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![-F::ONE, F::ZERO, F::ONE],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![F::ONE, F::ZERO, -F::ONE],
-            pos![F::ZERO, F::ONE, F::ZERO],
-            pos![F::ONE, F::ZERO, F::ONE],
+            pos![0.0, 1.0, 0.0],
+            pos![-1.0, 0.0, -1.0],
+            pos![0.0, 1.0, 0.0],
+            pos![-1.0, 0.0, 1.0],
+            pos![0.0, 1.0, 0.0],
+            pos![1.0, 0.0, -1.0],
+            pos![0.0, 1.0, 0.0],
+            pos![1.0, 0.0, 1.0],
         ];
 
         Self::new(positions, Vec::new())
@@ -983,13 +968,13 @@ impl<F: Float> LineSegmentMesh<F> {
 
         let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         xy_circle.rotate(
-            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), <F as Float>::FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2),
             &mut dirty_mask,
         );
 
         let mut yz_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         yz_circle.rotate(
-            &UnitQuaternion::from_axis_angle(&Vector3::z_axis(), <F as Float>::FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2),
             &mut dirty_mask,
         );
 
@@ -1007,17 +992,17 @@ impl<F: Float> LineSegmentMesh<F> {
     pub fn create_horizontal_unit_circle(n_segments: usize) -> Self {
         let mut positions = Vec::with_capacity(2 * n_segments);
 
-        let angle_between_vertices = F::TWO_PI / F::from_usize(n_segments).unwrap();
+        let angle_between_vertices = 2.0 * PI / n_segments as f32;
 
-        positions.push(pos![F::ONE, F::ZERO, F::ZERO]);
+        positions.push(pos![1.0, 0.0, 0.0]);
 
         let mut polar_angle = angle_between_vertices;
 
         for _ in 1..n_segments {
-            let cos_polar_angle = F::cos(polar_angle);
-            let sin_polar_angle = F::sin(polar_angle);
+            let cos_polar_angle = f32::cos(polar_angle);
+            let sin_polar_angle = f32::sin(polar_angle);
 
-            let position = pos![cos_polar_angle, F::ZERO, sin_polar_angle];
+            let position = pos![cos_polar_angle, 0.0, sin_polar_angle];
             positions.push(position);
             positions.push(position);
 

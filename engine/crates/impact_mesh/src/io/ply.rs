@@ -24,7 +24,7 @@ struct PlyTriangleVertexIndices([u32; 3]);
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
-pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMesh<f32>> {
+pub fn read_mesh_from_ply_file(file_path: impl AsRef<Path>) -> Result<TriangleMesh> {
     let file_path = file_path.as_ref();
 
     let vertex_parser = Parser::<PlyVertex>::new();
@@ -68,7 +68,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
     vertex_property_names: Vec<&String>,
     vertex_list: Vec<PlyVertex>,
     triangle_vertex_indices_list: Vec<PlyTriangleVertexIndices>,
-) -> TriangleMesh<f32> {
+) -> TriangleMesh {
     let mut prop_idx = 0;
 
     let mut vertex_positions = Vec::new();

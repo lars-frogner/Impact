@@ -160,7 +160,7 @@ fn setup_triangle_mesh_for_new_entity(
             &mut resource_manager.triangle_meshes,
             &template,
             None,
-            Option::<&PlanarTextureProjection<_>>::None,
+            Option::<&PlanarTextureProjection>::None,
         ),
     }
 }

@@ -5,7 +5,7 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, hash::StringHash64, hash64};
+use impact_math::{hash::StringHash64, hash64};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
@@ -21,7 +21,7 @@ define_component_type! {
 }
 
 /// A registry of loaded [`LineSegmentMesh`]es.
-pub type LineSegmentMeshRegistry = MutableResourceRegistry<LineSegmentMesh<f32>>;
+pub type LineSegmentMeshRegistry = MutableResourceRegistry<LineSegmentMesh>;
 
 /// A 3D mesh of line segments represented by pairs of vertices.
 ///
@@ -30,9 +30,9 @@ pub type LineSegmentMeshRegistry = MutableResourceRegistry<LineSegmentMesh<f32>>
 /// making up an edge in the mesh. The mesh does not have a concept of faces or
 /// surfaces, only edges.
 #[derive(Clone, Debug)]
-pub struct LineSegmentMesh<F: Float> {
-    positions: Vec<VertexPosition<F>>,
-    colors: Vec<VertexColor<F>>,
+pub struct LineSegmentMesh {
+    positions: Vec<VertexPosition>,
+    colors: Vec<VertexColor>,
 }
 
 bitflags! {
@@ -88,13 +88,13 @@ impl<'de> serde::Deserialize<'de> for LineSegmentMeshID {
     }
 }
 
-impl<F: Float> LineSegmentMesh<F> {
+impl LineSegmentMesh {
     /// Creates a new mesh described by the given vertex positions and colors.
     ///
     /// # Panics
     /// If the length of `colors` is neither zero nor equal to the length of
     /// `positions`.
-    pub fn new(positions: Vec<VertexPosition<F>>, colors: Vec<VertexColor<F>>) -> Self {
+    pub fn new(positions: Vec<VertexPosition>, colors: Vec<VertexColor>) -> Self {
         let n_vertices = positions.len();
 
         assert!(
@@ -116,12 +116,12 @@ impl<F: Float> LineSegmentMesh<F> {
     }
 
     /// Returns a slice with the positions of the mesh vertices.
-    pub fn positions(&self) -> &[VertexPosition<F>] {
+    pub fn positions(&self) -> &[VertexPosition] {
         &self.positions
     }
 
     /// Returns a slice with the colors of the mesh vertices.
-    pub fn colors(&self) -> &[VertexColor<F>] {
+    pub fn colors(&self) -> &[VertexColor] {
         &self.colors
     }
 
@@ -137,14 +137,14 @@ impl<F: Float> LineSegmentMesh<F> {
 
     /// Returns an iterator over the mesh line segments, each item containing
     /// the two line segment vertex positions.
-    pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3<F>; 2]> {
+    pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3<f32>; 2]> {
         self.positions()
             .chunks_exact(2)
             .map(|pair| [&pair[0].0, &pair[1].0])
     }
 
     /// Applies the given scaling factor to the vertex positions of the mesh.
-    pub fn scale(&mut self, scaling: F, dirty_mask: &mut LineSegmentMeshDirtyMask) {
+    pub fn scale(&mut self, scaling: f32, dirty_mask: &mut LineSegmentMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.scaled(scaling);
         }
@@ -154,7 +154,7 @@ impl<F: Float> LineSegmentMesh<F> {
     /// Applies the given rotation to the mesh, rotating the vertex positions.
     pub fn rotate(
         &mut self,
-        rotation: &UnitQuaternion<F>,
+        rotation: &UnitQuaternion<f32>,
         dirty_mask: &mut LineSegmentMeshDirtyMask,
     ) {
         for position in &mut self.positions {
@@ -167,7 +167,7 @@ impl<F: Float> LineSegmentMesh<F> {
     /// vertex positions.
     pub fn translate(
         &mut self,
-        translation: &Vector3<F>,
+        translation: &Vector3<f32>,
         dirty_mask: &mut LineSegmentMeshDirtyMask,
     ) {
         for position in &mut self.positions {
@@ -180,7 +180,7 @@ impl<F: Float> LineSegmentMesh<F> {
     /// vertex positions.
     pub fn transform(
         &mut self,
-        transform: &Similarity3<F>,
+        transform: &Similarity3<f32>,
         dirty_mask: &mut LineSegmentMeshDirtyMask,
     ) {
         for position in &mut self.positions {
@@ -192,7 +192,7 @@ impl<F: Float> LineSegmentMesh<F> {
     /// Sets the color of every vertex to the given color.
     pub fn set_same_color(
         &mut self,
-        color: VertexColor<F>,
+        color: VertexColor,
         dirty_mask: &mut LineSegmentMeshDirtyMask,
     ) {
         self.colors = vec![color; self.positions.len()];
@@ -218,11 +218,11 @@ impl<F: Float> LineSegmentMesh<F> {
     }
 }
 
-impl Resource for LineSegmentMesh<f32> {
+impl Resource for LineSegmentMesh {
     type ID = LineSegmentMeshID;
 }
 
-impl MutableResource for LineSegmentMesh<f32> {
+impl MutableResource for LineSegmentMesh {
     type DirtyMask = LineSegmentMeshDirtyMask;
 }
 
