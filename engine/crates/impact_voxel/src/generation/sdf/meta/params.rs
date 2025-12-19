@@ -80,6 +80,7 @@ pub enum ParamValueMapping {
 type ParamIndicesForDeps = TinyVec<[ParamIdx; 4]>;
 
 impl<'a> ParamSpecRef<'a> {
+    #[inline]
     fn param_dependencies(&self) -> ParamIndicesForDeps {
         match self {
             Self::Discrete(spec) => spec.param_dependencies(),
@@ -87,6 +88,7 @@ impl<'a> ParamSpecRef<'a> {
         }
     }
 
+    #[inline]
     fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> f32 {
         match self {
             Self::Discrete(spec) => spec.sample(param_values, rng) as f32,
@@ -96,10 +98,12 @@ impl<'a> ParamSpecRef<'a> {
 }
 
 impl DiscreteParamSpec {
+    #[inline]
     pub fn as_spec<'a>(&'a self) -> ParamSpecRef<'a> {
         ParamSpecRef::Discrete(self)
     }
 
+    #[inline]
     fn param_dependencies(&self) -> ParamIndicesForDeps {
         let mut deps = ParamIndicesForDeps::new();
         match self {
@@ -112,6 +116,7 @@ impl DiscreteParamSpec {
         deps
     }
 
+    #[inline]
     fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> u32 {
         match self {
             Self::Constant(constant) => constant.eval(param_values),
@@ -125,10 +130,12 @@ impl DiscreteParamSpec {
 }
 
 impl ContParamSpec {
+    #[inline]
     pub fn as_spec<'a>(&'a self) -> ParamSpecRef<'a> {
         ParamSpecRef::Continuous(self)
     }
 
+    #[inline]
     fn param_dependencies(&self) -> ParamIndicesForDeps {
         let mut deps = ParamIndicesForDeps::new();
         match self {
@@ -150,6 +157,7 @@ impl ContParamSpec {
         deps
     }
 
+    #[inline]
     fn sample(&self, param_values: &[f32], rng: &mut ParamRng) -> f32 {
         match self {
             Self::Constant(constant) => constant.eval(param_values),
@@ -186,12 +194,14 @@ impl ContParamSpec {
 }
 
 impl DiscreteValueSource {
+    #[inline]
     fn add_param_dependency(&self, deps: &mut ParamIndicesForDeps) {
         if let Self::FromParam { idx, .. } = self {
             deps.push(*idx);
         }
     }
 
+    #[inline]
     fn eval(&self, param_values: &[f32]) -> u32 {
         match self {
             Self::Fixed(value) => *value,
@@ -205,12 +215,14 @@ impl DiscreteValueSource {
 }
 
 impl ContValueSource {
+    #[inline]
     fn add_param_dependency(&self, deps: &mut ParamIndicesForDeps) {
         if let Self::FromParam { idx, .. } = self {
             deps.push(*idx);
         }
     }
 
+    #[inline]
     fn eval(&self, param_values: &[f32]) -> f32 {
         match self {
             Self::Fixed(value) => *value,
@@ -223,6 +235,7 @@ impl ContValueSource {
 }
 
 impl ParamValueMapping {
+    #[inline]
     fn apply(&self, value: f32) -> f32 {
         match *self {
             Self::Linear { offset, scale } => offset + scale * value,
@@ -230,6 +243,7 @@ impl ParamValueMapping {
     }
 }
 
+#[inline]
 pub fn create_param_rng(seed: u64) -> ParamRng {
     ParamRng::seed_from_u64(seed)
 }

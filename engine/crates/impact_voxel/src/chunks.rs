@@ -588,29 +588,40 @@ impl ChunkedVoxelObject {
     }
 
     /// Returns the extent of single voxel in the object.
+    #[inline]
     pub fn voxel_extent(&self) -> f32 {
         self.voxel_extent
     }
 
+    /// Returns the reciprocal of the voxel extent.
+    #[inline]
+    pub fn inverse_voxel_extent(&self) -> f32 {
+        self.inverse_voxel_extent
+    }
+
     /// Returns the extent of single voxel chunk in the object.
+    #[inline]
     pub fn chunk_extent(&self) -> f32 {
         self.voxel_extent * CHUNK_SIZE as f32
     }
 
     /// Returns the number of chunks along each axis of the object's voxel
     /// grid.
+    #[inline]
     pub fn chunk_counts(&self) -> &[usize; 3] {
         &self.chunk_counts
     }
 
     /// Returns the total number of chunks, incuding empty ones, contained in
     /// the object's chunk grid.
+    #[inline]
     pub fn total_chunk_count(&self) -> usize {
         self.chunk_counts.iter().product()
     }
 
     /// Returns a guess for the rough number of exposed chunks the object
     /// contains based on its size.
+    #[inline]
     pub fn exposed_chunk_count_heuristic(&self) -> usize {
         // It is probably roughly equal to the total number of boundary chunks
         2 * (self.chunk_counts[0] * self.chunk_counts[1]
@@ -620,6 +631,7 @@ impl ChunkedVoxelObject {
 
     /// Returns a guess for the rough number of surface voxels the object
     /// contains based on its size.
+    #[inline]
     pub fn surface_voxel_count_heuristic(&self) -> usize {
         // Assuming one face is fully exposed
         CHUNK_SIZE_SQUARED * self.exposed_chunk_count_heuristic()
@@ -627,23 +639,27 @@ impl ChunkedVoxelObject {
 
     /// Returns the range of indices along each axis of the object's chunk
     /// grid that may contain non-empty chunks.
+    #[inline]
     pub fn occupied_chunk_ranges(&self) -> &[Range<usize>; 3] {
         &self.occupied_chunk_ranges
     }
 
     /// Returns the range of indices along each axis of the object's voxel
     /// grid that may contain non-empty voxels.
+    #[inline]
     pub fn occupied_voxel_ranges(&self) -> &[Range<usize>; 3] {
         &self.occupied_voxel_ranges
     }
 
     /// Whether the object only consists of empty voxels.
+    #[inline]
     pub fn contains_only_empty_voxels(&self) -> bool {
         self.occupied_voxel_ranges.iter().any(Range::is_empty)
     }
 
     /// Returns the stride in the linear chunk index correponding to
     /// incrementing each 3D chunk index.
+    #[inline]
     pub fn chunk_idx_strides(&self) -> &[usize; 3] {
         &self.chunk_idx_strides
     }
@@ -655,6 +671,7 @@ impl ChunkedVoxelObject {
     /// is different). This does not account for any relative motion of the
     /// objects after splitting. If this object has not been disconnected from a
     /// larger object, the offsets are zero.
+    #[inline]
     pub fn origin_offset_in_root(&self) -> [f32; 3] {
         self.origin_offset_in_root
             .map(|offset| self.voxel_extent * offset as f32)
@@ -669,6 +686,7 @@ impl ChunkedVoxelObject {
     /// Returns the number of voxels (potentially empty) actually stored in the
     /// object (as opposed to the count of voxels the object logically
     /// contains).
+    #[inline]
     pub fn stored_voxel_count(&self) -> usize {
         self.chunks
             .iter()
@@ -677,11 +695,13 @@ impl ChunkedVoxelObject {
     }
 
     /// Returns the slice of all voxel chunks.
+    #[inline]
     pub fn chunks(&self) -> &[VoxelChunk] {
         &self.chunks
     }
 
     /// Returns the slice of all stored (non-uniform chunk) voxels.
+    #[inline]
     pub fn voxels(&self) -> &[Voxel] {
         &self.voxels
     }
@@ -774,6 +794,7 @@ impl ChunkedVoxelObject {
 
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
     /// the object.
+    #[inline]
     pub fn compute_aabb<F: Float>(&self) -> AxisAlignedBox<F> {
         let voxel_extent = F::from_f32(self.voxel_extent()).unwrap();
 
@@ -793,6 +814,7 @@ impl ChunkedVoxelObject {
     }
 
     /// Computes a sphere enclosing all non-empty voxels in the object.
+    #[inline]
     pub fn compute_bounding_sphere<F: Float>(&self) -> Sphere<F> {
         let bounding_sphere_for_outer_voxel_centers =
             Sphere::bounding_sphere_for_points(&self.compute_occupied_voxel_range_corner_centers());
@@ -808,6 +830,7 @@ impl ChunkedVoxelObject {
         )
     }
 
+    #[inline]
     fn compute_occupied_voxel_range_corner_centers<F: Float>(&self) -> [Point3<F>; 8] {
         if self.contains_only_empty_voxels() {
             return [Point3::origin(); 8];
@@ -858,6 +881,7 @@ impl ChunkedVoxelObject {
     /// # Panics
     /// May panic of the chunk's handle to its segment of the object's voxel
     /// buffer is invalid.
+    #[inline]
     pub fn non_uniform_chunk_voxels(&self, chunk: &NonUniformVoxelChunk) -> &[Voxel] {
         chunk_voxels(&self.voxels, chunk.data_offset)
     }
@@ -866,6 +890,7 @@ impl ChunkedVoxelObject {
     /// coordinates (fractional indices scaled by the voxel extent) in the
     /// object's voxel grid, or [`None`] if the voxel is empty or the
     /// coordinates are out of bounds.
+    #[inline]
     pub fn get_voxel_at_coords(&self, x: f32, y: f32, z: f32) -> Option<&Voxel> {
         let i = (x * self.inverse_voxel_extent) as i64;
         let j = (y * self.inverse_voxel_extent) as i64;
@@ -880,6 +905,7 @@ impl ChunkedVoxelObject {
     /// Despite the organization of voxels into chunks, this lookup is
     /// relatively efficient because we can perform simple bit manipulations
     /// to determine the chunk containing the voxel.
+    #[inline]
     pub fn get_voxel<I: PrimInt>(&self, i: I, j: I, k: I) -> Option<&Voxel> {
         if i < I::from(self.occupied_voxel_ranges[0].start).unwrap()
             || j < I::from(self.occupied_voxel_ranges[1].start).unwrap()
@@ -907,6 +933,7 @@ impl ChunkedVoxelObject {
     ///
     /// # Panics
     /// If the indices are outside the object's voxel grid.
+    #[inline]
     pub fn get_voxel_inside(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
         let chunk_idx = self.linear_chunk_idx_from_object_voxel_indices(i, j, k);
         let chunk = &self.chunks[chunk_idx];
@@ -924,6 +951,7 @@ impl ChunkedVoxelObject {
 
     /// Returns the [`VoxelChunk`] at the given indices in the object's chunk
     /// grid. If the indices are out of bounds, an empty chunk is returned.
+    #[inline]
     pub fn get_chunk<I: PrimInt>(&self, chunk_i: I, chunk_j: I, chunk_k: I) -> VoxelChunk {
         if chunk_i < I::zero()
             || chunk_j < I::zero()
@@ -1100,12 +1128,14 @@ impl ChunkedVoxelObject {
     /// chunks whose (hypothetical) meshes have been invalidated by changes in
     /// the voxel object since the object was created or
     /// [`Self::mark_chunk_meshes_synchronized`] was last called.
+    #[inline]
     pub fn invalidated_mesh_chunk_indices(&self) -> impl ExactSizeIterator<Item = &[usize; 3]> {
         self.invalidated_mesh_chunk_indices.iter()
     }
 
     /// Signals that the mesh data of all the object's chunks is up to date with
     /// the object's voxels.
+    #[inline]
     pub fn mark_chunk_meshes_synchronized(&mut self) {
         self.invalidated_mesh_chunk_indices.clear();
     }
@@ -1567,6 +1597,7 @@ impl ChunkedVoxelObject {
 
     /// Computes the index in `self.chunks` of the chunk containing
     /// the voxel at the given indices into the object's voxel grid.
+    #[inline]
     fn linear_chunk_idx_from_object_voxel_indices(&self, i: usize, j: usize, k: usize) -> usize {
         let chunk_indices = chunk_indices_from_object_voxel_indices(i, j, k);
         self.linear_chunk_idx(&chunk_indices)
@@ -1574,6 +1605,7 @@ impl ChunkedVoxelObject {
 
     /// Computes the index in `self.chunks` of the chunk with the given 3D index
     /// in the object's chunk grid.
+    #[inline]
     fn linear_chunk_idx(&self, chunk_indices: &[usize; 3]) -> usize {
         chunk_indices[0] * self.chunk_idx_strides[0]
             + chunk_indices[1] * self.chunk_idx_strides[1]
@@ -1657,11 +1689,13 @@ impl VoxelChunk {
         }
     }
 
+    #[inline]
     const fn contains_only_empty_voxels(&self) -> bool {
         matches!(self, Self::Empty)
             || matches!(self, Self::NonUniform(chunk) if chunk.contains_only_empty_voxels())
     }
 
+    #[inline]
     const fn data_offset_and_split_detection_if_non_uniform(
         &self,
     ) -> Option<(u32, NonUniformChunkSplitDetectionData)> {
@@ -1677,6 +1711,7 @@ impl VoxelChunk {
         }
     }
 
+    #[inline]
     const fn stored_voxel_count(&self) -> usize {
         match self {
             Self::Empty => 0,
@@ -1715,6 +1750,7 @@ impl VoxelChunk {
         }
     }
 
+    #[inline]
     fn mark_lower_face_as_obscured(&mut self, dim: Dimension) {
         let flags = match self {
             Self::Empty | Self::Uniform(_) => {
@@ -1725,6 +1761,7 @@ impl VoxelChunk {
         flags.mark_lower_face_as_obscured(dim);
     }
 
+    #[inline]
     fn mark_upper_face_as_obscured(&mut self, dim: Dimension) {
         let flags = match self {
             Self::Empty | Self::Uniform(_) => {
@@ -1735,6 +1772,7 @@ impl VoxelChunk {
         flags.mark_upper_face_as_obscured(dim);
     }
 
+    #[inline]
     fn mark_lower_face_as_unobscured(&mut self, dim: Dimension) {
         let flags = match self {
             Self::Empty => {
@@ -1748,6 +1786,7 @@ impl VoxelChunk {
         flags.mark_lower_face_as_unobscured(dim);
     }
 
+    #[inline]
     fn mark_upper_face_as_unobscured(&mut self, dim: Dimension) {
         let flags = match self {
             Self::Empty => {
@@ -2341,6 +2380,7 @@ impl VoxelChunk {
 }
 
 impl NonUniformVoxelChunk {
+    #[inline]
     const fn contains_only_empty_voxels(&self) -> bool {
         self.flags.contains(VoxelChunkFlags::IS_EMPTY)
     }
@@ -2542,33 +2582,42 @@ impl NonUniformVoxelChunk {
 }
 
 impl FaceEmptyCounts {
+    #[inline]
     const fn zero() -> Self {
         Self([[0; 2]; 3])
     }
 
+    #[inline]
     fn increment_x_dn(&mut self) {
         self.0[0][0] += 1;
     }
+    #[inline]
     fn increment_x_up(&mut self) {
         self.0[0][1] += 1;
     }
+    #[inline]
     fn increment_y_dn(&mut self) {
         self.0[1][0] += 1;
     }
+    #[inline]
     fn increment_y_up(&mut self) {
         self.0[1][1] += 1;
     }
+    #[inline]
     fn increment_z_dn(&mut self) {
         self.0[2][0] += 1;
     }
+    #[inline]
     fn increment_z_up(&mut self) {
         self.0[2][1] += 1;
     }
 
+    #[inline]
     fn to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
         self.to_face_distributions(CHUNK_SIZE_SQUARED)
     }
 
+    #[inline]
     fn to_face_distributions(&self, full_face_count: usize) -> [[FaceVoxelDistribution; 2]; 3] {
         self.map(&|empty_count| {
             if empty_count == full_face_count {
@@ -2581,12 +2630,14 @@ impl FaceEmptyCounts {
         })
     }
 
+    #[inline]
     fn map<T>(&self, f: &impl Fn(usize) -> T) -> [[T; 2]; 3] {
         self.0.map(|counts| counts.map(f))
     }
 }
 
 impl VoxelChunkFlags {
+    #[inline]
     const fn fully_obscured() -> Self {
         Self::IS_OBSCURED_X_DN
             .union(Self::IS_OBSCURED_Y_DN)
@@ -2596,28 +2647,34 @@ impl VoxelChunkFlags {
             .union(Self::IS_OBSCURED_Z_UP)
     }
 
+    #[inline]
     fn has_exposed_face(&self) -> bool {
         !self.contains(Self::fully_obscured())
     }
 
+    #[inline]
     fn mark_lower_face_as_obscured(&mut self, dim: Dimension) {
         self.insert(Self::from_bits_retain(1 << dim as u8));
     }
 
+    #[inline]
     fn mark_upper_face_as_obscured(&mut self, dim: Dimension) {
         self.insert(Self::from_bits_retain(1 << (3 + dim as u8)));
     }
 
+    #[inline]
     fn mark_lower_face_as_unobscured(&mut self, dim: Dimension) {
         self.remove(Self::from_bits_retain(1 << dim as u8));
     }
 
+    #[inline]
     fn mark_upper_face_as_unobscured(&mut self, dim: Dimension) {
         self.remove(Self::from_bits_retain(1 << (3 + dim as u8)));
     }
 }
 
 impl ExposedVoxelChunk {
+    #[inline]
     fn new(chunk_indices: [usize; 3], flags: VoxelChunkFlags) -> Self {
         Self {
             chunk_indices,
@@ -2626,15 +2683,18 @@ impl ExposedVoxelChunk {
     }
 
     /// Returns the indices of the voxel chunk in the object's chunk grid.
+    #[inline]
     pub fn chunk_indices(&self) -> &[usize; 3] {
         &self.chunk_indices
     }
 
     /// Returns the flags for the voxel chunk.
+    #[inline]
     pub fn flags(&self) -> VoxelChunkFlags {
         self.flags
     }
 
+    #[inline]
     pub fn lower_voxel_indices(&self) -> [usize; 3] {
         [
             self.chunk_indices[0] * CHUNK_SIZE,
@@ -2643,6 +2703,7 @@ impl ExposedVoxelChunk {
         ]
     }
 
+    #[inline]
     pub fn upper_voxel_indices(&self) -> [usize; 3] {
         [
             self.chunk_indices[0] * CHUNK_SIZE + CHUNK_SIZE - 1,
@@ -2695,6 +2756,7 @@ fn determine_occupied_voxel_ranges(
     array::from_fn(|dim| min_voxel_indices[dim]..max_voxel_indices[dim] + 1)
 }
 
+#[inline]
 fn chunk_indices_from_linear_idx(chunk_counts: &[usize; 3], chunk_idx: usize) -> [usize; 3] {
     let chunk_i = chunk_idx / (chunk_counts[2] * chunk_counts[1]);
     let chunk_j = (chunk_idx / chunk_counts[2]) % chunk_counts[1];
@@ -2702,19 +2764,23 @@ fn chunk_indices_from_linear_idx(chunk_counts: &[usize; 3], chunk_idx: usize) ->
     [chunk_i, chunk_j, chunk_k]
 }
 
+#[inline]
 const fn chunk_start_voxel_idx(data_offset: u32) -> usize {
     (data_offset as usize) << (3 * LOG2_CHUNK_SIZE)
 }
 
+#[inline]
 const fn chunk_data_offset_from_start_voxel_idx(start_voxel_idx: usize) -> u32 {
     (start_voxel_idx >> (3 * LOG2_CHUNK_SIZE)) as u32
 }
 
+#[inline]
 fn chunk_voxels(voxels: &[Voxel], data_offset: u32) -> &[Voxel] {
     let start_voxel_idx = chunk_start_voxel_idx(data_offset);
     &voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT]
 }
 
+#[inline]
 fn chunk_voxels_mut(voxels: &mut [Voxel], data_offset: u32) -> &mut [Voxel] {
     let start_voxel_idx = chunk_start_voxel_idx(data_offset);
     &mut voxels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT]
@@ -2722,6 +2788,7 @@ fn chunk_voxels_mut(voxels: &mut [Voxel], data_offset: u32) -> &mut [Voxel] {
 
 /// Computes the index into a chunk's flattened voxel grid of the voxel at the
 /// given indices in the parent object's voxel grid.
+#[inline]
 const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
     i: usize,
     j: usize,
@@ -2733,6 +2800,7 @@ const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
 
 /// Computes the index into a chunk's flattened voxel grid of the voxel with the
 /// given 3D index in the voxel grid.
+#[inline]
 const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
     (voxel_indices[0] << (2 * LOG2_CHUNK_SIZE))
         + (voxel_indices[1] << LOG2_CHUNK_SIZE)
@@ -2741,6 +2809,7 @@ const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
 
 /// Computes the 3D index into a chunk's voxel grid for the voxel with the
 /// given linear index into the flattened version of the chunk's voxel grid.
+#[inline]
 const fn chunk_voxel_indices_from_linear_idx(idx: usize) -> [usize; 3] {
     [
         idx >> (2 * LOG2_CHUNK_SIZE),
@@ -2755,6 +2824,7 @@ const fn chunk_voxel_indices_from_linear_idx(idx: usize) -> [usize; 3] {
 /// Since chunks have a power-of-two number of voxels along each axis, the
 /// chunk index is encoded in the upper bits of the corresponding object voxel
 /// index.
+#[inline]
 const fn chunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -> [usize; 3] {
     [
         i >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
@@ -2769,6 +2839,7 @@ const fn chunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -
 /// Since chunks have a power-of-two number of voxels along each axis, the voxel
 /// index within the chunk is encoded in the lower bits of the corresponding
 /// object voxel index.
+#[inline]
 const fn voxel_indices_within_chunk_from_object_voxel_indices(
     i: usize,
     j: usize,

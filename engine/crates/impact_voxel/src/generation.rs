@@ -268,14 +268,17 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
 impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
     type ChunkGenerationBuffers<AB: Allocator> = SDFVoxelGeneratorChunkBuffers<AB>;
 
+    #[inline]
     fn voxel_extent(&self) -> f32 {
         self.voxel_extent
     }
 
+    #[inline]
     fn grid_shape(&self) -> [usize; 3] {
         self.grid_shape
     }
 
+    #[inline]
     fn total_buffer_size(&self) -> usize {
         self.sdf_generator.total_buffer_size_for_chunk()
             + self.voxel_type_generator.total_buffer_size()

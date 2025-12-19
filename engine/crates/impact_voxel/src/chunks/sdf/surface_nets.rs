@@ -373,12 +373,14 @@ fn centroid_of_edge_intersections(dists: &[f32; 8]) -> Vec3A {
     sum / count as f32
 }
 
+#[inline]
 fn opposite_signs(a: f32, b: f32) -> bool {
     (a.to_bits() ^ b.to_bits()) & 0x8000_0000 != 0
 }
 
 // Given two cube corners, finds the point between them where the SDF is zero.
 // (This might not exist).
+#[inline]
 fn estimate_surface_edge_intersection(
     corner1: u32,
     corner2: u32,
@@ -398,6 +400,7 @@ fn estimate_surface_edge_intersection(
 /// For each dimension, there are 4 cube edges along that axis. This will do
 /// bilinear interpolation between the differences along those edges based on
 /// the position of the surface (s).
+#[inline]
 fn sdf_gradient(dists: &[f32; 8], s: Vec3A) -> Vec3A {
     let p00 = Vec3A::from([dists[0b100], dists[0b010], dists[0b001]]);
     let n00 = Vec3A::from([dists[0b000], dists[0b000], dists[0b000]]);
@@ -460,6 +463,7 @@ macro_rules! sorting_network_7 {
 // when the single material has a strong contrast with the surrounding
 // materials.
 impl SurfaceNetsVertexMaterials {
+    #[inline]
     fn compute(corner_has_voxel: [bool; 8], corner_material_indices: [u8; 8]) -> Self {
         let mut materials = Self {
             indices: [0; 8],
@@ -529,14 +533,17 @@ impl SurfaceNetsVertexMaterials {
         sorting_network_7!(compare_and_swap);
     }
 
+    #[inline]
     pub fn material_count(&self) -> usize {
         self.indices[7] as usize
     }
 
+    #[inline]
     pub fn valid_indices(&self) -> &[u8] {
         &self.indices[..self.material_count()]
     }
 
+    #[inline]
     pub fn valid_weights(&self) -> &[u8] {
         &self.weights[..self.material_count()]
     }

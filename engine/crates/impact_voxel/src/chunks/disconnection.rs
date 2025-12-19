@@ -1968,6 +1968,7 @@ impl<'a> NonUniformChunkConnectionUpdater<'a> {
 impl UniformChunkSplitDetectionData {
     /// Creates split detection data for a new uniform chunk given the previous
     /// number of uniform chunks, that is, the count excluding this chunk.
+    #[inline]
     pub fn new(previous_uniform_chunk_count: usize) -> Self {
         Self {
             data_offset: previous_uniform_chunk_count as u32,
@@ -1977,6 +1978,7 @@ impl UniformChunkSplitDetectionData {
 
 impl NonUniformChunkSplitDetectionData {
     /// Initializes split detection data for a new non-uniform chunk.
+    #[inline]
     pub fn new() -> Self {
         Self {
             region_count: 0,
@@ -1986,6 +1988,7 @@ impl NonUniformChunkSplitDetectionData {
 
     /// Creates split detection data for a chunk that was just converted from
     /// uniform to non-uniform.
+    #[inline]
     pub fn for_previously_uniform() -> Self {
         Self {
             region_count: 1,
@@ -1995,12 +1998,14 @@ impl NonUniformChunkSplitDetectionData {
 }
 
 impl Default for NonUniformChunkSplitDetectionData {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl LocalRegion {
+    #[inline]
     const fn zeroed() -> Self {
         Self {
             parent_label: GlobalRegionLabel::zero(),
@@ -2009,12 +2014,14 @@ impl LocalRegion {
         }
     }
 
+    #[inline]
     const fn range_of_adjacent_region_connections(&self) -> Range<usize> {
         (self.adjacent_region_connection_start_idx as usize)
             ..(self.adjacent_region_connection_start_idx as usize
                 + self.adjacent_region_connection_count as usize)
     }
 
+    #[inline]
     fn push_adjacent_region_connection_idx(
         &mut self,
         max_adjacent_region_connections: LocalRegionCount,
@@ -2041,10 +2048,12 @@ impl GlobalRegionLabel {
     const CHUNK_IDX_MASK: u32 = (1 << Self::CHUNK_IDX_N_BITS) - 1;
     const REGION_IDX_MASK: u32 = (1 << Self::REGION_IDX_N_BITS) - 1;
 
+    #[inline]
     const fn zero() -> Self {
         Self(0)
     }
 
+    #[inline]
     fn new(chunk_idx: u32, region_idx: u32) -> Self {
         assert!(chunk_idx <= Self::CHUNK_IDX_MASK);
         assert!(region_idx <= Self::REGION_IDX_MASK);
@@ -2056,10 +2065,12 @@ impl GlobalRegionLabel {
         Self(bits)
     }
 
+    #[inline]
     fn chunk_idx(&self) -> u32 {
         (self.0 >> Self::REGION_IDX_N_BITS) & Self::CHUNK_IDX_MASK
     }
 
+    #[inline]
     fn region_idx(&self) -> u32 {
         self.0 & Self::REGION_IDX_MASK
     }
@@ -2071,10 +2082,12 @@ impl AdjacentRegionConnection {
     const REGION_IDX_MASK: u16 = (1 << Self::REGION_IDX_N_BITS) - 1;
     const REGION_IDX_SHIFT: u16 = Self::CHUNK_FACE_N_BITS;
 
+    #[inline]
     const fn zero() -> Self {
         Self(0)
     }
 
+    #[inline]
     fn new(region_idx: u16, face_dim: Dimension, face_side: Side) -> Self {
         assert!(region_idx <= Self::REGION_IDX_MASK);
 
@@ -2085,6 +2098,7 @@ impl AdjacentRegionConnection {
         Self(bits)
     }
 
+    #[inline]
     fn encode_face(face_dim: Dimension, face_side: Side) -> u16 {
         let encoded_dim = match face_dim {
             Dimension::X => 0b1000,
@@ -2098,6 +2112,7 @@ impl AdjacentRegionConnection {
         encoded_dim | encoded_side
     }
 
+    #[inline]
     fn decode_face(&self) -> (Dimension, Side) {
         let face_dim = match self.0 & 0b1110 {
             0b1000 => Dimension::X,
@@ -2113,10 +2128,12 @@ impl AdjacentRegionConnection {
         (face_dim, face_side)
     }
 
+    #[inline]
     fn region_idx(&self) -> u16 {
         (self.0 >> Self::REGION_IDX_SHIFT) & Self::REGION_IDX_MASK
     }
 
+    #[inline]
     fn compute_relative_linear_chunk_idx(
         &self,
         chunk_idx_strides: &[usize; 3],
@@ -2146,14 +2163,17 @@ impl PropertyTransferrer for NoPropertyTransferrer {
     fn transfer_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxel: Voxel) {}
 }
 
+#[inline]
 const fn non_uniform_chunk_start_region_idx(uniform_chunk_count: usize, data_offset: u32) -> usize {
     uniform_chunk_count + ((data_offset as usize) << LOG2_MAX_REGIONS_PER_CHUNK)
 }
 
+#[inline]
 const fn chunk_start_adjacent_region_idx(data_offset: u32) -> usize {
     (data_offset as usize) * CHUNK_MAX_ADJACENT_REGION_CONNECTIONS
 }
 
+#[inline]
 fn chunk_voxel_region_labels(
     voxel_region_labels: &[LocalRegionLabel],
     data_offset: u32,
@@ -2162,6 +2182,7 @@ fn chunk_voxel_region_labels(
     &voxel_region_labels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT]
 }
 
+#[inline]
 fn chunk_voxel_region_labels_mut(
     voxel_region_labels: &mut [LocalRegionLabel],
     data_offset: u32,
@@ -2170,6 +2191,7 @@ fn chunk_voxel_region_labels_mut(
     &mut voxel_region_labels[start_voxel_idx..start_voxel_idx + CHUNK_VOXEL_COUNT]
 }
 
+#[inline]
 fn non_uniform_chunk_regions(
     regions: &[LocalRegion],
     uniform_chunk_count: usize,
@@ -2179,6 +2201,7 @@ fn non_uniform_chunk_regions(
     &regions[start_region_idx..start_region_idx + CHUNK_MAX_REGIONS]
 }
 
+#[inline]
 fn non_uniform_chunk_regions_mut(
     regions: &mut [LocalRegion],
     uniform_chunk_count: usize,
@@ -2188,6 +2211,7 @@ fn non_uniform_chunk_regions_mut(
     &mut regions[start_region_idx..start_region_idx + CHUNK_MAX_REGIONS]
 }
 
+#[inline]
 fn chunk_adjacent_region_connections(
     adjacent_region_connections: &[AdjacentRegionConnection],
     data_offset: u32,
@@ -2197,6 +2221,7 @@ fn chunk_adjacent_region_connections(
         ..start_adjacent_region_idx + CHUNK_MAX_ADJACENT_REGION_CONNECTIONS]
 }
 
+#[inline]
 fn chunk_adjacent_region_connections_mut(
     adjacent_region_connections: &mut [AdjacentRegionConnection],
     data_offset: u32,
@@ -2206,6 +2231,7 @@ fn chunk_adjacent_region_connections_mut(
         ..start_adjacent_region_idx + CHUNK_MAX_ADJACENT_REGION_CONNECTIONS]
 }
 
+#[inline]
 fn voxel_region_labels_for_two_chunks_mut(
     voxel_region_labels: &mut [LocalRegionLabel],
     chunk_1_data_offset: u32,
@@ -2219,6 +2245,7 @@ fn voxel_region_labels_for_two_chunks_mut(
     )
 }
 
+#[inline]
 fn uniform_regions_for_two_chunks_mut(
     regions: &mut [LocalRegion],
     chunk_1_data_offset: u32,
@@ -2233,6 +2260,7 @@ fn uniform_regions_for_two_chunks_mut(
     (&mut chunk_1_regions[0], &mut chunk_2_regions[0])
 }
 
+#[inline]
 fn adjacent_region_connections_for_two_chunks_mut(
     adjacent_region_connections: &mut [AdjacentRegionConnection],
     chunk_1_data_offset: u32,
@@ -2249,6 +2277,7 @@ fn adjacent_region_connections_for_two_chunks_mut(
     )
 }
 
+#[inline]
 fn max_adjacent_region_connections_per_region(
     boundary_region_count: LocalRegionCount,
 ) -> LocalRegionCount {
@@ -2258,6 +2287,7 @@ fn max_adjacent_region_connections_per_region(
 /// Walks the trees of parent voxels for the two voxels with the given indices
 /// to find their roots and merges the trees by assigning one root as the parent
 /// of the other.
+#[inline]
 fn give_voxels_same_root(parents: &mut [u16], idx_1: usize, idx_2: usize) {
     let root_1_idx = find_root_for_voxel(parents, idx_1);
     let root_2_idx = find_root_for_voxel(parents, idx_2);
@@ -2284,6 +2314,7 @@ fn give_voxels_same_root(parents: &mut [u16], idx_1: usize, idx_2: usize) {
 /// Walks the tree of parent voxels for the voxel with the given index until
 /// the root voxel index representing the local region is found.
 #[cfg(not(feature = "unchecked"))]
+#[inline]
 fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
     let parent_idx = parents[idx] as usize;
 
@@ -2303,6 +2334,7 @@ fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
 /// Walks the tree of parent voxels for the voxel with the given index until
 /// the root voxel index representing the local region is found.
 #[cfg(feature = "unchecked")]
+#[inline]
 fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
     let parent_idx = unsafe { *parents.get_unchecked(idx) as usize };
 
@@ -2354,6 +2386,7 @@ fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) 
 }
 
 #[cfg(not(feature = "unchecked"))]
+#[inline]
 fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
     // Set the new root voxel as the parent of the old root voxel
     parents[root_idx] = idx as u16;
@@ -2362,6 +2395,7 @@ fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
 }
 
 #[cfg(feature = "unchecked")]
+#[inline]
 fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
     unsafe {
         // Set the new root voxel as the parent of the old root voxel
@@ -2372,6 +2406,7 @@ fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
+#[inline]
 fn give_voxels_same_root_usize(parents: &mut [usize], idx_1: usize, idx_2: usize) {
     let root_1_idx = find_root_for_voxel_usize(parents, idx_1);
     let root_2_idx = find_root_for_voxel_usize(parents, idx_2);
@@ -2400,6 +2435,7 @@ fn find_root_for_voxel_usize(parents: &mut [usize], idx: usize) -> usize {
 /// root and merges the tree with the tree with the given target root by
 /// assigning the target root as the parent of the current root.
 #[cfg(not(feature = "unchecked"))]
+#[inline]
 fn set_root_for_region(
     chunks: &[VoxelChunk],
     regions: &mut [LocalRegion],
@@ -2431,6 +2467,7 @@ fn set_root_for_region(
 }
 
 #[cfg(feature = "unchecked")]
+#[inline]
 fn set_root_for_region(
     chunks: &[VoxelChunk],
     regions: &mut [LocalRegion],
@@ -2502,6 +2539,7 @@ fn find_root_for_region_and_compress_path(
 /// the root is then shortened by making the root the direct parent of the
 /// region.
 #[cfg(feature = "unchecked")]
+#[inline]
 fn find_root_for_region_and_compress_path(
     chunks: &[VoxelChunk],
     regions: &mut [LocalRegion],
@@ -2608,6 +2646,7 @@ fn find_root_for_region(
     region_root_label
 }
 
+#[inline]
 fn object_region_idx_for_region_label(
     chunks: &[VoxelChunk],
     uniform_chunk_count: usize,
@@ -2622,6 +2661,7 @@ fn object_region_idx_for_region_label(
 }
 
 #[cfg(not(feature = "unchecked"))]
+#[inline]
 fn object_region_idx_for_region_in_chunk(
     chunks: &[VoxelChunk],
     uniform_chunk_count: usize,
@@ -2644,6 +2684,7 @@ fn object_region_idx_for_region_in_chunk(
 }
 
 #[cfg(feature = "unchecked")]
+#[inline]
 fn object_region_idx_for_region_in_chunk(
     chunks: &[VoxelChunk],
     uniform_chunk_count: usize,
@@ -2662,6 +2703,7 @@ fn object_region_idx_for_region_in_chunk(
     }
 }
 
+#[inline]
 fn remove_adjacent_connections_for_chunk_boundary_regions(
     chunk_regions: &mut [LocalRegion],
     chunk_adjacent_region_connections: &mut [AdjacentRegionConnection],
@@ -2682,6 +2724,7 @@ fn remove_adjacent_connections_for_chunk_boundary_regions(
     }
 }
 
+#[inline]
 fn remove_adjacent_connections_for_region(
     region: &mut LocalRegion,
     chunk_adjacent_region_connections: &mut [AdjacentRegionConnection],
@@ -2702,6 +2745,7 @@ fn remove_adjacent_connections_for_region(
     }
 }
 
+#[inline]
 fn add_adjacent_connection_for_region(
     region: &mut LocalRegion,
     chunk_adjacent_region_connections: &mut [AdjacentRegionConnection],

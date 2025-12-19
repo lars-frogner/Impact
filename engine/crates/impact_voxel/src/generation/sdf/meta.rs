@@ -2789,6 +2789,7 @@ fn sample_signed_distance_with_gradient<A: Allocator>(
 /// Takes 2x2x2 signed distances (column-major order) sampled one voxel width
 /// apart and estimates the value at the center of the sampled block by taking
 /// their average.
+#[inline]
 fn compute_center_value_of_2x2x2_samples(signed_distances: &[f32; 8]) -> f32 {
     signed_distances.iter().sum::<f32>() * 0.125
 }
@@ -2797,6 +2798,7 @@ fn compute_center_value_of_2x2x2_samples(signed_distances: &[f32; 8]) -> f32 {
 /// apart and estimates the gradient at the center of the sampled block by
 /// calculating the analytic gradient of the trilinear interpolation of the
 /// samples at the center.
+#[inline]
 fn compute_gradient_from_2x2x2_samples(signed_distances: &[f32; 8]) -> Vector3<f32> {
     let &[d000, d001, d010, d011, d100, d101, d110, d111] = signed_distances;
     vector![
