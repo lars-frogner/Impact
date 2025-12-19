@@ -42,9 +42,9 @@ required-features = ["cli"]
 [[bench]]
 name = "entity"
 harness = false
-required-features = ["profiling"]
+required-features = ["benchmark"]
 
 [[bench]]
 name = "query"
 harness = false
-required-features = ["profiling"]
+required-features = ["benchmark"]

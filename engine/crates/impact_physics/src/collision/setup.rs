@@ -20,7 +20,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SphericalCollidable {
         kind: u32,
-        sphere: Sphere<f32>,
+        sphere: Sphere,
         response_params: ContactResponseParameters,
     }
 }
@@ -33,7 +33,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PlanarCollidable {
         kind: u32,
-        plane: Plane<f32>,
+        plane: Plane,
         response_params: ContactResponseParameters,
     }
 }
@@ -52,7 +52,7 @@ impl SphericalCollidable {
     }"#)]
     pub fn new(
         kind: CollidableKind,
-        sphere: Sphere<f32>,
+        sphere: Sphere,
         response_params: ContactResponseParameters,
     ) -> Self {
         Self {
@@ -66,7 +66,7 @@ impl SphericalCollidable {
         CollidableKind::from_u32(self.kind).unwrap()
     }
 
-    pub fn sphere(&self) -> &Sphere<f32> {
+    pub fn sphere(&self) -> &Sphere {
         &self.sphere
     }
 
@@ -89,7 +89,7 @@ impl PlanarCollidable {
     }"#)]
     pub fn new(
         kind: CollidableKind,
-        plane: Plane<f32>,
+        plane: Plane,
         response_params: ContactResponseParameters,
     ) -> Self {
         Self {
@@ -103,7 +103,7 @@ impl PlanarCollidable {
         CollidableKind::from_u32(self.kind).unwrap()
     }
 
-    pub fn plane(&self) -> &Plane<f32> {
+    pub fn plane(&self) -> &Plane {
         &self.plane
     }
 

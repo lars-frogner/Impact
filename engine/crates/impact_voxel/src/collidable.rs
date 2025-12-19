@@ -521,7 +521,7 @@ fn generate_sphere_voxel_object_contact_manifold(
 pub fn for_each_sphere_voxel_object_contact(
     voxel_object: &ChunkedVoxelObject,
     transform_to_object_space: &Isometry3<f32>,
-    sphere: &Sphere<f32>,
+    sphere: &Sphere,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();
@@ -616,7 +616,7 @@ fn generate_voxel_object_plane_contact_manifold(
 pub fn for_each_voxel_object_plane_contact(
     voxel_object: &ChunkedVoxelObject,
     transform_to_object_space: &Isometry3<f32>,
-    plane: &Plane<f32>,
+    plane: &Plane,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();

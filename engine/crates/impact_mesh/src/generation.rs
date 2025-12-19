@@ -7,6 +7,7 @@ use crate::{
     VertexColor,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
+use impact_math::consts::f32::TWO_PI;
 use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
@@ -283,7 +284,7 @@ impl TriangleMesh {
 
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let angle_between_vertices = 2.0 * PI / n_circumference_vertices as f32;
+        let angle_between_vertices = TWO_PI / n_circumference_vertices as f32;
 
         let tan_slope_angle = if abs_diff_eq!(length, 0.0) {
             0.0
@@ -457,7 +458,7 @@ impl TriangleMesh {
         let n_rings = u32::try_from(n_rings).unwrap();
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let delta_phi = 2.0 * PI / n_circumference_vertices as f32;
+        let delta_phi = TWO_PI / n_circumference_vertices as f32;
         let delta_theta = PI / (n_rings + 1) as f32;
 
         // Top vertex
@@ -575,7 +576,7 @@ impl TriangleMesh {
         let n_rings = u32::try_from(n_rings).unwrap();
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
-        let delta_phi = 2.0 * PI / n_circumference_vertices as f32;
+        let delta_phi = TWO_PI / n_circumference_vertices as f32;
         let delta_theta = FRAC_PI_2 / n_rings as f32;
 
         // Top vertex
@@ -992,7 +993,7 @@ impl LineSegmentMesh {
     pub fn create_horizontal_unit_circle(n_segments: usize) -> Self {
         let mut positions = Vec::with_capacity(2 * n_segments);
 
-        let angle_between_vertices = 2.0 * PI / n_segments as f32;
+        let angle_between_vertices = TWO_PI / n_segments as f32;
 
         positions.push(pos![1.0, 0.0, 0.0]);
 

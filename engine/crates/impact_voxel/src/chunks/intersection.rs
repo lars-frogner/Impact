@@ -33,7 +33,7 @@ impl ChunkedVoxelObject {
     /// that are fully outside the negative halfspace of the plane.
     pub fn for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &self,
-        plane: &Plane<f32>,
+        plane: &Plane,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         let normalized_plane = plane.scaled(self.inverse_voxel_extent);
@@ -54,7 +54,7 @@ impl ChunkedVoxelObject {
     /// that are fully outside the sphere.
     pub fn for_each_surface_voxel_maybe_intersecting_sphere(
         &self,
-        sphere: &Sphere<f32>,
+        sphere: &Sphere,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
@@ -153,7 +153,7 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_sphere(
         &mut self,
-        sphere: &Sphere<f32>,
+        sphere: &Sphere,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
         let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
@@ -291,7 +291,7 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_capsule(
         &mut self,
-        capsule: &Capsule<f32>,
+        capsule: &Capsule,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
         let normalized_capsule = capsule.scaled(self.inverse_voxel_extent);
@@ -436,7 +436,7 @@ impl ChunkedVoxelObject {
         i: usize,
         j: usize,
         k: usize,
-    ) -> AxisAlignedBox<f32> {
+    ) -> AxisAlignedBox {
         voxel_aabb_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
@@ -508,7 +508,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
         &self,
-        plane: &Plane<f32>,
+        plane: &Plane,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -532,7 +532,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_sphere_brute_force(
         &self,
-        sphere: &Sphere<f32>,
+        sphere: &Sphere,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -555,7 +555,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_sphere_brute_force(
         &self,
-        sphere: &Sphere<f32>,
+        sphere: &Sphere,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -576,7 +576,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_capsule_brute_force(
         &self,
-        capsule: &Capsule<f32>,
+        capsule: &Capsule,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         let containment_tester = capsule.create_point_containment_tester();
@@ -600,7 +600,7 @@ impl ChunkedVoxelObject {
     #[inline]
     pub fn voxel_ranges_in_object_touching_aab(
         &self,
-        normalized_aab: &AxisAlignedBox<f32>,
+        normalized_aab: &AxisAlignedBox,
     ) -> VoxelRanges {
         voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), normalized_aab)
     }
@@ -610,7 +610,7 @@ impl ChunkedVoxelObject {
     #[inline]
     pub fn voxel_ranges_in_object_touching_sphere(
         &self,
-        normalized_sphere: &Sphere<f32>,
+        normalized_sphere: &Sphere,
     ) -> VoxelRanges {
         voxel_ranges_touching_sphere(self.occupied_voxel_ranges.clone(), normalized_sphere)
     }
@@ -618,10 +618,7 @@ impl ChunkedVoxelObject {
     /// The plane should be in normalized voxel object space (where voxel extent
     /// is 1.0).
     #[inline]
-    pub fn voxel_ranges_in_object_within_plane(
-        &self,
-        normalized_plane: &Plane<f32>,
-    ) -> VoxelRanges {
+    pub fn voxel_ranges_in_object_within_plane(&self, normalized_plane: &Plane) -> VoxelRanges {
         voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), normalized_plane)
     }
 
@@ -676,7 +673,7 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
 #[inline]
 fn voxel_ranges_within_plane(
     max_voxel_ranges: VoxelRanges,
-    normalized_plane: &Plane<f32>,
+    normalized_plane: &Plane,
 ) -> VoxelRanges {
     let normalized_aabb = normalized_aabb_from_voxel_ranges(&max_voxel_ranges);
 
@@ -691,7 +688,7 @@ fn voxel_ranges_within_plane(
 #[inline]
 fn voxel_ranges_touching_aab(
     max_voxel_ranges: VoxelRanges,
-    normalized_aab: &AxisAlignedBox<f32>,
+    normalized_aab: &AxisAlignedBox,
 ) -> VoxelRanges {
     let lower_corner = normalized_aab.lower_corner();
     let upper_corner = normalized_aab.upper_corner();
@@ -712,7 +709,7 @@ fn voxel_ranges_touching_aab(
 #[inline]
 fn voxel_ranges_touching_sphere(
     max_voxel_ranges: VoxelRanges,
-    normalized_sphere: &Sphere<f32>,
+    normalized_sphere: &Sphere,
 ) -> VoxelRanges {
     voxel_ranges_touching_aab(max_voxel_ranges, &normalized_sphere.compute_aabb())
 }
@@ -745,7 +742,7 @@ fn normalized_chunk_aabb_from_chunk_indices(
     chunk_i: usize,
     chunk_j: usize,
     chunk_k: usize,
-) -> AxisAlignedBox<f32> {
+) -> AxisAlignedBox {
     AxisAlignedBox::new(
         point![
             (chunk_i * CHUNK_SIZE) as f32,
@@ -766,7 +763,7 @@ fn voxel_aabb_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> AxisAlignedBox<f32> {
+) -> AxisAlignedBox {
     AxisAlignedBox::new(
         point![
             i as f32 * voxel_extent,
@@ -782,7 +779,7 @@ fn voxel_aabb_from_object_voxel_indices(
 }
 
 #[inline]
-fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox<f32> {
+fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox {
     let lower_corner = point![
         voxel_ranges[0].start as f32,
         voxel_ranges[1].start as f32,
@@ -811,13 +808,13 @@ pub mod fuzzing {
     use std::mem;
 
     #[derive(Clone, Debug)]
-    pub struct ArbitraryPlane(Plane<f32>);
+    pub struct ArbitraryPlane(Plane);
 
     #[derive(Clone, Debug)]
-    pub struct ArbitrarySphere(Sphere<f32>);
+    pub struct ArbitrarySphere(Sphere);
 
     #[derive(Clone, Debug)]
-    pub struct ArbitraryCapsule(Capsule<f32>);
+    pub struct ArbitraryCapsule(Capsule);
 
     impl Arbitrary<'_> for ArbitraryPlane {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
@@ -1162,7 +1159,7 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
-            object.compute_aabb::<f32>().center()
+            object.compute_aabb().center()
                 - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
             sphere_radius,
         );
@@ -1205,7 +1202,7 @@ mod tests {
         let mut object = ChunkedVoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
-            object.compute_aabb::<f32>().center()
+            object.compute_aabb().center()
                 - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
             sphere_radius,
         );
@@ -1250,7 +1247,7 @@ mod tests {
         let mut object = ChunkedVoxelObject::generate(&generator);
 
         let capsule = Capsule::new(
-            object.compute_aabb::<f32>().center() - capsule_direction.scale(-object_radius),
+            object.compute_aabb().center() - capsule_direction.scale(-object_radius),
             capsule_vector,
             capsule_radius,
         );

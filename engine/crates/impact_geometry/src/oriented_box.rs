@@ -1,24 +1,23 @@
 //! Representation of boxes with arbitrary orientations.
 
 use crate::{AxisAlignedBox, Plane};
-use impact_math::Float;
 use nalgebra::{Isometry3, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
 
 /// A box with arbitrary position, orientation and extents.
 #[derive(Clone, Debug)]
-pub struct OrientedBox<F: Float> {
-    center: Point3<F>,
-    orientation: UnitQuaternion<F>,
-    half_extents: Vector3<F>,
+pub struct OrientedBox {
+    center: Point3<f32>,
+    orientation: UnitQuaternion<f32>,
+    half_extents: Vector3<f32>,
 }
 
-impl<F: Float> OrientedBox<F> {
+impl OrientedBox {
     /// Creates a new box with the given center position, orientation quaternion
     /// and half extents along each of its three axes.
     pub fn new(
-        center: Point3<F>,
-        orientation: UnitQuaternion<F>,
-        half_extents: Vector3<F>,
+        center: Point3<f32>,
+        orientation: UnitQuaternion<f32>,
+        half_extents: Vector3<f32>,
     ) -> Self {
         Self {
             center,
@@ -30,52 +29,52 @@ impl<F: Float> OrientedBox<F> {
     /// Creates a new box with the given half extents, centered at the origin
     /// and with the width, height and depth axes aligned with the x-, y-
     /// and z-axis respectively.
-    pub fn aligned_at_origin(half_extents: Vector3<F>) -> Self {
+    pub fn aligned_at_origin(half_extents: Vector3<f32>) -> Self {
         Self::new(Point3::origin(), UnitQuaternion::identity(), half_extents)
     }
 
     /// Creates a new box corresponding to the given axis aligned box.
-    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox<F>) -> Self {
+    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox) -> Self {
         Self::new(
             axis_aligned_box.center(),
             UnitQuaternion::identity(),
-            axis_aligned_box.extents().scale(F::ONE_HALF),
+            axis_aligned_box.extents().scale(0.5),
         )
     }
 
     /// Returns the center of the box.
-    pub fn center(&self) -> &Point3<F> {
+    pub fn center(&self) -> &Point3<f32> {
         &self.center
     }
 
     /// Returns the orientation of the box.
-    pub fn orientation(&self) -> &UnitQuaternion<F> {
+    pub fn orientation(&self) -> &UnitQuaternion<f32> {
         &self.orientation
     }
 
     /// Returns half extents of the box.
-    pub fn half_extents(&self) -> &Vector3<F> {
+    pub fn half_extents(&self) -> &Vector3<f32> {
         &self.half_extents
     }
 
     /// Computes the unit vector representing the width axis of the box.
-    pub fn compute_width_axis(&self) -> UnitVector3<F> {
+    pub fn compute_width_axis(&self) -> UnitVector3<f32> {
         UnitVector3::new_unchecked(self.orientation.transform_vector(&Vector3::x_axis()))
     }
 
     /// Computes the unit vector representing the height axis of the box.
-    pub fn compute_height_axis(&self) -> UnitVector3<F> {
+    pub fn compute_height_axis(&self) -> UnitVector3<f32> {
         UnitVector3::new_unchecked(self.orientation.transform_vector(&Vector3::y_axis()))
     }
 
     /// Computes the unit vector representing the depth axis of the box.
-    pub fn compute_depth_axis(&self) -> UnitVector3<F> {
+    pub fn compute_depth_axis(&self) -> UnitVector3<f32> {
         UnitVector3::new_unchecked(self.orientation.transform_vector(&Vector3::z_axis()))
     }
 
     /// Whether the given point is inside this box. A point exactly on the
     /// surface of the box is considered inside.
-    pub fn contains_point(&self, point: &Point3<F>) -> bool {
+    pub fn contains_point(&self, point: &Point3<f32>) -> bool {
         let point_in_box_frame = self.transform_point_to_box_frame(point);
         let abs_point_in_box_frame = point_in_box_frame.coords.abs();
         abs_point_in_box_frame.x <= self.half_extents.x
@@ -86,7 +85,7 @@ impl<F: Float> OrientedBox<F> {
     /// Transforms the given point to the frame with origin at the center of the
     /// box and with x-, y- and z-axes aligned with the width-, height- and
     /// depth-axes of the box, respectively.
-    pub fn transform_point_to_box_frame(&self, point: &Point3<F>) -> Point3<F> {
+    pub fn transform_point_to_box_frame(&self, point: &Point3<f32>) -> Point3<f32> {
         self.orientation
             .inverse_transform_vector(&(point - self.center))
             .into()
@@ -95,13 +94,13 @@ impl<F: Float> OrientedBox<F> {
     /// Transforms the given point from the frame with origin at the center of the
     /// box and with x-, y- and z-axes aligned with the width-, height- and
     /// depth-axes of the box, respectively.
-    pub fn transform_point_from_box_frame(&self, point: &Point3<F>) -> Point3<F> {
+    pub fn transform_point_from_box_frame(&self, point: &Point3<f32>) -> Point3<f32> {
         self.center + self.orientation.transform_vector(&point.coords)
     }
 
     /// Creates a new box corresponding to transforming this box with the given
     /// similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
         Self::new(
             transform.transform_point(&self.center),
             transform.isometry.rotation * self.orientation,
@@ -111,7 +110,7 @@ impl<F: Float> OrientedBox<F> {
 
     /// Creates a new box corresponding to transforming this box with the given
     /// isometry transform.
-    pub fn translated_and_rotated(&self, transform: &Isometry3<F>) -> Self {
+    pub fn translated_and_rotated(&self, transform: &Isometry3<f32>) -> Self {
         Self::new(
             transform.transform_point(&self.center),
             transform.rotation * self.orientation,
@@ -121,7 +120,7 @@ impl<F: Float> OrientedBox<F> {
 
     /// Creates a new box corresponding to rotating this box with the given
     /// rotation.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
         Self::new(
             rotation.transform_point(&self.center),
             rotation * self.orientation,
@@ -130,7 +129,7 @@ impl<F: Float> OrientedBox<F> {
     }
 
     /// Computes the eight corners of the oriented box.
-    pub fn compute_corners(&self) -> [Point3<F>; 8] {
+    pub fn compute_corners(&self) -> [Point3<f32>; 8] {
         let half_width_vector = self.compute_width_axis().scale(self.half_extents.x);
         let half_height_vector = self.compute_height_axis().scale(self.half_extents.y);
         let half_depth_vector = self.compute_depth_axis().scale(self.half_extents.z);
@@ -150,7 +149,7 @@ impl<F: Float> OrientedBox<F> {
     ///
     /// The order and orientation of the planes are consistent with the planes
     /// in a [`Frustum`](crate::Frustum).
-    pub fn compute_bounding_planes(&self) -> [Plane<F>; 6] {
+    pub fn compute_bounding_planes(&self) -> [Plane; 6] {
         let width_axis = self.compute_width_axis();
         let height_axis = self.compute_height_axis();
         let depth_axis = self.compute_depth_axis();
@@ -177,10 +176,10 @@ impl<F: Float> OrientedBox<F> {
 /// intersecting A. The second returned AABB is the subdomain of box B enclosing
 /// the part of A intersecting B, expressed in box B's reference frame, which is
 /// the frame where B is axis-aligned with its center at the origin.
-pub fn compute_box_intersection_bounds<F: Float>(
-    box_a: &AxisAlignedBox<F>,
-    box_b: &OrientedBox<F>,
-) -> Option<(AxisAlignedBox<F>, AxisAlignedBox<F>)> {
+pub fn compute_box_intersection_bounds(
+    box_a: &AxisAlignedBox,
+    box_b: &OrientedBox,
+) -> Option<(AxisAlignedBox, AxisAlignedBox)> {
     // Edge list (used for both boxes)
     const EDGES: [(usize, usize); 12] = [
         (0, 1),
@@ -198,13 +197,14 @@ pub fn compute_box_intersection_bounds<F: Float>(
     ];
 
     // Running bounds with +/- infinity
-    let mut box_a_lower = Point3::new(F::INFINITY, F::INFINITY, F::INFINITY);
-    let mut box_a_upper = Point3::new(-F::INFINITY, -F::INFINITY, -F::INFINITY);
-    let mut box_b_lower = Point3::new(F::INFINITY, F::INFINITY, F::INFINITY);
-    let mut box_b_upper = Point3::new(-F::INFINITY, -F::INFINITY, -F::INFINITY);
+    let mut box_a_lower = Point3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+    let mut box_a_upper = Point3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+    let mut box_b_lower = Point3::new(f32::INFINITY, f32::INFINITY, f32::INFINITY);
+    let mut box_b_upper = Point3::new(f32::NEG_INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
     let mut boxes_intersect = false;
 
-    let mut expand_bounds = |point_in_box_a_frame: &Point3<F>, point_in_box_b_frame: &Point3<F>| {
+    let mut expand_bounds = |point_in_box_a_frame: &Point3<f32>,
+                             point_in_box_b_frame: &Point3<f32>| {
         box_a_lower = box_a_lower.inf(point_in_box_a_frame);
         box_a_upper = box_a_upper.sup(point_in_box_a_frame);
         box_b_lower = box_b_lower.inf(point_in_box_b_frame);
@@ -300,14 +300,14 @@ mod tests {
     use super::*;
     use crate::{Frustum, projection::OrthographicTransform};
     use approx::assert_abs_diff_eq;
+    use impact_math::consts::f32::{FRAC_PI_2, FRAC_PI_4, FRAC_PI_6};
     use nalgebra::{point, vector};
-    use std::f64::consts::PI;
 
     #[test]
     fn oriented_box_axes_are_correct() {
         let oriented_box = OrientedBox::new(
             Point3::origin(),
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 2.0),
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2),
             Vector3::repeat(1.0),
         );
         assert_abs_diff_eq!(oriented_box.compute_width_axis(), Vector3::x_axis());
@@ -316,7 +316,7 @@ mod tests {
 
         let oriented_box = OrientedBox::new(
             Point3::origin(),
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -PI / 2.0),
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -FRAC_PI_2),
             Vector3::repeat(1.0),
         );
         assert_abs_diff_eq!(oriented_box.compute_width_axis(), Vector3::z_axis());
@@ -338,7 +338,7 @@ mod tests {
             .iter()
             .zip(oriented_box.compute_bounding_planes())
         {
-            assert_abs_diff_eq!(oriented_box_plane, frustum_plane, epsilon = 1e-8);
+            assert_abs_diff_eq!(oriented_box_plane, frustum_plane, epsilon = 1e-6);
         }
     }
 
@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn rotated_box_contains_center_point() {
         let center = point![1.0, 2.0, 3.0];
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI / 4.0);
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_4);
         let oriented_box = OrientedBox::new(center, rotation, vector![1.0, 1.0, 1.0]);
 
         assert!(oriented_box.contains_point(&center));
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn rotated_box_contains_rotated_corner_point() {
         let center = point![0.0, 0.0, 0.0];
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI / 4.0);
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_4);
         let oriented_box = OrientedBox::new(center, rotation, vector![1.0, 1.0, 1.0]);
 
         // Corner in box frame, transformed to world frame
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn rotated_box_excludes_exterior_points() {
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI / 4.0);
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_4);
         let oriented_box = OrientedBox::new(Point3::origin(), rotation, vector![1.0, 1.0, 1.0]);
 
         // Point outside rotated bounds
@@ -578,7 +578,7 @@ mod tests {
         let box_a = AxisAlignedBox::new(point![-1.0, -1.0, -1.0], point![1.0, 1.0, 1.0]);
 
         // Box B: rotated 45 degrees around Z axis
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), PI / 4.0);
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_4);
         let box_b = OrientedBox::new(point![0.0, 0.0, 0.0], rotation, vector![1.0, 1.0, 1.0]);
 
         let (bounds_a, bounds_b) = compute_box_intersection_bounds(&box_a, &box_b).unwrap();
@@ -704,18 +704,18 @@ mod tests {
         let box_a = AxisAlignedBox::new(point![-1.0, -1.0, -1.0], point![1.0, 1.0, 1.0]);
 
         // Box B: translated and rotated
-        let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 6.0);
+        let rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), FRAC_PI_6);
         let box_b = OrientedBox::new(point![0.5, 0.5, 0.0], rotation, vector![1.0, 1.0, 1.0]);
 
         let (bounds_a, _bounds_b) = compute_box_intersection_bounds(&box_a, &box_b).unwrap();
 
         // Verify bounds are within their respective coordinate systems
-        assert!(bounds_a.lower_corner().x >= -1.0);
-        assert!(bounds_a.lower_corner().y >= -1.0);
-        assert!(bounds_a.lower_corner().z >= -1.0);
-        assert!(bounds_a.upper_corner().x <= 1.0);
-        assert!(bounds_a.upper_corner().y <= 1.0);
-        assert!(bounds_a.upper_corner().z <= 1.0);
+        assert!(bounds_a.lower_corner().x >= -(1.0 + 1e-5));
+        assert!(bounds_a.lower_corner().y >= -(1.0 + 1e-5));
+        assert!(bounds_a.lower_corner().z >= -(1.0 + 1e-5));
+        assert!(bounds_a.upper_corner().x <= (1.0 + 1e-5));
+        assert!(bounds_a.upper_corner().y <= (1.0 + 1e-5));
+        assert!(bounds_a.upper_corner().z <= (1.0 + 1e-5));
 
         // The intersection should have positive volume
         let volume_a = (bounds_a.upper_corner() - bounds_a.lower_corner()).product();

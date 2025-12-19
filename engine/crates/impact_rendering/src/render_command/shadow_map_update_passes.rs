@@ -239,7 +239,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
         record_additional_commands_before_face_update: &mut impl FnMut(
-            &Frustum<f32>,
+            &Frustum,
             InstanceFeatureBufferRangeID,
             &mut TimestampQueryRegistry<'_>,
             &mut wgpu::CommandEncoder,
@@ -607,7 +607,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
         record_additional_commands_before_cascade_update: &mut impl FnMut(
-            &OrientedBox<f32>,
+            &OrientedBox,
             InstanceFeatureBufferRangeID,
             &mut TimestampQueryRegistry<'_>,
             &mut wgpu::CommandEncoder,

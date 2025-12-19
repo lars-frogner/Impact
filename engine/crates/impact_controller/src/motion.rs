@@ -298,7 +298,7 @@ mod tests {
     use MotionDirection::{Backwards, Down, Forwards, Left, Up};
     use MotionState::{Moving, Still};
     use approx::assert_abs_diff_eq;
-    use std::f32::consts::SQRT_2;
+    use impact_math::consts::f32::SQRT_2;
 
     #[test]
     fn updating_semi_directional_motion_works() {

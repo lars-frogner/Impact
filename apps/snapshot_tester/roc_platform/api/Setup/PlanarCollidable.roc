@@ -1,8 +1,8 @@
-# Hash: 634423dc90e9f3a0468b8ba5b382dc22fa04dfd49cfabf08440df37e7292a8ed
-# Generated: 2025-12-17T23:58:42+00:00
+# Hash: 36b0bf84e9bd7b8e41c67a9a812c63144b8ac68f38372373698975f4752d7c22
+# Generated: 2025-12-19T22:42:14+00:00
 # Rust type: impact_physics::collision::setup::PlanarCollidable
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: 2214e649 (dirty)
 module [
     PlanarCollidable,
     new,
@@ -24,11 +24,11 @@ import core.Plane
 ## A planar collidable.
 PlanarCollidable : {
     kind : U32,
-    plane : Plane.Plane Binary32,
+    plane : Plane.Plane,
     response_params : Physics.ContactResponseParameters.ContactResponseParameters,
 }
 
-new : Physics.CollidableKind.CollidableKind, Plane.Plane Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> PlanarCollidable
+new : Physics.CollidableKind.CollidableKind, Plane.Plane, Physics.ContactResponseParameters.ContactResponseParameters -> PlanarCollidable
 new = |kind, plane, response_params|
     {
         kind:
@@ -40,11 +40,11 @@ new = |kind, plane, response_params|
         response_params,
     }
 
-add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Plane.Plane Binary32, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
+add_new : Entity.ComponentData, Physics.CollidableKind.CollidableKind, Plane.Plane, Physics.ContactResponseParameters.ContactResponseParameters -> Entity.ComponentData
 add_new = |entity_data, kind, plane, response_params|
     add(entity_data, new(kind, plane, response_params))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Plane.Plane Binary32), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Physics.CollidableKind.CollidableKind), Entity.Arg.Broadcasted (Plane.Plane), Entity.Arg.Broadcasted (Physics.ContactResponseParameters.ContactResponseParameters) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, kind, plane, response_params|
     add_multiple(
         entity_data,
@@ -114,7 +114,7 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(32)
     |> Builtin.write_bytes_u32(value.kind)
-    |> Plane.write_bytes_32(value.plane)
+    |> Plane.write_bytes(value.plane)
     |> Physics.ContactResponseParameters.write_bytes(value.response_params)
 
 ## Deserializes a value of [PlanarCollidable] from its bytes in the
@@ -124,7 +124,7 @@ from_bytes = |bytes|
     Ok(
         {
             kind: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_u32?,
-            plane: bytes |> List.sublist({ start: 4, len: 16 }) |> Plane.from_bytes_32?,
+            plane: bytes |> List.sublist({ start: 4, len: 16 }) |> Plane.from_bytes?,
             response_params: bytes |> List.sublist({ start: 20, len: 12 }) |> Physics.ContactResponseParameters.from_bytes?,
         },
     )

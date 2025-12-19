@@ -21,6 +21,7 @@ use impact_geometry::{
 };
 use impact_math::{
     angle::{Angle, Degrees},
+    consts::f32::TWO_PI,
     splitmix,
 };
 use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
@@ -1633,7 +1634,7 @@ impl MetaSphereSurfaceTransforms {
         let solid_angle_per_transform = 4.0 * PI / (count as f32);
 
         let max_polar_angle_for_cap_covering_solid_angle = (1.0
-            - solid_angle_per_transform / (2.0 * PI))
+            - solid_angle_per_transform / TWO_PI)
             .clamp(-1.0, 1.0)
             .acos();
 
@@ -1754,7 +1755,7 @@ impl MetaRayTranslationToSurface {
 
         let mut compute_translation_to_surface =
             |subject_node_to_parent_transform: &Similarity3<f32>,
-             sphere_in_subject_space: &Sphere<f32>| {
+             sphere_in_subject_space: &Sphere| {
                 compute_spherecast_translation_to_surface(
                     &generator,
                     &mut buffers_1x1x1,
@@ -2576,7 +2577,7 @@ fn compute_spherecast_translation_to_surface<A: Allocator>(
     buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
     surface_sdf_node_to_parent_transform: &Similarity3<f32>,
     subject_node_to_parent_transform: &Similarity3<f32>,
-    sphere_in_subject_space: &Sphere<f32>,
+    sphere_in_subject_space: &Sphere,
     direction_in_subject_space: &UnitVector3<f32>,
     max_steps: u32,
     tolerance: f32,
@@ -2645,7 +2646,7 @@ fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
     buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
-    sphere: &Sphere<f32>,
+    sphere: &Sphere,
     direction: &UnitVector3<f32>,
     max_steps: u32,
     tolerance: f32,

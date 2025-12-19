@@ -10,19 +10,19 @@ use nalgebra::{Isometry3, UnitVector3, Vector3};
 
 #[derive(Clone, Debug)]
 pub struct SphereCollidable {
-    sphere: Sphere<f32>,
+    sphere: Sphere,
     response_params: ContactResponseParameters,
 }
 
 impl SphereCollidable {
-    pub fn new(sphere: Sphere<f32>, response_params: ContactResponseParameters) -> Self {
+    pub fn new(sphere: Sphere, response_params: ContactResponseParameters) -> Self {
         Self {
             sphere,
             response_params,
         }
     }
 
-    pub fn sphere(&self) -> &Sphere<f32> {
+    pub fn sphere(&self) -> &Sphere {
         &self.sphere
     }
 
@@ -98,8 +98,8 @@ pub fn generate_sphere_plane_contact_manifold(
 }
 
 pub fn determine_sphere_sphere_contact_geometry(
-    sphere_a: &Sphere<f32>,
-    sphere_b: &Sphere<f32>,
+    sphere_a: &Sphere,
+    sphere_b: &Sphere,
 ) -> Option<ContactGeometry> {
     let center_displacement = sphere_a.center() - sphere_b.center();
     let squared_center_distance = center_displacement.norm_squared();
@@ -132,8 +132,8 @@ pub fn determine_sphere_sphere_contact_geometry(
 }
 
 pub fn determine_sphere_plane_contact_geometry(
-    sphere: &Sphere<f32>,
-    plane: &Plane<f32>,
+    sphere: &Sphere,
+    plane: &Plane,
 ) -> Option<ContactGeometry> {
     let signed_distance = plane.compute_signed_distance(sphere.center());
     let penetration_depth = sphere.radius() - signed_distance;

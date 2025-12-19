@@ -3,7 +3,6 @@
 use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
 use nalgebra::{Isometry3, Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
 use num_traits::Signed;
 
@@ -21,18 +20,11 @@ use num_traits::Signed;
 /// is defined as the halfspace the unit normal is
 /// pointing into.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Plane<F: Float> {
-    unit_normal: UnitVector3<F>,
-    displacement: F,
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct Plane {
+    unit_normal: UnitVector3<f32>,
+    displacement: f32,
 }
-
-// WARNING: Do not change `Plane` without ensuring that `Plane<f32>` and
-// `Plane<f64>` are still `Pod`
-unsafe impl Zeroable for Plane<f32> {}
-unsafe impl Zeroable for Plane<f64> {}
-unsafe impl Pod for Plane<f32> {}
-unsafe impl Pod for Plane<f64> {}
 
 /// How a sphere is positioned relative to a plane.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -54,31 +46,22 @@ pub enum IntersectsPlane {
     No,
 }
 
-impl<F: Float> Plane<F> {
+impl Plane {
     /// The xy-coordinate plane, with the positive halfspace being the space of
     /// positive z-coordinates.
-    pub const XY_PLANE: Self = Self::new(
-        UnitVector3::new_unchecked(vector![F::ZERO, F::ZERO, F::ONE]),
-        F::ZERO,
-    );
+    pub const XY_PLANE: Self = Self::new(UnitVector3::new_unchecked(vector![0.0, 0.0, 1.0]), 0.0);
 
     /// The yz-coordinate plane, with the positive halfspace being the space of
     /// positive x-coordinates.
-    pub const YZ_PLANE: Self = Self::new(
-        UnitVector3::new_unchecked(vector![F::ONE, F::ZERO, F::ZERO]),
-        F::ZERO,
-    );
+    pub const YZ_PLANE: Self = Self::new(UnitVector3::new_unchecked(vector![1.0, 0.0, 0.0]), 0.0);
 
     /// The xz-coordinate plane, with the positive halfspace being the space of
     /// positive y-coordinates.
-    pub const XZ_PLANE: Self = Self::new(
-        UnitVector3::new_unchecked(vector![F::ZERO, F::ONE, F::ZERO]),
-        F::ZERO,
-    );
+    pub const XZ_PLANE: Self = Self::new(UnitVector3::new_unchecked(vector![0.0, 1.0, 0.0]), 0.0);
 
     /// Creates a new plane defined by the given unit normal
     /// vector and displacement.
-    pub const fn new(unit_normal: UnitVector3<F>, displacement: F) -> Self {
+    pub const fn new(unit_normal: UnitVector3<f32>, displacement: f32) -> Self {
         Self {
             unit_normal,
             displacement,
@@ -87,7 +70,10 @@ impl<F: Float> Plane<F> {
 
     /// Creates a new plane defined by the given unit normal
     /// vector and point in the plane.
-    pub fn from_normal_and_point(unit_normal: UnitVector3<F>, point_in_plane: &Point3<F>) -> Self {
+    pub fn from_normal_and_point(
+        unit_normal: UnitVector3<f32>,
+        point_in_plane: &Point3<f32>,
+    ) -> Self {
         Self::new(
             unit_normal,
             Self::calculate_displacement(&unit_normal, point_in_plane),
@@ -95,46 +81,46 @@ impl<F: Float> Plane<F> {
     }
 
     /// Returns the unit normal vector of the plane.
-    pub fn unit_normal(&self) -> &UnitVector3<F> {
+    pub fn unit_normal(&self) -> &UnitVector3<f32> {
         &self.unit_normal
     }
 
     /// Returns the displacement of the plane.
-    pub fn displacement(&self) -> F {
+    pub fn displacement(&self) -> f32 {
         self.displacement
     }
 
     /// Computes the signed distance from the plane to the given
     /// point. If the signed distance is negative, the point lies
     /// in the negative halfspace of the plane.
-    pub fn compute_signed_distance(&self, point: &Point3<F>) -> F {
+    pub fn compute_signed_distance(&self, point: &Point3<f32>) -> f32 {
         self.unit_normal().dot(&point.coords) - self.displacement
     }
 
     /// Whether the given point is strictly in the positive
     /// halfspace of the plane.
-    pub fn point_lies_in_positive_halfspace(&self, point: &Point3<F>) -> bool {
-        self.compute_signed_distance(point) > F::zero()
+    pub fn point_lies_in_positive_halfspace(&self, point: &Point3<f32>) -> bool {
+        self.compute_signed_distance(point) > 0.0
     }
 
     /// Whether the given point is strictly in the negative
     /// halfspace of the plane.
-    pub fn point_lies_in_negative_halfspace(&self, point: &Point3<F>) -> bool {
-        self.compute_signed_distance(point) < F::zero()
+    pub fn point_lies_in_negative_halfspace(&self, point: &Point3<f32>) -> bool {
+        self.compute_signed_distance(point) < 0.0
     }
 
     /// Returns the projection of the given point onto this plane.
-    pub fn project_point_onto_plane(&self, point: &Point3<F>) -> Point3<F> {
+    pub fn project_point_onto_plane(&self, point: &Point3<f32>) -> Point3<f32> {
         let signed_distance = self.compute_signed_distance(point);
         point - self.unit_normal.scale(signed_distance)
     }
 
     /// Determines how the given sphere is positioned relative
     /// to the plane.
-    pub fn determine_sphere_relation(&self, sphere: &Sphere<F>) -> SphereRelationToPlane {
+    pub fn determine_sphere_relation(&self, sphere: &Sphere) -> SphereRelationToPlane {
         let signed_distance = self.compute_signed_distance(sphere.center());
 
-        let intersects_plane = if <F as Signed>::abs(&signed_distance) < sphere.radius() {
+        let intersects_plane = if signed_distance.abs() < sphere.radius() {
             IntersectsPlane::Yes
         } else {
             IntersectsPlane::No
@@ -149,13 +135,13 @@ impl<F: Float> Plane<F> {
 
     /// Computes the plane resulting from scaling this plane with the given
     /// uniform scale factor.
-    pub fn scaled(&self, scale: F) -> Self {
+    pub fn scaled(&self, scale: f32) -> Self {
         Self::new(self.unit_normal, self.displacement * scale)
     }
 
     /// Computes the plane resulting from rotating this plane with the given
     /// rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
         let rotated_unit_normal =
             UnitVector3::new_unchecked(rotation.transform_vector(&self.unit_normal));
         Self::new(rotated_unit_normal, self.displacement)
@@ -163,7 +149,7 @@ impl<F: Float> Plane<F> {
 
     /// Computes the plane resulting from transforming this plane with the given
     /// similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
         let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
         let transformed_point_in_plane = transform.transform_point(&point_in_plane);
         let transformed_unit_normal = UnitVector3::new_unchecked(
@@ -177,7 +163,7 @@ impl<F: Float> Plane<F> {
 
     /// Computes the plane resulting from transforming this plane with the given
     /// isometry transform.
-    pub fn translated_and_rotated(&self, transform: &Isometry3<F>) -> Self {
+    pub fn translated_and_rotated(&self, transform: &Isometry3<f32>) -> Self {
         let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
         let transformed_point_in_plane = transform.transform_point(&point_in_plane);
         let transformed_unit_normal =
@@ -186,26 +172,23 @@ impl<F: Float> Plane<F> {
     }
 
     /// Deconstructs the plane into its unit normal and displacement.
-    pub fn into_normal_and_displacement(self) -> (UnitVector3<F>, F) {
+    pub fn into_normal_and_displacement(self) -> (UnitVector3<f32>, f32) {
         (self.unit_normal, self.displacement)
     }
 
-    fn calculate_displacement(unit_normal: &UnitVector3<F>, point_in_plane: &Point3<F>) -> F {
+    fn calculate_displacement(unit_normal: &UnitVector3<f32>, point_in_plane: &Point3<f32>) -> f32 {
         unit_normal.dot(&point_in_plane.coords)
     }
 }
 
-impl<F: Float + AbsDiffEq> AbsDiffEq for Plane<F>
-where
-    F::Epsilon: Copy,
-{
-    type Epsilon = F::Epsilon;
+impl AbsDiffEq for Plane {
+    type Epsilon = f32;
 
-    fn default_epsilon() -> F::Epsilon {
-        F::default_epsilon()
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
     }
 
-    fn abs_diff_eq(&self, other: &Self, epsilon: F::Epsilon) -> bool {
+    fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
         self.unit_normal.abs_diff_eq(&other.unit_normal, epsilon)
             && self.displacement.abs_diff_eq(&other.displacement, epsilon)
     }
@@ -213,14 +196,14 @@ where
 
 roc_integration::impl_roc_for_library_provided_primitives! {
 //  Type            Pkg   Parents  Module   Roc name  Postfix      Precision
-    Plane<f32> =>   core, None,    Plane,   Plane,    Some("_32"), SinglePrecision,
-    Plane<f64> =>   core, None,    Plane,   Plane,    Some("_64"), DoublePrecision,
+    Plane =>        core, None,    Plane,   Plane,    None,        PrecisionIrrelevant,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use impact_math::consts::f32::SQRT_2;
     use nalgebra::{Vector3, point, vector};
 
     #[test]
@@ -250,8 +233,8 @@ mod tests {
         );
         assert_abs_diff_eq!(
             plane.compute_signed_distance(&point![8.0, 0.0, 8.0]),
-            std::f64::consts::SQRT_2 * 8.0,
-            epsilon = 1e-9
+            SQRT_2 * 8.0,
+            epsilon = 1e-6
         );
         assert_abs_diff_eq!(plane.compute_signed_distance(&point![0.0, 8.0, 0.0]), 0.0);
     }

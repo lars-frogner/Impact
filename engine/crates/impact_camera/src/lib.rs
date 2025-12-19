@@ -13,7 +13,6 @@ use impact_geometry::{
     projection::{OrthographicTransform, PerspectiveTransform},
 };
 use impact_math::{
-    Float,
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
 };
@@ -21,25 +20,25 @@ use nalgebra::Projective3;
 use std::fmt::Debug;
 
 /// Represents a 3D camera.
-pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
+pub trait Camera: Debug + Send + Sync + 'static {
     /// Returns the projection transform used by the camera.
-    fn projection_transform(&self) -> &Projective3<F>;
+    fn projection_transform(&self) -> &Projective3<f32>;
 
     /// Returns the vertical field of view angle in radians.
-    fn vertical_field_of_view(&self) -> Radians<F>;
+    fn vertical_field_of_view(&self) -> Radians<f32>;
 
     /// Returns the frustum representing the view volume of the
     /// camera.
-    fn view_frustum(&self) -> &Frustum<F>;
+    fn view_frustum(&self) -> &Frustum;
 
     /// Returns the ratio of width to height of the camera's view plane.
-    fn aspect_ratio(&self) -> F;
+    fn aspect_ratio(&self) -> f32;
 
     /// Sets the ratio of width to height of the camera's view plane.
     ///
     /// # Panics
     /// If `aspect_ratio` is zero.
-    fn set_aspect_ratio(&mut self, aspect_ratio: F);
+    fn set_aspect_ratio(&mut self, aspect_ratio: f32);
 
     /// Whether the projection transform has changed since the
     /// last reset of change tracing.
@@ -51,26 +50,26 @@ pub trait Camera<F: Float>: Debug + Send + Sync + 'static {
 
 /// 3D camera using a perspective transformation.
 #[derive(Debug)]
-pub struct PerspectiveCamera<F: Float> {
-    perspective_transform: PerspectiveTransform<F>,
-    view_frustum: Frustum<F>,
+pub struct PerspectiveCamera {
+    perspective_transform: PerspectiveTransform,
+    view_frustum: Frustum,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
 }
 
 /// 3D camera using an orthographic transformation.
 #[derive(Debug)]
-pub struct OrthographicCamera<F: Float> {
-    aspect_ratio: F,
-    vertical_field_of_view: Radians<F>,
-    near_and_far_distance: UpperExclusiveBounds<F>,
-    orthographic_transform: OrthographicTransform<F>,
-    view_frustum: Frustum<F>,
+pub struct OrthographicCamera {
+    aspect_ratio: f32,
+    vertical_field_of_view: Radians<f32>,
+    near_and_far_distance: UpperExclusiveBounds<f32>,
+    orthographic_transform: OrthographicTransform,
+    view_frustum: Frustum,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
 }
 
-impl<F: Float> PerspectiveCamera<F> {
+impl PerspectiveCamera {
     /// Creates a new perspective camera.
     ///
     /// # Note
@@ -79,10 +78,10 @@ impl<F: Float> PerspectiveCamera<F> {
     /// # Panics
     /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
     /// zero.
-    pub fn new<A: Angle<F>>(
-        aspect_ratio: F,
+    pub fn new<A: Angle<f32>>(
+        aspect_ratio: f32,
         vertical_field_of_view: A,
-        near_and_far_distance: UpperExclusiveBounds<F>,
+        near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let perspective_transform =
             PerspectiveTransform::new(aspect_ratio, vertical_field_of_view, near_and_far_distance);
@@ -97,12 +96,12 @@ impl<F: Float> PerspectiveCamera<F> {
     }
 
     /// Returns the near distance of the camera.
-    pub fn near_distance(&self) -> F {
+    pub fn near_distance(&self) -> f32 {
         self.perspective_transform.near_distance()
     }
 
     /// Returns the far distance of the camera.
-    pub fn far_distance(&self) -> F {
+    pub fn far_distance(&self) -> f32 {
         self.perspective_transform.far_distance()
     }
 
@@ -110,12 +109,12 @@ impl<F: Float> PerspectiveCamera<F> {
     ///
     /// # Panics
     /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle<F>>(&mut self, fov: A) {
+    pub fn set_vertical_field_of_view<A: Angle<f32>>(&mut self, fov: A) {
         self.perspective_transform.set_vertical_field_of_view(fov);
         self.update_frustum_and_notify_change();
     }
 
-    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
+    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<f32>) {
         self.perspective_transform
             .set_near_and_far_distance(near_and_far_distance);
         self.update_frustum_and_notify_change();
@@ -127,24 +126,24 @@ impl<F: Float> PerspectiveCamera<F> {
     }
 }
 
-impl<F: Float> Camera<F> for PerspectiveCamera<F> {
-    fn projection_transform(&self) -> &Projective3<F> {
+impl Camera for PerspectiveCamera {
+    fn projection_transform(&self) -> &Projective3<f32> {
         self.perspective_transform.as_projective()
     }
 
-    fn vertical_field_of_view(&self) -> Radians<F> {
+    fn vertical_field_of_view(&self) -> Radians<f32> {
         self.perspective_transform.vertical_field_of_view()
     }
 
-    fn view_frustum(&self) -> &Frustum<F> {
+    fn view_frustum(&self) -> &Frustum {
         &self.view_frustum
     }
 
-    fn aspect_ratio(&self) -> F {
+    fn aspect_ratio(&self) -> f32 {
         self.perspective_transform.aspect_ratio()
     }
 
-    fn set_aspect_ratio(&mut self, aspect_ratio: F) {
+    fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.perspective_transform.set_aspect_ratio(aspect_ratio);
         self.update_frustum_and_notify_change();
     }
@@ -158,7 +157,7 @@ impl<F: Float> Camera<F> for PerspectiveCamera<F> {
     }
 }
 
-impl<F: Float> OrthographicCamera<F> {
+impl OrthographicCamera {
     /// Creates a new orthographic camera.
     ///
     /// # Note
@@ -166,10 +165,10 @@ impl<F: Float> OrthographicCamera<F> {
     ///
     /// # Panics
     /// If `aspect_ratio` or `vertical_field_of_view` is zero.
-    pub fn new<A: Angle<F>>(
-        aspect_ratio: F,
+    pub fn new<A: Angle<f32>>(
+        aspect_ratio: f32,
         vertical_field_of_view: A,
-        near_and_far_distance: UpperExclusiveBounds<F>,
+        near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let orthographic_transform = OrthographicTransform::with_field_of_view(
             aspect_ratio,
@@ -190,12 +189,12 @@ impl<F: Float> OrthographicCamera<F> {
     }
 
     /// Returns the near distance of the camera.
-    pub fn near_distance(&self) -> F {
+    pub fn near_distance(&self) -> f32 {
         self.near_and_far_distance.lower()
     }
 
     /// Returns the far distance of the camera.
-    pub fn far_distance(&self) -> F {
+    pub fn far_distance(&self) -> f32 {
         self.near_and_far_distance.upper()
     }
 
@@ -203,14 +202,14 @@ impl<F: Float> OrthographicCamera<F> {
     ///
     /// # Panics
     /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle<F>>(&mut self, fov: A) {
+    pub fn set_vertical_field_of_view<A: Angle<f32>>(&mut self, fov: A) {
         let fov = fov.as_radians();
         assert_abs_diff_ne!(fov, Radians::zero());
         self.vertical_field_of_view = fov;
         self.update_projection_transform_and_frustum();
     }
 
-    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<F>) {
+    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<f32>) {
         self.near_and_far_distance = near_and_far_distance;
         self.update_projection_transform_and_frustum();
     }
@@ -226,25 +225,25 @@ impl<F: Float> OrthographicCamera<F> {
     }
 }
 
-impl<F: Float> Camera<F> for OrthographicCamera<F> {
-    fn projection_transform(&self) -> &Projective3<F> {
+impl Camera for OrthographicCamera {
+    fn projection_transform(&self) -> &Projective3<f32> {
         self.orthographic_transform.as_projective()
     }
 
-    fn vertical_field_of_view(&self) -> Radians<F> {
+    fn vertical_field_of_view(&self) -> Radians<f32> {
         self.vertical_field_of_view
     }
 
-    fn view_frustum(&self) -> &Frustum<F> {
+    fn view_frustum(&self) -> &Frustum {
         &self.view_frustum
     }
 
-    fn aspect_ratio(&self) -> F {
+    fn aspect_ratio(&self) -> f32 {
         self.aspect_ratio
     }
 
-    fn set_aspect_ratio(&mut self, aspect_ratio: F) {
-        assert_abs_diff_ne!(aspect_ratio, F::zero());
+    fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
+        assert_abs_diff_ne!(aspect_ratio, 0.0);
         self.aspect_ratio = aspect_ratio;
         self.update_projection_transform_and_frustum();
     }
@@ -301,10 +300,10 @@ mod tests {
         let mut camera =
             PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.near_distance(), 0.1);
-        assert_abs_diff_eq!(camera.far_distance(), 100.0, epsilon = 1e-7);
+        assert_abs_diff_eq!(camera.far_distance(), 100.0, epsilon = 1e-4);
         camera.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
         assert_abs_diff_eq!(camera.near_distance(), 42.0);
-        assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-7);
+        assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-4);
         assert!(camera.projection_transform_changed());
     }
 

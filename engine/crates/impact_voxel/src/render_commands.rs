@@ -150,7 +150,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_omnidirectional_light_shadow_cubemap_face_update<GR>(
         &self,
-        positive_z_cubemap_face_frustum: &Frustum<f32>,
+        positive_z_cubemap_face_frustum: &Frustum,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -171,7 +171,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_unidirectional_light_shadow_map_cascade_update<GR>(
         &self,
-        cascade_frustum: &OrientedBox<f32>,
+        cascade_frustum: &OrientedBox,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -394,7 +394,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_shadow_mapping_with_frustum<GR>(
         &self,
-        frustum: &Frustum<f32>,
+        frustum: &Frustum,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -435,7 +435,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_shadow_mapping_with_orthographic_frustum<GR>(
         &self,
-        orthographic_frustum: &OrientedBox<f32>,
+        orthographic_frustum: &OrientedBox,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,

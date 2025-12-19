@@ -22,7 +22,7 @@ use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
 };
-use impact_math::angle::Angle;
+use impact_math::{angle::Angle, consts::f32::PI};
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_physics::{
     anchor::AnchorManager,
@@ -715,7 +715,7 @@ fn buffer_transforms_for_dynamics_gizmos(
 }
 
 fn sphere_radius_from_mass_and_density(mass: f32, density: f32) -> f32 {
-    f32::cbrt(3.0 * mass / (4.0 * std::f32::consts::PI * density))
+    f32::cbrt(3.0 * mass / (4.0 * PI * density))
 }
 
 fn model_view_transform_for_vector_gizmo(

@@ -2,7 +2,6 @@
 
 use crate::Plane;
 use approx::AbsDiffEq;
-use impact_math::Float;
 use na::point;
 use nalgebra::{self as na, Matrix4, Point3, UnitVector3, Vector3};
 
@@ -11,8 +10,8 @@ use Corner::{Lower, Upper};
 /// A box with orientation aligned with the coordinate system axes. The width,
 /// height and depth axes are aligned with the x-, y- and z-axis respectively.
 #[derive(Clone, Debug, PartialEq)]
-pub struct AxisAlignedBox<F: Float> {
-    corners: [Point3<F>; 2],
+pub struct AxisAlignedBox {
+    corners: [Point3<f32>; 2],
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -34,9 +33,9 @@ const ALL_CORNER_COMPONENTS: [[Corner; 3]; 8] = [
 
 const OPPOSITE_CORNER_INDICES: [usize; 8] = [7, 6, 5, 4, 3, 2, 1, 0];
 
-impl<F: Float> AxisAlignedBox<F> {
+impl AxisAlignedBox {
     /// Creates a new box with the given lower and upper corner points.
-    pub fn new(lower_corner: Point3<F>, upper_corner: Point3<F>) -> Self {
+    pub fn new(lower_corner: Point3<f32>, upper_corner: Point3<f32>) -> Self {
         Self {
             corners: [lower_corner, upper_corner],
         }
@@ -47,7 +46,7 @@ impl<F: Float> AxisAlignedBox<F> {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[Point3<F>]) -> Self {
+    pub fn aabb_for_points(points: &[Point3<f32>]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create AABB for empty point slice"
@@ -73,7 +72,7 @@ impl<F: Float> AxisAlignedBox<F> {
     ///
     /// # Panics
     /// If the point array is empty.
-    pub fn aabb_for_point_array<const N: usize>(points: &[Point3<F>; N]) -> Self {
+    pub fn aabb_for_point_array<const N: usize>(points: &[Point3<f32>; N]) -> Self {
         assert!(N > 0, "Tried to create AABB for empty point array");
 
         let first_point = points[0];
@@ -100,34 +99,34 @@ impl<F: Float> AxisAlignedBox<F> {
     }
 
     /// Returns a reference to the lower corner of the box.
-    pub fn lower_corner(&self) -> &Point3<F> {
+    pub fn lower_corner(&self) -> &Point3<f32> {
         &self.corners[0]
     }
 
     /// Returns a reference to the upper corner of the box.
-    pub fn upper_corner(&self) -> &Point3<F> {
+    pub fn upper_corner(&self) -> &Point3<f32> {
         &self.corners[1]
     }
 
     /// Calculates and returns the center point of the box.
-    pub fn center(&self) -> Point3<F> {
+    pub fn center(&self) -> Point3<f32> {
         na::center(self.lower_corner(), self.upper_corner())
     }
 
     /// Returns the extents of the box along the three axes.
-    pub fn extents(&self) -> Vector3<F> {
+    pub fn extents(&self) -> Vector3<f32> {
         self.upper_corner() - self.lower_corner()
     }
 
     /// Returns the half extents of the box along the three axes.
-    pub fn half_extents(&self) -> Vector3<F> {
-        self.extents().scale(F::ONE_HALF)
+    pub fn half_extents(&self) -> Vector3<f32> {
+        self.extents().scale(0.5)
     }
 
     /// Returns an array with all the eight corners of the box. The corners are
     /// ordered from smaller to larger coordinates, with the z-component varying
     /// fastest.
-    pub fn all_corners(&self) -> [Point3<F>; 8] {
+    pub fn all_corners(&self) -> [Point3<f32>; 8] {
         [0, 1, 2, 3, 4, 5, 6, 7].map(|idx| self.corner(idx))
     }
 
@@ -137,7 +136,7 @@ impl<F: Float> AxisAlignedBox<F> {
     ///
     /// # Panics
     /// If the given index exceeds 7.
-    pub fn corner(&self, corner_idx: usize) -> Point3<F> {
+    pub fn corner(&self, corner_idx: usize) -> Point3<f32> {
         let corner_components = &ALL_CORNER_COMPONENTS[corner_idx];
         point![
             self.corners[corner_components[0] as usize].x,
@@ -152,13 +151,13 @@ impl<F: Float> AxisAlignedBox<F> {
     ///
     /// # Panics
     /// If the given index exceeds 7.
-    pub fn opposite_corner(&self, corner_idx: usize) -> Point3<F> {
+    pub fn opposite_corner(&self, corner_idx: usize) -> Point3<f32> {
         self.corner(OPPOSITE_CORNER_INDICES[corner_idx])
     }
 
     /// Whether the given point is inside this axis-aligned box. A point exactly on the
     /// surface of the box is considered inside.
-    pub fn contains_point(&self, point: &Point3<F>) -> bool {
+    pub fn contains_point(&self, point: &Point3<f32>) -> bool {
         point.x >= self.lower_corner().x
             && point.x <= self.upper_corner().x
             && point.y >= self.lower_corner().y
@@ -191,7 +190,7 @@ impl<F: Float> AxisAlignedBox<F> {
 
     /// Computes the corner of the axis aligned box that is closest to the given
     /// point.
-    pub fn compute_closest_corner(&self, point: &Point3<F>) -> Point3<F> {
+    pub fn compute_closest_corner(&self, point: &Point3<f32>) -> Point3<f32> {
         let mut closest_corner = Point3::origin();
         for dim in 0..3 {
             if (self.lower_corner()[dim] - point[dim]).abs()
@@ -207,7 +206,7 @@ impl<F: Float> AxisAlignedBox<F> {
 
     /// Computes the corner of the axis aligned box that is farthest from the
     /// given point.
-    pub fn compute_farthest_corner(&self, point: &Point3<F>) -> Point3<F> {
+    pub fn compute_farthest_corner(&self, point: &Point3<f32>) -> Point3<f32> {
         let mut farthest_corner = Point3::origin();
         for dim in 0..3 {
             if (self.lower_corner()[dim] - point[dim]).abs()
@@ -228,10 +227,7 @@ impl<F: Float> AxisAlignedBox<F> {
         let lower_corner = self.lower_corner().sup(other.lower_corner());
         let upper_corner = self.upper_corner().inf(other.upper_corner());
 
-        if (upper_corner - lower_corner)
-            .iter()
-            .any(|&diff| diff < F::ZERO)
-        {
+        if (upper_corner - lower_corner).iter().any(|&diff| diff < 0.0) {
             None
         } else {
             Some(Self::new(lower_corner, upper_corner))
@@ -240,7 +236,7 @@ impl<F: Float> AxisAlignedBox<F> {
 
     /// Computes the axis-aligned box resulting from scaling this box with the
     /// given uniform scale factor.
-    pub fn scaled(&self, scale: F) -> Self {
+    pub fn scaled(&self, scale: f32) -> Self {
         Self::new(
             self.lower_corner().coords.scale(scale).into(),
             self.upper_corner().coords.scale(scale).into(),
@@ -249,22 +245,22 @@ impl<F: Float> AxisAlignedBox<F> {
 
     /// Computes the axis-aligned box resulting from scaling the extents of this
     /// box relative to its center with the given uniform scale factor.
-    pub fn scaled_about_center(&self, scale: F) -> Self {
+    pub fn scaled_about_center(&self, scale: f32) -> Self {
         let center = self.center();
-        let scaled_half_extents = self.extents().scale(F::ONE_HALF * scale.abs());
+        let scaled_half_extents = self.extents().scale(0.5 * scale.abs());
         Self::new(center - scaled_half_extents, center + scaled_half_extents)
     }
 
     /// Computes the axis-aligned box resulting from expanding the extents of
     /// this box relative to its center by the given margin on each side.
-    pub fn expanded_about_center(&self, margin: F) -> Self {
+    pub fn expanded_about_center(&self, margin: f32) -> Self {
         let margin = Vector3::repeat(margin);
         Self::new(self.lower_corner() - margin, self.upper_corner() + margin)
     }
 
     /// Computes the axis-aligned box resulting from translating this box with
     /// the given displacement vector.
-    pub fn translated(&self, displacement: &Vector3<F>) -> Self {
+    pub fn translated(&self, displacement: &Vector3<f32>) -> Self {
         Self::new(
             self.lower_corner() + displacement,
             self.upper_corner() + displacement,
@@ -272,7 +268,7 @@ impl<F: Float> AxisAlignedBox<F> {
     }
 
     /// Computes the AABB for the transformed version of this AABB.
-    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4<F>) -> Self {
+    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4<f32>) -> Self {
         let transformed_center = homogeneous_transform.transform_point(&self.center());
 
         // Performance trick: transform half-extents by the element-wise
@@ -293,14 +289,14 @@ impl<F: Float> AxisAlignedBox<F> {
     /// completely outside the box.
     pub fn find_contained_subsegment(
         &self,
-        segment_start: &Point3<F>,
-        offset_from_segment_start_to_end: &Vector3<F>,
-    ) -> Option<(F, F)> {
-        let mut t_min = F::ZERO;
-        let mut t_max = F::ONE;
+        segment_start: &Point3<f32>,
+        offset_from_segment_start_to_end: &Vector3<f32>,
+    ) -> Option<(f32, f32)> {
+        let mut t_min: f32 = 0.0;
+        let mut t_max: f32 = 1.0;
 
         for dim in 0..3 {
-            if offset_from_segment_start_to_end[dim] != F::ZERO {
+            if offset_from_segment_start_to_end[dim] != 0.0 {
                 let recip = offset_from_segment_start_to_end[dim].recip();
                 let t1 = (self.lower_corner()[dim] - segment_start[dim]) * recip;
                 let t2 = (self.upper_corner()[dim] - segment_start[dim]) * recip;
@@ -328,14 +324,14 @@ impl<F: Float> AxisAlignedBox<F> {
     /// [`None`] if the ray does not hit the box.
     pub fn find_ray_intersection(
         &self,
-        ray_origin: &Point3<F>,
-        ray_direction: &UnitVector3<F>,
-    ) -> Option<(F, F)> {
-        let mut t_min = F::ZERO;
-        let mut t_max = F::INFINITY;
+        ray_origin: &Point3<f32>,
+        ray_direction: &UnitVector3<f32>,
+    ) -> Option<(f32, f32)> {
+        let mut t_min: f32 = 0.0;
+        let mut t_max: f32 = f32::INFINITY;
 
         for dim in 0..3 {
-            if ray_direction[dim] != F::ZERO {
+            if ray_direction[dim] != 0.0 {
                 let recip = ray_direction[dim].recip();
                 let t1 = (self.lower_corner()[dim] - ray_origin[dim]) * recip;
                 let t2 = (self.upper_corner()[dim] - ray_origin[dim]) * recip;
@@ -356,8 +352,8 @@ impl<F: Float> AxisAlignedBox<F> {
         }
 
         // Require intersection in the forward ray direction
-        if t_max >= F::ZERO {
-            Some((t_min.max(F::ZERO), t_max))
+        if t_max >= 0.0 {
+            Some((t_min.max(0.0), t_max))
         } else {
             None
         }
@@ -366,14 +362,14 @@ impl<F: Float> AxisAlignedBox<F> {
     /// Returns a version of this AAB that extrudes as little as possible
     /// into the positive halfspace of the given plane without changing the
     /// volume of the box lying within the negative halfspace.
-    pub fn projected_onto_negative_halfspace(&self, plane: &Plane<F>) -> Self {
-        let tolerance = F::from_f64(1e-8).unwrap();
+    pub fn projected_onto_negative_halfspace(&self, plane: &Plane) -> Self {
+        const TOLERANCE: f32 = 1e-8;
         let normal = plane.unit_normal();
 
         let mut fitted = self.clone();
 
         for (i, j, k) in [(0, 1, 2), (1, 2, 0), (2, 0, 1)] {
-            if normal[k].abs() > tolerance {
+            if normal[k].abs() > TOLERANCE {
                 let a = normal[i] * self.corners[0][i] + normal[j] * self.corners[0][j];
                 let b = normal[i] * self.corners[0][i] + normal[j] * self.corners[1][j];
                 let c = normal[i] * self.corners[1][i] + normal[j] * self.corners[0][j];
@@ -382,11 +378,11 @@ impl<F: Float> AxisAlignedBox<F> {
                 let extremal = (plane.displacement() - a.min(b).min(c).min(d)) / normal[k];
 
                 if normal[k].is_sign_positive() {
-                    fitted.corners[0][k] = F::min(fitted.corners[0][k], extremal);
-                    fitted.corners[1][k] = F::min(fitted.corners[1][k], extremal);
+                    fitted.corners[0][k] = fitted.corners[0][k].min(extremal);
+                    fitted.corners[1][k] = fitted.corners[1][k].min(extremal);
                 } else {
-                    fitted.corners[0][k] = F::max(fitted.corners[0][k], extremal);
-                    fitted.corners[1][k] = F::max(fitted.corners[1][k], extremal);
+                    fitted.corners[0][k] = fitted.corners[0][k].max(extremal);
+                    fitted.corners[1][k] = fitted.corners[1][k].max(extremal);
                 }
             }
         }
@@ -394,15 +390,11 @@ impl<F: Float> AxisAlignedBox<F> {
     }
 }
 
-impl<F> AbsDiffEq for AxisAlignedBox<F>
-where
-    F: Float + AbsDiffEq,
-    <F as AbsDiffEq>::Epsilon: Clone,
-{
-    type Epsilon = <F as AbsDiffEq>::Epsilon;
+impl AbsDiffEq for AxisAlignedBox {
+    type Epsilon = f32;
 
     fn default_epsilon() -> Self::Epsilon {
-        <F as AbsDiffEq>::default_epsilon()
+        f32::default_epsilon()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -722,7 +714,7 @@ mod tests {
         assert!(result.is_some());
         // Ray enters box when all coordinates reach 0, exits when all reach 1
         let (t_min, t_max) = result.unwrap();
-        let sqrt_3 = 3.0_f64.sqrt();
+        let sqrt_3 = f32::sqrt(3.0);
         assert_abs_diff_eq!(t_min, sqrt_3, epsilon = 1e-6);
         assert_abs_diff_eq!(t_max, sqrt_3 * 2.0, epsilon = 1e-6);
     }

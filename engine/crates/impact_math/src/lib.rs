@@ -5,6 +5,7 @@ mod macros;
 
 pub mod angle;
 pub mod bounds;
+pub mod consts;
 pub mod halton;
 pub mod hash;
 pub mod num;
