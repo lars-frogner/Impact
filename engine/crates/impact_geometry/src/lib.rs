@@ -26,19 +26,7 @@ use impact_math::{
     Float,
     angle::{Angle, Radians},
 };
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
-
-/// Anything that represents a 3D point.
-pub trait Point<F: Float> {
-    /// Returns a reference to the point.
-    fn point(&self) -> &Point3<F>;
-}
-
-impl<F: Float> Point<F> for Point3<F> {
-    fn point(&self) -> &Point3<F> {
-        self
-    }
-}
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
 
 /// Uses the Frisvad method.
 pub fn orthonormal_basis_with_z_axis<F: Float>(
