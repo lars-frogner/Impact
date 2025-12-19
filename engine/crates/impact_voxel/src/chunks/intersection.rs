@@ -418,6 +418,7 @@ impl ChunkedVoxelObject {
 
     /// Returns the object space position of the center of the voxel at the
     /// given object voxel indices.
+    #[inline]
     pub fn voxel_center_position_from_object_voxel_indices(
         &self,
         i: usize,
@@ -429,6 +430,7 @@ impl ChunkedVoxelObject {
 
     /// Returns the object space axis aligned bounding box of the voxel at the
     /// given object voxel indices.
+    #[inline]
     pub fn voxel_aabb_from_object_voxel_indices(
         &self,
         i: usize,
@@ -595,6 +597,7 @@ impl ChunkedVoxelObject {
 
     /// The AAB should be in normalized voxel object space (where voxel extent
     /// is 1.0).
+    #[inline]
     pub fn voxel_ranges_in_object_touching_aab(
         &self,
         normalized_aab: &AxisAlignedBox<f32>,
@@ -604,6 +607,7 @@ impl ChunkedVoxelObject {
 
     /// The sphere should be in normalized voxel object space (where voxel
     /// extent is 1.0).
+    #[inline]
     pub fn voxel_ranges_in_object_touching_sphere(
         &self,
         normalized_sphere: &Sphere<f32>,
@@ -613,6 +617,7 @@ impl ChunkedVoxelObject {
 
     /// The plane should be in normalized voxel object space (where voxel extent
     /// is 1.0).
+    #[inline]
     pub fn voxel_ranges_in_object_within_plane(
         &self,
         normalized_plane: &Plane<f32>,
@@ -659,6 +664,7 @@ impl ChunkedVoxelObject {
     }
 }
 
+#[inline]
 fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usize> {
     let start = voxel_range.start / CHUNK_SIZE;
     let end = voxel_range.end.div_ceil(CHUNK_SIZE);
@@ -667,6 +673,7 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
 
 /// The plane should be in normalized voxel object space (where voxel extent
 /// is 1.0).
+#[inline]
 fn voxel_ranges_within_plane(
     max_voxel_ranges: VoxelRanges,
     normalized_plane: &Plane<f32>,
@@ -681,6 +688,7 @@ fn voxel_ranges_within_plane(
 
 /// The AAB should be in normalized voxel object space (where voxel extent is
 /// 1.0).
+#[inline]
 fn voxel_ranges_touching_aab(
     max_voxel_ranges: VoxelRanges,
     normalized_aab: &AxisAlignedBox<f32>,
@@ -701,6 +709,7 @@ fn voxel_ranges_touching_aab(
 
 /// The sphere should be in normalized voxel object space (where voxel extent is
 /// 1.0).
+#[inline]
 fn voxel_ranges_touching_sphere(
     max_voxel_ranges: VoxelRanges,
     normalized_sphere: &Sphere<f32>,
@@ -708,6 +717,7 @@ fn voxel_ranges_touching_sphere(
     voxel_ranges_touching_aab(max_voxel_ranges, &normalized_sphere.compute_aabb())
 }
 
+#[inline]
 fn voxel_center_position_from_object_voxel_indices(
     voxel_extent: f32,
     i: usize,
@@ -721,6 +731,7 @@ fn voxel_center_position_from_object_voxel_indices(
     ]
 }
 
+#[inline]
 fn normalized_voxel_center_position_from_object_voxel_indices(
     i: usize,
     j: usize,
@@ -729,6 +740,7 @@ fn normalized_voxel_center_position_from_object_voxel_indices(
     point![(i as f32 + 0.5), (j as f32 + 0.5), (k as f32 + 0.5)]
 }
 
+#[inline]
 fn normalized_chunk_aabb_from_chunk_indices(
     chunk_i: usize,
     chunk_j: usize,
@@ -748,6 +760,7 @@ fn normalized_chunk_aabb_from_chunk_indices(
     )
 }
 
+#[inline]
 fn voxel_aabb_from_object_voxel_indices(
     voxel_extent: f32,
     i: usize,
@@ -768,6 +781,7 @@ fn voxel_aabb_from_object_voxel_indices(
     )
 }
 
+#[inline]
 fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox<f32> {
     let lower_corner = point![
         voxel_ranges[0].start as f32,

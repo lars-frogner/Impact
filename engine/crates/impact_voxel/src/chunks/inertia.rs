@@ -318,6 +318,7 @@ impl RelativeEq for VoxelObjectInertialPropertyManager {
 impl VoxelObjectInertialPropertyUpdater<'_, '_> {
     /// Updates the inertial properties to account for the given voxel being
     /// removed.
+    #[inline]
     pub fn remove_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
         let (voxel_mass, voxel_moments, voxel_moments_of_inertia, voxel_products_of_inertia) =
             compute_moments_for_voxel(
@@ -339,6 +340,7 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
     /// Updates the inertial properties of both the source and destination
     /// object to account for the given voxel being transferred from the
     /// source to the destination.
+    #[inline]
     pub fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
         let (voxel_mass, voxel_moments, voxel_moments_of_inertia, voxel_products_of_inertia) =
             compute_moments_for_voxel(
@@ -413,20 +415,24 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
 }
 
 impl disconnection::PropertyTransferrer for VoxelObjectInertialPropertyTransferrer<'_, '_> {
+    #[inline]
     fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
         self.transfer_voxel(object_voxel_indices, voxel);
     }
 
+    #[inline]
     fn transfer_non_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxels: &[Voxel]) {
         self.transfer_non_uniform_chunk(chunk_indices, chunk_voxels);
     }
 
+    #[inline]
     fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
         self.transfer_uniform_chunk(chunk_indices, chunk_voxel);
     }
 }
 
 /// This uses the equations for the integrated inertial properties of a cube.
+#[inline]
 fn compute_moments_for_voxel(
     voxel_extent: f32,
     voxel_extent_pow_2: f32,
@@ -565,6 +571,7 @@ fn compute_moments_for_non_uniform_chunk(
 }
 
 /// This uses the equations for the integrated inertial properties of a cube.
+#[inline]
 fn compute_moments_for_uniform_chunk(
     voxel_extent: f32,
     voxel_type_densities: &[f32],

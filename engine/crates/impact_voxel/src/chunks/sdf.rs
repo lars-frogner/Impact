@@ -47,28 +47,34 @@ impl VoxelChunkSignedDistanceField {
     /// The number of grid cells holding a signed distance in the SDF grid for a
     /// single voxel chunk (equals the number of voxels in the chunk plus one
     /// cell of padding on each side).
+    #[inline]
     pub const fn grid_size() -> usize {
         SDF_GRID_SIZE
     }
 
     /// The total number of grid cells holding a signed distance in the SDF grid
     /// for a single voxel chunk, including the padding cells on the boundary.
+    #[inline]
     pub const fn grid_cell_count() -> usize {
         SDF_GRID_CELL_COUNT
     }
 
+    #[inline]
     const fn grid_size_u32() -> u32 {
         Self::grid_size() as u32
     }
 
+    #[inline]
     const fn squared_grid_size() -> usize {
         Self::grid_size() * Self::grid_size()
     }
 
+    #[inline]
     const fn linear_idx(indices: &[usize; 3]) -> usize {
         indices[0] * Self::squared_grid_size() + indices[1] * Self::grid_size() + indices[2]
     }
 
+    #[inline]
     const fn linear_idx_u32(indices: &[u32; 3]) -> u32 {
         indices[0] * Self::squared_grid_size() as u32
             + indices[1] * Self::grid_size_u32()
@@ -76,6 +82,7 @@ impl VoxelChunkSignedDistanceField {
     }
 
     #[allow(clippy::large_stack_arrays)]
+    #[inline]
     pub const fn default() -> Self {
         Self {
             values: [0.0; SDF_GRID_CELL_COUNT],
@@ -84,11 +91,13 @@ impl VoxelChunkSignedDistanceField {
         }
     }
 
+    #[inline]
     pub fn get_value(&self, i: usize, j: usize, k: usize) -> Option<f32> {
         self.values.get(Self::linear_idx(&[i, j, k])).copied()
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
+    #[inline]
     fn loop_over_sdf_values<'a, 'b>(
         &'b self,
         lp: &'a LoopForChunkSDF,
@@ -97,6 +106,7 @@ impl VoxelChunkSignedDistanceField {
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
+    #[inline]
     fn loop_over_voxel_types<'a, 'b>(
         &'b self,
         lp: &'a LoopForChunkSDF,
@@ -104,6 +114,7 @@ impl VoxelChunkSignedDistanceField {
         LoopForChunkSDFVoxelTypes::new(lp, &self.voxel_types)
     }
 
+    #[inline]
     fn loops_over_sdf_values_and_voxel_types_mut<'a, 'b>(
         &'b mut self,
         lp: &'a LoopForChunkSDF,
@@ -117,10 +128,12 @@ impl VoxelChunkSignedDistanceField {
         )
     }
 
+    #[inline]
     fn set_adjacent_is_non_uniform(&mut self, dim: Dimension, side: Side, is_non_uniform: bool) {
         self.adjacent_is_non_uniform[dim.idx()][side.idx()] = is_non_uniform;
     }
 
+    #[inline]
     fn adjacent_is_non_uniform(&self, dim: Dimension, side: Side) -> bool {
         self.adjacent_is_non_uniform[dim.idx()][side.idx()]
     }

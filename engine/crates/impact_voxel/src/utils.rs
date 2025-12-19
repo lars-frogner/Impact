@@ -59,12 +59,14 @@ pub struct MutDataLoop3<'a, 'b, T, const N: usize> {
 
 impl Dimension {
     /// Returns the array \[`X`, `Y`, `Z`\].
+    #[inline]
     pub const fn all() -> [Self; 3] {
         [Self::X, Self::Y, Self::Z]
     }
 
     /// Returns the index of the dimension (`0` for `X`, `1` for `Y` and `2` for
     /// `Z`).
+    #[inline]
     pub const fn idx(self) -> usize {
         self as usize
     }
@@ -72,11 +74,13 @@ impl Dimension {
 
 impl Side {
     /// Returns the index of the side (`0` for `Lower`, `1` for `Upper`).
+    #[inline]
     pub const fn idx(self) -> usize {
         self as usize
     }
 
     /// Returns the opposite `Side`.
+    #[inline]
     pub const fn opposite(self) -> Self {
         match self {
             Self::Lower => Self::Upper,
@@ -87,6 +91,7 @@ impl Side {
     /// Returns a [`Range`] over a single index on the relevant side of a
     /// collection of `N` elements (`0` for the lower side and `N - 1` for the
     /// upper side).
+    #[inline]
     pub const fn as_range<const N: usize>(self) -> Range<usize> {
         match self {
             Self::Lower => 0..1,
@@ -97,6 +102,7 @@ impl Side {
 
 impl<const N: usize> Loop3<N> {
     /// Creates a loop over all `N^3` grid locations.
+    #[inline]
     pub const fn over_all() -> Self {
         Self {
             i_range: 0..N,
@@ -109,6 +115,7 @@ impl<const N: usize> Loop3<N> {
     }
 
     /// Creates a loop over all `(N-2)^3` interior grid locations.
+    #[inline]
     pub const fn over_interior() -> Self {
         Self {
             i_range: Self::interior_range(),
@@ -122,12 +129,14 @@ impl<const N: usize> Loop3<N> {
 
     /// Creates a loop over one full face of the grid (`N^2` locations),
     /// specified by a dimension and side.
+    #[inline]
     pub const fn over_face(dim: Dimension, side: Side) -> Self {
         Self::range_over_face(dim, side, Self::full_range())
     }
 
     /// Creates a loop over the interior of a face of the grid (`(N-2)^2`
     /// locations), specified by a dimension and side.
+    #[inline]
     pub const fn over_face_interior(dim: Dimension, side: Side) -> Self {
         Self::range_over_face(dim, side, Self::interior_range())
     }
@@ -136,6 +145,7 @@ impl<const N: usize> Loop3<N> {
     /// by the dimension and side of the face holding the edge, and the edge's
     /// side on the face along a secondary dimension, which is the dimension
     /// following the face dimension in the `X -> Y -> Z -> X` cycle.
+    #[inline]
     pub const fn over_edge(face_dim: Dimension, face_side: Side, secondary_side: Side) -> Self {
         Self::range_over_edge(face_dim, face_side, secondary_side, Self::full_range())
     }
@@ -145,6 +155,7 @@ impl<const N: usize> Loop3<N> {
     /// the edge, and the edge's side on the face along a secondary
     /// dimension, which is the dimension following the face dimension in
     /// the `X -> Y -> Z -> X` cycle.
+    #[inline]
     pub const fn over_edge_interior(
         face_dim: Dimension,
         face_side: Side,
@@ -155,6 +166,7 @@ impl<const N: usize> Loop3<N> {
 
     /// Creates a single-iteration loop over a corner of the grid specified by
     /// a side along the `X`, `Y` and `Z` dimensions.
+    #[inline]
     pub const fn over_corner(x_side: Side, y_side: Side, z_side: Side) -> Self {
         Self {
             i_range: x_side.as_range::<N>(),
@@ -169,6 +181,7 @@ impl<const N: usize> Loop3<N> {
     /// Creates a loop over all grid locations, iterating from the specified
     /// side along the specified dimension first. For `Side::Upper`, the
     /// dimension is iterated in reverse order.
+    #[inline]
     pub const fn over_all_from_side(dim: Dimension, side: Side) -> Self {
         let reverse = matches!(side, Side::Upper);
 
@@ -202,6 +215,7 @@ impl<const N: usize> Loop3<N> {
 
     /// Creates 6 loops together covering the full boundary of the grid (no
     /// locations are iterated over more than once).
+    #[inline]
     pub const fn over_full_boundary() -> [Self; 6] {
         [
             Self {
@@ -255,6 +269,7 @@ impl<const N: usize> Loop3<N> {
         ]
     }
 
+    #[inline]
     const fn range_over_face(dim: Dimension, side: Side, range: Range<usize>) -> Self {
         match dim {
             Dimension::X => Self {
@@ -284,6 +299,7 @@ impl<const N: usize> Loop3<N> {
         }
     }
 
+    #[inline]
     const fn range_over_edge(
         face_dim: Dimension,
         face_side: Side,
@@ -318,45 +334,54 @@ impl<const N: usize> Loop3<N> {
         }
     }
 
+    #[inline]
     const fn full_range() -> Range<usize> {
         0..N
     }
 
+    #[inline]
     const fn interior_range() -> Range<usize> {
         1..N - 1
     }
 
     /// Returns the range of indices for the x-dimension.
+    #[inline]
     pub const fn i_range(&self) -> Range<usize> {
         self.i_range.start..self.i_range.end
     }
 
     /// Returns the range of indices for the y-dimension.
+    #[inline]
     pub const fn j_range(&self) -> Range<usize> {
         self.j_range.start..self.j_range.end
     }
 
     /// Returns the range of indices for the z-dimension.
+    #[inline]
     pub const fn k_range(&self) -> Range<usize> {
         self.k_range.start..self.k_range.end
     }
 
     /// Returns the number of indices iterated over in the x-dimension.
+    #[inline]
     pub const fn n_iterations_i(&self) -> usize {
         self.i_range.end - self.i_range.start
     }
 
     /// Returns the number of indices iterated over in the y-dimension.
+    #[inline]
     pub const fn n_iterations_j(&self) -> usize {
         self.j_range.end - self.j_range.start
     }
 
     /// Returns the number of indices iterated over in the z-dimension.
+    #[inline]
     pub const fn n_iterations_k(&self) -> usize {
         self.k_range.end - self.k_range.start
     }
 
     /// Returns the number of indices iterated over in each dimension.
+    #[inline]
     pub const fn n_iterations_over_each_dimension(&self) -> [usize; 3] {
         [
             self.n_iterations_i(),
@@ -366,11 +391,13 @@ impl<const N: usize> Loop3<N> {
     }
 
     /// Returns the total number of iterations in the loop.
+    #[inline]
     pub const fn n_iterations(&self) -> usize {
         self.n_iterations_i() * self.n_iterations_j() * self.n_iterations_k()
     }
 
     /// Returns the maximum linear index for any loop iteration.
+    #[inline]
     pub const fn max_linear_idx(&self) -> usize {
         Self::linear_idx(
             self.i_range.end - 1,
@@ -380,6 +407,7 @@ impl<const N: usize> Loop3<N> {
     }
 
     /// Returns the linear index for the given 3D indices.
+    #[inline]
     pub const fn linear_idx(i: usize, j: usize, k: usize) -> usize {
         i * (N * N) + j * N + k
     }
@@ -471,6 +499,7 @@ impl<const N: usize> Loop3<N> {
     /// Executes the given closure for each iteration in the loop with
     /// short-circuiting. The closure should return `true` to continue
     /// iteration or `false` to break early.
+    #[inline]
     pub fn execute_short_circuiting(&self, f: &mut impl FnMut(usize, usize, usize) -> bool) {
         match (
             self.move_j_loop_out,
@@ -784,6 +813,7 @@ impl<const N: usize> Loop3<N> {
 
 impl<'a, 'b, T, const N: usize> DataLoop3<'a, 'b, T, N> {
     /// Creates a new loop over (part of) the given data slice.
+    #[inline]
     pub fn new(lp: &'a Loop3<N>, data: &'b [T]) -> Self {
         Self { lp, data }
     }
@@ -794,6 +824,7 @@ impl<'a, 'b, T, const N: usize> DataLoop3<'a, 'b, T, N> {
     /// # Panics
     /// If the length of the data slice is smaller than the maximum linear
     /// index in the loop.
+    #[inline]
     pub fn execute(self, f: &mut impl FnMut(&[usize; 3], &T)) {
         assert!(self.data.len() >= self.lp.max_linear_idx());
         self.lp.execute_with_linear_idx(&mut |indices, data_idx| {
@@ -807,6 +838,7 @@ impl<'a, 'b, T, const N: usize> DataLoop3<'a, 'b, T, N> {
 
 impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// Creates a new loop over (part of) the given mutable data slice.
+    #[inline]
     pub fn new(lp: &'a Loop3<N>, data: &'b mut [T]) -> Self {
         Self { lp, data }
     }
@@ -817,6 +849,7 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// # Panics
     /// If the length of the data slice is smaller than the maximum linear
     /// index in the loop.
+    #[inline]
     pub fn execute(self, f: &mut impl FnMut(&[usize; 3], &mut T)) {
         assert!(self.data.len() >= self.lp.max_linear_idx());
         self.lp.execute_with_linear_idx(&mut |indices, data_idx| {
@@ -833,6 +866,7 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     /// # Panics
     /// If the length of the data slice is smaller than the maximum linear
     /// index in the loop.
+    #[inline]
     pub fn fill_data_with_value(self, value: T)
     where
         T: Copy,
@@ -856,6 +890,7 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     ///   iterations in the loop.
     /// - If the length of the data slice is smaller than the maximum linear
     ///   index in the loop.
+    #[inline]
     pub fn map_slice_values_into_data<U>(self, slice: &[U], map: &impl Fn(&U) -> T) {
         assert_eq!(slice.len(), self.lp.n_iterations());
         assert!(self.data.len() >= self.lp.max_linear_idx());
@@ -888,6 +923,7 @@ impl<'a, 'b, T, const N: usize> MutDataLoop3<'a, 'b, T, N> {
     ///   maximum linear index in the loop.
     /// - If the length of the data slice for the other loop is smaller than the
     ///   maximum linear index in that loop.
+    #[inline]
     pub fn map_other_data_into_data<U, const M: usize>(
         self,
         other: &DataLoop3<'_, '_, U, M>,

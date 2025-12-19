@@ -142,32 +142,38 @@ impl VoxelSignedDistance {
 
     /// The maximum signed distance that can be represented by a
     /// [`VoxelSignedDistance`].
+    #[inline]
     pub const fn max_f32() -> f32 {
         Self::MAX_F32
     }
 
     /// The minimum (most negative) signed distance that can be represented by a
     /// [`VoxelSignedDistance`].
+    #[inline]
     pub const fn min_f32() -> f32 {
         Self::MIN_F32
     }
 
     /// A `SignedDistance` for a voxel that is maximally outside the object.
+    #[inline]
     pub const fn maximally_outside() -> Self {
         Self::from_encoded(i8::MAX)
     }
 
     /// A `SignedDistance` for a voxel that is maximally inside the object.
+    #[inline]
     pub const fn maximally_inside() -> Self {
         Self::from_encoded(i8::MIN)
     }
 
+    #[inline]
     const fn from_encoded(encoded: i8) -> Self {
         Self { encoded }
     }
 
     /// Encodes the given `f32` signed distance as a `VoxelSignedDistance`.
     /// The value will be clamped to [`Self::min_f32`] and [`Self::max_f32`].
+    #[inline]
     pub const fn from_f32(value: f32) -> Self {
         // We don't need to clamp the value before casting to `i8` since
         // `as` will do that for us (for Rust 1.45+). `NaN` will result in `0`.
@@ -175,38 +181,45 @@ impl VoxelSignedDistance {
     }
 
     /// Decodes the `VoxelSignedDistance` to an `f32` signed distance.
+    #[inline]
     pub const fn to_f32(self) -> f32 {
         self.encoded as f32 * Self::QUANTIZATION_STEP_SIZE
     }
 
     /// Whether the signed distance is strictly negative.
+    #[inline]
     pub const fn is_negative(self) -> bool {
         self.encoded.is_negative()
     }
 
     /// Whether the signed distance is maximally inside the object.
+    #[inline]
     pub const fn is_maximally_inside(self) -> bool {
         self.encoded == i8::MIN
     }
 
     /// Whether the signed distance is maximally outside the object.
+    #[inline]
     pub const fn is_maximally_outside(self) -> bool {
         self.encoded == i8::MAX
     }
 
     /// Whether the signed distance is maximally inside or outside the object.
+    #[inline]
     pub const fn is_maximally_inside_or_outside(self) -> bool {
         self.is_maximally_inside() || self.is_maximally_outside()
     }
 }
 
 impl From<f32> for VoxelSignedDistance {
+    #[inline]
     fn from(value: f32) -> Self {
         Self::from_f32(value)
     }
 }
 
 impl From<VoxelSignedDistance> for f32 {
+    #[inline]
     fn from(value: VoxelSignedDistance) -> Self {
         value.to_f32()
     }
@@ -219,10 +232,12 @@ impl fmt::Display for VoxelSignedDistance {
 }
 
 impl VoxelFlags {
+    #[inline]
     const fn new() -> Self {
         Self::empty()
     }
 
+    #[inline]
     const fn full_adjacency() -> Self {
         Self::HAS_ADJACENT_X_DN
             .union(Self::HAS_ADJACENT_X_UP)
@@ -232,6 +247,7 @@ impl VoxelFlags {
             .union(Self::HAS_ADJACENT_Z_UP)
     }
 
+    #[inline]
     const fn adjacency_for_face(face_dim: Dimension, face_side: Side) -> Self {
         const FLAGS: [VoxelFlags; 6] = [
             VoxelFlags::HAS_ADJACENT_X_DN,
@@ -244,6 +260,7 @@ impl VoxelFlags {
         FLAGS[2 * face_dim.idx() + face_side.idx()]
     }
 
+    #[inline]
     const fn placement(self) -> VoxelPlacement {
         const PLACEMENTS: [VoxelPlacement; 7] = [
             VoxelPlacement::Surface(VoxelSurfacePlacement::Corner),
@@ -262,6 +279,7 @@ impl VoxelFlags {
 impl Voxel {
     /// Creates a new voxel with the given type, state flags and signed
     /// distance.
+    #[inline]
     const fn new(
         voxel_type: VoxelType,
         flags: VoxelFlags,
@@ -276,17 +294,20 @@ impl Voxel {
 
     /// Creates a new non-empty voxel of the given type with the given signed
     /// distance.
+    #[inline]
     pub const fn non_empty(voxel_type: VoxelType, signed_distance: VoxelSignedDistance) -> Self {
         Self::new(voxel_type, VoxelFlags::new(), signed_distance)
     }
 
     /// Creates a new empty voxel with the given signed distance.
+    #[inline]
     pub const fn empty(signed_distance: VoxelSignedDistance) -> Self {
         Self::new(VoxelType::dummy(), VoxelFlags::IS_EMPTY, signed_distance)
     }
 
     /// Creates a new voxel with the given type that is maximally inside the
     /// object.
+    #[inline]
     pub const fn maximally_inside(voxel_type: VoxelType) -> Self {
         Self::new(
             voxel_type,
@@ -296,6 +317,7 @@ impl Voxel {
     }
 
     /// Creates a new empty voxel that is maximally outside the object.
+    #[inline]
     pub const fn maximally_outside() -> Self {
         Self::new(
             VoxelType::dummy(),
@@ -305,31 +327,37 @@ impl Voxel {
     }
 
     /// Whether this voxel has the same type and flags as the given voxel.
+    #[inline]
     pub fn matches_type_and_flags(&self, other: Self) -> bool {
         self.voxel_type == other.voxel_type && self.flags == other.flags
     }
 
     /// Whether the voxel is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.flags.contains(VoxelFlags::IS_EMPTY)
     }
 
     /// Returns the type of the voxel.
+    #[inline]
     pub fn voxel_type(&self) -> VoxelType {
         self.voxel_type
     }
 
     /// Sets the type of the voxel.
+    #[inline]
     pub fn set_voxel_type(&mut self, voxel_type: VoxelType) {
         self.voxel_type = voxel_type;
     }
 
     /// Returns the flags encoding the state of the voxel.
+    #[inline]
     pub fn flags(&self) -> VoxelFlags {
         self.flags
     }
 
     /// Returns the placement of the voxel if it is non-empty.
+    #[inline]
     pub fn placement(&self) -> Option<VoxelPlacement> {
         if self.is_empty() {
             None
@@ -340,6 +368,7 @@ impl Voxel {
 
     /// Returns the signed distance from the center of the voxel to the
     /// nearest surface of the object.
+    #[inline]
     pub fn signed_distance(&self) -> VoxelSignedDistance {
         self.signed_distance
     }
@@ -347,6 +376,7 @@ impl Voxel {
     /// Increases the signed distance by the given amount, and marks the voxel
     /// as empty and calls the given closure if the signed distance becomes
     /// positive.
+    #[inline]
     pub fn increase_signed_distance(
         &mut self,
         signed_distance_delta: f32,
@@ -361,17 +391,20 @@ impl Voxel {
     }
 
     /// Updates the voxel's state flags to the given set of flags.
+    #[inline]
     fn update_flags(&mut self, flags: VoxelFlags) {
         self.flags = flags;
     }
 
     /// Sets the given state flags for the voxel (this will not clear any
     /// existing flags).
+    #[inline]
     fn add_flags(&mut self, flags: VoxelFlags) {
         self.flags.insert(flags);
     }
 
     /// Unsets the given state flags for the voxel.
+    #[inline]
     fn remove_flags(&mut self, flags: VoxelFlags) {
         self.flags.remove(flags);
     }
@@ -405,12 +438,14 @@ impl VoxelObjectManager {
     }
 
     /// Returns the number of voxel objects in the manager.
+    #[inline]
     pub fn voxel_object_count(&self) -> usize {
         self.voxel_objects.len()
     }
 
     /// Returns a reference to the [`MeshedChunkedVoxelObject`] with the given
     /// ID, or [`None`] if the voxel object is not present.
+    #[inline]
     pub fn get_voxel_object(
         &self,
         voxel_object_id: VoxelObjectID,
@@ -420,6 +455,7 @@ impl VoxelObjectManager {
 
     /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
     /// given ID, or [`None`] if the voxel object is not present.
+    #[inline]
     pub fn get_voxel_object_mut(
         &mut self,
         voxel_object_id: VoxelObjectID,
@@ -430,6 +466,7 @@ impl VoxelObjectManager {
     /// Returns a reference to the [`VoxelObjectPhysicsContext`] for the voxel
     /// object with the given ID, or [`None`] if the object or physics context
     /// is not present.
+    #[inline]
     pub fn get_physics_context(
         &self,
         voxel_object_id: VoxelObjectID,
@@ -439,6 +476,7 @@ impl VoxelObjectManager {
 
     /// Returns mutable references to the [`MeshedChunkedVoxelObject`] with the
     /// given ID and its [`VoxelObjectPhysicsContext`] if both exist.
+    #[inline]
     pub fn get_voxel_object_with_physics_context_mut(
         &mut self,
         voxel_object_id: VoxelObjectID,
@@ -452,17 +490,20 @@ impl VoxelObjectManager {
     }
 
     /// Whether a voxel object with the given ID exists in the manager.
+    #[inline]
     pub fn has_voxel_object(&self, voxel_object_id: VoxelObjectID) -> bool {
         self.voxel_objects.contains_key(&voxel_object_id)
     }
 
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
+    #[inline]
     pub fn voxel_objects(&self) -> &HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
         &self.voxel_objects
     }
 
     /// Returns a mutable reference to the [`HashMap`] storing all voxel
     /// objects.
+    #[inline]
     pub fn voxel_objects_mut(&mut self) -> &mut HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
         &mut self.voxel_objects
     }
@@ -471,6 +512,7 @@ impl VoxelObjectManager {
     ///
     /// # Returns
     /// A new [`VoxelObjectID`] representing the added voxel object.
+    #[inline]
     pub fn add_voxel_object(&mut self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
         let voxel_object_id = self.create_new_voxel_object_id();
         self.voxel_objects.insert(voxel_object_id, voxel_object);
@@ -479,6 +521,7 @@ impl VoxelObjectManager {
 
     /// Adds the given [`VoxelObjectPhysicsContext`] for the voxel object with
     /// the given ID.
+    #[inline]
     pub fn add_physics_context_for_voxel_object(
         &mut self,
         voxel_object_id: VoxelObjectID,
@@ -490,12 +533,14 @@ impl VoxelObjectManager {
 
     /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.
     /// Also removes any associated [`VoxelObjectInertialPropertyManager`].
+    #[inline]
     pub fn remove_voxel_object(&mut self, voxel_object_id: VoxelObjectID) {
         self.voxel_objects.remove(&voxel_object_id);
         self.physics_contexts.remove(&voxel_object_id);
     }
 
     /// Removes all voxel objects in the manager.
+    #[inline]
     pub fn remove_all_voxel_objects(&mut self) {
         self.voxel_objects.clear();
     }
@@ -532,6 +577,7 @@ impl VoxelObjectManager {
         voxel_object_gpu_resources.sync_visible_objects(model_instance_manager);
     }
 
+    #[inline]
     fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {
         let voxel_object_id = VoxelObjectID(self.id_counter);
         self.id_counter = self.id_counter.checked_add(1).unwrap();

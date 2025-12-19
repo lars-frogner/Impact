@@ -1132,18 +1132,22 @@ impl<A: Allocator> SDFGraph<A> {
 }
 
 impl SDFNode {
+    #[inline]
     pub fn new_sphere(radius: f32) -> Self {
         Self::Sphere(SphereSDF::new(radius))
     }
 
+    #[inline]
     pub fn new_capsule(segment_length: f32, radius: f32) -> Self {
         Self::Capsule(CapsuleSDF::new(segment_length, radius))
     }
 
+    #[inline]
     pub fn new_box(extents: [f32; 3]) -> Self {
         Self::Box(BoxSDF::new(extents))
     }
 
+    #[inline]
     pub fn new_translation(child_id: SDFNodeID, translation: Vector3<f32>) -> Self {
         Self::Translation(SDFTranslation {
             child_id,
@@ -1151,14 +1155,17 @@ impl SDFNode {
         })
     }
 
+    #[inline]
     pub fn new_rotation(child_id: SDFNodeID, rotation: UnitQuaternion<f32>) -> Self {
         Self::Rotation(SDFRotation { child_id, rotation })
     }
 
+    #[inline]
     pub fn new_scaling(child_id: SDFNodeID, scaling: f32) -> Self {
         Self::Scaling(SDFScaling::new(child_id, scaling))
     }
 
+    #[inline]
     pub fn new_multifractal_noise(
         child_id: SDFNodeID,
         octaves: u32,
@@ -1179,6 +1186,7 @@ impl SDFNode {
         ))
     }
 
+    #[inline]
     pub fn new_multiscale_sphere(
         child_id: SDFNodeID,
         octaves: u32,
@@ -1201,18 +1209,22 @@ impl SDFNode {
         ))
     }
 
+    #[inline]
     pub fn new_union(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         Self::Union(SDFUnion::new(child_1_id, child_2_id, smoothness))
     }
 
+    #[inline]
     pub fn new_subtraction(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         Self::Subtraction(SDFSubtraction::new(child_1_id, child_2_id, smoothness))
     }
 
+    #[inline]
     pub fn new_intersection(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         Self::Intersection(SDFIntersection::new(child_1_id, child_2_id, smoothness))
     }
 
+    #[inline]
     pub fn node_to_parent_translation(&self) -> Vector3<f32> {
         match self {
             Self::Translation(SDFTranslation { translation, .. }) => *translation,
@@ -1220,6 +1232,7 @@ impl SDFNode {
         }
     }
 
+    #[inline]
     pub fn node_to_parent_transform(&self) -> Similarity3<f32> {
         match self {
             Self::Translation(SDFTranslation { translation, .. }) => {
@@ -1236,20 +1249,24 @@ impl SDFNode {
 
 impl SphereSDF {
     /// Creates a new generator for a sphere with the given radius (in voxels).
+    #[inline]
     pub fn new(radius: f32) -> Self {
         assert!(radius >= 0.0);
         Self { radius }
     }
 
+    #[inline]
     pub fn radius(&self) -> f32 {
         self.radius
     }
 
+    #[inline]
     pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         let half_extents = Vector3::repeat(self.radius);
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
 
+    #[inline]
     fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
         let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
 
@@ -1270,6 +1287,7 @@ impl SphereSDF {
 impl CapsuleSDF {
     /// Creates a new generator for a capsule with the given segment length and
     /// radius (in voxels).
+    #[inline]
     pub fn new(segment_length: f32, radius: f32) -> Self {
         assert!(segment_length >= 0.0);
         assert!(radius >= 0.0);
@@ -1279,20 +1297,24 @@ impl CapsuleSDF {
         }
     }
 
+    #[inline]
     pub fn segment_length(&self) -> f32 {
         2.0 * self.half_segment_length
     }
 
+    #[inline]
     pub fn radius(&self) -> f32 {
         self.radius
     }
 
+    #[inline]
     pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         let mut half_extents = Vector3::repeat(self.radius);
         half_extents.y += self.half_segment_length;
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
 
+    #[inline]
     fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
         let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
 
@@ -1317,12 +1339,14 @@ impl CapsuleSDF {
 
 impl BoxSDF {
     /// Creates a new generator for a box with the given extents (in voxels).
+    #[inline]
     pub fn new(extents: [f32; 3]) -> Self {
         assert!(extents.iter().copied().all(f32::is_sign_positive));
         let half_extents = 0.5 * Vector3::from(extents);
         Self { half_extents }
     }
 
+    #[inline]
     pub fn extents(&self) -> [f32; 3] {
         [
             2.0 * self.half_extents.x,
@@ -1331,10 +1355,12 @@ impl BoxSDF {
         ]
     }
 
+    #[inline]
     pub fn domain_bounds(&self) -> AxisAlignedBox<f32> {
         AxisAlignedBox::new((-self.half_extents).into(), self.half_extents.into())
     }
 
+    #[inline]
     fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox<f32> {
         let expanded_half_extents = self.half_extents + Vector3::repeat(margin);
         AxisAlignedBox::new(
@@ -1351,23 +1377,27 @@ impl BoxSDF {
 }
 
 impl SDFRotation {
+    #[inline]
     pub fn from_axis_angle(child_id: SDFNodeID, axis: Vector3<f32>, angle: f32) -> Self {
         let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::new_normalize(axis), angle);
         Self { child_id, rotation }
     }
 
+    #[inline]
     pub fn from_euler_angles(child_id: SDFNodeID, roll: f32, pitch: f32, yaw: f32) -> Self {
         let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
         Self { child_id, rotation }
     }
 
     /// Returns the Euler angles as `(roll, pitch, yaw)`.
+    #[inline]
     pub fn euler_angles(&self) -> (f32, f32, f32) {
         self.rotation.euler_angles()
     }
 }
 
 impl SDFScaling {
+    #[inline]
     pub fn new(child_id: SDFNodeID, scaling: f32) -> Self {
         assert!(scaling > 0.0);
         Self { child_id, scaling }
@@ -1375,6 +1405,7 @@ impl SDFScaling {
 }
 
 impl SDFUnion {
+    #[inline]
     pub fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         assert!(smoothness >= 0.0);
         Self {
@@ -1386,6 +1417,7 @@ impl SDFUnion {
 }
 
 impl SDFSubtraction {
+    #[inline]
     pub fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         assert!(smoothness >= 0.0);
         Self {
@@ -1397,6 +1429,7 @@ impl SDFSubtraction {
 }
 
 impl SDFIntersection {
+    #[inline]
     pub fn new(child_1_id: SDFNodeID, child_2_id: SDFNodeID, smoothness: f32) -> Self {
         assert!(smoothness >= 0.0);
         Self {
@@ -1408,6 +1441,7 @@ impl SDFIntersection {
 }
 
 impl MultifractalNoiseSDFModifier {
+    #[inline]
     pub fn new(
         child_id: SDFNodeID,
         octaves: u32,
@@ -1435,26 +1469,32 @@ impl MultifractalNoiseSDFModifier {
         }
     }
 
+    #[inline]
     pub fn octaves(&self) -> u32 {
         self.octaves
     }
 
+    #[inline]
     pub fn frequency(&self) -> f32 {
         self.frequency
     }
 
+    #[inline]
     pub fn lacunarity(&self) -> f32 {
         self.lacunarity
     }
 
+    #[inline]
     pub fn persistence(&self) -> f32 {
         self.persistence
     }
 
+    #[inline]
     pub fn amplitude(&self) -> f32 {
         self.amplitude
     }
 
+    #[inline]
     pub fn seed(&self) -> u32 {
         self.seed
     }
@@ -1541,6 +1581,7 @@ impl MultifractalNoiseSDFModifier {
         }
     }
 
+    #[inline]
     fn all_modified_signed_distances_at_block_test_positions_pass_predicate<
         const SIZE: usize,
         const COUNT: usize,
@@ -1604,6 +1645,7 @@ impl MultifractalNoiseSDFModifier {
 impl MultiscaleSphereSDFModifier {
     /// Inflation should probably always be 1.0. Intersection smoothness should
     /// probably exceed inflation.
+    #[inline]
     pub fn new(
         child_id: SDFNodeID,
         octaves: u32,
@@ -1633,34 +1675,42 @@ impl MultiscaleSphereSDFModifier {
         }
     }
 
+    #[inline]
     pub fn octaves(&self) -> u32 {
         self.octaves
     }
 
+    #[inline]
     pub fn max_scale(&self) -> f32 {
         0.5 / self.frequency
     }
 
+    #[inline]
     pub fn persistence(&self) -> f32 {
         self.persistence
     }
 
+    #[inline]
     pub fn inflation(&self) -> f32 {
         self.scaled_inflation / self.max_scale()
     }
 
+    #[inline]
     pub fn intersection_smoothness(&self) -> f32 {
         self.scaled_intersection_smoothness.get() / self.max_scale()
     }
 
+    #[inline]
     pub fn union_smoothness(&self) -> f32 {
         self.union_smoothness.get()
     }
 
+    #[inline]
     pub fn seed(&self) -> u32 {
         self.seed
     }
 
+    #[inline]
     fn domain_expansion(&self) -> f32 {
         self.scaled_inflation + displacement_due_to_smoothness(self.union_smoothness.get())
     }
@@ -1703,6 +1753,7 @@ impl MultiscaleSphereSDFModifier {
         parent_distance
     }
 
+    #[inline]
     fn evaluate_sphere_grid_sdf(&self, position: &Point3<f32>) -> f32 {
         const CORNER_OFFSETS: [Vector3<i32>; 8] = [
             vector![0, 0, 0],
@@ -1731,6 +1782,7 @@ impl MultiscaleSphereSDFModifier {
             .0
     }
 
+    #[inline]
     fn evaluate_corner_sphere_sdf(
         &self,
         grid_cell_indices: &Vector3<i32>,
@@ -1743,6 +1795,7 @@ impl MultiscaleSphereSDFModifier {
     }
 
     /// Every sphere gets a random radius based on its location in the grid.
+    #[inline]
     fn corner_sphere_radius(
         &self,
         grid_cell_indices: &Vector3<i32>,
@@ -1759,6 +1812,7 @@ impl MultiscaleSphereSDFModifier {
 }
 
 impl Smoothness {
+    #[inline]
     pub fn new(smoothness: f32) -> Self {
         Self {
             smoothness,
@@ -1783,11 +1837,13 @@ impl Smoothness {
 }
 
 impl From<f32> for Smoothness {
+    #[inline]
     fn from(smoothness: f32) -> Self {
         Self::new(smoothness)
     }
 }
 
+#[inline]
 fn zero_domain() -> AxisAlignedBox<f32> {
     AxisAlignedBox::new(Point3::origin(), Point3::origin())
 }
@@ -1801,11 +1857,13 @@ fn zero_domain() -> AxisAlignedBox<f32> {
 /// To capture this, the combined domain is expanded by an amount that grows
 /// with both the smoothing factor and the number of leaf nodes beneath the
 /// combination node.
+#[inline]
 fn soft_combine_domain_padding(smoothness: f32, leaf_count: u32) -> f32 {
     let local_padding = displacement_due_to_smoothness(smoothness);
     local_padding * (leaf_count as f32).log2()
 }
 
+#[inline]
 fn displacement_due_to_smoothness(smoothness: f32) -> f32 {
     0.25 * smoothness
 }
@@ -2073,6 +2131,7 @@ fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: Smoothn
 }
 
 /// Assumes underlying gradient noise in range [-1.0, 1.0].
+#[inline]
 fn theoretical_max_amplitude_of_fbm_noise(octaves: u32, persistence: f32) -> f32 {
     if abs_diff_ne!(persistence, 1.0, epsilon = 1e-6) {
         (1.0 - persistence.powi(octaves as i32)) / (1.0 - persistence)
