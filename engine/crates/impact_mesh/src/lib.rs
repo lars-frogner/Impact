@@ -18,7 +18,6 @@ pub use triangle::*;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::Point;
 use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
 };
@@ -248,11 +247,5 @@ impl fmt::Display for VertexAttributeSet {
             }
         }
         write!(f, "}}")
-    }
-}
-
-impl Point<f32> for VertexPosition {
-    fn point(&self) -> &Point3<f32> {
-        &self.0
     }
 }

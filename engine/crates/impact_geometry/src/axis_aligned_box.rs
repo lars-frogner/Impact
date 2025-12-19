@@ -1,6 +1,6 @@
 //! Representation of axis-aligned boxes.
 
-use crate::{Plane, Point};
+use crate::Plane;
 use approx::AbsDiffEq;
 use impact_math::Float;
 use na::point;
@@ -47,27 +47,23 @@ impl<F: Float> AxisAlignedBox<F> {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[impl Point<F>]) -> Self {
+    pub fn aabb_for_points(points: &[Point3<F>]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create AABB for empty point slice"
         );
 
-        let first_point = *points[0].point();
+        let first_point = points[0];
 
         let lower_corner = points
             .iter()
             .skip(1)
-            .fold(first_point, |lower_corner, point| {
-                lower_corner.inf(point.point())
-            });
+            .fold(first_point, |lower_corner, point| lower_corner.inf(point));
 
         let upper_corner = points
             .iter()
             .skip(1)
-            .fold(first_point, |upper_corner, point| {
-                upper_corner.sup(point.point())
-            });
+            .fold(first_point, |upper_corner, point| upper_corner.sup(point));
 
         Self::new(lower_corner, upper_corner)
     }
@@ -77,24 +73,20 @@ impl<F: Float> AxisAlignedBox<F> {
     ///
     /// # Panics
     /// If the point array is empty.
-    pub fn aabb_for_point_array<const N: usize>(points: &[impl Point<F>; N]) -> Self {
+    pub fn aabb_for_point_array<const N: usize>(points: &[Point3<F>; N]) -> Self {
         assert!(N > 0, "Tried to create AABB for empty point array");
 
-        let first_point = *points[0].point();
+        let first_point = points[0];
 
         let lower_corner = points
             .iter()
             .skip(1)
-            .fold(first_point, |lower_corner, point| {
-                lower_corner.inf(point.point())
-            });
+            .fold(first_point, |lower_corner, point| lower_corner.inf(point));
 
         let upper_corner = points
             .iter()
             .skip(1)
-            .fold(first_point, |upper_corner, point| {
-                upper_corner.sup(point.point())
-            });
+            .fold(first_point, |upper_corner, point| upper_corner.sup(point));
 
         Self::new(lower_corner, upper_corner)
     }

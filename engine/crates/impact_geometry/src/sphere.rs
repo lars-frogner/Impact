@@ -1,6 +1,6 @@
 //! Representation of spheres.
 
-use crate::{AxisAlignedBox, Point};
+use crate::AxisAlignedBox;
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
@@ -84,7 +84,7 @@ impl<F: Float> Sphere<F> {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn bounding_sphere_for_points(points: &[impl Point<F>]) -> Self {
+    pub fn bounding_sphere_for_points(points: &[Point3<F>]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create bounding sphere for empty point slice"
@@ -92,18 +92,18 @@ impl<F: Float> Sphere<F> {
 
         let one_over_count = F::from_usize(points.len()).unwrap().recip();
 
-        let first_point = points[0].point().coords;
+        let first_point = points[0].coords;
 
         let centroid: Point3<F> = points
             .iter()
             .skip(1)
-            .fold(first_point, |sum, point| sum + point.point().coords)
+            .fold(first_point, |sum, point| sum + point.coords)
             .scale(one_over_count)
             .into();
 
         let max_squared_dist_from_centroid =
             points.iter().fold(F::ZERO, |max_squared_dist, point| {
-                na::distance_squared(point.point(), &centroid).max(max_squared_dist)
+                na::distance_squared(point, &centroid).max(max_squared_dist)
             });
 
         Self::new(centroid, max_squared_dist_from_centroid.sqrt())

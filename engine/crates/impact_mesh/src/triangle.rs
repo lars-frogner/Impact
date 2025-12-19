@@ -247,7 +247,9 @@ impl TriangleMesh {
     /// mesh, or returns [`None`] if the mesh has no vertices.
     pub fn compute_aabb(&self) -> Option<AxisAlignedBox<f32>> {
         if self.has_positions() {
-            Some(AxisAlignedBox::aabb_for_points(self.positions()))
+            Some(AxisAlignedBox::aabb_for_points(bytemuck::cast_slice(
+                self.positions(),
+            )))
         } else {
             None
         }
@@ -257,7 +259,9 @@ impl TriangleMesh {
     /// if the mesh has no vertices.
     pub fn compute_bounding_sphere(&self) -> Option<Sphere<f32>> {
         if self.has_positions() {
-            Some(Sphere::bounding_sphere_for_points(self.positions()))
+            Some(Sphere::bounding_sphere_for_points(bytemuck::cast_slice(
+                self.positions(),
+            )))
         } else {
             None
         }
