@@ -38,10 +38,10 @@ impl IndexBufferable for u32 {
 }
 
 /// GPU resources for triangle meshes.
-pub type TriangleMeshGPUResourceMap = GPUResourceMap<TriangleMesh<f32>, MeshGPUResource>;
+pub type TriangleMeshGPUResourceMap = GPUResourceMap<TriangleMesh, MeshGPUResource>;
 
 /// GPU resources for line segment meshes.
-pub type LineSegmentMeshGPUResourceMap = GPUResourceMap<LineSegmentMesh<f32>, MeshGPUResource>;
+pub type LineSegmentMeshGPUResourceMap = GPUResourceMap<LineSegmentMesh, MeshGPUResource>;
 
 /// GPU buffers for a triangle or line segment mesh.
 #[derive(Debug)]
@@ -71,7 +71,7 @@ impl MeshGPUResource {
     /// Creates GPU buffers for the given triangle mesh.
     pub fn for_triangle_mesh(
         graphics_device: &GraphicsDevice,
-        mesh: &TriangleMesh<f32>,
+        mesh: &TriangleMesh,
         label: String,
     ) -> Self {
         assert!(
@@ -146,7 +146,7 @@ impl MeshGPUResource {
     /// Creates GPU buffers for the given line segment mesh.
     pub fn for_line_segment_mesh(
         graphics_device: &GraphicsDevice,
-        mesh: &LineSegmentMesh<f32>,
+        mesh: &LineSegmentMesh,
         label: String,
     ) -> Self {
         let mut available_attributes = VertexAttributeSet::empty();
@@ -186,7 +186,7 @@ impl MeshGPUResource {
     pub fn sync_with_triangle_mesh(
         &mut self,
         graphics_device: &GraphicsDevice,
-        mesh: &TriangleMesh<f32>,
+        mesh: &TriangleMesh,
         dirty_mask: TriangleMeshDirtyMask,
     ) {
         if dirty_mask.contains(TriangleMeshDirtyMask::POSITIONS) {
@@ -215,7 +215,7 @@ impl MeshGPUResource {
     pub fn sync_with_line_segment_mesh(
         &mut self,
         graphics_device: &GraphicsDevice,
-        mesh: &LineSegmentMesh<f32>,
+        mesh: &LineSegmentMesh,
         dirty_mask: LineSegmentMeshDirtyMask,
     ) {
         if dirty_mask.contains(LineSegmentMeshDirtyMask::POSITIONS) {
@@ -461,13 +461,13 @@ impl MeshGPUResource {
     }
 }
 
-impl GPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
+impl GPUResource<'_, TriangleMesh> for MeshGPUResource {
     type GPUContext = GraphicsDevice;
 
     fn create(
         graphics_device: &GraphicsDevice,
         id: TriangleMeshID,
-        mesh: &TriangleMesh<f32>,
+        mesh: &TriangleMesh,
     ) -> Result<Option<Self>> {
         Ok(Some(Self::for_triangle_mesh(
             graphics_device,
@@ -481,11 +481,11 @@ impl GPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
     }
 }
 
-impl MutableGPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
+impl MutableGPUResource<'_, TriangleMesh> for MeshGPUResource {
     fn update(
         &mut self,
         graphics_device: &GraphicsDevice,
-        mesh: &TriangleMesh<f32>,
+        mesh: &TriangleMesh,
         dirty_mask: TriangleMeshDirtyMask,
     ) -> Result<()> {
         self.sync_with_triangle_mesh(graphics_device, mesh, dirty_mask);
@@ -493,13 +493,13 @@ impl MutableGPUResource<'_, TriangleMesh<f32>> for MeshGPUResource {
     }
 }
 
-impl GPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
+impl GPUResource<'_, LineSegmentMesh> for MeshGPUResource {
     type GPUContext = GraphicsDevice;
 
     fn create(
         graphics_device: &GraphicsDevice,
         id: LineSegmentMeshID,
-        mesh: &LineSegmentMesh<f32>,
+        mesh: &LineSegmentMesh,
     ) -> Result<Option<Self>> {
         Ok(Some(Self::for_line_segment_mesh(
             graphics_device,
@@ -513,11 +513,11 @@ impl GPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
     }
 }
 
-impl MutableGPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
+impl MutableGPUResource<'_, LineSegmentMesh> for MeshGPUResource {
     fn update(
         &mut self,
         graphics_device: &GraphicsDevice,
-        mesh: &LineSegmentMesh<f32>,
+        mesh: &LineSegmentMesh,
         dirty_mask: LineSegmentMeshDirtyMask,
     ) -> Result<()> {
         self.sync_with_line_segment_mesh(graphics_device, mesh, dirty_mask);
@@ -525,35 +525,35 @@ impl MutableGPUResource<'_, LineSegmentMesh<f32>> for MeshGPUResource {
     }
 }
 
-impl VertexBufferable for VertexPosition<f32> {
+impl VertexBufferable for VertexPosition {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::Position as u32 => Float32x3,
         ]);
 }
 
-impl VertexBufferable for VertexNormalVector<f32> {
+impl VertexBufferable for VertexNormalVector {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::NormalVector as u32 => Float32x3,
         ]);
 }
 
-impl VertexBufferable for VertexTextureCoords<f32> {
+impl VertexBufferable for VertexTextureCoords {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::TextureCoords as u32 => Float32x2,
         ]);
 }
 
-impl VertexBufferable for VertexTangentSpaceQuaternion<f32> {
+impl VertexBufferable for VertexTangentSpaceQuaternion {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::TangentSpaceQuaternion as u32 => Float32x4,
         ]);
 }
 
-impl VertexBufferable for VertexColor<f32> {
+impl VertexBufferable for VertexColor {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =
         create_vertex_buffer_layout_for_vertex::<Self>(&wgpu::vertex_attr_array![
             MeshVertexAttributeLocation::Color as u32 => Float32x4,

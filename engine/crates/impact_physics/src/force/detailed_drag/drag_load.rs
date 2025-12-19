@@ -249,7 +249,7 @@ mod tests {
         fn should_compute_correct_drag_load_for_sphere(
             direction in direction_strategy()
         ) {
-            let sphere_mesh = TriangleMesh::<f32>::create_sphere(40);
+            let sphere_mesh = TriangleMesh::create_sphere(40);
             let triangle_drag_properties = compute_mesh_triangle_drag_properties(sphere_mesh.triangle_vertex_positions());
 
             let load = compute_aggregate_drag_load_for_direction(

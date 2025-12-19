@@ -198,7 +198,7 @@ define_setup_type! {
 
 impl TriangleMeshTemplate {
     /// Generates the [`TriangleMesh`] corresponding to this template.
-    pub fn generate_mesh(&self) -> TriangleMesh<f32> {
+    pub fn generate_mesh(&self) -> TriangleMesh {
         match self {
             Self::Rectangle(rectangle_mesh) => {
                 TriangleMesh::create_rectangle(rectangle_mesh.extent_x, rectangle_mesh.extent_z)
@@ -556,7 +556,7 @@ impl PlanarTextureProjection {
     ///
     /// # Panics
     /// On error from [`PlanarTextureProjection::new`].
-    pub fn create(&self) -> crate::texture_projection::PlanarTextureProjection<f32> {
+    pub fn create(&self) -> crate::texture_projection::PlanarTextureProjection {
         crate::texture_projection::PlanarTextureProjection::new(
             self.origin,
             self.u_vector,
@@ -570,7 +570,7 @@ pub fn setup_triangle_mesh_from_template(
     registry: &mut TriangleMeshRegistry,
     template: &TriangleMeshTemplate,
     mesh_id: Option<TriangleMeshID>,
-    projection: Option<&impl TextureProjection<f32>>,
+    projection: Option<&impl TextureProjection>,
 ) -> TriangleMeshID {
     let mesh_id =
         mesh_id.unwrap_or_else(|| template.generate_id(create_projection_label(projection)));
@@ -626,7 +626,7 @@ pub fn generate_missing_vertex_properties_for_mesh(
     mesh.set_dirty_mask(dirty_mask);
 }
 
-fn create_projection_label(projection: Option<&impl TextureProjection<f32>>) -> String {
+fn create_projection_label(projection: Option<&impl TextureProjection>) -> String {
     projection
         .as_ref()
         .map_or("None".to_string(), |projection| projection.identifier())

@@ -76,7 +76,7 @@ impl GizmoType {
                 );
             }
             Self::ShadowMapCascades => {
-                const CASCADE_COLORS: [VertexColor<f32>; 4] = [
+                const CASCADE_COLORS: [VertexColor; 4] = [
                     VertexColor::RED,
                     VertexColor::YELLOW,
                     VertexColor::GREEN,

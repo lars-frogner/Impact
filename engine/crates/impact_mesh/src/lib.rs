@@ -19,7 +19,6 @@ pub use triangle::*;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::Point;
-use impact_math::Float;
 use nalgebra::{
     Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
 };
@@ -59,17 +58,17 @@ pub trait VertexAttribute: Sized {
 /// The 3D position of a mesh vertex.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexPosition<F: Float>(pub Point3<F>);
+pub struct VertexPosition(pub Point3<f32>);
 
 /// The unit normal vector of a mesh at a vertex position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexNormalVector<F: Float>(pub UnitVector3<F>);
+pub struct VertexNormalVector(pub UnitVector3<f32>);
 
 /// The (u, v) texture coordinates of a mesh at a vertex position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexTextureCoords<F: Float>(pub Vector2<F>);
+pub struct VertexTextureCoords(pub Vector2<f32>);
 
 /// The rotation quaternion from local tangent space to model space at a vertex
 /// position. The handedness of the tangent basis is encoded in the sign of the
@@ -78,12 +77,12 @@ pub struct VertexTextureCoords<F: Float>(pub Vector2<F>);
 /// be negated before applying the rotation to it).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexTangentSpaceQuaternion<F: Float>(pub UnitQuaternion<F>);
+pub struct VertexTangentSpaceQuaternion(pub UnitQuaternion<f32>);
 
 /// The RGBA color of a mesh vertex.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexColor<F: Float>(pub Vector4<F>);
+pub struct VertexColor(pub Vector4<f32>);
 
 bitflags! {
     /// Bitflag encoding a set of [`VertexAttribute`]s.
@@ -138,54 +137,54 @@ impl fmt::Display for MeshID {
     }
 }
 
-impl<F: Float> VertexPosition<F> {
+impl VertexPosition {
     /// Returns the binding location of the GPU vertex buffer for position.
     pub const fn binding_location() -> u32 {
         0
     }
 
     /// Returns the position scaled by the given scaling factor.
-    pub fn scaled(&self, scaling: F) -> Self {
+    pub fn scaled(&self, scaling: f32) -> Self {
         Self(self.0.coords.scale(scaling).into())
     }
 
     /// Returns the position rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
         Self(rotation * self.0)
     }
 
     /// Returns the position translated by the given displacement vector.
-    pub fn translated(&self, translation: &Vector3<F>) -> Self {
+    pub fn translated(&self, translation: &Vector3<f32>) -> Self {
         Self(self.0 + translation)
     }
 
     /// Returns the position transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
         Self(transform * self.0)
     }
 }
 
-impl<F: Float> VertexNormalVector<F> {
+impl VertexNormalVector {
     /// Returns the normal vector rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
         Self(rotation * self.0)
     }
 
     /// Returns the normal vector transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
         self.rotated(&transform.isometry.rotation)
     }
 }
 
-impl<F: Float> VertexTangentSpaceQuaternion<F> {
+impl VertexTangentSpaceQuaternion {
     /// Returns the tangent space quaternion rotated by the given unit
     /// quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<F>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
         let mut rotated_tangent_space_quaternion = rotation * self.0;
 
         // Preserve encoding of tangent space handedness in real component of
         // tangent space quaternion
-        if (rotated_tangent_space_quaternion.w < F::ZERO) != (self.0.w < F::ZERO) {
+        if (rotated_tangent_space_quaternion.w < 0.0) != (self.0.w < 0.0) {
             rotated_tangent_space_quaternion =
                 UnitQuaternion::new_unchecked(rotated_tangent_space_quaternion.neg());
         }
@@ -195,45 +194,45 @@ impl<F: Float> VertexTangentSpaceQuaternion<F> {
 
     /// Returns the tangent space quaternion transformed by the given similarity
     /// transform.
-    pub fn transformed(&self, transform: &Similarity3<F>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
         self.rotated(&transform.isometry.rotation)
     }
 }
 
-impl<F: Float> VertexColor<F> {
-    pub const BLACK: Self = Self(vector![F::ZERO, F::ZERO, F::ZERO, F::ONE]);
-    pub const WHITE: Self = Self(vector![F::ONE, F::ONE, F::ONE, F::ONE]);
-    pub const RED: Self = Self(vector![F::ONE, F::ZERO, F::ZERO, F::ONE]);
-    pub const GREEN: Self = Self(vector![F::ZERO, F::ONE, F::ZERO, F::ONE]);
-    pub const BLUE: Self = Self(vector![F::ZERO, F::ZERO, F::ONE, F::ONE]);
-    pub const CYAN: Self = Self(vector![F::ZERO, F::ONE, F::ONE, F::ONE]);
-    pub const MAGENTA: Self = Self(vector![F::ONE, F::ZERO, F::ONE, F::ONE]);
-    pub const YELLOW: Self = Self(vector![F::ONE, F::ONE, F::ZERO, F::ONE]);
+impl VertexColor {
+    pub const BLACK: Self = Self(vector![0.0, 0.0, 0.0, 1.0]);
+    pub const WHITE: Self = Self(vector![1.0, 1.0, 1.0, 1.0]);
+    pub const RED: Self = Self(vector![1.0, 0.0, 0.0, 1.0]);
+    pub const GREEN: Self = Self(vector![0.0, 1.0, 0.0, 1.0]);
+    pub const BLUE: Self = Self(vector![0.0, 0.0, 1.0, 1.0]);
+    pub const CYAN: Self = Self(vector![0.0, 1.0, 1.0, 1.0]);
+    pub const MAGENTA: Self = Self(vector![1.0, 0.0, 1.0, 1.0]);
+    pub const YELLOW: Self = Self(vector![1.0, 1.0, 0.0, 1.0]);
 
-    pub fn with_alpha(self, alpha: F) -> Self {
+    pub fn with_alpha(self, alpha: f32) -> Self {
         let mut color = self.0;
         color.w = alpha;
         Self(color)
     }
 }
 
-impl<F: Float> VertexAttribute for VertexPosition<F> {
+impl VertexAttribute for VertexPosition {
     const GLOBAL_INDEX: usize = 0;
 }
 
-impl<F: Float> VertexAttribute for VertexNormalVector<F> {
+impl VertexAttribute for VertexNormalVector {
     const GLOBAL_INDEX: usize = 1;
 }
 
-impl<F: Float> VertexAttribute for VertexTextureCoords<F> {
+impl VertexAttribute for VertexTextureCoords {
     const GLOBAL_INDEX: usize = 2;
 }
 
-impl<F: Float> VertexAttribute for VertexTangentSpaceQuaternion<F> {
+impl VertexAttribute for VertexTangentSpaceQuaternion {
     const GLOBAL_INDEX: usize = 3;
 }
 
-impl<F: Float> VertexAttribute for VertexColor<F> {
+impl VertexAttribute for VertexColor {
     const GLOBAL_INDEX: usize = 4;
 }
 
@@ -252,8 +251,8 @@ impl fmt::Display for VertexAttributeSet {
     }
 }
 
-impl<F: Float> Point<F> for VertexPosition<F> {
-    fn point(&self) -> &Point3<F> {
+impl Point<f32> for VertexPosition {
+    fn point(&self) -> &Point3<f32> {
         &self.0
     }
 }

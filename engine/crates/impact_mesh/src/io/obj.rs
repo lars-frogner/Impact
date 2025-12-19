@@ -14,7 +14,7 @@ use tobj::{GPU_LOAD_OPTIONS, Mesh as ObjMesh};
 ///
 /// # Errors
 /// Returns an error if the file can not be found or loaded as a mesh.
-pub fn read_mesh_from_obj_file(file_path: impl AsRef<Path>) -> Result<TriangleMesh<f32>> {
+pub fn read_mesh_from_obj_file(file_path: impl AsRef<Path>) -> Result<TriangleMesh> {
     let file_path = file_path.as_ref();
 
     let (mut models, _) = tobj::load_obj(file_path, &GPU_LOAD_OPTIONS)?;
@@ -33,7 +33,7 @@ pub fn read_mesh_from_obj_file(file_path: impl AsRef<Path>) -> Result<TriangleMe
     Ok(mesh)
 }
 
-fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh<f32> {
+fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh {
     fn aggregate_3<T>(values: &[f32], aggregator: impl Fn(f32, f32, f32) -> T) -> Vec<T> {
         values
             .iter()
