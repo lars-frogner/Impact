@@ -6,7 +6,10 @@ pub mod setup;
 #[cfg(feature = "ecs")]
 pub mod systems;
 
-use crate::{VoxelObjectID, VoxelObjectManager, VoxelSurfacePlacement, chunks::ChunkedVoxelObject};
+use crate::{
+    Voxel, VoxelObjectID, VoxelObjectManager, VoxelPlacement, VoxelSurfacePlacement,
+    chunks::ChunkedVoxelObject,
+};
 use impact_geometry::{Plane, Sphere};
 use impact_physics::{
     collision::{
@@ -23,7 +26,7 @@ use impact_physics::{
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
     material::ContactResponseParameters,
 };
-use nalgebra::{Isometry3, Translation3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Isometry3, Point3, Translation3, UnitQuaternion, UnitVector3, Vector3};
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -267,11 +270,11 @@ fn generate_mutual_voxel_object_contact_manifold(
     );
 }
 
-pub fn for_each_mutual_voxel_object_contact(
-    voxel_object_a: &ChunkedVoxelObject,
-    voxel_object_b: &ChunkedVoxelObject,
-    transform_from_world_to_a: &Isometry3<f32>,
-    transform_from_world_to_b: &Isometry3<f32>,
+pub fn for_each_mutual_voxel_object_contact<'a>(
+    voxel_object_a: &'a ChunkedVoxelObject,
+    voxel_object_b: &'a ChunkedVoxelObject,
+    transform_from_world_to_a: &'a Isometry3<f32>,
+    transform_from_world_to_b: &'a Isometry3<f32>,
     f: &mut impl FnMut([usize; 3], [usize; 3], ContactGeometry),
 ) {
     let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverse();
@@ -286,80 +289,190 @@ pub fn for_each_mutual_voxel_object_contact(
         return;
     };
 
-    let voxel_radius_a = 0.5 * voxel_object_a.voxel_extent();
-    let voxel_radius_b = 0.5 * voxel_object_b.voxel_extent();
+    let voxel_object_a_intersection_size = intersection_voxel_ranges_in_a
+        .iter()
+        .map(|r| r.len())
+        .product::<usize>();
+    let voxel_object_b_intersection_size = intersection_voxel_ranges_in_b
+        .iter()
+        .map(|r| r.len())
+        .product::<usize>();
 
-    let max_center_distance = voxel_radius_a + voxel_radius_b;
+    let voxel_a_radius = 0.5 * voxel_object_a.voxel_extent();
+    let voxel_b_radius = 0.5 * voxel_object_b.voxel_extent();
+
+    let max_center_distance = voxel_a_radius + voxel_b_radius;
     let max_squared_center_distance = max_center_distance.powi(2);
 
-    voxel_object_a.for_each_surface_voxel_in_voxel_ranges(
-        intersection_voxel_ranges_in_a,
-        &mut |[i_a, j_a, k_a], _, placement_a| {
-            let voxel_a_center_in_object_space =
-                voxel_object_a.voxel_center_position_from_object_voxel_indices(i_a, j_a, k_a);
+    if voxel_object_b_intersection_size < voxel_object_a_intersection_size {
+        voxel_object_b.for_each_surface_voxel_in_voxel_ranges(
+            intersection_voxel_ranges_in_b,
+            &mut |[i_b, j_b, k_b], _, placement_b| {
+                let voxel_b_center_in_b =
+                    voxel_object_b.voxel_center_position_from_object_voxel_indices(i_b, j_b, k_b);
 
-            let voxel_a_center =
-                transform_from_world_to_a.inverse_transform_point(&voxel_a_center_in_object_space);
+                let voxel_b_center =
+                    transform_from_world_to_b.inverse_transform_point(&voxel_b_center_in_b);
 
-            voxel_object_b.for_each_surface_voxel_in_voxel_ranges(
-                intersection_voxel_ranges_in_b.clone(),
-                &mut |[i_b, j_b, k_b], _, placement_b| {
-                    if !matches!(
-                        (placement_a, placement_b),
-                        // Corner voxels in A can be in contact with any surface voxel in B
-                        (
-                            VoxelSurfacePlacement::Corner,
-                            VoxelSurfacePlacement::Corner
-                                | VoxelSurfacePlacement::Edge
-                                | VoxelSurfacePlacement::Face,
-                        )
-                        // Edge voxels in A can be in contact with corner or edge voxels in B
-                        | (
-                            VoxelSurfacePlacement::Edge,
-                            VoxelSurfacePlacement::Corner | VoxelSurfacePlacement::Edge,
-                        )
-                        // Face voxels in A can be in contact with corner voxels in B
-                        | (VoxelSurfacePlacement::Face, VoxelSurfacePlacement::Corner)
-                    ) {
-                        return;
+                let voxel_b_sphere = Sphere::new(voxel_b_center, voxel_b_radius);
+
+                let voxel_b_sphere_in_a =
+                    voxel_b_sphere.translated_and_rotated(transform_from_world_to_a);
+
+                let voxel_b_sphere_in_norm_a =
+                    voxel_b_sphere_in_a.scaled(voxel_object_a.inverse_voxel_extent());
+
+                let touched_ranges_in_a = voxel_object_a
+                    .voxel_ranges_in_object_touching_sphere(&voxel_b_sphere_in_norm_a);
+
+                for i_a in touched_ranges_in_a[0].clone() {
+                    for j_a in touched_ranges_in_a[1].clone() {
+                        for k_a in touched_ranges_in_a[2].clone() {
+                            let Some(VoxelPlacement::Surface(placement_a)) = voxel_object_a
+                                .get_voxel_inside(i_a, j_a, k_a)
+                                .and_then(Voxel::placement)
+                            else {
+                                continue;
+                            };
+                            if !surface_placements_allow_contact(placement_a, placement_b) {
+                                continue;
+                            }
+
+                            let voxel_a_center_in_a = voxel_object_a
+                                .voxel_center_position_from_object_voxel_indices(i_a, j_a, k_a);
+
+                            let voxel_a_center = transform_from_world_to_a
+                                .inverse_transform_point(&voxel_a_center_in_a);
+
+                            let Some(contact_geometry) = compute_mutual_voxel_contact_geometry(
+                                &voxel_a_center,
+                                &voxel_b_center,
+                                voxel_b_radius,
+                                max_center_distance,
+                                max_squared_center_distance,
+                            ) else {
+                                continue;
+                            };
+
+                            f([i_a, j_a, k_a], [i_b, j_b, k_b], contact_geometry);
+                        }
                     }
+                }
+            },
+        );
+    } else {
+        voxel_object_a.for_each_surface_voxel_in_voxel_ranges(
+            intersection_voxel_ranges_in_a,
+            &mut |[i_a, j_a, k_a], _, placement_a| {
+                let voxel_a_center_in_a =
+                    voxel_object_a.voxel_center_position_from_object_voxel_indices(i_a, j_a, k_a);
 
-                    let voxel_b_center_in_object_space = voxel_object_b
-                        .voxel_center_position_from_object_voxel_indices(i_b, j_b, k_b);
+                let voxel_a_center =
+                    transform_from_world_to_a.inverse_transform_point(&voxel_a_center_in_a);
 
-                    let voxel_b_center = transform_from_world_to_b
-                        .inverse_transform_point(&voxel_b_center_in_object_space);
+                let voxel_a_sphere = Sphere::new(voxel_a_center, voxel_a_radius);
 
-                    let center_displacement = voxel_a_center - voxel_b_center;
-                    let squared_center_distance = center_displacement.norm_squared();
+                let voxel_a_sphere_in_b =
+                    voxel_a_sphere.translated_and_rotated(transform_from_world_to_b);
 
-                    if squared_center_distance > max_squared_center_distance {
-                        return;
+                let voxel_a_sphere_in_norm_b =
+                    voxel_a_sphere_in_b.scaled(voxel_object_b.inverse_voxel_extent());
+
+                let touched_ranges_in_b = voxel_object_b
+                    .voxel_ranges_in_object_touching_sphere(&voxel_a_sphere_in_norm_b);
+
+                for i_b in touched_ranges_in_b[0].clone() {
+                    for j_b in touched_ranges_in_b[1].clone() {
+                        for k_b in touched_ranges_in_b[2].clone() {
+                            let Some(VoxelPlacement::Surface(placement_b)) = voxel_object_b
+                                .get_voxel_inside(i_b, j_b, k_b)
+                                .and_then(Voxel::placement)
+                            else {
+                                continue;
+                            };
+                            if !surface_placements_allow_contact(placement_a, placement_b) {
+                                continue;
+                            }
+
+                            let voxel_b_center_in_b = voxel_object_b
+                                .voxel_center_position_from_object_voxel_indices(i_b, j_b, k_b);
+
+                            let voxel_b_center = transform_from_world_to_b
+                                .inverse_transform_point(&voxel_b_center_in_b);
+
+                            let Some(contact_geometry) = compute_mutual_voxel_contact_geometry(
+                                &voxel_a_center,
+                                &voxel_b_center,
+                                voxel_b_radius,
+                                max_center_distance,
+                                max_squared_center_distance,
+                            ) else {
+                                continue;
+                            };
+
+                            f([i_a, j_a, k_a], [i_b, j_b, k_b], contact_geometry);
+                        }
                     }
+                }
+            },
+        );
+    }
+}
 
-                    let center_distance = squared_center_distance.sqrt();
+fn surface_placements_allow_contact(
+    placement_a: VoxelSurfacePlacement,
+    placement_b: VoxelSurfacePlacement,
+) -> bool {
+    matches!(
+        (placement_a, placement_b),
+        // Corner voxels in A can be in contact with any surface voxel in B
+        (
+            VoxelSurfacePlacement::Corner,
+            VoxelSurfacePlacement::Corner
+                | VoxelSurfacePlacement::Edge
+                | VoxelSurfacePlacement::Face,
+        )
+        // Edge voxels in A can be in contact with corner or edge voxels in B
+        | (
+            VoxelSurfacePlacement::Edge,
+            VoxelSurfacePlacement::Corner | VoxelSurfacePlacement::Edge,
+        )
+        // Face voxels in A can be in contact with corner voxels in B
+        | (VoxelSurfacePlacement::Face, VoxelSurfacePlacement::Corner)
+    )
+}
 
-                    let surface_normal = if center_distance > 1e-8 {
-                        UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
-                    } else {
-                        Vector3::z_axis()
-                    };
+fn compute_mutual_voxel_contact_geometry(
+    voxel_a_center: &Point3<f32>,
+    voxel_b_center: &Point3<f32>,
+    voxel_b_radius: f32,
+    max_center_distance: f32,
+    max_squared_center_distance: f32,
+) -> Option<ContactGeometry> {
+    let center_displacement = voxel_a_center - voxel_b_center;
+    let squared_center_distance = center_displacement.norm_squared();
 
-                    let position = voxel_b_center + surface_normal.scale(voxel_radius_b);
+    if squared_center_distance > max_squared_center_distance {
+        return None;
+    }
 
-                    let penetration_depth = f32::max(0.0, max_center_distance - center_distance);
+    let center_distance = squared_center_distance.sqrt();
 
-                    let contact_geometry = ContactGeometry {
-                        position,
-                        surface_normal,
-                        penetration_depth,
-                    };
+    let surface_normal = if center_distance > 1e-8 {
+        UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+    } else {
+        Vector3::z_axis()
+    };
 
-                    f([i_a, j_a, k_a], [i_b, j_b, k_b], contact_geometry);
-                },
-            );
-        },
-    );
+    let position = voxel_b_center + surface_normal.scale(voxel_b_radius);
+
+    let penetration_depth = f32::max(0.0, max_center_distance - center_distance);
+
+    Some(ContactGeometry {
+        position,
+        surface_normal,
+        penetration_depth,
+    })
 }
 
 fn generate_sphere_voxel_object_contact_manifold(
