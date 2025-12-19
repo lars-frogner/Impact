@@ -111,7 +111,13 @@ jobs:
         with:
           tool: cargo-hack
 
+      - name: cargo hack check --each-feature (engine)
+        if: matrix.workspace == 'engine'
+        working-directory: ${{ matrix.workspace }}
+        run: cargo hack check --each-feature --no-dev-deps --exclude-features window,egui
+
       - name: cargo hack check --each-feature
+        if: matrix.workspace != 'engine'
         working-directory: ${{ matrix.workspace }}
         run: cargo hack check --each-feature --no-dev-deps
 
