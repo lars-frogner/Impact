@@ -19,7 +19,7 @@ use impact_voxel::{
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,
 };
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
 use std::hint::black_box;
 
 pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
@@ -124,7 +124,7 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: imp
     let generator = create_sphere_generator(object_radius);
     let object = ChunkedVoxelObject::generate(&generator);
     let plane = Plane::new(
-        UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
+        UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)),
         plane_displacement,
     );
     benchmarker.benchmark(&mut || {
@@ -144,7 +144,7 @@ pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
         object.compute_aabb().center()
-            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
         sphere_radius,
     );
     benchmarker.benchmark(&mut || {
@@ -179,7 +179,7 @@ pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let mut object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
         object.compute_aabb().center()
-            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
         sphere_radius,
     );
     benchmarker.benchmark(&mut || {
@@ -195,7 +195,7 @@ pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
     let sphere_2_id = graph.add_node(SDFNode::new_sphere(50.0));
     let sphere_2_id = graph.add_node(SDFNode::new_translation(
         sphere_2_id,
-        vector![120.0, 0.0, 0.0],
+        Vector3::new(120.0, 0.0, 0.0),
     ));
     graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
     let sdf_generator = graph.build_in(Global).unwrap();
@@ -217,7 +217,7 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
     let sphere_2_id = graph.add_node(SDFNode::new_sphere(50.0));
     let sphere_2_id = graph.add_node(SDFNode::new_translation(
         sphere_2_id,
-        vector![120.0, 0.0, 0.0],
+        Vector3::new(120.0, 0.0, 0.0),
     ));
     graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
     let sdf_generator = graph.build_in(Global).unwrap();
@@ -263,7 +263,7 @@ pub fn update_mesh(benchmarker: impl Benchmarker) {
 
     let sphere = Sphere::new(
         object.compute_aabb().center()
-            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
         sphere_radius,
     );
 
@@ -284,7 +284,7 @@ pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let sphere = Sphere::new(Position::origin(), sphere_radius);
     let transform_to_object_space = Isometry3::from_parts(
         (object.compute_aabb().center()
-            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius))
+            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius))
         .coords,
         UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
     );
@@ -330,7 +330,7 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_b = ChunkedVoxelObject::generate(&generator_b);
     let transform_to_object_a_space = Isometry3::from_parts(
         (object_a.compute_aabb().center()
-            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_a_radius))
+            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_a_radius))
         .coords,
         UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
     );

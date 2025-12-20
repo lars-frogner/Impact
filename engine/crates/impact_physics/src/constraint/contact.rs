@@ -5,7 +5,7 @@ use crate::{
     material::ContactResponseParameters,
     quantities::{self, Orientation, Position, Velocity},
 };
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
 use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
@@ -482,12 +482,12 @@ fn construct_tangent_vectors(
         // project it onto the yz plane, rotate it 90 degrees within the plane
         // and use that as the (unnormalized) first tangent. This vector will
         // be sufficiently different from the normal to avoid numerical issues.
-        vector![0.0, surface_normal.z, -surface_normal.y]
+        Vector3::new(0.0, surface_normal.z, -surface_normal.y)
     } else {
         // If the normal lies far from the yz-plane, projecting it onto the
         // yz-plane could lead to degeneracy, so we project it onto the xy-
         // plane instead to construct the first tangent.
-        vector![surface_normal.y, -surface_normal.x, 0.0]
+        Vector3::new(surface_normal.y, -surface_normal.x, 0.0)
     });
 
     let tangent_2 = UnitVector3::new_unchecked(surface_normal.cross(&tangent_1));

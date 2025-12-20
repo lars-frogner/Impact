@@ -8,7 +8,7 @@ use crate::{
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
-use nalgebra::{point, vector};
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 
 /// Manages all [`CircularTrajectoryDriver`]s.
@@ -169,7 +169,7 @@ impl CircularTrajectory {
     }
 
     fn compute_circular_displacement(radius: f32, cos_angle: f32, sin_angle: f32) -> Position {
-        point![radius * cos_angle, radius * sin_angle, 0.0]
+        Point3::new(radius * cos_angle, radius * sin_angle, 0.0)
     }
 
     fn compute_circular_velocity(
@@ -177,11 +177,11 @@ impl CircularTrajectory {
         sin_angle: f32,
         tangential_speed: f32,
     ) -> Velocity {
-        vector![
+        Vector3::new(
             -tangential_speed * sin_angle,
             tangential_speed * cos_angle,
-            0.0
-        ]
+            0.0,
+        )
     }
 }
 
@@ -191,7 +191,7 @@ mod tests {
     use crate::quantities::{Direction, Orientation};
     use approx::abs_diff_eq;
     use impact_math::Float;
-    use nalgebra::{UnitVector3, point, vector};
+    use nalgebra::UnitVector3;
     use proptest::prelude::*;
 
     prop_compose! {
@@ -200,7 +200,7 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            point![position_coord_x, position_coord_y, position_coord_z]
+            Point3::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -209,11 +209,11 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(vector![
+            Direction::new_normalize(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
-            ])
+            ))
         }
     }
 

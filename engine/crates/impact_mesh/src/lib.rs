@@ -19,7 +19,7 @@ pub use triangle::*;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
 use roc_integration::roc;
 use std::{
     fmt::{self, Debug},
@@ -198,14 +198,14 @@ impl VertexTangentSpaceQuaternion {
 }
 
 impl VertexColor {
-    pub const BLACK: Self = Self(vector![0.0, 0.0, 0.0, 1.0]);
-    pub const WHITE: Self = Self(vector![1.0, 1.0, 1.0, 1.0]);
-    pub const RED: Self = Self(vector![1.0, 0.0, 0.0, 1.0]);
-    pub const GREEN: Self = Self(vector![0.0, 1.0, 0.0, 1.0]);
-    pub const BLUE: Self = Self(vector![0.0, 0.0, 1.0, 1.0]);
-    pub const CYAN: Self = Self(vector![0.0, 1.0, 1.0, 1.0]);
-    pub const MAGENTA: Self = Self(vector![1.0, 0.0, 1.0, 1.0]);
-    pub const YELLOW: Self = Self(vector![1.0, 1.0, 0.0, 1.0]);
+    pub const BLACK: Self = Self(Vector4::new(0.0, 0.0, 0.0, 1.0));
+    pub const WHITE: Self = Self(Vector4::new(1.0, 1.0, 1.0, 1.0));
+    pub const RED: Self = Self(Vector4::new(1.0, 0.0, 0.0, 1.0));
+    pub const GREEN: Self = Self(Vector4::new(0.0, 1.0, 0.0, 1.0));
+    pub const BLUE: Self = Self(Vector4::new(0.0, 0.0, 1.0, 1.0));
+    pub const CYAN: Self = Self(Vector4::new(0.0, 1.0, 1.0, 1.0));
+    pub const MAGENTA: Self = Self(Vector4::new(1.0, 0.0, 1.0, 1.0));
+    pub const YELLOW: Self = Self(Vector4::new(1.0, 1.0, 0.0, 1.0));
 
     pub fn with_alpha(self, alpha: f32) -> Self {
         let mut color = self.0;

@@ -6,7 +6,7 @@ use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
     transform::{Projective3, Similarity3},
 };
-use nalgebra::{Matrix4, Point3, UnitQuaternion, UnitVector3, point, vector};
+use nalgebra::{Matrix4, Point3, UnitQuaternion, UnitVector3, Vector3};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -120,10 +120,12 @@ impl Frustum {
 
         let top_point =
             self.inverse_transform_matrix
-                .transform_point(&point![0.0, 1.0, clip_space_depth]);
-        let bottom_point =
-            self.inverse_transform_matrix
-                .transform_point(&point![0.0, -1.0, clip_space_depth]);
+                .transform_point(&Point3::new(0.0, 1.0, clip_space_depth));
+        let bottom_point = self.inverse_transform_matrix.transform_point(&Point3::new(
+            0.0,
+            -1.0,
+            clip_space_depth,
+        ));
 
         (top_point.y - bottom_point.y).abs()
     }
@@ -172,21 +174,21 @@ impl Frustum {
     pub fn compute_corners(&self) -> [Point3<f32>; 8] {
         [
             self.inverse_transform_matrix
-                .transform_point(&point![-1.0, -1.0, 0.0]),
+                .transform_point(&Point3::new(-1.0, -1.0, 0.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![-1.0, -1.0, 1.0]),
+                .transform_point(&Point3::new(-1.0, -1.0, 1.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![-1.0, 1.0, 0.0]),
+                .transform_point(&Point3::new(-1.0, 1.0, 0.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![-1.0, 1.0, 1.0]),
+                .transform_point(&Point3::new(-1.0, 1.0, 1.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![1.0, -1.0, 0.0]),
+                .transform_point(&Point3::new(1.0, -1.0, 0.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![1.0, -1.0, 1.0]),
+                .transform_point(&Point3::new(1.0, -1.0, 1.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![1.0, 1.0, 0.0]),
+                .transform_point(&Point3::new(1.0, 1.0, 0.0)),
             self.inverse_transform_matrix
-                .transform_point(&point![1.0, 1.0, 1.0]),
+                .transform_point(&Point3::new(1.0, 1.0, 1.0)),
         ]
     }
 
@@ -202,46 +204,46 @@ impl Frustum {
         let upper_clip_space_depth =
             self.convert_linear_depth_to_clip_space_depth(upper_linear_depth);
         [
-            self.inverse_transform_matrix.transform_point(&point![
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 -1.0,
                 -1.0,
-                lower_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                lower_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 -1.0,
                 -1.0,
-                upper_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                upper_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 -1.0,
                 1.0,
-                lower_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                lower_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 -1.0,
                 1.0,
-                upper_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                upper_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 1.0,
                 -1.0,
-                lower_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                lower_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 1.0,
                 -1.0,
-                upper_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                upper_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 1.0,
                 1.0,
-                lower_clip_space_depth
-            ]),
-            self.inverse_transform_matrix.transform_point(&point![
+                lower_clip_space_depth,
+            )),
+            self.inverse_transform_matrix.transform_point(&Point3::new(
                 1.0,
                 1.0,
-                upper_clip_space_depth
-            ]),
+                upper_clip_space_depth,
+            )),
         ]
     }
 
@@ -258,7 +260,7 @@ impl Frustum {
     /// Computes the view distance corresponding to the given clip space depth.
     pub fn convert_clip_space_depth_to_view_distance(&self, clip_space_depth: f32) -> f32 {
         self.inverse_transform_matrix
-            .transform_point(&point![0.0, 0.0, clip_space_depth])
+            .transform_point(&Point3::new(0.0, 0.0, clip_space_depth))
             .z
     }
 
@@ -424,7 +426,7 @@ impl Frustum {
         displacement: f32,
     ) -> Plane {
         let (unit_normal, magnitude) =
-            UnitVector3::new_and_get(vector![normal_x, normal_y, normal_z]);
+            UnitVector3::new_and_get(Vector3::new(normal_x, normal_y, normal_z));
 
         Plane::new(unit_normal, displacement / magnitude)
     }
@@ -502,7 +504,7 @@ mod tests {
     use crate::projection::{OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
     use impact_math::angle::Degrees;
-    use nalgebra::{Rotation3, Vector3, point};
+    use nalgebra::{Rotation3, Vector3};
 
     #[test]
     fn computing_frustum_near_and_far_distance_works() {
@@ -525,7 +527,7 @@ mod tests {
         for x in [-0.999, 0.999] {
             for y in [-0.999, 0.999] {
                 for z in [-0.999, 0.999] {
-                    assert!(frustum.contains_point(&point![x, y, z]));
+                    assert!(frustum.contains_point(&Point3::new(x, y, z)));
                 }
             }
         }
@@ -539,7 +541,7 @@ mod tests {
         for x in [-1.001, 1.001] {
             for y in [-1.001, 1.001] {
                 for z in [-1.001, 1.001] {
-                    assert!(!frustum.contains_point(&point![x, y, z]));
+                    assert!(!frustum.contains_point(&Point3::new(x, y, z)));
                 }
             }
         }
@@ -563,7 +565,7 @@ mod tests {
                     };
                     for dist_fraction in [0.5, 0.3, 0.1] {
                         let sphere = Sphere::new(
-                            point![x as f32, y as f32, z as f32],
+                            Point3::new(x as f32, y as f32, z as f32),
                             dist_fraction * dist_to_frustum,
                         );
                         assert!(!frustum.could_contain_part_of_sphere(&sphere));
@@ -590,7 +592,7 @@ mod tests {
                         _ => f32::sqrt(3.0),
                     };
                     let sphere = Sphere::new(
-                        point![x as f32, y as f32, z as f32],
+                        Point3::new(x as f32, y as f32, z as f32),
                         1.001 * dist_to_frustum,
                     );
                     assert!(frustum.could_contain_part_of_sphere(&sphere));
@@ -617,7 +619,7 @@ mod tests {
                 .as_projective(),
         );
 
-        let sphere = Sphere::new(point![3.37632, -3.3647947, -2.6214356], 1.0);
+        let sphere = Sphere::new(Point3::new(3.37632, -3.3647947, -2.6214356), 1.0);
 
         assert!(frustum.could_contain_part_of_sphere(&sphere));
     }
@@ -634,9 +636,9 @@ mod tests {
                         if x == 0 && y == 0 && z == 0 {
                             continue;
                         }
-                        let center = point![x as f32, y as f32, z as f32];
+                        let center = Point3::new(x as f32, y as f32, z as f32);
                         let corner_offset =
-                            vector![offset_fraction, offset_fraction, offset_fraction];
+                            Vector3::new(offset_fraction, offset_fraction, offset_fraction);
                         let aab =
                             AxisAlignedBox::new(center - corner_offset, center + corner_offset);
                         assert!(!frustum.could_contain_part_of_axis_aligned_box(&aab));
@@ -654,8 +656,8 @@ mod tests {
         for x in [-2, 0, 2] {
             for y in [-2, 0, 2] {
                 for z in [-2, 0, 2] {
-                    let center = point![x as f32, y as f32, z as f32];
-                    let corner_offset = vector![1.0, 1.0, 1.0] * 1.001;
+                    let center = Point3::new(x as f32, y as f32, z as f32);
+                    let corner_offset = Vector3::new(1.0, 1.0, 1.0) * 1.001;
                     let aab = AxisAlignedBox::new(center - corner_offset, center + corner_offset);
                     assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
                 }
@@ -669,7 +671,7 @@ mod tests {
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for half_extent in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
-            let corner_offset = vector![1.0, 1.0, 1.0] * half_extent;
+            let corner_offset = Vector3::new(1.0, 1.0, 1.0) * half_extent;
             let aab = AxisAlignedBox::new(
                 Point3::origin() - corner_offset,
                 Point3::origin() + corner_offset,
@@ -757,14 +759,14 @@ mod tests {
 
         let corners = frustum.compute_corners();
 
-        assert_abs_diff_eq!(corners[0], point![left, bottom, near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[1], point![left, bottom, far], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[2], point![left, top, near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[3], point![left, top, far], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[4], point![right, bottom, near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[5], point![right, bottom, far], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[6], point![right, top, near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[7], point![right, top, far], epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[0], Point3::new(left, bottom, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[1], Point3::new(left, bottom, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[2], Point3::new(left, top, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[3], Point3::new(left, top, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[4], Point3::new(right, bottom, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[5], Point3::new(right, bottom, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[6], Point3::new(right, top, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[7], Point3::new(right, top, far), epsilon = 1e-5);
     }
 
     #[test]
@@ -784,14 +786,34 @@ mod tests {
             new_far_linear_depth,
         ));
 
-        assert_abs_diff_eq!(corners[0], point![left, bottom, new_near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[1], point![left, bottom, new_far], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[2], point![left, top, new_near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[3], point![left, top, new_far], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[4], point![right, bottom, new_near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[5], point![right, bottom, new_far], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[6], point![right, top, new_near], epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[7], point![right, top, new_far], epsilon = 1e-5);
+        assert_abs_diff_eq!(
+            corners[0],
+            Point3::new(left, bottom, new_near),
+            epsilon = 1e-5
+        );
+        assert_abs_diff_eq!(
+            corners[1],
+            Point3::new(left, bottom, new_far),
+            epsilon = 1e-5
+        );
+        assert_abs_diff_eq!(corners[2], Point3::new(left, top, new_near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[3], Point3::new(left, top, new_far), epsilon = 1e-5);
+        assert_abs_diff_eq!(
+            corners[4],
+            Point3::new(right, bottom, new_near),
+            epsilon = 1e-5
+        );
+        assert_abs_diff_eq!(
+            corners[5],
+            Point3::new(right, bottom, new_far),
+            epsilon = 1e-5
+        );
+        assert_abs_diff_eq!(
+            corners[6],
+            Point3::new(right, top, new_near),
+            epsilon = 1e-5
+        );
+        assert_abs_diff_eq!(corners[7], Point3::new(right, top, new_far), epsilon = 1e-5);
     }
 
     #[test]
@@ -805,11 +827,11 @@ mod tests {
 
         assert_abs_diff_eq!(
             center,
-            point![
+            Point3::new(
                 0.5 * (left + right),
                 0.5 * (bottom + top),
                 0.5 * (near + far)
-            ],
+            ),
             epsilon = 1e-5
         );
     }
@@ -825,12 +847,12 @@ mod tests {
 
         assert_abs_diff_eq!(
             aabb.lower_corner(),
-            &point![left, bottom, near],
+            &Point3::new(left, bottom, near),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &point![right, top, far],
+            &Point3::new(right, top, far),
             epsilon = 1e-5
         );
     }
@@ -854,12 +876,12 @@ mod tests {
 
         assert_abs_diff_eq!(
             aabb.lower_corner(),
-            &point![left, bottom, new_near],
+            &Point3::new(left, bottom, new_near),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &point![right, top, new_far],
+            &Point3::new(right, top, new_far),
             epsilon = 1e-5
         );
     }
@@ -871,7 +893,7 @@ mod tests {
                 .as_projective(),
         );
 
-        let aab = AxisAlignedBox::new(Point3::origin(), point![1.0, 1.0, 1.0]);
+        let aab = AxisAlignedBox::new(Point3::origin(), Point3::new(1.0, 1.0, 1.0));
 
         for plane_idx in 0..6 {
             let plane = &frustum.planes[plane_idx];

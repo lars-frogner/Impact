@@ -8,7 +8,7 @@ use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
     transform::{Projective3, Similarity3},
 };
-use nalgebra::{Matrix4, Point2, Point3, Quaternion, UnitQuaternion, Vector3, point, vector};
+use nalgebra::{Matrix4, Point2, Point3, Quaternion, UnitQuaternion, Vector3, Vector4};
 use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
 /// A perspective transformation that maps points in a view frustum pointing
@@ -243,12 +243,12 @@ impl OrthographicTransform {
         &[sx, sy, sz]: &[f32; 3],
     ) -> (Point3<f32>, Vector3<f32>) {
         (
-            point![
+            Point3::new(
                 -translation.x,
                 -translation.y,
-                0.5 * (1.0 / sz - 2.0 * translation.z)
-            ],
-            vector![1.0 / sx, 1.0 / sy, -0.5 / sz],
+                0.5 * (1.0 / sz - 2.0 * translation.z),
+            ),
+            Vector3::new(1.0 / sx, 1.0 / sy, -0.5 / sz),
         )
     }
 
@@ -337,42 +337,42 @@ impl CubeMapper {
     const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion<f32>; 6] = [
         // From positive x face:
         // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
             0.0,
             -FRAC_1_SQRT_2,
             0.0,
-            FRAC_1_SQRT_2
-        ])),
+            FRAC_1_SQRT_2,
+        ))),
         // From negative x face:
         // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
             0.0,
             FRAC_1_SQRT_2,
             0.0,
-            FRAC_1_SQRT_2
-        ])),
+            FRAC_1_SQRT_2,
+        ))),
         // From positive y face:
         // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
             FRAC_1_SQRT_2,
             0.0,
             0.0,
-            FRAC_1_SQRT_2
-        ])),
+            FRAC_1_SQRT_2,
+        ))),
         // From negative y face:
         // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
             -FRAC_1_SQRT_2,
             0.0,
             0.0,
-            FRAC_1_SQRT_2
-        ])),
+            FRAC_1_SQRT_2,
+        ))),
         // From positive z face:
         // UnitQuaternion::identity()
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![0.0, 0.0, 0.0, 1.0])),
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(0.0, 0.0, 0.0, 1.0))),
         // From negative z face:
         // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(vector![0.0, 1.0, 0.0, 0.0])),
+        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(0.0, 1.0, 0.0, 0.0))),
     ];
 
     /// Returns a quaternion representing the rotation from the given cube face
@@ -545,7 +545,6 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use impact_math::angle::Degrees;
-    use nalgebra::{point, vector};
 
     #[test]
     #[should_panic]
@@ -593,7 +592,7 @@ mod tests {
         let transform =
             PerspectiveTransform::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
 
-        let point = point![1.2, 2.4, 1.8];
+        let point = Point3::new(1.2, 2.4, 1.8);
 
         assert_abs_diff_eq!(
             transform.transform_point(&point),
@@ -607,7 +606,7 @@ mod tests {
         let transform =
             PerspectiveTransform::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
 
-        let vector = vector![1.2, 2.4, 1.8];
+        let vector = Vector3::new(1.2, 2.4, 1.8);
 
         assert_abs_diff_eq!(
             transform.transform_vector(&vector),
@@ -626,7 +625,7 @@ mod tests {
             UpperExclusiveBounds::new(near_distance, far_distance),
         );
 
-        let point = point![0.0, 0.0, -near_distance];
+        let point = Point3::new(0.0, 0.0, -near_distance);
         assert_abs_diff_eq!(transform.transform_point(&point).z, 0.0);
     }
 
@@ -640,7 +639,7 @@ mod tests {
             UpperExclusiveBounds::new(near_distance, far_distance),
         );
 
-        let point = point![0.0, 0.0, -far_distance];
+        let point = Point3::new(0.0, 0.0, -far_distance);
         assert_abs_diff_eq!(transform.transform_point(&point).z, 1.0);
     }
 
@@ -652,23 +651,23 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &point![far, far, far]),
-            point![-1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(far, far, far)),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &point![far, -far, -far]),
-            point![1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(far, -far, -far)),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &point![near, near, near]),
-            point![-1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(near, near, near)),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &point![near, -near, -near]),
-            point![1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(near, -near, -near)),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -681,23 +680,23 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &point![-far, far, far]),
-            point![1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-far, far, far)),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &point![-far, -far, -far]),
-            point![-1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-far, -far, -far)),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &point![-near, near, near]),
-            point![1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-near, near, near)),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &point![-near, -near, -near]),
-            point![-1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-near, -near, -near)),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -710,23 +709,23 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &point![far, far, far]),
-            point![1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(far, far, far)),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &point![-far, far, -far]),
-            point![-1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(-far, far, -far)),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &point![near, near, near]),
-            point![1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(near, near, near)),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &point![-near, near, -near]),
-            point![-1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(-near, near, -near)),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
     }
@@ -739,23 +738,23 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &point![far, -far, far]),
-            point![1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(far, -far, far)),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &point![-far, -far, -far]),
-            point![-1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(-far, -far, -far)),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &point![near, -near, near]),
-            point![1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(near, -near, near)),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &point![-near, -near, -near]),
-            point![-1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(-near, -near, -near)),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -768,23 +767,23 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &point![far, far, far]),
-            point![1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(far, far, far)),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &point![-far, -far, far]),
-            point![-1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(-far, -far, far)),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &point![near, near, near]),
-            point![1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(near, near, near)),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &point![-near, -near, near]),
-            point![-1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(-near, -near, near)),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -797,23 +796,23 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &point![far, far, -far]),
-            point![-1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(far, far, -far)),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &point![-far, -far, -far]),
-            point![1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(-far, -far, -far)),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &point![near, near, -near]),
-            point![-1.0, 1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(near, near, -near)),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &point![-near, -near, -near]),
-            point![1.0, -1.0],
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(-near, -near, -near)),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -832,23 +831,29 @@ mod tests {
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.transform_point(&point![far, far, far]).xy(),
-            point![-1.0, 1.0],
+            projection.transform_point(&Point3::new(far, far, far)).xy(),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![far, -far, -far]).xy(),
-            point![1.0, -1.0],
+            projection
+                .transform_point(&Point3::new(far, -far, -far))
+                .xy(),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![near, near, near]).xy(),
-            point![-1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(near, near, near))
+                .xy(),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![near, -near, -near]).xy(),
-            point![1.0, -1.0],
+            projection
+                .transform_point(&Point3::new(near, -near, -near))
+                .xy(),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -867,25 +872,31 @@ mod tests {
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.transform_point(&point![-far, far, far]).xy(),
-            point![1.0, 1.0],
-            epsilon = 1e-9
-        );
-        assert_abs_diff_eq!(
-            projection.transform_point(&point![-far, -far, -far]).xy(),
-            point![-1.0, -1.0],
-            epsilon = 1e-9
-        );
-        assert_abs_diff_eq!(
-            projection.transform_point(&point![-near, near, near]).xy(),
-            point![1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(-far, far, far))
+                .xy(),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
             projection
-                .transform_point(&point![-near, -near, -near])
+                .transform_point(&Point3::new(-far, -far, -far))
                 .xy(),
-            point![-1.0, -1.0],
+            Point2::new(-1.0, -1.0),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&Point3::new(-near, near, near))
+                .xy(),
+            Point2::new(1.0, 1.0),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&Point3::new(-near, -near, -near))
+                .xy(),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -904,23 +915,29 @@ mod tests {
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.transform_point(&point![far, far, far]).xy(),
-            point![1.0, -1.0],
+            projection.transform_point(&Point3::new(far, far, far)).xy(),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![-far, far, -far]).xy(),
-            point![-1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(-far, far, -far))
+                .xy(),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![near, near, near]).xy(),
-            point![1.0, -1.0],
+            projection
+                .transform_point(&Point3::new(near, near, near))
+                .xy(),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![-near, near, -near]).xy(),
-            point![-1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(-near, near, -near))
+                .xy(),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
     }
@@ -939,25 +956,31 @@ mod tests {
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.transform_point(&point![far, -far, far]).xy(),
-            point![1.0, 1.0],
-            epsilon = 1e-9
-        );
-        assert_abs_diff_eq!(
-            projection.transform_point(&point![-far, -far, -far]).xy(),
-            point![-1.0, -1.0],
-            epsilon = 1e-9
-        );
-        assert_abs_diff_eq!(
-            projection.transform_point(&point![near, -near, near]).xy(),
-            point![1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(far, -far, far))
+                .xy(),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
             projection
-                .transform_point(&point![-near, -near, -near])
+                .transform_point(&Point3::new(-far, -far, -far))
                 .xy(),
-            point![-1.0, -1.0],
+            Point2::new(-1.0, -1.0),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&Point3::new(near, -near, near))
+                .xy(),
+            Point2::new(1.0, 1.0),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&Point3::new(-near, -near, -near))
+                .xy(),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -976,23 +999,29 @@ mod tests {
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.transform_point(&point![far, far, far]).xy(),
-            point![1.0, 1.0],
+            projection.transform_point(&Point3::new(far, far, far)).xy(),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![-far, -far, far]).xy(),
-            point![-1.0, -1.0],
+            projection
+                .transform_point(&Point3::new(-far, -far, far))
+                .xy(),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![near, near, near]).xy(),
-            point![1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(near, near, near))
+                .xy(),
+            Point2::new(1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
-            projection.transform_point(&point![-near, -near, near]).xy(),
-            point![-1.0, -1.0],
+            projection
+                .transform_point(&Point3::new(-near, -near, near))
+                .xy(),
+            Point2::new(-1.0, -1.0),
             epsilon = 1e-9
         );
     }
@@ -1011,25 +1040,31 @@ mod tests {
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.transform_point(&point![far, far, -far]).xy(),
-            point![-1.0, 1.0],
-            epsilon = 1e-9
-        );
-        assert_abs_diff_eq!(
-            projection.transform_point(&point![-far, -far, -far]).xy(),
-            point![1.0, -1.0],
-            epsilon = 1e-9
-        );
-        assert_abs_diff_eq!(
-            projection.transform_point(&point![near, near, -near]).xy(),
-            point![-1.0, 1.0],
+            projection
+                .transform_point(&Point3::new(far, far, -far))
+                .xy(),
+            Point2::new(-1.0, 1.0),
             epsilon = 1e-9
         );
         assert_abs_diff_eq!(
             projection
-                .transform_point(&point![-near, -near, -near])
+                .transform_point(&Point3::new(-far, -far, -far))
                 .xy(),
-            point![1.0, -1.0],
+            Point2::new(1.0, -1.0),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&Point3::new(near, near, -near))
+                .xy(),
+            Point2::new(-1.0, 1.0),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(
+            projection
+                .transform_point(&Point3::new(-near, -near, -near))
+                .xy(),
+            Point2::new(1.0, -1.0),
             epsilon = 1e-9
         );
     }

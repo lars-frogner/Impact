@@ -16,7 +16,7 @@ use crate::{
 };
 use cfg_if::cfg_if;
 use impact_containers::HashSet;
-use nalgebra::vector;
+use nalgebra::Vector3;
 use std::{array, cmp::Ordering, iter, mem, ops::Range};
 
 /// Represents a helper for keeping track of the transferral of some aggregate
@@ -234,8 +234,8 @@ impl ChunkedVoxelObject {
         let mut region_linear_chunk_indices = [Vec::with_capacity(16), Vec::with_capacity(16)];
         let mut region_non_uniform_chunk_counts = [0; 2];
 
-        let mut min_region_chunk_indices = [vector![usize::MAX, usize::MAX, usize::MAX]; 2];
-        let mut max_region_chunk_indices = [vector![0, 0, 0]; 2];
+        let mut min_region_chunk_indices = [Vector3::new(usize::MAX, usize::MAX, usize::MAX); 2];
+        let mut max_region_chunk_indices = [Vector3::new(0, 0, 0); 2];
 
         for chunk_i in self.occupied_chunk_ranges[0].clone() {
             for chunk_j in self.occupied_chunk_ranges[1].clone() {
@@ -2875,7 +2875,7 @@ mod tests {
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(25.0));
         let sphere_2_id = graph.add_node(SDFNode::new_translation(
             sphere_2_id,
-            vector![60.0, 0.0, 0.0],
+            Vector3::new(60.0, 0.0, 0.0),
         ));
         graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
         let sdf_generator = graph.build_in(Global).unwrap();

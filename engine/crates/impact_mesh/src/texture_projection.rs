@@ -2,7 +2,7 @@
 
 use anyhow::{Result, bail};
 use approx::abs_diff_eq;
-use nalgebra::{Point3, UnitVector3, Vector2, Vector3, vector};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector3};
 
 /// Represents a projection of 3D positions into UV texture coordinates.
 pub trait TextureProjection {
@@ -98,10 +98,10 @@ impl TextureProjection for PlanarTextureProjection {
             * self.inverse_v_direction_comp_normal_to_u_direction;
         let u = displacement_along_u_direction - v * self.v_direction_comp_along_u_direction;
 
-        vector![
+        Vector2::new(
             u * self.inverse_u_vector_length,
-            v * self.inverse_v_vector_length
-        ]
+            v * self.inverse_v_vector_length,
+        )
     }
 }
 
@@ -109,73 +109,72 @@ impl TextureProjection for PlanarTextureProjection {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::point;
 
     #[test]
     fn plane_texture_projection_works() {
-        let origin = point![-0.3, 3.9, 12.8];
-        let u_vector = vector![-2.1, 4.8, 0.2];
-        let v_vector = vector![6.3, -8.1, 5.5];
+        let origin = Point3::new(-0.3, 3.9, 12.8);
+        let u_vector = Vector3::new(-2.1, 4.8, 0.2);
+        let v_vector = Vector3::new(6.3, -8.1, 5.5);
         let projection = PlanarTextureProjection::new(origin, u_vector, v_vector).unwrap();
 
         assert_abs_diff_eq!(
             projection.project_position(&origin),
-            vector![0.0, 0.0],
+            Vector2::new(0.0, 0.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + u_vector)),
-            vector![1.0, 0.0],
+            Vector2::new(1.0, 0.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + v_vector)),
-            vector![0.0, 1.0],
+            Vector2::new(0.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin - u_vector)),
-            vector![-1.0, 0.0],
+            Vector2::new(-1.0, 0.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin - v_vector)),
-            vector![0.0, -1.0],
+            Vector2::new(0.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + u_vector * 2.0)),
-            vector![2.0, 0.0],
+            Vector2::new(2.0, 0.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + v_vector * 2.0)),
-            vector![0.0, 2.0],
+            Vector2::new(0.0, 2.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin - u_vector * 2.0)),
-            vector![-2.0, 0.0],
+            Vector2::new(-2.0, 0.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin - v_vector * 2.0)),
-            vector![0.0, -2.0],
+            Vector2::new(0.0, -2.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + u_vector + v_vector)),
-            vector![1.0, 1.0],
+            Vector2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + u_vector * 3.5 - v_vector * 1.2)),
-            vector![3.5, -1.2],
+            Vector2::new(3.5, -1.2),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection.project_position(&(origin + u_vector * 0.37 + v_vector * 0.44)),
-            vector![0.37, 0.44],
+            Vector2::new(0.37, 0.44),
             epsilon = 1e-5
         );
     }

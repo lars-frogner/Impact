@@ -3,7 +3,7 @@
 use crate::{TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords};
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{UnitVector3, point, vector};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector3};
 use ply_rs::{
     parser::Parser,
     ply::{Property, PropertyAccess},
@@ -85,11 +85,11 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_positions = vertex_list
             .iter()
             .map(|PlyVertex { property_values }| {
-                VertexPosition(point![
+                VertexPosition(Point3::new(
                     property_values[prop_idx],
                     property_values[prop_idx + 1],
-                    property_values[prop_idx + 2]
-                ])
+                    property_values[prop_idx + 2],
+                ))
             })
             .collect();
 
@@ -117,11 +117,11 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_normal_vectors = vertex_list
             .iter()
             .map(|PlyVertex { property_values }| {
-                VertexNormalVector(UnitVector3::new_normalize(vector![
+                VertexNormalVector(UnitVector3::new_normalize(Vector3::new(
                     property_values[prop_idx],
                     property_values[prop_idx + 1],
-                    property_values[prop_idx + 2]
-                ]))
+                    property_values[prop_idx + 2],
+                )))
             })
             .collect();
 
@@ -137,10 +137,10 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_texture_coords = vertex_list
             .iter()
             .map(|PlyVertex { property_values }| {
-                VertexTextureCoords(vector![
+                VertexTextureCoords(Vector2::new(
                     property_values[prop_idx],
-                    property_values[prop_idx + 1]
-                ])
+                    property_values[prop_idx + 1],
+                ))
             })
             .collect();
 

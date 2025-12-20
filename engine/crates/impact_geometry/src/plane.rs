@@ -4,7 +4,7 @@ use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::transform::{Isometry3, Similarity3};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, vector};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -50,15 +50,18 @@ pub enum IntersectsPlane {
 impl Plane {
     /// The xy-coordinate plane, with the positive halfspace being the space of
     /// positive z-coordinates.
-    pub const XY_PLANE: Self = Self::new(UnitVector3::new_unchecked(vector![0.0, 0.0, 1.0]), 0.0);
+    pub const XY_PLANE: Self =
+        Self::new(UnitVector3::new_unchecked(Vector3::new(0.0, 0.0, 1.0)), 0.0);
 
     /// The yz-coordinate plane, with the positive halfspace being the space of
     /// positive x-coordinates.
-    pub const YZ_PLANE: Self = Self::new(UnitVector3::new_unchecked(vector![1.0, 0.0, 0.0]), 0.0);
+    pub const YZ_PLANE: Self =
+        Self::new(UnitVector3::new_unchecked(Vector3::new(1.0, 0.0, 0.0)), 0.0);
 
     /// The xz-coordinate plane, with the positive halfspace being the space of
     /// positive y-coordinates.
-    pub const XZ_PLANE: Self = Self::new(UnitVector3::new_unchecked(vector![0.0, 1.0, 0.0]), 0.0);
+    pub const XZ_PLANE: Self =
+        Self::new(UnitVector3::new_unchecked(Vector3::new(0.0, 1.0, 0.0)), 0.0);
 
     /// Creates a new plane defined by the given unit normal
     /// vector and displacement.
@@ -201,12 +204,12 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
     use impact_math::consts::f32::SQRT_2;
-    use nalgebra::{Vector3, point, vector};
+    use nalgebra::Vector3;
 
     #[test]
     fn creating_plane_through_origin_gives_zero_displacement() {
         let plane = Plane::from_normal_and_point(
-            UnitVector3::new_normalize(vector![1.2, -0.1, 2.7]),
+            UnitVector3::new_normalize(Vector3::new(1.2, -0.1, 2.7)),
             &Point3::origin(),
         );
         assert_abs_diff_eq!(plane.displacement(), 0.0);
@@ -214,31 +217,37 @@ mod tests {
 
     #[test]
     fn signed_distance_is_correct() {
-        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &point![1.0, 2.0, 0.0]);
+        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &Point3::new(1.0, 2.0, 0.0));
         assert_abs_diff_eq!(
-            plane.compute_signed_distance(&point![-1.2, 0.0, 42.4]),
+            plane.compute_signed_distance(&Point3::new(-1.2, 0.0, 42.4)),
             -2.0
         );
         assert_abs_diff_eq!(
-            plane.compute_signed_distance(&point![-2.1, 10.0, 4.42]),
+            plane.compute_signed_distance(&Point3::new(-2.1, 10.0, 4.42)),
             8.0
         );
 
         let plane = Plane::from_normal_and_point(
-            UnitVector3::new_normalize(vector![1.0, 0.0, 1.0]),
+            UnitVector3::new_normalize(Vector3::new(1.0, 0.0, 1.0)),
             &Point3::origin(),
         );
         assert_abs_diff_eq!(
-            plane.compute_signed_distance(&point![8.0, 0.0, 8.0]),
+            plane.compute_signed_distance(&Point3::new(8.0, 0.0, 8.0)),
             SQRT_2 * 8.0,
             epsilon = 1e-6
         );
-        assert_abs_diff_eq!(plane.compute_signed_distance(&point![0.0, 8.0, 0.0]), 0.0);
+        assert_abs_diff_eq!(
+            plane.compute_signed_distance(&Point3::new(0.0, 8.0, 0.0)),
+            0.0
+        );
     }
 
     #[test]
     fn transforming_plane_with_identity_gives_same_plane() {
-        let plane = Plane::new(UnitVector3::new_normalize(vector![1.2, -0.1, 2.7]), -3.4);
+        let plane = Plane::new(
+            UnitVector3::new_normalize(Vector3::new(1.2, -0.1, 2.7)),
+            -3.4,
+        );
         let transformed_plane = plane.transformed(&Similarity3::identity());
 
         assert_abs_diff_eq!(transformed_plane, plane, epsilon = 1e-9);
@@ -246,8 +255,8 @@ mod tests {
 
     #[test]
     fn projecting_point_on_plane_returns_same_point() {
-        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &point![1.0, 2.0, 0.0]);
-        let point_on_plane = point![5.0, 2.0, -3.0];
+        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &Point3::new(1.0, 2.0, 0.0));
+        let point_on_plane = Point3::new(5.0, 2.0, -3.0);
         let projected_point = plane.project_point_onto_plane(&point_on_plane);
 
         assert_abs_diff_eq!(projected_point, point_on_plane, epsilon = 1e-9);
@@ -255,12 +264,12 @@ mod tests {
 
     #[test]
     fn projecting_point_off_plane_moves_it_to_plane() {
-        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &point![0.0, 5.0, 0.0]);
-        let point_off_plane = point![2.0, 8.0, -1.0];
+        let plane = Plane::from_normal_and_point(Vector3::y_axis(), &Point3::new(0.0, 5.0, 0.0));
+        let point_off_plane = Point3::new(2.0, 8.0, -1.0);
         let projected_point = plane.project_point_onto_plane(&point_off_plane);
 
         // The projected point should be on the plane (y = 5.0)
-        assert_abs_diff_eq!(projected_point, point![2.0, 5.0, -1.0], epsilon = 1e-9);
+        assert_abs_diff_eq!(projected_point, Point3::new(2.0, 5.0, -1.0), epsilon = 1e-9);
 
         // Verify the projected point is actually on the plane
         assert_abs_diff_eq!(

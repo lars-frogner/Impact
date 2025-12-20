@@ -8,7 +8,7 @@ use crate::{
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
-use nalgebra::{point, vector};
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 use roots::{self, SimpleConvergency};
 
@@ -305,11 +305,11 @@ impl OrbitalTrajectory {
         sin_true_anomaly: f32,
         orbital_distance: f32,
     ) -> Position {
-        point![
+        Point3::new(
             orbital_distance * cos_true_anomaly,
             orbital_distance * sin_true_anomaly,
-            0.0
-        ]
+            0.0,
+        )
     }
 
     fn compute_rate_of_change_of_true_anomaly(
@@ -347,11 +347,11 @@ impl OrbitalTrajectory {
         radial_speed: f32,
         tangential_speed: f32,
     ) -> Velocity {
-        vector![
+        Vector3::new(
             radial_speed * cos_true_anomaly - tangential_speed * sin_true_anomaly,
             radial_speed * sin_true_anomaly + tangential_speed * cos_true_anomaly,
-            0.0
-        ]
+            0.0,
+        )
     }
 }
 
@@ -361,7 +361,7 @@ mod tests {
     use crate::quantities::{Direction, Orientation};
     use approx::abs_diff_eq;
     use impact_math::Float;
-    use nalgebra::{UnitVector3, point, vector};
+    use nalgebra::UnitVector3;
     use proptest::prelude::*;
 
     prop_compose! {
@@ -370,7 +370,7 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            point![position_coord_x, position_coord_y, position_coord_z]
+            Point3::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -379,11 +379,11 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(vector![
+            Direction::new_normalize(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
-            ])
+            ))
         }
     }
 
@@ -495,10 +495,10 @@ mod tests {
                 semi_major_axis * (1.0 - eccentricity.powi(2)) / (1.0 - eccentricity);
 
             let correct_periapsis_position = focal_position
-                + orientation.transform_point(&(point![periapsis_distance, 0.0, 0.0])).coords;
+                + orientation.transform_point(&(Point3::new(periapsis_distance, 0.0, 0.0))).coords;
 
             let correct_apoapsis_position = focal_position
-                + orientation.transform_point(&(point![-apoapsis_distance, 0.0, 0.0])).coords;
+                + orientation.transform_point(&(Point3::new(-apoapsis_distance, 0.0, 0.0))).coords;
 
             let periapsis_position = trajectory.compute_position_and_velocity(periapsis_time).0;
             let apoapsis_position = trajectory.compute_position_and_velocity(apoapsis_time).0;

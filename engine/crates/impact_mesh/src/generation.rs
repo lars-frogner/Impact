@@ -8,11 +8,11 @@ use crate::{
 };
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::{consts::f32::TWO_PI, transform::Similarity3};
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
-        $crate::VertexPosition(nalgebra::point![$x, $y, $z])
+        $crate::VertexPosition(Point3::new($x, $y, $z))
     };
     ($point:expr) => {
         $crate::VertexPosition($point)
@@ -303,11 +303,11 @@ impl TriangleMesh {
         positions.push(top_pos);
 
         // Normal direction at first side vertices
-        let normal_direction = normal!(UnitVector3::new_unchecked(vector![
+        let normal_direction = normal!(UnitVector3::new_unchecked(Vector3::new(
             cos_slope_angle,
             sin_slope_angle,
             0.0
-        ]));
+        )));
         normal_vectors.push(normal_direction);
         normal_vectors.push(normal_direction);
 
@@ -333,11 +333,11 @@ impl TriangleMesh {
             ];
             positions.push(top_pos);
 
-            let normal_direction = normal!(UnitVector3::new_unchecked(vector![
+            let normal_direction = normal!(UnitVector3::new_unchecked(Vector3::new(
                 cos_polar_angle * cos_slope_angle,
                 sin_slope_angle,
                 sin_polar_angle * cos_slope_angle
-            ]));
+            )));
             normal_vectors.push(normal_direction);
             normal_vectors.push(normal_direction);
 
@@ -776,7 +776,7 @@ impl TriangleMesh {
 
         cube.remove_normal_vectors(&mut dirty_mask);
         cube.translate(
-            &vector![0.5 * extent, 0.5 * extent, 0.5 * extent],
+            &Vector3::new(0.5 * extent, 0.5 * extent, 0.5 * extent),
             &mut dirty_mask,
         );
         cube.set_same_color(color, &mut dirty_mask);
@@ -839,12 +839,12 @@ impl LineSegmentMesh {
     pub fn create_unit_cubemap_frusta() -> Self {
         let mut down_diagonals = Self::create_baseless_unit_pyramid();
         let mut dirty_mask = LineSegmentMeshDirtyMask::empty();
-        down_diagonals.translate(&vector![0.0, -1.0, 0.0], &mut dirty_mask);
+        down_diagonals.translate(&Vector3::new(0.0, -1.0, 0.0), &mut dirty_mask);
 
         let mut up_diagonals = Self::create_baseless_unit_pyramid();
         up_diagonals.transform(
             &Similarity3::from_parts(
-                vector![0.0, 1.0, 0.0],
+                Vector3::new(0.0, 1.0, 0.0),
                 UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI),
                 1.0,
             ),

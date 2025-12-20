@@ -20,7 +20,7 @@ use impact_texture::{
     gpu_resource::{SamplerMap, TextureMap},
     processing::{FormatConversion, ImageProcessing, NormalMapFormat},
 };
-use nalgebra::{Vector3, Vector4, vector};
+use nalgebra::{Vector3, Vector4};
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -488,12 +488,12 @@ impl FixedVoxelMaterialProperties {
         emissive_luminance: f32,
     ) -> Self {
         Self {
-            properties: vector![
+            properties: Vector4::new(
                 specular_reflectance,
                 roughness_scale,
                 metalness,
-                emissive_luminance
-            ],
+                emissive_luminance,
+            ),
         }
     }
 }
@@ -532,7 +532,7 @@ impl Default for VoxelTypeSpecifications {
         Self(vec![VoxelTypeSpecification {
             name: Cow::Borrowed("Default"),
             mass_density: 1.0,
-            color: VoxelColor::Uniform(vector![0.9, 0.9, 0.9]),
+            color: VoxelColor::Uniform(Vector3::new(0.9, 0.9, 0.9)),
             specular_reflectance: 0.02,
             roughness: VoxelRoughness::Uniform(0.5),
             metalness: 0.0,

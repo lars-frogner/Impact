@@ -4,7 +4,7 @@ use crate::quantities::Position;
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{Float, transform::Similarity3};
-use nalgebra::{Matrix3, Point3, UnitQuaternion, Vector3, point, vector};
+use nalgebra::{Matrix3, Point3, UnitQuaternion, Vector3};
 use roc_integration::roc;
 use simba::scalar::SubsetOf;
 
@@ -89,7 +89,7 @@ impl InertialProperties {
         let radius = diameter * 0.5;
         let mass = compute_cylinder_volume(radius, length) * mass_density;
 
-        let center_of_mass = point![0.0, length * 0.5, 0.0];
+        let center_of_mass = Point3::new(0.0, length * 0.5, 0.0);
 
         let moment_of_inertia_y = 0.5 * mass * radius.powi(2);
         let moment_of_inertia_xz = (1.0 / 12.0) * mass * (3.0 * radius.powi(2) + length.powi(2));
@@ -114,7 +114,7 @@ impl InertialProperties {
 
         // The center of mass is one quarter of the way up from the center of
         // the disk toward the point
-        let center_of_mass = point![0.0, length * 0.25, 0.0];
+        let center_of_mass = Point3::new(0.0, length * 0.25, 0.0);
 
         let moment_of_inertia_y = (3.0 * 0.5 * 0.2) * mass * max_radius.powi(2);
         let moment_of_inertia_xz =
@@ -159,7 +159,7 @@ impl InertialProperties {
 
         // The center of mass is (3/8) of the way up from the center of the disk
         // toward the top
-        let center_of_mass = point![0.0, (3.0 / 8.0) * radius, 0.0];
+        let center_of_mass = Point3::new(0.0, (3.0 / 8.0) * radius, 0.0);
 
         let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
 
@@ -298,8 +298,9 @@ impl InertiaTensor {
             "Tried creating inertia tensor with diagonal element not exceeding zero"
         );
 
-        let matrix = Matrix3::from_diagonal(&vector![j_xx, j_yy, j_zz]);
-        let inverse_matrix = Matrix3::from_diagonal(&vector![1.0 / j_xx, 1.0 / j_yy, 1.0 / j_zz]);
+        let matrix = Matrix3::from_diagonal(&Vector3::new(j_xx, j_yy, j_zz));
+        let inverse_matrix =
+            Matrix3::from_diagonal(&Vector3::new(1.0 / j_xx, 1.0 / j_yy, 1.0 / j_zz));
 
         Self::from_matrix_and_inverse(matrix, inverse_matrix)
     }
@@ -439,9 +440,9 @@ impl InertiaTensor {
         let [shift_xy, shift_yz, shift_zx] = (-product_of_inertia_deltas).into();
 
         Matrix3::from_columns(&[
-            vector![shift_xx, shift_xy, shift_zx],
-            vector![shift_xy, shift_yy, shift_yz],
-            vector![shift_zx, shift_yz, shift_zz],
+            Vector3::new(shift_xx, shift_xy, shift_zx),
+            Vector3::new(shift_xy, shift_yy, shift_yz),
+            Vector3::new(shift_zx, shift_yz, shift_zz),
         ])
     }
 
@@ -456,17 +457,17 @@ impl InertiaTensor {
     ) -> (Vector3<f32>, Vector3<f32>) {
         let squared_displacement = displacement_to_com.component_mul(displacement_to_com);
 
-        let moment_of_inertia_deltas = vector![
+        let moment_of_inertia_deltas = Vector3::new(
             -mass * (squared_displacement.y + squared_displacement.z),
             -mass * (squared_displacement.z + squared_displacement.x),
             -mass * (squared_displacement.x + squared_displacement.y),
-        ];
+        );
 
-        let product_of_inertia_deltas = vector![
+        let product_of_inertia_deltas = Vector3::new(
             -mass * displacement_to_com.x * displacement_to_com.y,
             -mass * displacement_to_com.y * displacement_to_com.z,
             -mass * displacement_to_com.z * displacement_to_com.x,
-        ];
+        );
 
         (moment_of_inertia_deltas, product_of_inertia_deltas)
     }
@@ -642,9 +643,9 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<'a, F: Float + SubsetOf
 
     let inertia_matrix =
         Matrix3::from_columns(&[
-            vector![j_xx, j_xy, j_zx],
-            vector![j_xy, j_yy, j_yz],
-            vector![j_zx, j_yz, j_zz],
+            Vector3::new(j_xx, j_xy, j_zx),
+            Vector3::new(j_xy, j_yy, j_yz),
+            Vector3::new(j_zx, j_yz, j_zz),
         ]) + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, &center_of_mass.coords)
             .cast::<f64>();
 
@@ -731,11 +732,11 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 
     let diagonal_second_moments = edge_cross_prod.component_mul(&f_3);
 
-    let mixed_second_moments = vector![
+    let mixed_second_moments = Vector3::new(
         edge_cross_prod.x * (w_0.y * g_0.x + w_1.y * g_1.x + w_2.y * g_2.x), // x²y
         edge_cross_prod.y * (w_0.z * g_0.y + w_1.z * g_1.y + w_2.z * g_2.y), // y²z
-        edge_cross_prod.z * (w_0.x * g_0.z + w_1.x * g_1.z + w_2.x * g_2.z)  // z²x
-    ];
+        edge_cross_prod.z * (w_0.x * g_0.z + w_1.x * g_1.z + w_2.x * g_2.z), // z²x
+    );
 
     (
         zeroth_moment,

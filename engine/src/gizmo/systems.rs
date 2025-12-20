@@ -45,7 +45,7 @@ use impact_voxel::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
 };
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
 use std::iter;
 use tinyvec::TinyVec;
 
@@ -526,7 +526,7 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
         let scaling = plane_height * scene_camera.camera().aspect_ratio().max(1.0);
 
         let camera_cascade_from_vertical_square = InstanceModelViewTransform {
-            translation: vector![0.0, 0.0, plane_z],
+            translation: Vector3::new(0.0, 0.0, plane_z),
             rotation: UnitQuaternion::identity(),
             scaling,
         };
@@ -949,7 +949,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             };
 
             let chunk_offset_in_voxels =
-                CHUNK_SIZE as f32 * vector![chunk_i as f32, chunk_j as f32, chunk_k as f32];
+                CHUNK_SIZE as f32 * Vector3::new(chunk_i as f32, chunk_j as f32, chunk_k as f32);
 
             let chunk_transform = model_view_transform
                 .apply_to_scaling(voxel_extent)

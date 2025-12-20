@@ -8,7 +8,7 @@ use crate::{
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::Float;
 use impact_physics::inertia::{InertiaTensor, InertialProperties};
-use nalgebra::{Matrix3, Point3, Vector3, vector};
+use nalgebra::{Matrix3, Point3, Vector3};
 use std::ops::Range;
 
 /// Keeps track of the inertial properties (mass, center of mass and inertia
@@ -253,9 +253,9 @@ impl VoxelObjectInertialPropertyManager {
         // This is the inertia tensor defined with respect to the origin
         #[rustfmt::skip]
         let inertia_tensor_matrix = Matrix3::from_columns(&[
-            vector![  moments_of_inertia.x, -products_of_inertia.x, -products_of_inertia.z],
-            vector![-products_of_inertia.x,   moments_of_inertia.y, -products_of_inertia.y],
-            vector![-products_of_inertia.z, -products_of_inertia.y,   moments_of_inertia.z],
+            Vector3::new(  moments_of_inertia.x, -products_of_inertia.x, -products_of_inertia.z),
+            Vector3::new(-products_of_inertia.x,   moments_of_inertia.y, -products_of_inertia.y),
+            Vector3::new(-products_of_inertia.z, -products_of_inertia.y,   moments_of_inertia.z),
         ]);
 
         // This is with respect to the center of mass
@@ -460,18 +460,18 @@ fn compute_moments_for_voxel(
     let moments = (f32::ONE_HALF * voxel_extent_pow_2 * voxel_density) * squared_coord_diff;
 
     let moments_of_inertia = (f32::ONE_THIRD * voxel_extent_pow_2 * voxel_density)
-        * vector![
+        * Vector3::new(
             cubed_coord_diff[1] + cubed_coord_diff[2],
             cubed_coord_diff[0] + cubed_coord_diff[2],
-            cubed_coord_diff[0] + cubed_coord_diff[1]
-        ];
+            cubed_coord_diff[0] + cubed_coord_diff[1],
+        );
 
     let products_of_inertia = (f32::ONE_FOURTH * voxel_extent * voxel_density)
-        * vector![
+        * Vector3::new(
             squared_coord_diff[0] * squared_coord_diff[1],
             squared_coord_diff[1] * squared_coord_diff[2],
-            squared_coord_diff[2] * squared_coord_diff[0]
-        ];
+            squared_coord_diff[2] * squared_coord_diff[0],
+        );
 
     (mass, moments, moments_of_inertia, products_of_inertia)
 }
@@ -534,19 +534,19 @@ fn compute_moments_for_non_uniform_chunk(
                     let voxel_density = voxel_type_densities[voxel.voxel_type().idx()];
 
                     mass += voxel_density;
-                    moments += voxel_density * vector![xh2_sub_xl2, yh2_sub_yl2, zh2_sub_zl2];
+                    moments += voxel_density * Vector3::new(xh2_sub_xl2, yh2_sub_yl2, zh2_sub_zl2);
                     moments_of_inertia += voxel_density
-                        * vector![
+                        * Vector3::new(
                             yh3_sub_yl3 + zh3_sub_zl3,
                             xh3_sub_xl3 + zh3_sub_zl3,
-                            xh3_sub_xl3 + yh3_sub_yl3
-                        ];
+                            xh3_sub_xl3 + yh3_sub_yl3,
+                        );
                     products_of_inertia += voxel_density
-                        * vector![
+                        * Vector3::new(
                             xh2_sub_xl2 * yh2_sub_yl2,
                             yh2_sub_yl2 * zh2_sub_zl2,
-                            zh2_sub_zl2 * xh2_sub_xl2
-                        ];
+                            zh2_sub_zl2 * xh2_sub_xl2,
+                        );
                 }
                 voxel_idx += 1;
                 zl = zh;
@@ -614,19 +614,19 @@ fn compute_moments_for_uniform_chunk(
 
     let mass = chunk_extent_pow_3 * density;
     let moments = (f32::ONE_HALF * chunk_extent_pow_2 * density)
-        * vector![xh2_sub_xl2, yh2_sub_yl2, zh2_sub_zl2];
+        * Vector3::new(xh2_sub_xl2, yh2_sub_yl2, zh2_sub_zl2);
     let moments_of_inertia = (f32::ONE_THIRD * chunk_extent_pow_2 * density)
-        * vector![
+        * Vector3::new(
             yh3_sub_yl3 + zh3_sub_zl3,
             xh3_sub_xl3 + zh3_sub_zl3,
-            xh3_sub_xl3 + yh3_sub_yl3
-        ];
+            xh3_sub_xl3 + yh3_sub_yl3,
+        );
     let products_of_inertia = (f32::ONE_FOURTH * chunk_extent * density)
-        * vector![
+        * Vector3::new(
             xh2_sub_xl2 * yh2_sub_yl2,
             yh2_sub_yl2 * zh2_sub_zl2,
-            zh2_sub_zl2 * xh2_sub_xl2
-        ];
+            zh2_sub_zl2 * xh2_sub_xl2,
+        );
 
     (mass, moments, moments_of_inertia, products_of_inertia)
 }

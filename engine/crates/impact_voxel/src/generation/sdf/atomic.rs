@@ -11,7 +11,7 @@ use impact_alloc::{
 };
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::{Float, transform::Similarity3};
-use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3};
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::{f32, mem};
@@ -1751,14 +1751,14 @@ impl MultiscaleSphereSDFModifier {
     #[inline]
     fn evaluate_sphere_grid_sdf(&self, position: &Point3<f32>) -> f32 {
         const CORNER_OFFSETS: [Vector3<i32>; 8] = [
-            vector![0, 0, 0],
-            vector![0, 0, 1],
-            vector![0, 1, 0],
-            vector![0, 1, 1],
-            vector![1, 0, 0],
-            vector![1, 0, 1],
-            vector![1, 1, 0],
-            vector![1, 1, 1],
+            Vector3::new(0, 0, 0),
+            Vector3::new(0, 0, 1),
+            Vector3::new(0, 1, 0),
+            Vector3::new(0, 1, 1),
+            Vector3::new(1, 0, 0),
+            Vector3::new(1, 0, 1),
+            Vector3::new(1, 1, 0),
+            Vector3::new(1, 1, 1),
         ];
         let grid_cell_indices = position.coords.map(|coord| coord.floor() as i32);
         let offset_in_grid_cell = position.coords - grid_cell_indices.cast();

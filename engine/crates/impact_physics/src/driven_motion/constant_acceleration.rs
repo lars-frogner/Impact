@@ -150,7 +150,7 @@ impl ConstantAccelerationTrajectory {
 mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use nalgebra::{point, vector};
+    use nalgebra::{Point3, Vector3};
     use proptest::prelude::*;
 
     prop_compose! {
@@ -159,7 +159,7 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            point![position_coord_x, position_coord_y, position_coord_z]
+            Point3::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -169,7 +169,7 @@ mod tests {
             velocity_coord_y in -max_velocity_coord..max_velocity_coord,
             velocity_coord_z in -max_velocity_coord..max_velocity_coord,
         ) -> Velocity {
-            vector![velocity_coord_x, velocity_coord_y, velocity_coord_z]
+            Vector3::new(velocity_coord_x, velocity_coord_y, velocity_coord_z)
         }
     }
 
@@ -179,7 +179,7 @@ mod tests {
             acceleration_coord_y in -max_acceleration_coord..max_acceleration_coord,
             acceleration_coord_z in -max_acceleration_coord..max_acceleration_coord,
         ) -> Acceleration {
-            vector![acceleration_coord_x, acceleration_coord_y, acceleration_coord_z]
+            Vector3::new(acceleration_coord_x, acceleration_coord_y, acceleration_coord_z)
         }
     }
 

@@ -100,19 +100,19 @@ impl Default for ModelTransform {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::{UnitQuaternion, point, vector};
+    use nalgebra::UnitQuaternion;
 
     #[test]
     fn updating_offset_while_preserving_position_works() {
-        let position = point![1.0, 2.0, 3.0];
+        let position = Point3::new(1.0, 2.0, 3.0);
         let orientation = UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3);
         let scale = 1.5;
-        let original_offset = vector![4.0, 2.0, 3.0];
-        let new_offset = vector![4.5, 1.5, 1.0];
+        let original_offset = Vector3::new(4.0, 2.0, 3.0);
+        let new_offset = Vector3::new(4.5, 1.5, 1.0);
 
         let mut model_transform = ModelTransform::with_offset_and_scale(original_offset, scale);
         let mut frame = ReferenceFrame::new(position, orientation);
-        let point_within_frame = point![-2.0, 0.5, 3.0];
+        let point_within_frame = Point3::new(-2.0, 0.5, 3.0);
         let point_before = (frame.create_transform_to_parent_space()
             * model_transform.crate_transform_to_entity_space())
         .transform_point(&point_within_frame);

@@ -13,7 +13,7 @@ use impact_voxel::{
     },
     voxel_types::VoxelType,
 };
-use nalgebra::{Matrix4, Point3, UnitQuaternion, Vector3, vector};
+use nalgebra::{Matrix4, Point3, UnitQuaternion, Vector3};
 use std::{hint::black_box, num::NonZeroUsize};
 
 pub fn generate_box(benchmarker: impl Benchmarker) {
@@ -36,7 +36,7 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
     let sphere_2_id = graph.add_node(SDFNode::new_sphere(60.0));
     let sphere_2_id = graph.add_node(SDFNode::new_translation(
         sphere_2_id,
-        vector![50.0, 0.0, 0.0],
+        Vector3::new(50.0, 0.0, 0.0),
     ));
     graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
     let sdf_generator = graph.build_in(Global).unwrap();
@@ -52,7 +52,10 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
 pub fn generate_complex_object(benchmarker: impl Benchmarker) {
     let mut graph = SDFGraph::new_in(Global);
     let sphere_id = graph.add_node(SDFNode::new_sphere(60.0));
-    let sphere_id = graph.add_node(SDFNode::new_translation(sphere_id, vector![50.0, 0.0, 0.0]));
+    let sphere_id = graph.add_node(SDFNode::new_translation(
+        sphere_id,
+        Vector3::new(50.0, 0.0, 0.0),
+    ));
     let box_id = graph.add_node(SDFNode::new_box([50.0, 60.0, 70.0]));
     let box_id = graph.add_node(SDFNode::new_scaling(box_id, 0.9));
     let box_id = graph.add_node(SDFNode::new_rotation(

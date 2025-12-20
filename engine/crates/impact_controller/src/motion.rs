@@ -5,7 +5,7 @@ use approx::{abs_diff_eq, assert_abs_diff_ne};
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
 use impact_physics::quantities::{Orientation, Velocity};
-use nalgebra::vector;
+use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_component_type! {
@@ -162,7 +162,7 @@ impl SemiDirectionalMotionController {
 
             let magnitude_scale = f32::ONE / f32::sqrt(n_nonzero_components);
 
-            vector![velocity_x, velocity_y, velocity_z] * magnitude_scale
+            Vector3::new(velocity_x, velocity_y, velocity_z) * magnitude_scale
         }
     }
 }
@@ -315,7 +315,7 @@ mod tests {
         );
 
         assert!(controller.update_motion(Moving, Forwards).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, vector![0.0, 0.0, speed],);
+        assert_abs_diff_eq!(controller.local_velocity, Vector3::new(0.0, 0.0, speed));
 
         assert!(!controller.update_motion(Moving, Forwards).motion_changed());
 
@@ -327,7 +327,7 @@ mod tests {
         );
 
         assert!(controller.update_motion(Moving, Left).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, vector![-speed, 0.0, 0.0]);
+        assert_abs_diff_eq!(controller.local_velocity, Vector3::new(-speed, 0.0, 0.0));
 
         assert!(controller.stop().motion_changed());
         assert_eq!(
@@ -341,7 +341,7 @@ mod tests {
         assert!(controller.update_motion(Moving, Backwards).motion_changed());
         assert_abs_diff_eq!(
             controller.local_velocity,
-            vector![0.0, speed, -speed] / SQRT_2, // Magnitude should be `speed`
+            Vector3::new(0.0, speed, -speed) / SQRT_2, // Magnitude should be `speed`
             epsilon = 1e-6
         );
 
@@ -364,15 +364,15 @@ mod tests {
             });
 
         controller.update_motion(Moving, Down);
-        assert_abs_diff_eq!(controller.local_velocity, vector![0.0, -speed, 0.0],);
+        assert_abs_diff_eq!(controller.local_velocity, Vector3::new(0.0, -speed, 0.0));
 
         let speed = 8.1;
         assert!(controller.set_movement_speed(speed).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, vector![0.0, -speed, 0.0],);
+        assert_abs_diff_eq!(controller.local_velocity, Vector3::new(0.0, -speed, 0.0));
 
         let speed = -0.1;
         assert!(controller.set_movement_speed(speed).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, vector![0.0, -speed, 0.0],);
+        assert_abs_diff_eq!(controller.local_velocity, Vector3::new(0.0, -speed, 0.0));
 
         assert!(!controller.set_movement_speed(speed).motion_changed());
 
