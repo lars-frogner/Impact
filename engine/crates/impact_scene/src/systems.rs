@@ -12,7 +12,7 @@ use impact_light::{
     ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLightID,
 };
-use nalgebra::Isometry3;
+use impact_math::transform::Isometry3;
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
 /// entity that also has the
@@ -54,7 +54,7 @@ pub fn sync_lights_in_storage(
     ecs_world: &ECSWorld,
     light_manager: &mut LightManager,
     scene_graph: &SceneGraph,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
 ) {
     query!(
         ecs_world,

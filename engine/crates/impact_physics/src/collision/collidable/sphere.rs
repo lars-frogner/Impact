@@ -6,7 +6,8 @@ use crate::{
     material::ContactResponseParameters,
 };
 use impact_geometry::{Plane, Sphere};
-use nalgebra::{Isometry3, UnitVector3, Vector3};
+use impact_math::transform::Isometry3;
+use nalgebra::{UnitVector3, Vector3};
 
 #[derive(Clone, Debug)]
 pub struct SphereCollidable {
@@ -30,7 +31,7 @@ impl SphereCollidable {
         &self.response_params
     }
 
-    pub fn transformed(&self, transform: &Isometry3<f32>) -> Self {
+    pub fn transformed(&self, transform: &Isometry3) -> Self {
         Self {
             sphere: self.sphere.translated_and_rotated(transform),
             response_params: self.response_params,

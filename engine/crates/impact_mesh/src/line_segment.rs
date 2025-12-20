@@ -5,11 +5,11 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{hash::StringHash64, hash64};
+use impact_math::{hash::StringHash64, hash64, transform::Similarity3};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
-use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
+use nalgebra::{Point3, UnitQuaternion, Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -180,7 +180,7 @@ impl LineSegmentMesh {
     /// vertex positions.
     pub fn transform(
         &mut self,
-        transform: &Similarity3<f32>,
+        transform: &Similarity3,
         dirty_mask: &mut LineSegmentMeshDirtyMask,
     ) {
         for position in &mut self.positions {

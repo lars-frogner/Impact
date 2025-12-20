@@ -6,7 +6,8 @@ use impact_camera::{
     gpu_resource::{BufferableCamera, CameraGPUResource},
 };
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
-use nalgebra::{Isometry3, Point3};
+use impact_math::transform::Isometry3;
+use nalgebra::Point3;
 
 /// Manager for the cameras in a scene.
 #[derive(Debug)]
@@ -27,7 +28,7 @@ pub struct CameraContext {
 #[derive(Debug)]
 pub struct SceneCamera {
     camera: Box<dyn Camera>,
-    view_transform: Isometry3<f32>,
+    view_transform: Isometry3,
     scene_graph_node_id: CameraNodeID,
     jitter_enabled: bool,
 }
@@ -60,7 +61,7 @@ impl CameraManager {
 
     /// Returns the view transform of the active camera, or the identity
     /// transform if there is no active camera.
-    pub fn active_view_transform(&self) -> Isometry3<f32> {
+    pub fn active_view_transform(&self) -> Isometry3 {
         self.active_camera()
             .map(SceneCamera::view_transform)
             .copied()
@@ -162,7 +163,7 @@ impl SceneCamera {
     }
 
     /// Returns a reference to the camera's view transform.
-    pub fn view_transform(&self) -> &Isometry3<f32> {
+    pub fn view_transform(&self) -> &Isometry3 {
         &self.view_transform
     }
 
@@ -181,11 +182,11 @@ impl SceneCamera {
     /// view transform.
     pub fn compute_world_space_position(&self) -> Point3<f32> {
         let camera_to_world = self.view_transform.inverse();
-        camera_to_world.translation.vector.into()
+        Point3::from(*camera_to_world.translation())
     }
 
     /// Sets the transform from world space to camera space.
-    pub fn set_view_transform(&mut self, view_transform: Isometry3<f32>) {
+    pub fn set_view_transform(&mut self, view_transform: Isometry3) {
         self.view_transform = view_transform;
     }
 
@@ -203,7 +204,7 @@ impl BufferableCamera for SceneCamera {
         self.camera()
     }
 
-    fn view_transform(&self) -> &Isometry3<f32> {
+    fn view_transform(&self) -> &Isometry3 {
         self.view_transform()
     }
 

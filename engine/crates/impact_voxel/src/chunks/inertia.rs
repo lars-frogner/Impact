@@ -681,7 +681,7 @@ mod tests {
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use impact_alloc::Global;
-    use nalgebra::{Similarity3, UnitQuaternion};
+    use nalgebra::UnitQuaternion;
     use std::array;
 
     #[test]
@@ -733,6 +733,8 @@ mod tests {
     #[test]
     #[cfg(not(miri))]
     fn box_voxel_object_has_box_inertial_properties() {
+        use impact_math::transform::Similarity3;
+
         let voxel_extent = 0.1;
         let extents = [22.0, 27.0, 19.0];
         let mass_densities = [0.5];
@@ -768,7 +770,7 @@ mod tests {
         );
 
         box_inertial_properties.transform(&Similarity3::from_parts(
-            Vector3::from(occupied_voxel_range_centers).into(),
+            Vector3::from(occupied_voxel_range_centers),
             UnitQuaternion::identity(),
             1.0,
         ));

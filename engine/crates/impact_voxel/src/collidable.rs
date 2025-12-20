@@ -11,6 +11,7 @@ use crate::{
     chunks::ChunkedVoxelObject,
 };
 use impact_geometry::{Plane, Sphere};
+use impact_math::transform::Isometry3;
 use impact_physics::{
     collision::{
         self, CollidableDescriptor, CollidableID, CollidableOrder, CollidableWithId,
@@ -26,7 +27,7 @@ use impact_physics::{
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
     material::ContactResponseParameters,
 };
-use nalgebra::{Isometry3, Point3, Translation3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Point3, UnitVector3, Vector3};
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -55,7 +56,7 @@ pub struct LocalVoxelObjectCollidable {
 pub struct VoxelObjectCollidable {
     object_id: VoxelObjectID,
     response_params: ContactResponseParameters,
-    transform_to_object_space: Isometry3<f32>,
+    transform_to_object_space: Isometry3,
 }
 
 impl collision::Collidable for Collidable {
@@ -64,7 +65,7 @@ impl collision::Collidable for Collidable {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3<f32>,
+        transform_to_world_space: &Isometry3,
     ) -> Self {
         match descriptor.local_collidable() {
             Self::Local::Sphere(sphere) => {
@@ -195,13 +196,10 @@ impl VoxelObjectCollidable {
         object_id: VoxelObjectID,
         response_params: ContactResponseParameters,
         origin_offset: Vector3<f32>,
-        transform_to_world_space: Isometry3<f32>,
+        transform_to_world_space: Isometry3,
     ) -> Self {
-        let transform_from_object_to_world_space = transform_to_world_space
-            * Isometry3::from_parts(
-                Translation3::from(-origin_offset.cast()),
-                UnitQuaternion::identity(),
-            );
+        let transform_from_object_to_world_space =
+            transform_to_world_space.apply_to_translation(&(-origin_offset));
         Self {
             object_id,
             response_params,
@@ -213,7 +211,7 @@ impl VoxelObjectCollidable {
         self.object_id
     }
 
-    pub fn transform_to_object_space(&self) -> &Isometry3<f32> {
+    pub fn transform_to_object_space(&self) -> &Isometry3 {
         &self.transform_to_object_space
     }
 }
@@ -273,8 +271,8 @@ fn generate_mutual_voxel_object_contact_manifold(
 pub fn for_each_mutual_voxel_object_contact<'a>(
     voxel_object_a: &'a ChunkedVoxelObject,
     voxel_object_b: &'a ChunkedVoxelObject,
-    transform_from_world_to_a: &'a Isometry3<f32>,
-    transform_from_world_to_b: &'a Isometry3<f32>,
+    transform_from_world_to_a: &'a Isometry3,
+    transform_from_world_to_b: &'a Isometry3,
     f: &mut impl FnMut([usize; 3], [usize; 3], ContactGeometry),
 ) {
     let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverse();
@@ -520,7 +518,7 @@ fn generate_sphere_voxel_object_contact_manifold(
 
 pub fn for_each_sphere_voxel_object_contact(
     voxel_object: &ChunkedVoxelObject,
-    transform_to_object_space: &Isometry3<f32>,
+    transform_to_object_space: &Isometry3,
     sphere: &Sphere,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
@@ -615,7 +613,7 @@ fn generate_voxel_object_plane_contact_manifold(
 
 pub fn for_each_voxel_object_plane_contact(
     voxel_object: &ChunkedVoxelObject,
-    transform_to_object_space: &Isometry3<f32>,
+    transform_to_object_space: &Isometry3,
     plane: &Plane,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {

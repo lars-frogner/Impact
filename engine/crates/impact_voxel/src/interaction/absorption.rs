@@ -13,11 +13,12 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_geometry::{Capsule, Sphere};
+use impact_math::transform::Isometry3;
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
     rigid_body::RigidBodyManager,
 };
-use nalgebra::{Isometry3, Point3, Translation3, Vector3};
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 use std::mem;
 
@@ -203,8 +204,9 @@ pub fn apply_absorption<C>(
 
         let reference_frame = rigid_body.reference_frame();
 
-        let voxel_object_to_world_transform = reference_frame.create_transform_to_parent_space()
-            * Translation3::from(-local_center_of_mass);
+        let voxel_object_to_world_transform = reference_frame
+            .create_transform_to_parent_space()
+            .apply_to_translation(&(-local_center_of_mass));
 
         let world_to_voxel_object_transform = voxel_object_to_world_transform.inverse();
 
@@ -301,9 +303,9 @@ fn apply_sphere_absorption(
     time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
-    world_to_voxel_object_transform: &Isometry3<f32>,
+    world_to_voxel_object_transform: &Isometry3,
     absorbing_sphere: &VoxelAbsorbingSphere,
-    sphere_to_world_transform: &Isometry3<f32>,
+    sphere_to_world_transform: &Isometry3,
 ) {
     let sphere_in_voxel_object_space = absorbing_sphere
         .sphere()
@@ -335,9 +337,9 @@ fn apply_capsule_absorption(
     time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
-    world_to_voxel_object_transform: &Isometry3<f32>,
+    world_to_voxel_object_transform: &Isometry3,
     absorbing_capsule: &VoxelAbsorbingCapsule,
-    capsule_to_world_transform: &Isometry3<f32>,
+    capsule_to_world_transform: &Isometry3,
 ) {
     let capsule_in_voxel_object_space = absorbing_capsule
         .capsule()

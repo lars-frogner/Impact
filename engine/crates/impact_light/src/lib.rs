@@ -22,10 +22,9 @@ use impact_math::{
     Float,
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
+    transform::{Isometry3, Similarity3},
 };
-use nalgebra::{
-    self as na, Point3, Scale3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3,
-};
+use nalgebra::{self as na, Point3, UnitQuaternion, UnitVector3, Vector3};
 use roc_integration::roc;
 use shadow_map::{CascadeIdx, ShadowMappingConfig};
 use std::iter;
@@ -326,11 +325,11 @@ pub struct ShadowableUnidirectionalLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct OrthographicTranslationAndScaling {
-    translation: Translation3<f32>,
+    translation: Vector3<f32>,
     // Padding to obtain 16-byte alignment for next field
     flags: LightFlags, // Use some of the padding for bitflags for the parent light
     _padding_1: [u8; 3],
-    scaling: Scale3<f32>,
+    scaling: [f32; 3],
     // Padding to make size multiple of 16-bytes
     _padding_2: f32,
 }
@@ -1212,8 +1211,8 @@ impl ShadowableOmnidirectionalLight {
     pub fn create_transform_to_positive_z_cubemap_face_space(
         &self,
         face: CubemapFace,
-        transform_to_camera_space: &Similarity3<f32>,
-    ) -> Similarity3<f32> {
+        transform_to_camera_space: &Similarity3,
+    ) -> Similarity3 {
         self.create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
             * transform_to_camera_space
     }
@@ -1223,9 +1222,9 @@ impl ShadowableOmnidirectionalLight {
     pub fn create_transform_from_camera_space_to_positive_z_cubemap_face_space(
         &self,
         face: CubemapFace,
-    ) -> Similarity3<f32> {
-        CubeMapper::rotation_to_positive_z_face_from_face(face)
-            * self.create_camera_to_light_space_transform()
+    ) -> Isometry3 {
+        self.create_camera_to_light_space_transform()
+            .rotated(&CubeMapper::rotation_to_positive_z_face_from_face(face))
     }
 
     /// Returns a reference to the camera space position of the light.
@@ -1338,26 +1337,25 @@ impl ShadowableOmnidirectionalLight {
     pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum {
         CubeMapper::compute_transformed_frustum_for_face(
             face,
-            &self.create_camera_to_light_space_transform(),
+            &Similarity3::from_isometry(self.create_camera_to_light_space_transform()),
             self.near_distance,
             self.far_distance,
         )
     }
 
     /// Returns the transform from camera space to the local space of the light.
-    pub fn create_camera_to_light_space_transform(&self) -> Similarity3<f32> {
-        Similarity3::from_isometry(
-            self.camera_to_light_space_rotation * Translation3::from(-self.camera_space_position),
-            1.0,
+    pub fn create_camera_to_light_space_transform(&self) -> Isometry3 {
+        Isometry3::from_rotated_translation(
+            -self.camera_space_position.coords,
+            self.camera_to_light_space_rotation,
         )
     }
 
     /// Returns the transform from the local space of the light to camera space.
-    pub fn create_light_space_to_camera_transform(&self) -> Similarity3<f32> {
-        Similarity3::from_isometry(
-            Translation3::from(self.camera_space_position)
-                * self.camera_to_light_space_rotation.inverse(),
-            1.0,
+    pub fn create_light_space_to_camera_transform(&self) -> Isometry3 {
+        Isometry3::from_parts(
+            self.camera_space_position.coords,
+            self.camera_to_light_space_rotation.inverse(),
         )
     }
 
@@ -1504,9 +1502,9 @@ impl ShadowableUnidirectionalLight {
     /// transform into the light's space.
     pub fn create_transform_to_light_space(
         &self,
-        transform_to_camera_space: &Similarity3<f32>,
-    ) -> Similarity3<f32> {
-        self.camera_to_light_space_rotation * transform_to_camera_space
+        transform_to_camera_space: &Similarity3,
+    ) -> Similarity3 {
+        transform_to_camera_space.rotated(&self.camera_to_light_space_rotation)
     }
 
     /// Creates an axis-aligned bounding box in the light's reference frame
@@ -1735,10 +1733,10 @@ impl OrthographicTranslationAndScaling {
 
         // Use same scaling in x- and y-direction so that projected shadow map
         // texels are always square
-        if self.scaling.x < self.scaling.y {
-            self.scaling.y = self.scaling.x;
+        if self.scaling[0] < self.scaling[1] {
+            self.scaling[1] = self.scaling[0];
         } else {
-            self.scaling.x = self.scaling.y;
+            self.scaling[0] = self.scaling[1];
         }
     }
 
@@ -1758,8 +1756,8 @@ fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> f32
 }
 
 fn compute_orthographic_transform_aabb(
-    translation: &Translation3<f32>,
-    scaling: &Scale3<f32>,
+    translation: &Vector3<f32>,
+    scaling: &[f32; 3],
 ) -> AxisAlignedBox {
     let (orthographic_center, orthographic_half_extents) =
         OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(

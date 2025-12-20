@@ -16,13 +16,14 @@ use crate::{
 use absorption::{VoxelAbsorbingCapsule, VoxelAbsorbingSphere};
 use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
+use impact_math::transform::Isometry3;
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
     quantities::{AngularVelocity, Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
 use impact_scene::graph::{ModelInstanceNodeID, SceneGraph};
-use nalgebra::{Isometry3, Vector3};
+use nalgebra::Vector3;
 use tinyvec::TinyVec;
 
 /// Context trait for handling voxel object interactions in a generic way.
@@ -76,13 +77,13 @@ pub struct NewVoxelObjectEntity {
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingSphereEntity {
     pub sphere: VoxelAbsorbingSphere,
-    pub sphere_to_world_transform: Isometry3<f32>,
+    pub sphere_to_world_transform: Isometry3,
 }
 
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingCapsuleEntity {
     pub capsule: VoxelAbsorbingCapsule,
-    pub capsule_to_world_transform: Isometry3<f32>,
+    pub capsule_to_world_transform: Isometry3,
 }
 
 #[derive(Debug)]

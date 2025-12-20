@@ -6,11 +6,9 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
+    transform::{Projective3, Similarity3},
 };
-use nalgebra::{
-    Matrix4, Point2, Point3, Projective3, Quaternion, Scale3, Similarity3, Translation3,
-    UnitQuaternion, Vector3, point, vector,
-};
+use nalgebra::{Matrix4, Point2, Point3, Quaternion, UnitQuaternion, Vector3, point, vector};
 use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
 /// A perspective transformation that maps points in a view frustum pointing
@@ -79,12 +77,12 @@ impl PerspectiveTransform {
 
     /// Returns a reference to perspective transformation seen as a
     /// [`Projective3`].
-    pub fn as_projective(&self) -> &Projective3<f32> {
-        unsafe { &*(self as *const Self).cast::<Projective3<f32>>() }
+    pub fn as_projective(&self) -> &Projective3 {
+        unsafe { &*(self as *const Self).cast::<Projective3>() }
     }
 
     /// Returns the perspective transformation as a [`Projective3`].
-    pub fn to_projective(self) -> Projective3<f32> {
+    pub fn to_projective(self) -> Projective3 {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
@@ -223,45 +221,45 @@ impl OrthographicTransform {
         top: f32,
         near: f32,
         far: f32,
-    ) -> (Translation3<f32>, Scale3<f32>) {
+    ) -> (Vector3<f32>, [f32; 3]) {
         (
-            Translation3::new(
+            Vector3::new(
                 Self::compute_translation_x(left, right),
                 Self::compute_translation_y(bottom, top),
                 Self::compute_translation_z(near, far),
             ),
-            Scale3::new(
+            [
                 Self::compute_scaling_x(left, right),
                 Self::compute_scaling_y(bottom, top),
                 Self::compute_scaling_z(near, far),
-            ),
+            ],
         )
     }
 
     /// Computes the center and half extents of the orthographic view frustum
     /// represented by the given translation and nonuniform scaling.
     pub fn compute_center_and_half_extents_from_translation_and_scaling(
-        translation: &Translation3<f32>,
-        scaling: &Scale3<f32>,
+        translation: &Vector3<f32>,
+        &[sx, sy, sz]: &[f32; 3],
     ) -> (Point3<f32>, Vector3<f32>) {
         (
             point![
                 -translation.x,
                 -translation.y,
-                0.5 * (1.0 / scaling.z - 2.0 * translation.z)
+                0.5 * (1.0 / sz - 2.0 * translation.z)
             ],
-            vector![1.0 / scaling.x, 1.0 / scaling.y, -0.5 / scaling.z],
+            vector![1.0 / sx, 1.0 / sy, -0.5 / sz],
         )
     }
 
     /// Returns a reference to orthographic transformation seen as a
     /// [`Projective3`].
-    pub fn as_projective(&self) -> &Projective3<f32> {
-        unsafe { &*(self as *const Self).cast::<Projective3<f32>>() }
+    pub fn as_projective(&self) -> &Projective3 {
+        unsafe { &*(self as *const Self).cast::<Projective3>() }
     }
 
     /// Returns the orthographic transformation as a [`Projective3`].
-    pub fn to_projective(self) -> Projective3<f32> {
+    pub fn to_projective(self) -> Projective3 {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
@@ -403,7 +401,7 @@ impl CubeMapper {
     /// full cubemap in the parent space) and the given near and far distance.
     pub fn compute_transformed_frustum_for_face(
         face: CubemapFace,
-        transform_to_cube_space: &Similarity3<f32>,
+        transform_to_cube_space: &Similarity3,
         near_distance: f32,
         far_distance: f32,
     ) -> Frustum {
@@ -463,7 +461,7 @@ impl CubeMapper {
 
     fn compute_view_projection_matrix_and_inverse_for_face(
         face: CubemapFace,
-        view_transform: &Similarity3<f32>,
+        view_transform: &Similarity3,
         near_distance: f32,
         far_distance: f32,
     ) -> (Matrix4<f32>, Matrix4<f32>) {
@@ -474,12 +472,12 @@ impl CubeMapper {
             );
 
         let complete_view_transform =
-            Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()] * view_transform;
+            view_transform.rotated(&Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]);
 
         let view_projection_matrix =
-            projection_matrix_for_positive_z_face * complete_view_transform.to_homogeneous();
+            projection_matrix_for_positive_z_face * complete_view_transform.to_matrix();
 
-        let inverse_view_projection_matrix = complete_view_transform.inverse().to_homogeneous()
+        let inverse_view_projection_matrix = complete_view_transform.inverse().to_matrix()
             * inverse_projection_matrix_for_positive_z_face;
 
         (view_projection_matrix, inverse_view_projection_matrix)

@@ -1,5 +1,7 @@
 //! Basic implementation of [`Collidable`](collision::Collidable).
 
+use impact_math::transform::Isometry3;
+
 use crate::{
     collision::{
         self, CollidableDescriptor, CollidableOrder, CollidableWithId,
@@ -13,7 +15,6 @@ use crate::{
     },
     constraint::contact::ContactManifold,
 };
-use nalgebra::Isometry3;
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -35,7 +36,7 @@ impl collision::Collidable for Collidable {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3<f32>,
+        transform_to_world_space: &Isometry3,
     ) -> Self {
         match descriptor.local_collidable() {
             Self::Local::Sphere(sphere) => {

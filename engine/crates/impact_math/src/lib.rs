@@ -11,5 +11,6 @@ pub mod hash;
 pub mod num;
 pub mod power_law;
 pub mod splitmix;
+pub mod transform;
 
 pub use num::Float;

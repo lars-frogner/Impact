@@ -2,6 +2,7 @@
 
 use impact_alloc::Global;
 use impact_geometry::{Plane, Sphere};
+use impact_math::transform::Isometry3;
 use impact_physics::quantities::Position;
 use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
@@ -18,7 +19,7 @@ use impact_voxel::{
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,
 };
-use nalgebra::{Isometry3, Translation, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
 use std::hint::black_box;
 
 pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
@@ -282,10 +283,9 @@ pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(Position::origin(), sphere_radius);
     let transform_to_object_space = Isometry3::from_parts(
-        Translation::from(
-            object.compute_aabb().center()
-                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
-        ),
+        (object.compute_aabb().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius))
+        .coords,
         UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
     );
     benchmarker.benchmark(&mut || {
@@ -307,7 +307,7 @@ pub fn obtain_plane_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object = ChunkedVoxelObject::generate(&generator);
     let plane = Plane::new(Vector3::y_axis(), plane_displacement);
     let transform_to_object_space =
-        Isometry3::from(Translation::from(object.compute_aabb().center()));
+        Isometry3::from_translation(object.compute_aabb().center().coords);
 
     benchmarker.benchmark(&mut || {
         collidable::for_each_voxel_object_plane_contact(
@@ -329,14 +329,13 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_a = ChunkedVoxelObject::generate(&generator_a);
     let object_b = ChunkedVoxelObject::generate(&generator_b);
     let transform_to_object_a_space = Isometry3::from_parts(
-        Translation::from(
-            object_a.compute_aabb().center()
-                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_a_radius),
-        ),
+        (object_a.compute_aabb().center()
+            - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_a_radius))
+        .coords,
         UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
     );
     let transform_to_object_b_space =
-        Isometry3::from(Translation::from(object_b.compute_aabb().center()));
+        Isometry3::from_translation(object_b.compute_aabb().center().coords);
 
     benchmarker.benchmark(&mut || {
         collidable::for_each_mutual_voxel_object_contact(

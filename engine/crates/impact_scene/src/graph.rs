@@ -15,6 +15,7 @@ use impact_light::{
     ShadowableUnidirectionalLight, shadow_map::CascadeIdx,
 };
 use impact_material::MaterialRegistry;
+use impact_math::transform::{Isometry3, Similarity3};
 use impact_model::{
     InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID,
     transform::{
@@ -22,7 +23,6 @@ use impact_model::{
         InstanceModelViewTransformWithPrevious,
     },
 };
-use nalgebra::{Isometry3, Similarity3};
 use roc_integration::roc;
 use std::{
     mem,
@@ -116,12 +116,12 @@ type ChildCameraNodeIds = TinyVec<[CameraNodeID; 8]>;
 #[derive(Clone, Debug)]
 pub struct GroupNode {
     parent_node_id: Option<GroupNodeID>,
-    group_to_parent_transform: Isometry3<f32>,
+    group_to_parent_transform: Isometry3,
     child_group_node_ids: ChildGroupNodeIds,
     child_model_instance_node_ids: ChildModelInstanceNodeIds,
     child_camera_node_ids: ChildCameraNodeIds,
     bounding_sphere: Option<Sphere>,
-    group_to_root_transform: Isometry3<f32>,
+    group_to_root_transform: Isometry3,
 }
 
 /// A [`SceneGraph`] leaf node representing a model instance. It holds a
@@ -131,7 +131,7 @@ pub struct GroupNode {
 pub struct ModelInstanceNode {
     parent_node_id: GroupNodeID,
     model_bounding_sphere: Option<Sphere>,
-    model_to_parent_transform: Similarity3<f32>,
+    model_to_parent_transform: Similarity3,
     model_id: ModelID,
     feature_ids_for_rendering: FeatureIDSet,
     feature_ids_for_shadow_mapping: FeatureIDSet,
@@ -147,7 +147,7 @@ pub type FeatureIDSet = TinyVec<[InstanceFeatureID; 4]>;
 #[derive(Clone, Debug)]
 pub struct CameraNode {
     parent_node_id: GroupNodeID,
-    camera_to_parent_transform: Isometry3<f32>,
+    camera_to_parent_transform: Isometry3,
 }
 
 #[derive(Clone, Debug)]
@@ -220,7 +220,7 @@ impl SceneGraph {
     pub fn create_group_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        group_to_parent_transform: Isometry3<f32>,
+        group_to_parent_transform: Isometry3,
     ) -> GroupNodeID {
         let group_node = GroupNode::non_root(parent_node_id, group_to_parent_transform);
         let group_node_id = self.group_nodes.add_node(group_node);
@@ -251,7 +251,7 @@ impl SceneGraph {
     pub fn create_model_instance_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        model_to_parent_transform: Similarity3<f32>,
+        model_to_parent_transform: Similarity3,
         model_id: ModelID,
         frustum_culling_bounding_sphere: Option<Sphere>,
         feature_ids_for_rendering: FeatureIDSet,
@@ -313,7 +313,7 @@ impl SceneGraph {
     pub fn create_camera_node(
         &mut self,
         parent_node_id: GroupNodeID,
-        camera_to_parent_transform: Isometry3<f32>,
+        camera_to_parent_transform: Isometry3,
     ) -> CameraNodeID {
         let camera_node = CameraNode::new(parent_node_id, camera_to_parent_transform);
         let camera_node_id = self.camera_nodes.add_node(camera_node);
@@ -398,7 +398,7 @@ impl SceneGraph {
     pub fn set_group_to_parent_transform(
         &mut self,
         group_node_id: GroupNodeID,
-        transform: Isometry3<f32>,
+        transform: Isometry3,
     ) {
         if let Some(node) = self.group_nodes.get_node_mut(group_node_id) {
             node.set_group_to_parent_transform(transform);
@@ -410,7 +410,7 @@ impl SceneGraph {
     pub fn set_model_to_parent_transform(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
-        transform: Similarity3<f32>,
+        transform: Similarity3,
     ) {
         if let Some(node) = self
             .model_instance_nodes
@@ -425,7 +425,7 @@ impl SceneGraph {
     pub fn set_model_to_parent_transform_and_flags(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
-        transform: Similarity3<f32>,
+        transform: Similarity3,
         flags: ModelInstanceFlags,
     ) {
         if let Some(node) = self
@@ -457,7 +457,7 @@ impl SceneGraph {
     pub fn set_camera_to_parent_transform(
         &mut self,
         camera_node_id: CameraNodeID,
-        transform: Isometry3<f32>,
+        transform: Isometry3,
     ) {
         if let Some(node) = self.camera_nodes.get_node_mut(camera_node_id) {
             node.set_camera_to_parent_transform(transform);
@@ -468,7 +468,7 @@ impl SceneGraph {
     /// all group nodes in the scene graph.
     pub fn update_all_group_to_root_transforms(&mut self) {
         let arena =
-            ArenaPool::get_arena_for_capacity(32 * mem::size_of::<(GroupNodeID, Isometry3<f32>)>());
+            ArenaPool::get_arena_for_capacity(32 * mem::size_of::<(GroupNodeID, Isometry3)>());
         let mut operation_stack = AVec::with_capacity_in(32, &arena);
 
         operation_stack.push((self.root_node_id, Isometry3::identity()));
@@ -679,7 +679,7 @@ impl SceneGraph {
 
     /// Computes the transform from the scene graph's root node space to the
     /// space of the given camera node.
-    fn compute_view_transform(&self, camera_node: &CameraNode) -> Isometry3<f32> {
+    fn compute_view_transform(&self, camera_node: &CameraNode) -> Isometry3 {
         let parent_node = self.group_nodes.node(camera_node.parent_node_id());
         camera_node.parent_to_camera_transform() * parent_node.root_to_group_transform()
     }
@@ -701,7 +701,7 @@ impl SceneGraph {
         current_frame_number: u32,
         camera_space_view_frustum: &Frustum,
         group_node: &GroupNode,
-        group_to_camera_transform: &Isometry3<f32>,
+        group_to_camera_transform: &Isometry3,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
     {
@@ -782,12 +782,11 @@ impl SceneGraph {
         model_instance_manager: &mut ModelInstanceManager,
         current_frame_number: u32,
         model_instance_node: &ModelInstanceNode,
-        model_view_transform: &Similarity3<f32>,
+        model_view_transform: &Similarity3,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
     {
-        let instance_model_view_transform =
-            InstanceModelViewTransform::from(model_view_transform.cast());
+        let instance_model_view_transform = InstanceModelViewTransform::from(*model_view_transform);
 
         model_instance_manager
             .feature_mut::<InstanceModelViewTransformWithPrevious>(
@@ -922,7 +921,7 @@ impl SceneGraph {
         face: CubemapFace,
         camera_space_face_frustum: &Frustum,
         group_node: &GroupNode,
-        group_to_camera_transform: &Isometry3<f32>,
+        group_to_camera_transform: &Isometry3,
     ) {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -1094,7 +1093,7 @@ impl SceneGraph {
         unidirectional_light: &ShadowableUnidirectionalLight,
         cascade_idx: CascadeIdx,
         group_node: &GroupNode,
-        group_to_camera_transform: &Isometry3<f32>,
+        group_to_camera_transform: &Isometry3,
     ) {
         for &child_group_node_id in group_node.child_group_node_ids() {
             let child_group_node = self.group_nodes.node(child_group_node_id);
@@ -1316,11 +1315,11 @@ impl ModelMetadata {
 
 impl GroupNode {
     /// Returns the group-to-root transform for the node.
-    pub fn group_to_root_transform(&self) -> &Isometry3<f32> {
+    pub fn group_to_root_transform(&self) -> &Isometry3 {
         &self.group_to_root_transform
     }
 
-    fn new(parent_node_id: Option<GroupNodeID>, group_to_parent_transform: Isometry3<f32>) -> Self {
+    fn new(parent_node_id: Option<GroupNodeID>, group_to_parent_transform: Isometry3) -> Self {
         Self {
             parent_node_id,
             group_to_parent_transform,
@@ -1336,15 +1335,15 @@ impl GroupNode {
         Self::new(None, Isometry3::identity())
     }
 
-    fn non_root(parent_node_id: GroupNodeID, transform: Isometry3<f32>) -> Self {
+    fn non_root(parent_node_id: GroupNodeID, transform: Isometry3) -> Self {
         Self::new(Some(parent_node_id), transform)
     }
 
-    fn group_to_parent_transform(&self) -> &Isometry3<f32> {
+    fn group_to_parent_transform(&self) -> &Isometry3 {
         &self.group_to_parent_transform
     }
 
-    fn root_to_group_transform(&self) -> Isometry3<f32> {
+    fn root_to_group_transform(&self) -> Isometry3 {
         self.group_to_root_transform.inverse()
     }
 
@@ -1442,11 +1441,11 @@ impl GroupNode {
         self.bounding_sphere = bounding_sphere;
     }
 
-    fn set_group_to_root_transform(&mut self, group_to_root_transform: Isometry3<f32>) {
+    fn set_group_to_root_transform(&mut self, group_to_root_transform: Isometry3) {
         self.group_to_root_transform = group_to_root_transform;
     }
 
-    fn set_group_to_parent_transform(&mut self, transform: Isometry3<f32>) {
+    fn set_group_to_parent_transform(&mut self, transform: Isometry3) {
         self.group_to_parent_transform = transform;
     }
 }
@@ -1465,7 +1464,7 @@ impl ModelInstanceNode {
     fn new(
         parent_node_id: GroupNodeID,
         model_bounding_sphere: Option<Sphere>,
-        model_to_parent_transform: Similarity3<f32>,
+        model_to_parent_transform: Similarity3,
         model_id: ModelID,
         feature_ids_for_rendering: FeatureIDSet,
         feature_ids_for_shadow_mapping: FeatureIDSet,
@@ -1489,12 +1488,12 @@ impl ModelInstanceNode {
     }
 
     /// Returns the parent-to-model transform for the node.
-    pub fn parent_to_model_transform(&self) -> Similarity3<f32> {
+    pub fn parent_to_model_transform(&self) -> Similarity3 {
         self.model_to_parent_transform.inverse()
     }
 
     /// Returns the model-to-parent transform for the node.
-    pub fn model_to_parent_transform(&self) -> &Similarity3<f32> {
+    pub fn model_to_parent_transform(&self) -> &Similarity3 {
         &self.model_to_parent_transform
     }
 
@@ -1535,7 +1534,7 @@ impl ModelInstanceNode {
         self.model_bounding_sphere.as_ref()
     }
 
-    fn set_model_to_parent_transform(&mut self, transform: Similarity3<f32>) {
+    fn set_model_to_parent_transform(&mut self, transform: Similarity3) {
         self.model_to_parent_transform = transform;
     }
 
@@ -1556,7 +1555,7 @@ impl SceneGraphNode for ModelInstanceNode {
 }
 
 impl CameraNode {
-    fn new(parent_node_id: GroupNodeID, camera_to_parent_transform: Isometry3<f32>) -> Self {
+    fn new(parent_node_id: GroupNodeID, camera_to_parent_transform: Isometry3) -> Self {
         Self {
             parent_node_id,
             camera_to_parent_transform,
@@ -1569,16 +1568,16 @@ impl CameraNode {
     }
 
     /// Returns the parent-to-camera transform for the node.
-    pub fn parent_to_camera_transform(&self) -> Isometry3<f32> {
+    pub fn parent_to_camera_transform(&self) -> Isometry3 {
         self.camera_to_parent_transform.inverse()
     }
 
     /// Returns the camera-to-parent transform for the node.
-    pub fn camera_to_parent_transform(&self) -> &Isometry3<f32> {
+    pub fn camera_to_parent_transform(&self) -> &Isometry3 {
         &self.camera_to_parent_transform
     }
 
-    fn set_camera_to_parent_transform(&mut self, transform: Isometry3<f32>) {
+    fn set_camera_to_parent_transform(&mut self, transform: Isometry3) {
         self.camera_to_parent_transform = transform;
     }
 }
@@ -1627,7 +1626,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use impact_math::hash::Hash64;
     use impact_model::InstanceFeatureStorage;
-    use nalgebra::{Point3, Rotation3, Translation3, point};
+    use nalgebra::{Point3, UnitQuaternion, Vector3, point};
 
     fn create_dummy_group_node(
         scene_graph: &mut SceneGraph,
@@ -1650,7 +1649,7 @@ mod tests {
     fn create_dummy_model_instance_node_with_transform(
         scene_graph: &mut SceneGraph,
         parent_node_id: GroupNodeID,
-        model_to_parent_transform: Similarity3<f32>,
+        model_to_parent_transform: Similarity3,
     ) -> ModelInstanceNodeID {
         scene_graph.create_model_instance_node(
             parent_node_id,
@@ -1875,8 +1874,8 @@ mod tests {
     #[test]
     fn computing_root_to_camera_transform_with_only_camera_transforms_works() {
         let camera_to_root_transform = Isometry3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            Vector3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
         );
 
         let mut scene_graph = SceneGraph::new();
@@ -1907,22 +1906,20 @@ mod tests {
 
     #[test]
     fn computing_root_to_camera_transform_with_different_parent_to_model_transforms_works() {
-        let translation = Translation3::new(2.1, -5.9, 0.01);
-        let rotation = Rotation3::from_euler_angles(0.1, 0.2, 0.3);
+        let translation = Vector3::new(2.1, -5.9, 0.01);
+        let rotation = UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3);
 
         let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
         let group_1 = scene_graph.create_group_node(
             root,
-            Isometry3::from_parts(translation, Rotation3::identity().into()),
+            Isometry3::from_parts(translation, UnitQuaternion::identity()),
         );
-        let group_2 = scene_graph.create_group_node(
-            group_1,
-            Isometry3::from_parts(Translation3::identity(), rotation.into()),
-        );
+        let group_2 = scene_graph
+            .create_group_node(group_1, Isometry3::from_parts(Vector3::zeros(), rotation));
         let camera = scene_graph.create_camera_node(
             group_2,
-            Isometry3::from_parts(Translation3::identity(), Rotation3::identity().into()),
+            Isometry3::from_parts(Vector3::zeros(), UnitQuaternion::identity()),
         );
 
         scene_graph.update_all_group_to_root_transforms();
@@ -1931,8 +1928,8 @@ mod tests {
             scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
         assert_abs_diff_eq!(
-            root_to_camera_transform.to_homogeneous(),
-            rotation.inverse().to_homogeneous() * translation.inverse().to_homogeneous(),
+            root_to_camera_transform,
+            Isometry3::from_parts(translation, rotation).inverse(),
             epsilon = 1e-7
         );
     }
@@ -1945,8 +1942,8 @@ mod tests {
     #[test]
     fn updating_bounding_spheres_with_one_transformed_instance_in_world_space_works() {
         let model_to_parent_transform = Similarity3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            Vector3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
             7.0,
         );
         let bounding_sphere = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
@@ -2025,17 +2022,15 @@ mod tests {
         let bounding_sphere_1 = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
         let bounding_sphere_2 = Sphere::new(point![-0.4, 7.7, 2.9], 4.8);
 
-        let group_1_to_parent_transform = Isometry3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
-            Rotation3::identity().into(),
-        );
+        let group_1_to_parent_transform =
+            Isometry3::from_parts(Vector3::new(2.1, -5.9, 0.01), UnitQuaternion::identity());
         let group_2_to_parent_transform = Isometry3::from_parts(
-            Translation3::new(0.01, 2.9, 10.1),
-            Rotation3::from_euler_angles(1.1, 2.2, 3.3).into(),
+            Vector3::new(0.01, 2.9, 10.1),
+            UnitQuaternion::from_euler_angles(1.1, 2.2, 3.3),
         );
         let model_instance_2_to_parent_transform = Similarity3::from_parts(
-            Translation3::new(-2.1, 8.9, 1.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            Vector3::new(-2.1, 8.9, 1.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
             1.0,
         );
 

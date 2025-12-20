@@ -7,8 +7,8 @@ use crate::{
     VertexColor,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
-use impact_math::consts::f32::TWO_PI;
-use nalgebra::{Similarity3, UnitQuaternion, UnitVector3, Vector3, vector};
+use impact_math::{consts::f32::TWO_PI, transform::Similarity3};
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
@@ -844,7 +844,7 @@ impl LineSegmentMesh {
         let mut up_diagonals = Self::create_baseless_unit_pyramid();
         up_diagonals.transform(
             &Similarity3::from_parts(
-                vector![0.0, 1.0, 0.0].into(),
+                vector![0.0, 1.0, 0.0],
                 UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI),
                 1.0,
             ),

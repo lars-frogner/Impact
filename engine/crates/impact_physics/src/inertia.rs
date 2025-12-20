@@ -3,8 +3,8 @@
 use crate::quantities::Position;
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
-use nalgebra::{Matrix3, Point3, Similarity3, UnitQuaternion, Vector3, point, vector};
+use impact_math::{Float, transform::Similarity3};
+use nalgebra::{Matrix3, Point3, UnitQuaternion, Vector3, point, vector};
 use roc_integration::roc;
 use simba::scalar::SubsetOf;
 
@@ -190,7 +190,7 @@ impl InertialProperties {
 
     /// Applies the given similarity transform to the inertial properties of the
     /// body.
-    pub fn transform(&mut self, transform: &Similarity3<f32>) {
+    pub fn transform(&mut self, transform: &Similarity3) {
         let mass_scaling = transform.scaling().powi(3);
 
         self.mass *= mass_scaling;
@@ -203,7 +203,7 @@ impl InertialProperties {
             .inertia_tensor
             .with_multiplied_mass(mass_scaling)
             .with_multiplied_extent(transform.scaling())
-            .rotated(&transform.isometry.rotation);
+            .rotated(transform.rotation());
     }
 
     /// Applies the given distance scaling factor to the inertial properties of
@@ -750,7 +750,7 @@ mod tests {
     use super::*;
     use approx::abs_diff_eq;
     use impact_mesh::{FrontFaceSide, TriangleMesh, TriangleMeshDirtyMask};
-    use nalgebra::{Similarity3, Translation3, UnitQuaternion};
+    use nalgebra::UnitQuaternion;
     use proptest::prelude::*;
     use std::ops::Range;
 
@@ -774,8 +774,8 @@ mod tests {
             translation_z in -max_translation..max_translation,
             rotation in rotation_strategy(),
             scaling in scaling_range,
-        ) -> Similarity3<f32> {
-            let translation = Translation3::new(translation_x, translation_y, translation_z);
+        ) -> Similarity3 {
+            let translation = Vector3::new(translation_x, translation_y, translation_z);
             Similarity3::from_parts(
                 translation,
                 rotation,
@@ -831,7 +831,7 @@ mod tests {
             let correctly_transformed_inertia_tensor = initial_inertia_tensor
                 .with_multiplied_mass(transform.scaling().powi(3))
                 .with_multiplied_extent(transform.scaling())
-                .rotated(&transform.isometry.rotation);
+                .rotated(transform.rotation());
 
             prop_assert!(abs_diff_eq!(
                 cube_properties.inertia_tensor(),
@@ -871,7 +871,7 @@ mod tests {
             let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
-            box_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
+            box_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             box_properties.transform(&transform);
 
             let computed_mass = compute_uniform_triangle_mesh_mass(box_mesh.triangle_vertex_positions(), mass_density);
@@ -897,7 +897,7 @@ mod tests {
             let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
-            box_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
+            box_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             box_properties.transform(&transform);
 
             let computed_center_of_mass = compute_uniform_triangle_mesh_center_of_mass(box_mesh.triangle_vertex_positions());
@@ -923,7 +923,7 @@ mod tests {
             let mut box_mesh = TriangleMesh::create_box(extent_x, extent_y, extent_z, FrontFaceSide::Outside);
             let mut box_properties = InertialProperties::of_uniform_box(extent_x, extent_y, extent_z, mass_density);
 
-            box_mesh.transform(&transform.cast(), &mut TriangleMeshDirtyMask::empty());
+            box_mesh.transform(&transform, &mut TriangleMeshDirtyMask::empty());
             box_properties.transform(&transform);
 
             let computed_inertia_tensor =

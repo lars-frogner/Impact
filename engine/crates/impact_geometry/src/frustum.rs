@@ -2,10 +2,11 @@
 
 use crate::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
-use impact_math::bounds::{Bounds, UpperExclusiveBounds};
-use nalgebra::{
-    Matrix4, Point3, Projective3, Similarity3, UnitQuaternion, UnitVector3, point, vector,
+use impact_math::{
+    bounds::{Bounds, UpperExclusiveBounds},
+    transform::{Projective3, Similarity3},
 };
+use nalgebra::{Matrix4, Point3, UnitQuaternion, UnitVector3, point, vector};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -28,7 +29,7 @@ impl Frustum {
     /// This function uses the method of Gribb and Hartmann (2001)
     /// "Fast Extraction of Viewing Frustum Planes from the
     /// World-View-Projection Matrix".
-    pub fn from_transform(transform: &Projective3<f32>) -> Self {
+    pub fn from_transform(transform: &Projective3) -> Self {
         let planes = Self::planes_from_transform_matrix(transform.matrix());
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -37,8 +38,8 @@ impl Frustum {
         Self {
             planes,
             largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix: transform.to_homogeneous(),
-            inverse_transform_matrix: transform.inverse().to_homogeneous(),
+            transform_matrix: *transform.matrix(),
+            inverse_transform_matrix: *transform.inverse().matrix(),
         }
     }
 
@@ -341,7 +342,7 @@ impl Frustum {
 
     /// Computes the frustum resulting from transforming this frustum with the
     /// given similarity transform.
-    pub fn transformed(&self, transformation: &Similarity3<f32>) -> Self {
+    pub fn transformed(&self, transformation: &Similarity3) -> Self {
         let transformed_planes = self.transformed_planes(transformation);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -350,10 +351,10 @@ impl Frustum {
             );
 
         let transformed_inverse_transform_matrix =
-            transformation.to_homogeneous() * self.inverse_transform_matrix;
+            transformation.to_matrix() * self.inverse_transform_matrix;
 
         let inverse_of_transformed_inverse_transform_matrix =
-            self.transform_matrix * transformation.inverse().to_homogeneous();
+            self.transform_matrix * transformation.inverse().to_matrix();
 
         Self {
             planes: transformed_planes,
@@ -365,7 +366,7 @@ impl Frustum {
 
     /// Computes the planes of the frustum resulting from transforming this
     /// frustum with the given similarity transform.
-    pub fn transformed_planes(&self, transformation: &Similarity3<f32>) -> [Plane; 6] {
+    pub fn transformed_planes(&self, transformation: &Similarity3) -> [Plane; 6] {
         [
             self.planes[0].transformed(transformation),
             self.planes[1].transformed(transformation),
@@ -501,7 +502,7 @@ mod tests {
     use crate::projection::{OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
     use impact_math::angle::Degrees;
-    use nalgebra::{Rotation3, Translation3, point};
+    use nalgebra::{Rotation3, Vector3, point};
 
     #[test]
     fn computing_frustum_near_and_far_distance_works() {
@@ -685,7 +686,7 @@ mod tests {
         );
 
         let transformation = Similarity3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
+            Vector3::new(2.1, -5.9, 0.01),
             Rotation3::from_euler_angles(0.1, 0.2, 180.0).into(),
             7.0,
         );
@@ -710,7 +711,7 @@ mod tests {
         );
 
         let transformation = Similarity3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
+            Vector3::new(2.1, -5.9, 0.01),
             Rotation3::from_euler_angles(0.1, 0.2, 180.0).into(),
             7.0,
         );
@@ -730,7 +731,7 @@ mod tests {
         );
 
         let transformation = Similarity3::from_parts(
-            Translation3::new(2.1, -5.9, 0.01),
+            Vector3::new(2.1, -5.9, 0.01),
             Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
             7.0,
         );

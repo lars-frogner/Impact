@@ -1,7 +1,8 @@
 //! Reference frames.
 
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Isometry3, Point3, Translation3, UnitQuaternion};
+use impact_math::transform::Isometry3;
+use nalgebra::{Point3, UnitQuaternion};
 use roc_integration::roc;
 
 define_component_type! {
@@ -45,8 +46,8 @@ impl ReferenceFrame {
 
     /// Creates the [`Isometry3`] transform from the entity's reference frame
     /// to the parent space.
-    pub fn create_transform_to_parent_space(&self) -> Isometry3<f32> {
-        Isometry3::from_parts(Translation3::from(self.position), self.orientation)
+    pub fn create_transform_to_parent_space(&self) -> Isometry3 {
+        Isometry3::from_parts(self.position.coords, self.orientation)
     }
 }
 

@@ -2,7 +2,8 @@
 
 use crate::ReferenceFrame;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, Similarity3, Translation3, Vector3};
+use impact_math::transform::Similarity3;
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -53,8 +54,8 @@ impl ModelTransform {
 
     /// Creates the [`Similarity3`] for the transform from model space to the
     /// space of the parent entity.
-    pub fn crate_transform_to_entity_space(&self) -> Similarity3<f32> {
-        Similarity3::from_scaling(self.scale) * Translation3::from(-self.offset)
+    pub fn crate_transform_to_entity_space(&self) -> Similarity3 {
+        Similarity3::from_scaled_translation(-self.offset, self.scale)
     }
 
     /// Transforms the given point from model space to the space of the parent

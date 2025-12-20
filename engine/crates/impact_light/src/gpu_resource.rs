@@ -20,7 +20,7 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::hash::ConstStringHash64;
-use nalgebra::{Scale3, Translation3};
+use nalgebra::Vector3;
 use std::{fmt, hash::Hash};
 
 /// Contains all GPU resources for light sources, including uniform buffers and
@@ -104,8 +104,8 @@ pub struct ShadowableUnidirectionalLightMetadata {
 
 #[derive(Clone, Debug)]
 struct PackedOrthographicTranslationAndScaling {
-    translation: Translation3<f32>,
-    scaling: Scale3<f32>,
+    translation: Vector3<f32>,
+    scaling: [f32; 3],
 }
 
 impl LightGPUResources {
