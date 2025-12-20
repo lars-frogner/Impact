@@ -5,7 +5,7 @@ use crate::{
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Vector3, vector};
+use nalgebra::Vector3;
 use roc_integration::roc;
 
 /// Manages all [`ConstantAccelerationGenerator`]s.
@@ -81,7 +81,7 @@ impl ConstantAcceleration {
     /// Constant acceleration in the negative y-direction.
     #[roc(body = "new((0.0, -acceleration, 0.0))")]
     pub fn downward(acceleration: f32) -> Self {
-        Self::new(vector![0.0, -acceleration, 0.0])
+        Self::new(Vector3::new(0.0, -acceleration, 0.0))
     }
 
     /// The downward gravitational acceleration at the surface of Earth.

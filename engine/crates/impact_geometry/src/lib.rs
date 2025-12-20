@@ -26,7 +26,7 @@ use impact_math::{
     angle::{Angle, Radians},
     consts::f32::PI,
 };
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
 
 /// Uses the Frisvad method.
 pub fn orthonormal_basis_with_z_axis(
@@ -107,7 +107,7 @@ pub fn compute_uniformly_distributed_radial_directions(
         let x = horizontal_radius * cos_azimuthal_angle;
         let y = horizontal_radius * sin_azimuthal_angle;
 
-        UnitVector3::new_normalize(vector![x, y, z])
+        UnitVector3::new_normalize(Vector3::new(x, y, z))
     })
 }
 

@@ -4,7 +4,7 @@ use crate::{
     TriangleMesh, TriangleMeshDirtyMask, VertexNormalVector, VertexPosition, VertexTextureCoords,
 };
 use anyhow::{Result, bail};
-use nalgebra::{UnitVector3, point, vector};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector3};
 use std::path::Path;
 use tobj::{GPU_LOAD_OPTIONS, Mesh as ObjMesh};
 
@@ -53,13 +53,17 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh {
             .collect()
     }
 
-    let positions = aggregate_3(&mesh.positions, |x, y, z| VertexPosition(point![x, y, z]));
-
-    let normal_vectors = aggregate_3(&mesh.normals, |nx, ny, nz| {
-        VertexNormalVector(UnitVector3::new_normalize(vector![nx, ny, nz]))
+    let positions = aggregate_3(&mesh.positions, |x, y, z| {
+        VertexPosition(Point3::new(x, y, z))
     });
 
-    let texture_coords = aggregate_2(&mesh.texcoords, |u, v| VertexTextureCoords(vector![u, v]));
+    let normal_vectors = aggregate_3(&mesh.normals, |nx, ny, nz| {
+        VertexNormalVector(UnitVector3::new_normalize(Vector3::new(nx, ny, nz)))
+    });
+
+    let texture_coords = aggregate_2(&mesh.texcoords, |u, v| {
+        VertexTextureCoords(Vector2::new(u, v))
+    });
 
     TriangleMesh::new(
         positions,

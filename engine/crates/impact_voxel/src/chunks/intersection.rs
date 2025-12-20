@@ -14,7 +14,7 @@ use impact_geometry::{
     oriented_box::compute_box_intersection_bounds,
 };
 use impact_math::transform::Isometry3;
-use nalgebra::{self as na, Point3, point};
+use nalgebra::{self as na, Point3};
 use std::{array, ops::Range};
 
 pub type VoxelRanges = [Range<usize>; 3];
@@ -722,11 +722,11 @@ fn voxel_center_position_from_object_voxel_indices(
     j: usize,
     k: usize,
 ) -> Point3<f32> {
-    point![
+    Point3::new(
         (i as f32 + 0.5) * voxel_extent,
         (j as f32 + 0.5) * voxel_extent,
-        (k as f32 + 0.5) * voxel_extent
-    ]
+        (k as f32 + 0.5) * voxel_extent,
+    )
 }
 
 #[inline]
@@ -735,7 +735,7 @@ fn normalized_voxel_center_position_from_object_voxel_indices(
     j: usize,
     k: usize,
 ) -> Point3<f32> {
-    point![(i as f32 + 0.5), (j as f32 + 0.5), (k as f32 + 0.5)]
+    Point3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5)
 }
 
 #[inline]
@@ -745,16 +745,16 @@ fn normalized_chunk_aabb_from_chunk_indices(
     chunk_k: usize,
 ) -> AxisAlignedBox {
     AxisAlignedBox::new(
-        point![
+        Point3::new(
             (chunk_i * CHUNK_SIZE) as f32,
             (chunk_j * CHUNK_SIZE) as f32,
-            (chunk_k * CHUNK_SIZE) as f32
-        ],
-        point![
+            (chunk_k * CHUNK_SIZE) as f32,
+        ),
+        Point3::new(
             ((chunk_i + 1) * CHUNK_SIZE) as f32,
             ((chunk_j + 1) * CHUNK_SIZE) as f32,
-            ((chunk_k + 1) * CHUNK_SIZE) as f32
-        ],
+            ((chunk_k + 1) * CHUNK_SIZE) as f32,
+        ),
     )
 }
 
@@ -766,32 +766,32 @@ fn voxel_aabb_from_object_voxel_indices(
     k: usize,
 ) -> AxisAlignedBox {
     AxisAlignedBox::new(
-        point![
+        Point3::new(
             i as f32 * voxel_extent,
             j as f32 * voxel_extent,
-            k as f32 * voxel_extent
-        ],
-        point![
+            k as f32 * voxel_extent,
+        ),
+        Point3::new(
             (i as f32 + 1.0) * voxel_extent,
             (j as f32 + 1.0) * voxel_extent,
-            (k as f32 + 1.0) * voxel_extent
-        ],
+            (k as f32 + 1.0) * voxel_extent,
+        ),
     )
 }
 
 #[inline]
 fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox {
-    let lower_corner = point![
+    let lower_corner = Point3::new(
         voxel_ranges[0].start as f32,
         voxel_ranges[1].start as f32,
-        voxel_ranges[2].start as f32
-    ];
+        voxel_ranges[2].start as f32,
+    );
 
-    let upper_corner = point![
+    let upper_corner = Point3::new(
         voxel_ranges[0].end as f32,
         voxel_ranges[1].end as f32,
-        voxel_ranges[2].end as f32
-    ];
+        voxel_ranges[2].end as f32,
+    );
 
     AxisAlignedBox::new(lower_corner, upper_corner)
 }
@@ -805,7 +805,7 @@ pub mod fuzzing {
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
     use impact_alloc::Global;
-    use nalgebra::{UnitVector3, vector};
+    use nalgebra::{UnitVector3, Vector3};
     use std::mem;
 
     #[derive(Clone, Debug)]
@@ -827,7 +827,7 @@ pub mod fuzzing {
                 nz = 1e-3;
             }
             Ok(Self(Plane::new(
-                UnitVector3::new_normalize(vector![nx, ny, nz]),
+                UnitVector3::new_normalize(Vector3::new(nx, ny, nz)),
                 displacement,
             )))
         }
@@ -844,7 +844,7 @@ pub mod fuzzing {
             let x = 1e3 * arbitrary_norm_f32(u)?;
             let y = 1e3 * arbitrary_norm_f32(u)?;
             let z = 1e3 * arbitrary_norm_f32(u)?;
-            Ok(Self(Sphere::new(point![x, y, z], radius)))
+            Ok(Self(Sphere::new(Point3::new(x, y, z), radius)))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
@@ -858,13 +858,13 @@ pub mod fuzzing {
             let start_x = 1e3 * arbitrary_norm_f32(u)?;
             let start_y = 1e3 * arbitrary_norm_f32(u)?;
             let start_z = 1e3 * arbitrary_norm_f32(u)?;
-            let segment_start = point![start_x, start_y, start_z];
+            let segment_start = Point3::new(start_x, start_y, start_z);
 
             let dir_x = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let dir_y = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let dir_z = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let length = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
-            let segment_vector = vector![dir_x, dir_y, dir_z].normalize() * length;
+            let segment_vector = Vector3::new(dir_x, dir_y, dir_z).normalize() * length;
 
             let radius = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
 
@@ -1090,7 +1090,7 @@ mod tests {
         voxel_types::VoxelType,
     };
     use impact_alloc::Global;
-    use nalgebra::{UnitVector3, vector};
+    use nalgebra::{UnitVector3, Vector3};
 
     #[test]
     fn finding_surface_voxels_intersecting_negative_halfspace_of_plane_finds_correct_voxels() {
@@ -1109,7 +1109,7 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator);
 
         let plane = Plane::new(
-            UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]),
+            UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)),
             plane_displacement,
         );
 
@@ -1161,7 +1161,7 @@ mod tests {
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
-                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+                - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
             sphere_radius,
         );
 
@@ -1204,7 +1204,7 @@ mod tests {
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
-                - UnitVector3::new_normalize(vector![1.0, 1.0, 1.0]).scale(object_radius),
+                - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
             sphere_radius,
         );
 
@@ -1232,7 +1232,7 @@ mod tests {
     #[test]
     fn modifying_voxels_within_capsule_finds_correct_voxels() {
         let object_radius = 10.0;
-        let capsule_direction = UnitVector3::new_normalize(-vector![1.0, 1.0, 1.0]);
+        let capsule_direction = UnitVector3::new_normalize(-Vector3::new(1.0, 1.0, 1.0));
         let capsule_vector = capsule_direction.scale(10.0);
         let capsule_radius = 0.4 * object_radius;
 

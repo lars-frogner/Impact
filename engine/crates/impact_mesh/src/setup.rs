@@ -6,7 +6,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_math::hash64;
-use nalgebra::{Point3, Vector3, point, vector};
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 use std::fmt;
 
@@ -544,9 +544,9 @@ impl PlanarTextureProjection {
     new(origin, u_vector, v_vector)
     "#)]
     pub fn for_rectangle(rectangle: RectangleMesh, n_repeats_u: f32, n_repeats_v: f32) -> Self {
-        let origin = point![-0.5, 0.0, 0.5];
-        let u_vector = vector![rectangle.extent_x / n_repeats_u, 0.0, 0.0];
-        let v_vector = vector![0.0, 0.0, -rectangle.extent_z / n_repeats_v];
+        let origin = Point3::new(-0.5, 0.0, 0.5);
+        let u_vector = Vector3::new(rectangle.extent_x / n_repeats_u, 0.0, 0.0);
+        let v_vector = Vector3::new(0.0, 0.0, -rectangle.extent_z / n_repeats_v);
         Self::new(origin, u_vector, v_vector)
     }
 

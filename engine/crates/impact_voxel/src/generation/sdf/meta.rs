@@ -2798,11 +2798,11 @@ fn compute_center_value_of_2x2x2_samples(signed_distances: &[f32; 8]) -> f32 {
 #[inline]
 fn compute_gradient_from_2x2x2_samples(signed_distances: &[f32; 8]) -> Vector3<f32> {
     let &[d000, d001, d010, d011, d100, d101, d110, d111] = signed_distances;
-    vector![
+    Vector3::new(
         (d100 + d110 + d101 + d111) - (d000 + d010 + d001 + d011),
         (d010 + d110 + d011 + d111) - (d000 + d100 + d001 + d101),
-        (d001 + d101 + d011 + d111) - (d000 + d100 + d010 + d110)
-    ]
+        (d001 + d101 + d011 + d111) - (d000 + d100 + d010 + d110),
+    )
     .scale(0.25)
 }
 
@@ -2856,11 +2856,11 @@ fn unit_quaternion_from_tilt_turn_roll(
     let (sin_polar_angle, cos_polar_angle) = polar_angle.sin_cos();
     let (sin_azimuthal_angle, cos_azimuthal_angle) = azimuthal_angle.sin_cos();
 
-    let direction = UnitVector3::new_unchecked(vector![
+    let direction = UnitVector3::new_unchecked(Vector3::new(
         sin_polar_angle * cos_azimuthal_angle,
         cos_polar_angle,
         sin_polar_angle * sin_azimuthal_angle,
-    ]);
+    ));
 
     let rotation_without_roll = rotation_between_axes(&Vector3::y_axis(), &direction);
 

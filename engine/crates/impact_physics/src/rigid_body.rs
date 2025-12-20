@@ -781,7 +781,7 @@ mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use impact_math::{Float, angle::Radians};
-    use nalgebra::{Vector3, point, vector};
+    use nalgebra::Vector3;
     use proptest::prelude::*;
 
     prop_compose! {
@@ -790,7 +790,7 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            point![position_coord_x, position_coord_y, position_coord_z]
+            Point3::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -810,7 +810,7 @@ mod tests {
             force_coord_y in -max_force_coord..max_force_coord,
             force_coord_z in -max_force_coord..max_force_coord,
         ) -> Force {
-            vector![force_coord_x, force_coord_y, force_coord_z]
+            Vector3::new(force_coord_x, force_coord_y, force_coord_z)
         }
     }
 
@@ -820,7 +820,7 @@ mod tests {
             torque_coord_y in -max_torque_coord..max_torque_coord,
             torque_coord_z in -max_torque_coord..max_torque_coord,
         ) -> Force {
-            vector![torque_coord_x, torque_coord_y, torque_coord_z]
+            Vector3::new(torque_coord_x, torque_coord_y, torque_coord_z)
         }
     }
 
@@ -912,7 +912,7 @@ mod tests {
             angular_velocity,
         );
 
-        body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
+        body.apply_force(&Force::x(), &Point3::new(0.0, 1.0, 0.0));
 
         body.advance_momentum(0.0);
         assert_abs_diff_eq!(body.compute_velocity(), velocity);
@@ -966,7 +966,7 @@ mod tests {
             angular_velocity,
         );
 
-        body.apply_force(&Force::x(), &point![0.0, 1.0, 0.0]);
+        body.apply_force(&Force::x(), &Point3::new(0.0, 1.0, 0.0));
 
         body.advance_momentum(1.0);
         assert_abs_diff_ne!(body.compute_velocity(), velocity);

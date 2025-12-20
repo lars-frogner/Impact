@@ -160,7 +160,7 @@ mod tests {
     use crate::quantities::Direction;
     use approx::abs_diff_eq;
     use impact_math::Float;
-    use nalgebra::{Vector3, point, vector};
+    use nalgebra::{Point3, Vector3};
     use proptest::prelude::*;
 
     prop_compose! {
@@ -169,7 +169,7 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            point![position_coord_x, position_coord_y, position_coord_z]
+            Point3::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -178,11 +178,11 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(vector![
+            Direction::new_normalize(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
-            ])
+            ))
         }
     }
 

@@ -1626,7 +1626,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use impact_math::hash::Hash64;
     use impact_model::InstanceFeatureStorage;
-    use nalgebra::{Point3, UnitQuaternion, Vector3, point};
+    use nalgebra::{Point3, UnitQuaternion, Vector3};
 
     fn create_dummy_group_node(
         scene_graph: &mut SceneGraph,
@@ -1946,7 +1946,7 @@ mod tests {
             UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
             7.0,
         );
-        let bounding_sphere = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
+        let bounding_sphere = Sphere::new(Point3::new(3.9, 5.2, 0.0), 11.1);
 
         let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
@@ -1984,8 +1984,8 @@ mod tests {
 
     #[test]
     fn updating_bounding_spheres_with_two_instances_in_world_space_works() {
-        let bounding_sphere_1 = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
-        let bounding_sphere_2 = Sphere::new(point![-0.4, 7.7, 2.9], 4.8);
+        let bounding_sphere_1 = Sphere::new(Point3::new(3.9, 5.2, 0.0), 11.1);
+        let bounding_sphere_2 = Sphere::new(Point3::new(-0.4, 7.7, 2.9), 4.8);
 
         let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
@@ -2019,8 +2019,8 @@ mod tests {
 
     #[test]
     fn updating_bounding_spheres_with_nested_instances_works() {
-        let bounding_sphere_1 = Sphere::new(point![3.9, 5.2, 0.0], 11.1);
-        let bounding_sphere_2 = Sphere::new(point![-0.4, 7.7, 2.9], 4.8);
+        let bounding_sphere_1 = Sphere::new(Point3::new(3.9, 5.2, 0.0), 11.1);
+        let bounding_sphere_2 = Sphere::new(Point3::new(-0.4, 7.7, 2.9), 4.8);
 
         let group_1_to_parent_transform =
             Isometry3::from_parts(Vector3::new(2.1, -5.9, 0.01), UnitQuaternion::identity());

@@ -120,7 +120,7 @@ mod tests {
     use crate::quantities::Direction;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use impact_math::{Float, angle::Radians};
-    use nalgebra::{Vector3, vector};
+    use nalgebra::Vector3;
     use proptest::prelude::*;
 
     prop_compose! {
@@ -128,11 +128,11 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(vector![
+            Direction::new_normalize(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
-            ])
+            ))
         }
     }
 

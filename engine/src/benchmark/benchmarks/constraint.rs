@@ -15,7 +15,7 @@ use impact_physics::{
     rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_profiling::benchmark::Benchmarker;
-use nalgebra::point;
+use nalgebra::Point3;
 
 pub fn prepare_contacts(benchmarker: impl Benchmarker) {
     let mut rigid_body_manager = RigidBodyManager::new();
@@ -178,7 +178,10 @@ fn setup_stationary_overlapping_spheres(
         rigid_body_manager,
         collision_world,
         (0..500).map(|i| {
-            SphereBody::stationary(Sphere::new(point![i as f32 - 0.05, 0.0, 0.0], 0.5), 1.0)
+            SphereBody::stationary(
+                Sphere::new(Point3::new(i as f32 - 0.05, 0.0, 0.0), 0.5),
+                1.0,
+            )
         }),
     );
 

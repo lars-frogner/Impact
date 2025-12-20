@@ -25,7 +25,7 @@ use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
 };
-use nalgebra::{Point3, Vector3, point, vector};
+use nalgebra::{Point3, Vector3};
 use num_traits::{NumCast, PrimInt};
 use std::{array, iter, mem, ops::Range};
 use tinyvec::TinyVec;
@@ -796,17 +796,17 @@ impl ChunkedVoxelObject {
     /// the object.
     #[inline]
     pub fn compute_aabb(&self) -> AxisAlignedBox {
-        let lower_corner = point![
+        let lower_corner = Point3::new(
             self.occupied_voxel_ranges[0].start as f32 * self.voxel_extent,
             self.occupied_voxel_ranges[1].start as f32 * self.voxel_extent,
-            self.occupied_voxel_ranges[2].start as f32 * self.voxel_extent
-        ];
+            self.occupied_voxel_ranges[2].start as f32 * self.voxel_extent,
+        );
 
-        let upper_corner = point![
+        let upper_corner = Point3::new(
             self.occupied_voxel_ranges[0].end as f32 * self.voxel_extent,
             self.occupied_voxel_ranges[1].end as f32 * self.voxel_extent,
-            self.occupied_voxel_ranges[2].end as f32 * self.voxel_extent
-        ];
+            self.occupied_voxel_ranges[2].end as f32 * self.voxel_extent,
+        );
 
         AxisAlignedBox::new(lower_corner, upper_corner)
     }
@@ -998,8 +998,8 @@ impl ChunkedVoxelObject {
     /// Updates the recorded occupied chunk ranges by checking which chunks are
     /// occupied.
     fn update_occupied_chunk_ranges(&mut self) {
-        let mut min_chunk_indices = vector![usize::MAX, usize::MAX, usize::MAX];
-        let mut max_chunk_indices = vector![0, 0, 0];
+        let mut min_chunk_indices = Vector3::new(usize::MAX, usize::MAX, usize::MAX);
+        let mut max_chunk_indices = Vector3::new(0, 0, 0);
         let mut has_non_empty_chunks = false;
 
         for chunk_i in 0..self.chunk_counts[0] {
@@ -2715,14 +2715,14 @@ fn determine_occupied_voxel_ranges(
     chunks: &[VoxelChunk],
     voxels: &[Voxel],
 ) -> [Range<usize>; 3] {
-    let mut min_voxel_indices = vector![usize::MAX, usize::MAX, usize::MAX];
-    let mut max_voxel_indices = vector![0, 0, 0];
+    let mut min_voxel_indices = Vector3::new(usize::MAX, usize::MAX, usize::MAX);
+    let mut max_voxel_indices = Vector3::new(0, 0, 0);
 
     let mut chunk_idx = 0;
     for chunk_i in 0..chunk_counts[0] {
         for chunk_j in 0..chunk_counts[1] {
             for chunk_k in 0..chunk_counts[2] {
-                let voxel_index_offsets = vector![chunk_i, chunk_j, chunk_k] * CHUNK_SIZE;
+                let voxel_index_offsets = Vector3::new(chunk_i, chunk_j, chunk_k) * CHUNK_SIZE;
                 match &chunks[chunk_idx] {
                     VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
                         let chunk_voxels = chunk_voxels(voxels, *data_offset);
@@ -3426,16 +3426,16 @@ mod tests {
         let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
-        assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
+        assert_abs_diff_eq!(aabb.lower_corner(), &Point3::new(0.0, 0.0, 0.0));
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             // The occupied voxel range has chunk granularity, so the AABB will never be smaller
             // than a single chunk
-            &point![
+            &Point3::new(
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
-                generator.voxel_extent() * CHUNK_SIZE as f32
-            ]
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+            )
         );
     }
 
@@ -3444,14 +3444,14 @@ mod tests {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
-        assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
+        assert_abs_diff_eq!(aabb.lower_corner(), &Point3::new(0.0, 0.0, 0.0));
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &point![
+            &Point3::new(
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
-                generator.voxel_extent() * CHUNK_SIZE as f32
-            ]
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+            )
         );
     }
 
@@ -3462,14 +3462,14 @@ mod tests {
             OffsetBoxVoxelGenerator::with_default([2 * CHUNK_SIZE, 3 * CHUNK_SIZE, 4 * CHUNK_SIZE]);
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
-        assert_abs_diff_eq!(aabb.lower_corner(), &point![0.0, 0.0, 0.0]);
+        assert_abs_diff_eq!(aabb.lower_corner(), &Point3::new(0.0, 0.0, 0.0));
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &point![
+            &Point3::new(
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
                 generator.voxel_extent() * (3 * CHUNK_SIZE) as f32,
-                generator.voxel_extent() * (4 * CHUNK_SIZE) as f32
-            ]
+                generator.voxel_extent() * (4 * CHUNK_SIZE) as f32,
+            )
         );
     }
 
@@ -3529,19 +3529,19 @@ mod tests {
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(
             aabb.lower_corner(),
-            &point![
+            &Point3::new(
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
-                generator.voxel_extent() * CHUNK_SIZE as f32
-            ]
+                generator.voxel_extent() * CHUNK_SIZE as f32,
+            )
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &point![
+            &Point3::new(
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
-                generator.voxel_extent() * (2 * CHUNK_SIZE) as f32
-            ]
+                generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
+            )
         );
     }
 }
