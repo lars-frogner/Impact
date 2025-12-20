@@ -578,8 +578,8 @@ impl VoxelChunkCullingPass {
         voxel_extent: f32,
     ) -> Similarity3 {
         Similarity3::from(voxel_object_to_frustum_transform)
-            .apply_to_scaling(voxel_extent)
-            .inverse()
+            .applied_to_scaling(voxel_extent)
+            .inverted()
     }
 }
 

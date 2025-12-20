@@ -393,7 +393,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let pseudo_velocity_b = -body_b.inverse_mass * pseudo_momentum_change;
         let pseudo_angular_velocity_b =
-            -body_b.inverse_inertia_tensor * disp_b.cross(&pseudo_momentum_change);
+            body_b.inverse_inertia_tensor.negated() * disp_b.cross(&pseudo_momentum_change);
 
         body_a.position += pseudo_velocity_a;
         pseudo_advance_orientation(&mut body_a.orientation, &pseudo_angular_velocity_a);

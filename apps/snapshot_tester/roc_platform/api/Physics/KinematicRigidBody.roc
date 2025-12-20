@@ -1,8 +1,8 @@
-# Hash: 2e2f38ad45d965b7d007ec8c63e6d5a896c0a31cea3a72e13b3be671236673b3
-# Generated: 2025-12-17T23:58:42+00:00
+# Hash: 67c4c4cde3c60f72c3e33a9929dbb417dda9165b0353991acc43d8f1b2db97fa
+# Generated: 2025-12-20T20:27:34+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBody
 # Type category: POD
-# Commit: 7d41822d (dirty)
+# Commit: dbb3dcfa (dirty)
 module [
     KinematicRigidBody,
     write_bytes,
@@ -19,7 +19,7 @@ import core.Vector3
 ## forces or torques.
 KinematicRigidBody : {
     position : Point3.Point3 Binary32,
-    orientation : UnitQuaternion.UnitQuaternion Binary32,
+    orientation : UnitQuaternion.UnitQuaternion,
     velocity : Vector3.Vector3 Binary32,
     angular_velocity : Physics.AngularVelocity.AngularVelocity,
 }
@@ -31,7 +31,7 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(56)
     |> Point3.write_bytes_32(value.position)
-    |> UnitQuaternion.write_bytes_32(value.orientation)
+    |> UnitQuaternion.write_bytes(value.orientation)
     |> Vector3.write_bytes_32(value.velocity)
     |> Physics.AngularVelocity.write_bytes(value.angular_velocity)
 
@@ -42,7 +42,7 @@ from_bytes = |bytes|
     Ok(
         {
             position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes_32?,
-            orientation: bytes |> List.sublist({ start: 12, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            orientation: bytes |> List.sublist({ start: 12, len: 16 }) |> UnitQuaternion.from_bytes?,
             velocity: bytes |> List.sublist({ start: 28, len: 12 }) |> Vector3.from_bytes_32?,
             angular_velocity: bytes |> List.sublist({ start: 40, len: 16 }) |> Physics.AngularVelocity.from_bytes?,
         },

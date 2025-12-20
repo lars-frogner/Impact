@@ -1,6 +1,7 @@
 //! Quaternions.
 
-use approx::AbsDiffEq;
+use crate::matrix::{Matrix3, Matrix4};
+use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
 
@@ -8,8 +9,6 @@ type Point3 = nalgebra::Point3<f32>;
 type Vector3 = nalgebra::Vector3<f32>;
 type UnitVector3 = nalgebra::UnitVector3<f32>;
 type Vector4 = nalgebra::Vector4<f32>;
-type Matrix4 = nalgebra::Matrix4<f32>;
-type Matrix3 = nalgebra::Matrix3<f32>;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
@@ -60,85 +59,17 @@ impl Quaternion {
     }
 }
 
-impl<'a> std::ops::Add<&'a Quaternion> for &Quaternion {
-    type Output = Quaternion;
-
-    #[inline]
-    fn add(self, rhs: &'a Quaternion) -> Self::Output {
-        Quaternion {
-            inner: self.inner + rhs.inner,
-        }
+impl_binop!(Add, add, Quaternion, Quaternion, Quaternion, |a, b| {
+    Quaternion {
+        inner: a.inner + b.inner,
     }
-}
+});
 
-impl std::ops::Add<Quaternion> for &Quaternion {
-    type Output = Quaternion;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn add(self, rhs: Quaternion) -> Self::Output {
-        self + &rhs
+impl_binop!(Mul, mul, Quaternion, Quaternion, Quaternion, |a, b| {
+    Quaternion {
+        inner: a.inner * b.inner,
     }
-}
-
-impl std::ops::Add<Quaternion> for Quaternion {
-    type Output = Quaternion;
-
-    #[inline]
-    fn add(self, rhs: Quaternion) -> Self::Output {
-        &self + &rhs
-    }
-}
-
-impl<'a> std::ops::Add<&'a Quaternion> for Quaternion {
-    type Output = Quaternion;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn add(self, rhs: &'a Quaternion) -> Self::Output {
-        &self + rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Quaternion> for &Quaternion {
-    type Output = Quaternion;
-
-    #[inline]
-    fn mul(self, rhs: &'a Quaternion) -> Self::Output {
-        Quaternion {
-            inner: self.inner * rhs.inner,
-        }
-    }
-}
-
-impl std::ops::Mul<Quaternion> for &Quaternion {
-    type Output = Quaternion;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: Quaternion) -> Self::Output {
-        self * &rhs
-    }
-}
-
-impl std::ops::Mul<Quaternion> for Quaternion {
-    type Output = Quaternion;
-
-    #[inline]
-    fn mul(self, rhs: Quaternion) -> Self::Output {
-        &self * &rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Quaternion> for Quaternion {
-    type Output = Quaternion;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: &'a Quaternion) -> Self::Output {
-        &self * rhs
-    }
-}
+});
 
 impl AbsDiffEq for Quaternion {
     type Epsilon = f32;
@@ -149,6 +80,21 @@ impl AbsDiffEq for Quaternion {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         self.inner.abs_diff_eq(&other.inner, epsilon)
+    }
+}
+
+impl RelativeEq for Quaternion {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.inner.relative_eq(&other.inner, epsilon, max_relative)
     }
 }
 
@@ -261,22 +207,17 @@ impl UnitQuaternion {
 
     #[inline]
     pub fn to_rotation_matrix(&self) -> Matrix3 {
-        *self.inner.to_rotation_matrix().matrix()
+        Matrix3::_wrap(*self.inner.to_rotation_matrix().matrix())
     }
 
     #[inline]
     pub fn to_homogeneous_matrix(&self) -> Matrix4 {
-        self.inner.to_homogeneous()
+        Matrix4::_wrap(self.inner.to_homogeneous())
     }
 
     #[inline]
     pub fn transform_point(&self, point: &Point3) -> Point3 {
         self.inner.transform_point(point)
-    }
-
-    #[inline]
-    pub fn rotate_unit_vector(&self, vector: &UnitVector3) -> UnitVector3 {
-        self.inner * vector
     }
 
     #[inline]
@@ -294,50 +235,29 @@ impl UnitQuaternion {
         self.inner.inverse_transform_vector(vector)
     }
 
+    #[inline]
+    pub fn rotate_unit_vector(&self, vector: &UnitVector3) -> UnitVector3 {
+        self.inner * vector
+    }
+
+    #[inline]
     pub fn _inner(&self) -> &nalgebra::UnitQuaternion<f32> {
         &self.inner
     }
 }
 
-impl<'a> std::ops::Mul<&'a UnitQuaternion> for &UnitQuaternion {
-    type Output = UnitQuaternion;
-
-    #[inline]
-    fn mul(self, rhs: &'a UnitQuaternion) -> Self::Output {
+impl_binop!(
+    Mul,
+    mul,
+    UnitQuaternion,
+    UnitQuaternion,
+    UnitQuaternion,
+    |a, b| {
         UnitQuaternion {
-            inner: self.inner * rhs.inner,
+            inner: a.inner * b.inner,
         }
     }
-}
-
-impl std::ops::Mul<UnitQuaternion> for &UnitQuaternion {
-    type Output = UnitQuaternion;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: UnitQuaternion) -> Self::Output {
-        self * &rhs
-    }
-}
-
-impl std::ops::Mul<UnitQuaternion> for UnitQuaternion {
-    type Output = UnitQuaternion;
-
-    #[inline]
-    fn mul(self, rhs: UnitQuaternion) -> Self::Output {
-        &self * &rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a UnitQuaternion> for UnitQuaternion {
-    type Output = UnitQuaternion;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: &'a UnitQuaternion) -> Self::Output {
-        &self * rhs
-    }
-}
+);
 
 impl AbsDiffEq for UnitQuaternion {
     type Epsilon = f32;
@@ -348,6 +268,21 @@ impl AbsDiffEq for UnitQuaternion {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         self.inner.abs_diff_eq(&other.inner, epsilon)
+    }
+}
+
+impl RelativeEq for UnitQuaternion {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.inner.relative_eq(&other.inner, epsilon, max_relative)
     }
 }
 

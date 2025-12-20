@@ -1,8 +1,8 @@
-# Hash: f6c8c18d0602b35d2d86e0c71287e7f241653bbacf9996ec8f58b8103770ba32
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 1c1718b86b626b9c40806a17d89196f9d3c9fea21f89c5710d4bc4ada14c1dde
+# Generated: 2025-12-20T20:27:16+00:00
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotation
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: dbb3dcfa (dirty)
 module [
     ConstantRotation,
     new,
@@ -26,14 +26,14 @@ ConstantRotation : {
     ## orientation.
     initial_time : F32,
     ## The orientation of the body at the initial time.
-    initial_orientation : UnitQuaternion.UnitQuaternion Binary32,
+    initial_orientation : UnitQuaternion.UnitQuaternion,
     ## The angular velocity of the body.
     angular_velocity : Physics.AngularVelocity.AngularVelocity,
 }
 
 ## Creates a new constant rotation defined by the given initial time and
 ## orientation and angular velocity.
-new : F32, UnitQuaternion.UnitQuaternion Binary32, Physics.AngularVelocity.AngularVelocity -> ConstantRotation
+new : F32, UnitQuaternion.UnitQuaternion, Physics.AngularVelocity.AngularVelocity -> ConstantRotation
 new = |initial_time, initial_orientation, angular_velocity|
     {
         initial_time,
@@ -44,7 +44,7 @@ new = |initial_time, initial_orientation, angular_velocity|
 ## Creates a new constant rotation defined by the given initial time and
 ## orientation and angular velocity.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion Binary32, Physics.AngularVelocity.AngularVelocity -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion, Physics.AngularVelocity.AngularVelocity -> Entity.ComponentData
 add_new = |entity_data, initial_time, initial_orientation, angular_velocity|
     add(entity_data, new(initial_time, initial_orientation, angular_velocity))
 
@@ -52,7 +52,7 @@ add_new = |entity_data, initial_time, initial_orientation, angular_velocity|
 ## orientation and angular velocity.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion Binary32), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, initial_time, initial_orientation, angular_velocity|
     add_multiple(
         entity_data,
@@ -122,7 +122,7 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(36)
     |> Builtin.write_bytes_f32(value.initial_time)
-    |> UnitQuaternion.write_bytes_32(value.initial_orientation)
+    |> UnitQuaternion.write_bytes(value.initial_orientation)
     |> Physics.AngularVelocity.write_bytes(value.angular_velocity)
 
 ## Deserializes a value of [ConstantRotation] from its bytes in the
@@ -132,7 +132,7 @@ from_bytes = |bytes|
     Ok(
         {
             initial_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
-            initial_orientation: bytes |> List.sublist({ start: 4, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            initial_orientation: bytes |> List.sublist({ start: 4, len: 16 }) |> UnitQuaternion.from_bytes?,
             angular_velocity: bytes |> List.sublist({ start: 20, len: 16 }) |> Physics.AngularVelocity.from_bytes?,
         },
     )

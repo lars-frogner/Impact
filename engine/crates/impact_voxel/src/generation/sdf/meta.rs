@@ -1366,7 +1366,9 @@ impl MetaTranslation {
                     CompositionMode::Post => input_instance
                         .with_transform(input_instance.transform.translated(&translation)),
                     CompositionMode::Pre => input_instance.with_transform(
-                        input_instance.transform.apply_to_translation(&translation),
+                        input_instance
+                            .transform
+                            .applied_to_translation(&translation),
                     ),
                 }
             },
@@ -1400,7 +1402,7 @@ impl MetaRotation {
                         input_instance.with_transform(input_instance.transform.rotated(&rotation))
                     }
                     CompositionMode::Pre => input_instance
-                        .with_transform(input_instance.transform.apply_to_rotation(&rotation)),
+                        .with_transform(input_instance.transform.applied_to_rotation(&rotation)),
                 }
             },
         )
@@ -1429,7 +1431,7 @@ impl MetaScaling {
                         input_instance.with_transform(input_instance.transform.scaled(scaling))
                     }
                     CompositionMode::Pre => input_instance
-                        .with_transform(input_instance.transform.apply_to_scaling(scaling)),
+                        .with_transform(input_instance.transform.applied_to_scaling(scaling)),
                 }
             },
         )

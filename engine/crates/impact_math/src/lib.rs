@@ -8,6 +8,7 @@ pub mod bounds;
 pub mod consts;
 pub mod halton;
 pub mod hash;
+pub mod matrix;
 pub mod num;
 pub mod power_law;
 pub mod quaternion;

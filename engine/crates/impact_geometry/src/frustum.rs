@@ -4,10 +4,11 @@ use crate::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
 use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
+    matrix::Matrix4,
     quaternion::UnitQuaternion,
     transform::{Projective3, Similarity3},
 };
-use nalgebra::{Matrix4, Point3, UnitVector3, Vector3};
+use nalgebra::{Point3, UnitVector3, Vector3};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -19,8 +20,8 @@ use nalgebra::{Matrix4, Point3, UnitVector3, Vector3};
 pub struct Frustum {
     planes: [Plane; 6],
     largest_signed_dist_aab_corner_indices_for_planes: [usize; 6],
-    transform_matrix: Matrix4<f32>,
-    inverse_transform_matrix: Matrix4<f32>,
+    transform_matrix: Matrix4,
+    inverse_transform_matrix: Matrix4,
 }
 
 impl Frustum {
@@ -47,8 +48,8 @@ impl Frustum {
     /// Creates the frustum representing the clip space of the given transform
     /// matrix, using the given matrix inverse rather than computing it.
     pub fn from_transform_matrix_with_inverse(
-        transform_matrix: Matrix4<f32>,
-        inverse_transform_matrix: Matrix4<f32>,
+        transform_matrix: Matrix4,
+        inverse_transform_matrix: Matrix4,
     ) -> Self {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
@@ -100,7 +101,7 @@ impl Frustum {
 
     /// Returns the matrix of the transform into the clip space
     /// that this frustum represents.
-    pub fn transform_matrix(&self) -> &Matrix4<f32> {
+    pub fn transform_matrix(&self) -> &Matrix4 {
         &self.transform_matrix
     }
 
@@ -357,7 +358,7 @@ impl Frustum {
             transformation.to_matrix() * self.inverse_transform_matrix;
 
         let inverse_of_transformed_inverse_transform_matrix =
-            self.transform_matrix * transformation.inverse().to_matrix();
+            self.transform_matrix * transformation.inverted().to_matrix();
 
         Self {
             planes: transformed_planes,
@@ -380,41 +381,44 @@ impl Frustum {
         ]
     }
 
-    fn planes_from_transform_matrix(transform_matrix: &Matrix4<f32>) -> [Plane; 6] {
-        let m = transform_matrix;
+    fn planes_from_transform_matrix(transform_matrix: &Matrix4) -> [Plane; 6] {
+        let c1 = transform_matrix.column1();
+        let c2 = transform_matrix.column2();
+        let c3 = transform_matrix.column3();
+        let c4 = transform_matrix.column4();
 
         let left = Self::plane_from_unnormalized_coefficients(
-            m.m41 + m.m11,
-            m.m42 + m.m12,
-            m.m43 + m.m13,
-            -(m.m44 + m.m14),
+            c1.w + c1.x,
+            c2.w + c2.x,
+            c3.w + c3.x,
+            -(c4.w + c4.x),
         );
         let right = Self::plane_from_unnormalized_coefficients(
-            m.m41 - m.m11,
-            m.m42 - m.m12,
-            m.m43 - m.m13,
-            -(m.m44 - m.m14),
+            c1.w - c1.x,
+            c2.w - c2.x,
+            c3.w - c3.x,
+            -(c4.w - c4.x),
         );
 
         let bottom = Self::plane_from_unnormalized_coefficients(
-            m.m41 + m.m21,
-            m.m42 + m.m22,
-            m.m43 + m.m23,
-            -(m.m44 + m.m24),
+            c1.w + c1.y,
+            c2.w + c2.y,
+            c3.w + c3.y,
+            -(c4.w + c4.y),
         );
         let top = Self::plane_from_unnormalized_coefficients(
-            m.m41 - m.m21,
-            m.m42 - m.m22,
-            m.m43 - m.m23,
-            -(m.m44 - m.m24),
+            c1.w - c1.y,
+            c2.w - c2.y,
+            c3.w - c3.y,
+            -(c4.w - c4.y),
         );
 
-        let near = Self::plane_from_unnormalized_coefficients(m.m31, m.m32, m.m33, -m.m34);
+        let near = Self::plane_from_unnormalized_coefficients(c1.z, c2.z, c3.z, -c4.z);
         let far = Self::plane_from_unnormalized_coefficients(
-            m.m41 - m.m31,
-            m.m42 - m.m32,
-            m.m43 - m.m33,
-            -(m.m44 - m.m34),
+            c1.w - c1.z,
+            c2.w - c2.z,
+            c3.w - c3.z,
+            -(c4.w - c4.z),
         );
 
         [left, right, bottom, top, near, far]
@@ -433,7 +437,7 @@ impl Frustum {
     }
 
     #[cfg(test)]
-    fn from_transform_matrix(transform_matrix: Matrix4<f32>) -> Self {
+    fn from_transform_matrix(transform_matrix: Matrix4) -> Self {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -443,7 +447,7 @@ impl Frustum {
             planes,
             largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix,
-            inverse_transform_matrix: transform_matrix.try_inverse().unwrap(),
+            inverse_transform_matrix: transform_matrix.inverted().unwrap(),
         }
     }
 
@@ -721,7 +725,7 @@ mod tests {
 
         let transformed_frustum = frustum.transformed(&transformation);
 
-        let untransformed_frustum = transformed_frustum.transformed(&transformation.inverse());
+        let untransformed_frustum = transformed_frustum.transformed(&transformation.inverted());
 
         assert_abs_diff_eq!(frustum, untransformed_frustum, epsilon = 1e-4);
     }

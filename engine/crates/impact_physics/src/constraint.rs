@@ -13,7 +13,8 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_containers::HashMap;
-use nalgebra::{Matrix3, Vector3};
+use impact_math::matrix::Matrix3;
+use nalgebra::Vector3;
 use num_traits::Zero;
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
@@ -127,7 +128,7 @@ struct ConstrainedBody {
     /// Inverse of the body's mass.
     pub inverse_mass: f32,
     /// Inverse of the body's inertia tensor (in world space).
-    pub inverse_inertia_tensor: Matrix3<f32>,
+    pub inverse_inertia_tensor: Matrix3,
     /// Position of the body's center of mass (in world space).
     pub position: Position,
     /// Orientation of the body's reference frame (in world space).

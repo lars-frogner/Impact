@@ -206,9 +206,9 @@ pub fn apply_absorption<C>(
 
         let voxel_object_to_world_transform = reference_frame
             .create_transform_to_parent_space()
-            .apply_to_translation(&(-local_center_of_mass));
+            .applied_to_translation(&(-local_center_of_mass));
 
-        let world_to_voxel_object_transform = voxel_object_to_world_transform.inverse();
+        let world_to_voxel_object_transform = voxel_object_to_world_transform.inverted();
 
         let mut inertial_property_updater = physics_context.inertial_property_manager.begin_update(
             voxel_object.voxel_extent(),

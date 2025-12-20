@@ -1344,7 +1344,7 @@ impl GroupNode {
     }
 
     fn root_to_group_transform(&self) -> Isometry3 {
-        self.group_to_root_transform.inverse()
+        self.group_to_root_transform.inverted()
     }
 
     fn parent_node_id(&self) -> GroupNodeID {
@@ -1489,7 +1489,7 @@ impl ModelInstanceNode {
 
     /// Returns the parent-to-model transform for the node.
     pub fn parent_to_model_transform(&self) -> Similarity3 {
-        self.model_to_parent_transform.inverse()
+        self.model_to_parent_transform.inverted()
     }
 
     /// Returns the model-to-parent transform for the node.
@@ -1569,7 +1569,7 @@ impl CameraNode {
 
     /// Returns the parent-to-camera transform for the node.
     pub fn parent_to_camera_transform(&self) -> Isometry3 {
-        self.camera_to_parent_transform.inverse()
+        self.camera_to_parent_transform.inverted()
     }
 
     /// Returns the camera-to-parent transform for the node.
@@ -1885,7 +1885,10 @@ mod tests {
         let root_to_camera_transform =
             scene_graph.compute_view_transform(scene_graph.camera_nodes.node(camera));
 
-        assert_abs_diff_eq!(root_to_camera_transform, camera_to_root_transform.inverse());
+        assert_abs_diff_eq!(
+            root_to_camera_transform,
+            camera_to_root_transform.inverted()
+        );
     }
 
     #[test]
@@ -1929,7 +1932,7 @@ mod tests {
 
         assert_abs_diff_eq!(
             root_to_camera_transform,
-            Isometry3::from_parts(translation, rotation).inverse(),
+            Isometry3::from_parts(translation, rotation).inverted(),
             epsilon = 1e-7
         );
     }

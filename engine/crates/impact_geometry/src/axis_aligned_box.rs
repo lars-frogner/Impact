@@ -1,10 +1,10 @@
 //! Representation of axis-aligned boxes.
 
 use crate::Plane;
-use approx::AbsDiffEq;
-use nalgebra::{self as na, Matrix4, Point3, UnitVector3, Vector3};
-
 use Corner::{Lower, Upper};
+use approx::AbsDiffEq;
+use impact_math::matrix::Matrix4;
+use nalgebra::{self as na, Point3, UnitVector3, Vector3};
 
 /// A box with orientation aligned with the coordinate system axes. The width,
 /// height and depth axes are aligned with the x-, y- and z-axis respectively.
@@ -267,13 +267,13 @@ impl AxisAlignedBox {
     }
 
     /// Computes the AABB for the transformed version of this AABB.
-    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4<f32>) -> Self {
+    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4) -> Self {
         let transformed_center = homogeneous_transform.transform_point(&self.center());
 
         // Performance trick: transform half-extents by the element-wise
         // absolute value of the linear 3x3 part
-        let rotation_scale = homogeneous_transform.fixed_view::<3, 3>(0, 0);
-        let abs_rotation_scale = rotation_scale.map(|x| x.abs());
+        let rotation_scale = homogeneous_transform.linear_part();
+        let abs_rotation_scale = rotation_scale.mapped(f32::abs);
         let transformed_half_extents = abs_rotation_scale * self.half_extents();
 
         Self::new(

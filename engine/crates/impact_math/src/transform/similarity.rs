@@ -1,13 +1,12 @@
 //! Similarity transforms.
 
 use super::Isometry3;
-use crate::quaternion::UnitQuaternion;
-use approx::AbsDiffEq;
+use crate::{matrix::Matrix4, quaternion::UnitQuaternion};
+use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 
 type Point3 = nalgebra::Point3<f32>;
 type Vector3 = nalgebra::Vector3<f32>;
-type Matrix4 = nalgebra::Matrix4<f32>;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
@@ -86,28 +85,28 @@ impl Similarity3 {
     }
 
     #[inline]
-    pub fn apply_to_translation(&self, translation: &Vector3) -> Self {
+    pub fn applied_to_translation(&self, translation: &Vector3) -> Self {
         Self {
             inner: self.inner * nalgebra::Translation3::from(*translation),
         }
     }
 
     #[inline]
-    pub fn apply_to_rotation(&self, rotation: &UnitQuaternion) -> Self {
+    pub fn applied_to_rotation(&self, rotation: &UnitQuaternion) -> Self {
         Self {
             inner: self.inner * rotation._inner(),
         }
     }
 
     #[inline]
-    pub fn apply_to_scaling(&self, scaling: f32) -> Self {
+    pub fn applied_to_scaling(&self, scaling: f32) -> Self {
         Self {
             inner: self.inner.prepend_scaling(scaling),
         }
     }
 
     #[inline]
-    pub fn inverse(&self) -> Self {
+    pub fn inverted(&self) -> Self {
         Self {
             inner: self.inner.inverse(),
         }
@@ -115,7 +114,7 @@ impl Similarity3 {
 
     #[inline]
     pub fn to_matrix(&self) -> Matrix4 {
-        self.inner.to_homogeneous()
+        Matrix4::_wrap(self.inner.to_homogeneous())
     }
 
     #[inline]
@@ -159,125 +158,23 @@ impl Similarity3 {
     }
 }
 
-impl<'a> std::ops::Mul<&'a Isometry3> for &Similarity3 {
-    type Output = Similarity3;
-
-    #[inline]
-    fn mul(self, rhs: &'a Isometry3) -> Self::Output {
-        Similarity3 {
-            inner: self.inner * rhs._inner(),
-        }
+impl_binop!(Mul, mul, Similarity3, Isometry3, Similarity3, |a, b| {
+    Similarity3 {
+        inner: a.inner * b._inner(),
     }
-}
+});
 
-impl std::ops::Mul<Isometry3> for &Similarity3 {
-    type Output = Similarity3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: Isometry3) -> Self::Output {
-        self * &rhs
+impl_binop!(Mul, mul, Isometry3, Similarity3, Similarity3, |a, b| {
+    Similarity3 {
+        inner: a._inner() * b.inner,
     }
-}
+});
 
-impl std::ops::Mul<Isometry3> for Similarity3 {
-    type Output = Similarity3;
-
-    #[inline]
-    fn mul(self, rhs: Isometry3) -> Self::Output {
-        &self * &rhs
+impl_binop!(Mul, mul, Similarity3, Similarity3, Similarity3, |a, b| {
+    Similarity3 {
+        inner: a.inner * b.inner,
     }
-}
-
-impl<'a> std::ops::Mul<&'a Isometry3> for Similarity3 {
-    type Output = Similarity3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: &'a Isometry3) -> Self::Output {
-        &self * rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Similarity3> for &Isometry3 {
-    type Output = Similarity3;
-
-    #[inline]
-    fn mul(self, rhs: &'a Similarity3) -> Self::Output {
-        Similarity3 {
-            inner: self._inner() * rhs.inner,
-        }
-    }
-}
-
-impl std::ops::Mul<Similarity3> for &Isometry3 {
-    type Output = Similarity3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: Similarity3) -> Self::Output {
-        self * &rhs
-    }
-}
-
-impl std::ops::Mul<Similarity3> for Isometry3 {
-    type Output = Similarity3;
-
-    #[inline]
-    fn mul(self, rhs: Similarity3) -> Self::Output {
-        &self * &rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Similarity3> for Isometry3 {
-    type Output = Similarity3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: &'a Similarity3) -> Self::Output {
-        &self * rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Similarity3> for &Similarity3 {
-    type Output = Similarity3;
-
-    #[inline]
-    fn mul(self, rhs: &'a Similarity3) -> Self::Output {
-        Similarity3 {
-            inner: self.inner * rhs.inner,
-        }
-    }
-}
-
-impl std::ops::Mul<Similarity3> for &Similarity3 {
-    type Output = Similarity3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: Similarity3) -> Self::Output {
-        self * &rhs
-    }
-}
-
-impl std::ops::Mul<Similarity3> for Similarity3 {
-    type Output = Similarity3;
-
-    #[inline]
-    fn mul(self, rhs: Similarity3) -> Self::Output {
-        &self * &rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Similarity3> for Similarity3 {
-    type Output = Similarity3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: &'a Similarity3) -> Self::Output {
-        &self * rhs
-    }
-}
+});
 
 impl AbsDiffEq for Similarity3 {
     type Epsilon = f32;
@@ -288,5 +185,20 @@ impl AbsDiffEq for Similarity3 {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         self.inner.abs_diff_eq(&other.inner, epsilon)
+    }
+}
+
+impl RelativeEq for Similarity3 {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.inner.relative_eq(&other.inner, epsilon, max_relative)
     }
 }

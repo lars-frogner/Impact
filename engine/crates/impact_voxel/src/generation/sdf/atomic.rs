@@ -12,10 +12,11 @@ use impact_alloc::{
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::{
     Float,
+    matrix::Matrix4,
     quaternion::{Quaternion, UnitQuaternion},
     transform::Similarity3,
 };
-use nalgebra::{Matrix4, Point3, UnitVector3, Vector3};
+use nalgebra::{Point3, UnitVector3, Vector3};
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::{f32, mem};
@@ -86,7 +87,7 @@ struct ProcessedSDFNode {
     node: SDFNode,
     /// Transforms positions from the root SDF coordinate space to this node's
     /// local space.
-    transform_to_node_space: Matrix4<f32>,
+    transform_to_node_space: Matrix4,
     /// The domain is defined in the node's local space.
     ///
     /// It is expanded by a small margin on each side relative to the original
@@ -571,7 +572,7 @@ impl<A: Allocator> SDFGenerator<A> {
                     // Transform: Shift the coordinate system in the opposite
                     // direction so positions are expressed relative to the
                     // child’s origin
-                    transform_stack[stack_top].append_translation_mut(&(-translation));
+                    transform_stack[stack_top].translate_transform(&(-translation));
 
                     // Margin: A translation node should have the same margin as
                     // its child
@@ -589,7 +590,7 @@ impl<A: Allocator> SDFGenerator<A> {
                 &SDFNode::Scaling(SDFScaling { scaling, .. }) => {
                     // Transform: Rescale coordinates so they match the child’s
                     // scale
-                    transform_stack[stack_top].append_scaling_mut(scaling.recip());
+                    transform_stack[stack_top].scale_transform(scaling.recip());
 
                     // Margin: A scaling node should preserve the same effective
                     // margin in parent space. Since SDF values scale by
@@ -1504,15 +1505,15 @@ impl MultifractalNoiseSDFModifier {
         &self,
         signed_distances: &mut [f32; COUNT],
         scratch: &mut [f32],
-        transform_to_node_space: &Matrix4<f32>,
+        transform_to_node_space: &Matrix4,
         block_origin_in_root_space: &Point3<f32>,
     ) {
         let origin_in_node_space =
             transform_to_node_space.transform_point(block_origin_in_root_space);
 
-        let dx = transform_to_node_space.column(0).xyz();
-        let dy = transform_to_node_space.column(1).xyz();
-        let dz = transform_to_node_space.column(2).xyz();
+        let dx = transform_to_node_space.column1().xyz();
+        let dy = transform_to_node_space.column2().xyz();
+        let dz = transform_to_node_space.column3().xyz();
 
         let inverse_scale = dx.norm();
         let scale = inverse_scale.recip();
@@ -1588,16 +1589,16 @@ impl MultifractalNoiseSDFModifier {
     >(
         &self,
         signed_distances: &[f32; COUNT],
-        transform_to_node_space: &Matrix4<f32>,
+        transform_to_node_space: &Matrix4,
         block_origin_in_root_space: &Point3<f32>,
         predicate: impl Fn(f32) -> bool,
     ) -> bool {
         let origin_in_node_space =
             transform_to_node_space.transform_point(block_origin_in_root_space);
 
-        let dx = transform_to_node_space.column(0).xyz();
-        let dy = transform_to_node_space.column(1).xyz();
-        let dz = transform_to_node_space.column(2).xyz();
+        let dx = transform_to_node_space.column1().xyz();
+        let dy = transform_to_node_space.column2().xyz();
+        let dz = transform_to_node_space.column3().xyz();
 
         let inverse_scale = dx.norm();
         let scale = inverse_scale.recip();
@@ -1872,16 +1873,16 @@ fn displacement_due_to_smoothness(smoothness: f32) -> f32 {
 #[inline]
 pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
     signed_distances: &mut [f32; COUNT],
-    transform_to_node_space: &Matrix4<f32>,
+    transform_to_node_space: &Matrix4,
     block_origin_in_root_space: &Point3<f32>,
     update_signed_distance: &impl Fn(&mut f32, &Point3<f32>),
 ) {
     assert_eq!(COUNT, SIZE.pow(3));
 
     let origin = transform_to_node_space.transform_point(block_origin_in_root_space);
-    let dx = transform_to_node_space.column(0).xyz();
-    let dy = transform_to_node_space.column(1).xyz();
-    let dz = transform_to_node_space.column(2).xyz();
+    let dx = transform_to_node_space.column1().xyz();
+    let dy = transform_to_node_space.column2().xyz();
+    let dz = transform_to_node_space.column3().xyz();
 
     let mut idx = 0;
     for i in 0..SIZE {
@@ -1900,16 +1901,16 @@ pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
 
 #[inline]
 fn all_block_test_positions_pass_predicate<const SIZE: usize, const COUNT: usize>(
-    transform_to_node_space: &Matrix4<f32>,
+    transform_to_node_space: &Matrix4,
     block_origin_in_root_space: &Point3<f32>,
     predicate: &impl Fn(usize, Point3<f32>) -> bool,
 ) -> bool {
     assert_eq!(COUNT, SIZE.pow(3));
 
     let lower = transform_to_node_space.transform_point(block_origin_in_root_space);
-    let dx = transform_to_node_space.column(0).xyz();
-    let dy = transform_to_node_space.column(1).xyz();
-    let dz = transform_to_node_space.column(2).xyz();
+    let dx = transform_to_node_space.column1().xyz();
+    let dy = transform_to_node_space.column2().xyz();
+    let dz = transform_to_node_space.column3().xyz();
 
     for (idx, point) in all_block_test_positions_with_indices::<SIZE, COUNT>(&lower, &dx, &dy, &dz)
     {

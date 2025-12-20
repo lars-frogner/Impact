@@ -1,7 +1,7 @@
 //! Isometry transforms.
 
 use crate::quaternion::UnitQuaternion;
-use approx::AbsDiffEq;
+use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 
 type Point3 = nalgebra::Point3<f32>;
@@ -58,21 +58,21 @@ impl Isometry3 {
     }
 
     #[inline]
-    pub fn apply_to_translation(&self, translation: &Vector3) -> Self {
+    pub fn applied_to_translation(&self, translation: &Vector3) -> Self {
         Self {
             inner: self.inner * nalgebra::Translation3::from(*translation),
         }
     }
 
     #[inline]
-    pub fn apply_to_rotation(&self, rotation: &UnitQuaternion) -> Self {
+    pub fn applied_to_rotation(&self, rotation: &UnitQuaternion) -> Self {
         Self {
             inner: self.inner * rotation._inner(),
         }
     }
 
     #[inline]
-    pub fn inverse(&self) -> Self {
+    pub fn inverted(&self) -> Self {
         Self {
             inner: self.inner.inverse(),
         }
@@ -108,50 +108,17 @@ impl Isometry3 {
         self.inner.inverse_transform_vector(vector)
     }
 
+    #[inline]
     pub fn _inner(&self) -> &nalgebra::Isometry3<f32> {
         &self.inner
     }
 }
 
-impl<'a> std::ops::Mul<&'a Isometry3> for &Isometry3 {
-    type Output = Isometry3;
-
-    #[inline]
-    fn mul(self, rhs: &'a Isometry3) -> Self::Output {
-        Isometry3 {
-            inner: self.inner * rhs.inner,
-        }
+impl_binop!(Mul, mul, Isometry3, Isometry3, Isometry3, |a, b| {
+    Isometry3 {
+        inner: a.inner * b.inner,
     }
-}
-
-impl std::ops::Mul<Isometry3> for &Isometry3 {
-    type Output = Isometry3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: Isometry3) -> Self::Output {
-        self * &rhs
-    }
-}
-
-impl std::ops::Mul<Isometry3> for Isometry3 {
-    type Output = Isometry3;
-
-    #[inline]
-    fn mul(self, rhs: Isometry3) -> Self::Output {
-        &self * &rhs
-    }
-}
-
-impl<'a> std::ops::Mul<&'a Isometry3> for Isometry3 {
-    type Output = Isometry3;
-
-    #[allow(clippy::op_ref)]
-    #[inline]
-    fn mul(self, rhs: &'a Isometry3) -> Self::Output {
-        &self * rhs
-    }
-}
+});
 
 impl AbsDiffEq for Isometry3 {
     type Epsilon = f32;
@@ -162,5 +129,20 @@ impl AbsDiffEq for Isometry3 {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         self.inner.abs_diff_eq(&other.inner, epsilon)
+    }
+}
+
+impl RelativeEq for Isometry3 {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.inner.relative_eq(&other.inner, epsilon, max_relative)
     }
 }
