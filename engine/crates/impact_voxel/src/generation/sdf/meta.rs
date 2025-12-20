@@ -22,10 +22,11 @@ use impact_geometry::{
 use impact_math::{
     angle::{Angle, Degrees},
     consts::f32::TWO_PI,
+    quaternion::UnitQuaternion,
     splitmix,
     transform::Similarity3,
 };
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{Point3, UnitVector3, Vector3, vector};
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
 use rand::{
     Rng,
@@ -2522,7 +2523,7 @@ fn compute_rotation_to_gradient<A: Allocator>(
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
     gradient_sdf_node_to_parent_transform: &Similarity3,
     subject_node_to_parent_transform: &Similarity3,
-) -> Option<UnitQuaternion<f32>> {
+) -> Option<UnitQuaternion> {
     // The basis for this computation is that the gradient node (for which we
     // sample the SDF) and the subject node (which we will rotate) have the
     // *same* parent space. In other words, we assume that no additional
@@ -2841,14 +2842,14 @@ fn compute_jittered_direction(
 
     let rotation = UnitQuaternion::from_axis_angle(&axis, angle);
 
-    rotation * direction
+    rotation.rotate_unit_vector(&direction)
 }
 
 fn unit_quaternion_from_tilt_turn_roll(
     tilt_angle: Degrees<f32>,
     turn_angle: Degrees<f32>,
     roll_angle: Degrees<f32>,
-) -> UnitQuaternion<f32> {
+) -> UnitQuaternion {
     let polar_angle = tilt_angle.radians();
     let azimuthal_angle = turn_angle.radians();
     let roll_angle = roll_angle.radians();

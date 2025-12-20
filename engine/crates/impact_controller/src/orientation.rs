@@ -2,8 +2,9 @@
 
 use super::OrientationController;
 use bytemuck::{Pod, Zeroable};
+use impact_math::quaternion::UnitQuaternion;
 use impact_physics::quantities::{AngularVelocity, Orientation};
-use nalgebra::{UnitQuaternion, Vector3};
+use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_component_type! {
@@ -87,7 +88,7 @@ impl CameraOrientationController {
 
 impl OrientationController for CameraOrientationController {
     fn update_orientation(&self, orientation: &mut Orientation) {
-        *orientation *= self.orientation_change;
+        *orientation = *orientation * self.orientation_change;
     }
 
     fn orientation_has_changed(&self) -> bool {
@@ -95,7 +96,9 @@ impl OrientationController for CameraOrientationController {
     }
 
     fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32) {
-        self.orientation_change *= compute_pitch_rotation(delta_y) * compute_yaw_rotation(-delta_x);
+        self.orientation_change = self.orientation_change
+            * compute_pitch_rotation(delta_y)
+            * compute_yaw_rotation(-delta_x);
 
         self.orientation_has_changed = true;
     }
@@ -134,7 +137,7 @@ impl OrientationController for RollFreeCameraOrientationController {
 
     fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32) {
         self.yaw_change = compute_yaw_rotation(-delta_x) * self.yaw_change;
-        self.pitch_change *= compute_pitch_rotation(delta_y);
+        self.pitch_change = self.pitch_change * compute_pitch_rotation(delta_y);
         self.orientation_has_changed = true;
     }
 

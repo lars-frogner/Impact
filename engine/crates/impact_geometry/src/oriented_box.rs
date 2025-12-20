@@ -1,14 +1,17 @@
 //! Representation of boxes with arbitrary orientations.
 
 use crate::{AxisAlignedBox, Plane};
-use impact_math::transform::{Isometry3, Similarity3};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
+use impact_math::{
+    quaternion::UnitQuaternion,
+    transform::{Isometry3, Similarity3},
+};
+use nalgebra::{Point3, UnitVector3, Vector3};
 
 /// A box with arbitrary position, orientation and extents.
 #[derive(Clone, Debug)]
 pub struct OrientedBox {
     center: Point3<f32>,
-    orientation: UnitQuaternion<f32>,
+    orientation: UnitQuaternion,
     half_extents: Vector3<f32>,
 }
 
@@ -17,7 +20,7 @@ impl OrientedBox {
     /// and half extents along each of its three axes.
     pub fn new(
         center: Point3<f32>,
-        orientation: UnitQuaternion<f32>,
+        orientation: UnitQuaternion,
         half_extents: Vector3<f32>,
     ) -> Self {
         Self {
@@ -49,7 +52,7 @@ impl OrientedBox {
     }
 
     /// Returns the orientation of the box.
-    pub fn orientation(&self) -> &UnitQuaternion<f32> {
+    pub fn orientation(&self) -> &UnitQuaternion {
         &self.orientation
     }
 
@@ -121,7 +124,7 @@ impl OrientedBox {
 
     /// Creates a new box corresponding to rotating this box with the given
     /// rotation.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         Self::new(
             rotation.transform_point(&self.center),
             rotation * self.orientation,

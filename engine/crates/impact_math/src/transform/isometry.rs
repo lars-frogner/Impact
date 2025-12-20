@@ -1,11 +1,11 @@
 //! Isometry transforms.
 
+use crate::quaternion::UnitQuaternion;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 
 type Point3 = nalgebra::Point3<f32>;
 type Vector3 = nalgebra::Vector3<f32>;
-type UnitQuaternion = nalgebra::UnitQuaternion<f32>;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
@@ -24,7 +24,7 @@ impl Isometry3 {
     #[inline]
     pub fn from_parts(translation: Vector3, rotation: UnitQuaternion) -> Self {
         Self {
-            inner: nalgebra::Isometry3::from_parts(translation.into(), rotation),
+            inner: nalgebra::Isometry3::from_parts(translation.into(), *rotation._inner()),
         }
     }
 
@@ -53,7 +53,7 @@ impl Isometry3 {
     #[inline]
     pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         Self {
-            inner: rotation * self.inner,
+            inner: rotation._inner() * self.inner,
         }
     }
 
@@ -67,7 +67,7 @@ impl Isometry3 {
     #[inline]
     pub fn apply_to_rotation(&self, rotation: &UnitQuaternion) -> Self {
         Self {
-            inner: self.inner * rotation,
+            inner: self.inner * rotation._inner(),
         }
     }
 
@@ -85,7 +85,7 @@ impl Isometry3 {
 
     #[inline]
     pub fn rotation(&self) -> &UnitQuaternion {
-        &self.inner.rotation
+        bytemuck::from_bytes(bytemuck::bytes_of(&self.inner.rotation))
     }
 
     #[inline]

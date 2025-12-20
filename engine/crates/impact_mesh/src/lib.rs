@@ -13,18 +13,15 @@ pub mod setup;
 pub mod texture_projection;
 mod triangle;
 
-use impact_math::transform::Similarity3;
 pub use line_segment::*;
 pub use triangle::*;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4};
+use impact_math::{quaternion::UnitQuaternion, transform::Similarity3};
+use nalgebra::{Point3, UnitVector3, Vector2, Vector3, Vector4};
 use roc_integration::roc;
-use std::{
-    fmt::{self, Debug},
-    ops::Neg,
-};
+use std::fmt::{self, Debug};
 
 /// The persistent ID of a [`TriangleMesh`] or [`LineSegmentMesh`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -75,7 +72,7 @@ pub struct VertexTextureCoords(pub Vector2<f32>);
 /// be negated before applying the rotation to it).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexTangentSpaceQuaternion(pub UnitQuaternion<f32>);
+pub struct VertexTangentSpaceQuaternion(pub UnitQuaternion);
 
 /// The RGBA color of a mesh vertex.
 #[repr(transparent)]
@@ -147,8 +144,8 @@ impl VertexPosition {
     }
 
     /// Returns the position rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
-        Self(rotation * self.0)
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
+        Self(rotation.transform_point(&self.0))
     }
 
     /// Returns the position translated by the given displacement vector.
@@ -164,8 +161,8 @@ impl VertexPosition {
 
 impl VertexNormalVector {
     /// Returns the normal vector rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
-        Self(rotation * self.0)
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
+        Self(rotation.rotate_unit_vector(&self.0))
     }
 
     /// Returns the normal vector transformed by the given similarity transform.
@@ -177,14 +174,13 @@ impl VertexNormalVector {
 impl VertexTangentSpaceQuaternion {
     /// Returns the tangent space quaternion rotated by the given unit
     /// quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         let mut rotated_tangent_space_quaternion = rotation * self.0;
 
         // Preserve encoding of tangent space handedness in real component of
         // tangent space quaternion
-        if (rotated_tangent_space_quaternion.w < 0.0) != (self.0.w < 0.0) {
-            rotated_tangent_space_quaternion =
-                UnitQuaternion::new_unchecked(rotated_tangent_space_quaternion.neg());
+        if (rotated_tangent_space_quaternion.real() < 0.0) != (self.0.real() < 0.0) {
+            rotated_tangent_space_quaternion = rotated_tangent_space_quaternion.negated();
         }
 
         Self(rotated_tangent_space_quaternion)

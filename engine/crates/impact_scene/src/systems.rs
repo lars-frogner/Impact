@@ -194,7 +194,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 view_transform,
-                &frame.orientation.cast(),
+                &frame.orientation,
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -217,7 +217,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 &view_transform,
-                &frame.orientation.cast(),
+                &frame.orientation,
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -271,7 +271,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 view_transform,
-                &frame.orientation.cast(),
+                &frame.orientation,
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -294,7 +294,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 &view_transform,
-                &frame.orientation.cast(),
+                &frame.orientation,
                 unidirectional_emission,
                 (*flags).into(),
             );

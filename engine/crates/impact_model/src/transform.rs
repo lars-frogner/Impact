@@ -4,8 +4,8 @@ use crate::ModelInstanceManager;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
-use impact_math::transform::Similarity3;
-use nalgebra::{UnitQuaternion, Vector3};
+use impact_math::{quaternion::UnitQuaternion, transform::Similarity3};
+use nalgebra::Vector3;
 use std::hash::Hash;
 
 /// Trait for types that can be referenced as an [`InstanceModelViewTransform`].
@@ -21,7 +21,7 @@ pub trait AsInstanceModelViewTransform {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InstanceModelViewTransform {
-    pub rotation: UnitQuaternion<f32>,
+    pub rotation: UnitQuaternion,
     pub translation: Vector3<f32>,
     pub scaling: f32,
 }

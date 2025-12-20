@@ -25,6 +25,7 @@ use impact_light::{
 use impact_math::{
     angle::Angle,
     consts::f32::PI,
+    quaternion::UnitQuaternion,
     transform::{Isometry3, Similarity3},
 };
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
@@ -45,7 +46,7 @@ use impact_voxel::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
 };
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Point3, UnitVector3, Vector3};
 use std::iter;
 use tinyvec::TinyVec;
 
@@ -742,7 +743,7 @@ fn compute_rotation_to_camera_space_for_cylindrical_billboard(
     camera_position: Point3<f32>,
     billboard_position: Point3<f32>,
     billboard_axis: UnitVector3<f32>,
-) -> UnitQuaternion<f32> {
+) -> UnitQuaternion {
     let y_axis = billboard_axis;
 
     let to_camera = UnitVector3::new_normalize(camera_position - billboard_position);

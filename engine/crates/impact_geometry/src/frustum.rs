@@ -4,9 +4,10 @@ use crate::{AxisAlignedBox, Plane, Sphere};
 use approx::AbsDiffEq;
 use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
+    quaternion::UnitQuaternion,
     transform::{Projective3, Similarity3},
 };
-use nalgebra::{Matrix4, Point3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Matrix4, Point3, UnitVector3, Vector3};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -315,7 +316,7 @@ impl Frustum {
 
     /// Computes the frustum resulting from rotating this frustum with the given
     /// rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         let rotated_planes = [
             self.planes[0].rotated(rotation),
             self.planes[1].rotated(rotation),
@@ -329,10 +330,10 @@ impl Frustum {
             Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(rotated_planes);
 
         let rotated_inverse_transform_matrix =
-            rotation.to_homogeneous() * self.inverse_transform_matrix;
+            rotation.to_homogeneous_matrix() * self.inverse_transform_matrix;
 
         let inverse_of_rotated_inverse_transform_matrix =
-            self.transform_matrix * rotation.inverse().to_homogeneous();
+            self.transform_matrix * rotation.inverse().to_homogeneous_matrix();
 
         Self {
             planes: rotated_planes,
@@ -504,7 +505,7 @@ mod tests {
     use crate::projection::{OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
     use impact_math::angle::Degrees;
-    use nalgebra::{Rotation3, Vector3};
+    use nalgebra::Vector3;
 
     #[test]
     fn computing_frustum_near_and_far_distance_works() {
@@ -689,7 +690,7 @@ mod tests {
 
         let transformation = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 180.0).into(),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 180.0),
             7.0,
         );
 
@@ -714,7 +715,7 @@ mod tests {
 
         let transformation = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 180.0).into(),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 180.0),
             7.0,
         );
 
@@ -734,7 +735,7 @@ mod tests {
 
         let transformation = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            Rotation3::from_euler_angles(0.1, 0.2, 0.3).into(),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
             7.0,
         );
 

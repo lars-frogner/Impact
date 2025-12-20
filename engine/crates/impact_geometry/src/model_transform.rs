@@ -100,7 +100,7 @@ impl Default for ModelTransform {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use nalgebra::UnitQuaternion;
+    use impact_math::quaternion::UnitQuaternion;
 
     #[test]
     fn updating_offset_while_preserving_position_works() {

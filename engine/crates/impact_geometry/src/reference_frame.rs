@@ -1,8 +1,8 @@
 //! Reference frames.
 
 use bytemuck::{Pod, Zeroable};
-use impact_math::transform::Isometry3;
-use nalgebra::{Point3, UnitQuaternion};
+use impact_math::{quaternion::UnitQuaternion, transform::Isometry3};
+use nalgebra::Point3;
 use roc_integration::roc;
 
 define_component_type! {
@@ -15,7 +15,7 @@ define_component_type! {
         /// in the parent space.
         pub position: Point3<f32>,
         /// The 3D orientation of the entity's reference frame in the parent space.
-        pub orientation: UnitQuaternion<f32>,
+        pub orientation: UnitQuaternion,
     }
 }
 
@@ -23,7 +23,7 @@ define_component_type! {
 impl ReferenceFrame {
     /// Creates a new reference frame with the given position and orientation.
     #[roc(body = "{ position, orientation }")]
-    pub fn new(position: Point3<f32>, orientation: UnitQuaternion<f32>) -> Self {
+    pub fn new(position: Point3<f32>, orientation: UnitQuaternion) -> Self {
         Self {
             position,
             orientation,
@@ -40,7 +40,7 @@ impl ReferenceFrame {
     /// Creates a new reference frame with the given orientation, located at the
     /// origin.
     #[roc(body = "new(Point3.origin, orientation)")]
-    pub fn unlocated(orientation: UnitQuaternion<f32>) -> Self {
+    pub fn unlocated(orientation: UnitQuaternion) -> Self {
         Self::new(Point3::origin(), orientation)
     }
 

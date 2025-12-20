@@ -5,7 +5,8 @@ use crate::{
     material::ContactResponseParameters,
     quantities::{self, Orientation, Position, Velocity},
 };
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
+use impact_math::quaternion::UnitQuaternion;
+use nalgebra::{UnitVector3, Vector3};
 use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
@@ -500,7 +501,7 @@ fn pseudo_advance_orientation(
     pseudo_angular_velocity: &Vector3<f32>,
 ) {
     *orientation = UnitQuaternion::new_normalize(
-        orientation.as_ref()
+        orientation.to_quaternion()
             + quantities::compute_orientation_derivative(orientation, pseudo_angular_velocity),
     );
 }

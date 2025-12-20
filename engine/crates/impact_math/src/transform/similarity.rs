@@ -1,12 +1,12 @@
 //! Similarity transforms.
 
 use super::Isometry3;
+use crate::quaternion::UnitQuaternion;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 
 type Point3 = nalgebra::Point3<f32>;
 type Vector3 = nalgebra::Vector3<f32>;
-type UnitQuaternion = nalgebra::UnitQuaternion<f32>;
 type Matrix4 = nalgebra::Matrix4<f32>;
 
 #[repr(transparent)]
@@ -26,7 +26,11 @@ impl Similarity3 {
     #[inline]
     pub fn from_parts(translation: Vector3, rotation: UnitQuaternion, scaling: f32) -> Self {
         Self {
-            inner: nalgebra::Similarity3::from_parts(translation.into(), rotation, scaling),
+            inner: nalgebra::Similarity3::from_parts(
+                translation.into(),
+                *rotation._inner(),
+                scaling,
+            ),
         }
     }
 
@@ -70,7 +74,7 @@ impl Similarity3 {
     #[inline]
     pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         Self {
-            inner: rotation * self.inner,
+            inner: rotation._inner() * self.inner,
         }
     }
 
@@ -91,7 +95,7 @@ impl Similarity3 {
     #[inline]
     pub fn apply_to_rotation(&self, rotation: &UnitQuaternion) -> Self {
         Self {
-            inner: self.inner * rotation,
+            inner: self.inner * rotation._inner(),
         }
     }
 

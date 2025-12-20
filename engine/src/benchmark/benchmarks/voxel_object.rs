@@ -2,7 +2,7 @@
 
 use impact_alloc::Global;
 use impact_geometry::{Plane, Sphere};
-use impact_math::transform::Isometry3;
+use impact_math::{quaternion::UnitQuaternion, transform::Isometry3};
 use impact_physics::quantities::Position;
 use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
@@ -19,7 +19,7 @@ use impact_voxel::{
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,
 };
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{UnitVector3, Vector3};
 use std::hint::black_box;
 
 pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
