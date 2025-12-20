@@ -11,8 +11,12 @@ use impact_gpu::{
     uniform::{self, UniformBufferable},
     wgpu,
 };
-use impact_math::{halton::HaltonSequence, hash::ConstStringHash64};
-use nalgebra::{Isometry3, Projective3, UnitQuaternion, Vector4};
+use impact_math::{
+    halton::HaltonSequence,
+    hash::ConstStringHash64,
+    transform::{Isometry3, Projective3},
+};
+use nalgebra::{UnitQuaternion, Vector4};
 use std::{borrow::Cow, sync::LazyLock};
 
 /// Represents a camera that can buffered in a GPU buffer.
@@ -21,7 +25,7 @@ pub trait BufferableCamera {
     fn camera(&self) -> &dyn Camera;
 
     /// Returns a reference to the camera's view transform.
-    fn view_transform(&self) -> &Isometry3<f32>;
+    fn view_transform(&self) -> &Isometry3;
 
     /// Returns whether jittering is enabled for the camera.
     fn jitter_enabled(&self) -> bool;
@@ -38,7 +42,7 @@ const JITTER_BASES: (u64, u64) = (2, 3);
 /// transform.
 #[derive(Debug)]
 pub struct CameraGPUResource {
-    view_transform: Isometry3<f32>,
+    view_transform: Isometry3,
     view_frustum: Frustum,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
@@ -55,7 +59,7 @@ pub struct CameraGPUResource {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct CameraProjectionUniform {
-    transform: Projective3<f32>,
+    transform: Projective3,
     /// The corners are listed in the order consistent with
     /// `TriangleMesh::create_screen_filling_quad`, which means it can be
     /// indexed into using the `vertex_index` built-in in the vertex shader when
@@ -162,7 +166,7 @@ impl CameraGPUResource {
 
     /// Returns the camera rotation quaternion push constant.
     pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternion<f32> {
-        self.view_transform.rotation
+        *self.view_transform.rotation()
     }
 
     /// Creates the bind group layout entry for the camera projection uniform,

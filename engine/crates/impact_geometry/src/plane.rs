@@ -3,7 +3,8 @@
 use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Isometry3, Point3, Similarity3, UnitQuaternion, UnitVector3, vector};
+use impact_math::transform::{Isometry3, Similarity3};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, vector};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -149,25 +150,21 @@ impl Plane {
 
     /// Computes the plane resulting from transforming this plane with the given
     /// similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
         let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
         let transformed_point_in_plane = transform.transform_point(&point_in_plane);
-        let transformed_unit_normal = UnitVector3::new_unchecked(
-            transform
-                .isometry
-                .rotation
-                .transform_vector(&self.unit_normal),
-        );
+        let transformed_unit_normal =
+            UnitVector3::new_unchecked(transform.rotation().transform_vector(&self.unit_normal));
         Self::from_normal_and_point(transformed_unit_normal, &transformed_point_in_plane)
     }
 
     /// Computes the plane resulting from transforming this plane with the given
     /// isometry transform.
-    pub fn translated_and_rotated(&self, transform: &Isometry3<f32>) -> Self {
+    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
         let point_in_plane = Point3::from(self.unit_normal.as_ref() * self.displacement);
         let transformed_point_in_plane = transform.transform_point(&point_in_plane);
         let transformed_unit_normal =
-            UnitVector3::new_unchecked(transform.rotation.transform_vector(&self.unit_normal));
+            UnitVector3::new_unchecked(transform.rotation().transform_vector(&self.unit_normal));
         Self::from_normal_and_point(transformed_unit_normal, &transformed_point_in_plane)
     }
 

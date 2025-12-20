@@ -1,7 +1,8 @@
 //! Representation of capsules.
 
 use crate::{AxisAlignedBox, Sphere};
-use nalgebra::{Isometry3, Point3, Similarity3, Vector3};
+use impact_math::transform::{Isometry3, Similarity3};
+use nalgebra::{Point3, Vector3};
 
 /// A capsule represented by the starting point and displacement vector of the
 /// segment making up the central axis of the cylinder between the caps, as well
@@ -74,7 +75,7 @@ impl Capsule {
 
     /// Computes the capsule resulting from transforming this capsule with the
     /// given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
         Self::new(
             transform.transform_point(self.segment_start()),
             transform.transform_vector(self.segment_vector()),
@@ -84,7 +85,7 @@ impl Capsule {
 
     /// Computes the capsule resulting from transforming this capsule with the
     /// given isometry transform.
-    pub fn translated_and_rotated(&self, transform: &Isometry3<f32>) -> Self {
+    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
         Self::new(
             transform.transform_point(self.segment_start()),
             transform.transform_vector(self.segment_vector()),
@@ -172,7 +173,7 @@ mod tests {
     use crate::AxisAlignedBox;
     use approx::assert_abs_diff_eq;
     use impact_math::consts::f32::FRAC_PI_2;
-    use nalgebra::{Translation3, UnitQuaternion, Vector3};
+    use nalgebra::{UnitQuaternion, Vector3};
 
     #[test]
     #[should_panic]
@@ -202,8 +203,8 @@ mod tests {
 
         let capsule = Capsule::new(segment_start, segment_vector, radius);
 
-        let translation = Translation3::new(2.0, 3.0, 4.0);
-        let transform = Similarity3::from_parts(translation, UnitQuaternion::identity(), 1.0);
+        let translation = Vector3::new(2.0, 3.0, 4.0);
+        let transform = Similarity3::from_translation(translation);
 
         let transformed_capsule = capsule.transformed(&transform);
 
@@ -227,7 +228,7 @@ mod tests {
         let capsule = Capsule::new(segment_start, segment_vector, radius);
 
         let rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2);
-        let transform = Similarity3::from_parts(Translation3::identity(), rotation, 1.0);
+        let transform = Similarity3::from_rotation(rotation);
 
         let transformed_capsule = capsule.transformed(&transform);
 

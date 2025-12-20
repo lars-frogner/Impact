@@ -8,7 +8,8 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
 use impact_containers::KeyIndexMapper;
 use impact_geometry::{Frustum, OrientedBox, Plane};
-use nalgebra::{Point3, Similarity3, UnitVector3};
+use impact_math::transform::Similarity3;
+use nalgebra::{Point3, UnitVector3};
 use std::{array, collections::BTreeSet, ops::Range};
 
 /// A [`ChunkedVoxelObject`] with an associated [`ChunkedVoxelObjectMesh`].
@@ -519,10 +520,10 @@ impl CullingFrustum {
     ///
     /// The frustum is assumed to be in the space where the apex is at the
     /// origin before transformation.
-    pub fn for_transformed_frustum(frustum: &Frustum, transformation: &Similarity3<f32>) -> Self {
+    pub fn for_transformed_frustum(frustum: &Frustum, transformation: &Similarity3) -> Self {
         Self::from_planes_and_apex_position(
             frustum.transformed_planes(transformation),
-            transformation.isometry.translation.vector.into(),
+            Point3::from(*transformation.translation()),
         )
     }
 
@@ -539,7 +540,7 @@ impl CullingFrustum {
     /// passing in a sufficiently large distance.
     pub fn for_transformed_orthographic_frustum(
         orthographic_frustum: &OrientedBox,
-        transformation: &Similarity3<f32>,
+        transformation: &Similarity3,
         apex_distance: f32,
     ) -> Self {
         let transformed_box = orthographic_frustum.transformed(transformation);

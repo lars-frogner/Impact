@@ -13,7 +13,8 @@ use impact_geometry::{
     AxisAlignedBox, Capsule, OrientedBox, Plane, Sphere,
     oriented_box::compute_box_intersection_bounds,
 };
-use nalgebra::{self as na, Isometry3, Point3, point};
+use impact_math::transform::Isometry3;
+use nalgebra::{self as na, Point3, point};
 use std::{array, ops::Range};
 
 pub type VoxelRanges = [Range<usize>; 3];
@@ -625,7 +626,7 @@ impl ChunkedVoxelObject {
     pub fn determine_voxel_ranges_encompassing_intersection(
         object_a: &Self,
         object_b: &Self,
-        transform_from_b_to_a: &Isometry3<f32>,
+        transform_from_b_to_a: &Isometry3,
     ) -> Option<(VoxelRanges, VoxelRanges)> {
         let object_a_aabb = normalized_aabb_from_voxel_ranges(&object_a.occupied_voxel_ranges)
             .scaled(object_a.voxel_extent);

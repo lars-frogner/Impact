@@ -8,11 +8,11 @@ use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::{hash::StringHash64, hash64};
+use impact_math::{hash::StringHash64, hash64, transform::Similarity3};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
-use nalgebra::{Matrix3x2, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Matrix3x2, Point3, UnitQuaternion, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::fmt;
 
@@ -554,11 +554,7 @@ impl TriangleMesh {
 
     /// Applies the given similarity transform to the mesh, transforming vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn transform(
-        &mut self,
-        transform: &Similarity3<f32>,
-        dirty_mask: &mut TriangleMeshDirtyMask,
-    ) {
+    pub fn transform(&mut self, transform: &Similarity3, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.transformed(transform);
         }

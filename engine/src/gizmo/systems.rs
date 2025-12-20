@@ -22,7 +22,11 @@ use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
 };
-use impact_math::{angle::Angle, consts::f32::PI};
+use impact_math::{
+    angle::Angle,
+    consts::f32::PI,
+    transform::{Isometry3, Similarity3},
+};
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_physics::{
     anchor::AnchorManager,
@@ -41,9 +45,7 @@ use impact_voxel::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
 };
-use nalgebra::{
-    Isometry3, Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector,
-};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
 use std::iter;
 use tinyvec::TinyVec;
 
@@ -406,9 +408,9 @@ fn compute_transform_for_bounding_sphere_gizmo(
     let radius = bounding_sphere.radius();
 
     let bounding_sphere_from_unit_sphere =
-        Similarity3::from_parts(center.coords.into(), UnitQuaternion::identity(), radius);
+        Similarity3::from_parts(center.coords, UnitQuaternion::identity(), radius);
 
-    let model_view_transform: Similarity3<_> = model_view_transform.into();
+    let model_view_transform = Similarity3::from(model_view_transform);
 
     Some(InstanceModelViewTransform::from(
         model_view_transform * bounding_sphere_from_unit_sphere,
@@ -469,7 +471,8 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     let light_space_to_camera_transform = light.create_light_space_to_camera_transform();
 
     let cubemap_near_plane_transform = InstanceModelViewTransform::from(
-        light_space_to_camera_transform.prepend_scaling(light.near_distance()),
+        Similarity3::from_isometry(light_space_to_camera_transform)
+            .apply_to_scaling(light.near_distance()),
     );
 
     model_instance_manager.buffer_instance_feature(
@@ -479,7 +482,8 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     );
 
     let cubemap_far_plane_transform = InstanceModelViewTransform::from(
-        light_space_to_camera_transform.prepend_scaling(light.far_distance()),
+        Similarity3::from_isometry(light_space_to_camera_transform)
+            .apply_to_scaling(light.far_distance()),
     );
 
     model_instance_manager.buffer_instance_feature(
@@ -558,11 +562,7 @@ fn buffer_transforms_for_anchor_gizmos(
 
     for anchor_point in anchor_points {
         let world_sphere_from_unit_sphere_transform = frame.create_transform_to_parent_space()
-            * Similarity3::from_parts(
-                anchor_point.coords.cast().into(),
-                UnitQuaternion::identity(),
-                RADIUS,
-            );
+            * Similarity3::from_parts(anchor_point.coords, UnitQuaternion::identity(), RADIUS);
 
         let view_sphere_from_unit_sphere_transform =
             scene_camera.view_transform() * world_sphere_from_unit_sphere_transform;
@@ -641,11 +641,8 @@ fn buffer_transforms_for_dynamics_gizmos(
             parameters.center_of_mass_sphere_density,
         );
 
-        let world_sphere_from_unit_sphere_transform = Similarity3::from_parts(
-            frame.position.coords.cast().into(),
-            UnitQuaternion::identity(),
-            radius,
-        );
+        let world_sphere_from_unit_sphere_transform =
+            Similarity3::from_parts(frame.position.coords, UnitQuaternion::identity(), radius);
 
         let view_sphere_from_unit_sphere_transform =
             scene_camera.view_transform() * world_sphere_from_unit_sphere_transform;
@@ -726,13 +723,12 @@ fn model_view_transform_for_vector_gizmo(
     length: f32,
 ) -> InstanceModelViewTransform {
     let rotation = compute_rotation_to_camera_space_for_cylindrical_billboard(
-        camera_position.cast(),
+        *camera_position,
         position,
         direction,
     );
 
-    let model_to_world_transform =
-        Similarity3::from_parts(position.coords.cast().into(), rotation.cast(), length);
+    let model_to_world_transform = Similarity3::from_parts(position.coords, rotation, length);
 
     (scene_camera.view_transform() * model_to_world_transform).into()
 }
@@ -813,7 +809,7 @@ fn buffer_transforms_for_collider_gizmos(
             let sphere = sphere_collidable.sphere();
 
             let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
-                sphere.center().coords.cast().into(),
+                sphere.center().coords,
                 UnitQuaternion::identity(),
                 sphere.radius(),
             );
@@ -833,12 +829,12 @@ fn buffer_transforms_for_collider_gizmos(
             // at the camera position (projected so as not to change the plane
             // displacement) and scaling the mesh to reach the camera's far
             // distance
-            let translation = plane.project_point_onto_plane(&camera_position.cast());
+            let translation = plane.project_point_onto_plane(camera_position);
             let rotation = rotation_between_axes(&Vector3::z_axis(), plane.unit_normal());
             let scaling = scene_camera.camera().view_frustum().far_distance();
 
             let unit_square_to_plane_collider_transform =
-                Similarity3::from_parts(translation.coords.cast().into(), rotation.cast(), scaling);
+                Similarity3::from_parts(translation.coords, rotation, scaling);
 
             let model_to_camera_transform =
                 scene_camera.view_transform() * unit_square_to_plane_collider_transform;
@@ -863,10 +859,10 @@ fn buffer_transforms_for_collider_gizmos(
                 .inverse();
 
             let transform_from_object_to_camera_space =
-                scene_camera.view_transform().cast() * transform_from_object_to_world_space;
+                scene_camera.view_transform() * transform_from_object_to_world_space;
 
             let rotation_from_object_to_camera_space =
-                transform_from_object_to_camera_space.rotation.cast();
+                transform_from_object_to_camera_space.rotation();
             let scaling_from_object_to_camera_space = voxel_radius;
 
             let mut transforms = Vec::with_capacity(voxel_object.surface_voxel_count_heuristic());
@@ -879,8 +875,8 @@ fn buffer_transforms_for_collider_gizmos(
                     .transform_point(&voxel_center_in_object_space);
 
                 let model_to_camera_transform = InstanceModelViewTransform {
-                    translation: voxel_center_in_camera_space.coords.cast(),
-                    rotation: rotation_from_object_to_camera_space,
+                    translation: voxel_center_in_camera_space.coords,
+                    rotation: *rotation_from_object_to_camera_space,
                     scaling: scaling_from_object_to_camera_space,
                 };
 
@@ -916,10 +912,13 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
         return;
     };
 
-    let model_view_transform: Similarity3<_> = model_instance_manager
-        .feature::<InstanceModelViewTransformWithPrevious>(node.model_view_transform_feature_id())
-        .current
-        .into();
+    let model_view_transform = Similarity3::from(
+        model_instance_manager
+            .feature::<InstanceModelViewTransformWithPrevious>(
+                node.model_view_transform_feature_id(),
+            )
+            .current,
+    );
 
     let models = GizmoType::VoxelChunks.models();
 
@@ -952,8 +951,9 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             let chunk_offset_in_voxels =
                 CHUNK_SIZE as f32 * vector![chunk_i as f32, chunk_j as f32, chunk_k as f32];
 
-            let chunk_transform = model_view_transform.prepend_scaling(voxel_extent)
-                * Translation3::from(chunk_offset_in_voxels.cast());
+            let chunk_transform = model_view_transform
+                .apply_to_scaling(voxel_extent)
+                .apply_to_translation(&chunk_offset_in_voxels);
 
             model_instance_manager.buffer_instance_feature(
                 model_id,
@@ -1026,7 +1026,7 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     let mut transforms = Vec::with_capacity(256);
 
     let mut add_transforms = |voxel_object: &ChunkedVoxelObject,
-                              transform_from_object_to_camera_space: &Isometry3<f32>,
+                              transform_from_object_to_camera_space: &Isometry3,
                               i,
                               j,
                               k| {
@@ -1038,7 +1038,7 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
 
         let model_to_camera_transform = InstanceModelViewTransform {
             translation: voxel_center_in_camera_space.coords,
-            rotation: transform_from_object_to_camera_space.rotation,
+            rotation: *transform_from_object_to_camera_space.rotation(),
             scaling: 0.5 * voxel_object.voxel_extent(),
         };
 

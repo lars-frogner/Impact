@@ -22,6 +22,7 @@ use impact_gpu::{
     timestamp_query::TimestampQueryRegistry,
     wgpu,
 };
+use impact_math::transform::Similarity3;
 use impact_mesh::gpu_resource::VertexBufferable;
 use impact_model::{
     InstanceFeature,
@@ -38,7 +39,6 @@ use impact_rendering::{
     resource::BasicGPUResources,
     surface::RenderingSurface,
 };
-use nalgebra::Similarity3;
 use std::{borrow::Cow, ops::Range};
 
 /// GPU commands that should be executed prior to rendering voxel objects.
@@ -486,7 +486,7 @@ impl VoxelChunkCullingPass {
         visible_voxel_object_ids: &[VoxelObjectID],
         visible_voxel_object_to_frustum_transforms: &[T],
         instance_range_for_transforms: Range<u32>,
-        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3<f32>) -> CullingFrustum,
+        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3) -> CullingFrustum,
         for_indexed_draw_calls: bool,
         tag: Cow<'static, str>,
     ) -> Result<()>
@@ -576,12 +576,10 @@ impl VoxelChunkCullingPass {
     fn compute_transform_from_frustum_space_to_normalized_voxel_object_space(
         voxel_object_to_frustum_transform: InstanceModelViewTransform,
         voxel_extent: f32,
-    ) -> Similarity3<f32> {
-        let mut frustum_to_voxel_object_transform =
-            Similarity3::from(voxel_object_to_frustum_transform);
-        frustum_to_voxel_object_transform.prepend_scaling_mut(voxel_extent);
-        frustum_to_voxel_object_transform.inverse_mut();
-        frustum_to_voxel_object_transform
+    ) -> Similarity3 {
+        Similarity3::from(voxel_object_to_frustum_transform)
+            .apply_to_scaling(voxel_extent)
+            .inverse()
     }
 }
 

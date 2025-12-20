@@ -15,14 +15,14 @@ use impact_geometry::{
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
+    transform::Projective3,
 };
-use nalgebra::Projective3;
 use std::fmt::Debug;
 
 /// Represents a 3D camera.
 pub trait Camera: Debug + Send + Sync + 'static {
     /// Returns the projection transform used by the camera.
-    fn projection_transform(&self) -> &Projective3<f32>;
+    fn projection_transform(&self) -> &Projective3;
 
     /// Returns the vertical field of view angle in radians.
     fn vertical_field_of_view(&self) -> Radians<f32>;
@@ -127,7 +127,7 @@ impl PerspectiveCamera {
 }
 
 impl Camera for PerspectiveCamera {
-    fn projection_transform(&self) -> &Projective3<f32> {
+    fn projection_transform(&self) -> &Projective3 {
         self.perspective_transform.as_projective()
     }
 
@@ -226,7 +226,7 @@ impl OrthographicCamera {
 }
 
 impl Camera for OrthographicCamera {
-    fn projection_transform(&self) -> &Projective3<f32> {
+    fn projection_transform(&self) -> &Projective3 {
         self.orthographic_transform.as_projective()
     }
 

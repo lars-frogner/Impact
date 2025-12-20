@@ -4,7 +4,8 @@ use crate::ModelInstanceManager;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
-use nalgebra::{Similarity3, UnitQuaternion, Vector3};
+use impact_math::transform::Similarity3;
+use nalgebra::{UnitQuaternion, Vector3};
 use std::hash::Hash;
 
 /// Trait for types that can be referenced as an [`InstanceModelViewTransform`].
@@ -68,24 +69,24 @@ impl InstanceModelViewTransform {
     }
 }
 
-impl From<Similarity3<f32>> for InstanceModelViewTransform {
-    fn from(transform: Similarity3<f32>) -> Self {
+impl From<Similarity3> for InstanceModelViewTransform {
+    fn from(transform: Similarity3) -> Self {
         InstanceModelViewTransform {
-            rotation: transform.isometry.rotation,
-            translation: transform.isometry.translation.vector,
+            rotation: *transform.rotation(),
+            translation: *transform.translation(),
             scaling: transform.scaling(),
         }
     }
 }
 
-impl From<InstanceModelViewTransform> for Similarity3<f32> {
+impl From<InstanceModelViewTransform> for Similarity3 {
     fn from(transform: InstanceModelViewTransform) -> Self {
         let InstanceModelViewTransform {
             rotation,
             translation,
             scaling,
         } = transform;
-        Similarity3::from_parts(translation.into(), rotation, scaling)
+        Similarity3::from_parts(translation, rotation, scaling)
     }
 }
 
@@ -167,13 +168,13 @@ impl InstanceModelLightTransform {
     }
 }
 
-impl From<Similarity3<f32>> for InstanceModelLightTransform {
-    fn from(transform: Similarity3<f32>) -> Self {
+impl From<Similarity3> for InstanceModelLightTransform {
+    fn from(transform: Similarity3) -> Self {
         Self(InstanceModelViewTransform::from(transform))
     }
 }
 
-impl From<InstanceModelLightTransform> for Similarity3<f32> {
+impl From<InstanceModelLightTransform> for Similarity3 {
     fn from(transform: InstanceModelLightTransform) -> Self {
         transform.0.into()
     }

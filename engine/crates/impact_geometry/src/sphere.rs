@@ -3,8 +3,8 @@
 use crate::AxisAlignedBox;
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use na::{Similarity3, UnitQuaternion, vector};
-use nalgebra::{self as na, Isometry3, Point3};
+use impact_math::transform::{Isometry3, Similarity3};
+use nalgebra::{self as na, Point3, UnitQuaternion, vector};
 
 /// A sphere represented by the center point and the radius.
 #[repr(C)]
@@ -181,7 +181,7 @@ impl Sphere {
 
     /// Computes the sphere resulting from transforming this
     /// sphere with the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
         Self::new(
             transform.transform_point(self.center()),
             transform.scaling() * self.radius(),
@@ -190,7 +190,7 @@ impl Sphere {
 
     /// Computes the sphere resulting from transforming this
     /// sphere with the given isometry transform.
-    pub fn translated_and_rotated(&self, transform: &Isometry3<f32>) -> Self {
+    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
         Self::new(transform.transform_point(self.center()), self.radius())
     }
 

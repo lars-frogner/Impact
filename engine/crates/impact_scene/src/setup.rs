@@ -8,11 +8,11 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_material::{MaterialID, MaterialRegistry};
+use impact_math::transform::{Isometry3, Similarity3};
 use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
 use impact_model::transform::{
     InstanceModelLightTransform, InstanceModelViewTransformWithPrevious,
 };
-use nalgebra::{Isometry3, Similarity3};
 use tinyvec::TinyVec;
 
 /// A parent entity.
@@ -79,7 +79,7 @@ pub fn setup_scene_graph_parent_node(
 
 pub fn setup_scene_graph_group_node(
     scene_graph: &mut SceneGraph,
-    group_to_parent_transform: Isometry3<f32>,
+    group_to_parent_transform: Isometry3,
     parent: Option<&SceneGraphParentNodeHandle>,
 ) -> SceneGraphGroupNodeHandle {
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
@@ -94,7 +94,7 @@ pub fn setup_scene_graph_model_instance_node(
     material_registry: &MaterialRegistry,
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
-    model_to_parent_transform: Similarity3<f32>,
+    model_to_parent_transform: Similarity3,
     mesh_id: TriangleMeshID,
     material_id: MaterialID,
     parent: Option<&SceneGraphParentNodeHandle>,

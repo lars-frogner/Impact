@@ -1,7 +1,8 @@
 //! Representation of boxes with arbitrary orientations.
 
 use crate::{AxisAlignedBox, Plane};
-use nalgebra::{Isometry3, Point3, Similarity3, UnitQuaternion, UnitVector3, Vector3};
+use impact_math::transform::{Isometry3, Similarity3};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
 
 /// A box with arbitrary position, orientation and extents.
 #[derive(Clone, Debug)]
@@ -100,20 +101,20 @@ impl OrientedBox {
 
     /// Creates a new box corresponding to transforming this box with the given
     /// similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
         Self::new(
             transform.transform_point(&self.center),
-            transform.isometry.rotation * self.orientation,
+            transform.rotation() * self.orientation,
             self.half_extents.scale(transform.scaling()),
         )
     }
 
     /// Creates a new box corresponding to transforming this box with the given
     /// isometry transform.
-    pub fn translated_and_rotated(&self, transform: &Isometry3<f32>) -> Self {
+    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
         Self::new(
             transform.transform_point(&self.center),
-            transform.rotation * self.orientation,
+            transform.rotation() * self.orientation,
             self.half_extents,
         )
     }

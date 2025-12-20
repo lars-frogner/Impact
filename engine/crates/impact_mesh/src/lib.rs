@@ -13,14 +13,13 @@ pub mod setup;
 pub mod texture_projection;
 mod triangle;
 
+use impact_math::transform::Similarity3;
 pub use line_segment::*;
 pub use triangle::*;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{
-    Point3, Similarity3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector,
-};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector2, Vector3, Vector4, vector};
 use roc_integration::roc;
 use std::{
     fmt::{self, Debug},
@@ -158,8 +157,8 @@ impl VertexPosition {
     }
 
     /// Returns the position transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
-        Self(transform * self.0)
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
+        Self(transform.transform_point(&self.0))
     }
 }
 
@@ -170,8 +169,8 @@ impl VertexNormalVector {
     }
 
     /// Returns the normal vector transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
-        self.rotated(&transform.isometry.rotation)
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
+        self.rotated(transform.rotation())
     }
 }
 
@@ -193,8 +192,8 @@ impl VertexTangentSpaceQuaternion {
 
     /// Returns the tangent space quaternion transformed by the given similarity
     /// transform.
-    pub fn transformed(&self, transform: &Similarity3<f32>) -> Self {
-        self.rotated(&transform.isometry.rotation)
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
+        self.rotated(transform.rotation())
     }
 }
 

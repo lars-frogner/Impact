@@ -23,8 +23,9 @@ use impact_math::{
     angle::{Angle, Degrees},
     consts::f32::TWO_PI,
     splitmix,
+    transform::Similarity3,
 };
-use nalgebra::{Point3, Similarity3, Translation3, UnitQuaternion, UnitVector3, Vector3, vector};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
 use rand::{
     Rng,
@@ -107,7 +108,7 @@ struct Instance {
     shape: InstanceShape,
     /// Transform from the local space of this instance's shape into this
     /// instance's coordinate space.
-    transform: Similarity3<f32>,
+    transform: Similarity3,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1222,21 +1223,21 @@ impl MetaSDFNode {
 }
 
 impl Instance {
-    fn shapeless(transform: Similarity3<f32>) -> Self {
+    fn shapeless(transform: Similarity3) -> Self {
         Self {
             shape: InstanceShape::None,
             transform,
         }
     }
 
-    fn with_transform(&self, transform: Similarity3<f32>) -> Self {
+    fn with_transform(&self, transform: Similarity3) -> Self {
         Self {
             shape: self.shape,
             transform,
         }
     }
 
-    fn with_applied_transform(&self, transform: Similarity3<f32>) -> Self {
+    fn with_applied_transform(&self, transform: Similarity3) -> Self {
         Self {
             shape: self.shape,
             transform: transform * self.transform,
@@ -1354,19 +1355,18 @@ impl MetaTranslation {
             self.sampling,
             |rng| self.sample_params(rng),
             |params, input_instance| {
-                let translation = Translation3::from([
+                let translation = Vector3::new(
                     params.translation_x,
                     params.translation_y,
                     params.translation_z,
-                ]);
+                );
 
                 match self.composition {
-                    CompositionMode::Post => {
-                        input_instance.with_transform(translation * input_instance.transform)
-                    }
-                    CompositionMode::Pre => {
-                        input_instance.with_transform(input_instance.transform * translation)
-                    }
+                    CompositionMode::Post => input_instance
+                        .with_transform(input_instance.transform.translated(&translation)),
+                    CompositionMode::Pre => input_instance.with_transform(
+                        input_instance.transform.apply_to_translation(&translation),
+                    ),
                 }
             },
         )
@@ -1396,11 +1396,10 @@ impl MetaRotation {
 
                 match self.composition {
                     CompositionMode::Post => {
-                        input_instance.with_transform(rotation * input_instance.transform)
+                        input_instance.with_transform(input_instance.transform.rotated(&rotation))
                     }
-                    CompositionMode::Pre => {
-                        input_instance.with_transform(input_instance.transform * rotation)
-                    }
+                    CompositionMode::Pre => input_instance
+                        .with_transform(input_instance.transform.apply_to_rotation(&rotation)),
                 }
             },
         )
@@ -1425,10 +1424,11 @@ impl MetaScaling {
                 let scaling = params.scaling.max(f32::EPSILON);
 
                 match self.composition {
-                    CompositionMode::Post => input_instance
-                        .with_transform(input_instance.transform.append_scaling(scaling)),
+                    CompositionMode::Post => {
+                        input_instance.with_transform(input_instance.transform.scaled(scaling))
+                    }
                     CompositionMode::Pre => input_instance
-                        .with_transform(input_instance.transform.prepend_scaling(scaling)),
+                        .with_transform(input_instance.transform.apply_to_scaling(scaling)),
                 }
             },
         )
@@ -1458,11 +1458,11 @@ impl MetaSimilarity {
                     Degrees(params.roll_angle),
                 );
 
-                let translation = Translation3::from([
+                let translation = Vector3::new(
                     params.translation_x,
                     params.translation_y,
                     params.translation_z,
-                ]);
+                );
 
                 let transform = Similarity3::from_parts(translation, rotation, scaling);
 
@@ -1555,7 +1555,7 @@ impl MetaStratifiedGridTransforms {
             let jz = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[2];
 
             let transform = Similarity3::from_parts(
-                Translation3::new(x + jx, y + jy, z + jz),
+                Vector3::new(x + jx, y + jy, z + jz),
                 UnitQuaternion::identity(),
                 1.0,
             );
@@ -1622,7 +1622,7 @@ impl MetaSphereSurfaceTransforms {
                 }
             };
 
-            let transform = Similarity3::from_parts(Translation3::from(translation), rotation, 1.0);
+            let transform = Similarity3::from_parts(translation, rotation, 1.0);
 
             output_instances.push(input_instance.with_applied_transform(transform));
         }
@@ -1682,7 +1682,7 @@ impl MetaClosestTranslationToSurface {
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_translation_to_surface =
-            |subject_node_to_parent_transform: &Similarity3<f32>| {
+            |subject_node_to_parent_transform: &Similarity3| {
                 compute_translation_to_closest_point_on_surface(
                     &generator,
                     &mut buffers,
@@ -1704,9 +1704,8 @@ impl MetaClosestTranslationToSurface {
                 continue;
             };
 
-            let translated_subject_transform =
-                Translation3::from(translation_to_surface_in_parent_space)
-                    * subject_node_to_parent_transform;
+            let translated_subject_transform = subject_node_to_parent_transform
+                .translated(&translation_to_surface_in_parent_space);
 
             translated_subject_instances
                 .push(subject_instance.with_transform(translated_subject_transform));
@@ -1754,8 +1753,7 @@ impl MetaRayTranslationToSurface {
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_translation_to_surface =
-            |subject_node_to_parent_transform: &Similarity3<f32>,
-             sphere_in_subject_space: &Sphere| {
+            |subject_node_to_parent_transform: &Similarity3, sphere_in_subject_space: &Sphere| {
                 compute_spherecast_translation_to_surface(
                     &generator,
                     &mut buffers_1x1x1,
@@ -1814,9 +1812,8 @@ impl MetaRayTranslationToSurface {
                 continue;
             };
 
-            let translated_subject_transform =
-                Translation3::from(translation_to_surface_in_parent_space)
-                    * subject_node_to_parent_transform;
+            let translated_subject_transform = subject_node_to_parent_transform
+                .translated(&translation_to_surface_in_parent_space);
 
             translated_subject_instances
                 .push(subject_instance.with_transform(translated_subject_transform));
@@ -1862,15 +1859,14 @@ impl MetaRotationToGradient {
         let gradient_sdf_node_to_parent_transform =
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
-        let mut compute_rotation_to_gradient =
-            |subject_node_to_parent_transform: &Similarity3<f32>| {
-                compute_rotation_to_gradient(
-                    &generator,
-                    &mut buffers,
-                    &gradient_sdf_node_to_parent_transform,
-                    subject_node_to_parent_transform,
-                )
-            };
+        let mut compute_rotation_to_gradient = |subject_node_to_parent_transform: &Similarity3| {
+            compute_rotation_to_gradient(
+                &generator,
+                &mut buffers,
+                &gradient_sdf_node_to_parent_transform,
+                subject_node_to_parent_transform,
+            )
+        };
 
         let mut rotated_subject_instances = AVec::with_capacity_in(subject_instances.len(), arena);
 
@@ -1884,7 +1880,7 @@ impl MetaRotationToGradient {
             };
 
             let rotated_subject_transform =
-                rotation_to_gradient_in_parent_space * subject_node_to_parent_transform;
+                subject_node_to_parent_transform.rotated(&rotation_to_gradient_in_parent_space);
 
             rotated_subject_instances
                 .push(subject_instance.with_transform(rotated_subject_transform));
@@ -2000,8 +1996,8 @@ impl MetaSDFInstantiation {
             let transform = &instance.transform;
 
             let scaling = transform.scaling();
-            let rotation = transform.isometry.rotation;
-            let translation = transform.isometry.translation.vector;
+            let rotation = transform.rotation();
+            let translation = transform.translation();
 
             if abs_diff_ne!(&center, &Point3::origin()) {
                 output_node_id =
@@ -2010,12 +2006,12 @@ impl MetaSDFInstantiation {
             if abs_diff_ne!(scaling, 1.0) {
                 output_node_id = graph.add_node(SDFNode::new_scaling(output_node_id, scaling));
             }
-            if abs_diff_ne!(&rotation, &UnitQuaternion::identity()) {
-                output_node_id = graph.add_node(SDFNode::new_rotation(output_node_id, rotation));
+            if abs_diff_ne!(rotation, &UnitQuaternion::identity()) {
+                output_node_id = graph.add_node(SDFNode::new_rotation(output_node_id, *rotation));
             }
-            if abs_diff_ne!(&translation, &Vector3::zeros()) {
+            if abs_diff_ne!(translation, &Vector3::zeros()) {
                 output_node_id =
-                    graph.add_node(SDFNode::new_translation(output_node_id, translation));
+                    graph.add_node(SDFNode::new_translation(output_node_id, *translation));
             }
 
             output_node_ids.push(output_node_id);
@@ -2068,21 +2064,21 @@ impl MetaTransformApplication {
                 let transform = &instance.transform;
 
                 let scaling = transform.scaling();
-                let rotation = transform.isometry.rotation;
-                let translation = transform.isometry.translation.vector;
+                let rotation = transform.rotation();
+                let translation = transform.translation();
 
                 let mut output_node_id = sdf_node_id;
 
                 if abs_diff_ne!(scaling, 1.0) {
                     output_node_id = graph.add_node(SDFNode::new_scaling(output_node_id, scaling));
                 }
-                if abs_diff_ne!(&rotation, &UnitQuaternion::identity()) {
+                if abs_diff_ne!(rotation, &UnitQuaternion::identity()) {
                     output_node_id =
-                        graph.add_node(SDFNode::new_rotation(output_node_id, rotation));
+                        graph.add_node(SDFNode::new_rotation(output_node_id, *rotation));
                 }
-                if abs_diff_ne!(&translation, &Vector3::zeros()) {
+                if abs_diff_ne!(translation, &Vector3::zeros()) {
                     output_node_id =
-                        graph.add_node(SDFNode::new_translation(output_node_id, translation));
+                        graph.add_node(SDFNode::new_translation(output_node_id, *translation));
                 }
 
                 output_node_ids.push(output_node_id);
@@ -2454,8 +2450,8 @@ where
 fn compute_translation_to_closest_point_on_surface<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
-    surface_sdf_node_to_parent_transform: &Similarity3<f32>,
-    subject_node_to_parent_transform: &Similarity3<f32>,
+    surface_sdf_node_to_parent_transform: &Similarity3,
+    subject_node_to_parent_transform: &Similarity3,
     max_iterations: u32,
     max_distance_from_surface: f32,
 ) -> Option<Vector3<f32>> {
@@ -2524,8 +2520,8 @@ fn compute_translation_to_closest_point_on_surface<A: Allocator>(
 fn compute_rotation_to_gradient<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
-    gradient_sdf_node_to_parent_transform: &Similarity3<f32>,
-    subject_node_to_parent_transform: &Similarity3<f32>,
+    gradient_sdf_node_to_parent_transform: &Similarity3,
+    subject_node_to_parent_transform: &Similarity3,
 ) -> Option<UnitQuaternion<f32>> {
     // The basis for this computation is that the gradient node (for which we
     // sample the SDF) and the subject node (which we will rotate) have the
@@ -2575,8 +2571,8 @@ fn compute_spherecast_translation_to_surface<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
     buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
-    surface_sdf_node_to_parent_transform: &Similarity3<f32>,
-    subject_node_to_parent_transform: &Similarity3<f32>,
+    surface_sdf_node_to_parent_transform: &Similarity3,
+    subject_node_to_parent_transform: &Similarity3,
     sphere_in_subject_space: &Sphere,
     direction_in_subject_space: &UnitVector3<f32>,
     max_steps: u32,

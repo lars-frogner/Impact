@@ -10,11 +10,8 @@ use impact_alloc::{
     avec,
 };
 use impact_geometry::{AxisAlignedBox, OrientedBox};
-use impact_math::Float;
-use nalgebra::{
-    Matrix4, Point3, Quaternion, Similarity3, Translation, UnitQuaternion, UnitVector3, Vector3,
-    vector,
-};
+use impact_math::{Float, transform::Similarity3};
+use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3, vector};
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::{f32, mem};
@@ -1233,14 +1230,12 @@ impl SDFNode {
     }
 
     #[inline]
-    pub fn node_to_parent_transform(&self) -> Similarity3<f32> {
+    pub fn node_to_parent_transform(&self) -> Similarity3 {
         match self {
             Self::Translation(SDFTranslation { translation, .. }) => {
-                Similarity3::from_parts((*translation).into(), UnitQuaternion::identity(), 1.0)
+                Similarity3::from_translation(*translation)
             }
-            Self::Rotation(SDFRotation { rotation, .. }) => {
-                Similarity3::from_parts(Translation::identity(), *rotation, 1.0)
-            }
+            Self::Rotation(SDFRotation { rotation, .. }) => Similarity3::from_rotation(*rotation),
             Self::Scaling(SDFScaling { scaling, .. }) => Similarity3::from_scaling(*scaling),
             _ => Similarity3::identity(),
         }

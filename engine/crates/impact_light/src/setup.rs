@@ -8,8 +8,8 @@ use crate::{
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLight, UnidirectionalLightID,
 };
-use impact_math::angle::Degrees;
-use nalgebra::{Isometry3, Point3, UnitQuaternion, UnitVector3};
+use impact_math::{angle::Degrees, transform::Isometry3};
+use nalgebra::{Point3, UnitQuaternion, UnitVector3};
 
 pub fn setup_ambient_light(
     light_manager: &mut LightManager,
@@ -26,7 +26,7 @@ pub fn setup_ambient_light(
 
 pub fn setup_omnidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     position: &Point3<f32>,
     omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
@@ -45,7 +45,7 @@ pub fn setup_omnidirectional_light(
 
 pub fn setup_shadowable_omnidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     position: &Point3<f32>,
     omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
@@ -64,7 +64,7 @@ pub fn setup_shadowable_omnidirectional_light(
 
 pub fn setup_unidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) -> UnidirectionalLightID {
@@ -88,7 +88,7 @@ pub fn setup_unidirectional_light(
 
 pub fn setup_shadowable_unidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) -> ShadowableUnidirectionalLightID {
@@ -121,7 +121,7 @@ pub fn sync_ambient_light_in_storage(
 pub fn sync_omnidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: OmnidirectionalLightID,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     position: &Point3<f32>,
     omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
@@ -136,7 +136,7 @@ pub fn sync_omnidirectional_light_in_storage(
 pub fn sync_shadowable_omnidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableOmnidirectionalLightID,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     position: &Point3<f32>,
     omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
@@ -151,7 +151,7 @@ pub fn sync_shadowable_omnidirectional_light_in_storage(
 pub fn sync_unidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: UnidirectionalLightID,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) {
@@ -167,7 +167,7 @@ pub fn sync_unidirectional_light_in_storage(
 pub fn sync_unidirectional_light_with_orientation_in_storage(
     light_manager: &mut LightManager,
     light_id: UnidirectionalLightID,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     orientation: &UnitQuaternion<f32>,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
@@ -186,7 +186,7 @@ pub fn sync_unidirectional_light_with_orientation_in_storage(
 pub fn sync_shadowable_unidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableUnidirectionalLightID,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) {
@@ -202,7 +202,7 @@ pub fn sync_shadowable_unidirectional_light_in_storage(
 pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableUnidirectionalLightID,
-    view_transform: &Isometry3<f32>,
+    view_transform: &Isometry3,
     orientation: &UnitQuaternion<f32>,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
