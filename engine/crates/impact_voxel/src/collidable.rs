@@ -199,11 +199,11 @@ impl VoxelObjectCollidable {
         transform_to_world_space: Isometry3,
     ) -> Self {
         let transform_from_object_to_world_space =
-            transform_to_world_space.apply_to_translation(&(-origin_offset));
+            transform_to_world_space.applied_to_translation(&(-origin_offset));
         Self {
             object_id,
             response_params,
-            transform_to_object_space: transform_from_object_to_world_space.inverse(),
+            transform_to_object_space: transform_from_object_to_world_space.inverted(),
         }
     }
 
@@ -275,7 +275,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
     transform_from_world_to_b: &'a Isometry3,
     f: &mut impl FnMut([usize; 3], [usize; 3], ContactGeometry),
 ) {
-    let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverse();
+    let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverted();
 
     let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
         ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(

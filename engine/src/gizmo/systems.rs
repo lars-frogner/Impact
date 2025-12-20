@@ -473,7 +473,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 
     let cubemap_near_plane_transform = InstanceModelViewTransform::from(
         Similarity3::from_isometry(light_space_to_camera_transform)
-            .apply_to_scaling(light.near_distance()),
+            .applied_to_scaling(light.near_distance()),
     );
 
     model_instance_manager.buffer_instance_feature(
@@ -484,7 +484,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 
     let cubemap_far_plane_transform = InstanceModelViewTransform::from(
         Similarity3::from_isometry(light_space_to_camera_transform)
-            .apply_to_scaling(light.far_distance()),
+            .applied_to_scaling(light.far_distance()),
     );
 
     model_instance_manager.buffer_instance_feature(
@@ -857,7 +857,7 @@ fn buffer_transforms_for_collider_gizmos(
 
             let transform_from_object_to_world_space = voxel_object_collidable
                 .transform_to_object_space()
-                .inverse();
+                .inverted();
 
             let transform_from_object_to_camera_space =
                 scene_camera.view_transform() * transform_from_object_to_world_space;
@@ -953,8 +953,8 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
                 CHUNK_SIZE as f32 * Vector3::new(chunk_i as f32, chunk_j as f32, chunk_k as f32);
 
             let chunk_transform = model_view_transform
-                .apply_to_scaling(voxel_extent)
-                .apply_to_translation(&chunk_offset_in_voxels);
+                .applied_to_scaling(voxel_extent)
+                .applied_to_translation(&chunk_offset_in_voxels);
 
             model_instance_manager.buffer_instance_feature(
                 model_id,
@@ -1006,7 +1006,7 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     };
     let object_b = object_b.object();
 
-    let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverse();
+    let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverted();
 
     let Some((voxel_ranges_for_a, voxel_ranges_for_b)) =
         ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
@@ -1019,10 +1019,10 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     };
 
     let transform_from_a_to_camera_space =
-        scene_camera.view_transform() * transform_from_world_to_a.inverse();
+        scene_camera.view_transform() * transform_from_world_to_a.inverted();
 
     let transform_from_b_to_camera_space =
-        scene_camera.view_transform() * transform_from_world_to_b.inverse();
+        scene_camera.view_transform() * transform_from_world_to_b.inverted();
 
     let mut transforms = Vec::with_capacity(256);
 

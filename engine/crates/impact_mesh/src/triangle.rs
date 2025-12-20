@@ -7,14 +7,15 @@ use crate::{
 use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_alloc::{arena::ArenaPool, avec};
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::{hash::StringHash64, hash64, quaternion::UnitQuaternion, transform::Similarity3};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
-use nalgebra::{Matrix3x2, Point3, UnitVector3, Vector3};
+use nalgebra::{Point3, UnitVector3, Vector3};
 use roc_integration::roc;
-use std::fmt;
+use std::{fmt, mem};
 
 define_component_type! {
     /// The ID of a [`TriangleMesh`].
@@ -276,7 +277,10 @@ impl TriangleMesh {
     pub fn generate_smooth_normal_vectors(&mut self, dirty_mask: &mut TriangleMeshDirtyMask) {
         assert!(self.has_positions());
 
-        let mut summed_normal_vectors = vec![Vector3::zeros(); self.n_vertices()];
+        let arena =
+            ArenaPool::get_arena_for_capacity(self.n_vertices() * mem::size_of::<Vector3<f32>>());
+
+        let mut summed_normal_vectors = avec![in &arena; Vector3::zeros(); self.n_vertices()];
 
         for [idx0, idx1, idx2] in self.triangle_indices() {
             let p0 = &self.positions[idx0].0;
@@ -345,7 +349,12 @@ impl TriangleMesh {
             self.generate_smooth_normal_vectors(dirty_mask);
         }
 
-        let mut summed_tangent_and_bitangent_vectors = vec![Matrix3x2::zeros(); self.n_vertices()];
+        let arena = ArenaPool::get_arena_for_capacity(
+            self.n_vertices() * 2 * mem::size_of::<Vector3<f32>>(),
+        );
+
+        let mut summed_tangent_and_bitangent_vectors =
+            avec![in &arena; [Vector3::zeros(); 2]; self.n_vertices()];
 
         for [idx0, idx1, idx2] in self.triangle_indices() {
             let p0 = &self.positions[idx0].0;
@@ -392,30 +401,29 @@ impl TriangleMesh {
             // Skip the triangle altogether if no solution is possible (happens
             // if the triangle is perpendicular to the UV-plane)
             if inv_denom.is_finite() {
-                let tangent_and_bitangent =
-                    Matrix3x2::from_columns(&[q1 * st2.y - q2 * st1.y, q2 * st1.x - q1 * st2.x])
-                        * inv_denom;
+                let tangent = (q1 * st2.y - q2 * st1.y) * inv_denom;
+                let bitangent = (q2 * st1.x - q1 * st2.x) * inv_denom;
 
                 // The unnormalized tangent and bitangent will have the same
                 // normalization factor for each triangle, so there is no need to
                 // normalize them before aggregating them as long as we perform
                 // normalization after aggregation
-                summed_tangent_and_bitangent_vectors[idx0] += tangent_and_bitangent;
-                summed_tangent_and_bitangent_vectors[idx1] += tangent_and_bitangent;
-                summed_tangent_and_bitangent_vectors[idx2] += tangent_and_bitangent;
+                summed_tangent_and_bitangent_vectors[idx0][0] += tangent;
+                summed_tangent_and_bitangent_vectors[idx0][1] += bitangent;
+                summed_tangent_and_bitangent_vectors[idx1][0] += tangent;
+                summed_tangent_and_bitangent_vectors[idx1][1] += bitangent;
+                summed_tangent_and_bitangent_vectors[idx2][0] += tangent;
+                summed_tangent_and_bitangent_vectors[idx2][1] += bitangent;
             }
         }
 
         self.tangent_space_quaternions.clear();
         self.tangent_space_quaternions.reserve(self.n_vertices());
 
-        for (summed_tangent_and_bitangent, normal) in summed_tangent_and_bitangent_vectors
+        for ([summed_tangent, summed_bitangent], normal) in summed_tangent_and_bitangent_vectors
             .into_iter()
             .zip(self.normal_vectors.iter())
         {
-            let summed_tangent = summed_tangent_and_bitangent.column(0);
-            let summed_bitangent = summed_tangent_and_bitangent.column(1);
-
             // Use Gram-Schmidt to make the summed tangent and bitangent
             // orthogonal to the normal vector and each other, then normalize
 

@@ -1,8 +1,8 @@
 //! Isometry transforms.
 
-use crate::quaternion::UnitQuaternion;
+use crate::{matrix::Matrix4, quaternion::UnitQuaternion};
+use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Matrix4;
 
 type Point3 = nalgebra::Point3<f32>;
 type Vector3 = nalgebra::Vector3<f32>;
@@ -22,15 +22,15 @@ impl Projective3 {
     }
 
     #[inline]
-    pub fn from_matrix_unchecked(matrix: Matrix4<f32>) -> Self {
+    pub fn from_matrix_unchecked(matrix: Matrix4) -> Self {
         Self {
-            inner: nalgebra::Projective3::from_matrix_unchecked(matrix),
+            inner: nalgebra::Projective3::from_matrix_unchecked(*matrix._inner()),
         }
     }
 
     #[inline]
-    pub fn matrix(&self) -> &Matrix4<f32> {
-        self.inner.matrix()
+    pub fn matrix(&self) -> &Matrix4 {
+        bytemuck::from_bytes(bytemuck::bytes_of(self.inner.matrix()))
     }
 
     #[inline]
@@ -86,5 +86,32 @@ impl Projective3 {
     #[inline]
     pub fn inverse_transform_vector(&self, vector: &Vector3) -> Vector3 {
         self.inner.inverse_transform_vector(vector)
+    }
+}
+
+impl AbsDiffEq for Projective3 {
+    type Epsilon = f32;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f32::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.inner.abs_diff_eq(&other.inner, epsilon)
+    }
+}
+
+impl RelativeEq for Projective3 {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.inner.relative_eq(&other.inner, epsilon, max_relative)
     }
 }

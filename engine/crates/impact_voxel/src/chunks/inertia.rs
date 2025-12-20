@@ -6,9 +6,9 @@ use crate::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
 };
 use approx::{AbsDiffEq, RelativeEq};
-use impact_math::Float;
+use impact_math::{Float, matrix::Matrix3};
 use impact_physics::inertia::{InertiaTensor, InertialProperties};
-use nalgebra::{Matrix3, Point3, Vector3};
+use nalgebra::{Point3, Vector3};
 use std::ops::Range;
 
 /// Keeps track of the inertial properties (mass, center of mass and inertia
@@ -262,7 +262,7 @@ impl VoxelObjectInertialPropertyManager {
         let com_inertia_tensor_matrix = inertia_tensor_matrix
             + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, &center_of_mass.coords);
 
-        let inertia_tensor = InertiaTensor::from_matrix(com_inertia_tensor_matrix.cast::<f64>());
+        let inertia_tensor = InertiaTensor::from_matrix(com_inertia_tensor_matrix);
 
         InertialProperties::new(mass, center_of_mass, inertia_tensor)
     }

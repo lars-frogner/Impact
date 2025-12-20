@@ -19,7 +19,7 @@ import Radians exposing [RadiansF32]
 import UnitVector3 exposing [UnitVector3F32]
 import Vector3 exposing [Vector3F32]
 import Vector4
-import Matrix3 exposing [Matrix3F32]
+import Matrix3 exposing [Matrix3]
 
 UnitQuaternion : (F32, F32, F32, F32)
 
@@ -81,7 +81,7 @@ rotate_vector = |quat, vec|
     |> Vector3.add(Vector3.scale(tmp, real))
     |> Vector3.add(Vector3.cross(imag, tmp))
 
-to_rotation_matrix : UnitQuaternion -> Matrix3F32
+to_rotation_matrix : UnitQuaternion -> Matrix3
 to_rotation_matrix = |(x, y, z, w)|
     x2 = 2 * x * x
     y2 = 2 * y * y

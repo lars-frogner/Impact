@@ -2,7 +2,7 @@
 
 use super::benchmark_data_path;
 use impact_alloc::{Global, arena::ArenaPool};
-use impact_math::quaternion::UnitQuaternion;
+use impact_math::{matrix::Matrix4, quaternion::UnitQuaternion};
 use impact_profiling::benchmark::Benchmarker;
 use impact_thread::pool::ThreadPool;
 use impact_voxel::{
@@ -14,7 +14,7 @@ use impact_voxel::{
     },
     voxel_types::VoxelType,
 };
-use nalgebra::{Matrix4, Point3, Vector3};
+use nalgebra::{Point3, Vector3};
 use std::{hint::black_box, num::NonZeroUsize};
 
 pub fn generate_box(benchmarker: impl Benchmarker) {

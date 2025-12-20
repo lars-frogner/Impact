@@ -1,8 +1,8 @@
-# Hash: d09bc723a38bbb651b2d3021a0bc112cdaedf1c54907dc5b69fd1f651da3c8a2
-# Generated: 2025-12-17T23:58:02+00:00
+# Hash: df707a2132dbec4e660f86d2d2a6c4bf0d1527aa9b5bd06e9f7536ccd3c5eb93
+# Generated: 2025-12-20T20:26:51+00:00
 # Rust type: impact_physics::inertia::InertiaTensor
 # Type category: POD
-# Commit: 7d41822d (dirty)
+# Commit: dbb3dcfa (dirty)
 module [
     InertiaTensor,
     write_bytes,
@@ -13,8 +13,8 @@ import core.Matrix3
 
 ## The inertia tensor of a physical body.
 InertiaTensor : {
-    matrix : Matrix3.Matrix3 Binary32,
-    inverse_matrix : Matrix3.Matrix3 Binary32,
+    matrix : Matrix3.Matrix3,
+    inverse_matrix : Matrix3.Matrix3,
 }
 
 ## Serializes a value of [InertiaTensor] into the binary representation
@@ -23,8 +23,8 @@ write_bytes : List U8, InertiaTensor -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(72)
-    |> Matrix3.write_bytes_32(value.matrix)
-    |> Matrix3.write_bytes_32(value.inverse_matrix)
+    |> Matrix3.write_bytes(value.matrix)
+    |> Matrix3.write_bytes(value.inverse_matrix)
 
 ## Deserializes a value of [InertiaTensor] from its bytes in the
 ## representation used by the engine.
@@ -32,8 +32,8 @@ from_bytes : List U8 -> Result InertiaTensor _
 from_bytes = |bytes|
     Ok(
         {
-            matrix: bytes |> List.sublist({ start: 0, len: 36 }) |> Matrix3.from_bytes_32?,
-            inverse_matrix: bytes |> List.sublist({ start: 36, len: 36 }) |> Matrix3.from_bytes_32?,
+            matrix: bytes |> List.sublist({ start: 0, len: 36 }) |> Matrix3.from_bytes?,
+            inverse_matrix: bytes |> List.sublist({ start: 36, len: 36 }) |> Matrix3.from_bytes?,
         },
     )
 

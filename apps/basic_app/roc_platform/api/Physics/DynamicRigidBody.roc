@@ -1,8 +1,8 @@
-# Hash: 3acc57f68bb196cb32f6fc3ffd21566f5914d742275c11421e4808193eec14cc
-# Generated: 2025-12-17T23:58:02+00:00
+# Hash: c5449a3b1b795371dcf0136bb4f6d630179d000418bcc2e6fb9e151bbab8108e
+# Generated: 2025-12-20T20:26:51+00:00
 # Rust type: impact_physics::rigid_body::DynamicRigidBody
 # Type category: POD
-# Commit: 7d41822d (dirty)
+# Commit: dbb3dcfa (dirty)
 module [
     DynamicRigidBody,
     write_bytes,
@@ -30,7 +30,7 @@ DynamicRigidBody : {
     mass : F32,
     inertia_tensor : Physics.InertiaTensor.InertiaTensor,
     position : Point3.Point3 Binary32,
-    orientation : UnitQuaternion.UnitQuaternion Binary32,
+    orientation : UnitQuaternion.UnitQuaternion,
     momentum : Vector3.Vector3 Binary32,
     angular_momentum : Vector3.Vector3 Binary32,
     total_force : Vector3.Vector3 Binary32,
@@ -46,7 +46,7 @@ write_bytes = |bytes, value|
     |> Builtin.write_bytes_f32(value.mass)
     |> Physics.InertiaTensor.write_bytes(value.inertia_tensor)
     |> Point3.write_bytes_32(value.position)
-    |> UnitQuaternion.write_bytes_32(value.orientation)
+    |> UnitQuaternion.write_bytes(value.orientation)
     |> Vector3.write_bytes_32(value.momentum)
     |> Vector3.write_bytes_32(value.angular_momentum)
     |> Vector3.write_bytes_32(value.total_force)
@@ -61,7 +61,7 @@ from_bytes = |bytes|
             mass: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
             inertia_tensor: bytes |> List.sublist({ start: 4, len: 72 }) |> Physics.InertiaTensor.from_bytes?,
             position: bytes |> List.sublist({ start: 76, len: 12 }) |> Point3.from_bytes_32?,
-            orientation: bytes |> List.sublist({ start: 88, len: 16 }) |> UnitQuaternion.from_bytes_32?,
+            orientation: bytes |> List.sublist({ start: 88, len: 16 }) |> UnitQuaternion.from_bytes?,
             momentum: bytes |> List.sublist({ start: 104, len: 12 }) |> Vector3.from_bytes_32?,
             angular_momentum: bytes |> List.sublist({ start: 116, len: 12 }) |> Vector3.from_bytes_32?,
             total_force: bytes |> List.sublist({ start: 128, len: 12 }) |> Vector3.from_bytes_32?,

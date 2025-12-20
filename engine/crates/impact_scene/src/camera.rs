@@ -181,7 +181,7 @@ impl SceneCamera {
     /// Computes the world-space position of the camera based on the current
     /// view transform.
     pub fn compute_world_space_position(&self) -> Point3<f32> {
-        let camera_to_world = self.view_transform.inverse();
+        let camera_to_world = self.view_transform.inverted();
         Point3::from(*camera_to_world.translation())
     }
 

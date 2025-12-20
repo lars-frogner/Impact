@@ -65,3 +65,45 @@ macro_rules! stringhash64_newtype {
         }
     };
 }
+
+macro_rules! impl_binop {
+    ($op:ident, $method:ident, $tl:ty, $tr:ty, $to:ty, |$lhs:ident, $rhs:ident| $body:block) => {
+        impl<'a> ::std::ops::$op<&'a $tr> for &'a $tl {
+            type Output = $to;
+
+            #[inline]
+            fn $method(self, rhs: &'a $tr) -> Self::Output {
+                let $lhs = self;
+                let $rhs = rhs;
+                $body
+            }
+        }
+
+        impl ::std::ops::$op<$tr> for &$tl {
+            type Output = $to;
+
+            #[inline]
+            fn $method(self, rhs: $tr) -> Self::Output {
+                self.$method(&rhs)
+            }
+        }
+
+        impl<'a> ::std::ops::$op<&'a $tr> for $tl {
+            type Output = $to;
+
+            #[inline]
+            fn $method(self, rhs: &'a $tr) -> Self::Output {
+                (&self).$method(rhs)
+            }
+        }
+
+        impl ::std::ops::$op<$tr> for $tl {
+            type Output = $to;
+
+            #[inline]
+            fn $method(self, rhs: $tr) -> Self::Output {
+                (&self).$method(&rhs)
+            }
+        }
+    };
+}
