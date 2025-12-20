@@ -1,7 +1,5 @@
 module [
     UnitQuaternion,
-    UnitQuaternionF32,
-    UnitQuaternionF64,
     identity,
     from_axis_angle,
     from_parts,
@@ -13,40 +11,35 @@ module [
     invert,
     rotate_vector,
     to_rotation_matrix,
-    write_bytes_32,
-    write_bytes_64,
-    from_bytes_32,
-    from_bytes_64,
+    write_bytes,
+    from_bytes,
 ]
 
-import Radians exposing [Radians]
-import UnitVector3 exposing [UnitVector3]
-import Vector3 exposing [Vector3]
+import Radians exposing [RadiansF32]
+import UnitVector3 exposing [UnitVector3F32]
+import Vector3 exposing [Vector3F32]
 import Vector4
-import Matrix3 exposing [Matrix3]
+import Matrix3 exposing [Matrix3F32]
 
-UnitQuaternion a : (Frac a, Frac a, Frac a, Frac a)
-
-UnitQuaternionF32 : UnitQuaternion Binary32
-UnitQuaternionF64 : UnitQuaternion Binary64
+UnitQuaternion : (F32, F32, F32, F32)
 
 identity = from_parts(Vector3.zero, 1.0)
 
-from_axis_angle : UnitVector3 a, Radians a -> UnitQuaternion a
+from_axis_angle : UnitVector3F32, RadiansF32 -> UnitQuaternion
 from_axis_angle = |axis, angle|
     sin_half_angle = Num.sin(0.5 * angle)
     cos_half_angle = Num.cos(0.5 * angle)
     from_parts(Vector3.scale(axis, sin_half_angle), cos_half_angle)
 
-from_parts : Vector3 a, Frac a -> UnitQuaternion a
+from_parts : Vector3F32, F32 -> UnitQuaternion
 from_parts = |vector, scalar|
     (vector.0, vector.1, vector.2, scalar)
 
-parts : UnitQuaternion a -> (Vector3 a, Frac a)
+parts : UnitQuaternion -> (Vector3F32, F32)
 parts = |(x, y, z, w)|
     ((x, y, z), w)
 
-mul : UnitQuaternion a, UnitQuaternion a -> UnitQuaternion a
+mul : UnitQuaternion, UnitQuaternion -> UnitQuaternion
 mul = |a, b|
     (a_imag, a_real) = parts(a)
     (b_imag, b_real) = parts(b)
@@ -60,27 +53,27 @@ mul = |a, b|
 
     from_parts(imag, real)
 
-norm_squared : UnitQuaternion a -> Frac a
+norm_squared : UnitQuaternion -> F32
 norm_squared = |quat|
     (imag, real) = parts(quat)
     Vector3.norm_squared(imag) + real * real
 
-norm : UnitQuaternion a -> Frac a
+norm : UnitQuaternion -> F32
 norm = |quat|
     Num.sqrt(norm_squared(quat))
 
-normalize : UnitQuaternion a -> UnitQuaternion a
+normalize : UnitQuaternion -> UnitQuaternion
 normalize = |quat|
     inv_norm = 1.0 / norm(quat)
     (imag, real) = parts(quat)
     from_parts(Vector3.scale(imag, inv_norm), real * inv_norm)
 
-invert : UnitQuaternion a -> UnitQuaternion a
+invert : UnitQuaternion -> UnitQuaternion
 invert = |quat|
     (imag, real) = parts(quat)
     from_parts(Vector3.flip(imag), real)
 
-rotate_vector : UnitQuaternion a, Vector3 a -> Vector3 a
+rotate_vector : UnitQuaternion, Vector3F32 -> Vector3F32
 rotate_vector = |quat, vec|
     (imag, real) = parts(quat)
     tmp = Vector3.cross(imag, vec) |> Vector3.scale(2.0)
@@ -88,7 +81,7 @@ rotate_vector = |quat, vec|
     |> Vector3.add(Vector3.scale(tmp, real))
     |> Vector3.add(Vector3.cross(imag, tmp))
 
-to_rotation_matrix : UnitQuaternion a -> Matrix3 a
+to_rotation_matrix : UnitQuaternion -> Matrix3F32
 to_rotation_matrix = |(x, y, z, w)|
     x2 = 2 * x * x
     y2 = 2 * y * y
@@ -104,7 +97,5 @@ to_rotation_matrix = |(x, y, z, w)|
     col3 = ((xz + wy), (yz - wx), 1 - (x2 + y2))
     (col1, col2, col3)
 
-write_bytes_32 = Vector4.write_bytes_32
-write_bytes_64 = Vector4.write_bytes_64
-from_bytes_32 = Vector4.from_bytes_32
-from_bytes_64 = Vector4.from_bytes_64
+write_bytes = Vector4.write_bytes_32
+from_bytes = Vector4.from_bytes_32

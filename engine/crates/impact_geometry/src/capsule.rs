@@ -172,8 +172,8 @@ mod tests {
     use super::*;
     use crate::AxisAlignedBox;
     use approx::assert_abs_diff_eq;
-    use impact_math::consts::f32::FRAC_PI_2;
-    use nalgebra::{UnitQuaternion, Vector3};
+    use impact_math::{consts::f32::FRAC_PI_2, quaternion::UnitQuaternion};
+    use nalgebra::Vector3;
 
     #[test]
     #[should_panic]

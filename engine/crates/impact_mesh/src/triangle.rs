@@ -8,11 +8,11 @@ use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::{hash::StringHash64, hash64, transform::Similarity3};
+use impact_math::{hash::StringHash64, hash64, quaternion::UnitQuaternion, transform::Similarity3};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
-use nalgebra::{Matrix3x2, Point3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{Matrix3x2, Point3, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::fmt;
 
@@ -471,18 +471,18 @@ impl TriangleMesh {
                 bitangent.into_inner(),
                 normal.0.into_inner(),
             ])
-            .into_inner();
+            .to_quaternion();
 
             // Make sure real component is always positive initially (negating a
             // quaternion gives same rotation)
-            if tangent_space_quaternion.w < 0.0 {
-                tangent_space_quaternion = -tangent_space_quaternion;
+            if tangent_space_quaternion.real() < 0.0 {
+                tangent_space_quaternion = tangent_space_quaternion.negated();
             }
 
             // If we have a left-handed basis, negate the quaternion so that the
             // real component is negative (but we still have the same rotation)
             if is_lefthanded {
-                tangent_space_quaternion = -tangent_space_quaternion;
+                tangent_space_quaternion = tangent_space_quaternion.negated();
             }
 
             self.tangent_space_quaternions
@@ -530,11 +530,7 @@ impl TriangleMesh {
 
     /// Applies the given rotation quaternion to the mesh, rotating vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn rotate(
-        &mut self,
-        rotation: &UnitQuaternion<f32>,
-        dirty_mask: &mut TriangleMeshDirtyMask,
-    ) {
+    pub fn rotate(&mut self, rotation: &UnitQuaternion, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }

@@ -10,8 +10,12 @@ use impact_alloc::{
     avec,
 };
 use impact_geometry::{AxisAlignedBox, OrientedBox};
-use impact_math::{Float, transform::Similarity3};
-use nalgebra::{Matrix4, Point3, Quaternion, UnitQuaternion, UnitVector3, Vector3};
+use impact_math::{
+    Float,
+    quaternion::{Quaternion, UnitQuaternion},
+    transform::Similarity3,
+};
+use nalgebra::{Matrix4, Point3, UnitVector3, Vector3};
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::{f32, mem};
@@ -129,7 +133,7 @@ pub struct SDFTranslation {
 #[derive(Clone, Debug)]
 pub struct SDFRotation {
     pub child_id: SDFNodeID,
-    pub rotation: UnitQuaternion<f32>,
+    pub rotation: UnitQuaternion,
 }
 
 #[derive(Clone, Debug)]
@@ -576,7 +580,8 @@ impl<A: Allocator> SDFGenerator<A> {
                     // Transform: Rotate the coordinate system in the opposite
                     // direction so coordinates align with the child’s local
                     // axes
-                    transform_stack[stack_top] = rotation.inverse().to_homogeneous() * transform;
+                    transform_stack[stack_top] =
+                        rotation.inverse().to_homogeneous_matrix() * transform;
 
                     // Margin: A rotation node should have the same margin as
                     // its child
@@ -1153,7 +1158,7 @@ impl SDFNode {
     }
 
     #[inline]
-    pub fn new_rotation(child_id: SDFNodeID, rotation: UnitQuaternion<f32>) -> Self {
+    pub fn new_rotation(child_id: SDFNodeID, rotation: UnitQuaternion) -> Self {
         Self::Rotation(SDFRotation { child_id, rotation })
     }
 
@@ -1718,8 +1723,9 @@ impl MultiscaleSphereSDFModifier {
     ) -> f32 {
         /// Rotates with an angle of `2 * pi / golden_ratio` around the axis
         /// `[1, 1, 1]` (to break up the regular grid pattern).
-        const ROTATION: UnitQuaternion<f32> = UnitQuaternion::new_unchecked(Quaternion::new(
-            -0.3623749, 0.5381091, 0.5381091, 0.5381091,
+        const ROTATION: UnitQuaternion = UnitQuaternion::new_unchecked(Quaternion::from_parts(
+            -0.3623749,
+            Vector3::new(0.5381091, 0.5381091, 0.5381091),
         ));
 
         let mut parent_distance = signed_distance;
@@ -1741,7 +1747,7 @@ impl MultiscaleSphereSDFModifier {
                 self.union_smoothness.scaled(scale),
             );
 
-            position = ROTATION * (position / self.persistence);
+            position = ROTATION.transform_point(&(position / self.persistence));
 
             scale *= self.persistence;
         }

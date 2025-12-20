@@ -14,9 +14,10 @@ use impact_gpu::{
 use impact_math::{
     halton::HaltonSequence,
     hash::ConstStringHash64,
+    quaternion::UnitQuaternion,
     transform::{Isometry3, Projective3},
 };
-use nalgebra::{UnitQuaternion, Vector4};
+use nalgebra::Vector4;
 use std::{borrow::Cow, sync::LazyLock};
 
 /// Represents a camera that can buffered in a GPU buffer.
@@ -165,7 +166,7 @@ impl CameraGPUResource {
     }
 
     /// Returns the camera rotation quaternion push constant.
-    pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternion<f32> {
+    pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternion {
         *self.view_transform.rotation()
     }
 

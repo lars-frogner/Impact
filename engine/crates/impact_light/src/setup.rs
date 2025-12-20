@@ -8,8 +8,8 @@ use crate::{
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLight, UnidirectionalLightID,
 };
-use impact_math::{angle::Degrees, transform::Isometry3};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3};
+use impact_math::{angle::Degrees, quaternion::UnitQuaternion, transform::Isometry3};
+use nalgebra::{Point3, UnitVector3};
 
 pub fn setup_ambient_light(
     light_manager: &mut LightManager,
@@ -168,7 +168,7 @@ pub fn sync_unidirectional_light_with_orientation_in_storage(
     light_manager: &mut LightManager,
     light_id: UnidirectionalLightID,
     view_transform: &Isometry3,
-    orientation: &UnitQuaternion<f32>,
+    orientation: &UnitQuaternion,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) {
@@ -203,7 +203,7 @@ pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableUnidirectionalLightID,
     view_transform: &Isometry3,
-    orientation: &UnitQuaternion<f32>,
+    orientation: &UnitQuaternion,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) {

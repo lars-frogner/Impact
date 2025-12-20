@@ -5,11 +5,11 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{hash::StringHash64, hash64, transform::Similarity3};
+use impact_math::{hash::StringHash64, hash64, quaternion::UnitQuaternion, transform::Similarity3};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
-use nalgebra::{Point3, UnitQuaternion, Vector3};
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -152,11 +152,7 @@ impl LineSegmentMesh {
     }
 
     /// Applies the given rotation to the mesh, rotating the vertex positions.
-    pub fn rotate(
-        &mut self,
-        rotation: &UnitQuaternion<f32>,
-        dirty_mask: &mut LineSegmentMeshDirtyMask,
-    ) {
+    pub fn rotate(&mut self, rotation: &UnitQuaternion, dirty_mask: &mut LineSegmentMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }

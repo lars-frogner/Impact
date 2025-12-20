@@ -7,8 +7,8 @@ use crate::{
     VertexColor,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
-use impact_math::{consts::f32::TWO_PI, transform::Similarity3};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3, vector};
+use impact_math::{consts::f32::TWO_PI, quaternion::UnitQuaternion, transform::Similarity3};
+use nalgebra::{Point3, UnitVector3, Vector3, vector};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {

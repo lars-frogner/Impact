@@ -54,10 +54,8 @@ impl DragLoad {
         // the mesh extent (distance from center of mass)
         let torque_scaling = mesh_scaling * force_scaling;
 
-        let world_space_force =
-            force_scaling * body_orientation.transform_vector(&self.force.cast::<f32>());
-        let world_space_torque =
-            torque_scaling * body_orientation.transform_vector(&self.torque.cast::<f32>());
+        let world_space_force = force_scaling * body_orientation.transform_vector(&self.force);
+        let world_space_torque = torque_scaling * body_orientation.transform_vector(&self.torque);
 
         (world_space_force, world_space_torque)
     }

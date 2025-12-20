@@ -3,8 +3,11 @@
 use crate::AxisAlignedBox;
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::transform::{Isometry3, Similarity3};
-use nalgebra::{self as na, Point3, UnitQuaternion, Vector3};
+use impact_math::{
+    quaternion::UnitQuaternion,
+    transform::{Isometry3, Similarity3},
+};
+use nalgebra::{self as na, Point3, Vector3};
 
 /// A sphere represented by the center point and the radius.
 #[repr(C)]
@@ -175,7 +178,7 @@ impl Sphere {
 
     /// Computes the sphere resulting from rotating this sphere with the given
     /// rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         Self::new(rotation.transform_point(self.center()), self.radius())
     }
 

@@ -10,6 +10,7 @@ pub mod halton;
 pub mod hash;
 pub mod num;
 pub mod power_law;
+pub mod quaternion;
 pub mod splitmix;
 pub mod transform;
 

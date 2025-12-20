@@ -3,8 +3,8 @@
 use crate::quantities::Position;
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, transform::Similarity3};
-use nalgebra::{Matrix3, Point3, UnitQuaternion, Vector3};
+use impact_math::{Float, quaternion::UnitQuaternion, transform::Similarity3};
+use nalgebra::{Matrix3, Point3, Vector3};
 use roc_integration::roc;
 use simba::scalar::SubsetOf;
 
@@ -322,7 +322,7 @@ impl InertiaTensor {
 
     /// Computes the inertia tensor corresponding to rotating the body with the
     /// given rotation quaternion and returns it as a matrix.
-    pub fn rotated_matrix(&self, rotation: &UnitQuaternion<f32>) -> Matrix3<f32> {
+    pub fn rotated_matrix(&self, rotation: &UnitQuaternion) -> Matrix3<f32> {
         let rotation_matrix = rotation.to_rotation_matrix();
         rotation_matrix * self.matrix * rotation_matrix.transpose()
     }
@@ -335,7 +335,7 @@ impl InertiaTensor {
     /// If the given factor is negative.
     pub fn rotated_matrix_with_scaled_extent(
         &self,
-        rotation: &UnitQuaternion<f32>,
+        rotation: &UnitQuaternion,
         factor: f32,
     ) -> Matrix3<f32> {
         assert!(
@@ -348,7 +348,7 @@ impl InertiaTensor {
 
     /// Computes the inertia tensor corresponding to rotating the body with the
     /// given rotation quaternion and returns its inverse as a matrix.
-    pub fn inverse_rotated_matrix(&self, rotation: &UnitQuaternion<f32>) -> Matrix3<f32> {
+    pub fn inverse_rotated_matrix(&self, rotation: &UnitQuaternion) -> Matrix3<f32> {
         let rotation_matrix = rotation.to_rotation_matrix();
         rotation_matrix * self.inverse_matrix * rotation_matrix.transpose()
     }
@@ -361,7 +361,7 @@ impl InertiaTensor {
     /// If the given factor is negative.
     pub fn inverse_rotated_matrix_with_scaled_extent(
         &self,
-        rotation: &UnitQuaternion<f32>,
+        rotation: &UnitQuaternion,
         factor: f32,
     ) -> Matrix3<f32> {
         assert!(
@@ -412,7 +412,7 @@ impl InertiaTensor {
 
     /// Computes the inertia tensor corresponding to rotating the body with the
     /// given rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         let rotation_matrix = rotation.to_rotation_matrix();
         let transpose_rotation_matrix = rotation_matrix.transpose();
 
@@ -751,7 +751,6 @@ mod tests {
     use super::*;
     use approx::abs_diff_eq;
     use impact_mesh::{FrontFaceSide, TriangleMesh, TriangleMeshDirtyMask};
-    use nalgebra::UnitQuaternion;
     use proptest::prelude::*;
     use std::ops::Range;
 
@@ -760,7 +759,7 @@ mod tests {
             rotation_roll in 0.0..f32::TWO_PI,
             rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
             rotation_yaw in 0.0..f32::TWO_PI,
-        ) -> UnitQuaternion<f32> {
+        ) -> UnitQuaternion {
             UnitQuaternion::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
         }
     }

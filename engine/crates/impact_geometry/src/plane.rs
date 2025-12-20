@@ -3,8 +3,11 @@
 use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::transform::{Isometry3, Similarity3};
-use nalgebra::{Point3, UnitQuaternion, UnitVector3, Vector3};
+use impact_math::{
+    quaternion::UnitQuaternion,
+    transform::{Isometry3, Similarity3},
+};
+use nalgebra::{Point3, UnitVector3, Vector3};
 use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and
@@ -145,7 +148,7 @@ impl Plane {
 
     /// Computes the plane resulting from rotating this plane with the given
     /// rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion<f32>) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         let rotated_unit_normal =
             UnitVector3::new_unchecked(rotation.transform_vector(&self.unit_normal));
         Self::new(rotated_unit_normal, self.displacement)

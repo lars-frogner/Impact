@@ -22,9 +22,10 @@ use impact_math::{
     Float,
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
+    quaternion::UnitQuaternion,
     transform::{Isometry3, Similarity3},
 };
-use nalgebra::{self as na, Point3, UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{self as na, Point3, UnitVector3, Vector3};
 use roc_integration::roc;
 use shadow_map::{CascadeIdx, ShadowMappingConfig};
 use std::iter;
@@ -242,7 +243,7 @@ pub struct OmnidirectionalLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct ShadowableOmnidirectionalLight {
-    camera_to_light_space_rotation: UnitQuaternion<f32>,
+    camera_to_light_space_rotation: UnitQuaternion,
     camera_space_position: Point3<f32>,
     // Padding to obtain 16-byte alignment for next field
     flags: LightFlags, // Use some of the padding for bitflags
@@ -305,7 +306,7 @@ pub struct UnidirectionalLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct ShadowableUnidirectionalLight {
-    camera_to_light_space_rotation: UnitQuaternion<f32>,
+    camera_to_light_space_rotation: UnitQuaternion,
     camera_space_direction: UnitVector3<f32>,
     // Padding to obtain 16-byte alignment for next field
     near_partition_depth: f32,
@@ -1391,7 +1392,7 @@ impl ShadowableOmnidirectionalLight {
 
     fn compute_camera_to_light_space_rotation(
         camera_space_direction: &UnitVector3<f32>,
-    ) -> UnitQuaternion<f32> {
+    ) -> UnitQuaternion {
         let direction_is_very_close_to_vertical =
             f32::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
 
@@ -1494,7 +1495,7 @@ impl ShadowableUnidirectionalLight {
 
     /// Returns a reference to the quaternion that rotates camera space to light
     /// space.
-    pub fn camera_to_light_space_rotation(&self) -> &UnitQuaternion<f32> {
+    pub fn camera_to_light_space_rotation(&self) -> &UnitQuaternion {
         &self.camera_to_light_space_rotation
     }
 
@@ -1706,7 +1707,7 @@ impl ShadowableUnidirectionalLight {
 
     fn compute_camera_to_light_space_rotation(
         camera_space_direction: &UnitVector3<f32>,
-    ) -> UnitQuaternion<f32> {
+    ) -> UnitQuaternion {
         let direction_is_very_close_to_vertical =
             f32::abs(camera_space_direction.y.abs() - 1.0) < 1e-3;
 

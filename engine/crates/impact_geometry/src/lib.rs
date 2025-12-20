@@ -25,8 +25,9 @@ pub use sphere::Sphere;
 use impact_math::{
     angle::{Angle, Radians},
     consts::f32::PI,
+    quaternion::UnitQuaternion,
 };
-use nalgebra::{UnitQuaternion, UnitVector3, Vector3};
+use nalgebra::{UnitVector3, Vector3};
 
 /// Uses the Frisvad method.
 pub fn orthonormal_basis_with_z_axis(
@@ -49,7 +50,7 @@ pub fn orthonormal_basis_with_z_axis(
     (x, y, z)
 }
 
-pub fn rotation_between_axes(a: &UnitVector3<f32>, b: &UnitVector3<f32>) -> UnitQuaternion<f32> {
+pub fn rotation_between_axes(a: &UnitVector3<f32>, b: &UnitVector3<f32>) -> UnitQuaternion {
     if let Some(rotation) = UnitQuaternion::rotation_between_axis(a, b) {
         rotation
     } else {

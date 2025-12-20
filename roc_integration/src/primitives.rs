@@ -127,8 +127,6 @@ impl_roc_for_library_provided_primitives! {
     nalgebra::Matrix4<f64>        => core, None,    Matrix4,        Matrix4,        Some("_64"),    DoublePrecision,
     nalgebra::UnitVector3<f32>    => core, None,    UnitVector3,    UnitVector3,    Some("_32"),    SinglePrecision,
     nalgebra::UnitVector3<f64>    => core, None,    UnitVector3,    UnitVector3,    Some("_64"),    DoublePrecision,
-    nalgebra::UnitQuaternion<f32> => core, None,    UnitQuaternion, UnitQuaternion, Some("_32"),    SinglePrecision,
-    nalgebra::UnitQuaternion<f64> => core, None,    UnitQuaternion, UnitQuaternion, Some("_64"),    DoublePrecision,
     nalgebra::Point3<f32>         => core, None,    Point3,         Point3,         Some("_32"),    SinglePrecision,
     nalgebra::Point3<f64>         => core, None,    Point3,         Point3,         Some("_64"),    DoublePrecision,
 }

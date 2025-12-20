@@ -13,8 +13,8 @@ use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::ReferenceFrame;
-use impact_math::angle::Angle;
-use nalgebra::{Point3, Quaternion, UnitQuaternion, Vector3};
+use impact_math::{angle::Angle, quaternion::Quaternion};
+use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -773,7 +773,7 @@ pub fn advance_orientation(
         angular_velocity.axis_of_rotation().scale(sin_half_angle),
     );
 
-    UnitQuaternion::new_normalize(rotation * orientation.as_ref())
+    Orientation::new_normalize(rotation * orientation.to_quaternion())
 }
 
 #[cfg(test)]

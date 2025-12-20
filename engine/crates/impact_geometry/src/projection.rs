@@ -6,9 +6,10 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
+    quaternion::{Quaternion, UnitQuaternion},
     transform::{Projective3, Similarity3},
 };
-use nalgebra::{Matrix4, Point2, Point3, Quaternion, UnitQuaternion, Vector3, Vector4};
+use nalgebra::{Matrix4, Point2, Point3, Vector3};
 use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
 /// A perspective transformation that maps points in a view frustum pointing
@@ -32,7 +33,7 @@ pub struct OrthographicTransform {
 pub struct CubeMapper {
     /// Rotations bringing points that lie in front of each cube face to the
     /// same relative locations with respect to the positive z face.
-    pub rotations_to_positive_z_face: [UnitQuaternion<f32>; 6],
+    pub rotations_to_positive_z_face: [UnitQuaternion; 6],
 }
 
 /// One of the six faces of a cubemap. The enum value corresponds to the
@@ -334,45 +335,37 @@ impl CubeMapper {
     /// within a cube face would, after being rotated with the corresponding
     /// rotation here, have the same texture coordinate within the positive z
     /// face.
-    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion<f32>; 6] = [
+    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion; 6] = [
         // From positive x face:
         // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
-            0.0,
-            -FRAC_1_SQRT_2,
-            0.0,
+        UnitQuaternion::new_unchecked(Quaternion::from_parts(
             FRAC_1_SQRT_2,
-        ))),
+            Vector3::new(0.0, -FRAC_1_SQRT_2, 0.0),
+        )),
         // From negative x face:
         // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
-            0.0,
+        UnitQuaternion::new_unchecked(Quaternion::from_parts(
             FRAC_1_SQRT_2,
-            0.0,
-            FRAC_1_SQRT_2,
-        ))),
+            Vector3::new(0.0, FRAC_1_SQRT_2, 0.0),
+        )),
         // From positive y face:
         // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
+        UnitQuaternion::new_unchecked(Quaternion::from_parts(
             FRAC_1_SQRT_2,
-            0.0,
-            0.0,
-            FRAC_1_SQRT_2,
-        ))),
+            Vector3::new(FRAC_1_SQRT_2, 0.0, 0.0),
+        )),
         // From negative y face:
         // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(
-            -FRAC_1_SQRT_2,
-            0.0,
-            0.0,
+        UnitQuaternion::new_unchecked(Quaternion::from_parts(
             FRAC_1_SQRT_2,
-        ))),
+            Vector3::new(-FRAC_1_SQRT_2, 0.0, 0.0),
+        )),
         // From positive z face:
         // UnitQuaternion::identity()
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(0.0, 0.0, 0.0, 1.0))),
+        UnitQuaternion::new_unchecked(Quaternion::from_parts(1.0, Vector3::new(0.0, 0.0, 0.0))),
         // From negative z face:
         // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_vector(Vector4::new(0.0, 1.0, 0.0, 0.0))),
+        UnitQuaternion::new_unchecked(Quaternion::from_parts(0.0, Vector3::new(0.0, 1.0, 0.0))),
     ];
 
     /// Returns a quaternion representing the rotation from the given cube face
@@ -380,7 +373,7 @@ impl CubeMapper {
     /// coordinate within the given cube face would, after being rotated with
     /// the returned rotation, have the same texture coordinate within the
     /// positive z face.
-    pub const fn rotation_to_positive_z_face_from_face(face: CubemapFace) -> UnitQuaternion<f32> {
+    pub const fn rotation_to_positive_z_face_from_face(face: CubemapFace) -> UnitQuaternion {
         Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]
     }
 
@@ -423,7 +416,7 @@ impl CubeMapper {
     ///
     /// The given rotation to cube space will be applied to each point prior to
     /// projection onto a cubemap face.
-    pub fn new(rotation_to_cube_space: UnitQuaternion<f32>) -> Self {
+    pub fn new(rotation_to_cube_space: UnitQuaternion) -> Self {
         let rotations_to_positive_z_face = [
             Self::ROTATIONS_TO_POSITIVE_Z_FACE[0] * rotation_to_cube_space,
             Self::ROTATIONS_TO_POSITIVE_Z_FACE[1] * rotation_to_cube_space,

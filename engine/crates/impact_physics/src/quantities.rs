@@ -3,8 +3,11 @@
 use crate::inertia::InertiaTensor;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::angle::{Angle, Radians};
-use nalgebra::{Point3, Quaternion, Unit, UnitQuaternion, UnitVector3, Vector3};
+use impact_math::{
+    angle::{Angle, Radians},
+    quaternion::{Quaternion, UnitQuaternion},
+};
+use nalgebra::{Point3, Unit, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
@@ -39,7 +42,7 @@ pub type Position = Point3<f32>;
 pub type Velocity = Vector3<f32>;
 
 /// An orientation in 3D space.
-pub type Orientation = UnitQuaternion<f32>;
+pub type Orientation = UnitQuaternion;
 
 /// A momentum in 3D space.
 pub type Momentum = Vector3<f32>;
@@ -214,8 +217,8 @@ impl AbsDiffEq for AngularVelocity {
 pub fn compute_orientation_derivative(
     orientation: &Orientation,
     angular_velocity_vector: &Vector3<f32>,
-) -> Quaternion<f32> {
-    Quaternion::from_imag(0.5 * angular_velocity_vector) * orientation.as_ref()
+) -> Quaternion {
+    Quaternion::from_imag(0.5 * angular_velocity_vector) * orientation.to_quaternion()
 }
 
 /// Computes the [`AngularVelocity`] of a body with the given properties.
