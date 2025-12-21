@@ -160,14 +160,14 @@ default = ["x11"]
 x11 = [
     "window",
     "winit/x11",
-    "egui-winit/x11",
+    "egui-winit?/x11",
 ]
 wayland = [
     "window",
     "winit/wayland",
     "winit/wayland-dlopen",
     "winit/wayland-csd-adwaita",
-    "egui-winit/wayland",
+    "egui-winit?/wayland",
 ]
 window = ["dep:winit", "impact_rendering/window"]
 
