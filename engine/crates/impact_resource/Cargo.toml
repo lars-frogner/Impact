@@ -5,8 +5,6 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
-[features]
-
 [dependencies]
 anyhow = { workspace = true }
 bitflags = { workspace = true }
