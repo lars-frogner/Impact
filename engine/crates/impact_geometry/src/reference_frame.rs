@@ -1,8 +1,7 @@
 //! Reference frames.
 
 use bytemuck::{Pod, Zeroable};
-use impact_math::{quaternion::UnitQuaternion, transform::Isometry3};
-use nalgebra::Point3;
+use impact_math::{point::Point3, quaternion::UnitQuaternion, transform::Isometry3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -13,7 +12,7 @@ define_component_type! {
     pub struct ReferenceFrame {
         /// The coordinates of the origin of the entity's reference frame measured
         /// in the parent space.
-        pub position: Point3<f32>,
+        pub position: Point3,
         /// The 3D orientation of the entity's reference frame in the parent space.
         pub orientation: UnitQuaternion,
     }
@@ -23,7 +22,7 @@ define_component_type! {
 impl ReferenceFrame {
     /// Creates a new reference frame with the given position and orientation.
     #[roc(body = "{ position, orientation }")]
-    pub fn new(position: Point3<f32>, orientation: UnitQuaternion) -> Self {
+    pub fn new(position: Point3, orientation: UnitQuaternion) -> Self {
         Self {
             position,
             orientation,
@@ -33,7 +32,7 @@ impl ReferenceFrame {
     /// Creates a new reference frame with the given position and the identity
     /// orientation.
     #[roc(body = "new(position, UnitQuaternion.identity)")]
-    pub fn unoriented(position: Point3<f32>) -> Self {
+    pub fn unoriented(position: Point3) -> Self {
         Self::new(position, UnitQuaternion::identity())
     }
 
@@ -47,7 +46,7 @@ impl ReferenceFrame {
     /// Creates the [`Isometry3`] transform from the entity's reference frame
     /// to the parent space.
     pub fn create_transform_to_parent_space(&self) -> Isometry3 {
-        Isometry3::from_parts(self.position.coords, self.orientation)
+        Isometry3::from_parts(*self.position.as_vector(), self.orientation)
     }
 }
 

@@ -13,8 +13,7 @@ use impact_geometry::{
     AxisAlignedBox, Capsule, OrientedBox, Plane, Sphere,
     oriented_box::compute_box_intersection_bounds,
 };
-use impact_math::transform::Isometry3;
-use nalgebra::{self as na, Point3};
+use impact_math::{point::Point3, transform::Isometry3};
 use std::{array, ops::Range};
 
 pub type VoxelRanges = [Range<usize>; 3];
@@ -222,7 +221,7 @@ impl ChunkedVoxelObject {
                                         i, j, k,
                                     );
 
-                                let normalized_distance_squared = na::distance_squared(
+                                let normalized_distance_squared = Point3::squared_distance_between(
                                     normalized_sphere.center(),
                                     &normalized_voxel_center_position,
                                 );
@@ -425,7 +424,7 @@ impl ChunkedVoxelObject {
         i: usize,
         j: usize,
         k: usize,
-    ) -> Point3<f32> {
+    ) -> Point3 {
         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
@@ -541,7 +540,7 @@ impl ChunkedVoxelObject {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
-                    if na::distance(&voxel_center_position, sphere.center())
+                    if Point3::distance_between(&voxel_center_position, sphere.center())
                         <= 0.5 * self.voxel_extent + sphere.radius()
                         && let Some(voxel) = self.get_voxel(i, j, k)
                         && let Some(VoxelPlacement::Surface(_)) = voxel.placement()
@@ -643,7 +642,7 @@ impl ChunkedVoxelObject {
         // `compute_box_intersection_bounds` returns the second bounds relative
         // to the center of box B, but we need it relative to the lower corner
         let intersection_aabb_in_b =
-            intersection_aabb_in_b_relative_to_center.translated(&object_b_obb.center().coords);
+            intersection_aabb_in_b_relative_to_center.translated(object_b_obb.center().as_vector());
 
         let intersection_voxel_ranges_in_a = voxel_ranges_touching_aab(
             object_a.occupied_voxel_ranges.clone(),
@@ -721,7 +720,7 @@ fn voxel_center_position_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> Point3<f32> {
+) -> Point3 {
     Point3::new(
         (i as f32 + 0.5) * voxel_extent,
         (j as f32 + 0.5) * voxel_extent,
@@ -734,7 +733,7 @@ fn normalized_voxel_center_position_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> Point3<f32> {
+) -> Point3 {
     Point3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5)
 }
 
@@ -805,7 +804,7 @@ pub mod fuzzing {
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
     use impact_alloc::Global;
-    use nalgebra::{UnitVector3, Vector3};
+    use impact_math::vector::{UnitVector3, Vector3};
     use std::mem;
 
     #[derive(Clone, Debug)]
@@ -827,7 +826,7 @@ pub mod fuzzing {
                 nz = 1e-3;
             }
             Ok(Self(Plane::new(
-                UnitVector3::new_normalize(Vector3::new(nx, ny, nz)),
+                UnitVector3::normalized_from(Vector3::new(nx, ny, nz)),
                 displacement,
             )))
         }
@@ -864,7 +863,7 @@ pub mod fuzzing {
             let dir_y = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let dir_z = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let length = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
-            let segment_vector = Vector3::new(dir_x, dir_y, dir_z).normalize() * length;
+            let segment_vector = Vector3::new(dir_x, dir_y, dir_z).normalized() * length;
 
             let radius = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
 
@@ -1090,7 +1089,7 @@ mod tests {
         voxel_types::VoxelType,
     };
     use impact_alloc::Global;
-    use nalgebra::{UnitVector3, Vector3};
+    use impact_math::vector::{UnitVector3, Vector3};
 
     #[test]
     fn finding_surface_voxels_intersecting_negative_halfspace_of_plane_finds_correct_voxels() {
@@ -1109,7 +1108,7 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator);
 
         let plane = Plane::new(
-            UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)),
+            UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 1.0)),
             plane_displacement,
         );
 
@@ -1161,7 +1160,7 @@ mod tests {
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
-                - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
+                - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
             sphere_radius,
         );
 
@@ -1204,7 +1203,7 @@ mod tests {
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
-                - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
+                - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
             sphere_radius,
         );
 
@@ -1232,8 +1231,8 @@ mod tests {
     #[test]
     fn modifying_voxels_within_capsule_finds_correct_voxels() {
         let object_radius = 10.0;
-        let capsule_direction = UnitVector3::new_normalize(-Vector3::new(1.0, 1.0, 1.0));
-        let capsule_vector = capsule_direction.scale(10.0);
+        let capsule_direction = UnitVector3::normalized_from(-Vector3::new(1.0, 1.0, 1.0));
+        let capsule_vector = 10.0 * capsule_direction;
         let capsule_radius = 0.4 * object_radius;
 
         let mut graph = SDFGraph::new_in(Global);
@@ -1248,7 +1247,7 @@ mod tests {
         let mut object = ChunkedVoxelObject::generate(&generator);
 
         let capsule = Capsule::new(
-            object.compute_aabb().center() - capsule_direction.scale(-object_radius),
+            object.compute_aabb().center() - (-object_radius) * capsule_direction,
             capsule_vector,
             capsule_radius,
         );

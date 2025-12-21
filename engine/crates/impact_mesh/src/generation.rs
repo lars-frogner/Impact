@@ -7,8 +7,13 @@ use crate::{
     VertexColor,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
-use impact_math::{consts::f32::TWO_PI, quaternion::UnitQuaternion, transform::Similarity3};
-use nalgebra::{Point3, UnitVector3, Vector3, vector};
+use impact_math::{
+    consts::f32::TWO_PI,
+    point::Point3,
+    quaternion::UnitQuaternion,
+    transform::Similarity3,
+    vector::{UnitVector3, Vector3},
+};
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
@@ -76,7 +81,7 @@ impl TriangleMesh {
             pos![-hex, 0.0, hez],
         ];
 
-        let normal_vectors = vec![normal![Vector3::y_axis()]; 4];
+        let normal_vectors = vec![normal![UnitVector3::unit_y()]; 4];
 
         let indices = vec![0, 3, 1, 1, 3, 2];
 
@@ -146,7 +151,7 @@ impl TriangleMesh {
             pos![-hw, hh, hd],
             pos![-hw, -hh, hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![-Vector3::x_axis()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![-UnitVector3::unit_x()]; 4]);
         add_face_indices();
 
         // Right face
@@ -156,7 +161,7 @@ impl TriangleMesh {
             pos![hw, hh, hd],
             pos![hw, hh, -hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![Vector3::x_axis()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![UnitVector3::unit_x()]; 4]);
         add_face_indices();
 
         // Bottom face
@@ -166,7 +171,7 @@ impl TriangleMesh {
             pos![hw, -hh, hd],
             pos![hw, -hh, -hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![-Vector3::y_axis()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![-UnitVector3::unit_y()]; 4]);
         add_face_indices();
 
         // Top face
@@ -176,7 +181,7 @@ impl TriangleMesh {
             pos![hw, hh, hd],
             pos![-hw, hh, hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![Vector3::y_axis()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![UnitVector3::unit_y()]; 4]);
         add_face_indices();
 
         // Front face
@@ -186,7 +191,7 @@ impl TriangleMesh {
             pos![hw, hh, -hd],
             pos![-hw, hh, -hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![-Vector3::z_axis()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![-UnitVector3::unit_z()]; 4]);
         add_face_indices();
 
         // Back face
@@ -196,7 +201,7 @@ impl TriangleMesh {
             pos![hw, hh, hd],
             pos![hw, -hh, hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![Vector3::z_axis()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![UnitVector3::unit_z()]; 4]);
         add_face_indices();
 
         Self::new(
@@ -303,7 +308,7 @@ impl TriangleMesh {
         positions.push(top_pos);
 
         // Normal direction at first side vertices
-        let normal_direction = normal!(UnitVector3::new_unchecked(Vector3::new(
+        let normal_direction = normal!(UnitVector3::unchecked_from(Vector3::new(
             cos_slope_angle,
             sin_slope_angle,
             0.0
@@ -333,7 +338,7 @@ impl TriangleMesh {
             ];
             positions.push(top_pos);
 
-            let normal_direction = normal!(UnitVector3::new_unchecked(Vector3::new(
+            let normal_direction = normal!(UnitVector3::unchecked_from(Vector3::new(
                 cos_polar_angle * cos_slope_angle,
                 sin_slope_angle,
                 sin_polar_angle * cos_slope_angle
@@ -408,9 +413,9 @@ impl TriangleMesh {
 
             normal_vectors.extend_from_slice(&vec![
                 normal!(if front_is_up {
-                    Vector3::y_axis()
+                    UnitVector3::unit_y()
                 } else {
-                    -Vector3::y_axis()
+                    -UnitVector3::unit_y()
                 });
                 (n_circumference_vertices + 1) as usize
             ]);
@@ -463,11 +468,11 @@ impl TriangleMesh {
 
         // Top vertex
         positions.push(pos![0.0, radius, 0.0]);
-        normal_vectors.push(normal!(Vector3::y_axis()));
+        normal_vectors.push(normal!(UnitVector3::unit_y()));
 
         // Bottom vertex
         positions.push(pos![0.0, -radius, 0.0]);
-        normal_vectors.push(normal!(-Vector3::y_axis()));
+        normal_vectors.push(normal!(-UnitVector3::unit_y()));
 
         let mut theta = delta_theta;
 
@@ -487,11 +492,11 @@ impl TriangleMesh {
                     y,
                     radius * sin_phi_sin_theta
                 ]);
-                normal_vectors.push(normal!(UnitVector3::new_unchecked(vector![
+                normal_vectors.push(normal!(UnitVector3::unchecked_from(Vector3::new(
                     cos_phi_sin_theta,
                     cos_theta,
                     sin_phi_sin_theta
-                ])));
+                ))));
 
                 phi += delta_phi;
             }
@@ -581,11 +586,11 @@ impl TriangleMesh {
 
         // Top vertex
         positions.push(pos![0.0, radius, 0.0]);
-        normal_vectors.push(normal!(Vector3::y_axis()));
+        normal_vectors.push(normal!(UnitVector3::unit_y()));
 
         // Vertex at center of disk
         positions.push(pos![0.0, 0.0, 0.0]);
-        normal_vectors.push(normal!(-Vector3::y_axis()));
+        normal_vectors.push(normal!(-UnitVector3::unit_y()));
 
         let mut theta = delta_theta;
 
@@ -605,11 +610,11 @@ impl TriangleMesh {
                     y,
                     radius * sin_phi_sin_theta
                 ]);
-                normal_vectors.push(normal!(UnitVector3::new_unchecked(vector![
+                normal_vectors.push(normal!(UnitVector3::unchecked_from(Vector3::new(
                     cos_phi_sin_theta,
                     cos_theta,
                     sin_phi_sin_theta
-                ])));
+                ))));
 
                 phi += delta_phi;
             }
@@ -623,7 +628,7 @@ impl TriangleMesh {
         // Use normal vectors appropriate for the disk for the repeated
         // equatorial positions
         normal_vectors.extend_from_slice(&vec![
-            normal!(-Vector3::y_axis());
+            normal!(-UnitVector3::unit_y());
             n_circumference_vertices as usize
         ]);
 
@@ -715,7 +720,7 @@ impl TriangleMesh {
 
         square.remove_normal_vectors(&mut dirty_mask);
         square.rotate(
-            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
             &mut dirty_mask,
         );
         square.set_same_color(color, &mut dirty_mask);
@@ -845,7 +850,7 @@ impl LineSegmentMesh {
         up_diagonals.transform(
             &Similarity3::from_parts(
                 Vector3::new(0.0, 1.0, 0.0),
-                UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI),
+                UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI),
                 1.0,
             ),
             &mut LineSegmentMeshDirtyMask::empty(),
@@ -969,13 +974,13 @@ impl LineSegmentMesh {
 
         let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         xy_circle.rotate(
-            &UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
             &mut dirty_mask,
         );
 
         let mut yz_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         yz_circle.rotate(
-            &UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_2),
             &mut dirty_mask,
         );
 

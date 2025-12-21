@@ -8,7 +8,7 @@ use crate::{
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use nalgebra::UnitVector3;
+use impact_math::vector::UnitVector3;
 use roc_integration::roc;
 
 /// Manages all [`DynamicDynamicSpringForceGenerator`]s.
@@ -153,9 +153,10 @@ impl DynamicDynamicSpringForceGenerator {
         let attachment_point_2 =
             rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
 
-        let Some((spring_direction, length)) =
-            UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, f32::EPSILON)
-        else {
+        let Some((spring_direction, length)) = UnitVector3::normalized_from_and_norm_if_above(
+            attachment_point_2 - attachment_point_1,
+            f32::EPSILON,
+        ) else {
             return;
         };
 
@@ -172,8 +173,7 @@ impl DynamicDynamicSpringForceGenerator {
                 - attachment_velocity_1.dot(&spring_direction)
         };
 
-        let force_on_2 =
-            self.spring.scalar_force(length, rate_of_length_change) * spring_direction.as_ref();
+        let force_on_2 = self.spring.scalar_force(length, rate_of_length_change) * spring_direction;
 
         rigid_body_1.apply_force(&(-force_on_2), &attachment_point_1);
         rigid_body_2.apply_force(&force_on_2, &attachment_point_2);
@@ -204,9 +204,10 @@ impl DynamicKinematicSpringForceGenerator {
         let attachment_point_2 =
             rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
 
-        let Some((spring_direction, length)) =
-            UnitVector3::try_new_and_get(attachment_point_2 - attachment_point_1, f32::EPSILON)
-        else {
+        let Some((spring_direction, length)) = UnitVector3::normalized_from_and_norm_if_above(
+            attachment_point_2 - attachment_point_1,
+            f32::EPSILON,
+        ) else {
             return;
         };
 
@@ -224,7 +225,7 @@ impl DynamicKinematicSpringForceGenerator {
         };
 
         let force_on_1 =
-            -self.spring.scalar_force(length, rate_of_length_change) * spring_direction.as_ref();
+            -self.spring.scalar_force(length, rate_of_length_change) * spring_direction;
 
         rigid_body_1.apply_force(&force_on_1, &attachment_point_1);
     }

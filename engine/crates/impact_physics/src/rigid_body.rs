@@ -13,8 +13,7 @@ use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::ReferenceFrame;
-use impact_math::{angle::Angle, quaternion::Quaternion};
-use nalgebra::{Point3, Vector3};
+use impact_math::{angle::Angle, point::Point3, quaternion::Quaternion, vector::Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -425,28 +424,28 @@ impl DynamicRigidBody {
     }
 
     /// Transforms a vector from the body-fixed frame to world space.
-    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_body_to_world_space(&self.orientation, vector)
     }
 
     /// Transforms a vector from world space to the body-fixed frame.
-    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_world_to_body_space(&self.orientation, vector)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
-    pub fn transform_point_from_body_to_world_space(&self, point: &Point3<f32>) -> Point3<f32> {
+    pub fn transform_point_from_body_to_world_space(&self, point: &Point3) -> Point3 {
         transform_point_from_body_to_world_space(&self.position, &self.orientation, point)
     }
 
     /// Transforms a point from world space to the body-fixed frame.
-    pub fn transform_point_from_world_to_body_space(&self, point: &Point3<f32>) -> Point3<f32> {
+    pub fn transform_point_from_world_to_body_space(&self, point: &Point3) -> Point3 {
         transform_point_from_world_to_body_space(&self.position, &self.orientation, point)
     }
 
     /// Computes the velocity of the given world space point on the body due to the
     /// body's linear and rotational motion.
-    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3<f32>) -> Velocity {
+    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3) -> Velocity {
         compute_velocity_of_world_space_point_on_body(
             &self.position,
             &self.compute_velocity(),
@@ -623,28 +622,28 @@ impl KinematicRigidBody {
     }
 
     /// Transforms a vector from the body-fixed frame to world space.
-    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_body_to_world_space(&self.orientation, vector)
     }
 
     /// Transforms a vector from world space to the body-fixed frame.
-    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_world_to_body_space(&self.orientation, vector)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
-    pub fn transform_point_from_body_to_world_space(&self, point: &Point3<f32>) -> Point3<f32> {
+    pub fn transform_point_from_body_to_world_space(&self, point: &Point3) -> Point3 {
         transform_point_from_body_to_world_space(&self.position, &self.orientation, point)
     }
 
     /// Transforms a point from world space to the body-fixed frame.
-    pub fn transform_point_from_world_to_body_space(&self, point: &Point3<f32>) -> Point3<f32> {
+    pub fn transform_point_from_world_to_body_space(&self, point: &Point3) -> Point3 {
         transform_point_from_world_to_body_space(&self.position, &self.orientation, point)
     }
 
     /// Computes the velocity of the given world space point on the body due to the
     /// body's linear and rotational motion.
-    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3<f32>) -> Velocity {
+    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3) -> Velocity {
         compute_velocity_of_world_space_point_on_body(
             &self.position,
             &self.velocity,
@@ -707,16 +706,16 @@ impl AbsDiffEq for KinematicRigidBody {
 /// Transforms a vector from the body-fixed frame to world space.
 pub fn transform_vector_from_body_to_world_space(
     body_orientation: &Orientation,
-    vector: &Vector3<f32>,
-) -> Vector3<f32> {
+    vector: &Vector3,
+) -> Vector3 {
     body_orientation.transform_vector(vector)
 }
 
 /// Transforms a vector from world space to the body-fixed frame.
 pub fn transform_vector_from_world_to_body_space(
     body_orientation: &Orientation,
-    vector: &Vector3<f32>,
-) -> Vector3<f32> {
+    vector: &Vector3,
+) -> Vector3 {
     body_orientation.inverse_transform_vector(vector)
 }
 
@@ -724,17 +723,17 @@ pub fn transform_vector_from_world_to_body_space(
 pub fn transform_point_from_body_to_world_space(
     body_position: &Position,
     body_orientation: &Orientation,
-    point: &Point3<f32>,
-) -> Point3<f32> {
-    body_position + body_orientation.transform_point(point).coords
+    point: &Point3,
+) -> Point3 {
+    body_position + body_orientation.transform_point(point).as_vector()
 }
 
 /// Transforms a point from world space to the body-fixed frame.
 pub fn transform_point_from_world_to_body_space(
     body_position: &Position,
     body_orientation: &Orientation,
-    point: &Point3<f32>,
-) -> Point3<f32> {
+    point: &Point3,
+) -> Point3 {
     body_orientation.inverse_transform_point(&Point3::from(point - body_position))
 }
 
@@ -770,18 +769,17 @@ pub fn advance_orientation(
 
     let rotation = Quaternion::from_parts(
         cos_half_angle,
-        angular_velocity.axis_of_rotation().scale(sin_half_angle),
+        sin_half_angle * angular_velocity.axis_of_rotation(),
     );
 
-    Orientation::new_normalize(rotation * orientation.to_quaternion())
+    Orientation::normalized_from(rotation * orientation.to_quaternion())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use impact_math::{Float, angle::Radians};
-    use nalgebra::Vector3;
+    use impact_math::{Float, angle::Radians, vector::UnitVector3};
     use proptest::prelude::*;
 
     prop_compose! {
@@ -900,8 +898,8 @@ mod tests {
 
     #[test]
     fn should_retain_dynamic_body_velocities_when_advancing_for_zero_time() {
-        let velocity = Velocity::z();
-        let angular_velocity = AngularVelocity::from_vector(Vector3::x());
+        let velocity = Velocity::unit_z();
+        let angular_velocity = AngularVelocity::from_vector(Vector3::unit_x());
 
         let mut body = DynamicRigidBody::new(
             1.0,
@@ -912,7 +910,7 @@ mod tests {
             angular_velocity,
         );
 
-        body.apply_force(&Force::x(), &Point3::new(0.0, 1.0, 0.0));
+        body.apply_force(&Force::unit_x(), &Point3::new(0.0, 1.0, 0.0));
 
         body.advance_momentum(0.0);
         assert_abs_diff_eq!(body.compute_velocity(), velocity);
@@ -954,8 +952,8 @@ mod tests {
     fn should_change_dynamic_body_velocities_with_nonzero_force_and_torque() {
         let position = Position::origin();
         let orientation = Orientation::identity();
-        let velocity = Velocity::z();
-        let angular_velocity = AngularVelocity::from_vector(Vector3::x());
+        let velocity = Velocity::unit_z();
+        let angular_velocity = AngularVelocity::from_vector(Vector3::unit_x());
 
         let mut body = DynamicRigidBody::new(
             1.0,
@@ -966,7 +964,7 @@ mod tests {
             angular_velocity,
         );
 
-        body.apply_force(&Force::x(), &Point3::new(0.0, 1.0, 0.0));
+        body.apply_force(&Force::unit_x(), &Point3::new(0.0, 1.0, 0.0));
 
         body.advance_momentum(1.0);
         assert_abs_diff_ne!(body.compute_velocity(), velocity);
@@ -982,7 +980,7 @@ mod tests {
     #[test]
     fn advancing_orientation_with_zero_angular_speed_gives_same_orientation() {
         let orientation = Orientation::identity();
-        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Radians(0.0));
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_x(), Radians(0.0));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 1.2);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
@@ -990,7 +988,7 @@ mod tests {
     #[test]
     fn advancing_orientation_by_zero_duration_gives_same_orientation() {
         let orientation = Orientation::identity();
-        let angular_velocity = AngularVelocity::new(Vector3::x_axis(), Radians(1.2));
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_x(), Radians(1.2));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 0.0);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
@@ -999,8 +997,8 @@ mod tests {
     fn advancing_orientation_about_its_own_axis_works() {
         let angular_speed = 0.1;
         let duration = 2.0;
-        let orientation = Orientation::from_axis_angle(&Vector3::y_axis(), 0.1);
-        let angular_velocity = AngularVelocity::new(Vector3::y_axis(), Radians(angular_speed));
+        let orientation = Orientation::from_axis_angle(&UnitVector3::unit_y(), 0.1);
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_y(), Radians(angular_speed));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, duration);
         assert_abs_diff_eq!(
             advanced_orientation.angle(),

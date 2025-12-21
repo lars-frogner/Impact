@@ -1,8 +1,8 @@
-# Hash: d0f6f83e212d7df8a6e6cee3799bbbe1c991081280b8602d41a2eeaac9e38645
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: 2ee31ad7940f089ab203774bdd711d9b4b6a0573660db166484271b556f54c6c
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     ModelTransform,
     identity,
@@ -38,7 +38,7 @@ import core.Vector3
 ModelTransform : {
     ## The offset subtracted from a model-space position before scaling to
     ## transform it to the parent entity's space.
-    offset : Vector3.Vector3 Binary32,
+    offset : Vector3.Vector3,
     ## The scaling factor applied to a model-space position after the
     ## offset to transform it to the parent entity's space.
     scale : F32,
@@ -73,14 +73,14 @@ add_multiple_identity = |entity_data|
 
 ## Creates a transform where the parent entity's space has the given offset
 ## from that of the model.
-with_offset : Vector3.Vector3 Binary32 -> ModelTransform
+with_offset : Vector3.Vector3 -> ModelTransform
 with_offset = |offset|
     with_offset_and_scale(offset, 1.0)
 
 ## Creates a transform where the parent entity's space has the given offset
 ## from that of the model.
 ## Adds the component to the given entity's data.
-add_with_offset : Entity.ComponentData, Vector3.Vector3 Binary32 -> Entity.ComponentData
+add_with_offset : Entity.ComponentData, Vector3.Vector3 -> Entity.ComponentData
 add_with_offset = |entity_data, offset|
     add(entity_data, with_offset(offset))
 
@@ -88,7 +88,7 @@ add_with_offset = |entity_data, offset|
 ## from that of the model.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_with_offset : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_with_offset : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3) -> Result Entity.MultiComponentData Str
 add_multiple_with_offset = |entity_data, offset|
     add_multiple(
         entity_data,
@@ -129,14 +129,14 @@ add_multiple_with_scale = |entity_data, scale|
 
 ## Creates a transform where the parent entity's space has the given offset
 ## and scale relative to that of the model.
-with_offset_and_scale : Vector3.Vector3 Binary32, F32 -> ModelTransform
+with_offset_and_scale : Vector3.Vector3, F32 -> ModelTransform
 with_offset_and_scale = |offset, scale|
     { offset, scale }
 
 ## Creates a transform where the parent entity's space has the given offset
 ## and scale relative to that of the model.
 ## Adds the component to the given entity's data.
-add_with_offset_and_scale : Entity.ComponentData, Vector3.Vector3 Binary32, F32 -> Entity.ComponentData
+add_with_offset_and_scale : Entity.ComponentData, Vector3.Vector3, F32 -> Entity.ComponentData
 add_with_offset_and_scale = |entity_data, offset, scale|
     add(entity_data, with_offset_and_scale(offset, scale))
 
@@ -144,7 +144,7 @@ add_with_offset_and_scale = |entity_data, offset, scale|
 ## and scale relative to that of the model.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_with_offset_and_scale : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_with_offset_and_scale : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_with_offset_and_scale = |entity_data, offset, scale|
     add_multiple(
         entity_data,
@@ -243,7 +243,7 @@ write_bytes : List U8, ModelTransform -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(16)
-    |> Vector3.write_bytes_32(value.offset)
+    |> Vector3.write_bytes(value.offset)
     |> Builtin.write_bytes_f32(value.scale)
 
 ## Deserializes a value of [ModelTransform] from its bytes in the
@@ -252,7 +252,7 @@ from_bytes : List U8 -> Result ModelTransform _
 from_bytes = |bytes|
     Ok(
         {
-            offset: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            offset: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             scale: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )

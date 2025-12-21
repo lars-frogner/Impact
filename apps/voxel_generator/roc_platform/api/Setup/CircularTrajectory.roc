@@ -1,8 +1,8 @@
-# Hash: 94ef3121b1a00525c8157afedcc0078d32446ada800a6716166987a372af06e5
-# Generated: 2025-12-20T20:27:16+00:00
+# Hash: 5eb4d486a9410c83cad8eb02ddea12445872860731a7d7917790046e89c461bf
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectory
 # Type category: Component
-# Commit: dbb3dcfa (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     CircularTrajectory,
     new,
@@ -31,7 +31,7 @@ CircularTrajectory : {
     ## circle's plane.
     orientation : UnitQuaternion.UnitQuaternion,
     ## The position of the center of the circle.
-    center_position : Point3.Point3 Binary32,
+    center_position : Point3.Point3,
     ## The radius of the circle.
     radius : F32,
     ## The duration of one revolution.
@@ -39,7 +39,7 @@ CircularTrajectory : {
 }
 
 ## Creates a new circular trajectory with the given properties.
-new : F32, UnitQuaternion.UnitQuaternion, Point3.Point3 Binary32, F32, F32 -> CircularTrajectory
+new : F32, UnitQuaternion.UnitQuaternion, Point3.Point3, F32, F32 -> CircularTrajectory
 new = |initial_time, orientation, center_position, radius, period|
     {
         initial_time,
@@ -51,7 +51,7 @@ new = |initial_time, orientation, center_position, radius, period|
 
 ## Creates a new circular trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion, Point3.Point3 Binary32, F32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion, Point3.Point3, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, initial_time, orientation, center_position, radius, period|
     add(entity_data, new(initial_time, orientation, center_position, radius, period))
 
@@ -115,7 +115,7 @@ write_bytes = |bytes, value|
     |> List.reserve(40)
     |> Builtin.write_bytes_f32(value.initial_time)
     |> UnitQuaternion.write_bytes(value.orientation)
-    |> Point3.write_bytes_32(value.center_position)
+    |> Point3.write_bytes(value.center_position)
     |> Builtin.write_bytes_f32(value.radius)
     |> Builtin.write_bytes_f32(value.period)
 
@@ -127,7 +127,7 @@ from_bytes = |bytes|
         {
             initial_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
             orientation: bytes |> List.sublist({ start: 4, len: 16 }) |> UnitQuaternion.from_bytes?,
-            center_position: bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes_32?,
+            center_position: bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes?,
             radius: bytes |> List.sublist({ start: 32, len: 4 }) |> Builtin.from_bytes_f32?,
             period: bytes |> List.sublist({ start: 36, len: 4 }) |> Builtin.from_bytes_f32?,
         },

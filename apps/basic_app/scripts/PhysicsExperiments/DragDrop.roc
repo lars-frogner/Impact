@@ -58,7 +58,7 @@ create_entities! = |position|
     cone_without_drag =
         cone_base
         |> Comp.ReferenceFrame.add_new(
-            Point3.displace(position, (-5, 0, 0)),
+            Point3.translate(position, (-5, 0, 0)),
             UnitQuaternion.from_axis_angle(UnitVector3.z_axis, 3.0),
         )
         |> Setup.UniformColor.add((0.7, 0.1, 0.1))

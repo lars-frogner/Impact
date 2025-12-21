@@ -79,7 +79,7 @@ impl ConstantAccelerationTrajectoryDriver {
         let (trajectory_position, trajectory_velocity) =
             self.trajectory.compute_position_and_velocity(time);
 
-        rigid_body.set_position(rigid_body.position() + trajectory_position.coords);
+        rigid_body.set_position(rigid_body.position() + trajectory_position.as_vector());
         rigid_body.set_velocity(rigid_body.velocity() + trajectory_velocity);
     }
 }
@@ -150,7 +150,7 @@ impl ConstantAccelerationTrajectory {
 mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use nalgebra::{Point3, Vector3};
+    use impact_math::{point::Point3, vector::Vector3};
     use proptest::prelude::*;
 
     prop_compose! {
@@ -198,8 +198,8 @@ mod tests {
     #[test]
     fn should_get_different_position_and_velocity_for_nonzero_velocty_and_acceleration() {
         let initial_position = Position::origin();
-        let initial_velocity = Velocity::y();
-        let acceleration = Acceleration::z();
+        let initial_velocity = Velocity::unit_y();
+        let acceleration = Acceleration::unit_z();
         let trajectory = ConstantAccelerationTrajectory::new(
             0.0,
             initial_position,

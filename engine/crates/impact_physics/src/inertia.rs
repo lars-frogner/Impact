@@ -3,8 +3,10 @@
 use crate::quantities::Position;
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, matrix::Matrix3, quaternion::UnitQuaternion, transform::Similarity3};
-use nalgebra::{Point3, Vector3};
+use impact_math::{
+    Float, matrix::Matrix3, point::Point3, quaternion::UnitQuaternion, transform::Similarity3,
+    vector::Vector3,
+};
 use roc_integration::roc;
 
 /// The inertia-related properties of a physical body.
@@ -47,7 +49,7 @@ impl InertialProperties {
     /// surface is represented by the given triangles. The surface is assumed
     /// closed, but may contain disjoint parts.
     pub fn of_uniform_triangle_mesh<'a>(
-        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
         mass_density: f32,
     ) -> Self {
         let (mass, center_of_mass, inertia_tensor) =
@@ -163,9 +165,9 @@ impl InertialProperties {
         let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
 
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
-            moment_of_inertia - mass * center_of_mass.y.powi(2),
+            moment_of_inertia - mass * center_of_mass.y().powi(2),
             moment_of_inertia,
-            moment_of_inertia - mass * center_of_mass.y.powi(2),
+            moment_of_inertia - mass * center_of_mass.y().powi(2),
         );
 
         Self::new(mass, center_of_mass, inertia_tensor)
@@ -212,7 +214,7 @@ impl InertialProperties {
 
         self.mass *= mass_scaling;
 
-        self.center_of_mass = self.center_of_mass.coords.scale(scale).into();
+        self.center_of_mass = scale * self.center_of_mass;
 
         self.inertia_tensor = self
             .inertia_tensor
@@ -426,7 +428,7 @@ impl InertiaTensor {
     /// respect to.
     pub fn compute_delta_to_com_inertia_matrix(
         mass: f32,
-        displacement_to_com: &Vector3<f32>,
+        displacement_to_com: &Vector3,
     ) -> Matrix3 {
         let (moment_of_inertia_deltas, product_of_inertia_deltas) =
             Self::compute_delta_to_com_moments_and_products_of_inertia(mass, displacement_to_com);
@@ -448,20 +450,20 @@ impl InertiaTensor {
     /// respect to.
     pub fn compute_delta_to_com_moments_and_products_of_inertia(
         mass: f32,
-        displacement_to_com: &Vector3<f32>,
-    ) -> (Vector3<f32>, Vector3<f32>) {
+        displacement_to_com: &Vector3,
+    ) -> (Vector3, Vector3) {
         let squared_displacement = displacement_to_com.component_mul(displacement_to_com);
 
         let moment_of_inertia_deltas = Vector3::new(
-            -mass * (squared_displacement.y + squared_displacement.z),
-            -mass * (squared_displacement.z + squared_displacement.x),
-            -mass * (squared_displacement.x + squared_displacement.y),
+            -mass * (squared_displacement.y() + squared_displacement.z()),
+            -mass * (squared_displacement.z() + squared_displacement.x()),
+            -mass * (squared_displacement.x() + squared_displacement.y()),
         );
 
         let product_of_inertia_deltas = Vector3::new(
-            -mass * displacement_to_com.x * displacement_to_com.y,
-            -mass * displacement_to_com.y * displacement_to_com.z,
-            -mass * displacement_to_com.z * displacement_to_com.x,
+            -mass * displacement_to_com.x() * displacement_to_com.y(),
+            -mass * displacement_to_com.y() * displacement_to_com.z(),
+            -mass * displacement_to_com.z() * displacement_to_com.x(),
         );
 
         (moment_of_inertia_deltas, product_of_inertia_deltas)
@@ -473,8 +475,8 @@ impl InertiaTensor {
     /// from the center of mass.
     pub fn compute_delta_from_com_moments_and_products_of_inertia(
         mass: f32,
-        displacement_from_com: &Vector3<f32>,
-    ) -> (Vector3<f32>, Vector3<f32>) {
+        displacement_from_com: &Vector3,
+    ) -> (Vector3, Vector3) {
         let (moment_of_inertia_deltas, product_of_inertia_deltas) =
             Self::compute_delta_to_com_moments_and_products_of_inertia(mass, displacement_from_com);
         (-moment_of_inertia_deltas, -product_of_inertia_deltas)
@@ -486,9 +488,9 @@ impl InertiaTensor {
     /// point they are currently defined with respect to.
     pub fn compute_delta_to_moments_and_products_of_inertia_defined_relative_to_point(
         mass: f32,
-        displacement_to_com: &Vector3<f32>,
-        displacement_to_point: &Vector3<f32>,
-    ) -> (Vector3<f32>, Vector3<f32>) {
+        displacement_to_com: &Vector3,
+        displacement_to_point: &Vector3,
+    ) -> (Vector3, Vector3) {
         let (com_moment_of_inertia_deltas, com_product_of_inertia_deltas) =
             Self::compute_delta_to_com_moments_and_products_of_inertia(mass, displacement_to_com);
 
@@ -569,7 +571,7 @@ pub fn compute_hemisphere_volume<F: Float>(radius: F) -> F {
 /// the method described in Eberly (2004). The surface is assumed closed, but
 /// may contain disjoint parts.
 pub fn compute_triangle_mesh_volume<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
 ) -> f32 {
     let mut volume = 0.0;
 
@@ -587,7 +589,7 @@ pub fn compute_triangle_mesh_volume<'a>(
 /// described in Eberly (2004). The inertia tensor is defined relative to the
 /// center of mass. The mesh is assumed closed, but may contain disjoint parts.
 pub fn compute_uniform_triangle_mesh_inertial_properties<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
     mass_density: f32,
 ) -> (f32, Position, InertiaTensor) {
     let mut mass = 0.0;
@@ -618,20 +620,20 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<'a>(
 
     let center_of_mass = Point3::from(first_moments / mass);
 
-    let j_xx = diagonal_second_moments.y + diagonal_second_moments.z;
-    let j_yy = diagonal_second_moments.z + diagonal_second_moments.x;
-    let j_zz = diagonal_second_moments.x + diagonal_second_moments.y;
+    let j_xx = diagonal_second_moments.y() + diagonal_second_moments.z();
+    let j_yy = diagonal_second_moments.z() + diagonal_second_moments.x();
+    let j_zz = diagonal_second_moments.x() + diagonal_second_moments.y();
 
-    let j_xy = -mixed_second_moments.x;
-    let j_yz = -mixed_second_moments.y;
-    let j_zx = -mixed_second_moments.z;
+    let j_xy = -mixed_second_moments.x();
+    let j_yz = -mixed_second_moments.y();
+    let j_zx = -mixed_second_moments.z();
 
     let inertia_matrix =
         Matrix3::from_columns(&[
             Vector3::new(j_xx, j_xy, j_zx),
             Vector3::new(j_xy, j_yy, j_yz),
             Vector3::new(j_zx, j_yz, j_zz),
-        ]) + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, &center_of_mass.coords);
+        ]) + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, center_of_mass.as_vector());
 
     let inertia_tensor = InertiaTensor::from_matrix(inertia_matrix);
 
@@ -643,7 +645,7 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<'a>(
 /// assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_mass<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
     mass_density: f32,
 ) -> f32 {
     compute_triangle_mesh_volume(triangle_vertex_positions) * mass_density
@@ -654,7 +656,7 @@ pub fn compute_uniform_triangle_mesh_mass<'a>(
 /// (2004). The surface is assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_center_of_mass<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
 ) -> Position {
     compute_uniform_triangle_mesh_inertial_properties(triangle_vertex_positions, 1.0).1
 }
@@ -665,36 +667,36 @@ pub fn compute_uniform_triangle_mesh_center_of_mass<'a>(
 /// surface is assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_inertia_tensor<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
     mass_density: f32,
 ) -> InertiaTensor {
     compute_uniform_triangle_mesh_inertial_properties(triangle_vertex_positions, mass_density).2
 }
 
 fn compute_volume_contribution_for_triangle(
-    vertex_0: &Point3<f32>,
-    vertex_1: &Point3<f32>,
-    vertex_2: &Point3<f32>,
+    vertex_0: &Point3,
+    vertex_1: &Point3,
+    vertex_2: &Point3,
 ) -> f32 {
-    let edge_1_y = vertex_1.y - vertex_0.y;
-    let edge_1_z = vertex_1.z - vertex_0.z;
-    let edge_2_y = vertex_2.y - vertex_0.y;
-    let edge_2_z = vertex_2.z - vertex_0.z;
+    let edge_1_y = vertex_1.y() - vertex_0.y();
+    let edge_1_z = vertex_1.z() - vertex_0.z();
+    let edge_2_y = vertex_2.y() - vertex_0.y();
+    let edge_2_z = vertex_2.z() - vertex_0.z();
 
-    (edge_1_y * edge_2_z - edge_2_y * edge_1_z) * (vertex_0.x + vertex_1.x + vertex_2.x)
+    (edge_1_y * edge_2_z - edge_2_y * edge_1_z) * (vertex_0.x() + vertex_1.x() + vertex_2.x())
 }
 
 fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
-    vertex_0: &Point3<f32>,
-    vertex_1: &Point3<f32>,
-    vertex_2: &Point3<f32>,
-) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
-    let w_0 = vertex_0.coords;
-    let w_1 = vertex_1.coords;
-    let w_2 = vertex_2.coords;
+    vertex_0: &Point3,
+    vertex_1: &Point3,
+    vertex_2: &Point3,
+) -> (f32, Vector3, Vector3, Vector3) {
+    let w_0 = vertex_0.as_vector();
+    let w_1 = vertex_1.as_vector();
+    let w_2 = vertex_2.as_vector();
 
     let tmp_0 = w_0 + w_1;
-    let tmp_1 = w_0.component_mul(&w_0);
+    let tmp_1 = w_0.component_mul(w_0);
     let tmp_2 = tmp_1 + w_1.component_mul(&tmp_0);
 
     let f_1 = tmp_0 + w_2;
@@ -710,16 +712,16 @@ fn compute_zeroth_first_and_second_moment_contributions_for_triangle(
 
     let edge_cross_prod = edge_1.cross(&edge_2);
 
-    let zeroth_moment = edge_cross_prod.x * f_1.x;
+    let zeroth_moment = edge_cross_prod.x() * f_1.x();
 
     let first_moments = edge_cross_prod.component_mul(&f_2);
 
     let diagonal_second_moments = edge_cross_prod.component_mul(&f_3);
 
     let mixed_second_moments = Vector3::new(
-        edge_cross_prod.x * (w_0.y * g_0.x + w_1.y * g_1.x + w_2.y * g_2.x), // x²y
-        edge_cross_prod.y * (w_0.z * g_0.y + w_1.z * g_1.y + w_2.z * g_2.y), // y²z
-        edge_cross_prod.z * (w_0.x * g_0.z + w_1.x * g_1.z + w_2.x * g_2.z), // z²x
+        edge_cross_prod.x() * (w_0.y() * g_0.x() + w_1.y() * g_1.x() + w_2.y() * g_2.x()), // x²y
+        edge_cross_prod.y() * (w_0.z() * g_0.y() + w_1.z() * g_1.y() + w_2.z() * g_2.y()), // y²z
+        edge_cross_prod.z() * (w_0.x() * g_0.z() + w_1.x() * g_1.z() + w_2.x() * g_2.z()), // z²x
     );
 
     (
@@ -799,7 +801,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 cube_properties.center_of_mass(),
                 &correctly_transformed_center_of_mass,
-                epsilon = 1e-7 * correctly_transformed_center_of_mass.coords.abs().max()
+                epsilon = 1e-7 * correctly_transformed_center_of_mass.as_vector().component_abs().max_component()
             ));
         }
     }
@@ -890,7 +892,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 computed_center_of_mass,
                 correct_center_of_mass,
-                epsilon = 1e-1 * correct_center_of_mass.coords.abs().max()
+                epsilon = 1e-1 * correct_center_of_mass.as_vector().component_abs().max_component()
             ));
         }
     }

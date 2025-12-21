@@ -75,7 +75,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             // Offset the model to put the center of mass at the origin of this
             // entity's space
             model_transform
-                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
             let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
@@ -114,7 +114,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             // Offset the model to put the center of mass at the origin of this
             // entity's space
             model_transform
-                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
             let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
@@ -153,7 +153,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             // Offset the model to put the center of mass at the origin of this
             // entity's space
             model_transform
-                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
             let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
@@ -192,7 +192,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             // Offset the model to put the center of mass at the origin of this
             // entity's space
             model_transform
-                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
             let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
@@ -232,7 +232,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             // Offset the model to put the center of mass at the origin of this
             // entity's space
             model_transform
-                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
             let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
@@ -278,7 +278,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             // Offset the model to put the center of mass at the origin of this
             // entity's space
             model_transform
-                .set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
             let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,

@@ -25,8 +25,9 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_math::{Float, halton::HaltonSequence, hash::ConstStringHash64, hash64};
-use nalgebra::Vector4;
+use impact_math::{
+    Float, halton::HaltonSequence, hash::ConstStringHash64, hash64, vector::Vector4,
+};
 use std::borrow::Cow;
 
 /// The maximum number of samples that can be used for computing ambient
@@ -70,7 +71,7 @@ pub struct AmbientOcclusionRenderCommands {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct AmbientOcclusionSamples {
-    sample_offsets: [Vector4<f32>; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
+    sample_offsets: [Vector4; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
     sample_count: u32,
     sample_radius: f32,
     sample_normalization: f32,
@@ -242,8 +243,8 @@ impl AmbientOcclusionSamples {
             let angle = angle_halton_sample * f32::TWO_PI;
             let (sin_angle, cos_angle) = f32::sin_cos(angle);
 
-            offset.x = radius * cos_angle;
-            offset.y = radius * sin_angle;
+            *offset.x_mut() = radius * cos_angle;
+            *offset.y_mut() = radius * sin_angle;
         }
 
         let sample_normalization = 2.0 * intensity_scale / (f32::PI * (sample_count as f32));

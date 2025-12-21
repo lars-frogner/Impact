@@ -16,8 +16,8 @@ module [
 ]
 
 import Radians exposing [RadiansF32]
-import UnitVector3 exposing [UnitVector3F32]
-import Vector3 exposing [Vector3F32]
+import UnitVector3 exposing [UnitVector3]
+import Vector3 exposing [Vector3]
 import Vector4
 import Matrix3 exposing [Matrix3]
 
@@ -25,17 +25,17 @@ UnitQuaternion : (F32, F32, F32, F32)
 
 identity = from_parts(Vector3.zero, 1.0)
 
-from_axis_angle : UnitVector3F32, RadiansF32 -> UnitQuaternion
+from_axis_angle : UnitVector3, RadiansF32 -> UnitQuaternion
 from_axis_angle = |axis, angle|
     sin_half_angle = Num.sin(0.5 * angle)
     cos_half_angle = Num.cos(0.5 * angle)
     from_parts(Vector3.scale(axis, sin_half_angle), cos_half_angle)
 
-from_parts : Vector3F32, F32 -> UnitQuaternion
+from_parts : Vector3, F32 -> UnitQuaternion
 from_parts = |vector, scalar|
     (vector.0, vector.1, vector.2, scalar)
 
-parts : UnitQuaternion -> (Vector3F32, F32)
+parts : UnitQuaternion -> (Vector3, F32)
 parts = |(x, y, z, w)|
     ((x, y, z), w)
 
@@ -73,7 +73,7 @@ invert = |quat|
     (imag, real) = parts(quat)
     from_parts(Vector3.flip(imag), real)
 
-rotate_vector : UnitQuaternion, Vector3F32 -> Vector3F32
+rotate_vector : UnitQuaternion, Vector3 -> Vector3
 rotate_vector = |quat, vec|
     (imag, real) = parts(quat)
     tmp = Vector3.cross(imag, vec) |> Vector3.scale(2.0)
@@ -97,5 +97,5 @@ to_rotation_matrix = |(x, y, z, w)|
     col3 = ((xz + wy), (yz - wx), 1 - (x2 + y2))
     (col1, col2, col3)
 
-write_bytes = Vector4.write_bytes_32
-from_bytes = Vector4.from_bytes_32
+write_bytes = Vector4.write_bytes
+from_bytes = Vector4.from_bytes

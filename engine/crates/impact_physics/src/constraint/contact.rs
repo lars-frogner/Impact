@@ -5,8 +5,10 @@ use crate::{
     material::ContactResponseParameters,
     quantities::{self, Orientation, Position, Velocity},
 };
-use impact_math::quaternion::UnitQuaternion;
-use nalgebra::{UnitVector3, Vector3};
+use impact_math::{
+    quaternion::UnitQuaternion,
+    vector::{UnitVector3, Vector3},
+};
 use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
@@ -47,7 +49,7 @@ pub struct ContactGeometry {
     /// deepest into body A.
     pub position: Position,
     /// The world space surface normal of body B at [`Self::position`].
-    pub surface_normal: UnitVector3<f32>,
+    pub surface_normal: UnitVector3,
     /// The distance between the deepest penetration points on A and B
     /// along [`Self::surface_normal`]. This is always non-negative when the
     /// bodies are in contact.
@@ -67,14 +69,14 @@ pub struct PreparedContact {
     local_position_on_b: Position,
     /// The world space surface normal of body B at
     /// [`Self::local_position_on_b`].
-    normal: UnitVector3<f32>,
+    normal: UnitVector3,
     /// A world space tangent direction of the surface of body B at
     /// [`Self::local_position_on_b`].
-    tangent: UnitVector3<f32>,
+    tangent: UnitVector3,
     /// The world space tangent direction completing the right-handed
     /// coordinate system defined by [`Self::normal`] and
     /// [`Self::tangent`].
-    bitangent: UnitVector3<f32>,
+    bitangent: UnitVector3,
     effective_mass_normal: f32,
     effective_mass_tangent: f32,
     effective_mass_bitangent: f32,
@@ -150,7 +152,7 @@ impl ContactGeometry {
     /// deepest into body B along the surface normal from
     /// [`Self::position_on_b`].
     pub fn position_on_a(&self) -> Position {
-        self.position - self.surface_normal.scale(self.penetration_depth)
+        self.position - self.penetration_depth * self.surface_normal
     }
 
     /// Returns world space position of the point on body B that penetrates
@@ -164,7 +166,7 @@ impl Default for ContactGeometry {
     fn default() -> Self {
         Self {
             position: Position::origin(),
-            surface_normal: Vector3::z_axis(),
+            surface_normal: UnitVector3::unit_z(),
             penetration_depth: 0.0,
         }
     }
@@ -323,9 +325,9 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b: &mut ConstrainedBody,
         impulses: ContactImpulses,
     ) {
-        let momentum_change = self.normal.scale(impulses.normal)
-            + self.tangent.scale(impulses.tangent)
-            + self.bitangent.scale(impulses.bitangent);
+        let momentum_change = impulses.normal * self.normal
+            + impulses.tangent * self.tangent
+            + impulses.bitangent * self.bitangent;
 
         // TODO: maybe this should be cached from `compute_impulses`
         let position_on_b =
@@ -385,7 +387,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let pseudo_impulse = effective_mass * correction_factor * penetration_depth;
 
-        let pseudo_momentum_change = self.normal.scale(pseudo_impulse);
+        let pseudo_momentum_change = pseudo_impulse * self.normal;
 
         let pseudo_velocity_a = body_a.inverse_mass * pseudo_momentum_change;
         let pseudo_angular_velocity_a =
@@ -453,16 +455,16 @@ impl Mul<f32> for ContactImpulses {
     }
 }
 
-fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3<f32>) -> Velocity {
+fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3) -> Velocity {
     body.velocity + body.angular_velocity.cross(disp)
 }
 
 fn compute_effective_mass(
     body_a: &ConstrainedBody,
     body_b: &ConstrainedBody,
-    disp_a: &Vector3<f32>,
-    disp_b: &Vector3<f32>,
-    direction: &UnitVector3<f32>,
+    disp_a: &Vector3,
+    disp_b: &Vector3,
+    direction: &UnitVector3,
 ) -> f32 {
     let disp_a_cross_dir = disp_a.cross(direction);
     let disp_b_cross_dir = disp_b.cross(direction);
@@ -473,34 +475,29 @@ fn compute_effective_mass(
         + disp_b_cross_dir.dot(&(body_b.inverse_inertia_tensor * disp_b_cross_dir)))
 }
 
-fn construct_tangent_vectors(
-    surface_normal: &UnitVector3<f32>,
-) -> (UnitVector3<f32>, UnitVector3<f32>) {
+fn construct_tangent_vectors(surface_normal: &UnitVector3) -> (UnitVector3, UnitVector3) {
     const INV_SQRT_THREE: f32 = 0.57735;
 
-    let tangent_1 = UnitVector3::new_normalize(if surface_normal.x.abs() < INV_SQRT_THREE {
+    let tangent_1 = UnitVector3::normalized_from(if surface_normal.x().abs() < INV_SQRT_THREE {
         // Since the normal is relatively close to lying in the yz-plane, we
         // project it onto the yz plane, rotate it 90 degrees within the plane
         // and use that as the (unnormalized) first tangent. This vector will
         // be sufficiently different from the normal to avoid numerical issues.
-        Vector3::new(0.0, surface_normal.z, -surface_normal.y)
+        Vector3::new(0.0, surface_normal.z(), -surface_normal.y())
     } else {
         // If the normal lies far from the yz-plane, projecting it onto the
         // yz-plane could lead to degeneracy, so we project it onto the xy-
         // plane instead to construct the first tangent.
-        Vector3::new(surface_normal.y, -surface_normal.x, 0.0)
+        Vector3::new(surface_normal.y(), -surface_normal.x(), 0.0)
     });
 
-    let tangent_2 = UnitVector3::new_unchecked(surface_normal.cross(&tangent_1));
+    let tangent_2 = UnitVector3::unchecked_from(surface_normal.cross(&tangent_1));
 
     (tangent_1, tangent_2)
 }
 
-fn pseudo_advance_orientation(
-    orientation: &mut Orientation,
-    pseudo_angular_velocity: &Vector3<f32>,
-) {
-    *orientation = UnitQuaternion::new_normalize(
+fn pseudo_advance_orientation(orientation: &mut Orientation, pseudo_angular_velocity: &Vector3) {
+    *orientation = UnitQuaternion::normalized_from(
         orientation.to_quaternion()
             + quantities::compute_orientation_derivative(orientation, pseudo_angular_velocity),
     );

@@ -7,10 +7,11 @@ use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
     matrix::Matrix4,
+    point::{Point2, Point3},
     quaternion::{Quaternion, UnitQuaternion},
     transform::{Projective3, Similarity3},
+    vector::Vector3,
 };
-use nalgebra::{Point2, Point3, Vector3};
 use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
 /// A perspective transformation that maps points in a view frustum pointing
@@ -108,24 +109,24 @@ impl PerspectiveTransform {
         self.matrix.element(2, 3) / (1.0 + self.matrix.element(2, 2))
     }
 
-    pub fn transform_point(&self, point: &Point3<f32>) -> Point3<f32> {
+    pub fn transform_point(&self, point: &Point3) -> Point3 {
         let diagonal = self.matrix.diagonal();
         let translation_z = self.matrix.element(2, 3);
-        let inverse_denom = -1.0 / point.z;
+        let inverse_denom = -1.0 / point.z();
         Point3::new(
-            diagonal.x * point.x * inverse_denom,
-            diagonal.y * point.y * inverse_denom,
-            (diagonal.z * point.z + translation_z) * inverse_denom,
+            diagonal.x() * point.x() * inverse_denom,
+            diagonal.y() * point.y() * inverse_denom,
+            (diagonal.z() * point.z() + translation_z) * inverse_denom,
         )
     }
 
-    pub fn transform_vector(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+    pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
         let diagonal = self.matrix.diagonal();
-        let inverse_denom = -1.0 / vector.z;
+        let inverse_denom = -1.0 / vector.z();
         Vector3::new(
-            diagonal.x * vector.x * inverse_denom,
-            diagonal.y * vector.y * inverse_denom,
-            -diagonal.z,
+            diagonal.x() * vector.x() * inverse_denom,
+            diagonal.y() * vector.y() * inverse_denom,
+            -diagonal.z(),
         )
     }
 
@@ -213,7 +214,14 @@ impl OrthographicTransform {
     pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox) -> Self {
         let lower = axis_aligned_box.lower_corner();
         let upper = axis_aligned_box.upper_corner();
-        Self::new(lower.x, upper.x, lower.y, upper.y, lower.z, upper.z)
+        Self::new(
+            lower.x(),
+            upper.x(),
+            lower.y(),
+            upper.y(),
+            lower.z(),
+            upper.z(),
+        )
     }
 
     /// Computes the translation and nonuniform scaling representing the
@@ -226,7 +234,7 @@ impl OrthographicTransform {
         top: f32,
         near: f32,
         far: f32,
-    ) -> (Vector3<f32>, [f32; 3]) {
+    ) -> (Vector3, [f32; 3]) {
         (
             Vector3::new(
                 Self::compute_translation_x(left, right),
@@ -244,14 +252,14 @@ impl OrthographicTransform {
     /// Computes the center and half extents of the orthographic view frustum
     /// represented by the given translation and nonuniform scaling.
     pub fn compute_center_and_half_extents_from_translation_and_scaling(
-        translation: &Vector3<f32>,
+        translation: &Vector3,
         &[sx, sy, sz]: &[f32; 3],
-    ) -> (Point3<f32>, Vector3<f32>) {
+    ) -> (Point3, Vector3) {
         (
             Point3::new(
-                -translation.x,
-                -translation.y,
-                0.5 * (1.0 / sz - 2.0 * translation.z),
+                -translation.x(),
+                -translation.y(),
+                0.5 * (1.0 / sz - 2.0 * translation.z()),
             ),
             Vector3::new(1.0 / sx, 1.0 / sy, -0.5 / sz),
         )
@@ -268,22 +276,22 @@ impl OrthographicTransform {
         Projective3::from_matrix_unchecked(self.matrix)
     }
 
-    pub fn transform_point(&self, point: &Point3<f32>) -> Point3<f32> {
+    pub fn transform_point(&self, point: &Point3) -> Point3 {
         let diagonal = self.matrix.diagonal();
         let translation = self.matrix.column4();
         Point3::new(
-            diagonal.x * point.x + translation.x,
-            diagonal.y * point.y + translation.y,
-            diagonal.z * point.z + translation.z,
+            diagonal.x() * point.x() + translation.x(),
+            diagonal.y() * point.y() + translation.y(),
+            diagonal.z() * point.z() + translation.z(),
         )
     }
 
-    pub fn transform_vector(&self, vector: &Vector3<f32>) -> Vector3<f32> {
+    pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
         let diagonal = self.matrix.diagonal();
         Vector3::new(
-            diagonal.x * vector.x,
-            diagonal.y * vector.y,
-            diagonal.z * vector.z,
+            diagonal.x() * vector.x(),
+            diagonal.y() * vector.y(),
+            diagonal.z() * vector.z(),
         )
     }
 
@@ -344,35 +352,35 @@ impl CubeMapper {
     /// face.
     const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion; 6] = [
         // From positive x face:
-        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_parts(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), -0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(
             FRAC_1_SQRT_2,
             Vector3::new(0.0, -FRAC_1_SQRT_2, 0.0),
         )),
         // From negative x face:
-        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_parts(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), 0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(
             FRAC_1_SQRT_2,
             Vector3::new(0.0, FRAC_1_SQRT_2, 0.0),
         )),
         // From positive y face:
-        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), 0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_parts(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), 0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(
             FRAC_1_SQRT_2,
             Vector3::new(FRAC_1_SQRT_2, 0.0, 0.0),
         )),
         // From negative y face:
-        // UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.5 * PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_parts(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), -0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(
             FRAC_1_SQRT_2,
             Vector3::new(-FRAC_1_SQRT_2, 0.0, 0.0),
         )),
         // From positive z face:
         // UnitQuaternion::identity()
-        UnitQuaternion::new_unchecked(Quaternion::from_parts(1.0, Vector3::new(0.0, 0.0, 0.0))),
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(1.0, Vector3::new(0.0, 0.0, 0.0))),
         // From negative z face:
-        // UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI)
-        UnitQuaternion::new_unchecked(Quaternion::from_parts(0.0, Vector3::new(0.0, 1.0, 0.0))),
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(0.0, Vector3::new(0.0, 1.0, 0.0))),
     ];
 
     /// Returns a quaternion representing the rotation from the given cube face
@@ -453,7 +461,7 @@ impl CubeMapper {
     ///
     /// If the x- or y-coordinate after projection lies outside the -1.0 to 1.0
     /// range, the point belongs to another face.
-    pub fn map_point_onto_face(&self, face: CubemapFace, point: &Point3<f32>) -> Point2<f32> {
+    pub fn map_point_onto_face(&self, face: CubemapFace, point: &Point3) -> Point2 {
         let rotated_point =
             self.rotations_to_positive_z_face[face.as_idx_usize()].transform_point(point);
         Self::map_point_to_positive_z_face(&rotated_point)
@@ -508,9 +516,9 @@ impl CubeMapper {
         (matrix, inverse_matrix)
     }
 
-    fn map_point_to_positive_z_face(point: &Point3<f32>) -> Point2<f32> {
-        let inverse_point_z = 1.0 / point.z;
-        Point2::new(point.x * inverse_point_z, point.y * inverse_point_z)
+    fn map_point_to_positive_z_face(point: &Point3) -> Point2 {
+        let inverse_point_z = 1.0 / point.z();
+        Point2::new(point.x() * inverse_point_z, point.y() * inverse_point_z)
     }
 }
 
@@ -626,7 +634,7 @@ mod tests {
         );
 
         let point = Point3::new(0.0, 0.0, -near_distance);
-        assert_abs_diff_eq!(transform.transform_point(&point).z, 0.0);
+        assert_abs_diff_eq!(transform.transform_point(&point).z(), 0.0);
     }
 
     #[test]
@@ -640,7 +648,7 @@ mod tests {
         );
 
         let point = Point3::new(0.0, 0.0, -far_distance);
-        assert_abs_diff_eq!(transform.transform_point(&point).z, 1.0);
+        assert_abs_diff_eq!(transform.transform_point(&point).z(), 1.0);
     }
 
     #[test]

@@ -1,8 +1,8 @@
-# Hash: 43e35e85b48da62e51253500ed095d7775d0095ff4b9c38a5ee39cc3b6b53f87
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: 6cb1713a5453c9575554615f65211f8142a440d6dcb89f5379a2ad4617906062
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_light::AmbientEmission
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     AmbientEmission,
     new,
@@ -31,19 +31,19 @@ AmbientEmission : {
     ##
     ## # Unit
     ## Lux (lx = lm/m²)
-    illuminance : Vector3.Vector3 Binary32,
+    illuminance : Vector3.Vector3,
 }
 
 ## Creates a new ambient light emission component with the given
 ## illuminance (in lux).
-new : Vector3.Vector3 Binary32 -> AmbientEmission
+new : Vector3.Vector3 -> AmbientEmission
 new = |illuminance|
     { illuminance }
 
 ## Creates a new ambient light emission component with the given
 ## illuminance (in lux).
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3 -> Entity.ComponentData
 add_new = |entity_data, illuminance|
     add(entity_data, new(illuminance))
 
@@ -51,7 +51,7 @@ add_new = |entity_data, illuminance|
 ## illuminance (in lux).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, illuminance|
     add_multiple(
         entity_data,
@@ -150,7 +150,7 @@ write_bytes : List U8, AmbientEmission -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(12)
-    |> Vector3.write_bytes_32(value.illuminance)
+    |> Vector3.write_bytes(value.illuminance)
 
 ## Deserializes a value of [AmbientEmission] from its bytes in the
 ## representation used by the engine.
@@ -158,7 +158,7 @@ from_bytes : List U8 -> Result AmbientEmission _
 from_bytes = |bytes|
     Ok(
         {
-            illuminance: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            illuminance: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
         },
     )
 

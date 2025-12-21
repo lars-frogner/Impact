@@ -16,7 +16,6 @@ use crate::{
 };
 use cfg_if::cfg_if;
 use impact_containers::HashSet;
-use nalgebra::Vector3;
 use std::{array, cmp::Ordering, iter, mem, ops::Range};
 
 /// Represents a helper for keeping track of the transferral of some aggregate
@@ -234,8 +233,8 @@ impl ChunkedVoxelObject {
         let mut region_linear_chunk_indices = [Vec::with_capacity(16), Vec::with_capacity(16)];
         let mut region_non_uniform_chunk_counts = [0; 2];
 
-        let mut min_region_chunk_indices = [Vector3::new(usize::MAX, usize::MAX, usize::MAX); 2];
-        let mut max_region_chunk_indices = [Vector3::new(0, 0, 0); 2];
+        let mut min_region_chunk_indices = [[usize::MAX; 3]; 2];
+        let mut max_region_chunk_indices = [[0; 3]; 2];
 
         for chunk_i in self.occupied_chunk_ranges[0].clone() {
             for chunk_j in self.occupied_chunk_ranges[1].clone() {
@@ -300,10 +299,14 @@ impl ChunkedVoxelObject {
                                 region_linear_chunk_indices[idx].push(chunk_idx);
                                 region_non_uniform_chunk_counts[idx] += 1;
 
-                                min_region_chunk_indices[idx] =
-                                    min_region_chunk_indices[idx].inf(&chunk_indices.into());
-                                max_region_chunk_indices[idx] =
-                                    max_region_chunk_indices[idx].sup(&chunk_indices.into());
+                                min_region_chunk_indices[idx] = super::componentwise_min_indices(
+                                    &min_region_chunk_indices[idx],
+                                    &chunk_indices,
+                                );
+                                max_region_chunk_indices[idx] = super::componentwise_max_indices(
+                                    &max_region_chunk_indices[idx],
+                                    &chunk_indices,
+                                );
 
                                 found_region[idx] = true;
                             }
@@ -334,10 +337,14 @@ impl ChunkedVoxelObject {
 
                             region_linear_chunk_indices[idx].push(chunk_idx);
 
-                            min_region_chunk_indices[idx] =
-                                min_region_chunk_indices[idx].inf(&chunk_indices.into());
-                            max_region_chunk_indices[idx] =
-                                max_region_chunk_indices[idx].sup(&chunk_indices.into());
+                            min_region_chunk_indices[idx] = super::componentwise_min_indices(
+                                &min_region_chunk_indices[idx],
+                                &chunk_indices,
+                            );
+                            max_region_chunk_indices[idx] = super::componentwise_max_indices(
+                                &max_region_chunk_indices[idx],
+                                &chunk_indices,
+                            );
                         }
                         VoxelChunk::Empty => {}
                     }
@@ -2767,7 +2774,7 @@ pub mod fuzzing {
     };
     use approx::assert_relative_eq;
     use impact_alloc::Global;
-    use nalgebra::Vector3;
+    use impact_math::vector::Vector3;
 
     pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator<Global>) {
         let object = ChunkedVoxelObject::generate(&generator);
@@ -2851,6 +2858,7 @@ mod tests {
         voxel_types::VoxelType,
     };
     use impact_alloc::Global;
+    use impact_math::vector::Vector3;
 
     #[test]
     fn connected_region_count_is_correct_for_single_voxel() {

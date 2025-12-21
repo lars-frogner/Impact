@@ -45,9 +45,9 @@ impl AtomicNode {
 
     pub fn for_translation(node: &SDFTranslation) -> Self {
         let mut params = AtomicNodeParams::new();
-        params.push(AtomicFloatParam::new("X", node.translation.x).into());
-        params.push(AtomicFloatParam::new("Y", node.translation.y).into());
-        params.push(AtomicFloatParam::new("Z", node.translation.z).into());
+        params.push(AtomicFloatParam::new("X", node.translation.x()).into());
+        params.push(AtomicFloatParam::new("Y", node.translation.y()).into());
+        params.push(AtomicFloatParam::new("Z", node.translation.z()).into());
         Self::new_unary(AtomicNodeKind::Translation, params, node.child_id)
     }
 

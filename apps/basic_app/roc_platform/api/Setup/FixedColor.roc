@@ -1,8 +1,8 @@
-# Hash: de671cf84a173720b6f9adf2d8e65aae332c52d78e7f152dc1a182f403f39940
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 7b11cd81da20f1d6598d5f84b4d7f07c6ccf1eb833a25c66c16df407ddda962e
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_material::setup::fixed::FixedColor
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     FixedColor,
     add,
@@ -17,7 +17,7 @@ import core.Builtin
 import core.Vector3
 
 ## A fixed, uniform color that is independent of lighting.
-FixedColor : Vector3.Vector3 Binary32
+FixedColor : Vector3.Vector3
 
 ## Adds a value of the [FixedColor] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -77,7 +77,7 @@ write_bytes : List U8, FixedColor -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(12)
-    |> Vector3.write_bytes_32(value)
+    |> Vector3.write_bytes(value)
 
 ## Deserializes a value of [FixedColor] from its bytes in the
 ## representation used by the engine.
@@ -85,7 +85,7 @@ from_bytes : List U8 -> Result FixedColor _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
         ),
     )
 

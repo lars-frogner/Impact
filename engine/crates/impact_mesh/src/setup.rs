@@ -5,8 +5,7 @@ use crate::{
     VertexAttributeSet, texture_projection::TextureProjection,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_math::hash64;
-use nalgebra::{Point3, Vector3};
+use impact_math::{hash64, point::Point3, vector::Vector3};
 use roc_integration::roc;
 use std::fmt;
 
@@ -186,13 +185,13 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PlanarTextureProjection {
         /// The origin of the plane, where the texture coordinates will be zero.
-        pub origin: Point3<f32>,
+        pub origin: Point3,
         /// The axis along which the U texture coordinate will increase. The texture
         /// coordinate will be unity at the tip of the vector.
-        pub u_vector: Vector3<f32>,
+        pub u_vector: Vector3,
         /// The axis along which the V texture coordinate will increase. The texture
         /// coordinate will be unity at the tip of the vector.
-        pub v_vector: Vector3<f32>,
+        pub v_vector: Vector3,
     }
 }
 
@@ -523,7 +522,7 @@ impl PlanarTextureProjection {
     /// texture coordinates will increase. The texture coordinates will be zero
     /// at the origin and unity at the tip of the respective u- or v-vector.
     #[roc(body = "{ origin, u_vector, v_vector }")]
-    pub fn new(origin: Point3<f32>, u_vector: Vector3<f32>, v_vector: Vector3<f32>) -> Self {
+    pub fn new(origin: Point3, u_vector: Vector3, v_vector: Vector3) -> Self {
         Self {
             origin,
             u_vector,

@@ -8,9 +8,9 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::MATERIAL_START;
 use impact_gpu::wgpu;
+use impact_math::vector::Vector2;
 use impact_model::impl_InstanceFeatureForGPU;
 use impact_model::{InstanceFeature, InstanceFeatureTypeID, ModelInstanceManager};
-use nalgebra::Vector2;
 use std::hash::Hash;
 
 bitflags! {
@@ -113,7 +113,7 @@ pub struct UniformColorParallaxMappedPhysicalMaterialValues {
     emissive_luminance: f32,
     color: RGBColor,
     parallax_displacement_scale: f32,
-    parallax_uv_per_distance: Vector2<f32>,
+    parallax_uv_per_distance: Vector2,
 }
 
 /// Fixed property values for a physical material with a textured base color and
@@ -134,7 +134,7 @@ pub struct TexturedColorParallaxMappedPhysicalMaterialValues {
     metalness: f32,
     emissive_luminance: f32,
     parallax_displacement_scale: f32,
-    parallax_uv_per_distance: Vector2<f32>,
+    parallax_uv_per_distance: Vector2,
 }
 
 /// Vertex attribute location of a specific type of material instance feature.

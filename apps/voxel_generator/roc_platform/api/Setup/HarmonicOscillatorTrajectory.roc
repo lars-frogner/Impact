@@ -1,8 +1,8 @@
-# Hash: 703a6837c5560c67643db4b4e3c0d44d31c6bfcd41d0f8b949697c222ced407b
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 8051746468219a5ee0782fe8ba5a166a6e941284c546a1e623056dde5926d049
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectory
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     HarmonicOscillatorTrajectory,
     new,
@@ -25,9 +25,9 @@ HarmonicOscillatorTrajectory : {
     ## oscillation.
     center_time : F32,
     ## The position of the center of oscillation.
-    center_position : Point3.Point3 Binary32,
+    center_position : Point3.Point3,
     ## The direction in which the body is oscillating back and forth.
-    direction : UnitVector3.UnitVector3 Binary32,
+    direction : UnitVector3.UnitVector3,
     ## The maximum distance of the body from the center position.
     amplitude : F32,
     ## The duration of one full oscillation.
@@ -36,7 +36,7 @@ HarmonicOscillatorTrajectory : {
 
 ## Creates a new harmonically oscillating trajectory with the given
 ## properties.
-new : F32, Point3.Point3 Binary32, UnitVector3.UnitVector3 Binary32, F32, F32 -> HarmonicOscillatorTrajectory
+new : F32, Point3.Point3, UnitVector3.UnitVector3, F32, F32 -> HarmonicOscillatorTrajectory
 new = |center_time, center_position, direction, amplitude, period|
     {
         center_time,
@@ -49,7 +49,7 @@ new = |center_time, center_position, direction, amplitude, period|
 ## Creates a new harmonically oscillating trajectory with the given
 ## properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F32, Point3.Point3 Binary32, UnitVector3.UnitVector3 Binary32, F32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, Point3.Point3, UnitVector3.UnitVector3, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, center_time, center_position, direction, amplitude, period|
     add(entity_data, new(center_time, center_position, direction, amplitude, period))
 
@@ -112,8 +112,8 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(36)
     |> Builtin.write_bytes_f32(value.center_time)
-    |> Point3.write_bytes_32(value.center_position)
-    |> UnitVector3.write_bytes_32(value.direction)
+    |> Point3.write_bytes(value.center_position)
+    |> UnitVector3.write_bytes(value.direction)
     |> Builtin.write_bytes_f32(value.amplitude)
     |> Builtin.write_bytes_f32(value.period)
 
@@ -124,8 +124,8 @@ from_bytes = |bytes|
     Ok(
         {
             center_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
-            center_position: bytes |> List.sublist({ start: 4, len: 12 }) |> Point3.from_bytes_32?,
-            direction: bytes |> List.sublist({ start: 16, len: 12 }) |> UnitVector3.from_bytes_32?,
+            center_position: bytes |> List.sublist({ start: 4, len: 12 }) |> Point3.from_bytes?,
+            direction: bytes |> List.sublist({ start: 16, len: 12 }) |> UnitVector3.from_bytes?,
             amplitude: bytes |> List.sublist({ start: 28, len: 4 }) |> Builtin.from_bytes_f32?,
             period: bytes |> List.sublist({ start: 32, len: 4 }) |> Builtin.from_bytes_f32?,
         },

@@ -21,9 +21,9 @@ use impact_containers::{HashMap, hash_map::Entry};
 use impact_math::{
     Float,
     angle::{Angle, Radians},
+    point::Point3,
     stringhash32_newtype,
 };
-use nalgebra::Point3;
 use roc_integration::roc;
 use std::path::{Path, PathBuf};
 
@@ -207,7 +207,7 @@ impl DetailedDragForce {
             let body_space_velocity_relative_to_medium =
                 rigid_body.transform_vector_from_world_to_body_space(&velocity_relative_to_medium);
 
-            let body_space_direction_of_motion_relative_to_medium = Direction::new_unchecked(
+            let body_space_direction_of_motion_relative_to_medium = Direction::unchecked_from(
                 body_space_velocity_relative_to_medium
                     / f32::sqrt(squared_body_speed_relative_to_medium),
             );
@@ -351,7 +351,7 @@ impl DragLoadMap {
     /// # Panics
     /// If the given number of direction samples or theta coordinates is zero.
     pub fn compute_from_mesh<'a>(
-        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
         center_of_mass: &Position,
         n_direction_samples: usize,
         n_theta_coords: usize,
@@ -407,7 +407,7 @@ fn generate_map_from_drag_loads(
         // maximum factor of four to prevent the samples near the poles from
         // becoming too influential.
         let scaled_angular_interpolation_distance =
-            angular_interpolation_distance / (1.0 - 0.75 * f32::abs(direction.z));
+            angular_interpolation_distance / (1.0 - 0.75 * f32::abs(direction.z()));
 
         let inverse_scaled_angular_interpolation_distance =
             1.0 / scaled_angular_interpolation_distance;
@@ -433,11 +433,11 @@ fn generate_map_from_drag_loads(
 }
 
 fn compute_phi(direction: &Direction) -> Radians<f32> {
-    Radians(f32::atan2(direction.y, direction.x))
+    Radians(f32::atan2(direction.y(), direction.x()))
 }
 
 fn compute_theta(direction: &Direction) -> Radians<f32> {
-    Radians(f32::acos(direction.z))
+    Radians(f32::acos(direction.z()))
 }
 
 fn compute_angular_interpolation_distance_from_smoothness(

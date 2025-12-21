@@ -1,20 +1,29 @@
 //! Matrices.
 
-use approx::{AbsDiffEq, RelativeEq};
+use crate::{
+    point::Point3,
+    vector::{Vector3, Vector4},
+};
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
 
-type Point3 = nalgebra::Point3<f32>;
-type Vector3 = nalgebra::Vector3<f32>;
-type Vector4 = nalgebra::Vector4<f32>;
-
 #[repr(transparent)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix3 {
     inner: nalgebra::Matrix3<f32>,
 }
 
 #[repr(transparent)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix4 {
     inner: nalgebra::Matrix4<f32>,
@@ -38,14 +47,16 @@ impl Matrix3 {
     #[inline]
     pub fn from_diagonal(diagonal: &Vector3) -> Self {
         Self {
-            inner: nalgebra::Matrix3::from_diagonal(diagonal),
+            inner: nalgebra::Matrix3::from_diagonal(diagonal._inner()),
         }
     }
 
     #[inline]
     pub fn from_columns(columns: &[Vector3; 3]) -> Self {
         Self {
-            inner: nalgebra::Matrix3::from_columns(columns),
+            inner: nalgebra::Matrix3::from_columns(
+                bytemuck::cast_slice::<_, nalgebra::Vector3<f32>>(columns),
+            ),
         }
     }
 
@@ -85,22 +96,22 @@ impl Matrix3 {
 
     #[inline]
     pub fn column1(&self) -> Vector3 {
-        self.inner.column(0).into_owned()
+        Vector3::_wrap(self.inner.column(0).into_owned())
     }
 
     #[inline]
     pub fn column2(&self) -> Vector3 {
-        self.inner.column(1).into_owned()
+        Vector3::_wrap(self.inner.column(1).into_owned())
     }
 
     #[inline]
     pub fn column3(&self) -> Vector3 {
-        self.inner.column(2).into_owned()
+        Vector3::_wrap(self.inner.column(2).into_owned())
     }
 
     #[inline]
     pub fn diagonal(&self) -> Vector3 {
-        self.inner.diagonal()
+        Vector3::_wrap(self.inner.diagonal())
     }
 
     #[inline]
@@ -132,7 +143,9 @@ impl_binop!(Mul, mul, Matrix3, Matrix3, Matrix3, |a, b| {
     }
 });
 
-impl_binop!(Mul, mul, Matrix3, Vector3, Vector3, |a, b| { a.inner * b });
+impl_binop!(Mul, mul, Matrix3, Vector3, Vector3, |a, b| {
+    Vector3::_wrap(a.inner * b._inner())
+});
 
 impl_binop!(Mul, mul, Matrix3, f32, Matrix3, |a, b| {
     Matrix3 {
@@ -146,32 +159,13 @@ impl_binop!(Mul, mul, f32, Matrix3, Matrix3, |a, b| {
     }
 });
 
-impl AbsDiffEq for Matrix3 {
-    type Epsilon = f32;
+impl_abs_diff_eq!(Matrix3, |a, b, epsilon| {
+    a.inner.abs_diff_eq(&b.inner, epsilon)
+});
 
-    fn default_epsilon() -> Self::Epsilon {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.inner.abs_diff_eq(&other.inner, epsilon)
-    }
-}
-
-impl RelativeEq for Matrix3 {
-    fn default_max_relative() -> Self::Epsilon {
-        f32::default_max_relative()
-    }
-
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: Self::Epsilon,
-        max_relative: Self::Epsilon,
-    ) -> bool {
-        self.inner.relative_eq(&other.inner, epsilon, max_relative)
-    }
-}
+impl_relative_eq!(Matrix3, |a, b, epsilon, max_relative| {
+    a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});
 
 impl Matrix4 {
     #[inline]
@@ -191,14 +185,16 @@ impl Matrix4 {
     #[inline]
     pub fn from_diagonal(diagonal: &Vector4) -> Self {
         Self {
-            inner: nalgebra::Matrix4::from_diagonal(diagonal),
+            inner: nalgebra::Matrix4::from_diagonal(diagonal._inner()),
         }
     }
 
     #[inline]
     pub fn from_columns(columns: &[Vector4; 4]) -> Self {
         Self {
-            inner: nalgebra::Matrix4::from_columns(columns),
+            inner: nalgebra::Matrix4::from_columns(
+                bytemuck::cast_slice::<_, nalgebra::Vector4<f32>>(columns),
+            ),
         }
     }
 
@@ -216,7 +212,7 @@ impl Matrix4 {
 
     #[inline]
     pub fn translate_transform(&mut self, translation: &Vector3) {
-        self.inner.append_translation_mut(translation);
+        self.inner.append_translation_mut(translation._inner());
     }
 
     #[inline]
@@ -236,27 +232,27 @@ impl Matrix4 {
 
     #[inline]
     pub fn column1(&self) -> Vector4 {
-        self.inner.column(0).into_owned()
+        Vector4::_wrap(self.inner.column(0).into_owned())
     }
 
     #[inline]
     pub fn column2(&self) -> Vector4 {
-        self.inner.column(1).into_owned()
+        Vector4::_wrap(self.inner.column(1).into_owned())
     }
 
     #[inline]
     pub fn column3(&self) -> Vector4 {
-        self.inner.column(2).into_owned()
+        Vector4::_wrap(self.inner.column(2).into_owned())
     }
 
     #[inline]
     pub fn column4(&self) -> Vector4 {
-        self.inner.column(3).into_owned()
+        Vector4::_wrap(self.inner.column(3).into_owned())
     }
 
     #[inline]
     pub fn diagonal(&self) -> Vector4 {
-        self.inner.diagonal()
+        Vector4::_wrap(self.inner.diagonal())
     }
 
     #[inline]
@@ -283,12 +279,12 @@ impl Matrix4 {
 
     #[inline]
     pub fn transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.transform_point(point)
+        Point3::_wrap(self.inner.transform_point(point._inner()))
     }
 
     #[inline]
     pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.transform_vector(vector)
+        Vector3::_wrap(self.inner.transform_vector(vector._inner()))
     }
 
     #[inline]
@@ -320,7 +316,9 @@ impl_binop!(Mul, mul, Matrix4, Matrix4, Matrix4, |a, b| {
     }
 });
 
-impl_binop!(Mul, mul, Matrix4, Vector4, Vector4, |a, b| { a.inner * b });
+impl_binop!(Mul, mul, Matrix4, Vector4, Vector4, |a, b| {
+    Vector4::_wrap(a.inner * b._inner())
+});
 
 impl_binop!(Mul, mul, Matrix4, f32, Matrix4, |a, b| {
     Matrix4 {
@@ -334,32 +332,13 @@ impl_binop!(Mul, mul, f32, Matrix4, Matrix4, |a, b| {
     }
 });
 
-impl AbsDiffEq for Matrix4 {
-    type Epsilon = f32;
+impl_abs_diff_eq!(Matrix4, |a, b, epsilon| {
+    a.inner.abs_diff_eq(&b.inner, epsilon)
+});
 
-    fn default_epsilon() -> Self::Epsilon {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.inner.abs_diff_eq(&other.inner, epsilon)
-    }
-}
-
-impl RelativeEq for Matrix4 {
-    fn default_max_relative() -> Self::Epsilon {
-        f32::default_max_relative()
-    }
-
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: Self::Epsilon,
-        max_relative: Self::Epsilon,
-    ) -> bool {
-        self.inner.relative_eq(&other.inner, epsilon, max_relative)
-    }
-}
+impl_relative_eq!(Matrix4, |a, b, epsilon, max_relative| {
+    a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});
 
 impl_roc_for_library_provided_primitives! {
 //  Type       Pkg   Parents  Module   Roc name  Postfix  Precision

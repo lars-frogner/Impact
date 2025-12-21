@@ -113,16 +113,6 @@ impl_roc_for_builtin_primitives! {
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.
 impl_roc_for_library_provided_primitives! {
-//  Type                             Pkg   Parents  Module          Roc name        Postfix         Precision
-    usize                         => core, None,    NativeNum,      Usize,          Some("_usize"), PrecisionIrrelevant,
-    nalgebra::Vector2<f32>        => core, None,    Vector2,        Vector2,        Some("_32"),    SinglePrecision,
-    nalgebra::Vector2<f64>        => core, None,    Vector2,        Vector2,        Some("_64"),    DoublePrecision,
-    nalgebra::Vector3<f32>        => core, None,    Vector3,        Vector3,        Some("_32"),    SinglePrecision,
-    nalgebra::Vector3<f64>        => core, None,    Vector3,        Vector3,        Some("_64"),    DoublePrecision,
-    nalgebra::Vector4<f32>        => core, None,    Vector4,        Vector4,        Some("_32"),    SinglePrecision,
-    nalgebra::Vector4<f64>        => core, None,    Vector4,        Vector4,        Some("_64"),    DoublePrecision,
-    nalgebra::UnitVector3<f32>    => core, None,    UnitVector3,    UnitVector3,    Some("_32"),    SinglePrecision,
-    nalgebra::UnitVector3<f64>    => core, None,    UnitVector3,    UnitVector3,    Some("_64"),    DoublePrecision,
-    nalgebra::Point3<f32>         => core, None,    Point3,         Point3,         Some("_32"),    SinglePrecision,
-    nalgebra::Point3<f64>         => core, None,    Point3,         Point3,         Some("_64"),    DoublePrecision,
+//  Type     Pkg   Parents  Module     Roc name  Postfix         Precision
+    usize => core, None,    NativeNum, Usize,    Some("_usize"), PrecisionIrrelevant,
 }

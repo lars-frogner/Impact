@@ -1,8 +1,8 @@
-# Hash: 7067bc0e84efe9d8551327df805dd5170d8b6b966383d7574c99d4240f94805d
-# Generated: 2025-12-17T23:58:02+00:00
+# Hash: c7dcb550e64df7cacf222930c0d2f3c0c60e83ca02fd97cbdd7726852c8dd3ab
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     VoxelAbsorbingSphere,
     new,
@@ -32,7 +32,7 @@ import core.Vector3
 ## [`impact_geometry::ReferenceFrame`].
 VoxelAbsorbingSphere : {
     ## The offset of the sphere in the reference frame of the entity.
-    offset : Vector3.Vector3 Binary32,
+    offset : Vector3.Vector3,
     ## The radius of the sphere.
     radius : F32,
     ## The maximum rate of absorption (at the center of the sphere).
@@ -42,7 +42,7 @@ VoxelAbsorbingSphere : {
 ## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
 ## in the reference frame of the entity and the given maximum absorption
 ## rate (at the center of the sphere).
-new : Vector3.Vector3 Binary32, F32, F32 -> VoxelAbsorbingSphere
+new : Vector3.Vector3, F32, F32 -> VoxelAbsorbingSphere
 new = |offset, radius, rate|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
@@ -57,7 +57,7 @@ new = |offset, radius, rate|
 ## in the reference frame of the entity and the given maximum absorption
 ## rate (at the center of the sphere).
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32, F32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, offset, radius, rate|
     add(entity_data, new(offset, radius, rate))
 
@@ -66,7 +66,7 @@ add_new = |entity_data, offset, radius, rate|
 ## rate (at the center of the sphere).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, offset, radius, rate|
     add_multiple(
         entity_data,
@@ -165,7 +165,7 @@ write_bytes : List U8, VoxelAbsorbingSphere -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(20)
-    |> Vector3.write_bytes_32(value.offset)
+    |> Vector3.write_bytes(value.offset)
     |> Builtin.write_bytes_f32(value.radius)
     |> Builtin.write_bytes_f32(value.rate)
 
@@ -175,7 +175,7 @@ from_bytes : List U8 -> Result VoxelAbsorbingSphere _
 from_bytes = |bytes|
     Ok(
         {
-            offset: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            offset: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             radius: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
             rate: bytes |> List.sublist({ start: 16, len: 4 }) |> Builtin.from_bytes_f32?,
         },

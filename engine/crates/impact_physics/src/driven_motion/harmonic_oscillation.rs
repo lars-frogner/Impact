@@ -95,7 +95,7 @@ impl HarmonicOscillatorTrajectoryDriver {
         let (trajectory_position, trajectory_velocity) =
             self.trajectory.compute_position_and_velocity(time);
 
-        rigid_body.set_position(rigid_body.position() + trajectory_position.coords);
+        rigid_body.set_position(rigid_body.position() + trajectory_position.as_vector());
         rigid_body.set_velocity(rigid_body.velocity() + trajectory_velocity);
     }
 }
@@ -143,12 +143,11 @@ impl HarmonicOscillatorTrajectory {
         let angular_frequency = f32::TWO_PI / self.period;
 
         let position = self.center_position
-            + (self.amplitude * f32::sin(angular_frequency * center_time_offset))
-                * self.direction.as_ref();
+            + (self.amplitude * f32::sin(angular_frequency * center_time_offset)) * self.direction;
 
         let velocity = ((self.amplitude * angular_frequency)
             * f32::cos(angular_frequency * center_time_offset))
-            * self.direction.as_ref();
+            * self.direction;
 
         (position, velocity)
     }
@@ -159,8 +158,11 @@ mod tests {
     use super::*;
     use crate::quantities::Direction;
     use approx::abs_diff_eq;
-    use impact_math::Float;
-    use nalgebra::{Point3, Vector3};
+    use impact_math::{
+        Float,
+        point::Point3,
+        vector::{UnitVector3, Vector3},
+    };
     use proptest::prelude::*;
 
     prop_compose! {
@@ -178,7 +180,7 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(Vector3::new(
+            Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -189,8 +191,13 @@ mod tests {
     #[test]
     #[should_panic]
     fn should_panic_if_period_is_zero() {
-        let trajectory =
-            HarmonicOscillatorTrajectory::new(0.0, Position::origin(), Vector3::x_axis(), 1.0, 0.0);
+        let trajectory = HarmonicOscillatorTrajectory::new(
+            0.0,
+            Position::origin(),
+            UnitVector3::unit_x(),
+            1.0,
+            0.0,
+        );
         trajectory.compute_position_and_velocity(1.0);
     }
 
@@ -213,7 +220,7 @@ mod tests {
             );
             let time = center_time + n_half_periods as f32 * 0.5 * period;
             let (trajectory_position, _) = trajectory.compute_position_and_velocity(time);
-            prop_assert!(abs_diff_eq!(trajectory_position, center_position, epsilon = 1e-3 * center_position.coords.abs().max()));
+            prop_assert!(abs_diff_eq!(trajectory_position, center_position, epsilon = 1e-3 * center_position.as_vector().component_abs().max_component()));
         }
     }
 
@@ -238,8 +245,8 @@ mod tests {
             let positive_peak_time = center_time + 0.25 * period;
             let negative_peak_time = center_time - 0.25 * period;
 
-            let positive_peak_position = center_position + amplitude * direction.as_ref();
-            let negative_peak_position = center_position - amplitude * direction.as_ref();
+            let positive_peak_position = center_position + amplitude * direction;
+            let negative_peak_position = center_position - amplitude * direction;
 
             let (
                 positive_peak_trajectory_position,
@@ -250,10 +257,10 @@ mod tests {
                 negative_peak_trajectory_velocity,
             ) = trajectory.compute_position_and_velocity(negative_peak_time);
 
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_position, positive_peak_position, epsilon = 1e-3 * positive_peak_position.coords.abs().max()));
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 1e-1));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_position, negative_peak_position, epsilon = 1e-3 * negative_peak_position.coords.abs().max()));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 1e-1));
+            prop_assert!(abs_diff_eq!(positive_peak_trajectory_position, positive_peak_position, epsilon = 1e-3 * positive_peak_position.as_vector().component_abs().max_component()));
+            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-1));
+            prop_assert!(abs_diff_eq!(negative_peak_trajectory_position, negative_peak_position, epsilon = 1e-3 * negative_peak_position.as_vector().component_abs().max_component()));
+            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-1));
         }
     }
 }

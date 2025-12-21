@@ -107,3 +107,88 @@ macro_rules! impl_binop {
         }
     };
 }
+
+macro_rules! impl_unary_op {
+    ($op:ident, $method:ident, $t:ty, $to:ty, |$this:ident| $body:block) => {
+        impl ::std::ops::$op for &$t {
+            type Output = $to;
+
+            #[inline]
+            fn $method(self) -> Self::Output {
+                let $this = self;
+                $body
+            }
+        }
+
+        impl ::std::ops::$op for $t {
+            type Output = $to;
+
+            #[inline]
+            fn $method(self) -> Self::Output {
+                (&self).$method()
+            }
+        }
+    };
+}
+
+macro_rules! impl_binop_assign {
+    ($op:ident, $method:ident, $tl:ty, $tr:ty, |$lhs:ident, $rhs:ident| $body:block) => {
+        impl ::std::ops::$op<&$tr> for $tl {
+            #[inline]
+            fn $method(&mut self, rhs: &$tr) {
+                let $lhs = self;
+                let $rhs = rhs;
+                $body
+            }
+        }
+
+        impl ::std::ops::$op<$tr> for $tl {
+            #[inline]
+            fn $method(&mut self, rhs: $tr) {
+                self.$method(&rhs);
+            }
+        }
+    };
+}
+
+macro_rules! impl_abs_diff_eq {
+    ($t:ty, |$arg1:ident, $arg2:ident, $arg3:ident| $body:block) => {
+        impl ::approx::AbsDiffEq for $t {
+            type Epsilon = f32;
+
+            fn default_epsilon() -> Self::Epsilon {
+                f32::default_epsilon()
+            }
+
+            fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+                let $arg1 = self;
+                let $arg2 = other;
+                let $arg3 = epsilon;
+                $body
+            }
+        }
+    };
+}
+
+macro_rules! impl_relative_eq {
+    ($t:ty, |$arg1:ident, $arg2:ident, $arg3:ident, $arg4:ident| $body:block) => {
+        impl ::approx::RelativeEq for $t {
+            fn default_max_relative() -> Self::Epsilon {
+                f32::default_max_relative()
+            }
+
+            fn relative_eq(
+                &self,
+                other: &Self,
+                epsilon: Self::Epsilon,
+                max_relative: Self::Epsilon,
+            ) -> bool {
+                let $arg1 = self;
+                let $arg2 = other;
+                let $arg3 = epsilon;
+                let $arg4 = max_relative;
+                $body
+            }
+        }
+    };
+}

@@ -10,7 +10,7 @@ arbitrary = ["dep:arbitrary"]
 postcard = ["dep:postcard", "serde"]
 ecs = ["dep:inventory", "dep:impact_ecs", "impact_geometry/ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
-serde = ["dep:serde", "nalgebra/serde-serialize"]
+serde = ["dep:serde", "nalgebra/serde-serialize", "impact_math/serde"]
 
 [dependencies]
 anyhow = { workspace = true }

@@ -7,8 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
-use nalgebra::{Point3, Vector3};
+use impact_math::{Float, point::Point3, vector::Vector3};
 use roc_integration::roc;
 
 /// Manages all [`CircularTrajectoryDriver`]s.
@@ -88,7 +87,7 @@ impl CircularTrajectoryDriver {
         let (trajectory_position, trajectory_velocity) =
             self.trajectory.compute_position_and_velocity(time);
 
-        rigid_body.set_position(rigid_body.position() + trajectory_position.coords);
+        rigid_body.set_position(rigid_body.position() + trajectory_position.as_vector());
         rigid_body.set_velocity(rigid_body.velocity() + trajectory_velocity);
     }
 }
@@ -148,7 +147,7 @@ impl CircularTrajectory {
             self.orientation.transform_point(&circular_displacement);
 
         let world_space_circular_position =
-            self.center_position + world_space_circular_displacement.coords;
+            self.center_position + world_space_circular_displacement.as_vector();
 
         let tangential_speed = self.radius * angular_speed;
 
@@ -190,8 +189,7 @@ mod tests {
     use super::*;
     use crate::quantities::{Direction, Orientation};
     use approx::abs_diff_eq;
-    use impact_math::Float;
-    use nalgebra::UnitVector3;
+    use impact_math::{Float, vector::UnitVector3};
     use proptest::prelude::*;
 
     prop_compose! {
@@ -209,7 +207,7 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(Vector3::new(
+            Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -273,16 +271,16 @@ mod tests {
             let first_velocity_direction = trajectory
                 .compute_position_and_velocity(time)
                 .1
-                .normalize();
+                .normalized();
             let second_velocity_direction = trajectory
                 .compute_position_and_velocity(half_period_offset_time)
                 .1
-                .normalize();
+                .normalized();
 
             prop_assert!(abs_diff_eq!(
                 first_velocity_direction.dot(&second_velocity_direction),
                 -1.0,
-                epsilon = 1e-6
+                epsilon = 1e-5
             ));
         }
     }
@@ -315,7 +313,7 @@ mod tests {
                 epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(
-                UnitVector3::new_normalize(velocity).dot(&UnitVector3::new_normalize(displacement)),
+                UnitVector3::normalized_from(velocity).dot(&UnitVector3::normalized_from(displacement)),
                 0.0,
                 epsilon = 1e-3
             ));

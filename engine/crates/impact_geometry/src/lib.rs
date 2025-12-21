@@ -26,16 +26,14 @@ use impact_math::{
     angle::{Angle, Radians},
     consts::f32::PI,
     quaternion::UnitQuaternion,
+    vector::{UnitVector3, Vector3},
 };
-use nalgebra::{UnitVector3, Vector3};
 
 /// Uses the Frisvad method.
-pub fn orthonormal_basis_with_z_axis(
-    z: UnitVector3<f32>,
-) -> (UnitVector3<f32>, UnitVector3<f32>, UnitVector3<f32>) {
-    let zx = z.x;
-    let zy = z.y;
-    let zz = z.z;
+pub fn orthonormal_basis_with_z_axis(z: UnitVector3) -> (UnitVector3, UnitVector3, UnitVector3) {
+    let zx = z.x();
+    let zy = z.y();
+    let zz = z.z();
 
     let sign = if zz >= 0.0 { 1.0 } else { -1.0 };
     let a = -1.0 / (sign + zz);
@@ -44,13 +42,13 @@ pub fn orthonormal_basis_with_z_axis(
     let x = Vector3::new(1.0 + sign * zx * zx * a, sign * b, -sign * zx);
     let y = Vector3::new(b, sign + zy * zy * a, -zy);
 
-    let x = UnitVector3::new_normalize(x);
-    let y = UnitVector3::new_normalize(y);
+    let x = UnitVector3::normalized_from(x);
+    let y = UnitVector3::normalized_from(y);
 
     (x, y, z)
 }
 
-pub fn rotation_between_axes(a: &UnitVector3<f32>, b: &UnitVector3<f32>) -> UnitQuaternion {
+pub fn rotation_between_axes(a: &UnitVector3, b: &UnitVector3) -> UnitQuaternion {
     if let Some(rotation) = UnitQuaternion::rotation_between_axis(a, b) {
         rotation
     } else {
@@ -58,19 +56,19 @@ pub fn rotation_between_axes(a: &UnitVector3<f32>, b: &UnitVector3<f32>) -> Unit
         // flip `a`
         let axis_most_orthogonal_to_a = cartesian_axis_most_orthogonal_to_vector(a);
         let axis_perpendicular_to_a =
-            UnitVector3::new_normalize(a.cross(&axis_most_orthogonal_to_a));
+            UnitVector3::normalized_from(a.cross(&axis_most_orthogonal_to_a));
 
         UnitQuaternion::from_axis_angle(&axis_perpendicular_to_a, PI)
     }
 }
 
-pub fn cartesian_axis_most_orthogonal_to_vector(vector: &Vector3<f32>) -> UnitVector3<f32> {
-    if vector.x.abs() < vector.y.abs() && vector.x.abs() < vector.z.abs() {
-        Vector3::x_axis()
-    } else if vector.y.abs() < vector.z.abs() {
-        Vector3::y_axis()
+pub fn cartesian_axis_most_orthogonal_to_vector(vector: &Vector3) -> UnitVector3 {
+    if vector.x().abs() < vector.y().abs() && vector.x().abs() < vector.z().abs() {
+        UnitVector3::unit_x()
+    } else if vector.y().abs() < vector.z().abs() {
+        UnitVector3::unit_y()
     } else {
-        Vector3::z_axis()
+        UnitVector3::unit_z()
     }
 }
 
@@ -84,7 +82,7 @@ pub fn cartesian_axis_most_orthogonal_to_vector(vector: &Vector3<f32>) -> UnitVe
 /// If the given number of directions is zero.
 pub fn compute_uniformly_distributed_radial_directions(
     n_direction_samples: usize,
-) -> impl Iterator<Item = UnitVector3<f32>> {
+) -> impl Iterator<Item = UnitVector3> {
     let idx_norm = if n_direction_samples > 1 {
         (n_direction_samples - 1) as f32
     } else {
@@ -108,7 +106,7 @@ pub fn compute_uniformly_distributed_radial_directions(
         let x = horizontal_radius * cos_azimuthal_angle;
         let y = horizontal_radius * sin_azimuthal_angle;
 
-        UnitVector3::new_normalize(Vector3::new(x, y, z))
+        UnitVector3::normalized_from(Vector3::new(x, y, z))
     })
 }
 

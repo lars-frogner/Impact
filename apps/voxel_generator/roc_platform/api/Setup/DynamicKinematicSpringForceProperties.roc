@@ -1,8 +1,8 @@
-# Hash: afd3a3491e2117fab6530ea3c7023a1bb6df29059ccd801abe0888f24aae4d0b
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 8be0e3cbd29979b4d826e057b953afa96eb3c578d44a7d0ae96eb7fd6076b825
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_physics::force::spring_force::DynamicKinematicSpringForceProperties
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     DynamicKinematicSpringForceProperties,
     new,
@@ -29,19 +29,19 @@ DynamicKinematicSpringForceProperties : {
     rigid_body_2 : Comp.KinematicRigidBodyID.KinematicRigidBodyID,
     ## The point where the spring is attached to the first (dynamic) body,
     ## in that body's model space.
-    attachment_point_1 : Point3.Point3 Binary32,
+    attachment_point_1 : Point3.Point3,
     ## The point where the spring is attached to the second (kinematic)
     ## body, in that body's model space.
-    attachment_point_2 : Point3.Point3 Binary32,
+    attachment_point_2 : Point3.Point3,
     ## The spring connecting the bodies.
     spring : Physics.Spring.Spring,
 }
 
-new : Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3 Binary32, Comp.KinematicRigidBodyID.KinematicRigidBodyID, Point3.Point3 Binary32, Physics.Spring.Spring -> DynamicKinematicSpringForceProperties
+new : Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3, Comp.KinematicRigidBodyID.KinematicRigidBodyID, Point3.Point3, Physics.Spring.Spring -> DynamicKinematicSpringForceProperties
 new = |rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring|
     { rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }
 
-add_new : Entity.ComponentData, Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3 Binary32, Comp.KinematicRigidBodyID.KinematicRigidBodyID, Point3.Point3 Binary32, Physics.Spring.Spring -> Entity.ComponentData
+add_new : Entity.ComponentData, Comp.DynamicRigidBodyID.DynamicRigidBodyID, Point3.Point3, Comp.KinematicRigidBodyID.KinematicRigidBodyID, Point3.Point3, Physics.Spring.Spring -> Entity.ComponentData
 add_new = |entity_data, rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring|
     add(entity_data, new(rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring))
 
@@ -105,8 +105,8 @@ write_bytes = |bytes, value|
     |> List.reserve(56)
     |> Comp.DynamicRigidBodyID.write_bytes(value.rigid_body_1)
     |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_2)
-    |> Point3.write_bytes_32(value.attachment_point_1)
-    |> Point3.write_bytes_32(value.attachment_point_2)
+    |> Point3.write_bytes(value.attachment_point_1)
+    |> Point3.write_bytes(value.attachment_point_2)
     |> Physics.Spring.write_bytes(value.spring)
 
 ## Deserializes a value of [DynamicKinematicSpringForceProperties] from its bytes in the
@@ -117,8 +117,8 @@ from_bytes = |bytes|
         {
             rigid_body_1: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.DynamicRigidBodyID.from_bytes?,
             rigid_body_2: bytes |> List.sublist({ start: 8, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
-            attachment_point_1: bytes |> List.sublist({ start: 16, len: 12 }) |> Point3.from_bytes_32?,
-            attachment_point_2: bytes |> List.sublist({ start: 28, len: 12 }) |> Point3.from_bytes_32?,
+            attachment_point_1: bytes |> List.sublist({ start: 16, len: 12 }) |> Point3.from_bytes?,
+            attachment_point_2: bytes |> List.sublist({ start: 28, len: 12 }) |> Point3.from_bytes?,
             spring: bytes |> List.sublist({ start: 40, len: 16 }) |> Physics.Spring.from_bytes?,
         },
     )

@@ -17,8 +17,7 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_math::{hash::ConstStringHash64, hash64};
-use nalgebra::Vector4;
+use impact_math::{hash::ConstStringHash64, hash64, vector::Vector4};
 use std::{borrow::Cow, fmt::Display};
 
 /// The maximum number of unique Gaussian weights that can be passed to the GPU
@@ -48,7 +47,7 @@ pub struct GaussianBlurSamples {
     /// as the second component. The remaining vector components are ignored.
     /// The reason we need to use a `Vector4` is that arrays in uniforms must
     /// have elements aligned to 16 bytes.
-    sample_offsets_and_weights: [Vector4<f32>; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
+    sample_offsets_and_weights: [Vector4; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
     sample_count: u32,
     truncated_tail_samples: u32,
     _pad: [u8; 8],
@@ -111,9 +110,9 @@ impl GaussianBlurSamples {
             .enumerate()
         {
             // Offset
-            offset_and_weight.x = sample_idx as f32;
+            *offset_and_weight.x_mut() = sample_idx as f32;
             // Weight
-            offset_and_weight.y =
+            *offset_and_weight.y_mut() =
                 coefficients_from_center[sample_idx] as f32 * weight_normalization;
         }
 
@@ -143,7 +142,7 @@ impl GaussianBlurSamples {
         self.sample_offsets_and_weights
             .iter()
             .take(self.sample_count as usize)
-            .map(|offset_and_weight| offset_and_weight.x)
+            .map(|offset_and_weight| offset_and_weight.x())
     }
 
     /// Returns an iterator over the 1D Gaussian kernel sample weights starting
@@ -153,7 +152,7 @@ impl GaussianBlurSamples {
         self.sample_offsets_and_weights
             .iter()
             .take(self.sample_count as usize)
-            .map(|offset_and_weight| offset_and_weight.y)
+            .map(|offset_and_weight| offset_and_weight.y())
     }
 }
 

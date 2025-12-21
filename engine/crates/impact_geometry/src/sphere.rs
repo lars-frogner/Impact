@@ -4,16 +4,17 @@ use crate::AxisAlignedBox;
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
+    point::Point3,
     quaternion::UnitQuaternion,
     transform::{Isometry3, Similarity3},
+    vector::Vector3,
 };
-use nalgebra::{self as na, Point3, Vector3};
 
 /// A sphere represented by the center point and the radius.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct Sphere {
-    center: Point3<f32>,
+    center: Point3,
     radius: f32,
 }
 
@@ -22,7 +23,7 @@ impl Sphere {
     ///
     /// # Panics
     /// If `radius` is negative.
-    pub fn new(center: Point3<f32>, radius: f32) -> Self {
+    pub fn new(center: Point3, radius: f32) -> Self {
         assert!(radius >= 0.0);
         Self { center, radius }
     }
@@ -31,7 +32,7 @@ impl Sphere {
     /// given spheres.
     pub fn bounding_sphere_from_pair(sphere_1: &Self, sphere_2: &Self) -> Self {
         let center_displacement = sphere_2.center() - sphere_1.center();
-        let distance_between_centra = center_displacement.magnitude();
+        let distance_between_centra = center_displacement.norm();
 
         if Self::first_sphere_encloses_second_sphere(
             sphere_1.radius(),
@@ -50,7 +51,7 @@ impl Sphere {
         let bounding_radius =
             0.5 * (distance_between_centra + sphere_1.radius() + sphere_2.radius());
 
-        let mean_center = na::center(sphere_1.center(), sphere_2.center());
+        let mean_center = Point3::center_of(sphere_1.center(), sphere_2.center());
 
         let bounding_center = if abs_diff_eq!(distance_between_centra, 0.0) {
             mean_center
@@ -70,7 +71,7 @@ impl Sphere {
     /// Finds the smallest sphere enclosing the given axis-aligned bounding box.
     pub fn bounding_sphere_from_aabb(aabb: &AxisAlignedBox) -> Self {
         let center = aabb.center();
-        let radius = 0.5 * na::distance(aabb.lower_corner(), aabb.upper_corner());
+        let radius = 0.5 * Point3::distance_between(aabb.lower_corner(), aabb.upper_corner());
         Self::new(center, radius)
     }
 
@@ -78,7 +79,7 @@ impl Sphere {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn bounding_sphere_for_points(points: &[Point3<f32>]) -> Self {
+    pub fn bounding_sphere_for_points(points: &[Point3]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create bounding sphere for empty point slice"
@@ -86,24 +87,25 @@ impl Sphere {
 
         let one_over_count = (points.len() as f32).recip();
 
-        let first_point = points[0].coords;
+        let first_point = *points[0].as_vector();
 
-        let centroid: Point3<f32> = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |sum, point| sum + point.coords)
-            .scale(one_over_count)
-            .into();
+        let centroid = Point3::from(
+            one_over_count
+                * points
+                    .iter()
+                    .skip(1)
+                    .fold(first_point, |sum, point| sum + point.as_vector()),
+        );
 
         let max_squared_dist_from_centroid = points.iter().fold(0.0, |max_squared_dist, point| {
-            na::distance_squared(point, &centroid).max(max_squared_dist)
+            Point3::squared_distance_between(point, &centroid).max(max_squared_dist)
         });
 
         Self::new(centroid, max_squared_dist_from_centroid.sqrt())
     }
 
     /// Returns the center point of the sphere.
-    pub fn center(&self) -> &Point3<f32> {
+    pub fn center(&self) -> &Point3 {
         &self.center
     }
 
@@ -123,15 +125,15 @@ impl Sphere {
         Self::first_sphere_encloses_second_sphere(
             self.radius(),
             sphere.radius(),
-            na::distance(self.center(), sphere.center()),
+            Point3::distance_between(self.center(), sphere.center()),
         )
     }
 
     /// Whether the given point is inside this sphere. A point
     /// exactly on the surface of the sphere is considered
     /// inside.
-    pub fn contains_point(&self, point: &Point3<f32>) -> bool {
-        na::distance_squared(self.center(), point) <= self.radius_squared()
+    pub fn contains_point(&self, point: &Point3) -> bool {
+        Point3::squared_distance_between(self.center(), point) <= self.radius_squared()
     }
 
     /// Whether all of the sphere is strictly outside the given axis-aligned
@@ -173,7 +175,7 @@ impl Sphere {
     /// Computes the sphere resulting from scaling this sphere with the given
     /// uniform scale factor.
     pub fn scaled(&self, scale: f32) -> Self {
-        Self::new(self.center.coords.scale(scale).into(), self.radius * scale)
+        Self::new(scale * self.center, scale * self.radius)
     }
 
     /// Computes the sphere resulting from rotating this sphere with the given
@@ -320,11 +322,11 @@ mod tests {
         let bounding_sphere = Sphere::bounding_sphere_for_points(&points);
         assert_abs_diff_eq!(
             bounding_sphere.center(),
-            &(points[0].coords + points[1].coords).unscale(2.0).into()
+            &(0.5 * (points[0].as_vector() + points[1].as_vector())).into()
         );
         assert_abs_diff_eq!(
             bounding_sphere.radius(),
-            0.5 * na::distance(&points[0], &points[1])
+            0.5 * Point3::distance_between(&points[0], &points[1])
         );
     }
 

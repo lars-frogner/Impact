@@ -119,8 +119,11 @@ mod tests {
     use crate::quantities::AngularVelocity;
     use crate::quantities::Direction;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
-    use impact_math::{Float, angle::Radians};
-    use nalgebra::Vector3;
+    use impact_math::{
+        Float,
+        angle::Radians,
+        vector::{UnitVector3, Vector3},
+    };
     use proptest::prelude::*;
 
     prop_compose! {
@@ -128,7 +131,7 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(Vector3::new(
+            Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -167,7 +170,7 @@ mod tests {
     #[test]
     fn should_get_different_orientation_for_nonzero_angular_velocity() {
         let orientation = Orientation::identity();
-        let angular_velocity = AngularVelocity::new(Vector3::y_axis(), Radians(1.0));
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_y(), Radians(1.0));
         let rotation = ConstantRotation::new(0.0, orientation, angular_velocity);
         let rotated_orientation = rotation.compute_orientation(1.0);
         assert_abs_diff_ne!(rotated_orientation, orientation, epsilon = 1e-6);

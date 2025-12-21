@@ -18,8 +18,12 @@ pub use triangle::*;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{quaternion::UnitQuaternion, transform::Similarity3};
-use nalgebra::{Point3, UnitVector3, Vector2, Vector3, Vector4};
+use impact_math::{
+    point::Point3,
+    quaternion::UnitQuaternion,
+    transform::Similarity3,
+    vector::{UnitVector3, Vector2, Vector3, Vector4},
+};
 use roc_integration::roc;
 use std::fmt::{self, Debug};
 
@@ -53,17 +57,17 @@ pub trait VertexAttribute: Sized {
 /// The 3D position of a mesh vertex.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexPosition(pub Point3<f32>);
+pub struct VertexPosition(pub Point3);
 
 /// The unit normal vector of a mesh at a vertex position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexNormalVector(pub UnitVector3<f32>);
+pub struct VertexNormalVector(pub UnitVector3);
 
 /// The (u, v) texture coordinates of a mesh at a vertex position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexTextureCoords(pub Vector2<f32>);
+pub struct VertexTextureCoords(pub Vector2);
 
 /// The rotation quaternion from local tangent space to model space at a vertex
 /// position. The handedness of the tangent basis is encoded in the sign of the
@@ -77,7 +81,7 @@ pub struct VertexTangentSpaceQuaternion(pub UnitQuaternion);
 /// The RGBA color of a mesh vertex.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexColor(pub Vector4<f32>);
+pub struct VertexColor(pub Vector4);
 
 bitflags! {
     /// Bitflag encoding a set of [`VertexAttribute`]s.
@@ -140,7 +144,7 @@ impl VertexPosition {
 
     /// Returns the position scaled by the given scaling factor.
     pub fn scaled(&self, scaling: f32) -> Self {
-        Self(self.0.coords.scale(scaling).into())
+        Self(scaling * self.0)
     }
 
     /// Returns the position rotated by the given unit quaternion.
@@ -149,7 +153,7 @@ impl VertexPosition {
     }
 
     /// Returns the position translated by the given displacement vector.
-    pub fn translated(&self, translation: &Vector3<f32>) -> Self {
+    pub fn translated(&self, translation: &Vector3) -> Self {
         Self(self.0 + translation)
     }
 
@@ -205,7 +209,7 @@ impl VertexColor {
 
     pub fn with_alpha(self, alpha: f32) -> Self {
         let mut color = self.0;
-        color.w = alpha;
+        *color.w_mut() = alpha;
         Self(color)
     }
 }

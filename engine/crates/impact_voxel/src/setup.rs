@@ -16,7 +16,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_math::hash::Hash32;
+use impact_math::{hash::Hash32, vector::Vector3};
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -31,7 +31,6 @@ use impact_scene::{
     graph::{FeatureIDSet, SceneGraph},
     model::ModelInstanceManager,
 };
-use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -156,7 +155,7 @@ define_setup_type! {
         pub radius_2: f32,
         /// The offset in number of voxels in each dimension between the centers of
         /// the two spheres.
-        pub center_offsets: Vector3<f32>,
+        pub center_offsets: Vector3,
         /// The smoothness of the union operation.
         pub smoothness: f32,
     }
@@ -477,7 +476,7 @@ impl VoxelSphereUnion {
         voxel_extent: f32,
         radius_1: f32,
         radius_2: f32,
-        center_offsets: Vector3<f32>,
+        center_offsets: Vector3,
         smoothness: f32,
     ) -> Self {
         assert!(voxel_extent > 0.0);
@@ -711,7 +710,7 @@ fn setup_rigid_body_for_new_voxel_object(
 
     // Offset the voxel object model to put the center of mass at the origin of
     // this entity's space
-    model_transform.set_offset_after_scaling(inertial_properties.center_of_mass().coords.cast());
+    model_transform.set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
     let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
         rigid_body_manager,

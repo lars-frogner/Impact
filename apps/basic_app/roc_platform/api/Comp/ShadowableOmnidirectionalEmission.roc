@@ -1,8 +1,8 @@
-# Hash: d4bb4cfa7aafff120997a95aa79b1fcc3487bbcc283d0fa01d8623ed334a4bc5
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: b8cf3273b02219a56704da58cdd4b60695748e85063617e4c5f950a2d44798b8
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_light::ShadowableOmnidirectionalEmission
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     ShadowableOmnidirectionalEmission,
     new,
@@ -31,7 +31,7 @@ ShadowableOmnidirectionalEmission : {
     ##
     ## # Unit
     ## Candela (cd = lm/sr)
-    luminous_intensity : Vector3.Vector3 Binary32,
+    luminous_intensity : Vector3.Vector3,
     ## The physical extent of the light source, which determines the extent of
     ## specular highlights and the softness of shadows.
     ##
@@ -42,14 +42,14 @@ ShadowableOmnidirectionalEmission : {
 
 ## Creates a new shadowable omnidirectional emission component with
 ## the given luminous intensity (in candela) and source extent.
-new : Vector3.Vector3 Binary32, F32 -> ShadowableOmnidirectionalEmission
+new : Vector3.Vector3, F32 -> ShadowableOmnidirectionalEmission
 new = |luminous_intensity, source_extent|
     { luminous_intensity, source_extent }
 
 ## Creates a new shadowable omnidirectional emission component with
 ## the given luminous intensity (in candela) and source extent.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, F32 -> Entity.ComponentData
 add_new = |entity_data, luminous_intensity, source_extent|
     add(entity_data, new(luminous_intensity, source_extent))
 
@@ -57,7 +57,7 @@ add_new = |entity_data, luminous_intensity, source_extent|
 ## the given luminous intensity (in candela) and source extent.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, luminous_intensity, source_extent|
     add_multiple(
         entity_data,
@@ -156,7 +156,7 @@ write_bytes : List U8, ShadowableOmnidirectionalEmission -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(16)
-    |> Vector3.write_bytes_32(value.luminous_intensity)
+    |> Vector3.write_bytes(value.luminous_intensity)
     |> Builtin.write_bytes_f32(value.source_extent)
 
 ## Deserializes a value of [ShadowableOmnidirectionalEmission] from its bytes in the
@@ -165,7 +165,7 @@ from_bytes : List U8 -> Result ShadowableOmnidirectionalEmission _
 from_bytes = |bytes|
     Ok(
         {
-            luminous_intensity: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            luminous_intensity: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             source_extent: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )

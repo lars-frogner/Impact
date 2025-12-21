@@ -16,6 +16,7 @@ use impact_gpu::wgpu;
 use impact_math::{
     hash::{Hash64, StringHash64, compute_hash_64_of_two_hash_64},
     hash64,
+    vector::Vector3,
 };
 use impact_mesh::VertexAttributeSet;
 use impact_model::InstanceFeatureTypeID;
@@ -24,7 +25,6 @@ use impact_texture::{
     TextureID,
     gpu_resource::{SamplerBindGroupLayoutEntryProps, TextureBindGroupLayoutEntryProps},
 };
-use nalgebra::Vector3;
 use roc_integration::roc;
 use setup::{
     fixed::FixedMaterialTextureBindingLocations, physical::PhysicalMaterialTextureBindingLocations,
@@ -36,7 +36,7 @@ use std::{
 use values::{MaterialPropertyFlags, MaterialPropertyValues};
 
 /// A color with RGB components.
-pub type RGBColor = Vector3<f32>;
+pub type RGBColor = Vector3;
 
 /// A registry of [`Material`]s.
 pub type MaterialRegistry = ImmutableResourceRegistry<Material>;

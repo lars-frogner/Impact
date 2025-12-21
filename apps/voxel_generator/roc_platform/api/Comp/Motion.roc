@@ -1,8 +1,8 @@
-# Hash: a52ce62104ed9d8cb481fe3a704e9b20557da915051110ab6dfe94a9c3e8bb99
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 867d4079d1b9bd92284873c0f9458c0e8d9433e329ff8695bad1622a3da4ca35
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_physics::quantities::Motion
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     Motion,
     new,
@@ -36,22 +36,22 @@ import core.Vector3
 
 ## A linear and angular velocity.
 Motion : {
-    linear_velocity : Vector3.Vector3 Binary32,
+    linear_velocity : Vector3.Vector3,
     angular_velocity : Physics.AngularVelocity.AngularVelocity,
 }
 
-new : Vector3.Vector3 Binary32, Physics.AngularVelocity.AngularVelocity -> Motion
+new : Vector3.Vector3, Physics.AngularVelocity.AngularVelocity -> Motion
 new = |linear_velocity, angular_velocity|
     {
         linear_velocity,
         angular_velocity,
     }
 
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32, Physics.AngularVelocity.AngularVelocity -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, Physics.AngularVelocity.AngularVelocity -> Entity.ComponentData
 add_new = |entity_data, linear_velocity, angular_velocity|
     add(entity_data, new(linear_velocity, angular_velocity))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (Physics.AngularVelocity.AngularVelocity) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, linear_velocity, angular_velocity|
     add_multiple(
         entity_data,
@@ -63,20 +63,20 @@ add_multiple_new = |entity_data, linear_velocity, angular_velocity|
     )
 
 ## Motion with the given linear velocity and zero angular velocity.
-linear : Vector3.Vector3 Binary32 -> Motion
+linear : Vector3.Vector3 -> Motion
 linear = |velocity|
     new(velocity, Physics.AngularVelocity.zero({}))
 
 ## Motion with the given linear velocity and zero angular velocity.
 ## Adds the component to the given entity's data.
-add_linear : Entity.ComponentData, Vector3.Vector3 Binary32 -> Entity.ComponentData
+add_linear : Entity.ComponentData, Vector3.Vector3 -> Entity.ComponentData
 add_linear = |entity_data, velocity|
     add(entity_data, linear(velocity))
 
 ## Motion with the given linear velocity and zero angular velocity.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_linear : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_linear : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3) -> Result Entity.MultiComponentData Str
 add_multiple_linear = |entity_data, velocity|
     add_multiple(
         entity_data,
@@ -224,7 +224,7 @@ write_bytes : List U8, Motion -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(28)
-    |> Vector3.write_bytes_32(value.linear_velocity)
+    |> Vector3.write_bytes(value.linear_velocity)
     |> Physics.AngularVelocity.write_bytes(value.angular_velocity)
 
 ## Deserializes a value of [Motion] from its bytes in the
@@ -233,7 +233,7 @@ from_bytes : List U8 -> Result Motion _
 from_bytes = |bytes|
     Ok(
         {
-            linear_velocity: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            linear_velocity: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             angular_velocity: bytes |> List.sublist({ start: 12, len: 16 }) |> Physics.AngularVelocity.from_bytes?,
         },
     )

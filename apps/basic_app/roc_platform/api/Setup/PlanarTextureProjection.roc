@@ -1,8 +1,8 @@
-# Hash: 5aaa193c8f9118bf6cc6c5f953e13cbad7010cb5a41f3196f90945aa11a05720
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 998a7ed44e89b0496db3a3562f14c2a1baae57ee33c377730c802114a12fc5cb
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_mesh::setup::PlanarTextureProjection
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     PlanarTextureProjection,
     new,
@@ -28,20 +28,20 @@ import core.Vector3
 ## [`PlanarTextureProjection`](crate::texture_projection::PlanarTextureProjection).
 PlanarTextureProjection : {
     ## The origin of the plane, where the texture coordinates will be zero.
-    origin : Point3.Point3 Binary32,
+    origin : Point3.Point3,
     ## The axis along which the U texture coordinate will increase. The texture
     ## coordinate will be unity at the tip of the vector.
-    u_vector : Vector3.Vector3 Binary32,
+    u_vector : Vector3.Vector3,
     ## The axis along which the V texture coordinate will increase. The texture
     ## coordinate will be unity at the tip of the vector.
-    v_vector : Vector3.Vector3 Binary32,
+    v_vector : Vector3.Vector3,
 }
 
 ## Creates the properties of a projection onto the plane defined by the
 ## given origin and two vectors defining the axes along which the U and V
 ## texture coordinates will increase. The texture coordinates will be zero
 ## at the origin and unity at the tip of the respective u- or v-vector.
-new : Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> PlanarTextureProjection
+new : Point3.Point3, Vector3.Vector3, Vector3.Vector3 -> PlanarTextureProjection
 new = |origin, u_vector, v_vector|
     { origin, u_vector, v_vector }
 
@@ -50,7 +50,7 @@ new = |origin, u_vector, v_vector|
 ## texture coordinates will increase. The texture coordinates will be zero
 ## at the origin and unity at the tip of the respective u- or v-vector.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Point3.Point3 Binary32, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Point3.Point3, Vector3.Vector3, Vector3.Vector3 -> Entity.ComponentData
 add_new = |entity_data, origin, u_vector, v_vector|
     add(entity_data, new(origin, u_vector, v_vector))
 
@@ -60,7 +60,7 @@ add_new = |entity_data, origin, u_vector, v_vector|
 ## at the origin and unity at the tip of the respective u- or v-vector.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3), Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (Vector3.Vector3) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, origin, u_vector, v_vector|
     add_multiple(
         entity_data,
@@ -172,9 +172,9 @@ write_bytes : List U8, PlanarTextureProjection -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(36)
-    |> Point3.write_bytes_32(value.origin)
-    |> Vector3.write_bytes_32(value.u_vector)
-    |> Vector3.write_bytes_32(value.v_vector)
+    |> Point3.write_bytes(value.origin)
+    |> Vector3.write_bytes(value.u_vector)
+    |> Vector3.write_bytes(value.v_vector)
 
 ## Deserializes a value of [PlanarTextureProjection] from its bytes in the
 ## representation used by the engine.
@@ -182,9 +182,9 @@ from_bytes : List U8 -> Result PlanarTextureProjection _
 from_bytes = |bytes|
     Ok(
         {
-            origin: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes_32?,
-            u_vector: bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes_32?,
-            v_vector: bytes |> List.sublist({ start: 24, len: 12 }) |> Vector3.from_bytes_32?,
+            origin: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes?,
+            u_vector: bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes?,
+            v_vector: bytes |> List.sublist({ start: 24, len: 12 }) |> Vector3.from_bytes?,
         },
     )
 

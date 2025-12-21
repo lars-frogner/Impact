@@ -8,8 +8,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
 use impact_containers::KeyIndexMapper;
 use impact_geometry::{Frustum, OrientedBox, Plane};
-use impact_math::transform::Similarity3;
-use nalgebra::{Point3, UnitVector3};
+use impact_math::{point::Point3, transform::Similarity3, vector::UnitVector3};
 use std::{array, collections::BTreeSet, ops::Range};
 
 /// A [`ChunkedVoxelObject`] with an associated [`ChunkedVoxelObjectMesh`].
@@ -106,13 +105,13 @@ pub struct VoxelMeshModifications<'a> {
 pub struct CullingFrustum {
     pub planes: [FrustumPlane; 6],
     pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
-    pub apex_position: Point3<f32>,
+    pub apex_position: Point3,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct FrustumPlane {
-    pub unit_normal: UnitVector3<f32>,
+    pub unit_normal: UnitVector3,
     pub displacement: f32,
 }
 
@@ -496,7 +495,7 @@ impl ChunkSubmesh {
 impl CullingFrustum {
     /// Gathers the given frustum planes and apex position into a
     /// `CullingFrustum`.
-    pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3<f32>) -> Self {
+    pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.map(|plane| {
             u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
                 .unwrap()
@@ -546,7 +545,7 @@ impl CullingFrustum {
         let transformed_box = orthographic_frustum.transformed(transformation);
         let transformed_view_diection = -transformed_box.compute_depth_axis();
         let transformed_apex_position =
-            transformed_box.center() - transformed_view_diection.scale(apex_distance);
+            transformed_box.center() - apex_distance * transformed_view_diection;
         Self::from_planes_and_apex_position(
             transformed_box.compute_bounding_planes(),
             transformed_apex_position,

@@ -1,8 +1,8 @@
-# Hash: 13219d458dc2e2a17a2d338e86a6ed1905452d65e808f3fef19d1a89709292a2
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: 176dce6e77a28d9ea514b13069f8253c2a0662b4f3416895d332b5bf78cc64cb
+# Generated: 2025-12-21T23:08:03+00:00
 # Rust type: impact_light::ShadowableUnidirectionalEmission
 # Type category: Component
-# Commit: d4065e65 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     ShadowableUnidirectionalEmission,
     new,
@@ -34,9 +34,9 @@ ShadowableUnidirectionalEmission : {
     ##
     ## # Unit
     ## Lux (lx = lm/m²)
-    perpendicular_illuminance : Vector3.Vector3 Binary32,
+    perpendicular_illuminance : Vector3.Vector3,
     ## The direction of the emitted light.
-    direction : UnitVector3.UnitVector3 Binary32,
+    direction : UnitVector3.UnitVector3,
     ## The angular extent of the light source, which determines the extent of
     ## specular highlights and the softness of shadows.
     angular_source_extent : Degrees.Degrees Binary32,
@@ -45,7 +45,7 @@ ShadowableUnidirectionalEmission : {
 ## Creates a new shadowable unidirectional emission component with the
 ## given perpendicular illuminance (in lux), direction, and angular
 ## source extent.
-new : Vector3.Vector3 Binary32, UnitVector3.UnitVector3 Binary32, Degrees.Degrees Binary32 -> ShadowableUnidirectionalEmission
+new : Vector3.Vector3, UnitVector3.UnitVector3, Degrees.Degrees Binary32 -> ShadowableUnidirectionalEmission
 new = |perpendicular_illuminance, direction, angular_source_extent|
     { perpendicular_illuminance, direction, angular_source_extent }
 
@@ -53,7 +53,7 @@ new = |perpendicular_illuminance, direction, angular_source_extent|
 ## given perpendicular illuminance (in lux), direction, and angular
 ## source extent.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32, UnitVector3.UnitVector3 Binary32, Degrees.Degrees Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, UnitVector3.UnitVector3, Degrees.Degrees Binary32 -> Entity.ComponentData
 add_new = |entity_data, perpendicular_illuminance, direction, angular_source_extent|
     add(entity_data, new(perpendicular_illuminance, direction, angular_source_extent))
 
@@ -62,7 +62,7 @@ add_new = |entity_data, perpendicular_illuminance, direction, angular_source_ext
 ## source extent.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (UnitVector3.UnitVector3 Binary32), Entity.Arg.Broadcasted (Degrees.Degrees Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (UnitVector3.UnitVector3), Entity.Arg.Broadcasted (Degrees.Degrees Binary32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, perpendicular_illuminance, direction, angular_source_extent|
     add_multiple(
         entity_data,
@@ -161,8 +161,8 @@ write_bytes : List U8, ShadowableUnidirectionalEmission -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(28)
-    |> Vector3.write_bytes_32(value.perpendicular_illuminance)
-    |> UnitVector3.write_bytes_32(value.direction)
+    |> Vector3.write_bytes(value.perpendicular_illuminance)
+    |> UnitVector3.write_bytes(value.direction)
     |> Degrees.write_bytes_32(value.angular_source_extent)
 
 ## Deserializes a value of [ShadowableUnidirectionalEmission] from its bytes in the
@@ -171,8 +171,8 @@ from_bytes : List U8 -> Result ShadowableUnidirectionalEmission _
 from_bytes = |bytes|
     Ok(
         {
-            perpendicular_illuminance: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
-            direction: bytes |> List.sublist({ start: 12, len: 12 }) |> UnitVector3.from_bytes_32?,
+            perpendicular_illuminance: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
+            direction: bytes |> List.sublist({ start: 12, len: 12 }) |> UnitVector3.from_bytes?,
             angular_source_extent: bytes |> List.sublist({ start: 24, len: 4 }) |> Degrees.from_bytes_32?,
         },
     )

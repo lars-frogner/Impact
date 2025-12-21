@@ -1,6 +1,7 @@
 //! Benchmarks for constraint resolution.
 
 use impact_geometry::{ReferenceFrame, Sphere};
+use impact_math::point::Point3;
 use impact_physics::{
     anchor::AnchorManager,
     collision::{
@@ -15,7 +16,6 @@ use impact_physics::{
     rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_profiling::benchmark::Benchmarker;
-use nalgebra::Point3;
 
 pub fn prepare_contacts(benchmarker: impl Benchmarker) {
     let mut rigid_body_manager = RigidBodyManager::new();
