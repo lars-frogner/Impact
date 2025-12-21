@@ -2,7 +2,7 @@
 
 use super::{AnchoredTwoBodyConstraint, ConstrainedBody, PreparedTwoBodyConstraint};
 use crate::anchor::{TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef};
-use nalgebra::Vector3;
+use impact_math::vector::Vector3;
 
 #[derive(Clone, Debug)]
 pub struct SphericalJoint {
@@ -18,7 +18,7 @@ pub struct ResolvedSphericalJoint<'a> {
 
 #[derive(Clone, Debug)]
 pub struct PreparedSphericalJoint {
-    _attachment_point_displacement: Vector3<f32>,
+    _attachment_point_displacement: Vector3,
 }
 
 impl AnchoredTwoBodyConstraint for SphericalJoint {
@@ -38,11 +38,11 @@ impl AnchoredTwoBodyConstraint for SphericalJoint {
         let body_a_attachment_point = body_a.position
             + body_a
                 .orientation
-                .transform_vector(&anchor_a.point().coords);
+                .transform_vector(anchor_a.point().as_vector());
         let body_b_attachment_point = body_b.position
             + body_b
                 .orientation
-                .transform_vector(&anchor_b.point().coords);
+                .transform_vector(anchor_b.point().as_vector());
 
         let attachment_point_displacement = body_a_attachment_point - body_b_attachment_point;
 

@@ -2,9 +2,8 @@
 
 use super::OrientationController;
 use bytemuck::{Pod, Zeroable};
-use impact_math::quaternion::UnitQuaternion;
+use impact_math::{quaternion::UnitQuaternion, vector::UnitVector3};
 use impact_physics::quantities::{AngularVelocity, Orientation};
-use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_component_type! {
@@ -155,9 +154,9 @@ impl Default for RollFreeCameraOrientationController {
 }
 
 fn compute_yaw_rotation(angular_displacement_x: f32) -> Orientation {
-    UnitQuaternion::from_axis_angle(&Vector3::y_axis(), angular_displacement_x)
+    UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), angular_displacement_x)
 }
 
 fn compute_pitch_rotation(angular_displacement_y: f32) -> Orientation {
-    UnitQuaternion::from_axis_angle(&Vector3::x_axis(), angular_displacement_y)
+    UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), angular_displacement_y)
 }

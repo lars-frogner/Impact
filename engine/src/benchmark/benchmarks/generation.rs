@@ -2,7 +2,12 @@
 
 use super::benchmark_data_path;
 use impact_alloc::{Global, arena::ArenaPool};
-use impact_math::{matrix::Matrix4, quaternion::UnitQuaternion};
+use impact_math::{
+    matrix::Matrix4,
+    point::Point3,
+    quaternion::UnitQuaternion,
+    vector::{UnitVector3, Vector3},
+};
 use impact_profiling::benchmark::Benchmarker;
 use impact_thread::pool::ThreadPool;
 use impact_voxel::{
@@ -14,7 +19,6 @@ use impact_voxel::{
     },
     voxel_types::VoxelType,
 };
-use nalgebra::{Point3, Vector3};
 use std::{hint::black_box, num::NonZeroUsize};
 
 pub fn generate_box(benchmarker: impl Benchmarker) {
@@ -61,7 +65,7 @@ pub fn generate_complex_object(benchmarker: impl Benchmarker) {
     let box_id = graph.add_node(SDFNode::new_scaling(box_id, 0.9));
     let box_id = graph.add_node(SDFNode::new_rotation(
         box_id,
-        UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 10.0),
+        UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), 10.0),
     ));
     graph.add_node(SDFNode::new_union(sphere_id, box_id, 1.0));
     let sdf_generator = graph.build_in(Global).unwrap();

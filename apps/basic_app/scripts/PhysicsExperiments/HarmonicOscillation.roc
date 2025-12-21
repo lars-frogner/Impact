@@ -38,9 +38,9 @@ create_entities! = |position, mass, spring_constant, amplitude|
     period = Num.tau / angular_frequency
 
     attachment_position = position
-    mass_position = Point3.displace(attachment_position, (0.0, -2.0 * amplitude - 0.5, 0.0))
+    mass_position = Point3.translate(attachment_position, (0.0, -2.0 * amplitude - 0.5, 0.0))
 
-    reference_position = Point3.displace(attachment_position, (-2.0, (-amplitude) - 0.5, 0.0))
+    reference_position = Point3.translate(attachment_position, (-2.0, (-amplitude) - 0.5, 0.0))
 
     attachment_point =
         Entity.new_component_data

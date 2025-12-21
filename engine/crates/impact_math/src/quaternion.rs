@@ -1,22 +1,30 @@
 //! Quaternions.
 
-use crate::matrix::{Matrix3, Matrix4};
-use approx::{AbsDiffEq, RelativeEq};
+use crate::{
+    matrix::{Matrix3, Matrix4},
+    point::Point3,
+    vector::{UnitVector3, Vector3},
+};
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
 
-type Point3 = nalgebra::Point3<f32>;
-type Vector3 = nalgebra::Vector3<f32>;
-type UnitVector3 = nalgebra::UnitVector3<f32>;
-type Vector4 = nalgebra::Vector4<f32>;
-
 #[repr(transparent)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Quaternion {
     inner: nalgebra::Quaternion<f32>,
 }
 
 #[repr(transparent)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct UnitQuaternion {
     inner: nalgebra::UnitQuaternion<f32>,
@@ -26,10 +34,10 @@ impl Quaternion {
     #[inline]
     pub const fn from_parts(real: f32, imag: Vector3) -> Self {
         Self {
-            inner: nalgebra::Quaternion::from_vector(Vector4::new(
-                imag.data.0[0][0],
-                imag.data.0[0][1],
-                imag.data.0[0][2],
+            inner: nalgebra::Quaternion::from_vector(nalgebra::Vector4::new(
+                imag._inner().data.0[0][0],
+                imag._inner().data.0[0][1],
+                imag._inner().data.0[0][2],
                 real,
             )),
         }
@@ -47,7 +55,7 @@ impl Quaternion {
 
     #[inline]
     pub fn imag(&self) -> Vector3 {
-        self.inner.imag()
+        Vector3::_wrap(self.inner.imag())
     }
 
     #[inline]
@@ -71,32 +79,13 @@ impl_binop!(Mul, mul, Quaternion, Quaternion, Quaternion, |a, b| {
     }
 });
 
-impl AbsDiffEq for Quaternion {
-    type Epsilon = f32;
+impl_abs_diff_eq!(Quaternion, |a, b, epsilon| {
+    a.inner.abs_diff_eq(&b.inner, epsilon)
+});
 
-    fn default_epsilon() -> Self::Epsilon {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.inner.abs_diff_eq(&other.inner, epsilon)
-    }
-}
-
-impl RelativeEq for Quaternion {
-    fn default_max_relative() -> Self::Epsilon {
-        f32::default_max_relative()
-    }
-
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: Self::Epsilon,
-        max_relative: Self::Epsilon,
-    ) -> bool {
-        self.inner.relative_eq(&other.inner, epsilon, max_relative)
-    }
-}
+impl_relative_eq!(Quaternion, |a, b, epsilon, max_relative| {
+    a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});
 
 impl UnitQuaternion {
     #[inline]
@@ -107,14 +96,14 @@ impl UnitQuaternion {
     }
 
     #[inline]
-    pub fn new_normalize(quaternion: Quaternion) -> Self {
+    pub fn normalized_from(quaternion: Quaternion) -> Self {
         Self {
             inner: nalgebra::UnitQuaternion::new_normalize(quaternion.inner),
         }
     }
 
     #[inline]
-    pub const fn new_unchecked(quaternion: Quaternion) -> Self {
+    pub const fn unchecked_from(quaternion: Quaternion) -> Self {
         Self {
             inner: nalgebra::UnitQuaternion::new_unchecked(quaternion.inner),
         }
@@ -123,7 +112,7 @@ impl UnitQuaternion {
     #[inline]
     pub fn from_axis_angle(axis: &UnitVector3, angle: f32) -> Self {
         Self {
-            inner: nalgebra::UnitQuaternion::from_axis_angle(axis, angle),
+            inner: nalgebra::UnitQuaternion::from_axis_angle(axis._inner(), angle),
         }
     }
 
@@ -136,20 +125,21 @@ impl UnitQuaternion {
 
     #[inline]
     pub fn rotation_between_axis(a: &UnitVector3, b: &UnitVector3) -> Option<Self> {
-        nalgebra::UnitQuaternion::rotation_between_axis(a, b).map(|inner| Self { inner })
+        nalgebra::UnitQuaternion::rotation_between_axis(a._inner(), b._inner())
+            .map(|inner| Self { inner })
     }
 
     #[inline]
     pub fn look_at_rh(dir: &Vector3, up: &Vector3) -> Self {
         Self {
-            inner: nalgebra::UnitQuaternion::look_at_rh(dir, up),
+            inner: nalgebra::UnitQuaternion::look_at_rh(dir._inner(), up._inner()),
         }
     }
 
     #[inline]
     pub fn from_basis_unchecked(basis: &[Vector3; 3]) -> Self {
         Self {
-            inner: nalgebra::UnitQuaternion::from_basis_unchecked(basis),
+            inner: nalgebra::UnitQuaternion::from_basis_unchecked(&basis.map(|v| *v._inner())),
         }
     }
 
@@ -175,17 +165,19 @@ impl UnitQuaternion {
 
     #[inline]
     pub fn imag(&self) -> Vector3 {
-        self.inner.imag()
+        Vector3::_wrap(self.inner.imag())
     }
 
     #[inline]
     pub fn axis_angle(&self) -> Option<(UnitVector3, f32)> {
-        self.inner.axis_angle()
+        self.inner
+            .axis_angle()
+            .map(|(axis, angle)| (UnitVector3::_wrap(axis), angle))
     }
 
     #[inline]
     pub fn axis(&self) -> Option<UnitVector3> {
-        self.inner.axis()
+        self.inner.axis().map(UnitVector3::_wrap)
     }
 
     #[inline]
@@ -217,27 +209,27 @@ impl UnitQuaternion {
 
     #[inline]
     pub fn transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.transform_point(point)
+        Point3::_wrap(self.inner.transform_point(point._inner()))
     }
 
     #[inline]
     pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.transform_vector(vector)
+        Vector3::_wrap(self.inner.transform_vector(vector._inner()))
     }
 
     #[inline]
     pub fn inverse_transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.inverse_transform_point(point)
+        Point3::_wrap(self.inner.inverse_transform_point(point._inner()))
     }
 
     #[inline]
     pub fn inverse_transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.inverse_transform_vector(vector)
+        Vector3::_wrap(self.inner.inverse_transform_vector(vector._inner()))
     }
 
     #[inline]
     pub fn rotate_unit_vector(&self, vector: &UnitVector3) -> UnitVector3 {
-        self.inner * vector
+        UnitVector3::_wrap(self.inner * vector._inner())
     }
 
     #[inline]
@@ -259,32 +251,13 @@ impl_binop!(
     }
 );
 
-impl AbsDiffEq for UnitQuaternion {
-    type Epsilon = f32;
+impl_abs_diff_eq!(UnitQuaternion, |a, b, epsilon| {
+    a.inner.abs_diff_eq(&b.inner, epsilon)
+});
 
-    fn default_epsilon() -> Self::Epsilon {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.inner.abs_diff_eq(&other.inner, epsilon)
-    }
-}
-
-impl RelativeEq for UnitQuaternion {
-    fn default_max_relative() -> Self::Epsilon {
-        f32::default_max_relative()
-    }
-
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: Self::Epsilon,
-        max_relative: Self::Epsilon,
-    ) -> bool {
-        self.inner.relative_eq(&other.inner, epsilon, max_relative)
-    }
-}
+impl_relative_eq!(UnitQuaternion, |a, b, epsilon, max_relative| {
+    a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});
 
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.

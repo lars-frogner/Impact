@@ -6,8 +6,7 @@ use crate::{
     material::ContactResponseParameters,
 };
 use impact_geometry::{Plane, Sphere};
-use impact_math::transform::Isometry3;
-use nalgebra::{UnitVector3, Vector3};
+use impact_math::{transform::Isometry3, vector::UnitVector3};
 
 #[derive(Clone, Debug)]
 pub struct SphereCollidable {
@@ -113,12 +112,12 @@ pub fn determine_sphere_sphere_contact_geometry(
     let center_distance = squared_center_distance.sqrt();
 
     let surface_normal = if center_distance > 1e-8 {
-        UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+        UnitVector3::unchecked_from(center_displacement / center_distance)
     } else {
-        Vector3::z_axis()
+        UnitVector3::unit_z()
     };
 
-    let position = sphere_b.center() + surface_normal.scale(sphere_b.radius());
+    let position = sphere_b.center() + sphere_b.radius() * surface_normal;
 
     let penetration_depth = f32::max(
         0.0,
@@ -144,7 +143,7 @@ pub fn determine_sphere_plane_contact_geometry(
     }
 
     let surface_normal = *plane.unit_normal();
-    let position = sphere.center() - surface_normal.scale(signed_distance);
+    let position = sphere.center() - signed_distance * surface_normal;
 
     Some(ContactGeometry {
         position,

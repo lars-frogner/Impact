@@ -20,12 +20,11 @@ use disconnection::{
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::Float;
+use impact_math::point::Point3;
 use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
 };
-use nalgebra::{Point3, Vector3};
 use num_traits::{NumCast, PrimInt};
 use std::{array, iter, mem, ops::Range};
 use tinyvec::TinyVec;
@@ -828,7 +827,7 @@ impl ChunkedVoxelObject {
     }
 
     #[inline]
-    fn compute_occupied_voxel_range_corner_centers<F: Float>(&self) -> [Point3<F>; 8] {
+    fn compute_occupied_voxel_range_corner_centers(&self) -> [Point3; 8] {
         if self.contains_only_empty_voxels() {
             return [Point3::origin(); 8];
         }
@@ -847,10 +846,7 @@ impl ChunkedVoxelObject {
             [rx.end - 1, ry.end - 1, rz.start],
             [rx.end - 1, ry.end - 1, rz.end - 1],
         ]
-        .map(|[i, j, k]| {
-            self.voxel_center_position_from_object_voxel_indices(i, j, k)
-                .cast()
-        })
+        .map(|[i, j, k]| self.voxel_center_position_from_object_voxel_indices(i, j, k))
     }
 
     /// Calls the given closure for each voxel in the given non-uniform chunk,
@@ -998,8 +994,8 @@ impl ChunkedVoxelObject {
     /// Updates the recorded occupied chunk ranges by checking which chunks are
     /// occupied.
     fn update_occupied_chunk_ranges(&mut self) {
-        let mut min_chunk_indices = Vector3::new(usize::MAX, usize::MAX, usize::MAX);
-        let mut max_chunk_indices = Vector3::new(0, 0, 0);
+        let mut min_chunk_indices = [usize::MAX; 3];
+        let mut max_chunk_indices = [0; 3];
         let mut has_non_empty_chunks = false;
 
         for chunk_i in 0..self.chunk_counts[0] {
@@ -1008,8 +1004,10 @@ impl ChunkedVoxelObject {
                     let chunk_indices = [chunk_i, chunk_j, chunk_k];
                     let chunk_idx = self.linear_chunk_idx(&chunk_indices);
                     if !self.chunks[chunk_idx].contains_only_empty_voxels() {
-                        min_chunk_indices = min_chunk_indices.inf(&chunk_indices.into());
-                        max_chunk_indices = max_chunk_indices.sup(&chunk_indices.into());
+                        min_chunk_indices =
+                            componentwise_min_indices(&min_chunk_indices, &chunk_indices);
+                        max_chunk_indices =
+                            componentwise_max_indices(&max_chunk_indices, &chunk_indices);
                         has_non_empty_chunks = true;
                     }
                 }
@@ -2715,33 +2713,47 @@ fn determine_occupied_voxel_ranges(
     chunks: &[VoxelChunk],
     voxels: &[Voxel],
 ) -> [Range<usize>; 3] {
-    let mut min_voxel_indices = Vector3::new(usize::MAX, usize::MAX, usize::MAX);
-    let mut max_voxel_indices = Vector3::new(0, 0, 0);
+    let mut min_voxel_indices = [usize::MAX; 3];
+    let mut max_voxel_indices = [0; 3];
 
     let mut chunk_idx = 0;
     for chunk_i in 0..chunk_counts[0] {
         for chunk_j in 0..chunk_counts[1] {
             for chunk_k in 0..chunk_counts[2] {
-                let voxel_index_offsets = Vector3::new(chunk_i, chunk_j, chunk_k) * CHUNK_SIZE;
+                let voxel_index_offsets = [
+                    chunk_i * CHUNK_SIZE,
+                    chunk_j * CHUNK_SIZE,
+                    chunk_k * CHUNK_SIZE,
+                ];
                 match &chunks[chunk_idx] {
                     VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
                         let chunk_voxels = chunk_voxels(voxels, *data_offset);
                         LoopOverChunkVoxelData::new(&LoopForChunkVoxels::over_all(), chunk_voxels)
                             .execute(&mut |&voxel_indices, voxel| {
                                 if !voxel.is_empty() {
-                                    let object_voxel_indices =
-                                        voxel_index_offsets + Vector3::from(voxel_indices);
-                                    min_voxel_indices =
-                                        min_voxel_indices.inf(&object_voxel_indices);
-                                    max_voxel_indices =
-                                        max_voxel_indices.sup(&object_voxel_indices);
+                                    let object_voxel_indices = array::from_fn(|idx| {
+                                        voxel_index_offsets[idx] + voxel_indices[idx]
+                                    });
+
+                                    min_voxel_indices = componentwise_min_indices(
+                                        &min_voxel_indices,
+                                        &object_voxel_indices,
+                                    );
+                                    max_voxel_indices = componentwise_max_indices(
+                                        &max_voxel_indices,
+                                        &object_voxel_indices,
+                                    );
                                 }
                             });
                     }
                     VoxelChunk::Uniform(_) => {
-                        min_voxel_indices = min_voxel_indices.inf(&voxel_index_offsets);
-                        max_voxel_indices = max_voxel_indices
-                            .sup(&(voxel_index_offsets.add_scalar(CHUNK_SIZE - 1)));
+                        min_voxel_indices =
+                            componentwise_min_indices(&min_voxel_indices, &voxel_index_offsets);
+
+                        max_voxel_indices = componentwise_max_indices(
+                            &max_voxel_indices,
+                            &voxel_index_offsets.map(|offset| offset + (CHUNK_SIZE - 1)),
+                        );
                     }
                     VoxelChunk::Empty => {}
                 }
@@ -2870,6 +2882,16 @@ fn extract_slice_segments_mut<T>(
         &mut values_from_1[..segment_len],
         &mut values_from_2[..segment_len],
     )
+}
+
+#[inline]
+fn componentwise_min_indices(a: &[usize; 3], b: &[usize; 3]) -> [usize; 3] {
+    [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2])]
+}
+
+#[inline]
+fn componentwise_max_indices(a: &[usize; 3], b: &[usize; 3]) -> [usize; 3] {
+    [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])]
 }
 
 #[cfg(feature = "fuzzing")]

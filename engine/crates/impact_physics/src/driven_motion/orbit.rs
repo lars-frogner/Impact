@@ -7,8 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
-use nalgebra::{Point3, Vector3};
+use impact_math::{Float, point::Point3, vector::Vector3};
 use roc_integration::roc;
 use roots::{self, SimpleConvergency};
 
@@ -99,7 +98,7 @@ impl OrbitalTrajectoryDriver {
         let (trajectory_position, trajectory_velocity) =
             self.trajectory.compute_position_and_velocity(time);
 
-        rigid_body.set_position(rigid_body.position() + trajectory_position.coords);
+        rigid_body.set_position(rigid_body.position() + trajectory_position.as_vector());
         rigid_body.set_velocity(rigid_body.velocity() + trajectory_velocity);
     }
 }
@@ -196,7 +195,7 @@ impl OrbitalTrajectory {
             self.orientation.transform_point(&orbital_displacement);
 
         let world_space_orbital_position =
-            self.focal_position + world_space_orbital_displacement.coords;
+            self.focal_position + world_space_orbital_displacement.as_vector();
 
         let rate_of_change_of_true_anomaly = Self::compute_rate_of_change_of_true_anomaly(
             self.eccentricity,
@@ -360,8 +359,7 @@ mod tests {
     use super::*;
     use crate::quantities::{Direction, Orientation};
     use approx::abs_diff_eq;
-    use impact_math::Float;
-    use nalgebra::UnitVector3;
+    use impact_math::{Float, vector::UnitVector3};
     use proptest::prelude::*;
 
     prop_compose! {
@@ -379,7 +377,7 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(Vector3::new(
+            Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -495,10 +493,10 @@ mod tests {
                 semi_major_axis * (1.0 - eccentricity.powi(2)) / (1.0 - eccentricity);
 
             let correct_periapsis_position = focal_position
-                + orientation.transform_point(&(Point3::new(periapsis_distance, 0.0, 0.0))).coords;
+                + orientation.transform_point(&(Point3::new(periapsis_distance, 0.0, 0.0))).as_vector();
 
             let correct_apoapsis_position = focal_position
-                + orientation.transform_point(&(Point3::new(-apoapsis_distance, 0.0, 0.0))).coords;
+                + orientation.transform_point(&(Point3::new(-apoapsis_distance, 0.0, 0.0))).as_vector();
 
             let periapsis_position = trajectory.compute_position_and_velocity(periapsis_time).0;
             let apoapsis_position = trajectory.compute_position_and_velocity(apoapsis_time).0;
@@ -547,12 +545,12 @@ mod tests {
             let apoapsis_displacement = apoapsis_position - focal_position;
 
             prop_assert!(abs_diff_eq!(
-                UnitVector3::new_normalize(periapsis_velocity).dot(&UnitVector3::new_normalize(periapsis_displacement)),
+                UnitVector3::normalized_from(periapsis_velocity).dot(&UnitVector3::normalized_from(periapsis_displacement)),
                 0.0,
                 epsilon = 1e-2
             ));
             prop_assert!(abs_diff_eq!(
-               UnitVector3::new_normalize(apoapsis_velocity).dot(&UnitVector3::new_normalize(apoapsis_displacement)),
+               UnitVector3::normalized_from(apoapsis_velocity).dot(&UnitVector3::normalized_from(apoapsis_displacement)),
                 0.0,
                 epsilon = 1e-2
             ));
@@ -620,14 +618,14 @@ mod tests {
             let periapsis_velocity_direction = trajectory
                 .compute_position_and_velocity(periapsis_time)
                 .1
-                .normalize();
+                .normalized();
             let apoapsis_velocity_direction = trajectory
                 .compute_position_and_velocity(apoapsis_time)
                 .1
-                .normalize();
+                .normalized();
 
             prop_assert!(abs_diff_eq!(
-                UnitVector3::new_normalize(periapsis_velocity_direction).dot(&UnitVector3::new_normalize(apoapsis_velocity_direction)),
+                UnitVector3::normalized_from(periapsis_velocity_direction).dot(&UnitVector3::normalized_from(apoapsis_velocity_direction)),
                 -1.0,
                 epsilon = 1e-2
             ));
@@ -663,7 +661,7 @@ mod tests {
                 epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(
-                UnitVector3::new_normalize(velocity).dot(&UnitVector3::new_normalize(displacement)),
+                UnitVector3::normalized_from(velocity).dot(&UnitVector3::normalized_from(displacement)),
                 0.0,
                 epsilon = 1e-3
             ));

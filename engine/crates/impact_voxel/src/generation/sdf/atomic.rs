@@ -13,13 +13,14 @@ use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::{
     Float,
     matrix::Matrix4,
+    point::Point3,
     quaternion::{Quaternion, UnitQuaternion},
     transform::Similarity3,
+    vector::{UnitVector3, Vector3},
 };
-use nalgebra::{Point3, UnitVector3, Vector3};
 use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
-use std::{f32, mem};
+use std::{array, f32, mem};
 use twox_hash::XxHash32;
 
 /// A signed distance field generator.
@@ -122,13 +123,13 @@ pub struct CapsuleSDF {
 /// centered at the origin.
 #[derive(Clone, Debug)]
 pub struct BoxSDF {
-    half_extents: Vector3<f32>,
+    half_extents: Vector3,
 }
 
 #[derive(Clone, Debug)]
 pub struct SDFTranslation {
     pub child_id: SDFNodeID,
-    pub translation: Vector3<f32>,
+    pub translation: Vector3,
 }
 
 #[derive(Clone, Debug)]
@@ -952,7 +953,7 @@ impl<A: Allocator> SDFGenerator<A> {
     >(
         &self,
         buffers: &mut SDFGeneratorBlockBuffers<COUNT, A>,
-        block_origin_in_root_space: &Point3<f32>,
+        block_origin_in_root_space: &Point3,
     ) {
         if self.nodes.is_empty() {
             buffers.signed_distance_stack[0].fill(VoxelSignedDistance::MAX_F32);
@@ -1077,7 +1078,7 @@ impl<A: Allocator> SDFGenerator<A> {
     pub fn compute_signed_distance(
         &self,
         buffers: &mut SDFGeneratorBlockBuffers<1, A>,
-        position_in_root_space: &Point3<f32>,
+        position_in_root_space: &Point3,
     ) -> f32 {
         self.compute_signed_distances_for_block_preserving_gradients::<1, 1>(
             buffers,
@@ -1151,7 +1152,7 @@ impl SDFNode {
     }
 
     #[inline]
-    pub fn new_translation(child_id: SDFNodeID, translation: Vector3<f32>) -> Self {
+    pub fn new_translation(child_id: SDFNodeID, translation: Vector3) -> Self {
         Self::Translation(SDFTranslation {
             child_id,
             translation,
@@ -1228,7 +1229,7 @@ impl SDFNode {
     }
 
     #[inline]
-    pub fn node_to_parent_translation(&self) -> Vector3<f32> {
+    pub fn node_to_parent_translation(&self) -> Vector3 {
         match self {
             Self::Translation(SDFTranslation { translation, .. }) => *translation,
             _ => Vector3::zeros(),
@@ -1263,7 +1264,7 @@ impl SphereSDF {
 
     #[inline]
     pub fn domain_bounds(&self) -> AxisAlignedBox {
-        let half_extents = Vector3::repeat(self.radius);
+        let half_extents = Vector3::same(self.radius);
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
 
@@ -1271,7 +1272,7 @@ impl SphereSDF {
     fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
         let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
 
-        let expanded_half_extents = Vector3::repeat(extent_of_internal_box_in_sphere + margin);
+        let expanded_half_extents = Vector3::same(extent_of_internal_box_in_sphere + margin);
 
         AxisAlignedBox::new(
             (-expanded_half_extents).into(),
@@ -1280,8 +1281,8 @@ impl SphereSDF {
     }
 
     #[inline]
-    pub fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
-        position_in_node_space.coords.magnitude() - self.radius
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
+        position_in_node_space.as_vector().norm() - self.radius
     }
 }
 
@@ -1310,8 +1311,8 @@ impl CapsuleSDF {
 
     #[inline]
     pub fn domain_bounds(&self) -> AxisAlignedBox {
-        let mut half_extents = Vector3::repeat(self.radius);
-        half_extents.y += self.half_segment_length;
+        let mut half_extents = Vector3::same(self.radius);
+        *half_extents.y_mut() += self.half_segment_length;
         AxisAlignedBox::new((-half_extents).into(), half_extents.into())
     }
 
@@ -1319,8 +1320,8 @@ impl CapsuleSDF {
     fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
         let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
 
-        let mut expanded_half_extents = Vector3::repeat(extent_of_internal_box_in_sphere + margin);
-        expanded_half_extents.y += self.half_segment_length;
+        let mut expanded_half_extents = Vector3::same(extent_of_internal_box_in_sphere + margin);
+        *expanded_half_extents.y_mut() += self.half_segment_length;
 
         AxisAlignedBox::new(
             (-expanded_half_extents).into(),
@@ -1329,12 +1330,12 @@ impl CapsuleSDF {
     }
 
     #[inline]
-    pub fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
         let mut position = *position_in_node_space;
-        position.y -= position
-            .y
+        *position.y_mut() -= position
+            .y()
             .clamp(-self.half_segment_length, self.half_segment_length);
-        position.coords.magnitude() - self.radius
+        position.as_vector().norm() - self.radius
     }
 }
 
@@ -1350,9 +1351,9 @@ impl BoxSDF {
     #[inline]
     pub fn extents(&self) -> [f32; 3] {
         [
-            2.0 * self.half_extents.x,
-            2.0 * self.half_extents.y,
-            2.0 * self.half_extents.z,
+            2.0 * self.half_extents.x(),
+            2.0 * self.half_extents.y(),
+            2.0 * self.half_extents.z(),
         ]
     }
 
@@ -1363,7 +1364,7 @@ impl BoxSDF {
 
     #[inline]
     fn expanded_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
-        let expanded_half_extents = self.half_extents + Vector3::repeat(margin);
+        let expanded_half_extents = self.half_extents + Vector3::same(margin);
         AxisAlignedBox::new(
             (-expanded_half_extents).into(),
             expanded_half_extents.into(),
@@ -1371,16 +1372,16 @@ impl BoxSDF {
     }
 
     #[inline]
-    pub fn compute_signed_distance(&self, position_in_node_space: &Point3<f32>) -> f32 {
-        let q = position_in_node_space.coords.abs() - self.half_extents;
-        q.sup(&Vector3::zeros()).magnitude() + f32::min(q.max(), 0.0)
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
+        let q = position_in_node_space.as_vector().component_abs() - self.half_extents;
+        q.component_max(&Vector3::zeros()).norm() + f32::min(q.max_component(), 0.0)
     }
 }
 
 impl SDFRotation {
     #[inline]
-    pub fn from_axis_angle(child_id: SDFNodeID, axis: Vector3<f32>, angle: f32) -> Self {
-        let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::new_normalize(axis), angle);
+    pub fn from_axis_angle(child_id: SDFNodeID, axis: Vector3, angle: f32) -> Self {
+        let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::normalized_from(axis), angle);
         Self { child_id, rotation }
     }
 
@@ -1506,7 +1507,7 @@ impl MultifractalNoiseSDFModifier {
         signed_distances: &mut [f32; COUNT],
         scratch: &mut [f32],
         transform_to_node_space: &Matrix4,
-        block_origin_in_root_space: &Point3<f32>,
+        block_origin_in_root_space: &Point3,
     ) {
         let origin_in_node_space =
             transform_to_node_space.transform_point(block_origin_in_root_space);
@@ -1521,15 +1522,15 @@ impl MultifractalNoiseSDFModifier {
         // We incorporate the scaling into the noise by dividing the original
         // frequency with the scale and adjusting the origin to compensate
         let unscaled_frequency = self.frequency * inverse_scale;
-        let origin_for_noise = Point3::from(origin_in_node_space.coords.scale(scale));
+        let origin_for_noise = scale * origin_in_node_space;
 
         // Fall back to per-voxel evaluation if there is any rotation
-        if abs_diff_ne!(dx.x * inverse_scale, 1.0, epsilon = 1e-6)
-            || abs_diff_ne!(dy.y * inverse_scale, 1.0, epsilon = 1e-6)
+        if abs_diff_ne!(dx.x() * inverse_scale, 1.0, epsilon = 1e-6)
+            || abs_diff_ne!(dy.y() * inverse_scale, 1.0, epsilon = 1e-6)
         {
-            let dx_for_noise = dx.scale(scale);
-            let dy_for_noise = dy.scale(scale);
-            let dz_for_noise = dz.scale(scale);
+            let dx_for_noise = scale * dx;
+            let dy_for_noise = scale * dy;
+            let dz_for_noise = scale * dz;
             let mut noise = [0.0];
 
             let mut idx = 0;
@@ -1541,7 +1542,12 @@ impl MultifractalNoiseSDFModifier {
                         NoiseBuilder::fbm_3d_offset(
                             // Warning: We reverse the order of dimensions here to match the
                             // block-wise evaluation below
-                            pos.z, 1, pos.y, 1, pos.x, 1,
+                            pos.z(),
+                            1,
+                            pos.y(),
+                            1,
+                            pos.x(),
+                            1,
                         )
                         .with_octaves(self.octaves as u8)
                         .with_freq(unscaled_frequency)
@@ -1563,11 +1569,11 @@ impl MultifractalNoiseSDFModifier {
         NoiseBuilder::fbm_3d_offset(
             // Warning: We reverse the order of dimensions here because the
             // generated noise is laid out in row-major order
-            origin_for_noise.z,
+            origin_for_noise.z(),
             SIZE,
-            origin_for_noise.y,
+            origin_for_noise.y(),
             SIZE,
-            origin_for_noise.x,
+            origin_for_noise.x(),
             SIZE,
         )
         .with_octaves(self.octaves as u8)
@@ -1590,7 +1596,7 @@ impl MultifractalNoiseSDFModifier {
         &self,
         signed_distances: &[f32; COUNT],
         transform_to_node_space: &Matrix4,
-        block_origin_in_root_space: &Point3<f32>,
+        block_origin_in_root_space: &Point3,
         predicate: impl Fn(f32) -> bool,
     ) -> bool {
         let origin_in_node_space =
@@ -1606,11 +1612,11 @@ impl MultifractalNoiseSDFModifier {
         // We incorporate the scaling into the noise by dividing the original
         // frequency with the scale and adjusting the origin to compensate
         let unscaled_frequency = self.frequency * inverse_scale;
-        let origin_for_noise = Point3::from(origin_in_node_space.coords.scale(scale));
+        let origin_for_noise = scale * origin_in_node_space;
 
-        let dx_for_noise = dx.scale(scale);
-        let dy_for_noise = dy.scale(scale);
-        let dz_for_noise = dz.scale(scale);
+        let dx_for_noise = scale * dx;
+        let dy_for_noise = scale * dy;
+        let dz_for_noise = scale * dz;
 
         let mut noise = [0.0];
 
@@ -1623,7 +1629,12 @@ impl MultifractalNoiseSDFModifier {
             NoiseBuilder::fbm_3d_offset(
                 // Warning: We reverse the order of dimensions here to match
                 // `Self::modify_signed_distances_for_block`
-                point.z, 1, point.y, 1, point.x, 1,
+                point.z(),
+                1,
+                point.y(),
+                1,
+                point.x(),
+                1,
             )
             .with_octaves(self.octaves as u8)
             .with_freq(unscaled_frequency)
@@ -1717,14 +1728,10 @@ impl MultiscaleSphereSDFModifier {
     }
 
     #[inline]
-    fn modify_signed_distance(
-        &self,
-        position_in_node_space: &Point3<f32>,
-        signed_distance: f32,
-    ) -> f32 {
+    fn modify_signed_distance(&self, position_in_node_space: &Point3, signed_distance: f32) -> f32 {
         /// Rotates with an angle of `2 * pi / golden_ratio` around the axis
         /// `[1, 1, 1]` (to break up the regular grid pattern).
-        const ROTATION: UnitQuaternion = UnitQuaternion::new_unchecked(Quaternion::from_parts(
+        const ROTATION: UnitQuaternion = UnitQuaternion::unchecked_from(Quaternion::from_parts(
             -0.3623749,
             Vector3::new(0.5381091, 0.5381091, 0.5381091),
         ));
@@ -1756,19 +1763,24 @@ impl MultiscaleSphereSDFModifier {
     }
 
     #[inline]
-    fn evaluate_sphere_grid_sdf(&self, position: &Point3<f32>) -> f32 {
-        const CORNER_OFFSETS: [Vector3<i32>; 8] = [
-            Vector3::new(0, 0, 0),
-            Vector3::new(0, 0, 1),
-            Vector3::new(0, 1, 0),
-            Vector3::new(0, 1, 1),
-            Vector3::new(1, 0, 0),
-            Vector3::new(1, 0, 1),
-            Vector3::new(1, 1, 0),
-            Vector3::new(1, 1, 1),
+    fn evaluate_sphere_grid_sdf(&self, position: &Point3) -> f32 {
+        const CORNER_OFFSETS: [[i32; 3]; 8] = [
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 0],
+            [0, 1, 1],
+            [1, 0, 0],
+            [1, 0, 1],
+            [1, 1, 0],
+            [1, 1, 1],
         ];
-        let grid_cell_indices = position.coords.map(|coord| coord.floor() as i32);
-        let offset_in_grid_cell = position.coords - grid_cell_indices.cast();
+        let grid_cell_indices = [
+            position.x().floor() as i32,
+            position.y().floor() as i32,
+            position.z().floor() as i32,
+        ];
+        let offset_in_grid_cell =
+            position.as_vector() - Vector3::from(grid_cell_indices.map(|idx| idx as f32));
 
         CORNER_OFFSETS
             .iter()
@@ -1787,27 +1799,26 @@ impl MultiscaleSphereSDFModifier {
     #[inline]
     fn evaluate_corner_sphere_sdf(
         &self,
-        grid_cell_indices: &Vector3<i32>,
-        offset_in_grid_cell: &Vector3<f32>,
-        corner_offsets: &Vector3<i32>,
+        grid_cell_indices: &[i32; 3],
+        offset_in_grid_cell: &Vector3,
+        corner_offsets: &[i32; 3],
     ) -> f32 {
         let sphere_radius = self.corner_sphere_radius(grid_cell_indices, corner_offsets);
-        let distance_to_sphere_center = (offset_in_grid_cell - corner_offsets.cast()).magnitude();
+        let distance_to_sphere_center =
+            (offset_in_grid_cell - Vector3::from(corner_offsets.map(|idx| idx as f32))).norm();
         distance_to_sphere_center - sphere_radius
     }
 
     /// Every sphere gets a random radius based on its location in the grid.
     #[inline]
-    fn corner_sphere_radius(
-        &self,
-        grid_cell_indices: &Vector3<i32>,
-        corner_offsets: &Vector3<i32>,
-    ) -> f32 {
+    fn corner_sphere_radius(&self, grid_cell_indices: &[i32; 3], corner_offsets: &[i32; 3]) -> f32 {
         // The maximum radius is half the extent of a grid cell, i.e. 0.5
         const HASH_TO_RADIUS: f32 = 0.5 / u32::MAX as f32;
         let hash = XxHash32::oneshot(
             self.seed,
-            bytemuck::bytes_of(&(grid_cell_indices + corner_offsets)),
+            bytemuck::bytes_of(&array::from_fn::<i32, 3, _>(|idx| {
+                grid_cell_indices[idx] + corner_offsets[idx]
+            })),
         );
         HASH_TO_RADIUS * hash as f32
     }
@@ -1874,8 +1885,8 @@ fn displacement_due_to_smoothness(smoothness: f32) -> f32 {
 pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
     signed_distances: &mut [f32; COUNT],
     transform_to_node_space: &Matrix4,
-    block_origin_in_root_space: &Point3<f32>,
-    update_signed_distance: &impl Fn(&mut f32, &Point3<f32>),
+    block_origin_in_root_space: &Point3,
+    update_signed_distance: &impl Fn(&mut f32, &Point3),
 ) {
     assert_eq!(COUNT, SIZE.pow(3));
 
@@ -1902,8 +1913,8 @@ pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
 #[inline]
 fn all_block_test_positions_pass_predicate<const SIZE: usize, const COUNT: usize>(
     transform_to_node_space: &Matrix4,
-    block_origin_in_root_space: &Point3<f32>,
-    predicate: &impl Fn(usize, Point3<f32>) -> bool,
+    block_origin_in_root_space: &Point3,
+    predicate: &impl Fn(usize, Point3) -> bool,
 ) -> bool {
     assert_eq!(COUNT, SIZE.pow(3));
 
@@ -1923,11 +1934,11 @@ fn all_block_test_positions_pass_predicate<const SIZE: usize, const COUNT: usize
 
 #[inline]
 fn all_block_test_positions_with_indices<const SIZE: usize, const COUNT: usize>(
-    origin: &Point3<f32>,
-    dx: &Vector3<f32>,
-    dy: &Vector3<f32>,
-    dz: &Vector3<f32>,
-) -> impl Iterator<Item = (usize, Point3<f32>)> {
+    origin: &Point3,
+    dx: &Vector3,
+    dy: &Vector3,
+    dz: &Vector3,
+) -> impl Iterator<Item = (usize, Point3)> {
     block_corner_positions_with_indices::<SIZE, COUNT>(origin, dx, dy, dz)
         .into_iter()
         .chain(block_edge_midpoint_positions_with_indices::<SIZE, COUNT>(
@@ -1940,11 +1951,11 @@ fn all_block_test_positions_with_indices<const SIZE: usize, const COUNT: usize>(
 
 #[inline]
 fn block_corner_positions_with_indices<const SIZE: usize, const COUNT: usize>(
-    origin: &Point3<f32>,
-    dx: &Vector3<f32>,
-    dy: &Vector3<f32>,
-    dz: &Vector3<f32>,
-) -> [(usize, Point3<f32>); 8] {
+    origin: &Point3,
+    dx: &Vector3,
+    dy: &Vector3,
+    dz: &Vector3,
+) -> [(usize, Point3); 8] {
     let flat_idx = |i: usize, j: usize, k: usize| i * SIZE * SIZE + j * SIZE + k;
 
     let s = (SIZE - 1) as f32;
@@ -1966,11 +1977,11 @@ fn block_corner_positions_with_indices<const SIZE: usize, const COUNT: usize>(
 
 #[inline]
 fn block_edge_midpoint_positions_with_indices<const SIZE: usize, const COUNT: usize>(
-    origin: &Point3<f32>,
-    dx: &Vector3<f32>,
-    dy: &Vector3<f32>,
-    dz: &Vector3<f32>,
-) -> [(usize, Point3<f32>); 12] {
+    origin: &Point3,
+    dx: &Vector3,
+    dy: &Vector3,
+    dz: &Vector3,
+) -> [(usize, Point3); 12] {
     let flat_idx = |i: usize, j: usize, k: usize| i * SIZE * SIZE + j * SIZE + k;
 
     let s = (SIZE - 1) as f32;
@@ -2006,11 +2017,11 @@ fn block_edge_midpoint_positions_with_indices<const SIZE: usize, const COUNT: us
 
 #[inline]
 fn block_face_center_positions_with_indices<const SIZE: usize, const COUNT: usize>(
-    origin: &Point3<f32>,
-    dx: &Vector3<f32>,
-    dy: &Vector3<f32>,
-    dz: &Vector3<f32>,
-) -> [(usize, Point3<f32>); 6] {
+    origin: &Point3,
+    dx: &Vector3,
+    dy: &Vector3,
+    dz: &Vector3,
+) -> [(usize, Point3); 6] {
     let flat_idx = |i: usize, j: usize, k: usize| i * SIZE * SIZE + j * SIZE + k;
 
     let s = (SIZE - 1) as f32;

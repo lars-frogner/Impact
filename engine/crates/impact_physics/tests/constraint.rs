@@ -2,7 +2,11 @@
 
 use approx::assert_abs_diff_eq;
 use impact_geometry::{Plane, ReferenceFrame, Sphere};
-use impact_math::angle::{Angle, Radians};
+use impact_math::{
+    angle::{Angle, Radians},
+    point::Point3,
+    vector::Vector3,
+};
 use impact_physics::{
     anchor::AnchorManager,
     collision::{
@@ -16,7 +20,6 @@ use impact_physics::{
     quantities::{Motion, Orientation, Position, Velocity},
     rigid_body::{self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
-use nalgebra::{Point3, Vector3};
 
 #[derive(Clone, Debug)]
 struct SphereBody {

@@ -5,12 +5,12 @@ use crate::{
     collidable::{CollisionWorld, LocalCollidable, LocalVoxelObjectCollidable},
 };
 use bytemuck::{Pod, Zeroable};
+use impact_math::vector::Vector3;
 use impact_physics::{
     collision::{CollidableID, CollidableKind},
     material::ContactResponseParameters,
     rigid_body::TypedRigidBodyID,
 };
-use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -56,7 +56,7 @@ pub fn setup_voxel_collidable(
     collision_world: &mut CollisionWorld,
     object_id: VoxelObjectID,
     rigid_body_id: TypedRigidBodyID,
-    origin_offset: Vector3<f32>,
+    origin_offset: Vector3,
     collidable: &VoxelCollidable,
 ) -> CollidableID {
     collision_world.add_collidable(

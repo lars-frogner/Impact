@@ -3,7 +3,10 @@
 use crate::{TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoords};
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point3, UnitVector3, Vector2, Vector3};
+use impact_math::{
+    point::Point3,
+    vector::{UnitVector3, Vector2, Vector3},
+};
 use ply_rs::{
     parser::Parser,
     ply::{Property, PropertyAccess},
@@ -117,7 +120,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_normal_vectors = vertex_list
             .iter()
             .map(|PlyVertex { property_values }| {
-                VertexNormalVector(UnitVector3::new_normalize(Vector3::new(
+                VertexNormalVector(UnitVector3::normalized_from(Vector3::new(
                     property_values[prop_idx],
                     property_values[prop_idx + 1],
                     property_values[prop_idx + 2],

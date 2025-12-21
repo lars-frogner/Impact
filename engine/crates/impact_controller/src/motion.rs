@@ -3,9 +3,8 @@
 use super::{MotionChanged, MotionController};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
+use impact_math::{Float, vector::Vector3};
 use impact_physics::quantities::{Orientation, Velocity};
-use nalgebra::Vector3;
 use roc_integration::roc;
 
 define_component_type! {
@@ -175,7 +174,7 @@ impl MotionController for SemiDirectionalMotionController {
     fn compute_controlled_velocity(&self, orientation: &Orientation) -> Velocity {
         let mut controlled_velocity = orientation.transform_vector(&self.local_velocity);
         if !self.vertical_control {
-            controlled_velocity.y = 0.0;
+            *controlled_velocity.y_mut() = 0.0;
         }
         controlled_velocity
     }

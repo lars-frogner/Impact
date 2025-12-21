@@ -5,10 +5,11 @@ use approx::AbsDiffEq;
 use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
     matrix::Matrix4,
+    point::Point3,
     quaternion::UnitQuaternion,
     transform::{Projective3, Similarity3},
+    vector::{UnitVector3, Vector3},
 };
-use nalgebra::{Point3, UnitVector3, Vector3};
 
 /// A frustum, which in general is a pyramid truncated at the
 /// top. It is here represented by the six planes making up
@@ -129,11 +130,11 @@ impl Frustum {
             clip_space_depth,
         ));
 
-        (top_point.y - bottom_point.y).abs()
+        (top_point.y() - bottom_point.y()).abs()
     }
 
     /// Whether the given point is strictly inside the frustum.
-    pub fn contains_point(&self, point: &Point3<f32>) -> bool {
+    pub fn contains_point(&self, point: &Point3) -> bool {
         self.planes
             .iter()
             .all(|plane| plane.point_lies_in_positive_halfspace(point))
@@ -173,7 +174,7 @@ impl Frustum {
     }
 
     /// Computes the 8 corners of the frustum.
-    pub fn compute_corners(&self) -> [Point3<f32>; 8] {
+    pub fn compute_corners(&self) -> [Point3; 8] {
         [
             self.inverse_transform_matrix
                 .transform_point(&Point3::new(-1.0, -1.0, 0.0)),
@@ -199,7 +200,7 @@ impl Frustum {
     pub fn compute_corners_of_subfrustum(
         &self,
         clip_space_depth_limits: UpperExclusiveBounds<f32>,
-    ) -> [Point3<f32>; 8] {
+    ) -> [Point3; 8] {
         let (lower_linear_depth, upper_linear_depth) = clip_space_depth_limits.bounds();
         let lower_clip_space_depth =
             self.convert_linear_depth_to_clip_space_depth(lower_linear_depth);
@@ -254,16 +255,16 @@ impl Frustum {
     pub fn convert_view_distance_to_clip_space_depth(&self, distance: f32) -> f32 {
         self.transform_matrix
             .transform_point(&Point3::from(
-                self.near_plane().unit_normal().as_ref() * distance,
+                self.near_plane().unit_normal().as_vector() * distance,
             ))
-            .z
+            .z()
     }
 
     /// Computes the view distance corresponding to the given clip space depth.
     pub fn convert_clip_space_depth_to_view_distance(&self, clip_space_depth: f32) -> f32 {
         self.inverse_transform_matrix
             .transform_point(&Point3::new(0.0, 0.0, clip_space_depth))
-            .z
+            .z()
     }
 
     /// Computes the linear depth, which increases linearly with distance from 0
@@ -288,13 +289,13 @@ impl Frustum {
     }
 
     /// Computes the center point of the frustum.
-    pub fn compute_center(&self) -> Point3<f32> {
+    pub fn compute_center(&self) -> Point3 {
         let corners = self.compute_corners();
         let n_corners = corners.len();
 
         corners
             .into_iter()
-            .reduce(|accum, point| accum + point.coords)
+            .reduce(|accum, point| accum + point.as_vector())
             .unwrap()
             / (n_corners as f32)
     }
@@ -388,37 +389,37 @@ impl Frustum {
         let c4 = transform_matrix.column4();
 
         let left = Self::plane_from_unnormalized_coefficients(
-            c1.w + c1.x,
-            c2.w + c2.x,
-            c3.w + c3.x,
-            -(c4.w + c4.x),
+            c1.w() + c1.x(),
+            c2.w() + c2.x(),
+            c3.w() + c3.x(),
+            -(c4.w() + c4.x()),
         );
         let right = Self::plane_from_unnormalized_coefficients(
-            c1.w - c1.x,
-            c2.w - c2.x,
-            c3.w - c3.x,
-            -(c4.w - c4.x),
+            c1.w() - c1.x(),
+            c2.w() - c2.x(),
+            c3.w() - c3.x(),
+            -(c4.w() - c4.x()),
         );
 
         let bottom = Self::plane_from_unnormalized_coefficients(
-            c1.w + c1.y,
-            c2.w + c2.y,
-            c3.w + c3.y,
-            -(c4.w + c4.y),
+            c1.w() + c1.y(),
+            c2.w() + c2.y(),
+            c3.w() + c3.y(),
+            -(c4.w() + c4.y()),
         );
         let top = Self::plane_from_unnormalized_coefficients(
-            c1.w - c1.y,
-            c2.w - c2.y,
-            c3.w - c3.y,
-            -(c4.w - c4.y),
+            c1.w() - c1.y(),
+            c2.w() - c2.y(),
+            c3.w() - c3.y(),
+            -(c4.w() - c4.y()),
         );
 
-        let near = Self::plane_from_unnormalized_coefficients(c1.z, c2.z, c3.z, -c4.z);
+        let near = Self::plane_from_unnormalized_coefficients(c1.z(), c2.z(), c3.z(), -c4.z());
         let far = Self::plane_from_unnormalized_coefficients(
-            c1.w - c1.z,
-            c2.w - c2.z,
-            c3.w - c3.z,
-            -(c4.w - c4.z),
+            c1.w() - c1.z(),
+            c2.w() - c2.z(),
+            c3.w() - c3.z(),
+            -(c4.w() - c4.z()),
         );
 
         [left, right, bottom, top, near, far]
@@ -431,7 +432,7 @@ impl Frustum {
         displacement: f32,
     ) -> Plane {
         let (unit_normal, magnitude) =
-            UnitVector3::new_and_get(Vector3::new(normal_x, normal_y, normal_z));
+            UnitVector3::normalized_from_and_norm(Vector3::new(normal_x, normal_y, normal_z));
 
         Plane::new(unit_normal, displacement / magnitude)
     }
@@ -458,9 +459,9 @@ impl Frustum {
     pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane) -> usize {
         let normal = plane.unit_normal();
         match (
-            normal.x.is_sign_negative(),
-            normal.y.is_sign_negative(),
-            normal.z.is_sign_negative(),
+            normal.x().is_sign_negative(),
+            normal.y().is_sign_negative(),
+            normal.z().is_sign_negative(),
         ) {
             (true, true, true) => 0,
             (true, true, false) => 1,
@@ -509,7 +510,6 @@ mod tests {
     use crate::projection::{OrthographicTransform, PerspectiveTransform};
     use approx::assert_abs_diff_eq;
     use impact_math::angle::Degrees;
-    use nalgebra::Vector3;
 
     #[test]
     fn computing_frustum_near_and_far_distance_works() {

@@ -12,9 +12,9 @@ module [
 ]
 
 import Builtin
-import Vector3 exposing [Vector3F32]
+import Vector3 exposing [Vector3]
 
-Matrix3 : (Vector3F32, Vector3F32, Vector3F32)
+Matrix3 : (Vector3, Vector3, Vector3)
 
 map : Matrix3, (F32 -> F32) -> Matrix3
 map = |mat, f|
@@ -40,16 +40,16 @@ write_bytes : List U8, Matrix3 -> List U8
 write_bytes = |bytes, (col1, col2, col3)|
     bytes
     |> List.reserve(36)
-    |> Vector3.write_bytes_32(col1)
-    |> Vector3.write_bytes_32(col2)
-    |> Vector3.write_bytes_32(col3)
+    |> Vector3.write_bytes(col1)
+    |> Vector3.write_bytes(col2)
+    |> Vector3.write_bytes(col3)
 
 from_bytes : List U8 -> Result Matrix3 Builtin.DecodeErr
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
-            bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes_32?,
-            bytes |> List.sublist({ start: 24, len: 12 }) |> Vector3.from_bytes_32?,
+            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
+            bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes?,
+            bytes |> List.sublist({ start: 24, len: 12 }) |> Vector3.from_bytes?,
         ),
     )

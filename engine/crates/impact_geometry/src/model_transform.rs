@@ -2,8 +2,7 @@
 
 use crate::ReferenceFrame;
 use bytemuck::{Pod, Zeroable};
-use impact_math::transform::Similarity3;
-use nalgebra::{Point3, Vector3};
+use impact_math::{point::Point3, transform::Similarity3, vector::Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -15,7 +14,7 @@ define_component_type! {
     pub struct ModelTransform {
         /// The offset subtracted from a model-space position before scaling to
         /// transform it to the parent entity's space.
-        pub offset: Vector3<f32>,
+        pub offset: Vector3,
         /// The scaling factor applied to a model-space position after the
         /// offset to transform it to the parent entity's space.
         pub scale: f32,
@@ -34,7 +33,7 @@ impl ModelTransform {
     /// Creates a transform where the parent entity's space has the given offset
     /// from that of the model.
     #[roc(body = "with_offset_and_scale(offset, 1.0)")]
-    pub fn with_offset(offset: Vector3<f32>) -> Self {
+    pub fn with_offset(offset: Vector3) -> Self {
         Self::with_offset_and_scale(offset, 1.0)
     }
 
@@ -48,7 +47,7 @@ impl ModelTransform {
     /// Creates a transform where the parent entity's space has the given offset
     /// and scale relative to that of the model.
     #[roc(body = "{ offset, scale }")]
-    pub fn with_offset_and_scale(offset: Vector3<f32>, scale: f32) -> Self {
+    pub fn with_offset_and_scale(offset: Vector3, scale: f32) -> Self {
         Self { offset, scale }
     }
 
@@ -60,16 +59,13 @@ impl ModelTransform {
 
     /// Transforms the given point from model space to the space of the parent
     /// entity.
-    pub fn transform_point_from_model_space_to_entity_space(
-        &self,
-        point: &Point3<f32>,
-    ) -> Point3<f32> {
+    pub fn transform_point_from_model_space_to_entity_space(&self, point: &Point3) -> Point3 {
         (point - self.offset) * self.scale
     }
 
     /// Updates the pre-scaling offset to yield the given offset after scaling.
-    pub fn set_offset_after_scaling(&mut self, offset_after_scaling: Vector3<f32>) {
-        self.offset = offset_after_scaling.unscale(self.scale);
+    pub fn set_offset_after_scaling(&mut self, offset_after_scaling: Vector3) {
+        self.offset = offset_after_scaling / self.scale;
     }
 
     /// Sets the pre-scaling offset to the given vector, adjusting the given
@@ -79,7 +75,7 @@ impl ModelTransform {
     pub fn update_offset_while_preserving_entity_position(
         &mut self,
         entity_frame: &mut ReferenceFrame,
-        offset: Vector3<f32>,
+        offset: Vector3,
     ) {
         let displacement_in_frame = offset - self.offset;
         let displacement_in_parent_frame = entity_frame
@@ -100,7 +96,7 @@ impl Default for ModelTransform {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_math::quaternion::UnitQuaternion;
+    use impact_math::{point::Point3, quaternion::UnitQuaternion};
 
     #[test]
     fn updating_offset_while_preserving_position_works() {

@@ -16,14 +16,13 @@ use crate::{
 use absorption::{VoxelAbsorbingCapsule, VoxelAbsorbingSphere};
 use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
-use impact_math::transform::Isometry3;
+use impact_math::{transform::Isometry3, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
     quantities::{AngularVelocity, Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
 use impact_scene::graph::{ModelInstanceNodeID, SceneGraph};
-use nalgebra::Vector3;
 use tinyvec::TinyVec;
 
 /// Context trait for handling voxel object interactions in a generic way.
@@ -116,8 +115,7 @@ pub fn sync_voxel_object_model_transform_with_inertial_properties(
     };
     model_transform.offset = physics_context
         .inertial_property_manager
-        .derive_center_of_mass()
-        .cast();
+        .derive_center_of_mass();
 }
 
 /// Updates the bounding sphere of a voxel object's model instance node to match
@@ -146,7 +144,7 @@ fn handle_voxel_object_after_removing_voxels(
     inertial_property_manager: &mut VoxelObjectInertialPropertyManager,
     rigid_body_id: DynamicRigidBodyID,
     rigid_body: &mut DynamicRigidBody,
-    original_local_center_of_mass: Vector3<f32>,
+    original_local_center_of_mass: Vector3,
 ) -> VoxelRemovalOutcome {
     if voxel_object.is_effectively_empty() {
         return VoxelRemovalOutcome {
@@ -198,7 +196,7 @@ fn handle_voxel_object_after_removing_voxels(
             )
         } else {
             let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
-            let new_local_center_of_mass = new_inertial_properties.center_of_mass().coords;
+            let new_local_center_of_mass = new_inertial_properties.center_of_mass().as_vector();
 
             // We need to know how the center of mass of the original object has
             // changed to update its position and linear velocity. Here we
@@ -238,7 +236,7 @@ fn handle_voxel_object_after_removing_voxels(
                 voxel_object,
                 rigid_body_id,
                 &original_local_center_of_mass,
-                &new_local_center_of_mass,
+                new_local_center_of_mass,
             )
         };
 
@@ -266,7 +264,7 @@ fn handle_voxel_object_after_removing_voxels(
         // inertial properties.
 
         let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
-        let new_local_center_of_mass = new_inertial_properties.center_of_mass().coords;
+        let new_local_center_of_mass = new_inertial_properties.center_of_mass().as_vector();
 
         let local_center_of_mass_displacement =
             new_local_center_of_mass - original_local_center_of_mass;
@@ -290,7 +288,7 @@ fn handle_voxel_object_after_removing_voxels(
             voxel_object,
             rigid_body_id,
             &original_local_center_of_mass,
-            &new_local_center_of_mass,
+            new_local_center_of_mass,
         );
 
         // There is no disconnected object to inherit any anchors, so all lost
@@ -310,7 +308,7 @@ fn handle_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
     disconnected_object: DisconnectedVoxelObject,
     mut inertial_property_manager: VoxelObjectInertialPropertyManager,
-    original_local_center_of_mass: Vector3<f32>,
+    original_local_center_of_mass: Vector3,
     original_position: Position,
     orientation: Orientation,
     original_linear_velocity: Velocity,
@@ -366,7 +364,7 @@ fn handle_disconnected_voxel_object(
     inertial_property_manager.offset_reference_point_by(&origin_offset_in_voxel_object_space);
 
     let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
-    let new_local_center_of_mass = new_inertial_properties.center_of_mass().coords;
+    let new_local_center_of_mass = new_inertial_properties.center_of_mass().as_vector();
 
     let rigid_body = DynamicRigidBody::new(
         new_inertial_properties.mass(),
@@ -383,7 +381,7 @@ fn handle_disconnected_voxel_object(
         &voxel_object,
         &original_local_center_of_mass,
         &origin_offset_in_voxel_object_space,
-        &new_local_center_of_mass,
+        new_local_center_of_mass,
     );
 
     DynamicDisconnectedVoxelObject {
@@ -398,8 +396,8 @@ fn handle_anchors_for_original_voxel_object_after_removing_voxels(
     anchor_manager: &mut AnchorManager,
     voxel_object: &ChunkedVoxelObject,
     rigid_body_id: DynamicRigidBodyID,
-    original_local_center_of_mass: &Vector3<f32>,
-    new_local_center_of_mass: &Vector3<f32>,
+    original_local_center_of_mass: &Vector3,
+    new_local_center_of_mass: &Vector3,
 ) -> Anchors {
     let mut lost_anchors = Anchors::new();
 
@@ -412,7 +410,7 @@ fn handle_anchors_for_original_voxel_object_after_removing_voxels(
             let local_anchor = *anchor_point + original_local_center_of_mass;
 
             if voxel_object
-                .get_voxel_at_coords(local_anchor.x, local_anchor.y, local_anchor.z)
+                .get_voxel_at_coords(local_anchor.x(), local_anchor.y(), local_anchor.z())
                 .is_some()
             {
                 // The anchor is still attached to the original object,
@@ -447,9 +445,9 @@ fn handle_anchors_for_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
     lost_anchors: Anchors,
     disconnected_object: &ChunkedVoxelObject,
-    original_local_center_of_mass: &Vector3<f32>,
-    origin_offset_in_voxel_object_space: &Vector3<f32>,
-    new_local_center_of_mass: &Vector3<f32>,
+    original_local_center_of_mass: &Vector3,
+    origin_offset_in_voxel_object_space: &Vector3,
+    new_local_center_of_mass: &Vector3,
 ) -> Anchors {
     // Determine the coordinates of the original center of mass of the original
     // object relative to the origin of the disconnected object (in model space,
@@ -466,7 +464,7 @@ fn handle_anchors_for_disconnected_voxel_object(
         let local_anchor = anchor_point + original_local_center_of_mass_relative_to_new_origin;
 
         if disconnected_object
-            .get_voxel_at_coords(local_anchor.x, local_anchor.y, local_anchor.z)
+            .get_voxel_at_coords(local_anchor.x(), local_anchor.y(), local_anchor.z())
             .is_some()
         {
             // The anchor is attached to the disconnected object, so we must

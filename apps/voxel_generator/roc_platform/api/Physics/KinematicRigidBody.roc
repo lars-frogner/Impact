@@ -1,8 +1,8 @@
-# Hash: 67c4c4cde3c60f72c3e33a9929dbb417dda9165b0353991acc43d8f1b2db97fa
-# Generated: 2025-12-20T20:27:16+00:00
+# Hash: 57f768c55e744798195a2a51279863ee63881ad1642a0248e3619858a6fe32e0
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_physics::rigid_body::KinematicRigidBody
 # Type category: POD
-# Commit: dbb3dcfa (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     KinematicRigidBody,
     write_bytes,
@@ -18,9 +18,9 @@ import core.Vector3
 ## modified. It does not have any inertial properties, and is not affected by
 ## forces or torques.
 KinematicRigidBody : {
-    position : Point3.Point3 Binary32,
+    position : Point3.Point3,
     orientation : UnitQuaternion.UnitQuaternion,
-    velocity : Vector3.Vector3 Binary32,
+    velocity : Vector3.Vector3,
     angular_velocity : Physics.AngularVelocity.AngularVelocity,
 }
 
@@ -30,9 +30,9 @@ write_bytes : List U8, KinematicRigidBody -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(56)
-    |> Point3.write_bytes_32(value.position)
+    |> Point3.write_bytes(value.position)
     |> UnitQuaternion.write_bytes(value.orientation)
-    |> Vector3.write_bytes_32(value.velocity)
+    |> Vector3.write_bytes(value.velocity)
     |> Physics.AngularVelocity.write_bytes(value.angular_velocity)
 
 ## Deserializes a value of [KinematicRigidBody] from its bytes in the
@@ -41,9 +41,9 @@ from_bytes : List U8 -> Result KinematicRigidBody _
 from_bytes = |bytes|
     Ok(
         {
-            position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes_32?,
+            position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes?,
             orientation: bytes |> List.sublist({ start: 12, len: 16 }) |> UnitQuaternion.from_bytes?,
-            velocity: bytes |> List.sublist({ start: 28, len: 12 }) |> Vector3.from_bytes_32?,
+            velocity: bytes |> List.sublist({ start: 28, len: 12 }) |> Vector3.from_bytes?,
             angular_velocity: bytes |> List.sublist({ start: 40, len: 16 }) |> Physics.AngularVelocity.from_bytes?,
         },
     )

@@ -6,8 +6,7 @@ use impact_camera::{
     gpu_resource::{BufferableCamera, CameraGPUResource},
 };
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
-use impact_math::transform::Isometry3;
-use nalgebra::Point3;
+use impact_math::{point::Point3, transform::Isometry3};
 
 /// Manager for the cameras in a scene.
 #[derive(Debug)]
@@ -180,7 +179,7 @@ impl SceneCamera {
 
     /// Computes the world-space position of the camera based on the current
     /// view transform.
-    pub fn compute_world_space_position(&self) -> Point3<f32> {
+    pub fn compute_world_space_position(&self) -> Point3 {
         let camera_to_world = self.view_transform.inverted();
         Point3::from(*camera_to_world.translation())
     }

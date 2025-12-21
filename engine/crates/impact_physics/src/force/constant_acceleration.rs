@@ -5,7 +5,7 @@ use crate::{
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use nalgebra::Vector3;
+use impact_math::vector::Vector3;
 use roc_integration::roc;
 
 /// Manages all [`ConstantAccelerationGenerator`]s.
@@ -39,7 +39,7 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ConstantAcceleration(Vector3<f32>);
+    pub struct ConstantAcceleration(Vector3);
 }
 
 impl From<u64> for ConstantAccelerationGeneratorID {
@@ -74,7 +74,7 @@ impl ConstantAcceleration {
     pub const EARTH_DOWNWARD_ACCELERATION: f32 = 9.81;
 
     #[roc(body = "(acceleration,)")]
-    pub fn new(acceleration: Vector3<f32>) -> Self {
+    pub fn new(acceleration: Vector3) -> Self {
         Self(acceleration)
     }
 

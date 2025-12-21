@@ -1,8 +1,8 @@
-# Hash: 36149c86bdc06f1f40b3f43630a58eaec6573abdffabc6fab6fd7473fb8d1ecf
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 5067bf5c15d0349bb7f035ed147c0d1de69665f6d8a66aee0a36636b1897c21a
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingCapsule
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,
@@ -33,10 +33,10 @@ import core.Vector3
 VoxelAbsorbingCapsule : {
     ## The offset of the starting point of the capsule's central line segment
     ## in the reference frame of the entity.
-    offset_to_segment_start : Vector3.Vector3 Binary32,
+    offset_to_segment_start : Vector3.Vector3,
     ## The displacement vector from the start to the end of the capsule's
     ## central line segment in the reference frame of the entity.
-    segment_vector : Vector3.Vector3 Binary32,
+    segment_vector : Vector3.Vector3,
     ## The radius of the capsule.
     radius : F32,
     ## The maximum rate of absorption (at the central line segment of the
@@ -49,7 +49,7 @@ VoxelAbsorbingCapsule : {
 ## to the end of the line segment and radius, all in the reference frame of
 ## the entity, as well as the given maximum absorption rate (at the central
 ## line segment).
-new : Vector3.Vector3 Binary32, Vector3.Vector3 Binary32, F32, F32 -> VoxelAbsorbingCapsule
+new : Vector3.Vector3, Vector3.Vector3, F32, F32 -> VoxelAbsorbingCapsule
 new = |offset_to_segment_start, segment_vector, radius, rate|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
@@ -67,7 +67,7 @@ new = |offset_to_segment_start, segment_vector, radius, rate|
 ## the entity, as well as the given maximum absorption rate (at the central
 ## line segment).
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32, Vector3.Vector3 Binary32, F32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, Vector3.Vector3, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
     add(entity_data, new(offset_to_segment_start, segment_vector, radius, rate))
 
@@ -78,7 +78,7 @@ add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
 ## line segment).
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
     add_multiple(
         entity_data,
@@ -177,8 +177,8 @@ write_bytes : List U8, VoxelAbsorbingCapsule -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(32)
-    |> Vector3.write_bytes_32(value.offset_to_segment_start)
-    |> Vector3.write_bytes_32(value.segment_vector)
+    |> Vector3.write_bytes(value.offset_to_segment_start)
+    |> Vector3.write_bytes(value.segment_vector)
     |> Builtin.write_bytes_f32(value.radius)
     |> Builtin.write_bytes_f32(value.rate)
 
@@ -188,8 +188,8 @@ from_bytes : List U8 -> Result VoxelAbsorbingCapsule _
 from_bytes = |bytes|
     Ok(
         {
-            offset_to_segment_start: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
-            segment_vector: bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes_32?,
+            offset_to_segment_start: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
+            segment_vector: bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes?,
             radius: bytes |> List.sublist({ start: 24, len: 4 }) |> Builtin.from_bytes_f32?,
             rate: bytes |> List.sublist({ start: 28, len: 4 }) |> Builtin.from_bytes_f32?,
         },

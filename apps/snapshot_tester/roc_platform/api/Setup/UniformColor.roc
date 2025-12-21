@@ -1,8 +1,8 @@
-# Hash: a2317e69f2320b5922ccc56bea3cbc845c81e478c576030ea7236f5f27dd5314
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: 050ac6e90b3783cae497fb13172d80ac331054a8e640b499e56600857b9c0842
+# Generated: 2025-12-21T23:08:03+00:00
 # Rust type: impact_material::setup::physical::UniformColor
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     UniformColor,
     iron,
@@ -43,7 +43,7 @@ import core.Vector3
 ## reflected by the material). For metallic materials, the base color affects
 ## the material's specular reflectance. For emissive materials, the base color
 ## affects the material's emissive luminance.
-UniformColor : Vector3.Vector3 Binary32
+UniformColor : Vector3.Vector3
 
 iron : UniformColor
 iron = (0.562, 0.565, 0.578)
@@ -211,7 +211,7 @@ write_bytes : List U8, UniformColor -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(12)
-    |> Vector3.write_bytes_32(value)
+    |> Vector3.write_bytes(value)
 
 ## Deserializes a value of [UniformColor] from its bytes in the
 ## representation used by the engine.
@@ -219,7 +219,7 @@ from_bytes : List U8 -> Result UniformColor _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
         ),
     )
 

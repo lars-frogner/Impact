@@ -11,7 +11,11 @@ use crate::{
     chunks::ChunkedVoxelObject,
 };
 use impact_geometry::{Plane, Sphere};
-use impact_math::transform::Isometry3;
+use impact_math::{
+    point::Point3,
+    transform::Isometry3,
+    vector::{UnitVector3, Vector3},
+};
 use impact_physics::{
     collision::{
         self, CollidableDescriptor, CollidableID, CollidableOrder, CollidableWithId,
@@ -27,7 +31,6 @@ use impact_physics::{
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
     material::ContactResponseParameters,
 };
-use nalgebra::{Point3, UnitVector3, Vector3};
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -49,7 +52,7 @@ pub enum LocalCollidable {
 pub struct LocalVoxelObjectCollidable {
     object_id: VoxelObjectID,
     response_params: ContactResponseParameters,
-    origin_offset: Vector3<f32>,
+    origin_offset: Vector3,
 }
 
 #[derive(Clone, Debug)]
@@ -195,7 +198,7 @@ impl VoxelObjectCollidable {
     pub fn new(
         object_id: VoxelObjectID,
         response_params: ContactResponseParameters,
-        origin_offset: Vector3<f32>,
+        origin_offset: Vector3,
         transform_to_world_space: Isometry3,
     ) -> Self {
         let transform_from_object_to_world_space =
@@ -441,8 +444,8 @@ fn surface_placements_allow_contact(
 }
 
 fn compute_mutual_voxel_contact_geometry(
-    voxel_a_center: &Point3<f32>,
-    voxel_b_center: &Point3<f32>,
+    voxel_a_center: &Point3,
+    voxel_b_center: &Point3,
     voxel_b_radius: f32,
     max_center_distance: f32,
     max_squared_center_distance: f32,
@@ -457,12 +460,12 @@ fn compute_mutual_voxel_contact_geometry(
     let center_distance = squared_center_distance.sqrt();
 
     let surface_normal = if center_distance > 1e-8 {
-        UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+        UnitVector3::unchecked_from(center_displacement / center_distance)
     } else {
-        Vector3::z_axis()
+        UnitVector3::unit_z()
     };
 
-    let position = voxel_b_center + surface_normal.scale(voxel_b_radius);
+    let position = voxel_b_center + voxel_b_radius * surface_normal;
 
     let penetration_depth = f32::max(0.0, max_center_distance - center_distance);
 
@@ -548,12 +551,12 @@ pub fn for_each_sphere_voxel_object_contact(
             let center_distance = squared_center_distance.sqrt();
 
             let surface_normal = if center_distance > 1e-8 {
-                UnitVector3::new_unchecked(center_displacement.unscale(center_distance))
+                UnitVector3::unchecked_from(center_displacement / center_distance)
             } else {
-                Vector3::z_axis()
+                UnitVector3::unit_z()
             };
 
-            let position = voxel_center + surface_normal.scale(voxel_radius);
+            let position = voxel_center + voxel_radius * surface_normal;
 
             let penetration_depth = f32::max(0.0, max_center_distance - center_distance);
 

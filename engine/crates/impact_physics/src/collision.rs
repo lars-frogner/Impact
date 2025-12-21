@@ -151,7 +151,8 @@ impl<C: Collidable> CollisionWorld<C> {
                 }
             };
 
-            let transform_to_world_space = Isometry3::from_parts(position.coords, *orientation);
+            let transform_to_world_space =
+                Isometry3::from_parts(*position.as_vector(), *orientation);
 
             let collidable = CollidableWithId::new(
                 collidable_id,

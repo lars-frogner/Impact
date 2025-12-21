@@ -1,14 +1,15 @@
 //! Similarity transforms.
 
 use super::Isometry3;
-use crate::{matrix::Matrix4, quaternion::UnitQuaternion};
-use approx::{AbsDiffEq, RelativeEq};
+use crate::{matrix::Matrix4, point::Point3, quaternion::UnitQuaternion, vector::Vector3};
 use bytemuck::{Pod, Zeroable};
 
-type Point3 = nalgebra::Point3<f32>;
-type Vector3 = nalgebra::Vector3<f32>;
-
 #[repr(transparent)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Similarity3 {
     inner: nalgebra::Similarity3<f32>,
@@ -26,7 +27,7 @@ impl Similarity3 {
     pub fn from_parts(translation: Vector3, rotation: UnitQuaternion, scaling: f32) -> Self {
         Self {
             inner: nalgebra::Similarity3::from_parts(
-                translation.into(),
+                (*translation._inner()).into(),
                 *rotation._inner(),
                 scaling,
             ),
@@ -66,7 +67,7 @@ impl Similarity3 {
     #[inline]
     pub fn translated(&self, translation: &Vector3) -> Self {
         Self {
-            inner: nalgebra::Translation3::from(*translation) * self.inner,
+            inner: nalgebra::Translation3::from(*translation._inner()) * self.inner,
         }
     }
 
@@ -87,7 +88,7 @@ impl Similarity3 {
     #[inline]
     pub fn applied_to_translation(&self, translation: &Vector3) -> Self {
         Self {
-            inner: self.inner * nalgebra::Translation3::from(*translation),
+            inner: self.inner * nalgebra::Translation3::from(*translation._inner()),
         }
     }
 
@@ -139,22 +140,22 @@ impl Similarity3 {
 
     #[inline]
     pub fn transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.transform_point(point)
+        Point3::_wrap(self.inner.transform_point(point._inner()))
     }
 
     #[inline]
     pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.transform_vector(vector)
+        Vector3::_wrap(self.inner.transform_vector(vector._inner()))
     }
 
     #[inline]
     pub fn inverse_transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.inverse_transform_point(point)
+        Point3::_wrap(self.inner.inverse_transform_point(point._inner()))
     }
 
     #[inline]
     pub fn inverse_transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.inverse_transform_vector(vector)
+        Vector3::_wrap(self.inner.inverse_transform_vector(vector._inner()))
     }
 }
 
@@ -176,29 +177,10 @@ impl_binop!(Mul, mul, Similarity3, Similarity3, Similarity3, |a, b| {
     }
 });
 
-impl AbsDiffEq for Similarity3 {
-    type Epsilon = f32;
+impl_abs_diff_eq!(Similarity3, |a, b, epsilon| {
+    a.inner.abs_diff_eq(&b.inner, epsilon)
+});
 
-    fn default_epsilon() -> Self::Epsilon {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.inner.abs_diff_eq(&other.inner, epsilon)
-    }
-}
-
-impl RelativeEq for Similarity3 {
-    fn default_max_relative() -> Self::Epsilon {
-        f32::default_max_relative()
-    }
-
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: Self::Epsilon,
-        max_relative: Self::Epsilon,
-    ) -> bool {
-        self.inner.relative_eq(&other.inner, epsilon, max_relative)
-    }
-}
+impl_relative_eq!(Similarity3, |a, b, epsilon, max_relative| {
+    a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});

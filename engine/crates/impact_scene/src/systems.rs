@@ -77,7 +77,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 view_transform,
-                &frame.position.cast(),
+                &frame.position,
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -100,7 +100,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 &view_transform,
-                &frame.position.cast(),
+                &frame.position,
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -117,7 +117,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 view_transform,
-                &frame.position.cast(),
+                &frame.position,
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -140,7 +140,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 &view_transform,
-                &frame.position.cast(),
+                &frame.position,
                 omnidirectional_emission,
                 (*flags).into(),
             );

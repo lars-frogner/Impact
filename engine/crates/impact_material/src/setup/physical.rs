@@ -9,10 +9,12 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::hash64;
+use impact_math::{
+    hash64,
+    vector::{Vector2, Vector3},
+};
 use impact_mesh::VertexAttributeSet;
 use impact_texture::{SamplerRegistry, TextureID, TextureRegistry};
-use nalgebra::{Vector2, Vector3};
 use roc_integration::roc;
 use std::hash::Hash;
 
@@ -202,7 +204,7 @@ define_setup_type! {
     pub struct ParallaxMap {
         pub height_map_texture_id: TextureID,
         pub displacement_scale: f64,
-        pub uv_per_distance: Vector2<f32>,
+        pub uv_per_distance: Vector2,
     }
 }
 
@@ -436,7 +438,7 @@ impl ParallaxMap {
     pub fn new(
         height_map_texture_id: TextureID,
         displacement_scale: f64,
-        uv_per_distance: Vector2<f32>,
+        uv_per_distance: Vector2,
     ) -> Self {
         Self {
             height_map_texture_id,

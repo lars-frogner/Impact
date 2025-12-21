@@ -1,13 +1,14 @@
 //! Isometry transforms.
 
-use crate::quaternion::UnitQuaternion;
-use approx::{AbsDiffEq, RelativeEq};
+use crate::{point::Point3, quaternion::UnitQuaternion, vector::Vector3};
 use bytemuck::{Pod, Zeroable};
 
-type Point3 = nalgebra::Point3<f32>;
-type Vector3 = nalgebra::Vector3<f32>;
-
 #[repr(transparent)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(transparent)
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Isometry3 {
     inner: nalgebra::Isometry3<f32>,
@@ -24,7 +25,10 @@ impl Isometry3 {
     #[inline]
     pub fn from_parts(translation: Vector3, rotation: UnitQuaternion) -> Self {
         Self {
-            inner: nalgebra::Isometry3::from_parts(translation.into(), *rotation._inner()),
+            inner: nalgebra::Isometry3::from_parts(
+                (*translation._inner()).into(),
+                *rotation._inner(),
+            ),
         }
     }
 
@@ -46,7 +50,7 @@ impl Isometry3 {
     #[inline]
     pub fn translated(&self, translation: &Vector3) -> Self {
         Self {
-            inner: nalgebra::Translation3::from(*translation) * self.inner,
+            inner: nalgebra::Translation3::from(*translation._inner()) * self.inner,
         }
     }
 
@@ -60,7 +64,7 @@ impl Isometry3 {
     #[inline]
     pub fn applied_to_translation(&self, translation: &Vector3) -> Self {
         Self {
-            inner: self.inner * nalgebra::Translation3::from(*translation),
+            inner: self.inner * nalgebra::Translation3::from(*translation._inner()),
         }
     }
 
@@ -80,7 +84,7 @@ impl Isometry3 {
 
     #[inline]
     pub fn translation(&self) -> &Vector3 {
-        &self.inner.translation.vector
+        bytemuck::from_bytes(bytemuck::bytes_of(&self.inner.translation.vector))
     }
 
     #[inline]
@@ -90,22 +94,22 @@ impl Isometry3 {
 
     #[inline]
     pub fn transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.transform_point(point)
+        Point3::_wrap(self.inner.transform_point(point._inner()))
     }
 
     #[inline]
     pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.transform_vector(vector)
+        Vector3::_wrap(self.inner.transform_vector(vector._inner()))
     }
 
     #[inline]
     pub fn inverse_transform_point(&self, point: &Point3) -> Point3 {
-        self.inner.inverse_transform_point(point)
+        Point3::_wrap(self.inner.inverse_transform_point(point._inner()))
     }
 
     #[inline]
     pub fn inverse_transform_vector(&self, vector: &Vector3) -> Vector3 {
-        self.inner.inverse_transform_vector(vector)
+        Vector3::_wrap(self.inner.inverse_transform_vector(vector._inner()))
     }
 
     #[inline]
@@ -120,29 +124,10 @@ impl_binop!(Mul, mul, Isometry3, Isometry3, Isometry3, |a, b| {
     }
 });
 
-impl AbsDiffEq for Isometry3 {
-    type Epsilon = f32;
+impl_abs_diff_eq!(Isometry3, |a, b, epsilon| {
+    a.inner.abs_diff_eq(&b.inner, epsilon)
+});
 
-    fn default_epsilon() -> Self::Epsilon {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.inner.abs_diff_eq(&other.inner, epsilon)
-    }
-}
-
-impl RelativeEq for Isometry3 {
-    fn default_max_relative() -> Self::Epsilon {
-        f32::default_max_relative()
-    }
-
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: Self::Epsilon,
-        max_relative: Self::Epsilon,
-    ) -> bool {
-        self.inner.relative_eq(&other.inner, epsilon, max_relative)
-    }
-}
+impl_relative_eq!(Isometry3, |a, b, epsilon, max_relative| {
+    a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});

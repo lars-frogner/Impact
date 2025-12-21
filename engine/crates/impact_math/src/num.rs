@@ -2,12 +2,11 @@
 
 #![allow(clippy::excessive_precision)]
 
-use nalgebra as na;
 use num_traits as nt;
 
 /// Gathers traits useful for working with generic floating point types.
 pub trait Float:
-    Copy + nt::FloatConst + nt::FromPrimitive + nt::ToPrimitive + na::RealField + na::Scalar
+    nt::Float + nt::FromPrimitive + nt::ToPrimitive + approx::AbsDiffEq + approx::RelativeEq
 {
     const ZERO: Self;
     const ONE: Self;

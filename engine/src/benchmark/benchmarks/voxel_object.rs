@@ -2,7 +2,11 @@
 
 use impact_alloc::Global;
 use impact_geometry::{Plane, Sphere};
-use impact_math::{quaternion::UnitQuaternion, transform::Isometry3};
+use impact_math::{
+    quaternion::UnitQuaternion,
+    transform::Isometry3,
+    vector::{UnitVector3, Vector3},
+};
 use impact_physics::quantities::Position;
 use impact_profiling::benchmark::Benchmarker;
 use impact_voxel::{
@@ -19,7 +23,6 @@ use impact_voxel::{
     mesh::ChunkedVoxelObjectMesh,
     voxel_types::VoxelType,
 };
-use nalgebra::{UnitVector3, Vector3};
 use std::hint::black_box;
 
 pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
@@ -124,7 +127,7 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: imp
     let generator = create_sphere_generator(object_radius);
     let object = ChunkedVoxelObject::generate(&generator);
     let plane = Plane::new(
-        UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)),
+        UnitVector3::normalized_from(Vector3::same(1.0)),
         plane_displacement,
     );
     benchmarker.benchmark(&mut || {
@@ -144,7 +147,7 @@ pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
         object.compute_aabb().center()
-            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
+            - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
         sphere_radius,
     );
     benchmarker.benchmark(&mut || {
@@ -179,7 +182,7 @@ pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let mut object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(
         object.compute_aabb().center()
-            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
+            - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
         sphere_radius,
     );
     benchmarker.benchmark(&mut || {
@@ -263,7 +266,7 @@ pub fn update_mesh(benchmarker: impl Benchmarker) {
 
     let sphere = Sphere::new(
         object.compute_aabb().center()
-            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius),
+            - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
         sphere_radius,
     );
 
@@ -283,10 +286,10 @@ pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object = ChunkedVoxelObject::generate(&generator);
     let sphere = Sphere::new(Position::origin(), sphere_radius);
     let transform_to_object_space = Isometry3::from_parts(
-        (object.compute_aabb().center()
-            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_radius))
-        .coords,
-        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
+        *(object.compute_aabb().center()
+            - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)))
+        .as_vector(),
+        UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), 1.0),
     );
     benchmarker.benchmark(&mut || {
         collidable::for_each_sphere_voxel_object_contact(
@@ -305,9 +308,9 @@ pub fn obtain_plane_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let plane_displacement = -0.92 * object_radius;
     let generator = create_sphere_generator(object_radius);
     let object = ChunkedVoxelObject::generate(&generator);
-    let plane = Plane::new(Vector3::y_axis(), plane_displacement);
+    let plane = Plane::new(UnitVector3::unit_y(), plane_displacement);
     let transform_to_object_space =
-        Isometry3::from_translation(object.compute_aabb().center().coords);
+        Isometry3::from_translation(*object.compute_aabb().center().as_vector());
 
     benchmarker.benchmark(&mut || {
         collidable::for_each_voxel_object_plane_contact(
@@ -329,13 +332,13 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_a = ChunkedVoxelObject::generate(&generator_a);
     let object_b = ChunkedVoxelObject::generate(&generator_b);
     let transform_to_object_a_space = Isometry3::from_parts(
-        (object_a.compute_aabb().center()
-            - UnitVector3::new_normalize(Vector3::new(1.0, 1.0, 1.0)).scale(object_a_radius))
-        .coords,
-        UnitQuaternion::from_axis_angle(&Vector3::z_axis(), 1.0),
+        *(object_a.compute_aabb().center()
+            - object_a_radius * UnitVector3::normalized_from(Vector3::same(1.0)))
+        .as_vector(),
+        UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), 1.0),
     );
     let transform_to_object_b_space =
-        Isometry3::from_translation(object_b.compute_aabb().center().coords);
+        Isometry3::from_translation(*object_b.compute_aabb().center().as_vector());
 
     benchmarker.benchmark(&mut || {
         collidable::for_each_mutual_voxel_object_contact(

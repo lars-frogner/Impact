@@ -13,12 +13,11 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_geometry::{Capsule, Sphere};
-use impact_math::transform::Isometry3;
+use impact_math::{point::Point3, transform::Isometry3, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
     rigid_body::RigidBodyManager,
 };
-use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 use std::mem;
 
@@ -34,7 +33,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
     pub struct VoxelAbsorbingSphere {
         /// The offset of the sphere in the reference frame of the entity.
-        offset: Vector3<f32>,
+        offset: Vector3,
         /// The radius of the sphere.
         radius: f32,
         /// The maximum rate of absorption (at the center of the sphere).
@@ -55,10 +54,10 @@ define_component_type! {
     pub struct VoxelAbsorbingCapsule {
         /// The offset of the starting point of the capsule's central line segment
         /// in the reference frame of the entity.
-        offset_to_segment_start: Vector3<f32>,
+        offset_to_segment_start: Vector3,
         /// The displacement vector from the start to the end of the capsule's
         /// central line segment in the reference frame of the entity.
-        segment_vector: Vector3<f32>,
+        segment_vector: Vector3,
         /// The radius of the capsule.
         radius: f32,
         /// The maximum rate of absorption (at the central line segment of the
@@ -81,7 +80,7 @@ impl VoxelAbsorbingSphere {
         radius,
         rate,
     }"#)]
-    pub fn new(offset: Vector3<f32>, radius: f32, rate: f32) -> Self {
+    pub fn new(offset: Vector3, radius: f32, rate: f32) -> Self {
         assert!(radius >= 0.0);
         assert!(rate >= 0.0);
         Self {
@@ -120,8 +119,8 @@ impl VoxelAbsorbingCapsule {
         rate,
     }"#)]
     pub fn new(
-        offset_to_segment_start: Vector3<f32>,
-        segment_vector: Vector3<f32>,
+        offset_to_segment_start: Vector3,
+        segment_vector: Vector3,
         radius: f32,
         rate: f32,
     ) -> Self {

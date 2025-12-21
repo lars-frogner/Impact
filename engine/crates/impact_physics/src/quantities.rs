@@ -5,9 +5,10 @@ use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
+    point::Point3,
     quaternion::{Quaternion, UnitQuaternion},
+    vector::{UnitVector3, Vector3},
 };
-use nalgebra::{Point3, Unit, UnitVector3, Vector3};
 use roc_integration::roc;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
@@ -33,34 +34,34 @@ pub struct AngularVelocity {
 }
 
 /// A unit vector in 3D space.
-pub type Direction = Unit<Vector3<f32>>;
+pub type Direction = UnitVector3;
 
 /// A position in 3D space.
-pub type Position = Point3<f32>;
+pub type Position = Point3;
 
 /// A velocity in 3D space.
-pub type Velocity = Vector3<f32>;
+pub type Velocity = Vector3;
 
 /// An orientation in 3D space.
 pub type Orientation = UnitQuaternion;
 
 /// A momentum in 3D space.
-pub type Momentum = Vector3<f32>;
+pub type Momentum = Vector3;
 
 /// An angular momentum in 3D space.
-pub type AngularMomentum = Vector3<f32>;
+pub type AngularMomentum = Vector3;
 
 /// An acceleration in 3D space.
-pub type Acceleration = Vector3<f32>;
+pub type Acceleration = Vector3;
 
 /// An angular acceleration in 3D space.
-pub type AngularAcceleration = Vector3<f32>;
+pub type AngularAcceleration = Vector3;
 
 /// A 3D force.
-pub type Force = Vector3<f32>;
+pub type Force = Vector3;
 
 /// A 3D torque.
-pub type Torque = Vector3<f32>;
+pub type Torque = Vector3;
 
 #[roc]
 impl Motion {
@@ -95,7 +96,7 @@ impl Motion {
     }
 }
 
-#[roc(dependencies=[Vector3<f32>])]
+#[roc(dependencies=[Vector3])]
 impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
     /// angular speed.
@@ -114,9 +115,9 @@ impl AngularVelocity {
         Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
         None -> zero({})
     "#)]
-    pub fn from_vector(angular_velocity_vector: Vector3<f32>) -> Self {
+    pub fn from_vector(angular_velocity_vector: Vector3) -> Self {
         if let Some((axis_of_rotation, angular_speed)) =
-            UnitVector3::try_new_and_get(angular_velocity_vector, f32::EPSILON)
+            UnitVector3::normalized_from_and_norm_if_above(angular_velocity_vector, f32::EPSILON)
         {
             Self::new(axis_of_rotation, Radians(angular_speed))
         } else {
@@ -144,7 +145,7 @@ impl AngularVelocity {
     #[roc(body = "{ axis_of_rotation: UnitVector3.y_axis, angular_speed: 0.0 }")]
     pub fn zero() -> Self {
         Self {
-            axis_of_rotation: Vector3::y_axis(),
+            axis_of_rotation: UnitVector3::unit_y(),
             angular_speed: Radians(0.0),
         }
     }
@@ -160,8 +161,8 @@ impl AngularVelocity {
     }
 
     /// Computes the corresponding angular velocity vector.
-    pub fn as_vector(&self) -> Vector3<f32> {
-        self.axis_of_rotation.as_ref() * self.angular_speed.radians()
+    pub fn as_vector(&self) -> Vector3 {
+        self.angular_speed.radians() * self.axis_of_rotation
     }
 }
 
@@ -216,7 +217,7 @@ impl AbsDiffEq for AngularVelocity {
 /// the given [`Orientation`] for a body with the given angular velocity.
 pub fn compute_orientation_derivative(
     orientation: &Orientation,
-    angular_velocity_vector: &Vector3<f32>,
+    angular_velocity_vector: &Vector3,
 ) -> Quaternion {
     Quaternion::from_imag(0.5 * angular_velocity_vector) * orientation.to_quaternion()
 }

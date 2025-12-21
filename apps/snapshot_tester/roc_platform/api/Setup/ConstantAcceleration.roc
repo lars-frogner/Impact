@@ -1,8 +1,8 @@
-# Hash: fad3b6b111e5d9b964b4b39ca74a6972233820d3e474f30f681a32688cf4a16b
-# Generated: 2025-12-17T23:58:42+00:00
+# Hash: d4490213914da584ba5750d7532df19aca8da682bd7b68ec66179499c4c03553
+# Generated: 2025-12-21T23:08:03+00:00
 # Rust type: impact_physics::force::constant_acceleration::ConstantAcceleration
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     ConstantAcceleration,
     earth_downward_acceleration,
@@ -27,21 +27,21 @@ import core.Builtin
 import core.Vector3
 
 ## A constant acceleration vector.
-ConstantAcceleration : Vector3.Vector3 Binary32
+ConstantAcceleration : Vector3.Vector3
 
 ## The downward acceleration at the surface of Earth [m/s^2].
 earth_downward_acceleration : F32
 earth_downward_acceleration = 9.81
 
-new : Vector3.Vector3 Binary32 -> ConstantAcceleration
+new : Vector3.Vector3 -> ConstantAcceleration
 new = |acceleration|
     (acceleration,)
 
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3 -> Entity.ComponentData
 add_new = |entity_data, acceleration|
     add(entity_data, new(acceleration))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, acceleration|
     add_multiple(
         entity_data,
@@ -159,7 +159,7 @@ write_bytes : List U8, ConstantAcceleration -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(12)
-    |> Vector3.write_bytes_32(value)
+    |> Vector3.write_bytes(value)
 
 ## Deserializes a value of [ConstantAcceleration] from its bytes in the
 ## representation used by the engine.
@@ -167,7 +167,7 @@ from_bytes : List U8 -> Result ConstantAcceleration _
 from_bytes = |bytes|
     Ok(
         (
-            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
+            bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
         ),
     )
 

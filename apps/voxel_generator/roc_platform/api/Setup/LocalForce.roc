@@ -1,8 +1,8 @@
-# Hash: 5c22c04494b22eb28a2c1c8d42e44f919797add4a6d333cca07b6915a9f0e6b1
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: cf69b2dd03df200f2ad5d4fbb1602a0daf8c84bc97adfe682ddfd8d5728970b3
+# Generated: 2025-12-21T23:04:45+00:00
 # Rust type: impact_physics::force::local_force::LocalForce
 # Type category: Component
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     LocalForce,
     new,
@@ -24,20 +24,20 @@ import core.Vector3
 ## body-fixed frame.
 LocalForce : {
     ## The force vector in the body-fixed frame.
-    force : Vector3.Vector3 Binary32,
+    force : Vector3.Vector3,
     ## The point where the force is applied, in the body's model space.
-    point : Point3.Point3 Binary32,
+    point : Point3.Point3,
 }
 
-new : Vector3.Vector3 Binary32, Point3.Point3 Binary32 -> LocalForce
+new : Vector3.Vector3, Point3.Point3 -> LocalForce
 new = |force, point|
     { force, point }
 
-add_new : Entity.ComponentData, Vector3.Vector3 Binary32, Point3.Point3 Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, Point3.Point3 -> Entity.ComponentData
 add_new = |entity_data, force, point|
     add(entity_data, new(force, point))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3 Binary32), Entity.Arg.Broadcasted (Point3.Point3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (Point3.Point3) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, force, point|
     add_multiple(
         entity_data,
@@ -106,8 +106,8 @@ write_bytes : List U8, LocalForce -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(24)
-    |> Vector3.write_bytes_32(value.force)
-    |> Point3.write_bytes_32(value.point)
+    |> Vector3.write_bytes(value.force)
+    |> Point3.write_bytes(value.point)
 
 ## Deserializes a value of [LocalForce] from its bytes in the
 ## representation used by the engine.
@@ -115,8 +115,8 @@ from_bytes : List U8 -> Result LocalForce _
 from_bytes = |bytes|
     Ok(
         {
-            force: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes_32?,
-            point: bytes |> List.sublist({ start: 12, len: 12 }) |> Point3.from_bytes_32?,
+            force: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
+            point: bytes |> List.sublist({ start: 12, len: 12 }) |> Point3.from_bytes?,
         },
     )
 

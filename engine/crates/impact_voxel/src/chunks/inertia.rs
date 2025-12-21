@@ -6,9 +6,8 @@ use crate::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
 };
 use approx::{AbsDiffEq, RelativeEq};
-use impact_math::{Float, matrix::Matrix3};
+use impact_math::{Float, matrix::Matrix3, point::Point3, vector::Vector3};
 use impact_physics::inertia::{InertiaTensor, InertialProperties};
-use nalgebra::{Point3, Vector3};
 use std::ops::Range;
 
 /// Keeps track of the inertial properties (mass, center of mass and inertia
@@ -20,9 +19,9 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq)]
 pub struct VoxelObjectInertialPropertyManager {
     mass: f32,
-    moments: Vector3<f32>,
-    moments_of_inertia: Vector3<f32>,
-    products_of_inertia: Vector3<f32>,
+    moments: Vector3,
+    moments_of_inertia: Vector3,
+    products_of_inertia: Vector3,
 }
 
 /// Helper for updating the inertial properties of a voxel object.
@@ -55,9 +54,9 @@ impl VoxelChunk {
         voxel_type_densities: &[f32],
         chunk_indices: &[usize; 3],
         mass: &mut f32,
-        moments: &mut Vector3<f32>,
-        moments_of_inertia: &mut Vector3<f32>,
-        products_of_inertia: &mut Vector3<f32>,
+        moments: &mut Vector3,
+        moments_of_inertia: &mut Vector3,
+        products_of_inertia: &mut Vector3,
     ) {
         match self {
             Self::NonUniform(chunk) => {
@@ -127,9 +126,9 @@ impl VoxelObjectInertialPropertyManager {
 
     fn new(
         mass: f32,
-        moments: Vector3<f32>,
-        moments_of_inertia: Vector3<f32>,
-        products_of_inertia: Vector3<f32>,
+        moments: Vector3,
+        moments_of_inertia: Vector3,
+        products_of_inertia: Vector3,
     ) -> Self {
         Self {
             mass,
@@ -154,7 +153,7 @@ impl VoxelObjectInertialPropertyManager {
 
     /// Computes the center of mass corresponding to the current inertial
     /// properties in the manager.
-    pub fn derive_center_of_mass(&self) -> Vector3<f32> {
+    pub fn derive_center_of_mass(&self) -> Vector3 {
         self.moments / self.mass
     }
 
@@ -221,7 +220,7 @@ impl VoxelObjectInertialPropertyManager {
     /// Converts the inertial properties to be defined with respect to the
     /// reference point at the given offset from the point they are currently
     /// defined with respect to.
-    pub fn offset_reference_point_by(&mut self, offset: &Vector3<f32>) {
+    pub fn offset_reference_point_by(&mut self, offset: &Vector3) {
         let (moment_of_inertia_deltas, product_of_inertia_deltas) =
             InertiaTensor::compute_delta_to_moments_and_products_of_inertia_defined_relative_to_point(
                 self.mass,
@@ -244,23 +243,23 @@ impl VoxelObjectInertialPropertyManager {
 
     fn compute_inertial_properties_from_moments(
         mass: f32,
-        moments: &Vector3<f32>,
-        moments_of_inertia: &Vector3<f32>,
-        products_of_inertia: &Vector3<f32>,
+        moments: &Vector3,
+        moments_of_inertia: &Vector3,
+        products_of_inertia: &Vector3,
     ) -> InertialProperties {
         let center_of_mass = Point3::from(moments / mass);
 
         // This is the inertia tensor defined with respect to the origin
         #[rustfmt::skip]
         let inertia_tensor_matrix = Matrix3::from_columns(&[
-            Vector3::new(  moments_of_inertia.x, -products_of_inertia.x, -products_of_inertia.z),
-            Vector3::new(-products_of_inertia.x,   moments_of_inertia.y, -products_of_inertia.y),
-            Vector3::new(-products_of_inertia.z, -products_of_inertia.y,   moments_of_inertia.z),
+            Vector3::new(  moments_of_inertia.x(), -products_of_inertia.x(), -products_of_inertia.z()),
+            Vector3::new(-products_of_inertia.x(),   moments_of_inertia.y(), -products_of_inertia.y()),
+            Vector3::new(-products_of_inertia.z(), -products_of_inertia.y(),   moments_of_inertia.z()),
         ]);
 
         // This is with respect to the center of mass
         let com_inertia_tensor_matrix = inertia_tensor_matrix
-            + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, &center_of_mass.coords);
+            + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, center_of_mass.as_vector());
 
         let inertia_tensor = InertiaTensor::from_matrix(com_inertia_tensor_matrix);
 
@@ -440,11 +439,11 @@ fn compute_moments_for_voxel(
     voxel_type_densities: &[f32],
     object_voxel_indices: &[usize; 3],
     voxel: Voxel,
-) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+) -> (f32, Vector3, Vector3, Vector3) {
     let voxel_density = voxel_type_densities[voxel.voxel_type().idx()];
 
     let lower_coords = Vector3::from(object_voxel_indices.map(|index| voxel_extent * index as f32));
-    let upper_coords = lower_coords.add_scalar(voxel_extent);
+    let upper_coords = lower_coords + Vector3::same(voxel_extent);
 
     let lower_coords_squared = lower_coords.component_mul(&lower_coords);
     let upper_coords_squared = upper_coords.component_mul(&upper_coords);
@@ -483,7 +482,7 @@ fn compute_moments_for_non_uniform_chunk(
     chunk_voxels: &[Voxel],
     voxel_type_densities: &[f32],
     chunk_indices: &[usize; 3],
-) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+) -> (f32, Vector3, Vector3, Vector3) {
     let mut mass = 0.0;
     let mut moments = Vector3::zeros();
     let mut moments_of_inertia = Vector3::zeros();
@@ -577,7 +576,7 @@ fn compute_moments_for_uniform_chunk(
     voxel_type_densities: &[f32],
     chunk_voxel: Voxel,
     chunk_indices: &[usize; 3],
-) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+) -> (f32, Vector3, Vector3, Vector3) {
     let density = voxel_type_densities[chunk_voxel.voxel_type().idx()];
 
     let chunk_extent = (CHUNK_SIZE as f32) * voxel_extent;
@@ -638,7 +637,7 @@ fn compute_inertial_property_moments_for_object(
     chunks: &[VoxelChunk],
     voxels: &[Voxel],
     voxel_type_densities: &[f32],
-) -> (f32, Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+) -> (f32, Vector3, Vector3, Vector3) {
     let mut mass = 0.0;
     let mut moments = Vector3::zeros();
     let mut moments_of_inertia = Vector3::zeros();

@@ -1,8 +1,8 @@
-# Hash: 12ea345deb1188948a3b1a20881eaf74863d589fbfccb775dbafe82b15f151c4
-# Generated: 2025-12-20T20:26:51+00:00
+# Hash: 5f02f8a6605dcae47906c52316547efa6a204f729d3624cbe595894a9030aee1
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_physics::driven_motion::orbit::OrbitalTrajectory
 # Type category: Component
-# Commit: dbb3dcfa (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     OrbitalTrajectory,
     new,
@@ -31,7 +31,7 @@ OrbitalTrajectory : {
     orientation : UnitQuaternion.UnitQuaternion,
     ## The position of the focal point where the body being orbited would be
     ## located.
-    focal_position : Point3.Point3 Binary32,
+    focal_position : Point3.Point3,
     ## Half the longest diameter of the orbital ellipse.
     semi_major_axis : F32,
     ## The eccentricity of the orbital ellipse (0 is circular, 1 is a line).
@@ -41,7 +41,7 @@ OrbitalTrajectory : {
 }
 
 ## Creates a new orbital trajectory with the given properties.
-new : F32, UnitQuaternion.UnitQuaternion, Point3.Point3 Binary32, F32, F32, F32 -> OrbitalTrajectory
+new : F32, UnitQuaternion.UnitQuaternion, Point3.Point3, F32, F32, F32 -> OrbitalTrajectory
 new = |periapsis_time, orientation, focal_position, semi_major_axis, eccentricity, period|
     {
         periapsis_time,
@@ -54,7 +54,7 @@ new = |periapsis_time, orientation, focal_position, semi_major_axis, eccentricit
 
 ## Creates a new orbital trajectory with the given properties.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion, Point3.Point3 Binary32, F32, F32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, F32, UnitQuaternion.UnitQuaternion, Point3.Point3, F32, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, periapsis_time, orientation, focal_position, semi_major_axis, eccentricity, period|
     add(entity_data, new(periapsis_time, orientation, focal_position, semi_major_axis, eccentricity, period))
 
@@ -118,7 +118,7 @@ write_bytes = |bytes, value|
     |> List.reserve(44)
     |> Builtin.write_bytes_f32(value.periapsis_time)
     |> UnitQuaternion.write_bytes(value.orientation)
-    |> Point3.write_bytes_32(value.focal_position)
+    |> Point3.write_bytes(value.focal_position)
     |> Builtin.write_bytes_f32(value.semi_major_axis)
     |> Builtin.write_bytes_f32(value.eccentricity)
     |> Builtin.write_bytes_f32(value.period)
@@ -131,7 +131,7 @@ from_bytes = |bytes|
         {
             periapsis_time: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
             orientation: bytes |> List.sublist({ start: 4, len: 16 }) |> UnitQuaternion.from_bytes?,
-            focal_position: bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes_32?,
+            focal_position: bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes?,
             semi_major_axis: bytes |> List.sublist({ start: 32, len: 4 }) |> Builtin.from_bytes_f32?,
             eccentricity: bytes |> List.sublist({ start: 36, len: 4 }) |> Builtin.from_bytes_f32?,
             period: bytes |> List.sublist({ start: 40, len: 4 }) |> Builtin.from_bytes_f32?,

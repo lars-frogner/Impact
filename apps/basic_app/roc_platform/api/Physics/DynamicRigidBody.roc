@@ -1,8 +1,8 @@
-# Hash: c5449a3b1b795371dcf0136bb4f6d630179d000418bcc2e6fb9e151bbab8108e
-# Generated: 2025-12-20T20:26:51+00:00
+# Hash: a07dbe6aeed3f1d1835cf0bbcb9f65e61caea333e16d7e25757e6793f496c206
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_physics::rigid_body::DynamicRigidBody
 # Type category: POD
-# Commit: dbb3dcfa (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     DynamicRigidBody,
     write_bytes,
@@ -29,12 +29,12 @@ import core.Vector3
 DynamicRigidBody : {
     mass : F32,
     inertia_tensor : Physics.InertiaTensor.InertiaTensor,
-    position : Point3.Point3 Binary32,
+    position : Point3.Point3,
     orientation : UnitQuaternion.UnitQuaternion,
-    momentum : Vector3.Vector3 Binary32,
-    angular_momentum : Vector3.Vector3 Binary32,
-    total_force : Vector3.Vector3 Binary32,
-    total_torque : Vector3.Vector3 Binary32,
+    momentum : Vector3.Vector3,
+    angular_momentum : Vector3.Vector3,
+    total_force : Vector3.Vector3,
+    total_torque : Vector3.Vector3,
 }
 
 ## Serializes a value of [DynamicRigidBody] into the binary representation
@@ -45,12 +45,12 @@ write_bytes = |bytes, value|
     |> List.reserve(152)
     |> Builtin.write_bytes_f32(value.mass)
     |> Physics.InertiaTensor.write_bytes(value.inertia_tensor)
-    |> Point3.write_bytes_32(value.position)
+    |> Point3.write_bytes(value.position)
     |> UnitQuaternion.write_bytes(value.orientation)
-    |> Vector3.write_bytes_32(value.momentum)
-    |> Vector3.write_bytes_32(value.angular_momentum)
-    |> Vector3.write_bytes_32(value.total_force)
-    |> Vector3.write_bytes_32(value.total_torque)
+    |> Vector3.write_bytes(value.momentum)
+    |> Vector3.write_bytes(value.angular_momentum)
+    |> Vector3.write_bytes(value.total_force)
+    |> Vector3.write_bytes(value.total_torque)
 
 ## Deserializes a value of [DynamicRigidBody] from its bytes in the
 ## representation used by the engine.
@@ -60,12 +60,12 @@ from_bytes = |bytes|
         {
             mass: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
             inertia_tensor: bytes |> List.sublist({ start: 4, len: 72 }) |> Physics.InertiaTensor.from_bytes?,
-            position: bytes |> List.sublist({ start: 76, len: 12 }) |> Point3.from_bytes_32?,
+            position: bytes |> List.sublist({ start: 76, len: 12 }) |> Point3.from_bytes?,
             orientation: bytes |> List.sublist({ start: 88, len: 16 }) |> UnitQuaternion.from_bytes?,
-            momentum: bytes |> List.sublist({ start: 104, len: 12 }) |> Vector3.from_bytes_32?,
-            angular_momentum: bytes |> List.sublist({ start: 116, len: 12 }) |> Vector3.from_bytes_32?,
-            total_force: bytes |> List.sublist({ start: 128, len: 12 }) |> Vector3.from_bytes_32?,
-            total_torque: bytes |> List.sublist({ start: 140, len: 12 }) |> Vector3.from_bytes_32?,
+            momentum: bytes |> List.sublist({ start: 104, len: 12 }) |> Vector3.from_bytes?,
+            angular_momentum: bytes |> List.sublist({ start: 116, len: 12 }) |> Vector3.from_bytes?,
+            total_force: bytes |> List.sublist({ start: 128, len: 12 }) |> Vector3.from_bytes?,
+            total_torque: bytes |> List.sublist({ start: 140, len: 12 }) |> Vector3.from_bytes?,
         },
     )
 

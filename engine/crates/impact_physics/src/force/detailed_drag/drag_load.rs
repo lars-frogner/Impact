@@ -1,8 +1,11 @@
 //! Calculation of forces and torques due to drag.
 
 use crate::quantities::{Direction, Force, Orientation, Position, Torque};
-use impact_math::Float;
-use nalgebra::{Point3, UnitVector3, Vector3};
+use impact_math::{
+    Float,
+    point::Point3,
+    vector::{UnitVector3, Vector3},
+};
 use std::ops::{Add, AddAssign, Div, Mul};
 
 /// A load (force and torque) due to drag.
@@ -10,9 +13,9 @@ use std::ops::{Add, AddAssign, Div, Mul};
 #[derive(Clone, Debug, Default)]
 pub struct DragLoad {
     /// The drag force on the center of mass.
-    pub force: Vector3<f32>,
+    pub force: Vector3,
     /// The drag torque around the center of mass.
-    pub torque: Vector3<f32>,
+    pub torque: Vector3,
 }
 
 /// Helper struct for accumulating drag loads and averaging them.
@@ -27,7 +30,7 @@ pub struct AveragingDragLoad {
 #[derive(Clone, Debug)]
 pub struct MeshTriangleDragProperties {
     center: Position,
-    normal_vector: UnitVector3<f32>,
+    normal_vector: UnitVector3,
     area: f32,
 }
 
@@ -136,7 +139,7 @@ impl AveragingDragLoad {
 /// A [`Vec`] with each pair of direction (against the relative flow of the
 /// medium) and aggregate drag load.
 pub fn compute_aggregate_drag_loads_for_uniformly_distributed_directions<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
     center_of_mass: &Position,
     n_direction_samples: usize,
 ) -> Vec<(Direction, DragLoad)> {
@@ -175,7 +178,7 @@ pub fn compute_aggregate_drag_load_for_direction(
             let projected_area = cos_impact_angle * triangle.area;
             // let projected_area = triangle.area;
             // It is directed inwards perpendicularly to the surface
-            let drag_force = (-projected_area) * triangle.normal_vector.as_ref();
+            let drag_force = (-projected_area) * triangle.normal_vector;
             // If the line of force does not go through the center of mass,
             // there is also an associated torque
             let drag_torque = (triangle.center - center_of_mass).cross(&drag_force);
@@ -194,21 +197,18 @@ pub fn compute_aggregate_drag_load_for_direction(
 /// Computes the properties required for calculating drag for each
 /// non-degenerate triangle in the given iterator and returns them in an array.
 pub fn compute_mesh_triangle_drag_properties<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
 ) -> Vec<MeshTriangleDragProperties> {
     triangle_vertex_positions
         .into_iter()
         .filter_map(|[vertex_1, vertex_2, vertex_3]| {
-            let vertex_1 = vertex_1.cast::<f32>();
-            let vertex_2 = vertex_2.cast::<f32>();
-            let vertex_3 = vertex_3.cast::<f32>();
-
             let edge_1 = vertex_2 - vertex_1;
             let edge_2 = vertex_3 - vertex_1;
 
-            UnitVector3::try_new_and_get(edge_1.cross(&edge_2), f32::EPSILON).map(
+            UnitVector3::normalized_from_and_norm_if_above(edge_1.cross(&edge_2), f32::EPSILON).map(
                 |(normal_vector, twice_area)| {
-                    let center = f32::ONE_THIRD * (vertex_1 + vertex_2.coords + vertex_3.coords);
+                    let center =
+                        f32::ONE_THIRD * (vertex_1 + vertex_2.as_vector() + vertex_3.as_vector());
                     MeshTriangleDragProperties {
                         center,
                         normal_vector,
@@ -232,7 +232,7 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::new_normalize(Vector3::new(
+            Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -256,7 +256,7 @@ mod tests {
                 &direction,
             );
 
-            let (force_direction, force) = UnitVector3::new_and_get(load.force);
+            let (force_direction, force) = UnitVector3::normalized_from_and_norm(load.force);
 
             // In the accumulation of forces on the individual triangles over
             // the front-facing hemisphere, the components perpendicular to the

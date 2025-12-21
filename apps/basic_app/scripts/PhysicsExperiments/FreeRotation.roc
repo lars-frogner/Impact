@@ -26,9 +26,9 @@ setup! = |_|
     create_entities!((0, 3, 8), 5.0, 1e-3)
 
 create_entities! = |position, angular_speed, angular_velocity_perturbation_fraction|
-    major_axis_body_position = Point3.displace(position, (5.0, 0.0, 0.0))
+    major_axis_body_position = Point3.translate(position, (5.0, 0.0, 0.0))
     intermediate_axis_body_position = position
-    minor_axis_body_position = Point3.displace(position, (-5.0, 0.0, 0.0))
+    minor_axis_body_position = Point3.translate(position, (-5.0, 0.0, 0.0))
 
     angular_velocity_perturbation = angular_speed * angular_velocity_perturbation_fraction
 

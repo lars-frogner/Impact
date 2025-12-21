@@ -16,8 +16,7 @@ use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::ModelTransform;
-use impact_math::hash::StringHash32;
-use nalgebra::Point3;
+use impact_math::{hash::StringHash32, point::Point3};
 use roc_integration::roc;
 use std::path::{Path, PathBuf};
 
@@ -47,7 +46,7 @@ pub fn setup_detailed_drag_force<'a>(
     rigid_body_id: DynamicRigidBodyID,
     model_transform: &ModelTransform,
     drag_load_map_id: StringHash32,
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
 ) -> Result<DetailedDragForceGeneratorID> {
     let drag_load_map_id = DragLoadMapID(drag_load_map_id);
 
@@ -71,7 +70,7 @@ pub fn setup_detailed_drag_force<'a>(
                 )
             })?
         } else {
-            let center_of_mass = Point3::from(model_transform.offset.cast());
+            let center_of_mass = Point3::from(model_transform.offset);
             let map = generate_map(
                 config,
                 &center_of_mass,
@@ -117,7 +116,7 @@ fn generate_map<'a>(
     config: &DragLoadMapConfig,
     center_of_mass: &Position,
     drag_load_map_id: DragLoadMapID,
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3<f32>; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
 ) -> Result<DragLoadMap> {
     impact_log::info!("Generating drag load map: {drag_load_map_id}");
 

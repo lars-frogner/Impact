@@ -1,8 +1,8 @@
-# Hash: b00cbb08d785052a53328ed6f0b333d5c8f7b46c2b51ff688daa6f43083c381d
-# Generated: 2025-12-17T23:58:42+00:00
+# Hash: 13103d0aaa0b4d29a67762e1aacecec9a9e0bf76b64d32906f520b3c3edd6c01
+# Generated: 2025-12-21T23:08:03+00:00
 # Rust type: impact_physics::inertia::InertialProperties
 # Type category: POD
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     InertialProperties,
     write_bytes,
@@ -16,7 +16,7 @@ import core.Point3
 ## The inertia-related properties of a physical body.
 InertialProperties : {
     inertia_tensor : Physics.InertiaTensor.InertiaTensor,
-    center_of_mass : Point3.Point3 Binary32,
+    center_of_mass : Point3.Point3,
     mass : F32,
 }
 
@@ -27,7 +27,7 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(88)
     |> Physics.InertiaTensor.write_bytes(value.inertia_tensor)
-    |> Point3.write_bytes_32(value.center_of_mass)
+    |> Point3.write_bytes(value.center_of_mass)
     |> Builtin.write_bytes_f32(value.mass)
 
 ## Deserializes a value of [InertialProperties] from its bytes in the
@@ -37,7 +37,7 @@ from_bytes = |bytes|
     Ok(
         {
             inertia_tensor: bytes |> List.sublist({ start: 0, len: 72 }) |> Physics.InertiaTensor.from_bytes?,
-            center_of_mass: bytes |> List.sublist({ start: 72, len: 12 }) |> Point3.from_bytes_32?,
+            center_of_mass: bytes |> List.sublist({ start: 72, len: 12 }) |> Point3.from_bytes?,
             mass: bytes |> List.sublist({ start: 84, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )

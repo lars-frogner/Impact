@@ -1624,9 +1624,8 @@ impl From<SceneEntityFlags> for ModelInstanceFlags {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_math::{hash::Hash64, quaternion::UnitQuaternion};
+    use impact_math::{hash::Hash64, point::Point3, quaternion::UnitQuaternion, vector::Vector3};
     use impact_model::InstanceFeatureStorage;
-    use nalgebra::{Point3, Vector3};
 
     fn create_dummy_group_node(
         scene_graph: &mut SceneGraph,

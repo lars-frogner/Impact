@@ -13,14 +13,16 @@ use impact_gpu::{
     },
 };
 use impact_io::image::{Image, ImageMetadata, PixelFormat};
-use impact_math::hash::Hash32;
+use impact_math::{
+    hash::Hash32,
+    vector::{Vector3, Vector4},
+};
 use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
     TextureRegistry,
     gpu_resource::{SamplerMap, TextureMap},
     processing::{FormatConversion, ImageProcessing, NormalMapFormat},
 };
-use nalgebra::{Vector3, Vector4};
 use std::{
     borrow::Cow,
     num::NonZeroU32,
@@ -56,7 +58,7 @@ pub enum VoxelColor {
     Textured(PathBuf),
 }
 
-pub type RBGColor = Vector3<f32>;
+pub type RBGColor = Vector3;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
@@ -89,7 +91,7 @@ pub struct VoxelTypeRegistry {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct FixedVoxelMaterialProperties {
-    properties: Vector4<f32>,
+    properties: Vector4,
 }
 
 impl VoxelType {
@@ -568,9 +570,9 @@ fn create_uniform_color_image(texture_resolution: NonZeroU32, color: RBGColor) -
     };
 
     let pixel = [
-        float_to_u8(color.x),
-        float_to_u8(color.y),
-        float_to_u8(color.z),
+        float_to_u8(color.x()),
+        float_to_u8(color.y()),
+        float_to_u8(color.z()),
         255,
     ];
 

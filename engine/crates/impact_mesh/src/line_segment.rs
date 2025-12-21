@@ -5,11 +5,13 @@ use std::fmt;
 use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{hash::StringHash64, hash64, quaternion::UnitQuaternion, transform::Similarity3};
+use impact_math::{
+    hash::StringHash64, hash64, point::Point3, quaternion::UnitQuaternion, transform::Similarity3,
+    vector::Vector3,
+};
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
 };
-use nalgebra::{Point3, Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -137,7 +139,7 @@ impl LineSegmentMesh {
 
     /// Returns an iterator over the mesh line segments, each item containing
     /// the two line segment vertex positions.
-    pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3<f32>; 2]> {
+    pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3; 2]> {
         self.positions()
             .chunks_exact(2)
             .map(|pair| [&pair[0].0, &pair[1].0])
@@ -161,11 +163,7 @@ impl LineSegmentMesh {
 
     /// Applies the given displacement vector to the mesh, translating the
     /// vertex positions.
-    pub fn translate(
-        &mut self,
-        translation: &Vector3<f32>,
-        dirty_mask: &mut LineSegmentMeshDirtyMask,
-    ) {
+    pub fn translate(&mut self, translation: &Vector3, dirty_mask: &mut LineSegmentMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.translated(translation);
         }

@@ -1,8 +1,8 @@
-# Hash: 4522f9f0b0298eace2cf26a097c7711330f0df3b702690c06d02427c2209a9f9
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 896e6acbc3669af50a65fb729642507072b530e21da7c3b2225dbff3a29e004c
+# Generated: 2025-12-21T22:57:59+00:00
 # Rust type: impact_material::setup::physical::ParallaxMap
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     ParallaxMap,
     new,
@@ -24,18 +24,18 @@ import core.Vector2
 ParallaxMap : {
     height_map_texture_id : Texture.TextureID.TextureID,
     displacement_scale : F64,
-    uv_per_distance : Vector2.Vector2 Binary32,
+    uv_per_distance : Vector2.Vector2,
 }
 
-new : Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> ParallaxMap
+new : Texture.TextureID.TextureID, F64, Vector2.Vector2 -> ParallaxMap
 new = |height_map_texture_id, displacement_scale, uv_per_distance|
     { height_map_texture_id, displacement_scale, uv_per_distance }
 
-add_new : Entity.ComponentData, Texture.TextureID.TextureID, F64, Vector2.Vector2 Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Texture.TextureID.TextureID, F64, Vector2.Vector2 -> Entity.ComponentData
 add_new = |entity_data, height_map_texture_id, displacement_scale, uv_per_distance|
     add(entity_data, new(height_map_texture_id, displacement_scale, uv_per_distance))
 
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Vector2.Vector2 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Texture.TextureID.TextureID), Entity.Arg.Broadcasted (F64), Entity.Arg.Broadcasted (Vector2.Vector2) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, height_map_texture_id, displacement_scale, uv_per_distance|
     add_multiple(
         entity_data,
@@ -106,7 +106,7 @@ write_bytes = |bytes, value|
     |> List.reserve(24)
     |> Texture.TextureID.write_bytes(value.height_map_texture_id)
     |> Builtin.write_bytes_f64(value.displacement_scale)
-    |> Vector2.write_bytes_32(value.uv_per_distance)
+    |> Vector2.write_bytes(value.uv_per_distance)
 
 ## Deserializes a value of [ParallaxMap] from its bytes in the
 ## representation used by the engine.
@@ -116,7 +116,7 @@ from_bytes = |bytes|
         {
             height_map_texture_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Texture.TextureID.from_bytes?,
             displacement_scale: bytes |> List.sublist({ start: 8, len: 8 }) |> Builtin.from_bytes_f64?,
-            uv_per_distance: bytes |> List.sublist({ start: 16, len: 8 }) |> Vector2.from_bytes_32?,
+            uv_per_distance: bytes |> List.sublist({ start: 16, len: 8 }) |> Vector2.from_bytes?,
         },
     )
 

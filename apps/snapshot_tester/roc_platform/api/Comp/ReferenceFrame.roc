@@ -1,8 +1,8 @@
-# Hash: 6c0059634b92f0d9ff1ec93418ef9bfecdf268592dfaa17ab3a2984cb5e618c2
-# Generated: 2025-12-20T20:27:34+00:00
+# Hash: e9161116d3dbd5e19d96cfec2eddf06976c8d0dcf7e14b6d5d763622ed0c3fb7
+# Generated: 2025-12-21T23:08:03+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: dbb3dcfa (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     ReferenceFrame,
     new,
@@ -35,26 +35,26 @@ import core.UnitQuaternion
 ReferenceFrame : {
     ## The coordinates of the origin of the entity's reference frame measured
     ## in the parent space.
-    position : Point3.Point3 Binary32,
+    position : Point3.Point3,
     ## The 3D orientation of the entity's reference frame in the parent space.
     orientation : UnitQuaternion.UnitQuaternion,
 }
 
 ## Creates a new reference frame with the given position and orientation.
-new : Point3.Point3 Binary32, UnitQuaternion.UnitQuaternion -> ReferenceFrame
+new : Point3.Point3, UnitQuaternion.UnitQuaternion -> ReferenceFrame
 new = |position, orientation|
     { position, orientation }
 
 ## Creates a new reference frame with the given position and orientation.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Point3.Point3 Binary32, UnitQuaternion.UnitQuaternion -> Entity.ComponentData
+add_new : Entity.ComponentData, Point3.Point3, UnitQuaternion.UnitQuaternion -> Entity.ComponentData
 add_new = |entity_data, position, orientation|
     add(entity_data, new(position, orientation))
 
 ## Creates a new reference frame with the given position and orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary32), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3), Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, position, orientation|
     add_multiple(
         entity_data,
@@ -67,14 +67,14 @@ add_multiple_new = |entity_data, position, orientation|
 
 ## Creates a new reference frame with the given position and the identity
 ## orientation.
-unoriented : Point3.Point3 Binary32 -> ReferenceFrame
+unoriented : Point3.Point3 -> ReferenceFrame
 unoriented = |position|
     new(position, UnitQuaternion.identity)
 
 ## Creates a new reference frame with the given position and the identity
 ## orientation.
 ## Adds the component to the given entity's data.
-add_unoriented : Entity.ComponentData, Point3.Point3 Binary32 -> Entity.ComponentData
+add_unoriented : Entity.ComponentData, Point3.Point3 -> Entity.ComponentData
 add_unoriented = |entity_data, position|
     add(entity_data, unoriented(position))
 
@@ -82,7 +82,7 @@ add_unoriented = |entity_data, position|
 ## orientation.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_unoriented : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3 Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_unoriented : Entity.MultiComponentData, Entity.Arg.Broadcasted (Point3.Point3) -> Result Entity.MultiComponentData Str
 add_multiple_unoriented = |entity_data, position|
     add_multiple(
         entity_data,
@@ -209,7 +209,7 @@ write_bytes : List U8, ReferenceFrame -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(28)
-    |> Point3.write_bytes_32(value.position)
+    |> Point3.write_bytes(value.position)
     |> UnitQuaternion.write_bytes(value.orientation)
 
 ## Deserializes a value of [ReferenceFrame] from its bytes in the
@@ -218,7 +218,7 @@ from_bytes : List U8 -> Result ReferenceFrame _
 from_bytes = |bytes|
     Ok(
         {
-            position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes_32?,
+            position: bytes |> List.sublist({ start: 0, len: 12 }) |> Point3.from_bytes?,
             orientation: bytes |> List.sublist({ start: 12, len: 16 }) |> UnitQuaternion.from_bytes?,
         },
     )

@@ -52,7 +52,7 @@ impl<F> Radians<F> {
 
 impl<F: Float> Angle<F> for Degrees<F> {
     fn zero() -> Self {
-        Self(F::zero())
+        Self(F::ZERO)
     }
 
     fn as_degrees(self) -> Degrees<F> {
@@ -74,7 +74,7 @@ impl<F: Float> Angle<F> for Degrees<F> {
 
 impl<F: Float> Angle<F> for Radians<F> {
     fn zero() -> Self {
-        Self(F::zero())
+        Self(F::ZERO)
     }
 
     fn as_degrees(self) -> Degrees<F> {

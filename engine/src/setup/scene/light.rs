@@ -67,7 +67,7 @@ fn setup_omnidirectional_lights_for_new_entities(
                 setup::setup_omnidirectional_light(
                     &mut light_manager,
                     &view_transform,
-                    &frame.position.cast(),
+                    &frame.position,
                     omnidirectional_emission,
                     flags.into(),
                 ),
@@ -93,7 +93,7 @@ fn setup_omnidirectional_lights_for_new_entities(
                 setup::setup_shadowable_omnidirectional_light(
                     &mut light_manager,
                     &view_transform,
-                    &frame.position.cast(),
+                    &frame.position,
                     omnidirectional_emission,
                     flags.into(),
                 ),

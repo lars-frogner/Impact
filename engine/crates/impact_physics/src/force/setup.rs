@@ -45,9 +45,7 @@ pub fn setup_local_force(
 ) -> LocalForceGeneratorID {
     // Transform point to body-fixed frame
     let point = model_transform.map_or(local_force.point, |transform| {
-        transform
-            .transform_point_from_model_space_to_entity_space(&local_force.point.cast())
-            .cast()
+        transform.transform_point_from_model_space_to_entity_space(&local_force.point)
     });
 
     let anchor = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
@@ -71,14 +69,10 @@ pub fn setup_dynamic_dynamic_spring_force(
 ) -> DynamicDynamicSpringForceGeneratorID {
     // Transform points to body-fixed frame
     let point_1 = model_transform.map_or(properties.attachment_point_1, |transform| {
-        transform
-            .transform_point_from_model_space_to_entity_space(&properties.attachment_point_1.cast())
-            .cast()
+        transform.transform_point_from_model_space_to_entity_space(&properties.attachment_point_1)
     });
     let point_2 = model_transform.map_or(properties.attachment_point_2, |transform| {
-        transform
-            .transform_point_from_model_space_to_entity_space(&properties.attachment_point_2.cast())
-            .cast()
+        transform.transform_point_from_model_space_to_entity_space(&properties.attachment_point_2)
     });
 
     let anchor_1 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
@@ -108,14 +102,10 @@ pub fn setup_dynamic_kinematic_spring_force(
 ) -> DynamicKinematicSpringForceGeneratorID {
     // Transform points to body-fixed frame
     let point_1 = model_transform.map_or(properties.attachment_point_1, |transform| {
-        transform
-            .transform_point_from_model_space_to_entity_space(&properties.attachment_point_1.cast())
-            .cast()
+        transform.transform_point_from_model_space_to_entity_space(&properties.attachment_point_1)
     });
     let point_2 = model_transform.map_or(properties.attachment_point_2, |transform| {
-        transform
-            .transform_point_from_model_space_to_entity_space(&properties.attachment_point_2.cast())
-            .cast()
+        transform.transform_point_from_model_space_to_entity_space(&properties.attachment_point_2)
     });
 
     let anchor_1 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {

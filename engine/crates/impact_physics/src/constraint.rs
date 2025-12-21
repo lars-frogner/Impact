@@ -13,8 +13,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_containers::HashMap;
-use impact_math::matrix::Matrix3;
-use nalgebra::Vector3;
+use impact_math::{matrix::Matrix3, vector::Vector3};
 use num_traits::Zero;
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
@@ -136,7 +135,7 @@ struct ConstrainedBody {
     /// Linear velocity of the body' center of mass (in world space).
     pub velocity: Velocity,
     /// Angular velocity of the body about its center of mass (in world space).
-    pub angular_velocity: Vector3<f32>,
+    pub angular_velocity: Vector3,
 }
 
 impl ConstraintManager {
@@ -301,7 +300,7 @@ impl ConstrainedBody {
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
     fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
-        self.orientation.transform_point(point) + self.position.coords
+        self.orientation.transform_point(point) + self.position.as_vector()
     }
 
     /// Transforms the given point from world space to the coordinate system
@@ -309,6 +308,6 @@ impl ConstrainedBody {
     /// body's center of mass.
     fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
         self.orientation
-            .inverse_transform_point(&(point - self.position.coords))
+            .inverse_transform_point(&(point - self.position.as_vector()))
     }
 }

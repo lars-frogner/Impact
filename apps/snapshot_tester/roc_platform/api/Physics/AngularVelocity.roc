@@ -1,8 +1,8 @@
-# Hash: fee9b7f7641ec5ac66f3becf4cc3c6759aef7755051c1451f6b54dc9a8540630
-# Generated: 2025-12-17T23:58:42+00:00
+# Hash: 66a477d127534cb8f6d11d20e5c149e05722eebc56db19f3e02a3038d77bbed6
+# Generated: 2025-12-21T23:08:03+00:00
 # Rust type: impact_physics::quantities::AngularVelocity
 # Type category: POD
-# Commit: 7d41822d (dirty)
+# Commit: d4c84c05 (dirty)
 module [
     AngularVelocity,
     new,
@@ -19,19 +19,19 @@ import core.Vector3
 ## An angular velocity in 3D space, represented by an axis of rotation and an
 ## angular speed.
 AngularVelocity : {
-    axis_of_rotation : UnitVector3.UnitVector3 Binary32,
+    axis_of_rotation : UnitVector3.UnitVector3,
     angular_speed : Radians.Radians Binary32,
 }
 
 ## Creates a new [`AngularVelocity`] with the given axis of rotation and
 ## angular speed.
-new : UnitVector3.UnitVector3 Binary32, Radians.Radians Binary32 -> AngularVelocity
+new : UnitVector3.UnitVector3, Radians.Radians Binary32 -> AngularVelocity
 new = |axis_of_rotation, angular_speed|
     { axis_of_rotation, angular_speed }
 
 ## Creates a new [`AngularVelocity`] from the given angular velocity
 ## vector.
-from_vector : Vector3.Vector3 Binary32 -> AngularVelocity
+from_vector : Vector3.Vector3 -> AngularVelocity
 from_vector = |angular_velocity_vector|
     when UnitVector3.try_from_and_get(angular_velocity_vector, 1e-15) is
         Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
@@ -48,7 +48,7 @@ write_bytes : List U8, AngularVelocity -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(16)
-    |> UnitVector3.write_bytes_32(value.axis_of_rotation)
+    |> UnitVector3.write_bytes(value.axis_of_rotation)
     |> Radians.write_bytes_32(value.angular_speed)
 
 ## Deserializes a value of [AngularVelocity] from its bytes in the
@@ -57,7 +57,7 @@ from_bytes : List U8 -> Result AngularVelocity _
 from_bytes = |bytes|
     Ok(
         {
-            axis_of_rotation: bytes |> List.sublist({ start: 0, len: 12 }) |> UnitVector3.from_bytes_32?,
+            axis_of_rotation: bytes |> List.sublist({ start: 0, len: 12 }) |> UnitVector3.from_bytes?,
             angular_speed: bytes |> List.sublist({ start: 12, len: 4 }) |> Radians.from_bytes_32?,
         },
     )
