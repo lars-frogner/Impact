@@ -36,6 +36,7 @@ wgpu = { version = "27.0", default-features = false, features = [
     "wgsl",
     "naga-ir",
     "serde",
+    "parking_lot",
 ] }
 
 [lints]
