@@ -1129,6 +1129,27 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn matrix3a_element_access_panics_on_out_of_bounds_row() {
+        let matrix = Matrix3A::identity();
+        let _ = matrix.element(3, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn matrix3a_element_access_panics_on_out_of_bounds_column() {
+        let matrix = Matrix3A::identity();
+        let _ = matrix.element(0, 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn matrix3a_element_mut_access_panics_on_out_of_bounds() {
+        let mut matrix = Matrix3A::identity();
+        let _ = matrix.element_mut(0, 3);
+    }
+
+    #[test]
     fn accessing_matrix3a_columns_works() {
         let col1 = Vector3A::new(1.0, 2.0, 3.0);
         let col2 = Vector3A::new(4.0, 5.0, 6.0);
@@ -1415,6 +1436,27 @@ mod tests {
 
         *matrix.element_mut(0, 1) = 5.0;
         assert_eq!(matrix.element(0, 1), 5.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn matrix4a_element_access_panics_on_out_of_bounds_row() {
+        let matrix = Matrix4A::identity();
+        let _ = matrix.element(4, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn matrix4a_element_access_panics_on_out_of_bounds_column() {
+        let matrix = Matrix4A::identity();
+        let _ = matrix.element(0, 4);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn matrix4a_element_mut_access_panics_on_out_of_bounds() {
+        let mut matrix = Matrix4A::identity();
+        let _ = matrix.element_mut(0, 4);
     }
 
     #[test]
@@ -1737,6 +1779,125 @@ mod tests {
     }
 
     // General matrix property tests
+    #[test]
+    fn matrix_operations_with_zero_matrix() {
+        let zero = Matrix3A::zeros();
+        let test_matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+
+        // Adding zero matrix should not change the matrix
+        let added = &test_matrix + &zero;
+        assert_eq!(added, test_matrix);
+
+        // Subtracting zero matrix should not change the matrix
+        let subtracted = &test_matrix - &zero;
+        assert_eq!(subtracted, test_matrix);
+
+        // Multiplying by zero matrix should give zero matrix
+        let multiplied = &test_matrix * &zero;
+        for i in 0..3 {
+            for j in 0..3 {
+                assert_abs_diff_eq!(multiplied.element(i, j), 0.0, epsilon = EPSILON);
+            }
+        }
+    }
+
+    #[test]
+    fn matrix_with_negative_values() {
+        let negative_diag = Vector3::new(-1.0, -2.0, -3.0);
+        let matrix = Matrix3A::from_diagonal(&negative_diag);
+
+        assert_eq!(matrix.element(0, 0), -1.0);
+        assert_eq!(matrix.element(1, 1), -2.0);
+        assert_eq!(matrix.element(2, 2), -3.0);
+
+        let negated = -&matrix;
+        assert_eq!(negated.element(0, 0), 1.0);
+        assert_eq!(negated.element(1, 1), 2.0);
+        assert_eq!(negated.element(2, 2), 3.0);
+    }
+
+    #[test]
+    fn matrix_scalar_multiplication_by_zero() {
+        let matrix = Matrix4A::from_diagonal(&Vector4A::new(1.0, 2.0, 3.0, 4.0));
+        let result = &matrix * 0.0;
+
+        for i in 0..4 {
+            for j in 0..4 {
+                assert_eq!(result.element(i, j), 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn matrix_scalar_multiplication_by_one() {
+        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let result = &matrix * 1.0;
+
+        assert_eq!(result, matrix);
+    }
+
+    #[test]
+    fn matrix_scalar_multiplication_by_negative() {
+        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let result = &matrix * -1.0;
+
+        assert_eq!(result.element(0, 0), -1.0);
+        assert_eq!(result.element(1, 1), -2.0);
+        assert_eq!(result.element(2, 2), -3.0);
+    }
+
+    #[test]
+    fn matrix_addition_is_commutative() {
+        let m1 = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let m2 = Matrix3A::from_diagonal(&Vector3::new(4.0, 5.0, 6.0));
+
+        let result1 = &m1 + &m2;
+        let result2 = &m2 + &m1;
+
+        assert_eq!(result1, result2);
+    }
+
+    #[test]
+    fn matrix_multiplication_is_associative() {
+        let m1 = Matrix3A::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
+        let m2 = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let m3 = Matrix3A::from_diagonal(&Vector3::new(3.0, 2.0, 1.0));
+
+        let result1 = (&m1 * &m2) * &m3;
+        let result2 = &m1 * (&m2 * &m3);
+
+        for i in 0..3 {
+            for j in 0..3 {
+                assert_abs_diff_eq!(
+                    result1.element(i, j),
+                    result2.element(i, j),
+                    epsilon = EPSILON
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn matrix_min_max_with_negative_values() {
+        let col1 = Vector3A::new(-5.0, 2.0, 0.0);
+        let col2 = Vector3A::new(3.0, -7.0, 1.0);
+        let col3 = Vector3A::new(-2.0, 4.0, -3.0);
+        let matrix = Matrix3A::from_columns(col1, col2, col3);
+
+        assert_abs_diff_eq!(matrix.min_element(), -7.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(matrix.max_element(), 4.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn matrix_transpose_of_diagonal_is_same() {
+        let diag = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let matrix = Matrix4A::from_diagonal(&diag);
+        let transposed = matrix.transposed();
+
+        // Diagonal matrices are symmetric
+        assert_eq!(matrix, transposed);
+    }
+
     #[test]
     fn matrix_operations_with_different_reference_combinations_work() {
         let m1 = Matrix3A::identity();

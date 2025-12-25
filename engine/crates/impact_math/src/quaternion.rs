@@ -912,6 +912,184 @@ mod tests {
         assert_eq!(imag.z(), 0.0);
     }
 
+    // Edge case tests
+    #[test]
+    fn quaternion_scalar_multiplication_by_zero() {
+        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let result = &quat * 0.0;
+
+        assert_eq!(result.real(), 0.0);
+        let imag = result.imag();
+        assert_eq!(imag.x(), 0.0);
+        assert_eq!(imag.y(), 0.0);
+        assert_eq!(imag.z(), 0.0);
+    }
+
+    #[test]
+    fn quaternion_scalar_multiplication_by_one() {
+        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let result = &quat * 1.0;
+
+        assert_eq!(result.real(), quat.real());
+        let result_imag = result.imag();
+        let quat_imag = quat.imag();
+        assert_eq!(result_imag.x(), quat_imag.x());
+        assert_eq!(result_imag.y(), quat_imag.y());
+        assert_eq!(result_imag.z(), quat_imag.z());
+    }
+
+    #[test]
+    fn quaternion_scalar_multiplication_by_negative() {
+        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let result = &quat * -1.0;
+
+        assert_eq!(result.real(), -4.0);
+        let imag = result.imag();
+        assert_eq!(imag.x(), -1.0);
+        assert_eq!(imag.y(), -2.0);
+        assert_eq!(imag.z(), -3.0);
+    }
+
+    #[test]
+    fn unit_quaternion_from_axis_angle_with_negative_angle() {
+        let axis = UnitVector3::unit_z();
+        let angle = -PI / 4.0;
+        let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
+
+        // Negative angle should rotate in opposite direction
+        let vector = Vector3A::new(1.0, 0.0, 0.0);
+        let rotated = quat.rotate_vector(&vector);
+
+        // -45 degrees around Z should have positive x and negative y components
+        assert!(rotated.x() > 0.0);
+        assert!(rotated.y() < 0.0);
+    }
+
+    #[test]
+    fn unit_quaternion_from_axis_angle_with_zero_angle() {
+        let axis = UnitVector3::unit_x();
+        let angle = 0.0;
+        let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
+
+        // Zero angle should give identity rotation
+        assert_abs_diff_eq!(quat.real(), 1.0, epsilon = EPSILON);
+        let imag = quat.imag();
+        assert_abs_diff_eq!(imag.x(), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(imag.y(), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(imag.z(), 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn unit_quaternion_from_axis_angle_with_full_rotation() {
+        let axis = UnitVector3::unit_y();
+        let angle = 2.0 * PI;
+        let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
+
+        let vector = Vector3A::new(1.0, 0.0, 1.0);
+        let rotated = quat.rotate_vector(&vector);
+
+        // Full rotation should return to original position
+        assert_abs_diff_eq!(rotated.x(), vector.x(), epsilon = EPSILON);
+        assert_abs_diff_eq!(rotated.y(), vector.y(), epsilon = EPSILON);
+        assert_abs_diff_eq!(rotated.z(), vector.z(), epsilon = EPSILON);
+    }
+
+    #[test]
+    fn quaternion_addition_with_itself() {
+        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let result = &quat + &quat;
+
+        assert_eq!(result.real(), 8.0);
+        let imag = result.imag();
+        assert_eq!(imag.x(), 2.0);
+        assert_eq!(imag.y(), 4.0);
+        assert_eq!(imag.z(), 6.0);
+    }
+
+    #[test]
+    fn quaternion_subtraction_with_itself() {
+        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let result = &quat - &quat;
+
+        assert_abs_diff_eq!(result.real(), 0.0, epsilon = EPSILON);
+        let imag = result.imag();
+        assert_abs_diff_eq!(imag.x(), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(imag.y(), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(imag.z(), 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn unit_quaternion_double_negation_gives_original() {
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 6.0);
+        let double_negated = -(-quat);
+
+        assert_abs_diff_eq!(double_negated.real(), quat.real(), epsilon = EPSILON);
+        let quat_imag = quat.imag();
+        let double_neg_imag = double_negated.imag();
+        assert_abs_diff_eq!(double_neg_imag.x(), quat_imag.x(), epsilon = EPSILON);
+        assert_abs_diff_eq!(double_neg_imag.y(), quat_imag.y(), epsilon = EPSILON);
+        assert_abs_diff_eq!(double_neg_imag.z(), quat_imag.z(), epsilon = EPSILON);
+    }
+
+    #[test]
+    fn unit_quaternion_rotation_between_parallel_axes() {
+        let axis = UnitVector3::unit_x();
+        let rotation = UnitQuaternionA::rotation_between_axes(&axis, &axis);
+
+        // Rotating from an axis to itself should be identity
+        assert_abs_diff_eq!(rotation.real(), 1.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn unit_quaternion_rotation_between_opposite_axes() {
+        let axis_x = UnitVector3::unit_x();
+        let axis_neg_x = UnitVector3::neg_unit_x();
+
+        let rotation = UnitQuaternionA::rotation_between_axes(&axis_x, &axis_neg_x);
+
+        // Rotating from X to -X should be 180 degrees
+        assert_abs_diff_eq!(rotation.angle().abs(), PI, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn non_aligned_quaternion_default_works() {
+        let quat = Quaternion::default();
+        assert_eq!(quat.real(), 1.0);
+        let imag = quat.imag();
+        assert_eq!(imag.x(), 0.0);
+        assert_eq!(imag.y(), 0.0);
+        assert_eq!(imag.z(), 0.0);
+    }
+
+    #[test]
+    fn non_aligned_unit_quaternion_default_works() {
+        let quat = UnitQuaternion::default();
+        assert_eq!(quat.real(), 1.0);
+        let imag = quat.imag();
+        assert_eq!(imag.x(), 0.0);
+        assert_eq!(imag.y(), 0.0);
+        assert_eq!(imag.z(), 0.0);
+    }
+
+    #[test]
+    fn non_aligned_quaternion_from_imag_works() {
+        let imag = Vector3::new(1.0, 2.0, 3.0);
+        let quat = Quaternion::from_imag(imag);
+
+        assert_eq!(quat.real(), 0.0);
+        assert_eq!(quat.imag(), &imag);
+    }
+
+    #[test]
+    fn non_aligned_unit_quaternion_identity_works() {
+        let identity = UnitQuaternion::identity();
+        assert_eq!(identity.real(), 1.0);
+        let imag = identity.imag();
+        assert_eq!(imag.x(), 0.0);
+        assert_eq!(imag.y(), 0.0);
+        assert_eq!(imag.z(), 0.0);
+    }
+
     // General trait tests
     #[test]
     fn quaternion_operations_with_different_reference_combinations_work() {
