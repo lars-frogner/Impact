@@ -820,6 +820,16 @@ mod tests {
     }
 
     #[test]
+    fn point3_center_of_calculates_midpoint() {
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(4.0, 6.0, 8.0);
+        let center = Point3::center_of(&p1, &p2);
+        assert_eq!(center.x(), 2.0);
+        assert_eq!(center.y(), 3.0);
+        assert_eq!(center.z(), 4.0);
+    }
+
+    #[test]
     fn point3_component_accessors_work() {
         let mut p = Point3::new(1.0, 2.0, 3.0);
         assert_eq!(p.x(), 1.0);
@@ -1357,5 +1367,94 @@ mod tests {
         let dist_to_p1 = Point2::distance_between(&center, &p1);
         let dist_to_p2 = Point2::distance_between(&center, &p2);
         assert_abs_diff_eq!(dist_to_p1, dist_to_p2, epsilon = EPSILON);
+    }
+
+    // Edge case tests
+    #[test]
+    fn point_center_with_negative_coordinates() {
+        let p1 = Point2::new(-4.0, -6.0);
+        let p2 = Point2::new(4.0, 6.0);
+        let center = Point2::center_of(&p1, &p2);
+        assert_eq!(center.x(), 0.0);
+        assert_eq!(center.y(), 0.0);
+
+        let p3_1 = Point3A::new(-2.0, -4.0, -6.0);
+        let p3_2 = Point3A::new(2.0, 4.0, 6.0);
+        let center3 = Point3A::center_of(&p3_1, &p3_2);
+        assert_eq!(center3.x(), 0.0);
+        assert_eq!(center3.y(), 0.0);
+        assert_eq!(center3.z(), 0.0);
+    }
+
+    #[test]
+    fn point_distance_with_zero_points() {
+        let origin = Point2::new(0.0, 0.0);
+        let p = Point2::new(3.0, 4.0);
+
+        let distance = Point2::distance_between(&origin, &p);
+        assert_abs_diff_eq!(distance, 5.0, epsilon = EPSILON);
+
+        let zero_distance = Point2::distance_between(&origin, &origin);
+        assert_abs_diff_eq!(zero_distance, 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn point_min_max_with_all_negative() {
+        let p1 = Point2::new(-5.0, -2.0);
+        let p2 = Point2::new(-3.0, -7.0);
+
+        let min_p = p1.min_with(&p2);
+        assert_eq!(min_p.x(), -5.0);
+        assert_eq!(min_p.y(), -7.0);
+
+        let max_p = p1.max_with(&p2);
+        assert_eq!(max_p.x(), -3.0);
+        assert_eq!(max_p.y(), -2.0);
+    }
+
+    #[test]
+    fn point_min_max_with_same_point() {
+        let p = Point3A::new(1.0, 2.0, 3.0);
+
+        let min_p = p.min_with(&p);
+        assert_eq!(min_p, p);
+
+        let max_p = p.max_with(&p);
+        assert_eq!(max_p, p);
+    }
+
+    #[test]
+    fn point_arithmetic_with_zero_vector() {
+        let p = Point3::new(5.0, 10.0, 15.0);
+        let zero_vec = Vector3::new(0.0, 0.0, 0.0);
+
+        let add_result = &p + &zero_vec;
+        assert_eq!(add_result, p);
+
+        let sub_result = &p - &zero_vec;
+        assert_eq!(sub_result, p);
+    }
+
+    #[test]
+    fn point_scalar_multiplication_by_zero() {
+        let p = Point2::new(5.0, 10.0);
+        let result = &p * 0.0;
+        assert_eq!(result.x(), 0.0);
+        assert_eq!(result.y(), 0.0);
+    }
+
+    #[test]
+    fn point_scalar_multiplication_by_one() {
+        let p = Point3A::new(5.0, 10.0, 15.0);
+        let result = &p * 1.0;
+        assert_eq!(result, p);
+    }
+
+    #[test]
+    fn point_scalar_multiplication_by_negative() {
+        let p = Point2::new(2.0, 3.0);
+        let result = &p * -2.0;
+        assert_eq!(result.x(), -4.0);
+        assert_eq!(result.y(), -6.0);
     }
 }

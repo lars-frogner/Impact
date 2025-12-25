@@ -1746,6 +1746,41 @@ mod tests {
     }
 
     #[test]
+    fn vector3a_cross_product_is_perpendicular() {
+        let v1 = Vector3A::new(1.0, 2.0, 3.0);
+        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let cross = v1.cross(&v2);
+
+        // Cross product should be perpendicular to both input vectors
+        assert_abs_diff_eq!(cross.dot(&v1), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(cross.dot(&v2), 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3a_cross_product_is_anticommutative() {
+        let v1 = Vector3A::new(1.0, 2.0, 3.0);
+        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let cross1 = v1.cross(&v2);
+        let cross2 = v2.cross(&v1);
+
+        // v1 × v2 = -(v2 × v1)
+        assert_abs_diff_eq!(cross1.x(), -cross2.x(), epsilon = EPSILON);
+        assert_abs_diff_eq!(cross1.y(), -cross2.y(), epsilon = EPSILON);
+        assert_abs_diff_eq!(cross1.z(), -cross2.z(), epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3a_cross_product_of_parallel_vectors_is_zero() {
+        let v1 = Vector3A::new(1.0, 2.0, 3.0);
+        let v2 = Vector3A::new(2.0, 4.0, 6.0); // Parallel to v1
+        let cross = v1.cross(&v2);
+
+        assert_abs_diff_eq!(cross.x(), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(cross.y(), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(cross.z(), 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
     fn vector3a_xy_extraction_works() {
         let v3 = Vector3A::new(1.0, 2.0, 3.0);
         let xy = v3.xy();
@@ -1998,6 +2033,108 @@ mod tests {
         assert_abs_diff_eq!(v1.dot(&v2), 32.0, epsilon = EPSILON); // 1*4 + 2*5 + 3*6 = 32
     }
 
+    #[test]
+    fn vector3_component_mutators_work() {
+        let mut v = Vector3::new(1.0, 2.0, 3.0);
+
+        *v.x_mut() = 10.0;
+        *v.y_mut() = 20.0;
+        *v.z_mut() = 30.0;
+
+        assert_eq!(v.x(), 10.0);
+        assert_eq!(v.y(), 20.0);
+        assert_eq!(v.z(), 30.0);
+    }
+
+    #[test]
+    fn vector3_indexing_works() {
+        let mut v = Vector3::new(1.0, 2.0, 3.0);
+        assert_eq!(v[0], 1.0);
+        assert_eq!(v[1], 2.0);
+        assert_eq!(v[2], 3.0);
+
+        v[0] = 10.0;
+        v[1] = 20.0;
+        v[2] = 30.0;
+        assert_eq!(v[0], 10.0);
+        assert_eq!(v[1], 20.0);
+        assert_eq!(v[2], 30.0);
+    }
+
+    #[test]
+    fn vector3_array_conversion_works() {
+        let arr: [f32; 3] = [1.0, 2.0, 3.0];
+        let v = Vector3::from(arr);
+        assert_eq!(v.x(), 1.0);
+        assert_eq!(v.y(), 2.0);
+        assert_eq!(v.z(), 3.0);
+
+        let converted_back: [f32; 3] = v.into();
+        assert_eq!(converted_back, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn vector3_arithmetic_operations_work() {
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
+
+        let add_result = &v1 + &v2;
+        assert_eq!(add_result.x(), 5.0);
+        assert_eq!(add_result.y(), 7.0);
+        assert_eq!(add_result.z(), 9.0);
+
+        let sub_result = &v1 - &v2;
+        assert_eq!(sub_result.x(), -3.0);
+        assert_eq!(sub_result.y(), -3.0);
+        assert_eq!(sub_result.z(), -3.0);
+
+        let mul_scalar = &v1 * 2.0;
+        assert_eq!(mul_scalar.x(), 2.0);
+        assert_eq!(mul_scalar.y(), 4.0);
+        assert_eq!(mul_scalar.z(), 6.0);
+
+        let scalar_mul = 3.0 * &v1;
+        assert_eq!(scalar_mul.x(), 3.0);
+        assert_eq!(scalar_mul.y(), 6.0);
+        assert_eq!(scalar_mul.z(), 9.0);
+
+        let div_scalar = &v1 / 2.0;
+        assert_eq!(div_scalar.x(), 0.5);
+        assert_eq!(div_scalar.y(), 1.0);
+        assert_eq!(div_scalar.z(), 1.5);
+
+        let neg_v = -&v1;
+        assert_eq!(neg_v.x(), -1.0);
+        assert_eq!(neg_v.y(), -2.0);
+        assert_eq!(neg_v.z(), -3.0);
+    }
+
+    #[test]
+    fn vector3_assignment_operations_work() {
+        let mut v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
+
+        v1 += &v2;
+        assert_eq!(v1.x(), 5.0);
+        assert_eq!(v1.y(), 7.0);
+        assert_eq!(v1.z(), 9.0);
+
+        v1 -= &v2;
+        assert_eq!(v1.x(), 1.0);
+        assert_eq!(v1.y(), 2.0);
+        assert_eq!(v1.z(), 3.0);
+
+        v1 *= 2.0;
+        assert_eq!(v1.x(), 2.0);
+        assert_eq!(v1.y(), 4.0);
+        assert_eq!(v1.z(), 6.0);
+
+        v1 /= 2.0;
+        assert_eq!(v1.x(), 1.0);
+        assert_eq!(v1.y(), 2.0);
+        assert_eq!(v1.z(), 3.0);
+    }
+
     // Vector4 (non-aligned) tests
     #[test]
     fn vector4_new_works() {
@@ -2072,6 +2209,124 @@ mod tests {
         assert_eq!(v4a.w(), 4.0);
     }
 
+    #[test]
+    fn vector4_component_mutators_work() {
+        let mut v = Vector4::new(1.0, 2.0, 3.0, 4.0);
+
+        *v.x_mut() = 10.0;
+        *v.y_mut() = 20.0;
+        *v.z_mut() = 30.0;
+        *v.w_mut() = 40.0;
+
+        assert_eq!(v.x(), 10.0);
+        assert_eq!(v.y(), 20.0);
+        assert_eq!(v.z(), 30.0);
+        assert_eq!(v.w(), 40.0);
+    }
+
+    #[test]
+    fn vector4_indexing_works() {
+        let mut v = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        assert_eq!(v[0], 1.0);
+        assert_eq!(v[1], 2.0);
+        assert_eq!(v[2], 3.0);
+        assert_eq!(v[3], 4.0);
+
+        v[0] = 10.0;
+        v[1] = 20.0;
+        v[2] = 30.0;
+        v[3] = 40.0;
+        assert_eq!(v[0], 10.0);
+        assert_eq!(v[1], 20.0);
+        assert_eq!(v[2], 30.0);
+        assert_eq!(v[3], 40.0);
+    }
+
+    #[test]
+    fn vector4_array_conversion_works() {
+        let arr: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
+        let v = Vector4::from(arr);
+        assert_eq!(v.x(), 1.0);
+        assert_eq!(v.y(), 2.0);
+        assert_eq!(v.z(), 3.0);
+        assert_eq!(v.w(), 4.0);
+
+        let converted_back: [f32; 4] = v.into();
+        assert_eq!(converted_back, [1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn vector4_arithmetic_operations_work() {
+        let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
+
+        let add_result = &v1 + &v2;
+        assert_eq!(add_result.x(), 6.0);
+        assert_eq!(add_result.y(), 8.0);
+        assert_eq!(add_result.z(), 10.0);
+        assert_eq!(add_result.w(), 12.0);
+
+        let sub_result = &v1 - &v2;
+        assert_eq!(sub_result.x(), -4.0);
+        assert_eq!(sub_result.y(), -4.0);
+        assert_eq!(sub_result.z(), -4.0);
+        assert_eq!(sub_result.w(), -4.0);
+
+        let mul_scalar = &v1 * 2.0;
+        assert_eq!(mul_scalar.x(), 2.0);
+        assert_eq!(mul_scalar.y(), 4.0);
+        assert_eq!(mul_scalar.z(), 6.0);
+        assert_eq!(mul_scalar.w(), 8.0);
+
+        let scalar_mul = 3.0 * &v1;
+        assert_eq!(scalar_mul.x(), 3.0);
+        assert_eq!(scalar_mul.y(), 6.0);
+        assert_eq!(scalar_mul.z(), 9.0);
+        assert_eq!(scalar_mul.w(), 12.0);
+
+        let div_scalar = &v1 / 2.0;
+        assert_eq!(div_scalar.x(), 0.5);
+        assert_eq!(div_scalar.y(), 1.0);
+        assert_eq!(div_scalar.z(), 1.5);
+        assert_eq!(div_scalar.w(), 2.0);
+
+        let neg_v = -&v1;
+        assert_eq!(neg_v.x(), -1.0);
+        assert_eq!(neg_v.y(), -2.0);
+        assert_eq!(neg_v.z(), -3.0);
+        assert_eq!(neg_v.w(), -4.0);
+    }
+
+    #[test]
+    fn vector4_assignment_operations_work() {
+        let mut v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
+
+        v1 += &v2;
+        assert_eq!(v1.x(), 6.0);
+        assert_eq!(v1.y(), 8.0);
+        assert_eq!(v1.z(), 10.0);
+        assert_eq!(v1.w(), 12.0);
+
+        v1 -= &v2;
+        assert_eq!(v1.x(), 1.0);
+        assert_eq!(v1.y(), 2.0);
+        assert_eq!(v1.z(), 3.0);
+        assert_eq!(v1.w(), 4.0);
+
+        v1 *= 2.0;
+        assert_eq!(v1.x(), 2.0);
+        assert_eq!(v1.y(), 4.0);
+        assert_eq!(v1.z(), 6.0);
+        assert_eq!(v1.w(), 8.0);
+
+        v1 /= 2.0;
+        assert_eq!(v1.x(), 1.0);
+        assert_eq!(v1.y(), 2.0);
+        assert_eq!(v1.z(), 3.0);
+        assert_eq!(v1.w(), 4.0);
+    }
+
     // UnitVector3 (non-aligned) tests
     #[test]
     fn unitvector3_unit_vectors_work() {
@@ -2142,6 +2397,14 @@ mod tests {
         assert_eq!(unit[0], 0.0);
         assert_eq!(unit[1], 1.0);
         assert_eq!(unit[2], 0.0);
+    }
+
+    #[test]
+    fn unitvector3_new_unchecked_works() {
+        let unit = UnitVector3::new_unchecked(1.0, 0.0, 0.0); // Already normalized
+        assert_eq!(unit.x(), 1.0);
+        assert_eq!(unit.y(), 0.0);
+        assert_eq!(unit.z(), 0.0);
     }
 
     #[test]
@@ -2746,6 +3009,7 @@ mod tests {
 
     #[test]
     fn vector_operations_with_different_reference_combinations_work() {
+        // Test Vector2
         let v1 = Vector2::new(1.0, 2.0);
         let v2 = Vector2::new(3.0, 4.0);
 
@@ -2762,6 +3026,38 @@ mod tests {
         let _result6 = 2.0 * v1; // scalar * owned
         let _result7 = &v2 * 2.0; // ref * scalar
         let _result8 = v2 * 2.0; // owned * scalar
+
+        // Test Vector3
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
+        let _result = &v1 + &v2;
+        let _result = v1 - v2;
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let _result = 2.0 * v1;
+
+        // Test Vector3A
+        let v1 = Vector3A::new(1.0, 2.0, 3.0);
+        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let _result = &v1 + &v2;
+        let _result = v1 - v2;
+        let v1 = Vector3A::new(1.0, 2.0, 3.0);
+        let _result = &v1 * 2.0;
+
+        // Test Vector4
+        let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
+        let _result = &v1 + &v2;
+        let _result = v1 - v2;
+        let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let _result = v1 / 2.0;
+
+        // Test Vector4A
+        let v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4A::new(5.0, 6.0, 7.0, 8.0);
+        let _result = &v1 + &v2;
+        let _result = v1 - v2;
+        let v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let _result = 3.0 * &v1;
     }
 
     #[test]
