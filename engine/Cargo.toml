@@ -36,9 +36,7 @@ license = "Apache-2.0"
 anyhow = "1.0"
 approx = "0.5"
 arbitrary = { version = "1.4", features = ["derive"] }
-postcard = { version = "1.1", default-features = false, features = [
-    "alloc",
-] }
+glam = "0.30"
 bitflags = { version = "2.10", features = ["bytemuck"] }
 bytemuck = { version = "1.24", features = ["derive"] }
 cfg-if = "1.0"
@@ -50,6 +48,9 @@ nohash-hasher = "0.2"
 num-traits = "0.2"
 parking_lot = "0.12"
 pastey = "0.2"
+postcard = { version = "1.1", default-features = false, features = [
+    "alloc",
+] }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 simba = "0.9"
