@@ -1,19 +1,35 @@
 //! Representation of axis-aligned boxes.
 
-use crate::Plane;
+use crate::PlaneA;
 use Corner::{Lower, Upper};
 use approx::AbsDiffEq;
 use impact_math::{
-    matrix::Matrix4,
-    point::Point3,
-    vector::{UnitVector3, Vector3},
+    matrix::Matrix4A,
+    point::{Point3, Point3A},
+    vector::{UnitVector3A, Vector3, Vector3A},
 };
 
 /// A box with orientation aligned with the coordinate system axes. The width,
 /// height and depth axes are aligned with the x-, y- and z-axis respectively.
+///
+/// This type only supports a few basic operations, as is primarily intended for
+/// compact storage inside other types and collections. For computations, prefer
+/// the SIMD-friendly 16-byte aligned [`AxisAlignedBoxA`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct AxisAlignedBox {
-    corners: [Point3; 2],
+    lower_corner: Point3,
+    upper_corner: Point3,
+}
+
+/// A box with orientation aligned with the coordinate system axes. The width,
+/// height and depth axes are aligned with the x-, y- and z-axis respectively.
+///
+/// The corners are stored in 128-bit SIMD registers for efficient computation.
+/// That leads to an 8 extra bytes in size (4 per corner) and 16-byte alignment.
+/// For cache-friendly storage, prefer [`AxisAlignedBox`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct AxisAlignedBoxA {
+    corners: [Point3A; 2],
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -37,7 +53,68 @@ const OPPOSITE_CORNER_INDICES: [usize; 8] = [7, 6, 5, 4, 3, 2, 1, 0];
 
 impl AxisAlignedBox {
     /// Creates a new box with the given lower and upper corner points.
-    pub fn new(lower_corner: Point3, upper_corner: Point3) -> Self {
+    #[inline]
+    pub const fn new(lower_corner: Point3, upper_corner: Point3) -> Self {
+        Self {
+            lower_corner,
+            upper_corner,
+        }
+    }
+
+    /// Returns a reference to the lower corner of the box.
+    #[inline]
+    pub const fn lower_corner(&self) -> &Point3 {
+        &self.lower_corner
+    }
+
+    /// Returns a reference to the upper corner of the box.
+    #[inline]
+    pub const fn upper_corner(&self) -> &Point3 {
+        &self.upper_corner
+    }
+
+    /// Calculates and returns the center point of the box.
+    #[inline]
+    pub fn center(&self) -> Point3 {
+        Point3::center_of(self.lower_corner(), self.upper_corner())
+    }
+
+    /// Returns the extents of the box along the three axes.
+    #[inline]
+    pub fn extents(&self) -> Vector3 {
+        self.upper_corner() - self.lower_corner()
+    }
+
+    /// Returns the half extents of the box along the three axes.
+    #[inline]
+    pub fn half_extents(&self) -> Vector3 {
+        0.5 * self.extents()
+    }
+
+    /// Converts the box to the 16-byte aligned SIMD-friendly [`AxisAlignedBoxA`].
+    #[inline]
+    pub fn aligned(&self) -> AxisAlignedBoxA {
+        AxisAlignedBoxA::new(self.lower_corner.aligned(), self.upper_corner.aligned())
+    }
+}
+
+impl AbsDiffEq for AxisAlignedBox {
+    type Epsilon = f32;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f32::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        Point3::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
+            && Point3::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
+    }
+}
+
+impl AxisAlignedBoxA {
+    /// Creates a new box with the given lower and upper corner points.
+    #[inline]
+    pub fn new(lower_corner: Point3A, upper_corner: Point3A) -> Self {
         Self {
             corners: [lower_corner, upper_corner],
         }
@@ -48,7 +125,7 @@ impl AxisAlignedBox {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[Point3]) -> Self {
+    pub fn aabb_for_points(points: &[Point3A]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create AABB for empty point slice"
@@ -78,7 +155,7 @@ impl AxisAlignedBox {
     ///
     /// # Panics
     /// If the point array is empty.
-    pub fn aabb_for_point_array<const N: usize>(points: &[Point3; N]) -> Self {
+    pub fn aabb_for_point_array<const N: usize>(points: &[Point3A; N]) -> Self {
         assert!(N > 0, "Tried to create AABB for empty point array");
 
         let first_point = points[0];
@@ -101,6 +178,7 @@ impl AxisAlignedBox {
     }
 
     /// Creates the axis-aligned box bounding both the given axis-aligned boxes.
+    #[inline]
     pub fn aabb_from_pair(aabb_1: &Self, aabb_2: &Self) -> Self {
         Self::new(
             aabb_1.lower_corner().min_with(aabb_2.lower_corner()),
@@ -109,34 +187,40 @@ impl AxisAlignedBox {
     }
 
     /// Returns a reference to the lower corner of the box.
-    pub fn lower_corner(&self) -> &Point3 {
+    #[inline]
+    pub fn lower_corner(&self) -> &Point3A {
         &self.corners[0]
     }
 
     /// Returns a reference to the upper corner of the box.
-    pub fn upper_corner(&self) -> &Point3 {
+    #[inline]
+    pub fn upper_corner(&self) -> &Point3A {
         &self.corners[1]
     }
 
     /// Calculates and returns the center point of the box.
-    pub fn center(&self) -> Point3 {
-        Point3::center_of(self.lower_corner(), self.upper_corner())
+    #[inline]
+    pub fn center(&self) -> Point3A {
+        Point3A::center_of(self.lower_corner(), self.upper_corner())
     }
 
     /// Returns the extents of the box along the three axes.
-    pub fn extents(&self) -> Vector3 {
+    #[inline]
+    pub fn extents(&self) -> Vector3A {
         self.upper_corner() - self.lower_corner()
     }
 
     /// Returns the half extents of the box along the three axes.
-    pub fn half_extents(&self) -> Vector3 {
+    #[inline]
+    pub fn half_extents(&self) -> Vector3A {
         0.5 * self.extents()
     }
 
     /// Returns an array with all the eight corners of the box. The corners are
     /// ordered from smaller to larger coordinates, with the z-component varying
     /// fastest.
-    pub fn all_corners(&self) -> [Point3; 8] {
+    #[inline]
+    pub fn all_corners(&self) -> [Point3A; 8] {
         [0, 1, 2, 3, 4, 5, 6, 7].map(|idx| self.corner(idx))
     }
 
@@ -146,9 +230,10 @@ impl AxisAlignedBox {
     ///
     /// # Panics
     /// If the given index exceeds 7.
-    pub fn corner(&self, corner_idx: usize) -> Point3 {
+    #[inline]
+    pub fn corner(&self, corner_idx: usize) -> Point3A {
         let corner_components = &ALL_CORNER_COMPONENTS[corner_idx];
-        Point3::new(
+        Point3A::new(
             self.corners[corner_components[0] as usize].x(),
             self.corners[corner_components[1] as usize].y(),
             self.corners[corner_components[2] as usize].z(),
@@ -161,13 +246,15 @@ impl AxisAlignedBox {
     ///
     /// # Panics
     /// If the given index exceeds 7.
-    pub fn opposite_corner(&self, corner_idx: usize) -> Point3 {
+    #[inline]
+    pub fn opposite_corner(&self, corner_idx: usize) -> Point3A {
         self.corner(OPPOSITE_CORNER_INDICES[corner_idx])
     }
 
     /// Whether the given point is inside this axis-aligned box. A point exactly on the
     /// surface of the box is considered inside.
-    pub fn contains_point(&self, point: &Point3) -> bool {
+    #[inline]
+    pub fn contains_point(&self, point: &Point3A) -> bool {
         point.x() >= self.lower_corner().x()
             && point.x() <= self.upper_corner().x()
             && point.y() >= self.lower_corner().y()
@@ -178,6 +265,7 @@ impl AxisAlignedBox {
 
     /// Whether all of the given axis-aligned box is inside this box. If a
     /// corner exactly touches the surface, it is still considered inside.
+    #[inline]
     pub fn contains_box(&self, other: &Self) -> bool {
         other.lower_corner().x() >= self.lower_corner().x()
             && other.upper_corner().x() <= self.upper_corner().x()
@@ -189,6 +277,7 @@ impl AxisAlignedBox {
 
     /// Whether all of the given axis-aligned box is outside this box. If the
     /// boundaries exactly touch each other, the box is considered inside.
+    #[inline]
     pub fn box_lies_outside(&self, other: &Self) -> bool {
         !((self.lower_corner().x() <= other.upper_corner().x()
             && self.upper_corner().x() >= other.lower_corner().x())
@@ -200,8 +289,9 @@ impl AxisAlignedBox {
 
     /// Computes the corner of the axis aligned box that is closest to the given
     /// point.
-    pub fn compute_closest_corner(&self, point: &Point3) -> Point3 {
-        let mut closest_corner = Point3::origin();
+    #[inline]
+    pub fn compute_closest_corner(&self, point: &Point3A) -> Point3A {
+        let mut closest_corner = Point3A::origin();
         for dim in 0..3 {
             if (self.lower_corner()[dim] - point[dim]).abs()
                 < (self.upper_corner()[dim] - point[dim]).abs()
@@ -216,8 +306,9 @@ impl AxisAlignedBox {
 
     /// Computes the corner of the axis aligned box that is farthest from the
     /// given point.
-    pub fn compute_farthest_corner(&self, point: &Point3) -> Point3 {
-        let mut farthest_corner = Point3::origin();
+    #[inline]
+    pub fn compute_farthest_corner(&self, point: &Point3A) -> Point3A {
+        let mut farthest_corner = Point3A::origin();
         for dim in 0..3 {
             if (self.lower_corner()[dim] - point[dim]).abs()
                 > (self.upper_corner()[dim] - point[dim]).abs()
@@ -233,6 +324,7 @@ impl AxisAlignedBox {
     /// Computes the axis-aligned bounding box enclosing only the volume
     /// enclosed by both this and the given bounding box, or [`None`] if the two
     /// boxes do not overlap.
+    #[inline]
     pub fn compute_overlap_with(&self, other: &Self) -> Option<Self> {
         let lower_corner = self.lower_corner().max_with(other.lower_corner());
         let upper_corner = self.upper_corner().min_with(other.upper_corner());
@@ -247,12 +339,14 @@ impl AxisAlignedBox {
 
     /// Computes the axis-aligned box resulting from scaling this box with the
     /// given uniform scale factor.
+    #[inline]
     pub fn scaled(&self, scale: f32) -> Self {
         Self::new(scale * self.lower_corner(), scale * self.upper_corner())
     }
 
     /// Computes the axis-aligned box resulting from scaling the extents of this
     /// box relative to its center with the given uniform scale factor.
+    #[inline]
     pub fn scaled_about_center(&self, scale: f32) -> Self {
         let center = self.center();
         let scaled_half_extents = (0.5 * scale.abs()) * self.extents();
@@ -261,27 +355,31 @@ impl AxisAlignedBox {
 
     /// Computes the axis-aligned box resulting from expanding the extents of
     /// this box relative to its center by the given margin on each side.
+    #[inline]
     pub fn expanded_about_center(&self, margin: f32) -> Self {
-        let margin = Vector3::same(margin);
+        let margin = Vector3A::same(margin);
         Self::new(self.lower_corner() - margin, self.upper_corner() + margin)
     }
 
     /// Computes the axis-aligned box resulting from translating this box with
     /// the given displacement vector.
-    pub fn translated(&self, displacement: &Vector3) -> Self {
+    #[inline]
+    pub fn translated(&self, displacement: &Vector3A) -> Self {
         Self::new(
             self.lower_corner() + displacement,
             self.upper_corner() + displacement,
         )
     }
 
-    /// Computes the AABB for the transformed version of this AABB.
-    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4) -> Self {
+    /// Computes the AABB for the transformed version of this AABB. The
+    /// transform is assumed to be an affine transform.
+    #[inline]
+    pub fn aabb_of_transformed(&self, homogeneous_transform: &Matrix4A) -> Self {
         let transformed_center = homogeneous_transform.transform_point(&self.center());
 
         // Performance trick: transform half-extents by the element-wise
         // absolute value of the linear 3x3 part
-        let rotation_scale = homogeneous_transform.linear_part();
+        let rotation_scale = homogeneous_transform.linear_part().aligned();
         let abs_rotation_scale = rotation_scale.mapped(f32::abs);
         let transformed_half_extents = abs_rotation_scale * self.half_extents();
 
@@ -297,8 +395,8 @@ impl AxisAlignedBox {
     /// completely outside the box.
     pub fn find_contained_subsegment(
         &self,
-        segment_start: &Point3,
-        offset_from_segment_start_to_end: &Vector3,
+        segment_start: &Point3A,
+        offset_from_segment_start_to_end: &Vector3A,
     ) -> Option<(f32, f32)> {
         let mut t_min: f32 = 0.0;
         let mut t_max: f32 = 1.0;
@@ -332,8 +430,8 @@ impl AxisAlignedBox {
     /// [`None`] if the ray does not hit the box.
     pub fn find_ray_intersection(
         &self,
-        ray_origin: &Point3,
-        ray_direction: &UnitVector3,
+        ray_origin: &Point3A,
+        ray_direction: &UnitVector3A,
     ) -> Option<(f32, f32)> {
         let mut t_min: f32 = 0.0;
         let mut t_max: f32 = f32::INFINITY;
@@ -370,7 +468,7 @@ impl AxisAlignedBox {
     /// Returns a version of this AAB that extrudes as little as possible
     /// into the positive halfspace of the given plane without changing the
     /// volume of the box lying within the negative halfspace.
-    pub fn projected_onto_negative_halfspace(&self, plane: &Plane) -> Self {
+    pub fn projected_onto_negative_halfspace(&self, plane: &PlaneA) -> Self {
         const TOLERANCE: f32 = 1e-8;
         let normal = plane.unit_normal();
 
@@ -396,9 +494,18 @@ impl AxisAlignedBox {
         }
         fitted
     }
+
+    /// Converts the box to the 4-byte aligned cache-friendly [`AxisAlignedBox`].
+    #[inline]
+    pub fn unaligned(&self) -> AxisAlignedBox {
+        AxisAlignedBox::new(
+            self.lower_corner().unaligned(),
+            self.upper_corner().unaligned(),
+        )
+    }
 }
 
-impl AbsDiffEq for AxisAlignedBox {
+impl AbsDiffEq for AxisAlignedBoxA {
     type Epsilon = f32;
 
     fn default_epsilon() -> Self::Epsilon {
@@ -406,240 +513,265 @@ impl AbsDiffEq for AxisAlignedBox {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Point3::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
-            && Point3::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
+        Point3A::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
+            && Point3A::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::PlaneA;
+
     use super::*;
     use approx::assert_abs_diff_eq;
 
     #[test]
     fn box_lies_outside_with_non_overlapping_boxes_works() {
-        let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        let aabb2 = AxisAlignedBox::new(Point3::new(2.0, 2.0, 2.0), Point3::new(3.0, 3.0, 3.0));
+        let aabb1 = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
+        let aabb2 = AxisAlignedBoxA::new(Point3A::new(2.0, 2.0, 2.0), Point3A::new(3.0, 3.0, 3.0));
         assert!(aabb1.box_lies_outside(&aabb2));
     }
 
     #[test]
     fn box_lies_outside_with_touching_boxes_works() {
-        let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        let aabb2 = AxisAlignedBox::new(Point3::new(1.0, 1.0, 1.0), Point3::new(2.0, 2.0, 2.0));
+        let aabb1 = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
+        let aabb2 = AxisAlignedBoxA::new(Point3A::new(1.0, 1.0, 1.0), Point3A::new(2.0, 2.0, 2.0));
         assert!(!aabb1.box_lies_outside(&aabb2));
     }
 
     #[test]
     fn box_lies_outside_with_overlapping_boxes_works() {
-        let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
-        let aabb2 = AxisAlignedBox::new(Point3::new(1.0, 1.0, 1.0), Point3::new(3.0, 3.0, 3.0));
+        let aabb1 = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
+        let aabb2 = AxisAlignedBoxA::new(Point3A::new(1.0, 1.0, 1.0), Point3A::new(3.0, 3.0, 3.0));
         assert!(!aabb1.box_lies_outside(&aabb2));
     }
 
     #[test]
     fn box_lies_outside_with_equal_boxes_works() {
-        let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        let aabb2 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb1 = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
+        let aabb2 = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert!(!aabb1.box_lies_outside(&aabb2));
     }
 
     #[test]
     fn box_lies_outside_with_nested_boxes_works() {
-        let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
-        let aabb2 = AxisAlignedBox::new(Point3::new(0.5, 0.5, 0.5), Point3::new(1.5, 1.5, 1.5));
+        let aabb1 = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
+        let aabb2 = AxisAlignedBoxA::new(Point3A::new(0.5, 0.5, 0.5), Point3A::new(1.5, 1.5, 1.5));
         assert!(!aabb1.box_lies_outside(&aabb2));
     }
 
     #[test]
     fn compute_closest_corner_with_point_inside_box_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(0.6, 0.6, 0.6)),
-            Point3::new(1.0, 1.0, 1.0)
+            aabb.compute_closest_corner(&Point3A::new(0.6, 0.6, 0.6)),
+            Point3A::new(1.0, 1.0, 1.0)
         );
     }
 
     #[test]
     fn compute_closest_corner_with_point_outside_box_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(2.0, 2.0, 2.0)),
-            Point3::new(1.0, 1.0, 1.0)
+            aabb.compute_closest_corner(&Point3A::new(2.0, 2.0, 2.0)),
+            Point3A::new(1.0, 1.0, 1.0)
         );
     }
 
     #[test]
     fn compute_closest_corner_with_point_on_box_corner_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(1.0, 1.0, 1.0)),
-            Point3::new(1.0, 1.0, 1.0)
+            aabb.compute_closest_corner(&Point3A::new(1.0, 1.0, 1.0)),
+            Point3A::new(1.0, 1.0, 1.0)
         );
     }
 
     #[test]
     fn compute_closest_corner_with_point_on_box_edge_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(0.0, 0.4, 0.4)),
-            Point3::new(0.0, 0.0, 0.0)
+            aabb.compute_closest_corner(&Point3A::new(0.0, 0.4, 0.4)),
+            Point3A::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
     fn compute_farthest_corner_with_point_inside_box_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(0.6, 0.6, 0.6)),
-            Point3::new(0.0, 0.0, 0.0)
+            aabb.compute_farthest_corner(&Point3A::new(0.6, 0.6, 0.6)),
+            Point3A::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
     fn compute_farthest_corner_with_point_outside_box_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(2.0, 2.0, 2.0)),
-            Point3::new(0.0, 0.0, 0.0)
+            aabb.compute_farthest_corner(&Point3A::new(2.0, 2.0, 2.0)),
+            Point3A::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
     fn compute_farthest_corner_with_point_on_box_corner_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(1.0, 1.0, 1.0)),
-            Point3::new(0.0, 0.0, 0.0)
+            aabb.compute_farthest_corner(&Point3A::new(1.0, 1.0, 1.0)),
+            Point3A::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
     fn compute_farthest_corner_with_point_on_box_edge_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(0.0, 0.4, 0.4)),
-            Point3::new(1.0, 1.0, 1.0)
+            aabb.compute_farthest_corner(&Point3A::new(0.0, 0.4, 0.4)),
+            Point3A::new(1.0, 1.0, 1.0)
         );
     }
 
     #[test]
     fn should_get_correct_corners() {
-        let lower = Point3::new(-1.0, 2.0, -3.0);
-        let upper = Point3::new(3.0, -2.0, 1.0);
-        let aabb = AxisAlignedBox::new(lower, upper);
+        let lower = Point3A::new(-1.0, 2.0, -3.0);
+        let upper = Point3A::new(3.0, -2.0, 1.0);
+        let aabb = AxisAlignedBoxA::new(lower, upper);
         assert_abs_diff_eq!(aabb.corner(0), lower);
-        assert_abs_diff_eq!(aabb.corner(1), Point3::new(lower.x(), lower.y(), upper.z()));
-        assert_abs_diff_eq!(aabb.corner(2), Point3::new(lower.x(), upper.y(), lower.z()));
-        assert_abs_diff_eq!(aabb.corner(3), Point3::new(lower.x(), upper.y(), upper.z()));
-        assert_abs_diff_eq!(aabb.corner(4), Point3::new(upper.x(), lower.y(), lower.z()));
-        assert_abs_diff_eq!(aabb.corner(5), Point3::new(upper.x(), lower.y(), upper.z()));
-        assert_abs_diff_eq!(aabb.corner(6), Point3::new(upper.x(), upper.y(), lower.z()));
+        assert_abs_diff_eq!(
+            aabb.corner(1),
+            Point3A::new(lower.x(), lower.y(), upper.z())
+        );
+        assert_abs_diff_eq!(
+            aabb.corner(2),
+            Point3A::new(lower.x(), upper.y(), lower.z())
+        );
+        assert_abs_diff_eq!(
+            aabb.corner(3),
+            Point3A::new(lower.x(), upper.y(), upper.z())
+        );
+        assert_abs_diff_eq!(
+            aabb.corner(4),
+            Point3A::new(upper.x(), lower.y(), lower.z())
+        );
+        assert_abs_diff_eq!(
+            aabb.corner(5),
+            Point3A::new(upper.x(), lower.y(), upper.z())
+        );
+        assert_abs_diff_eq!(
+            aabb.corner(6),
+            Point3A::new(upper.x(), upper.y(), lower.z())
+        );
         assert_abs_diff_eq!(aabb.corner(7), upper);
     }
 
     #[test]
     fn should_get_correct_opposite_corners() {
-        let lower = Point3::new(-1.0, 2.0, -3.0);
-        let upper = Point3::new(3.0, -2.0, 1.0);
-        let aabb = AxisAlignedBox::new(lower, upper);
+        let lower = Point3A::new(-1.0, 2.0, -3.0);
+        let upper = Point3A::new(3.0, -2.0, 1.0);
+        let aabb = AxisAlignedBoxA::new(lower, upper);
         assert_abs_diff_eq!(aabb.opposite_corner(7), lower);
         assert_abs_diff_eq!(
             aabb.opposite_corner(6),
-            Point3::new(lower.x(), lower.y(), upper.z())
+            Point3A::new(lower.x(), lower.y(), upper.z())
         );
         assert_abs_diff_eq!(
             aabb.opposite_corner(5),
-            Point3::new(lower.x(), upper.y(), lower.z())
+            Point3A::new(lower.x(), upper.y(), lower.z())
         );
         assert_abs_diff_eq!(
             aabb.opposite_corner(4),
-            Point3::new(lower.x(), upper.y(), upper.z())
+            Point3A::new(lower.x(), upper.y(), upper.z())
         );
         assert_abs_diff_eq!(
             aabb.opposite_corner(3),
-            Point3::new(upper.x(), lower.y(), lower.z())
+            Point3A::new(upper.x(), lower.y(), lower.z())
         );
         assert_abs_diff_eq!(
             aabb.opposite_corner(2),
-            Point3::new(upper.x(), lower.y(), upper.z())
+            Point3A::new(upper.x(), lower.y(), upper.z())
         );
         assert_abs_diff_eq!(
             aabb.opposite_corner(1),
-            Point3::new(upper.x(), upper.y(), lower.z())
+            Point3A::new(upper.x(), upper.y(), lower.z())
         );
         assert_abs_diff_eq!(aabb.opposite_corner(0), upper);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_box_fully_in_negative_halfspace_unchanged() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 2.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_z(), &Point3A::new(0.0, 0.0, 2.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
         assert_abs_diff_eq!(projected, aabb);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_box_fully_in_positive_halfspace_clips_to_plane() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 2.0), Point3::new(1.0, 1.0, 3.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 2.0), Point3A::new(1.0, 1.0, 3.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_z(), &Point3A::new(0.0, 0.0, 1.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
-        let expected = AxisAlignedBox::new(Point3::new(0.0, 0.0, 1.0), Point3::new(1.0, 1.0, 1.0));
+        let expected =
+            AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 1.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(projected, expected);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_intersecting_box_clips_upper_part() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_z(), &Point3A::new(0.0, 0.0, 1.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
-        let expected = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 1.0));
+        let expected =
+            AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 1.0));
         assert_abs_diff_eq!(projected, expected);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_plane_through_yz_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb =
+            AxisAlignedBoxA::new(Point3A::new(-1.0, -1.0, -1.0), Point3A::new(1.0, 1.0, 1.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_x(), &Point3::new(0.5, 0.0, 0.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_x(), &Point3A::new(0.5, 0.0, 0.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
         let expected =
-            AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(0.5, 1.0, 1.0));
+            AxisAlignedBoxA::new(Point3A::new(-1.0, -1.0, -1.0), Point3A::new(0.5, 1.0, 1.0));
         assert_abs_diff_eq!(projected, expected);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_plane_through_xz_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb =
+            AxisAlignedBoxA::new(Point3A::new(-1.0, -1.0, -1.0), Point3A::new(1.0, 1.0, 1.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_y(), &Point3::new(0.0, 0.3, 0.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_y(), &Point3A::new(0.0, 0.3, 0.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
         let expected =
-            AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 0.3, 1.0));
+            AxisAlignedBoxA::new(Point3A::new(-1.0, -1.0, -1.0), Point3A::new(1.0, 0.3, 1.0));
         assert_abs_diff_eq!(projected, expected);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_negative_normal_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
-        let plane = Plane::from_normal_and_point(
-            UnitVector3::unchecked_from(Vector3::new(0.0, 0.0, -1.0)),
-            &Point3::new(0.0, 0.0, 1.0),
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
+        let plane = PlaneA::from_normal_and_point(
+            UnitVector3A::unchecked_from(Vector3A::new(0.0, 0.0, -1.0)),
+            &Point3A::new(0.0, 0.0, 1.0),
         );
         let projected = aabb.projected_onto_negative_halfspace(&plane);
-        let expected = AxisAlignedBox::new(Point3::new(0.0, 0.0, 1.0), Point3::new(2.0, 2.0, 2.0));
+        let expected =
+            AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 1.0), Point3A::new(2.0, 2.0, 2.0));
         assert_abs_diff_eq!(projected, expected);
     }
 
     #[test]
     fn projecting_onto_negative_halfspace_with_diagonal_plane_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
-        let plane = Plane::from_normal_and_point(
-            UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 0.0)),
-            &Point3::new(1.0, 1.0, 0.0),
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
+        let plane = PlaneA::from_normal_and_point(
+            UnitVector3A::normalized_from(Vector3A::new(1.0, 1.0, 0.0)),
+            &Point3A::new(1.0, 1.0, 0.0),
         );
         let projected = aabb.projected_onto_negative_halfspace(&plane);
 
@@ -654,9 +786,10 @@ mod tests {
 
     #[test]
     fn projecting_onto_negative_halfspace_with_plane_parallel_to_axis_preserves_other_dimensions() {
-        let aabb = AxisAlignedBox::new(Point3::new(-2.0, -3.0, -4.0), Point3::new(5.0, 7.0, 8.0));
+        let aabb =
+            AxisAlignedBoxA::new(Point3A::new(-2.0, -3.0, -4.0), Point3A::new(5.0, 7.0, 8.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 2.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_z(), &Point3A::new(0.0, 0.0, 2.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
 
         // X and Y dimensions should be unchanged
@@ -672,19 +805,20 @@ mod tests {
 
     #[test]
     fn projecting_onto_negative_halfspace_with_box_touching_plane_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         let plane =
-            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+            PlaneA::from_normal_and_point(UnitVector3A::unit_z(), &Point3A::new(0.0, 0.0, 1.0));
         let projected = aabb.projected_onto_negative_halfspace(&plane);
-        let expected = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let expected =
+            AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(projected, expected);
     }
 
     #[test]
     fn find_ray_intersection_with_ray_through_box_center_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
-        let ray_origin = Point3::new(-1.0, 1.0, 1.0);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
+        let ray_origin = Point3A::new(-1.0, 1.0, 1.0);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
@@ -695,9 +829,9 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_ray_missing_box_returns_none() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        let ray_origin = Point3::new(2.0, 2.0, 2.0);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
+        let ray_origin = Point3A::new(2.0, 2.0, 2.0);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
@@ -705,9 +839,9 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_ray_starting_inside_box_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
-        let ray_origin = Point3::new(1.0, 1.0, 1.0);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
+        let ray_origin = Point3A::new(1.0, 1.0, 1.0);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
@@ -718,10 +852,10 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_ray_parallel_to_box_axis_outside_box_returns_none() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         // Ray parallel to x-axis but at y=0.5, z=2.0 (outside the box in z dimension)
-        let ray_origin = Point3::new(-1.0, 0.5, 2.0);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let ray_origin = Point3A::new(-1.0, 0.5, 2.0);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
@@ -729,10 +863,10 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_ray_behind_box_returns_none() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         // Ray would intersect box if extended backwards, but only forward direction counts
-        let ray_origin = Point3::new(2.0, 0.5, 0.5);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let ray_origin = Point3A::new(2.0, 0.5, 0.5);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
@@ -740,9 +874,9 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_diagonal_ray_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        let ray_origin = Point3::new(-1.0, -1.0, -1.0);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
+        let ray_origin = Point3A::new(-1.0, -1.0, -1.0);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 1.0, 1.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
@@ -755,10 +889,10 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_zero_direction_component_inside_bounds_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(2.0, 2.0, 2.0));
         // Ray with zero y-component but y-coordinate inside box bounds
-        let ray_origin = Point3::new(-1.0, 1.0, 1.0);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let ray_origin = Point3A::new(-1.0, 1.0, 1.0);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_some());
@@ -769,10 +903,10 @@ mod tests {
 
     #[test]
     fn find_ray_intersection_with_zero_direction_component_outside_bounds_returns_none() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb = AxisAlignedBoxA::new(Point3A::new(0.0, 0.0, 0.0), Point3A::new(1.0, 1.0, 1.0));
         // Ray with zero y-component but y-coordinate outside box bounds
-        let ray_origin = Point3::new(-1.0, 2.0, 0.5);
-        let ray_direction = UnitVector3::normalized_from(Vector3::new(1.0, 0.0, 0.0));
+        let ray_origin = Point3A::new(-1.0, 2.0, 0.5);
+        let ray_direction = UnitVector3A::normalized_from(Vector3A::new(1.0, 0.0, 0.0));
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
