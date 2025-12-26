@@ -30,7 +30,6 @@ impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_resource = { path = "../impact_resource" }
 inventory = { workspace = true, optional = true }
-nalgebra = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 

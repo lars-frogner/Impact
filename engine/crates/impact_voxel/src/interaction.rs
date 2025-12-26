@@ -205,7 +205,7 @@ fn handle_voxel_object_after_removing_voxels(
                 new_local_center_of_mass - original_local_center_of_mass;
 
             let world_center_of_mass_displacement =
-                orientation.transform_vector(&local_center_of_mass_displacement);
+                orientation.rotate_vector(&local_center_of_mass_displacement);
 
             // Compute the linear velocity of the new center of mass compared to
             // the old one
@@ -271,7 +271,7 @@ fn handle_voxel_object_after_removing_voxels(
 
         let world_center_of_mass_displacement = rigid_body
             .orientation()
-            .transform_vector(&local_center_of_mass_displacement);
+            .rotate_vector(&local_center_of_mass_displacement);
 
         // We don't modify the velocity here, since there was no disconnected object to
         // carry away momentum
@@ -338,7 +338,7 @@ fn handle_disconnected_voxel_object(
         inertial_property_manager.derive_center_of_mass() - original_local_center_of_mass;
 
     let world_center_of_mass_displacement =
-        orientation.transform_vector(&local_center_of_mass_displacement);
+        orientation.rotate_vector(&local_center_of_mass_displacement);
 
     // Compute the linear velocity of the new center of mass compared to the old
     // one

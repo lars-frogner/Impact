@@ -12,7 +12,7 @@ use impact_light::{
     ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLightID,
 };
-use impact_math::transform::Isometry3;
+use impact_math::transform::Isometry3A;
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
 /// entity that also has the
@@ -31,12 +31,12 @@ pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph:
                        model_transform: &ModelTransform,
                        frame: &ReferenceFrame,
                        flags: &SceneEntityFlags| {
-        let model_to_parent_transform = frame.create_transform_to_parent_space()
-            * model_transform.crate_transform_to_entity_space();
+        let model_to_parent_transform = frame.aligned().create_transform_to_parent_space()
+            * model_transform.aligned().crate_transform_to_entity_space();
 
         scene_graph.set_model_to_parent_transform_and_flags(
             node.id,
-            model_to_parent_transform,
+            model_to_parent_transform.unaligned(),
             (*flags).into(),
         );
     });
@@ -54,7 +54,7 @@ pub fn sync_lights_in_storage(
     ecs_world: &ECSWorld,
     light_manager: &mut LightManager,
     scene_graph: &SceneGraph,
-    view_transform: &Isometry3,
+    view_transform: &Isometry3A,
 ) {
     query!(
         ecs_world,
@@ -77,7 +77,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 view_transform,
-                &frame.position,
+                &frame.position.aligned(),
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -94,13 +94,14 @@ pub fn sync_lights_in_storage(
          flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
-            let view_transform = view_transform * parent_group_node.group_to_root_transform();
+            let view_transform =
+                view_transform * parent_group_node.group_to_root_transform().aligned();
 
             impact_light::setup::sync_omnidirectional_light_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 &view_transform,
-                &frame.position,
+                &frame.position.aligned(),
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -117,7 +118,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 view_transform,
-                &frame.position,
+                &frame.position.aligned(),
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -134,13 +135,14 @@ pub fn sync_lights_in_storage(
          flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
-            let view_transform = view_transform * parent_group_node.group_to_root_transform();
+            let view_transform =
+                view_transform * parent_group_node.group_to_root_transform().aligned();
 
             impact_light::setup::sync_shadowable_omnidirectional_light_in_storage(
                 light_manager,
                 *omnidirectional_light_id,
                 &view_transform,
-                &frame.position,
+                &frame.position.aligned(),
                 omnidirectional_emission,
                 (*flags).into(),
             );
@@ -171,7 +173,8 @@ pub fn sync_lights_in_storage(
          flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
-            let view_transform = view_transform * parent_group_node.group_to_root_transform();
+            let view_transform =
+                view_transform * parent_group_node.group_to_root_transform().aligned();
 
             impact_light::setup::sync_unidirectional_light_in_storage(
                 light_manager,
@@ -194,7 +197,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 view_transform,
-                &frame.orientation,
+                &frame.orientation.aligned(),
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -211,13 +214,14 @@ pub fn sync_lights_in_storage(
          flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
-            let view_transform = view_transform * parent_group_node.group_to_root_transform();
+            let view_transform =
+                view_transform * parent_group_node.group_to_root_transform().aligned();
 
             impact_light::setup::sync_unidirectional_light_with_orientation_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 &view_transform,
-                &frame.orientation,
+                &frame.orientation.aligned(),
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -248,7 +252,8 @@ pub fn sync_lights_in_storage(
          flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
-            let view_transform = view_transform * parent_group_node.group_to_root_transform();
+            let view_transform =
+                view_transform * parent_group_node.group_to_root_transform().aligned();
 
             impact_light::setup::sync_shadowable_unidirectional_light_in_storage(
                 light_manager,
@@ -271,7 +276,7 @@ pub fn sync_lights_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 view_transform,
-                &frame.orientation,
+                &frame.orientation.aligned(),
                 unidirectional_emission,
                 (*flags).into(),
             );
@@ -288,13 +293,14 @@ pub fn sync_lights_in_storage(
          flags: &SceneEntityFlags| {
             let parent_group_node = scene_graph.group_nodes().node(parent.id);
 
-            let view_transform = view_transform * parent_group_node.group_to_root_transform();
+            let view_transform =
+                view_transform * parent_group_node.group_to_root_transform().aligned();
 
             impact_light::setup::sync_shadowable_unidirectional_light_with_orientation_in_storage(
                 light_manager,
                 *unidirectional_light_id,
                 &view_transform,
-                &frame.orientation,
+                &frame.orientation.aligned(),
                 unidirectional_emission,
                 (*flags).into(),
             );

@@ -300,7 +300,7 @@ impl ConstrainedBody {
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
     fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
-        self.orientation.transform_point(point) + self.position.as_vector()
+        self.orientation.rotate_point(point) + self.position.as_vector()
     }
 
     /// Transforms the given point from world space to the coordinate system
@@ -308,6 +308,6 @@ impl ConstrainedBody {
     /// body's center of mass.
     fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
         self.orientation
-            .inverse_transform_point(&(point - self.position.as_vector()))
+            .inverse_rotate_point(&(point - self.position.as_vector()))
     }
 }

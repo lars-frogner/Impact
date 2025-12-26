@@ -191,8 +191,7 @@ impl OrbitalTrajectory {
             orbital_distance,
         );
 
-        let world_space_orbital_displacement =
-            self.orientation.transform_point(&orbital_displacement);
+        let world_space_orbital_displacement = self.orientation.rotate_point(&orbital_displacement);
 
         let world_space_orbital_position =
             self.focal_position + world_space_orbital_displacement.as_vector();
@@ -222,7 +221,7 @@ impl OrbitalTrajectory {
             tangential_speed,
         );
 
-        let world_space_orbital_velocity = self.orientation.transform_vector(&orbital_velocity);
+        let world_space_orbital_velocity = self.orientation.rotate_vector(&orbital_velocity);
 
         (world_space_orbital_position, world_space_orbital_velocity)
     }

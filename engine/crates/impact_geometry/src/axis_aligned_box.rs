@@ -61,6 +61,36 @@ impl AxisAlignedBox {
         }
     }
 
+    /// Creates the axis-aligned bounding box for the set of points in the given
+    /// slice.
+    ///
+    /// # Panics
+    /// If the point slice is empty.
+    pub fn aabb_for_points(points: &[Point3]) -> Self {
+        assert!(
+            !points.is_empty(),
+            "Tried to create AABB for empty point slice"
+        );
+
+        let first_point = points[0];
+
+        let lower_corner = points
+            .iter()
+            .skip(1)
+            .fold(first_point, |lower_corner, point| {
+                lower_corner.min_with(point)
+            });
+
+        let upper_corner = points
+            .iter()
+            .skip(1)
+            .fold(first_point, |upper_corner, point| {
+                upper_corner.max_with(point)
+            });
+
+        Self::new(lower_corner, upper_corner)
+    }
+
     /// Returns a reference to the lower corner of the box.
     #[inline]
     pub const fn lower_corner(&self) -> &Point3 {
@@ -118,36 +148,6 @@ impl AxisAlignedBoxA {
         Self {
             corners: [lower_corner, upper_corner],
         }
-    }
-
-    /// Creates the axis-aligned bounding box for the set of points in the given
-    /// slice.
-    ///
-    /// # Panics
-    /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[Point3A]) -> Self {
-        assert!(
-            !points.is_empty(),
-            "Tried to create AABB for empty point slice"
-        );
-
-        let first_point = points[0];
-
-        let lower_corner = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |lower_corner, point| {
-                lower_corner.min_with(point)
-            });
-
-        let upper_corner = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |upper_corner, point| {
-                upper_corner.max_with(point)
-            });
-
-        Self::new(lower_corner, upper_corner)
     }
 
     /// Creates the axis-aligned bounding box for the set of points in the given

@@ -6,7 +6,7 @@ use impact_camera::{
     gpu_resource::{BufferableCamera, CameraGPUResource},
 };
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
-use impact_math::{point::Point3, transform::Isometry3};
+use impact_math::{point::Point3A, transform::Isometry3A};
 
 /// Manager for the cameras in a scene.
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub struct CameraContext {
 #[derive(Debug)]
 pub struct SceneCamera {
     camera: Box<dyn Camera>,
-    view_transform: Isometry3,
+    view_transform: Isometry3A,
     scene_graph_node_id: CameraNodeID,
     jitter_enabled: bool,
 }
@@ -60,7 +60,7 @@ impl CameraManager {
 
     /// Returns the view transform of the active camera, or the identity
     /// transform if there is no active camera.
-    pub fn active_view_transform(&self) -> Isometry3 {
+    pub fn active_view_transform(&self) -> Isometry3A {
         self.active_camera()
             .map(SceneCamera::view_transform)
             .copied()
@@ -150,7 +150,7 @@ impl SceneCamera {
     ) -> Self {
         Self {
             camera: Box::new(camera),
-            view_transform: Isometry3::identity(),
+            view_transform: Isometry3A::identity(),
             scene_graph_node_id,
             jitter_enabled,
         }
@@ -162,7 +162,7 @@ impl SceneCamera {
     }
 
     /// Returns a reference to the camera's view transform.
-    pub fn view_transform(&self) -> &Isometry3 {
+    pub fn view_transform(&self) -> &Isometry3A {
         &self.view_transform
     }
 
@@ -179,13 +179,13 @@ impl SceneCamera {
 
     /// Computes the world-space position of the camera based on the current
     /// view transform.
-    pub fn compute_world_space_position(&self) -> Point3 {
+    pub fn compute_world_space_position(&self) -> Point3A {
         let camera_to_world = self.view_transform.inverted();
-        Point3::from(*camera_to_world.translation())
+        Point3A::from(*camera_to_world.translation())
     }
 
     /// Sets the transform from world space to camera space.
-    pub fn set_view_transform(&mut self, view_transform: Isometry3) {
+    pub fn set_view_transform(&mut self, view_transform: Isometry3A) {
         self.view_transform = view_transform;
     }
 
@@ -203,7 +203,7 @@ impl BufferableCamera for SceneCamera {
         self.camera()
     }
 
-    fn view_transform(&self) -> &Isometry3 {
+    fn view_transform(&self) -> &Isometry3A {
         self.view_transform()
     }
 

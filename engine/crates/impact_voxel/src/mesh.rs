@@ -7,8 +7,12 @@ use crate::chunks::{
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3A;
 use impact_containers::KeyIndexMapper;
-use impact_geometry::{Frustum, OrientedBox, Plane};
-use impact_math::{point::Point3, transform::Similarity3, vector::UnitVector3};
+use impact_geometry::{Frustum, FrustumA, OrientedBox, OrientedBoxA, Plane, PlaneA};
+use impact_math::{
+    point::Point3,
+    transform::{Similarity3, Similarity3A},
+    vector::UnitVector3,
+};
 use std::{array, collections::BTreeSet, ops::Range};
 
 /// A [`ChunkedVoxelObject`] with an associated [`ChunkedVoxelObjectMesh`].
@@ -497,8 +501,12 @@ impl CullingFrustum {
     /// `CullingFrustum`.
     pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.map(|plane| {
-            u32::try_from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
-                .unwrap()
+            u32::try_from(
+                FrustumA::determine_largest_signed_dist_aab_corner_index_for_plane(
+                    &plane.aligned(),
+                ),
+            )
+            .unwrap()
         });
         let planes = planes.map(|plane| {
             let (unit_normal, displacement) = plane.into_normal_and_displacement();
@@ -519,7 +527,7 @@ impl CullingFrustum {
     ///
     /// The frustum is assumed to be in the space where the apex is at the
     /// origin before transformation.
-    pub fn for_transformed_frustum(frustum: &Frustum, transformation: &Similarity3) -> Self {
+    pub fn for_transformed_frustum(frustum: &FrustumA, transformation: &Similarity3A) -> Self {
         Self::from_planes_and_apex_position(
             frustum.transformed_planes(transformation),
             Point3::from(*transformation.translation()),
@@ -538,8 +546,8 @@ impl CullingFrustum {
     /// infinity for an orthographic frustum, this can be emulated by
     /// passing in a sufficiently large distance.
     pub fn for_transformed_orthographic_frustum(
-        orthographic_frustum: &OrientedBox,
-        transformation: &Similarity3,
+        orthographic_frustum: &OrientedBoxA,
+        transformation: &Similarity3A,
         apex_distance: f32,
     ) -> Self {
         let transformed_box = orthographic_frustum.transformed(transformation);
@@ -548,7 +556,7 @@ impl CullingFrustum {
             transformed_box.center() - apex_distance * transformed_view_diection;
         Self::from_planes_and_apex_position(
             transformed_box.compute_bounding_planes(),
-            transformed_apex_position,
+            transformed_apex_position.unaligned(),
         )
     }
 }

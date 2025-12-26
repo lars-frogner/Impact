@@ -1618,12 +1618,14 @@ impl MetaSphereSurfaceTransforms {
 
             let rotation = match self.rotation {
                 SphereSurfaceRotation::Identity => UnitQuaternion::identity(),
-                SphereSurfaceRotation::RadialOutwards => {
-                    rotation_between_axes(&UnitVector3::unit_y(), &jittered_direction)
-                }
-                SphereSurfaceRotation::RadialInwards => {
-                    rotation_between_axes(&(-UnitVector3::unit_y()), &jittered_direction)
-                }
+                SphereSurfaceRotation::RadialOutwards => UnitQuaternion::rotation_between_axes(
+                    &UnitVector3::unit_y(),
+                    &jittered_direction,
+                ),
+                SphereSurfaceRotation::RadialInwards => UnitQuaternion::rotation_between_axes(
+                    &(-UnitVector3::unit_y()),
+                    &jittered_direction,
+                ),
             };
 
             let transform = Similarity3::from_parts(translation, rotation, 1.0);
@@ -2570,7 +2572,10 @@ fn compute_rotation_to_gradient<A: Allocator>(
     let y_axis = UnitVector3::normalized_from_if_above(subject_y_axis_in_parent_space, 1e-8)?;
     let gradient_direction = UnitVector3::normalized_from_if_above(gradient_in_parent_space, 1e-8)?;
 
-    Some(rotation_between_axes(&y_axis, &gradient_direction))
+    Some(UnitQuaternion::rotation_between_axes(
+        &y_axis,
+        &gradient_direction,
+    ))
 }
 
 fn compute_spherecast_translation_to_surface<A: Allocator>(
@@ -2867,7 +2872,8 @@ fn unit_quaternion_from_tilt_turn_roll(
         sin_polar_angle * sin_azimuthal_angle,
     ));
 
-    let rotation_without_roll = rotation_between_axes(&UnitVector3::unit_y(), &direction);
+    let rotation_without_roll =
+        UnitQuaternion::rotation_between_axes(&UnitVector3::unit_y(), &direction);
 
     let roll_rotation = UnitQuaternion::from_axis_angle(&direction, roll_angle);
 

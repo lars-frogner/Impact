@@ -172,7 +172,7 @@ impl MotionController for SemiDirectionalMotionController {
     }
 
     fn compute_controlled_velocity(&self, orientation: &Orientation) -> Velocity {
-        let mut controlled_velocity = orientation.transform_vector(&self.local_velocity);
+        let mut controlled_velocity = orientation.rotate_vector(&self.local_velocity);
         if !self.vertical_control {
             *controlled_velocity.y_mut() = 0.0;
         }

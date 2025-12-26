@@ -498,7 +498,7 @@ fn construct_tangent_vectors(surface_normal: &UnitVector3) -> (UnitVector3, Unit
 
 fn pseudo_advance_orientation(orientation: &mut Orientation, pseudo_angular_velocity: &Vector3) {
     *orientation = UnitQuaternion::normalized_from(
-        orientation.to_quaternion()
+        orientation.as_quaternion()
             + quantities::compute_orientation_derivative(orientation, pseudo_angular_velocity),
     );
 }

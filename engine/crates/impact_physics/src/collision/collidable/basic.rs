@@ -1,7 +1,5 @@
 //! Basic implementation of [`Collidable`](collision::Collidable).
 
-use impact_math::transform::Isometry3;
-
 use crate::{
     collision::{
         self, CollidableDescriptor, CollidableOrder, CollidableWithId,
@@ -15,6 +13,7 @@ use crate::{
     },
     constraint::contact::ContactManifold,
 };
+use impact_math::transform::Isometry3;
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 

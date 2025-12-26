@@ -85,6 +85,13 @@ impl Similarity3 {
         Self::from_parts(Vector3::zeros(), UnitQuaternion::identity(), scaling)
     }
 
+    /// Creates the similarity transform corresponding to applying the given
+    /// translation before the scaling.
+    #[inline]
+    pub fn from_scaled_translation(translation: Vector3, scaling: f32) -> Self {
+        Self::from_parts(translation * scaling, UnitQuaternion::identity(), scaling)
+    }
+
     /// The translational part of the transform.
     #[inline]
     pub const fn translation(&self) -> &Vector3 {
@@ -1177,6 +1184,22 @@ mod tests {
         );
         assert_abs_diff_eq!(*sim.rotation(), *isometry.rotation(), epsilon = EPSILON);
         assert_abs_diff_eq!(sim.scaling(), 1.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn similarity3_from_scaled_translation_scales_translation() {
+        let translation = Vector3::new(1.0, 2.0, 3.0);
+        let scaling = 2.0;
+        let sim = Similarity3::from_scaled_translation(translation, scaling);
+
+        let expected_translation = translation * scaling;
+        assert_abs_diff_eq!(*sim.translation(), expected_translation, epsilon = EPSILON);
+        assert_abs_diff_eq!(
+            *sim.rotation(),
+            UnitQuaternion::identity(),
+            epsilon = EPSILON
+        );
+        assert_abs_diff_eq!(sim.scaling(), scaling, epsilon = EPSILON);
     }
 
     #[test]

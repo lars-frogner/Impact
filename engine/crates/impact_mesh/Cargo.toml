@@ -10,7 +10,7 @@ ecs = ["dep:inventory", "dep:impact_ecs"]
 obj = ["dep:tobj"]
 ply = ["dep:ply-rs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
-serde = ["dep:serde", "nalgebra/serde-serialize"]
+serde = ["dep:serde", "impact_math/serde"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -26,7 +26,6 @@ impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_resource = { path = "../impact_resource" }
 inventory = { workspace = true, optional = true }
-nalgebra = { workspace = true }
 pastey = { workspace = true }
 ply-rs = { version = "0.1", optional = true }
 roc_integration = { path = "../../../roc_integration" }

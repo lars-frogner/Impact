@@ -395,6 +395,24 @@ impl Vector3 {
         Vector4::new(self.x(), self.y(), self.z(), w)
     }
 
+    /// Computes the normalized version of the vector.
+    #[inline]
+    pub fn normalized(&self) -> Self {
+        self / self.norm()
+    }
+
+    /// Computes the norm (length) of the vector.
+    #[inline]
+    pub fn norm(&self) -> f32 {
+        self.norm_squared().sqrt()
+    }
+
+    /// Computes the square of the norm of the vector.
+    #[inline]
+    pub fn norm_squared(&self) -> f32 {
+        self.dot(self)
+    }
+
     /// Computes the dot product of this vector with another.
     #[inline]
     pub fn dot(&self, other: &Self) -> f32 {
@@ -809,6 +827,44 @@ impl UnitVector3 {
     #[inline]
     pub const fn neg_unit_z() -> Self {
         Self::new_unchecked(0.0, 0.0, -1.0)
+    }
+
+    /// Creates a unit vector by normalizing the given vector. If the vector has
+    /// zero length, the result will be non-finite.
+    #[inline]
+    pub fn normalized_from(vector: Vector3) -> Self {
+        Self::unchecked_from(vector.normalized())
+    }
+
+    /// Creates a unit vector by normalizing the given vector if its norm
+    /// exceeds the given threshold. Otherwise, returns [`None`].
+    #[inline]
+    pub fn normalized_from_if_above(vector: Vector3, min_norm: f32) -> Option<Self> {
+        Self::normalized_from_and_norm_if_above(vector, min_norm).map(|(v, _norm)| v)
+    }
+
+    /// Creates a unit vector by normalizing the given vector, and returns both
+    /// the vector and the norm. If the norm is zero, the vector will be
+    /// non-finite.
+    #[inline]
+    pub fn normalized_from_and_norm(vector: Vector3) -> (Self, f32) {
+        let norm = vector.norm();
+        (Self::unchecked_from(vector / norm), norm)
+    }
+
+    /// Creates a unit vector by normalizing the given vector if its norm
+    /// exceeds the given threshold, and returns both the vector and the norm.
+    /// Returns [`None`] if the norm does not exceed the threshold.
+    #[inline]
+    pub fn normalized_from_and_norm_if_above(
+        vector: Vector3,
+        min_norm: f32,
+    ) -> Option<(Self, f32)> {
+        let norm_squared = vector.norm_squared();
+        (norm_squared > min_norm.powi(2)).then(|| {
+            let norm = norm_squared.sqrt();
+            (Self::unchecked_from(vector / norm), norm)
+        })
     }
 
     /// The x-component.
@@ -2405,6 +2461,21 @@ mod tests {
         assert_eq!(unit.x(), 1.0);
         assert_eq!(unit.y(), 0.0);
         assert_eq!(unit.z(), 0.0);
+    }
+
+    #[test]
+    fn unitvector3_normalized_from_works() {
+        let v = Vector3::new(3.0, 4.0, 0.0);
+        let unit = UnitVector3::normalized_from(v);
+
+        // Should normalize to unit length
+        let norm = (unit.x() * unit.x() + unit.y() * unit.y() + unit.z() * unit.z()).sqrt();
+        assert_abs_diff_eq!(norm, 1.0, epsilon = EPSILON);
+
+        // Should maintain direction (parallel to original)
+        assert_abs_diff_eq!(unit.x(), 3.0 / 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(unit.y(), 4.0 / 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(unit.z(), 0.0, epsilon = EPSILON);
     }
 
     #[test]

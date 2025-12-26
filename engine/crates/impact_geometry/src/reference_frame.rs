@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{
     point::{Point3, Point3A},
     quaternion::{UnitQuaternion, UnitQuaternionA},
-    transform::Isometry3A,
+    transform::{Isometry3, Isometry3A},
 };
 use roc_integration::roc;
 
@@ -69,6 +69,13 @@ impl ReferenceFrame {
         Self::new(Point3::origin(), orientation)
     }
 
+    /// Creates the [`Isometry3`] transform from the entity's reference frame
+    /// to the parent space.
+    #[inline]
+    pub fn create_transform_to_parent_space(&self) -> Isometry3 {
+        Isometry3::from_parts(*self.position.as_vector(), self.orientation)
+    }
+
     /// Converts the reference frame to the 16-byte aligned SIMD-friendly
     /// [`ReferenceFrameA`].
     #[inline]
@@ -111,7 +118,7 @@ impl ReferenceFrameA {
         Self::new(Point3A::origin(), orientation)
     }
 
-    /// Creates the [`Isometry3`] transform from the entity's reference frame
+    /// Creates the [`Isometry3A`] transform from the entity's reference frame
     /// to the parent space.
     #[inline]
     pub fn create_transform_to_parent_space(&self) -> Isometry3A {

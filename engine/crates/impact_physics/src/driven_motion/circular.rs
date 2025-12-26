@@ -144,7 +144,7 @@ impl CircularTrajectory {
             Self::compute_circular_displacement(self.radius, cos_angle, sin_angle);
 
         let world_space_circular_displacement =
-            self.orientation.transform_point(&circular_displacement);
+            self.orientation.rotate_point(&circular_displacement);
 
         let world_space_circular_position =
             self.center_position + world_space_circular_displacement.as_vector();
@@ -154,7 +154,7 @@ impl CircularTrajectory {
         let circular_velocity =
             Self::compute_circular_velocity(cos_angle, sin_angle, tangential_speed);
 
-        let world_space_circular_velocity = self.orientation.transform_vector(&circular_velocity);
+        let world_space_circular_velocity = self.orientation.rotate_vector(&circular_velocity);
 
         (world_space_circular_position, world_space_circular_velocity)
     }

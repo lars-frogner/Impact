@@ -1512,9 +1512,9 @@ impl MultifractalNoiseSDFModifier {
         let origin_in_node_space =
             transform_to_node_space.transform_point(block_origin_in_root_space);
 
-        let dx = transform_to_node_space.column1().xyz();
-        let dy = transform_to_node_space.column2().xyz();
-        let dz = transform_to_node_space.column3().xyz();
+        let dx = transform_to_node_space.column_1().xyz();
+        let dy = transform_to_node_space.column_2().xyz();
+        let dz = transform_to_node_space.column_3().xyz();
 
         let inverse_scale = dx.norm();
         let scale = inverse_scale.recip();
@@ -1602,9 +1602,9 @@ impl MultifractalNoiseSDFModifier {
         let origin_in_node_space =
             transform_to_node_space.transform_point(block_origin_in_root_space);
 
-        let dx = transform_to_node_space.column1().xyz();
-        let dy = transform_to_node_space.column2().xyz();
-        let dz = transform_to_node_space.column3().xyz();
+        let dx = transform_to_node_space.column_1().xyz();
+        let dy = transform_to_node_space.column_2().xyz();
+        let dz = transform_to_node_space.column_3().xyz();
 
         let inverse_scale = dx.norm();
         let scale = inverse_scale.recip();
@@ -1755,7 +1755,7 @@ impl MultiscaleSphereSDFModifier {
                 self.union_smoothness.scaled(scale),
             );
 
-            position = ROTATION.transform_point(&(position / self.persistence));
+            position = ROTATION.rotate_point(&(position / self.persistence));
 
             scale *= self.persistence;
         }
@@ -1891,9 +1891,9 @@ pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
     assert_eq!(COUNT, SIZE.pow(3));
 
     let origin = transform_to_node_space.transform_point(block_origin_in_root_space);
-    let dx = transform_to_node_space.column1().xyz();
-    let dy = transform_to_node_space.column2().xyz();
-    let dz = transform_to_node_space.column3().xyz();
+    let dx = transform_to_node_space.column_1().xyz();
+    let dy = transform_to_node_space.column_2().xyz();
+    let dz = transform_to_node_space.column_3().xyz();
 
     let mut idx = 0;
     for i in 0..SIZE {
@@ -1919,9 +1919,9 @@ fn all_block_test_positions_pass_predicate<const SIZE: usize, const COUNT: usize
     assert_eq!(COUNT, SIZE.pow(3));
 
     let lower = transform_to_node_space.transform_point(block_origin_in_root_space);
-    let dx = transform_to_node_space.column1().xyz();
-    let dy = transform_to_node_space.column2().xyz();
-    let dz = transform_to_node_space.column3().xyz();
+    let dx = transform_to_node_space.column_1().xyz();
+    let dy = transform_to_node_space.column_2().xyz();
+    let dz = transform_to_node_space.column_3().xyz();
 
     for (idx, point) in all_block_test_positions_with_indices::<SIZE, COUNT>(&lower, &dx, &dy, &dz)
     {

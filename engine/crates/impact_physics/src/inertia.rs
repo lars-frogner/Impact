@@ -274,7 +274,7 @@ impl RelativeEq for InertialProperties {
 impl InertiaTensor {
     /// Creates a new inertia tensor corresponding to the given matrix.
     pub fn from_matrix(matrix: Matrix3) -> Self {
-        let inverse_matrix = matrix.inverted().expect("Could not invert inertia tensor");
+        let inverse_matrix = matrix.inverted();
 
         Self::from_matrix_and_inverse(matrix, inverse_matrix)
     }
@@ -834,12 +834,12 @@ mod tests {
             let rotated_inertia_tensor = cube_properties.inertia_tensor().rotated(&rotation);
             prop_assert!(abs_diff_eq!(
                 rotated_inertia_tensor.inverse_matrix(),
-                &rotated_inertia_tensor.matrix().inverted().unwrap(),
+                &rotated_inertia_tensor.matrix().inverted(),
                 epsilon = 1e-5
             ));
             prop_assert!(abs_diff_eq!(
                 cube_properties.inertia_tensor().inverse_rotated_matrix(&rotation),
-                rotated_inertia_tensor.matrix().inverted().unwrap(),
+                rotated_inertia_tensor.matrix().inverted(),
                 epsilon = 1e-5
             ));
         }

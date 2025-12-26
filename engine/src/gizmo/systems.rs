@@ -17,7 +17,7 @@ use crate::gizmo::{
 };
 use approx::abs_diff_ne;
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_geometry::{ReferenceFrame, rotation_between_axes};
+use impact_geometry::ReferenceFrame;
 use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
@@ -841,7 +841,8 @@ fn buffer_transforms_for_collider_gizmos(
             // displacement) and scaling the mesh to reach the camera's far
             // distance
             let translation = plane.project_point_onto_plane(camera_position);
-            let rotation = rotation_between_axes(&UnitVector3::unit_z(), plane.unit_normal());
+            let rotation =
+                UnitQuaternion::rotation_between_axes(&UnitVector3::unit_z(), plane.unit_normal());
             let scaling = scene_camera.camera().view_frustum().far_distance();
 
             let unit_square_to_plane_collider_transform =

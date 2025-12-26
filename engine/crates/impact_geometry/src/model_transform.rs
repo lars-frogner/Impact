@@ -4,7 +4,7 @@ use crate::reference_frame::ReferenceFrameA;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     point::Point3A,
-    transform::Similarity3A,
+    transform::{Similarity3, Similarity3A},
     vector::{Vector3, Vector3A},
 };
 use roc_integration::roc;
@@ -80,6 +80,13 @@ impl ModelTransform {
         Self { offset, scale }
     }
 
+    /// Creates the [`Similarity3`] for the transform from model space to the
+    /// space of the parent entity.
+    #[inline]
+    pub fn crate_transform_to_entity_space(&self) -> Similarity3 {
+        Similarity3::from_scaled_translation(-self.offset, self.scale)
+    }
+
     /// Converts the transform to the 16-byte aligned SIMD-friendly
     /// [`ModelTransformA`].
     #[inline]
@@ -124,7 +131,7 @@ impl ModelTransformA {
         Self { offset, scale }
     }
 
-    /// Creates the [`Similarity3`] for the transform from model space to the
+    /// Creates the [`Similarity3A`] for the transform from model space to the
     /// space of the parent entity.
     #[inline]
     pub fn crate_transform_to_entity_space(&self) -> Similarity3A {

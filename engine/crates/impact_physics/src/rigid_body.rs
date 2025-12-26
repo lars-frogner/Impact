@@ -708,7 +708,7 @@ pub fn transform_vector_from_body_to_world_space(
     body_orientation: &Orientation,
     vector: &Vector3,
 ) -> Vector3 {
-    body_orientation.transform_vector(vector)
+    body_orientation.rotate_vector(vector)
 }
 
 /// Transforms a vector from world space to the body-fixed frame.
@@ -716,7 +716,7 @@ pub fn transform_vector_from_world_to_body_space(
     body_orientation: &Orientation,
     vector: &Vector3,
 ) -> Vector3 {
-    body_orientation.inverse_transform_vector(vector)
+    body_orientation.inverse_rotate_vector(vector)
 }
 
 /// Transforms a point from the body-fixed frame to world space.
@@ -725,7 +725,7 @@ pub fn transform_point_from_body_to_world_space(
     body_orientation: &Orientation,
     point: &Point3,
 ) -> Point3 {
-    body_position + body_orientation.transform_point(point).as_vector()
+    body_position + body_orientation.rotate_point(point).as_vector()
 }
 
 /// Transforms a point from world space to the body-fixed frame.
@@ -734,7 +734,7 @@ pub fn transform_point_from_world_to_body_space(
     body_orientation: &Orientation,
     point: &Point3,
 ) -> Point3 {
-    body_orientation.inverse_transform_point(&Point3::from(point - body_position))
+    body_orientation.inverse_rotate_point(&Point3::from(point - body_position))
 }
 
 /// Computes the velocity of the given world space point on the body due to the
@@ -772,7 +772,7 @@ pub fn advance_orientation(
         sin_half_angle * angular_velocity.axis_of_rotation(),
     );
 
-    Orientation::normalized_from(rotation * orientation.to_quaternion())
+    Orientation::normalized_from(rotation * orientation.as_quaternion())
 }
 
 #[cfg(test)]
@@ -1006,8 +1006,8 @@ mod tests {
             epsilon = 1e-8,
         );
         assert_abs_diff_eq!(
-            advanced_orientation.axis().unwrap(),
-            orientation.axis().unwrap(),
+            advanced_orientation.axis(),
+            orientation.axis(),
             epsilon = 1e-8,
         );
     }

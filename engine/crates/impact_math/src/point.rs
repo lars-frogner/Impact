@@ -289,6 +289,41 @@ impl Point3 {
         bytemuck::cast_ref(self)
     }
 
+    /// Returns a point where each component is the minimum of the corresponding
+    /// components in this and another point.
+    #[inline]
+    pub fn min_with(&self, other: &Self) -> Self {
+        Self::new(
+            self.x.min(other.x),
+            self.y.min(other.y),
+            self.z.min(other.z),
+        )
+    }
+
+    /// Returns a point where each component is the maximum of the corresponding
+    /// components in this and another point.
+    #[inline]
+    pub fn max_with(&self, other: &Self) -> Self {
+        Self::new(
+            self.x.max(other.x),
+            self.y.max(other.y),
+            self.z.max(other.z),
+        )
+    }
+
+    /// Computes the distance between two points.
+    #[inline]
+    pub fn distance_between(point_a: &Self, point_b: &Self) -> f32 {
+        Self::squared_distance_between(point_a, point_b).sqrt()
+    }
+
+    /// Computes the square of the distance between two points.
+    #[inline]
+    pub fn squared_distance_between(point_a: &Self, point_b: &Self) -> f32 {
+        let diff = point_b - point_a;
+        diff.dot(&diff)
+    }
+
     /// Converts the point to the 16-byte aligned SIMD-friendly [`Point3A`].
     #[inline]
     pub fn aligned(&self) -> Point3A {
@@ -859,6 +894,34 @@ mod tests {
         assert_eq!(v.x(), 3.0);
         assert_eq!(v.y(), 4.0);
         assert_eq!(v.z(), 5.0);
+    }
+
+    #[test]
+    fn point3_min_max_with_work() {
+        let p1 = Point3::new(1.0, 4.0, 2.0);
+        let p2 = Point3::new(3.0, 2.0, 5.0);
+
+        let min_p = p1.min_with(&p2);
+        assert_eq!(min_p.x(), 1.0);
+        assert_eq!(min_p.y(), 2.0);
+        assert_eq!(min_p.z(), 2.0);
+
+        let max_p = p1.max_with(&p2);
+        assert_eq!(max_p.x(), 3.0);
+        assert_eq!(max_p.y(), 4.0);
+        assert_eq!(max_p.z(), 5.0);
+    }
+
+    #[test]
+    fn point3_distance_calculations_work() {
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(1.0, 2.0, 2.0);
+
+        let distance = Point3::distance_between(&p1, &p2);
+        assert_abs_diff_eq!(distance, 3.0, epsilon = EPSILON);
+
+        let squared_distance = Point3::squared_distance_between(&p1, &p2);
+        assert_abs_diff_eq!(squared_distance, 9.0, epsilon = EPSILON);
     }
 
     #[test]
