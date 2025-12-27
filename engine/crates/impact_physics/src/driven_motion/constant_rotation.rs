@@ -106,18 +106,18 @@ impl ConstantRotation {
     pub fn compute_orientation(&self, time: f32) -> Orientation {
         let time_offset = time - self.initial_time;
         advance_orientation(
-            &self.initial_orientation,
-            &self.angular_velocity,
+            &self.initial_orientation.aligned(),
+            &self.angular_velocity.aligned(),
             time_offset,
         )
+        .unaligned()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::AngularVelocity;
-    use crate::quantities::Direction;
+    use crate::quantities::{AngularVelocity, Direction, OrientationA};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use impact_math::{
         Float,
@@ -145,7 +145,7 @@ mod tests {
             rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
             rotation_yaw in 0.0..f32::TWO_PI,
         ) -> Orientation {
-            Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
+            OrientationA::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).unaligned()
         }
     }
 

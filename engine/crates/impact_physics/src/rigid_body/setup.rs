@@ -47,11 +47,11 @@ pub fn setup_dynamic_rigid_body(
 ) -> DynamicRigidBodyID {
     let rigid_body = DynamicRigidBody::new(
         inertial_properties.mass(),
-        *inertial_properties.inertia_tensor(),
-        frame.position,
-        frame.orientation,
-        motion.linear_velocity,
-        motion.angular_velocity,
+        inertial_properties.inertia_tensor().clone(),
+        frame.position.aligned(),
+        frame.orientation.aligned(),
+        motion.linear_velocity.aligned(),
+        motion.angular_velocity.aligned(),
     );
 
     rigid_body_manager.add_dynamic_rigid_body(rigid_body)

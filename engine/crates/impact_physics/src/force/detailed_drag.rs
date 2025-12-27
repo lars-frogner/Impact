@@ -6,6 +6,7 @@ mod equirectangular_map;
 pub mod setup;
 
 pub use drag_load::DragLoad;
+use impact_alloc::arena::ArenaPool;
 
 use crate::{
     force::ForceGeneratorRegistry,
@@ -200,7 +201,7 @@ impl DetailedDragForce {
     ) {
         let velocity = rigid_body.compute_velocity();
 
-        let velocity_relative_to_medium = velocity - medium.velocity;
+        let velocity_relative_to_medium = velocity - medium.velocity.aligned();
         let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
 
         if squared_body_speed_relative_to_medium > 0.0 {
@@ -208,7 +209,7 @@ impl DetailedDragForce {
                 rigid_body.transform_vector_from_world_to_body_space(&velocity_relative_to_medium);
 
             let body_space_direction_of_motion_relative_to_medium = Direction::unchecked_from(
-                body_space_velocity_relative_to_medium
+                body_space_velocity_relative_to_medium.unaligned()
                     / f32::sqrt(squared_body_speed_relative_to_medium),
             );
 
@@ -223,7 +224,7 @@ impl DetailedDragForce {
                 self.scaling,
                 medium.mass_density,
                 self.drag_coefficient,
-                rigid_body.orientation(),
+                &rigid_body.orientation().aligned(),
                 squared_body_speed_relative_to_medium,
             );
 
@@ -369,10 +370,13 @@ impl DragLoadMap {
         let angular_interpolation_distance =
             compute_angular_interpolation_distance_from_smoothness(smoothness, n_direction_samples);
 
+        let arena = ArenaPool::get_arena();
+
         let drag_loads =
             drag_load::compute_aggregate_drag_loads_for_uniformly_distributed_directions(
+                &arena,
                 triangle_vertex_positions,
-                center_of_mass,
+                &center_of_mass.aligned(),
                 n_direction_samples,
             );
 

@@ -107,7 +107,8 @@ impl Motion {
         linear_velocity,
         angular_velocity,
     }"#)]
-    pub fn new(linear_velocity: Velocity, angular_velocity: AngularVelocity) -> Self {
+    #[inline]
+    pub const fn new(linear_velocity: Velocity, angular_velocity: AngularVelocity) -> Self {
         Self {
             linear_velocity,
             angular_velocity,
@@ -116,19 +117,22 @@ impl Motion {
 
     /// Motion with the given linear velocity and zero angular velocity.
     #[roc(body = "new(velocity, Physics.AngularVelocity.zero({}))")]
-    pub fn linear(velocity: Velocity) -> Self {
+    #[inline]
+    pub const fn linear(velocity: Velocity) -> Self {
         Self::new(velocity, AngularVelocity::zero())
     }
 
     /// Motion with with the given angular velocity and zero linear velocity.
     #[roc(body = "new(Vector3.zero, velocity)")]
-    pub fn angular(velocity: AngularVelocity) -> Self {
+    #[inline]
+    pub const fn angular(velocity: AngularVelocity) -> Self {
         Self::new(Velocity::zeros(), velocity)
     }
 
     /// No linear or angular motion.
     #[roc(body = "linear(Vector3.zero)")]
-    pub fn stationary() -> Self {
+    #[inline]
+    pub const fn stationary() -> Self {
         Self::linear(Velocity::zeros())
     }
 }
@@ -138,7 +142,8 @@ impl AngularVelocity {
     /// Creates a new [`AngularVelocity`] with the given axis of rotation and
     /// angular speed.
     #[roc(body = "{ axis_of_rotation, angular_speed }")]
-    pub fn new(axis_of_rotation: Direction, angular_speed: Radians<f32>) -> Self {
+    #[inline]
+    pub const fn new(axis_of_rotation: Direction, angular_speed: Radians<f32>) -> Self {
         Self {
             axis_of_rotation,
             angular_speed,
@@ -152,6 +157,7 @@ impl AngularVelocity {
         Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
         None -> zero({})
     "#)]
+    #[inline]
     pub fn from_vector(angular_velocity_vector: Vector3) -> Self {
         if let Some((axis_of_rotation, angular_speed)) =
             UnitVector3::normalized_from_and_norm_if_above(angular_velocity_vector, f32::EPSILON)
@@ -165,6 +171,7 @@ impl AngularVelocity {
     /// Creates the [`AngularVelocity`] that would change the given first
     /// orientation to the given second orientation if applied for the given
     /// duration.
+    #[inline]
     pub fn from_consecutive_orientations(
         first_orientation: &Orientation,
         second_orientation: &Orientation,
@@ -177,7 +184,8 @@ impl AngularVelocity {
 
     /// Creates a new [`AngularVelocity`] with zero angular speed.
     #[roc(body = "{ axis_of_rotation: UnitVector3.y_axis, angular_speed: 0.0 }")]
-    pub fn zero() -> Self {
+    #[inline]
+    pub const fn zero() -> Self {
         Self {
             axis_of_rotation: UnitVector3::unit_y(),
             angular_speed: Radians(0.0),
@@ -185,22 +193,33 @@ impl AngularVelocity {
     }
 
     /// Returns the axis of rotation.
-    pub fn axis_of_rotation(&self) -> &Direction {
+    #[inline]
+    pub const fn axis_of_rotation(&self) -> &Direction {
         &self.axis_of_rotation
     }
 
     /// Returns the angular speed.
-    pub fn angular_speed(&self) -> Radians<f32> {
+    #[inline]
+    pub const fn angular_speed(&self) -> Radians<f32> {
         self.angular_speed
     }
 
     /// Computes the corresponding angular velocity vector.
+    #[inline]
     pub fn as_vector(&self) -> Vector3 {
         self.angular_speed.radians() * self.axis_of_rotation
+    }
+
+    /// Converts the vector to the 16-byte aligned SIMD-friendly
+    /// [`AngularVelocityA`].
+    #[inline]
+    pub fn aligned(&self) -> AngularVelocityA {
+        AngularVelocityA::new(self.axis_of_rotation.aligned(), self.angular_speed)
     }
 }
 
 impl Default for AngularVelocity {
+    #[inline]
     fn default() -> Self {
         Self::zero()
     }
@@ -222,7 +241,8 @@ impl AbsDiffEq for AngularVelocity {
 impl AngularVelocityA {
     /// Creates a new [`AngularVelocityA`] with the given axis of rotation and
     /// angular speed.
-    pub fn new(axis_of_rotation: DirectionA, angular_speed: Radians<f32>) -> Self {
+    #[inline]
+    pub const fn new(axis_of_rotation: DirectionA, angular_speed: Radians<f32>) -> Self {
         Self {
             axis_of_rotation,
             angular_speed,
@@ -231,6 +251,7 @@ impl AngularVelocityA {
 
     /// Creates a new [`AngularVelocityA`] from the given angular velocity
     /// vector.
+    #[inline]
     pub fn from_vector(angular_velocity_vector: Vector3A) -> Self {
         if let Some((axis_of_rotation, angular_speed)) =
             UnitVector3A::normalized_from_and_norm_if_above(angular_velocity_vector, f32::EPSILON)
@@ -244,6 +265,7 @@ impl AngularVelocityA {
     /// Creates the [`AngularVelocityA`] that would change the given first
     /// orientation to the given second orientation if applied for the given
     /// duration.
+    #[inline]
     pub fn from_consecutive_orientations(
         first_orientation: &OrientationA,
         second_orientation: &OrientationA,
@@ -255,7 +277,8 @@ impl AngularVelocityA {
     }
 
     /// Creates a new [`AngularVelocityA`] with zero angular speed.
-    pub fn zero() -> Self {
+    #[inline]
+    pub const fn zero() -> Self {
         Self {
             axis_of_rotation: UnitVector3A::unit_y(),
             angular_speed: Radians(0.0),
@@ -263,18 +286,28 @@ impl AngularVelocityA {
     }
 
     /// Returns the axis of rotation.
-    pub fn axis_of_rotation(&self) -> &DirectionA {
+    #[inline]
+    pub const fn axis_of_rotation(&self) -> &DirectionA {
         &self.axis_of_rotation
     }
 
     /// Returns the angular speed.
-    pub fn angular_speed(&self) -> Radians<f32> {
+    #[inline]
+    pub const fn angular_speed(&self) -> Radians<f32> {
         self.angular_speed
     }
 
     /// Computes the corresponding angular velocity vector.
+    #[inline]
     pub fn as_vector(&self) -> Vector3A {
         self.angular_speed.radians() * self.axis_of_rotation
+    }
+
+    /// Converts the tensor to the 4-byte aligned cache-friendly
+    /// [`AngularVelocity`].
+    #[inline]
+    pub fn unaligned(&self) -> AngularVelocity {
+        AngularVelocity::new(self.axis_of_rotation.unaligned(), self.angular_speed)
     }
 }
 
@@ -327,6 +360,7 @@ impl AbsDiffEq for AngularVelocityA {
 
 /// Computes the quaternion representing the instantaneous time derivative of
 /// the given orientation for a body with the given angular velocity.
+#[inline]
 pub fn compute_orientation_derivative(
     orientation: &OrientationA,
     angular_velocity_vector: &Vector3A,
@@ -336,6 +370,7 @@ pub fn compute_orientation_derivative(
 }
 
 /// Computes the angular velocity of a body with the given properties.
+#[inline]
 pub fn compute_angular_velocity(
     inertia_tensor: &InertiaTensorA,
     orientation: &OrientationA,
@@ -346,6 +381,7 @@ pub fn compute_angular_velocity(
 }
 
 /// Computes the angular momentum of a body with the given properties.
+#[inline]
 pub fn compute_angular_momentum(
     inertia_tensor: &InertiaTensorA,
     orientation: &OrientationA,
@@ -356,6 +392,7 @@ pub fn compute_angular_momentum(
 
 /// Computes the angular acceleration of a body with the given properties
 /// when the body experiences the given torque around its center of mass.
+#[inline]
 pub fn compute_angular_acceleration(
     inertia_tensor: &InertiaTensorA,
     orientation: &OrientationA,
@@ -366,6 +403,7 @@ pub fn compute_angular_acceleration(
 
 /// Computes the total kinetic energy (translational and rotational) of a
 /// body with the given properties.
+#[inline]
 pub fn compute_total_kinetic_energy(
     mass: f32,
     inertia_tensor: &InertiaTensorA,
@@ -379,11 +417,13 @@ pub fn compute_total_kinetic_energy(
 
 /// Computes the translational kinetic energy of a body with the given
 /// properties.
+#[inline]
 pub fn compute_translational_kinetic_energy(mass: f32, velocity: &VelocityA) -> f32 {
     0.5 * mass * velocity.norm_squared()
 }
 
 /// Computes the rotational kinetic energy of a body with the given properties.
+#[inline]
 pub fn compute_rotational_kinetic_energy(
     inertia_tensor: &InertiaTensorA,
     orientation: &OrientationA,

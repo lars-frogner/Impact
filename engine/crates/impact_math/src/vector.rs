@@ -1,6 +1,7 @@
 //! Vectors.
 
 use bytemuck::{Pod, Zeroable};
+use glam::Vec3Swizzles;
 use roc_integration::impl_roc_for_library_provided_primitives;
 use std::ops::{Deref, Index, IndexMut, Mul, MulAssign};
 
@@ -602,6 +603,20 @@ impl Vector3A {
     #[inline]
     pub fn xy(&self) -> Vector2 {
         Vector2::new(self.x(), self.y())
+    }
+
+    /// Creates a vector where the x-, y- and z-components are the y-, z- and
+    /// x-component of this vector.
+    #[inline]
+    pub fn yzx(&self) -> Self {
+        Self::wrap(self.inner.yzx())
+    }
+
+    /// Creates a vector where the x-, y- and z-components are the z-, x- and
+    /// y-component of this vector.
+    #[inline]
+    pub fn zxy(&self) -> Self {
+        Self::wrap(self.inner.zxy())
     }
 
     /// Converts the vector to 4D by appending the given w-component.

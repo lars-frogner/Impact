@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0190f2bc8c4de3748b54eab4cd85026fe2638e6bd1ae50d39c6e7ccc2fdbd560 # shrinks to extent_x = 0.01, extent_y = 0.01, extent_z = 0.01, mass_density = 0.01, transform = Similarity3A { rotation: UnitQuaternionA { inner: Quat(0.0, -0.0, 0.0, 1.0) }, translation: Vector3A { inner: Vec3A(0.0, 0.0, -56.138405) }, scaling: 0.01 }
+cc 86e1403592e97d71cfdff0dfc362a04e7691bd99612b7b7e53fdce9bd945849f # shrinks to rotation = UnitQuaternionA { inner: Quat(-0.6926407, -0.09582914, -0.7091155, -0.09066984) }
+cc 730a64495b126248d27d42bd1a7cf379675fc3da146f7140a5a25915bbe3a003 # shrinks to extent_x = 0.01, extent_y = 0.01, extent_z = 53.540726, mass_density = 0.1, transform = Similarity3A { rotation: UnitQuaternionA { inner: Quat(0.35785368, -0.25042072, 0.10024276, -0.8939696) }, translation: Vector3A { inner: Vec3A(0.0, 0.0, -76.81024) }, scaling: 0.01 }

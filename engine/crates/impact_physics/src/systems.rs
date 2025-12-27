@@ -22,8 +22,8 @@ pub fn synchronize_rigid_body_components(
             };
             frame.position = *rigid_body.position();
             frame.orientation = *rigid_body.orientation();
-            motion.linear_velocity = rigid_body.compute_velocity();
-            motion.angular_velocity = rigid_body.compute_angular_velocity();
+            motion.linear_velocity = rigid_body.compute_velocity().unaligned();
+            motion.angular_velocity = rigid_body.compute_angular_velocity().unaligned();
         }
     );
 

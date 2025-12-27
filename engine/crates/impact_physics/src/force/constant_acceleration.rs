@@ -92,7 +92,7 @@ impl ConstantAcceleration {
 
     /// Applies the acceleration to the given dynamic rigid body.
     pub fn apply(&self, rigid_body: &mut DynamicRigidBody) {
-        let force = self.0 * rigid_body.mass();
+        let force = self.0.aligned() * rigid_body.mass();
         rigid_body.apply_force_at_center_of_mass(&force);
     }
 }

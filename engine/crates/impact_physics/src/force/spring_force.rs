@@ -8,7 +8,7 @@ use crate::{
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::vector::UnitVector3;
+use impact_math::vector::UnitVector3A;
 use roc_integration::roc;
 
 /// Manages all [`DynamicDynamicSpringForceGenerator`]s.
@@ -149,11 +149,11 @@ impl DynamicDynamicSpringForceGenerator {
         };
 
         let attachment_point_1 =
-            rigid_body_1.transform_point_from_body_to_world_space(&anchor_1.point);
+            rigid_body_1.transform_point_from_body_to_world_space(&anchor_1.point.aligned());
         let attachment_point_2 =
-            rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
+            rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point.aligned());
 
-        let Some((spring_direction, length)) = UnitVector3::normalized_from_and_norm_if_above(
+        let Some((spring_direction, length)) = UnitVector3A::normalized_from_and_norm_if_above(
             attachment_point_2 - attachment_point_1,
             f32::EPSILON,
         ) else {
@@ -200,11 +200,11 @@ impl DynamicKinematicSpringForceGenerator {
         };
 
         let attachment_point_1 =
-            rigid_body_1.transform_point_from_body_to_world_space(&anchor_1.point);
+            rigid_body_1.transform_point_from_body_to_world_space(&anchor_1.point.aligned());
         let attachment_point_2 =
-            rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point);
+            rigid_body_2.transform_point_from_body_to_world_space(&anchor_2.point.aligned());
 
-        let Some((spring_direction, length)) = UnitVector3::normalized_from_and_norm_if_above(
+        let Some((spring_direction, length)) = UnitVector3A::normalized_from_and_norm_if_above(
             attachment_point_2 - attachment_point_1,
             f32::EPSILON,
         ) else {

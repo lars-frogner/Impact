@@ -3,11 +3,11 @@
 use super::{ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint};
 use crate::{
     material::ContactResponseParameters,
-    quantities::{self, Orientation, Position, Velocity},
+    quantities::{self, OrientationA, Position, PositionA, VelocityA},
 };
 use impact_math::{
-    quaternion::UnitQuaternion,
-    vector::{UnitVector3, Vector3},
+    quaternion::UnitQuaternionA,
+    vector::{UnitVector3, UnitVector3A, Vector3A},
 };
 use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
@@ -47,9 +47,9 @@ pub struct ContactID(u64);
 pub struct ContactGeometry {
     /// The world space position of the point on body B that penetrates
     /// deepest into body A.
-    pub position: Position,
+    pub position: PositionA,
     /// The world space surface normal of body B at [`Self::position`].
-    pub surface_normal: UnitVector3,
+    pub surface_normal: UnitVector3A,
     /// The distance between the deepest penetration points on A and B
     /// along [`Self::surface_normal`]. This is always non-negative when the
     /// bodies are in contact.
@@ -151,13 +151,13 @@ impl ContactGeometry {
     /// Returns world space position of the point on body A that penetrates
     /// deepest into body B along the surface normal from
     /// [`Self::position_on_b`].
-    pub fn position_on_a(&self) -> Position {
+    pub fn position_on_a(&self) -> PositionA {
         self.position - self.penetration_depth * self.surface_normal
     }
 
     /// Returns world space position of the point on body B that penetrates
     /// deepest into body A.
-    pub fn position_on_b(&self) -> Position {
+    pub fn position_on_b(&self) -> PositionA {
         self.position
     }
 }
@@ -165,8 +165,8 @@ impl ContactGeometry {
 impl Default for ContactGeometry {
     fn default() -> Self {
         Self {
-            position: Position::origin(),
-            surface_normal: UnitVector3::unit_z(),
+            position: PositionA::origin(),
+            surface_normal: UnitVector3A::unit_z(),
             penetration_depth: 0.0,
         }
     }
@@ -183,8 +183,8 @@ impl TwoBodyConstraint for Contact {
 
         // World space displacements from the center of mass of each body to
         // the reference contact point (taken to be on body B)
-        let disp_a = self.geometry.position - body_a.position;
-        let disp_b = self.geometry.position - body_b.position;
+        let disp_a = self.geometry.position - body_a.position.aligned();
+        let disp_b = self.geometry.position - body_b.position.aligned();
 
         let normal = self.geometry.surface_normal;
         let (tangent_1, tangent_2) = construct_tangent_vectors(&normal);
@@ -223,11 +223,11 @@ impl TwoBodyConstraint for Contact {
         };
 
         PreparedContact {
-            local_position_on_a,
-            local_position_on_b,
-            normal,
-            tangent: tangent_1,
-            bitangent: tangent_2,
+            local_position_on_a: local_position_on_a.unaligned(),
+            local_position_on_b: local_position_on_b.unaligned(),
+            normal: normal.unaligned(),
+            tangent: tangent_1.unaligned(),
+            bitangent: tangent_2.unaligned(),
             effective_mass_normal,
             effective_mass_tangent: effective_mass_tangent_1,
             effective_mass_bitangent: effective_mass_tangent_2,
@@ -259,12 +259,12 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b: &ConstrainedBody,
     ) -> ContactImpulses {
         let position_on_b =
-            body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b);
+            body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b.aligned());
 
         // These could have been cached from `ContactGeometry::prepare`, but
         // probably not worth the extra space as they are cheap to recompute
-        let disp_a = position_on_b - body_a.position;
-        let disp_b = position_on_b - body_b.position;
+        let disp_a = position_on_b - body_a.position.aligned();
+        let disp_b = position_on_b - body_b.position.aligned();
 
         // At this point, the body velocities have been advanced based on
         // non-constraint forces and may also have been updated with
@@ -272,7 +272,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let velocity_a = compute_point_velocity(body_a, &disp_a);
         let velocity_b = compute_point_velocity(body_b, &disp_b);
 
-        let relative_velocity = velocity_a - velocity_b;
+        let relative_velocity = (velocity_a - velocity_b).unaligned();
 
         let separating_velocity = self.normal.dot(&relative_velocity);
 
@@ -325,22 +325,30 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b: &mut ConstrainedBody,
         impulses: ContactImpulses,
     ) {
-        let momentum_change = impulses.normal * self.normal
-            + impulses.tangent * self.tangent
-            + impulses.bitangent * self.bitangent;
+        let momentum_change = impulses.normal * self.normal.aligned()
+            + impulses.tangent * self.tangent.aligned()
+            + impulses.bitangent * self.bitangent.aligned();
 
         // TODO: maybe this should be cached from `compute_impulses`
         let position_on_b =
-            body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b);
+            body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b.aligned());
 
-        let disp_a = position_on_b - body_a.position;
-        let disp_b = position_on_b - body_b.position;
+        let disp_a = position_on_b - body_a.position.aligned();
+        let disp_b = position_on_b - body_b.position.aligned();
 
-        body_a.velocity += body_a.inverse_mass * momentum_change;
-        body_a.angular_velocity += body_a.inverse_inertia_tensor * disp_a.cross(&momentum_change);
+        body_a.velocity =
+            (body_a.velocity.aligned() + body_a.inverse_mass * momentum_change).unaligned();
 
-        body_b.velocity -= body_b.inverse_mass * momentum_change;
-        body_b.angular_velocity -= body_b.inverse_inertia_tensor * disp_b.cross(&momentum_change);
+        body_a.angular_velocity = (body_a.angular_velocity.aligned()
+            + body_a.inverse_inertia_tensor.aligned() * disp_a.cross(&momentum_change))
+        .unaligned();
+
+        body_b.velocity =
+            (body_b.velocity.aligned() - body_b.inverse_mass * momentum_change).unaligned();
+
+        body_b.angular_velocity = (body_b.angular_velocity.aligned()
+            - body_b.inverse_inertia_tensor.aligned() * disp_b.cross(&momentum_change))
+        .unaligned();
     }
 
     fn apply_positional_correction_to_body_pair(
@@ -359,22 +367,24 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         // estimate the current penetration depth. TODO: it's probably more
         // accurate to fix the normal in body B space instead of world space.
 
-        let position_on_a =
-            body_a.transform_point_from_body_to_world_frame(&self.local_position_on_a);
-        let position_on_b =
-            body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b);
+        let normal = self.normal.aligned();
 
-        let penetration_depth = self.normal.dot(&(position_on_b - position_on_a));
+        let position_on_a =
+            body_a.transform_point_from_body_to_world_frame(&self.local_position_on_a.aligned());
+        let position_on_b =
+            body_b.transform_point_from_body_to_world_frame(&self.local_position_on_b.aligned());
+
+        let penetration_depth = normal.dot(&(position_on_b - position_on_a));
 
         // We don't want to touch the bodies if they are no longer penetrating
         if penetration_depth <= 0.0 {
             return;
         }
 
-        let disp_a = position_on_b - body_a.position;
-        let disp_b = position_on_b - body_b.position;
+        let disp_a = position_on_b - body_a.position.aligned();
+        let disp_b = position_on_b - body_b.position.aligned();
 
-        let effective_mass = compute_effective_mass(body_a, body_b, &disp_a, &disp_b, &self.normal);
+        let effective_mass = compute_effective_mass(body_a, body_b, &disp_a, &disp_b, &normal);
 
         // We are trying to compute the impulse that would yield a change in
         // linear and angular velocity that over one time step would move the
@@ -387,21 +397,25 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let pseudo_impulse = effective_mass * correction_factor * penetration_depth;
 
-        let pseudo_momentum_change = pseudo_impulse * self.normal;
+        let pseudo_momentum_change = pseudo_impulse * normal;
 
         let pseudo_velocity_a = body_a.inverse_mass * pseudo_momentum_change;
         let pseudo_angular_velocity_a =
-            body_a.inverse_inertia_tensor * disp_a.cross(&pseudo_momentum_change);
+            body_a.inverse_inertia_tensor.aligned() * disp_a.cross(&pseudo_momentum_change);
 
         let pseudo_velocity_b = -body_b.inverse_mass * pseudo_momentum_change;
         let pseudo_angular_velocity_b =
-            body_b.inverse_inertia_tensor.negated() * disp_b.cross(&pseudo_momentum_change);
+            -body_b.inverse_inertia_tensor.aligned() * disp_b.cross(&pseudo_momentum_change);
 
-        body_a.position += pseudo_velocity_a;
-        pseudo_advance_orientation(&mut body_a.orientation, &pseudo_angular_velocity_a);
+        body_a.position = (body_a.position.aligned() + pseudo_velocity_a).unaligned();
+        body_a.orientation =
+            pseudo_advanced_orientation(&body_a.orientation.aligned(), &pseudo_angular_velocity_a)
+                .unaligned();
 
-        body_b.position += pseudo_velocity_b;
-        pseudo_advance_orientation(&mut body_b.orientation, &pseudo_angular_velocity_b);
+        body_b.position = (body_b.position.aligned() + pseudo_velocity_b).unaligned();
+        body_b.orientation =
+            pseudo_advanced_orientation(&body_b.orientation.aligned(), &pseudo_angular_velocity_b)
+                .unaligned();
     }
 }
 
@@ -455,50 +469,53 @@ impl Mul<f32> for ContactImpulses {
     }
 }
 
-fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3) -> Velocity {
-    body.velocity + body.angular_velocity.cross(disp)
+fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3A) -> VelocityA {
+    body.velocity.aligned() + body.angular_velocity.aligned().cross(disp)
 }
 
 fn compute_effective_mass(
     body_a: &ConstrainedBody,
     body_b: &ConstrainedBody,
-    disp_a: &Vector3,
-    disp_b: &Vector3,
-    direction: &UnitVector3,
+    disp_a: &Vector3A,
+    disp_b: &Vector3A,
+    direction: &UnitVector3A,
 ) -> f32 {
     let disp_a_cross_dir = disp_a.cross(direction);
     let disp_b_cross_dir = disp_b.cross(direction);
 
     1.0 / (body_a.inverse_mass
         + body_b.inverse_mass
-        + disp_a_cross_dir.dot(&(body_a.inverse_inertia_tensor * disp_a_cross_dir))
-        + disp_b_cross_dir.dot(&(body_b.inverse_inertia_tensor * disp_b_cross_dir)))
+        + disp_a_cross_dir.dot(&(body_a.inverse_inertia_tensor.aligned() * disp_a_cross_dir))
+        + disp_b_cross_dir.dot(&(body_b.inverse_inertia_tensor.aligned() * disp_b_cross_dir)))
 }
 
-fn construct_tangent_vectors(surface_normal: &UnitVector3) -> (UnitVector3, UnitVector3) {
+fn construct_tangent_vectors(surface_normal: &UnitVector3A) -> (UnitVector3A, UnitVector3A) {
     const INV_SQRT_THREE: f32 = 0.57735;
 
-    let tangent_1 = UnitVector3::normalized_from(if surface_normal.x().abs() < INV_SQRT_THREE {
+    let tangent_1 = UnitVector3A::normalized_from(if surface_normal.x().abs() < INV_SQRT_THREE {
         // Since the normal is relatively close to lying in the yz-plane, we
         // project it onto the yz plane, rotate it 90 degrees within the plane
         // and use that as the (unnormalized) first tangent. This vector will
         // be sufficiently different from the normal to avoid numerical issues.
-        Vector3::new(0.0, surface_normal.z(), -surface_normal.y())
+        Vector3A::new(0.0, surface_normal.z(), -surface_normal.y())
     } else {
         // If the normal lies far from the yz-plane, projecting it onto the
         // yz-plane could lead to degeneracy, so we project it onto the xy-
         // plane instead to construct the first tangent.
-        Vector3::new(surface_normal.y(), -surface_normal.x(), 0.0)
+        Vector3A::new(surface_normal.y(), -surface_normal.x(), 0.0)
     });
 
-    let tangent_2 = UnitVector3::unchecked_from(surface_normal.cross(&tangent_1));
+    let tangent_2 = UnitVector3A::unchecked_from(surface_normal.cross(&tangent_1));
 
     (tangent_1, tangent_2)
 }
 
-fn pseudo_advance_orientation(orientation: &mut Orientation, pseudo_angular_velocity: &Vector3) {
-    *orientation = UnitQuaternion::normalized_from(
+fn pseudo_advanced_orientation(
+    orientation: &OrientationA,
+    pseudo_angular_velocity: &Vector3A,
+) -> OrientationA {
+    UnitQuaternionA::normalized_from(
         orientation.as_quaternion()
             + quantities::compute_orientation_derivative(orientation, pseudo_angular_velocity),
-    );
+    )
 }

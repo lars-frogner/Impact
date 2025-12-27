@@ -1,7 +1,7 @@
 //! Quaternions.
 
 use crate::{
-    matrix::{Matrix3, Matrix4A},
+    matrix::{Matrix3A, Matrix4A},
     point::Point3A,
     vector::{UnitVector3, UnitVector3A, Vector3, Vector3A, Vector4, Vector4A},
 };
@@ -423,8 +423,8 @@ impl UnitQuaternionA {
 
     /// Converts the quaternion to a 3x3 rotation matrix.
     #[inline]
-    pub fn to_rotation_matrix(&self) -> Matrix3 {
-        Matrix3::from_glam(glam::Mat3::from_quat(self.inner))
+    pub fn to_rotation_matrix(&self) -> Matrix3A {
+        Matrix3A::wrap(glam::Mat3A::from_quat(self.inner))
     }
 
     /// Converts the quaternion to a 4x4 homogeneous matrix.
@@ -825,7 +825,7 @@ mod tests {
     #[test]
     fn unit_quaternion_to_rotation_matrix_works() {
         let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
-        let matrix = quat.to_rotation_matrix().aligned();
+        let matrix = quat.to_rotation_matrix();
 
         // 90 degree rotation around Z should map X to Y
         let x_axis = Vector3A::new(1.0, 0.0, 0.0);
@@ -1194,7 +1194,7 @@ mod tests {
     #[test]
     fn quaternion_matrix_conversion_preserves_rotation() {
         let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0);
-        let matrix = quat.to_rotation_matrix().aligned();
+        let matrix = quat.to_rotation_matrix();
 
         let vector = Vector3A::new(0.0, 1.0, 0.0);
         let quat_rotated = quat.rotate_vector(&vector);

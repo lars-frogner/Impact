@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
+use impact_math::consts::f32::TWO_PI;
 use roc_integration::roc;
 
 /// Manages all [`HarmonicOscillatorTrajectoryDriver`]s.
@@ -139,17 +139,20 @@ impl HarmonicOscillatorTrajectory {
             "Period of harmonically oscillating trajectory is zero"
         );
 
-        let center_time_offset = time - self.center_time;
-        let angular_frequency = f32::TWO_PI / self.period;
+        let center_position = self.center_position.aligned();
+        let direction = self.direction.aligned();
 
-        let position = self.center_position
-            + (self.amplitude * f32::sin(angular_frequency * center_time_offset)) * self.direction;
+        let center_time_offset = time - self.center_time;
+        let angular_frequency = TWO_PI / self.period;
+
+        let position = center_position
+            + (self.amplitude * f32::sin(angular_frequency * center_time_offset)) * direction;
 
         let velocity = ((self.amplitude * angular_frequency)
             * f32::cos(angular_frequency * center_time_offset))
-            * self.direction;
+            * direction;
 
-        (position, velocity)
+        (position.unaligned(), velocity.unaligned())
     }
 }
 
@@ -159,7 +162,7 @@ mod tests {
     use crate::quantities::Direction;
     use approx::abs_diff_eq;
     use impact_math::{
-        Float,
+        consts::f32::{PI, TWO_PI},
         point::Point3,
         vector::{UnitVector3, Vector3},
     };
@@ -177,8 +180,8 @@ mod tests {
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..f32::TWO_PI,
-            theta in 0.0..f32::PI,
+            phi in 0.0..TWO_PI,
+            theta in 0.0..PI,
         ) -> Direction {
             Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
@@ -220,7 +223,11 @@ mod tests {
             );
             let time = center_time + n_half_periods as f32 * 0.5 * period;
             let (trajectory_position, _) = trajectory.compute_position_and_velocity(time);
-            prop_assert!(abs_diff_eq!(trajectory_position, center_position, epsilon = 1e-3 * center_position.as_vector().component_abs().max_component()));
+            prop_assert!(abs_diff_eq!(
+                trajectory_position,
+                center_position,
+                epsilon = 1e-3 * center_position.as_vector().aligned().component_abs().max_component()
+            ));
         }
     }
 
@@ -257,9 +264,17 @@ mod tests {
                 negative_peak_trajectory_velocity,
             ) = trajectory.compute_position_and_velocity(negative_peak_time);
 
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_position, positive_peak_position, epsilon = 1e-3 * positive_peak_position.as_vector().component_abs().max_component()));
+            prop_assert!(abs_diff_eq!(
+                positive_peak_trajectory_position,
+                positive_peak_position,
+                epsilon = 1e-3 * positive_peak_position.as_vector().aligned().component_abs().max_component()
+            ));
             prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-1));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_position, negative_peak_position, epsilon = 1e-3 * negative_peak_position.as_vector().component_abs().max_component()));
+            prop_assert!(abs_diff_eq!(
+                negative_peak_trajectory_position,
+                negative_peak_position,
+                epsilon = 1e-3 * negative_peak_position.as_vector().aligned().component_abs().max_component()
+            ));
             prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, Velocity::zeros(), epsilon = 5e-1));
         }
     }
