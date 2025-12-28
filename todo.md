@@ -34,10 +34,6 @@
 
 - Implement graph based system for generating voxel types (probably integrated with SDF graph).
 
-## Math
-
-- Replace `nalgebra` with custom library powered by `glam`.
-
 ## Performance
 
 - Use single bind group for G-buffer attachments.
@@ -53,8 +49,6 @@
 - Investigate where arena allocation could be beneficial.
 
 - Add acceleration structure for broad phase collision detection.
-
-- Pass arena when setting up entities.
 
 - Add custom allocator support for `AlignedByteVec`.
 
@@ -78,8 +72,4 @@
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
-- Investigate flakyness of the `executing_tasks_works` test.
-
-- Benchmark building of meta and atomic SDF graphs.
-
-- Create timelapse of asteroid generation in graph editor.
+- Fix sporadic `assertion failed: radius >= 0.0` from `sphere.rs` (probably when absorbing voxels with sphere).
