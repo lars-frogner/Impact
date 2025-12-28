@@ -14,7 +14,6 @@ use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_containers::HashMap;
 use impact_math::{matrix::Matrix3P, vector::Vector3P};
-use num_traits::Zero;
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
 use std::{
@@ -78,7 +77,7 @@ trait AnchoredTwoBodyConstraint {
 trait PreparedTwoBodyConstraint {
     type Impulses: fmt::Debug
         + Copy
-        + Zero
+        + Default
         + Add<Output = Self::Impulses>
         + Sub<Output = Self::Impulses>
         + Mul<f32, Output = Self::Impulses>;

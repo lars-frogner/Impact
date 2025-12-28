@@ -25,7 +25,6 @@ use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
 };
-use num_traits::{NumCast, PrimInt};
 use std::{array, iter, mem, ops::Range};
 use tinyvec::TinyVec;
 
@@ -888,9 +887,12 @@ impl ChunkedVoxelObject {
     /// coordinates are out of bounds.
     #[inline]
     pub fn get_voxel_at_coords(&self, x: f32, y: f32, z: f32) -> Option<&Voxel> {
-        let i = (x * self.inverse_voxel_extent) as i64;
-        let j = (y * self.inverse_voxel_extent) as i64;
-        let k = (z * self.inverse_voxel_extent) as i64;
+        if x.is_sign_negative() || y.is_sign_negative() || z.is_sign_negative() {
+            return None;
+        }
+        let i = (x * self.inverse_voxel_extent) as usize;
+        let j = (y * self.inverse_voxel_extent) as usize;
+        let k = (z * self.inverse_voxel_extent) as usize;
         self.get_voxel(i, j, k)
     }
 
@@ -902,20 +904,16 @@ impl ChunkedVoxelObject {
     /// relatively efficient because we can perform simple bit manipulations
     /// to determine the chunk containing the voxel.
     #[inline]
-    pub fn get_voxel<I: PrimInt>(&self, i: I, j: I, k: I) -> Option<&Voxel> {
-        if i < I::from(self.occupied_voxel_ranges[0].start).unwrap()
-            || j < I::from(self.occupied_voxel_ranges[1].start).unwrap()
-            || k < I::from(self.occupied_voxel_ranges[2].start).unwrap()
-            || i >= I::from(self.occupied_voxel_ranges[0].end).unwrap()
-            || j >= I::from(self.occupied_voxel_ranges[1].end).unwrap()
-            || k >= I::from(self.occupied_voxel_ranges[2].end).unwrap()
+    pub fn get_voxel(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
+        if i < self.occupied_voxel_ranges[0].start
+            || j < self.occupied_voxel_ranges[1].start
+            || k < self.occupied_voxel_ranges[2].start
+            || i >= self.occupied_voxel_ranges[0].end
+            || j >= self.occupied_voxel_ranges[1].end
+            || k >= self.occupied_voxel_ranges[2].end
         {
             return None;
         }
-
-        let i = NumCast::from(i).unwrap();
-        let j = NumCast::from(j).unwrap();
-        let k = NumCast::from(k).unwrap();
 
         self.get_voxel_inside(i, j, k)
     }
@@ -948,20 +946,13 @@ impl ChunkedVoxelObject {
     /// Returns the [`VoxelChunk`] at the given indices in the object's chunk
     /// grid. If the indices are out of bounds, an empty chunk is returned.
     #[inline]
-    pub fn get_chunk<I: PrimInt>(&self, chunk_i: I, chunk_j: I, chunk_k: I) -> VoxelChunk {
-        if chunk_i < I::zero()
-            || chunk_j < I::zero()
-            || chunk_k < I::zero()
-            || chunk_i >= I::from(self.chunk_counts[0]).unwrap()
-            || chunk_j >= I::from(self.chunk_counts[1]).unwrap()
-            || chunk_k >= I::from(self.chunk_counts[2]).unwrap()
+    pub fn get_chunk(&self, chunk_i: usize, chunk_j: usize, chunk_k: usize) -> VoxelChunk {
+        if chunk_i >= self.chunk_counts[0]
+            || chunk_j >= self.chunk_counts[1]
+            || chunk_k >= self.chunk_counts[2]
         {
             return VoxelChunk::Empty;
         }
-
-        let chunk_i = NumCast::from(chunk_i).unwrap();
-        let chunk_j = NumCast::from(chunk_j).unwrap();
-        let chunk_k = NumCast::from(chunk_k).unwrap();
 
         let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
         self.chunks[chunk_idx]

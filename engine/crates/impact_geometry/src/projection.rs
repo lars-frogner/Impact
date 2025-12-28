@@ -59,7 +59,7 @@ impl PerspectiveTransform {
     /// # Panics
     /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
     /// zero.
-    pub fn new<A: Angle<f32>>(
+    pub fn new<A: Angle>(
         aspect_ratio: f32,
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<f32>,
@@ -99,7 +99,7 @@ impl PerspectiveTransform {
 
     /// Returns the vertical field of view angle in radians.
     #[inline]
-    pub fn vertical_field_of_view(&self) -> Radians<f32> {
+    pub fn vertical_field_of_view(&self) -> Radians {
         Radians(2.0 * (1.0 / self.matrix.element(1, 1)).atan())
     }
 
@@ -135,7 +135,7 @@ impl PerspectiveTransform {
     /// # Panics
     /// If `fov` is zero.
     #[inline]
-    pub fn set_vertical_field_of_view<A: Angle<f32>>(&mut self, vertical_field_of_view: A) {
+    pub fn set_vertical_field_of_view<A: Angle>(&mut self, vertical_field_of_view: A) {
         let vertical_field_of_view = vertical_field_of_view.radians();
         assert_abs_diff_ne!(vertical_field_of_view, 0.0);
 
@@ -180,7 +180,7 @@ impl OrthographicTransform {
     /// # Panics
     /// If `aspect_ratio` or `vertical_field_of_view` is zero
     #[inline]
-    pub fn with_field_of_view<A: Angle<f32>>(
+    pub fn with_field_of_view<A: Angle>(
         aspect_ratio: f32,
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<f32>,

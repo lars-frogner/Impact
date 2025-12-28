@@ -121,16 +121,16 @@ mod tests {
     use crate::quantities::{AngularVelocityP, DirectionP, Orientation};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use impact_math::{
-        Float,
         angle::Radians,
+        consts::f32::{FRAC_PI_2, PI, TWO_PI},
         vector::{UnitVector3P, Vector3P},
     };
     use proptest::prelude::*;
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..f32::TWO_PI,
-            theta in 0.0..f32::PI,
+            phi in 0.0..TWO_PI,
+            theta in 0.0..PI,
         ) -> DirectionP {
             DirectionP::normalized_from(Vector3P::new(
                 f32::cos(phi) * f32::sin(theta),
@@ -142,9 +142,9 @@ mod tests {
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..f32::TWO_PI,
-            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
-            rotation_yaw in 0.0..f32::TWO_PI,
+            rotation_roll in 0.0..TWO_PI,
+            rotation_pitch in -FRAC_PI_2..FRAC_PI_2,
+            rotation_yaw in 0.0..TWO_PI,
         ) -> OrientationP {
             Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).pack()
         }

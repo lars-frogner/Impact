@@ -20,8 +20,8 @@ use drag_load::AveragingDragLoad;
 use equirectangular_map::EquirectangularMap;
 use impact_containers::{HashMap, hash_map::Entry};
 use impact_math::{
-    Float,
     angle::{Angle, Radians},
+    consts::f32::PI,
     point::Point3P,
     stringhash32_newtype,
 };
@@ -395,7 +395,7 @@ impl DragLoadMap {
 fn generate_map_from_drag_loads(
     drag_loads: &[(DirectionP, DragLoad)],
     n_theta_coords: usize,
-    angular_interpolation_distance: Radians<f32>,
+    angular_interpolation_distance: Radians,
 ) -> DragLoadMap {
     let angular_interpolation_distance = angular_interpolation_distance.radians();
     assert!(angular_interpolation_distance > 0.0);
@@ -440,22 +440,22 @@ fn generate_map_from_drag_loads(
     averaging_map.map_values(|averaging_load| averaging_load.into_average_load())
 }
 
-fn compute_phi(direction: &Direction) -> Radians<f32> {
+fn compute_phi(direction: &Direction) -> Radians {
     Radians(f32::atan2(direction.y(), direction.x()))
 }
 
-fn compute_theta(direction: &Direction) -> Radians<f32> {
+fn compute_theta(direction: &Direction) -> Radians {
     Radians(f32::acos(direction.z()))
 }
 
 fn compute_angular_interpolation_distance_from_smoothness(
     smoothness: f32,
     n_direction_samples: usize,
-) -> Radians<f32> {
+) -> Radians {
     // For a smoothness of one, the angular areas covered by the quadratic
     // angular regions surrounding the direction samples add exactly up to the
     // total angular area of the sphere
-    Radians(smoothness * f32::sqrt(4.0 * f32::PI / (n_direction_samples as f32)))
+    Radians(smoothness * f32::sqrt(4.0 * PI / (n_direction_samples as f32)))
 }
 
 fn compute_weight(normalized_angular_distance: f32) -> f32 {

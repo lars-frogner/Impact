@@ -23,12 +23,11 @@ arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
-glam = { workspace = true, features = ["approx", "bytemuck"] }
+glam = { version = "0.30", features = ["approx", "bytemuck"] }
 impact_containers = { path = "../impact_containers" }
 impact_profiling = { path = "../impact_profiling", optional = true }
 inventory = { workspace = true, optional = true }
 nohash-hasher = { workspace = true }
-num-traits = { workspace = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true, optional = true }
 roc_integration = { path = "../../../roc_integration" }

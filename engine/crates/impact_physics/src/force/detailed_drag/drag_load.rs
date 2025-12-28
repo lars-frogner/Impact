@@ -3,7 +3,6 @@
 use crate::quantities::{Direction, DirectionP, Force, Orientation, Position, PositionP, Torque};
 use impact_alloc::{AVec, Allocator};
 use impact_math::{
-    Float,
     point::Point3P,
     vector::{UnitVector3, UnitVector3P, Vector3P},
 };
@@ -230,7 +229,7 @@ pub fn compute_mesh_triangle_drag_properties<'a, A: Allocator>(
             UnitVector3::normalized_from_and_norm_if_above(edge_1.cross(&edge_2), f32::EPSILON).map(
                 |(normal_vector, twice_area)| {
                     let center =
-                        f32::ONE_THIRD * (vertex_1 + vertex_2.as_vector() + vertex_3.as_vector());
+                        (1.0 / 3.0) * (vertex_1 + vertex_2.as_vector() + vertex_3.as_vector());
 
                     MeshTriangleDragProperties {
                         center: center.pack(),
@@ -250,14 +249,17 @@ mod tests {
     use super::*;
     use approx::abs_diff_eq;
     use impact_alloc::Global;
-    use impact_math::vector::Vector3;
+    use impact_math::{
+        consts::f32::{PI, TWO_PI},
+        vector::Vector3,
+    };
     use impact_mesh::TriangleMesh;
     use proptest::prelude::*;
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..f32::TWO_PI,
-            theta in 0.0..f32::PI,
+            phi in 0.0..TWO_PI,
+            theta in 0.0..PI,
         ) -> Direction {
             Direction::normalized_from(Vector3::new(
                 f32::cos(phi) * f32::sin(theta),
@@ -292,7 +294,7 @@ mod tests {
             // factor comes from using the projected triangle area. So the force
             // accumulation corresponds to integrating cos(theta)^2 over the
             // hemisphere, giving (2/3)*pi*r^2.
-            let correct_force = f32::ONE_THIRD * f32::TWO_PI * 0.5_f32.powi(2);
+            let correct_force = (1.0 / 3.0) * TWO_PI * 0.5_f32.powi(2);
 
             prop_assert!(abs_diff_eq!(force_direction, -direction, epsilon = 1e-3));
             prop_assert!(abs_diff_eq!(force, correct_force, epsilon = 1e-3));

@@ -82,7 +82,7 @@ define_component_type! {
 #[derive(Clone, Debug, PartialEq)]
 pub struct AngularVelocity {
     axis_of_rotation: Direction,
-    angular_speed: Radians<f32>,
+    angular_speed: Radians,
 }
 
 /// An angular velocity in 3D space, represented by an axis of rotation and an
@@ -96,7 +96,7 @@ pub struct AngularVelocity {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct AngularVelocityP {
     axis_of_rotation: DirectionP,
-    angular_speed: Radians<f32>,
+    angular_speed: Radians,
 }
 
 #[roc]
@@ -140,7 +140,7 @@ impl AngularVelocity {
     /// Creates a new angular velocity with the given axis of rotation and
     /// angular speed.
     #[inline]
-    pub const fn new(axis_of_rotation: Direction, angular_speed: Radians<f32>) -> Self {
+    pub const fn new(axis_of_rotation: Direction, angular_speed: Radians) -> Self {
         Self {
             axis_of_rotation,
             angular_speed,
@@ -191,7 +191,7 @@ impl AngularVelocity {
 
     /// Returns the angular speed.
     #[inline]
-    pub const fn angular_speed(&self) -> Radians<f32> {
+    pub const fn angular_speed(&self) -> Radians {
         self.angular_speed
     }
 
@@ -275,7 +275,7 @@ impl AngularVelocityP {
     /// angular speed.
     #[roc(body = "{ axis_of_rotation, angular_speed }")]
     #[inline]
-    pub const fn new(axis_of_rotation: DirectionP, angular_speed: Radians<f32>) -> Self {
+    pub const fn new(axis_of_rotation: DirectionP, angular_speed: Radians) -> Self {
         Self {
             axis_of_rotation,
             angular_speed,
@@ -318,7 +318,7 @@ impl AngularVelocityP {
 
     /// Returns the angular speed.
     #[inline]
-    pub const fn angular_speed(&self) -> Radians<f32> {
+    pub const fn angular_speed(&self) -> Radians {
         self.angular_speed
     }
 

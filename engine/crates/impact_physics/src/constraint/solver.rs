@@ -16,7 +16,6 @@ use crate::{
 };
 use bitflags::bitflags;
 use impact_containers::KeyIndexMapper;
-use num_traits::Zero;
 use std::{
     fmt,
     hash::Hash,
@@ -306,7 +305,7 @@ impl ConstraintSolver {
             body_a_idx,
             body_b_idx,
             constraint: prepared_constraint,
-            accumulated_impulses: Zero::zero(),
+            accumulated_impulses: Default::default(),
             flags: ConstraintFlags::WAS_PREPARED,
         })
     }
@@ -336,7 +335,7 @@ impl ConstraintSolver {
             body_a_idx,
             body_b_idx,
             constraint: prepared_constraint,
-            accumulated_impulses: Zero::zero(),
+            accumulated_impulses: Default::default(),
             flags: ConstraintFlags::WAS_PREPARED,
         })
     }

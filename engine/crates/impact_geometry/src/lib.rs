@@ -85,6 +85,6 @@ pub fn compute_uniformly_distributed_radial_directions(
     })
 }
 
-fn compute_golden_angle() -> Radians<f32> {
+fn compute_golden_angle() -> Radians {
     Radians(PI * (3.0 - 5.0_f32.sqrt()))
 }

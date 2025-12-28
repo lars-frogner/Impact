@@ -2853,9 +2853,9 @@ fn compute_jittered_direction(
 }
 
 fn unit_quaternion_from_tilt_turn_roll(
-    tilt_angle: Degrees<f32>,
-    turn_angle: Degrees<f32>,
-    roll_angle: Degrees<f32>,
+    tilt_angle: Degrees,
+    turn_angle: Degrees,
+    roll_angle: Degrees,
 ) -> UnitQuaternion {
     let polar_angle = tilt_angle.radians();
     let azimuthal_angle = turn_angle.radians();

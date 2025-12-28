@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use impact_gpu::texture::DepthOrArrayLayers;
-use impact_math::Float;
+use impact_math::consts::f32::PI;
 use impact_texture::lookup_table::{LookupTable, LookupTableMetadata, LookupTableValueType};
 use std::num::NonZeroU32;
 
@@ -86,7 +86,7 @@ pub fn compute_reflectance_integral(
             evaluate_radiance(v_dot_n, l_dot_n, l_dot_v)
         };
 
-        l_dot_n * integrate_hundred_point_gauss_legendre(evaluate_integrand_for_phi, 0.0, f32::PI)
+        l_dot_n * integrate_hundred_point_gauss_legendre(evaluate_integrand_for_phi, 0.0, PI)
     };
 
     // Multiply with 2 since we only integrated over half the hemisphere (0 <=
@@ -164,7 +164,7 @@ fn evaluate_ggx_distribution(n_dot_m: f32, roughness: f32) -> f32 {
     if n_dot_m > 0.0 {
         let roughness_squared = roughness.powi(2);
         roughness_squared
-            / (f32::PI * (1.0 + n_dot_m.powi(2) * (roughness_squared - 1.0)).powi(2) + 1e-6)
+            / (PI * (1.0 + n_dot_m.powi(2) * (roughness_squared - 1.0)).powi(2) + 1e-6)
     } else {
         0.0
     }
@@ -248,16 +248,17 @@ fn integrate_hundred_point_gauss_legendre(
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use impact_math::consts::f32::TWO_PI;
 
     #[test]
     fn gauss_legendre_integration_works() {
         assert_abs_diff_eq!(
-            integrate_hundred_point_gauss_legendre(f32::sin, 0.0, f32::TWO_PI),
+            integrate_hundred_point_gauss_legendre(f32::sin, 0.0, TWO_PI),
             0.0,
             epsilon = 1e-6
         );
         assert_abs_diff_eq!(
-            integrate_hundred_point_gauss_legendre(f32::sin, 0.0, f32::PI),
+            integrate_hundred_point_gauss_legendre(f32::sin, 0.0, PI),
             2.0,
             epsilon = 1e-6
         );

@@ -272,8 +272,8 @@ impl CameraProjectionUniform {
 
     fn generate_jitter_offsets() -> [Vector4P; JITTER_COUNT] {
         let mut offsets = [Vector4P::zeros(); JITTER_COUNT];
-        let halton_x = HaltonSequence::<f32>::new(JITTER_BASES.0);
-        let halton_y = HaltonSequence::<f32>::new(JITTER_BASES.1);
+        let halton_x = HaltonSequence::new(JITTER_BASES.0);
+        let halton_y = HaltonSequence::new(JITTER_BASES.1);
         for ((offset, x), y) in offsets.iter_mut().zip(halton_x).zip(halton_y) {
             *offset.x_mut() = 2.0 * x - 1.0;
             *offset.y_mut() = 2.0 * y - 1.0;
