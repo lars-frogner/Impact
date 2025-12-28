@@ -3,17 +3,18 @@
 pub mod setup;
 
 use crate::{
-    inertia::InertiaTensor,
+    inertia::InertiaTensorP,
     quantities::{
-        self, AngularMomentum, AngularVelocity, AngularVelocityA, Force, ForceA, Momentum, Motion,
-        Orientation, OrientationA, Position, PositionA, Torque, TorqueA, Velocity, VelocityA,
+        self, AngularMomentumP, AngularVelocity, AngularVelocityP, Force, ForceP, MomentumP,
+        Motion, Orientation, OrientationP, Position, PositionP, Torque, TorqueP, Velocity,
+        VelocityP,
     },
 };
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::ReferenceFrame;
-use impact_math::{angle::Angle, point::Point3A, quaternion::QuaternionA, vector::Vector3A};
+use impact_math::{angle::Angle, point::Point3, quaternion::Quaternion, vector::Vector3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -67,13 +68,13 @@ pub struct RigidBodyManager {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct DynamicRigidBody {
     mass: f32,
-    inertia_tensor: InertiaTensor,
-    position: Position,
-    orientation: Orientation,
-    momentum: Momentum,
-    angular_momentum: AngularMomentum,
-    total_force: Force,
-    total_torque: Torque,
+    inertia_tensor: InertiaTensorP,
+    position: PositionP,
+    orientation: OrientationP,
+    momentum: MomentumP,
+    angular_momentum: AngularMomentumP,
+    total_force: ForceP,
+    total_torque: TorqueP,
 }
 
 /// A rigid body whose linear and angular velocity only change when explicitly
@@ -83,10 +84,10 @@ pub struct DynamicRigidBody {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct KinematicRigidBody {
-    position: Position,
-    orientation: Orientation,
-    velocity: Velocity,
-    angular_velocity: AngularVelocity,
+    position: PositionP,
+    orientation: OrientationP,
+    velocity: VelocityP,
+    angular_velocity: AngularVelocityP,
 }
 
 impl From<DynamicRigidBodyID> for TypedRigidBodyID {
@@ -348,18 +349,18 @@ impl DynamicRigidBody {
     /// Creates a new dynamic rigid body with the given properties.
     pub fn new(
         mass: f32,
-        inertia_tensor: InertiaTensor,
-        position: Position,
-        orientation: Orientation,
-        velocity: Velocity,
-        angular_velocity: AngularVelocity,
+        inertia_tensor: InertiaTensorP,
+        position: PositionP,
+        orientation: OrientationP,
+        velocity: VelocityP,
+        angular_velocity: AngularVelocityP,
     ) -> Self {
         let momentum = velocity * mass;
 
         let angular_momentum = quantities::compute_angular_momentum(
-            &inertia_tensor.aligned(),
-            &orientation.aligned(),
-            &angular_velocity.aligned(),
+            &inertia_tensor.unpack(),
+            &orientation.unpack(),
+            &angular_velocity.unpack(),
         );
 
         Self {
@@ -368,9 +369,9 @@ impl DynamicRigidBody {
             position,
             orientation,
             momentum,
-            angular_momentum: angular_momentum.unaligned(),
-            total_force: Force::zeros(),
-            total_torque: Torque::zeros(),
+            angular_momentum: angular_momentum.pack(),
+            total_force: ForceP::zeros(),
+            total_torque: TorqueP::zeros(),
         }
     }
 
@@ -380,87 +381,87 @@ impl DynamicRigidBody {
     }
 
     /// Returns the inertia tensor of the body.
-    pub fn inertia_tensor(&self) -> &InertiaTensor {
+    pub fn inertia_tensor(&self) -> &InertiaTensorP {
         &self.inertia_tensor
     }
 
     /// Returns the position of the body.
-    pub fn position(&self) -> &Position {
+    pub fn position(&self) -> &PositionP {
         &self.position
     }
 
     /// Returns the orientation of the body.
-    pub fn orientation(&self) -> &Orientation {
+    pub fn orientation(&self) -> &OrientationP {
         &self.orientation
     }
 
     /// Returns the linear momentum of the body.
-    pub fn momentum(&self) -> &Momentum {
+    pub fn momentum(&self) -> &MomentumP {
         &self.momentum
     }
 
     /// Returns the angular momentum of the body.
-    pub fn angular_momentum(&self) -> &AngularMomentum {
+    pub fn angular_momentum(&self) -> &AngularMomentumP {
         &self.angular_momentum
     }
 
     /// Computes the velocity of the body.
-    pub fn compute_velocity(&self) -> VelocityA {
-        self.momentum.aligned() / self.mass
+    pub fn compute_velocity(&self) -> Velocity {
+        self.momentum.unpack() / self.mass
     }
 
     /// Computes the angular velocity of the body.
-    pub fn compute_angular_velocity(&self) -> AngularVelocityA {
+    pub fn compute_angular_velocity(&self) -> AngularVelocity {
         quantities::compute_angular_velocity(
-            &self.inertia_tensor.aligned(),
-            &self.orientation.aligned(),
-            &self.angular_momentum.aligned(),
+            &self.inertia_tensor.unpack(),
+            &self.orientation.unpack(),
+            &self.angular_momentum.unpack(),
         )
     }
 
     /// Returns the current total force on the body.
-    pub fn total_force(&self) -> &Force {
+    pub fn total_force(&self) -> &ForceP {
         &self.total_force
     }
 
     /// Returns the current total torque on the body around the center of mass.
-    pub fn total_torque(&self) -> &Torque {
+    pub fn total_torque(&self) -> &TorqueP {
         &self.total_torque
     }
 
     /// Transforms a vector from the body-fixed frame to world space.
-    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3A) -> Vector3A {
-        transform_vector_from_body_to_world_space(&self.orientation.aligned(), vector)
+    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3) -> Vector3 {
+        transform_vector_from_body_to_world_space(&self.orientation.unpack(), vector)
     }
 
     /// Transforms a vector from world space to the body-fixed frame.
-    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3A) -> Vector3A {
-        transform_vector_from_world_to_body_space(&self.orientation.aligned(), vector)
+    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
+        transform_vector_from_world_to_body_space(&self.orientation.unpack(), vector)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
-    pub fn transform_point_from_body_to_world_space(&self, point: &Point3A) -> Point3A {
+    pub fn transform_point_from_body_to_world_space(&self, point: &Point3) -> Point3 {
         transform_point_from_body_to_world_space(
-            &self.position.aligned(),
-            &self.orientation.aligned(),
+            &self.position.unpack(),
+            &self.orientation.unpack(),
             point,
         )
     }
 
     /// Transforms a point from world space to the body-fixed frame.
-    pub fn transform_point_from_world_to_body_space(&self, point: &Point3A) -> Point3A {
+    pub fn transform_point_from_world_to_body_space(&self, point: &Point3) -> Point3 {
         transform_point_from_world_to_body_space(
-            &self.position.aligned(),
-            &self.orientation.aligned(),
+            &self.position.unpack(),
+            &self.orientation.unpack(),
             point,
         )
     }
 
     /// Computes the velocity of the given world space point on the body due to the
     /// body's linear and rotational motion.
-    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3A) -> VelocityA {
+    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3) -> Velocity {
         compute_velocity_of_world_space_point_on_body(
-            &self.position.aligned(),
+            &self.position.unpack(),
             &self.compute_velocity(),
             &self.compute_angular_velocity(),
             point,
@@ -478,66 +479,66 @@ impl DynamicRigidBody {
     /// Computes the body's [`Motion`].
     pub fn compute_motion(&self) -> Motion {
         Motion {
-            linear_velocity: self.compute_velocity().unaligned(),
-            angular_velocity: self.compute_angular_velocity().unaligned(),
+            linear_velocity: self.compute_velocity().pack(),
+            angular_velocity: self.compute_angular_velocity().pack(),
         }
     }
 
     /// Applies the given force at the body's center of mass.
-    pub fn apply_force_at_center_of_mass(&mut self, force: &ForceA) {
-        let mut total_force = self.total_force.aligned();
+    pub fn apply_force_at_center_of_mass(&mut self, force: &Force) {
+        let mut total_force = self.total_force.unpack();
         total_force += force;
-        self.total_force = total_force.unaligned();
+        self.total_force = total_force.pack();
     }
 
     /// Applies the given torque around the body's center of mass.
-    pub fn apply_torque(&mut self, torque: &TorqueA) {
-        let mut total_torque = self.total_torque.aligned();
+    pub fn apply_torque(&mut self, torque: &Torque) {
+        let mut total_torque = self.total_torque.unpack();
         total_torque += torque;
-        self.total_torque = total_torque.unaligned();
+        self.total_torque = total_torque.pack();
     }
 
     /// Applies the given force at the given position. This may result in a
     /// torque around the center of mass.
-    pub fn apply_force(&mut self, force: &ForceA, force_position: &PositionA) {
-        let position = self.position.aligned();
+    pub fn apply_force(&mut self, force: &Force, force_position: &Position) {
+        let position = self.position.unpack();
 
         self.apply_force_at_center_of_mass(force);
         self.apply_torque(&(force_position - position).cross(force));
     }
 
     /// Sets the given inertial properties for the body.
-    pub fn set_inertial_properties(&mut self, mass: f32, inertia_tensor: InertiaTensor) {
+    pub fn set_inertial_properties(&mut self, mass: f32, inertia_tensor: InertiaTensorP) {
         self.mass = mass;
         self.inertia_tensor = inertia_tensor;
     }
 
     /// Sets the given position for the body.
-    pub fn set_position(&mut self, position: Position) {
+    pub fn set_position(&mut self, position: PositionP) {
         self.position = position;
     }
 
     /// Sets the given orientation for the body.
-    pub fn set_orientation(&mut self, orientation: Orientation) {
+    pub fn set_orientation(&mut self, orientation: OrientationP) {
         self.orientation = orientation;
     }
 
     /// Recomputes the body's linear momentum according to the given
     /// velocity.
-    pub fn synchronize_momentum(&mut self, velocity: &VelocityA) {
+    pub fn synchronize_momentum(&mut self, velocity: &Velocity) {
         let momentum = velocity * self.mass();
-        self.momentum = momentum.unaligned();
+        self.momentum = momentum.pack();
     }
 
     /// Recomputes the body's angular momentum according to the given angular
     /// velocity.
-    pub fn synchronize_angular_momentum(&mut self, angular_velocity: &AngularVelocityA) {
+    pub fn synchronize_angular_momentum(&mut self, angular_velocity: &AngularVelocity) {
         let angular_momentum = quantities::compute_angular_momentum(
-            &self.inertia_tensor.aligned(),
-            &self.orientation.aligned(),
+            &self.inertia_tensor.unpack(),
+            &self.orientation.unpack(),
             angular_velocity,
         );
-        self.angular_momentum = angular_momentum.unaligned();
+        self.angular_momentum = angular_momentum.pack();
     }
 
     /// Advances the linear momentum of the body based on the total force
@@ -556,24 +557,24 @@ impl DynamicRigidBody {
 
     /// Advances the position of the body based on the current linear velocity.
     pub fn advance_position(&mut self, step_duration: f32) {
-        let mut position = self.position.aligned();
+        let mut position = self.position.unpack();
 
         let velocity = self.compute_velocity();
 
         position = advance_position(&position, &velocity, step_duration);
 
-        self.position = position.unaligned();
+        self.position = position.pack();
     }
 
     /// Advances the orientation of the body based on the current angular velocity.
     pub fn advance_orientation(&mut self, step_duration: f32) {
-        let mut orientation = self.orientation.aligned();
+        let mut orientation = self.orientation.unpack();
 
         let angular_velocity = self.compute_angular_velocity();
 
         orientation = advance_orientation(&orientation, &angular_velocity, step_duration);
 
-        self.orientation = orientation.unaligned();
+        self.orientation = orientation.pack();
     }
 
     /// Resets the total applied force and torque to zero.
@@ -584,12 +585,12 @@ impl DynamicRigidBody {
 
     /// Resets the total applied force to zero.
     pub fn reset_total_force(&mut self) {
-        self.total_force = Force::zeros();
+        self.total_force = ForceP::zeros();
     }
 
     /// Resets the total applied torque to zero.
     pub fn reset_total_torque(&mut self) {
-        self.total_torque = Torque::zeros();
+        self.total_torque = TorqueP::zeros();
     }
 }
 
@@ -602,27 +603,27 @@ impl AbsDiffEq for DynamicRigidBody {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         f32::abs_diff_eq(&self.mass, &other.mass, epsilon)
-            && InertiaTensor::abs_diff_eq(&self.inertia_tensor, &other.inertia_tensor, epsilon)
-            && Position::abs_diff_eq(&self.position, &other.position, epsilon)
-            && Orientation::abs_diff_eq(&self.orientation, &other.orientation, epsilon)
-            && Momentum::abs_diff_eq(&self.momentum, &other.momentum, epsilon)
-            && AngularMomentum::abs_diff_eq(
+            && InertiaTensorP::abs_diff_eq(&self.inertia_tensor, &other.inertia_tensor, epsilon)
+            && PositionP::abs_diff_eq(&self.position, &other.position, epsilon)
+            && OrientationP::abs_diff_eq(&self.orientation, &other.orientation, epsilon)
+            && MomentumP::abs_diff_eq(&self.momentum, &other.momentum, epsilon)
+            && AngularMomentumP::abs_diff_eq(
                 &self.angular_momentum,
                 &other.angular_momentum,
                 epsilon,
             )
-            && Force::abs_diff_eq(&self.total_force, &other.total_force, epsilon)
-            && Torque::abs_diff_eq(&self.total_torque, &other.total_torque, epsilon)
+            && ForceP::abs_diff_eq(&self.total_force, &other.total_force, epsilon)
+            && TorqueP::abs_diff_eq(&self.total_torque, &other.total_torque, epsilon)
     }
 }
 
 impl KinematicRigidBody {
     /// Creates a new kinematic rigid body with the given properties.
     pub fn new(
-        position: Position,
-        orientation: Orientation,
-        velocity: Velocity,
-        angular_velocity: AngularVelocity,
+        position: PositionP,
+        orientation: OrientationP,
+        velocity: VelocityP,
+        angular_velocity: AngularVelocityP,
     ) -> Self {
         Self {
             position,
@@ -633,102 +634,102 @@ impl KinematicRigidBody {
     }
 
     /// Returns the position of the body.
-    pub fn position(&self) -> &Position {
+    pub fn position(&self) -> &PositionP {
         &self.position
     }
 
     /// Returns the orientation of the body.
-    pub fn orientation(&self) -> &Orientation {
+    pub fn orientation(&self) -> &OrientationP {
         &self.orientation
     }
 
     /// Returns the linear velocity of the body.
-    pub fn velocity(&self) -> &Velocity {
+    pub fn velocity(&self) -> &VelocityP {
         &self.velocity
     }
 
     /// Returns the angular velocity of the body.
-    pub fn angular_velocity(&self) -> &AngularVelocity {
+    pub fn angular_velocity(&self) -> &AngularVelocityP {
         &self.angular_velocity
     }
 
     /// Transforms a vector from the body-fixed frame to world space.
-    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3A) -> Vector3A {
-        transform_vector_from_body_to_world_space(&self.orientation.aligned(), vector)
+    pub fn transform_vector_from_body_to_world_space(&self, vector: &Vector3) -> Vector3 {
+        transform_vector_from_body_to_world_space(&self.orientation.unpack(), vector)
     }
 
     /// Transforms a vector from world space to the body-fixed frame.
-    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3A) -> Vector3A {
-        transform_vector_from_world_to_body_space(&self.orientation.aligned(), vector)
+    pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
+        transform_vector_from_world_to_body_space(&self.orientation.unpack(), vector)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
-    pub fn transform_point_from_body_to_world_space(&self, point: &Point3A) -> Point3A {
+    pub fn transform_point_from_body_to_world_space(&self, point: &Point3) -> Point3 {
         transform_point_from_body_to_world_space(
-            &self.position.aligned(),
-            &self.orientation.aligned(),
+            &self.position.unpack(),
+            &self.orientation.unpack(),
             point,
         )
     }
 
     /// Transforms a point from world space to the body-fixed frame.
-    pub fn transform_point_from_world_to_body_space(&self, point: &Point3A) -> Point3A {
+    pub fn transform_point_from_world_to_body_space(&self, point: &Point3) -> Point3 {
         transform_point_from_world_to_body_space(
-            &self.position.aligned(),
-            &self.orientation.aligned(),
+            &self.position.unpack(),
+            &self.orientation.unpack(),
             point,
         )
     }
 
     /// Computes the velocity of the given world space point on the body due to the
     /// body's linear and rotational motion.
-    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3A) -> VelocityA {
+    pub fn compute_velocity_of_attached_world_space_point(&self, point: &Point3) -> Velocity {
         compute_velocity_of_world_space_point_on_body(
-            &self.position.aligned(),
-            &self.velocity.aligned(),
-            &self.angular_velocity.aligned(),
+            &self.position.unpack(),
+            &self.velocity.unpack(),
+            &self.angular_velocity.unpack(),
             point,
         )
     }
 
     /// Sets the given position for the body.
-    pub fn set_position(&mut self, position: Position) {
+    pub fn set_position(&mut self, position: PositionP) {
         self.position = position;
     }
 
     /// Sets the given orientation for the body.
-    pub fn set_orientation(&mut self, orientation: Orientation) {
+    pub fn set_orientation(&mut self, orientation: OrientationP) {
         self.orientation = orientation;
     }
 
     /// Sets the given velocity for the body.
-    pub fn set_velocity(&mut self, velocity: Velocity) {
+    pub fn set_velocity(&mut self, velocity: VelocityP) {
         self.velocity = velocity;
     }
 
     /// Sets the given angular velocity for the body.
-    pub fn set_angular_velocity(&mut self, angular_velocity: AngularVelocity) {
+    pub fn set_angular_velocity(&mut self, angular_velocity: AngularVelocityP) {
         self.angular_velocity = angular_velocity;
     }
 
     /// Advances the position of the body based on the current linear velocity.
     pub fn advance_position(&mut self, step_duration: f32) {
-        let mut position = self.position.aligned();
-        let velocity = self.velocity.aligned();
+        let mut position = self.position.unpack();
+        let velocity = self.velocity.unpack();
 
         position = advance_position(&position, &velocity, step_duration);
 
-        self.position = position.unaligned();
+        self.position = position.pack();
     }
 
     /// Advances the orientation of the body based on the current angular velocity.
     pub fn advance_orientation(&mut self, step_duration: f32) {
-        let mut orientation = self.orientation.aligned();
-        let angular_velocity = self.angular_velocity.aligned();
+        let mut orientation = self.orientation.unpack();
+        let angular_velocity = self.angular_velocity.unpack();
 
         orientation = advance_orientation(&orientation, &angular_velocity, step_duration);
 
-        self.orientation = orientation.unaligned();
+        self.orientation = orientation.pack();
     }
 }
 
@@ -740,10 +741,10 @@ impl AbsDiffEq for KinematicRigidBody {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Position::abs_diff_eq(&self.position, &other.position, epsilon)
-            && Orientation::abs_diff_eq(&self.orientation, &other.orientation, epsilon)
-            && Velocity::abs_diff_eq(&self.velocity, &other.velocity, epsilon)
-            && AngularVelocity::abs_diff_eq(
+        PositionP::abs_diff_eq(&self.position, &other.position, epsilon)
+            && OrientationP::abs_diff_eq(&self.orientation, &other.orientation, epsilon)
+            && VelocityP::abs_diff_eq(&self.velocity, &other.velocity, epsilon)
+            && AngularVelocityP::abs_diff_eq(
                 &self.angular_velocity,
                 &other.angular_velocity,
                 epsilon,
@@ -753,48 +754,48 @@ impl AbsDiffEq for KinematicRigidBody {
 
 /// Transforms a vector from the body-fixed frame to world space.
 pub fn transform_vector_from_body_to_world_space(
-    body_orientation: &OrientationA,
-    vector: &Vector3A,
-) -> Vector3A {
+    body_orientation: &Orientation,
+    vector: &Vector3,
+) -> Vector3 {
     body_orientation.rotate_vector(vector)
 }
 
 /// Transforms a vector from world space to the body-fixed frame.
 pub fn transform_vector_from_world_to_body_space(
-    body_orientation: &OrientationA,
-    vector: &Vector3A,
-) -> Vector3A {
+    body_orientation: &Orientation,
+    vector: &Vector3,
+) -> Vector3 {
     body_orientation.inverse().rotate_vector(vector)
 }
 
 /// Transforms a point from the body-fixed frame to world space.
 pub fn transform_point_from_body_to_world_space(
-    body_position: &PositionA,
-    body_orientation: &OrientationA,
-    point: &Point3A,
-) -> Point3A {
+    body_position: &Position,
+    body_orientation: &Orientation,
+    point: &Point3,
+) -> Point3 {
     body_position + body_orientation.rotate_point(point).as_vector()
 }
 
 /// Transforms a point from world space to the body-fixed frame.
 pub fn transform_point_from_world_to_body_space(
-    body_position: &PositionA,
-    body_orientation: &OrientationA,
-    point: &Point3A,
-) -> Point3A {
+    body_position: &Position,
+    body_orientation: &Orientation,
+    point: &Point3,
+) -> Point3 {
     body_orientation
         .inverse()
-        .rotate_point(&Point3A::from(point - body_position))
+        .rotate_point(&Point3::from(point - body_position))
 }
 
 /// Computes the velocity of the given world space point on the body due to the
 /// body's linear and rotational motion.
 pub fn compute_velocity_of_world_space_point_on_body(
-    body_position: &PositionA,
-    body_velocity: &VelocityA,
-    body_angular_velocity: &AngularVelocityA,
-    point: &PositionA,
-) -> VelocityA {
+    body_position: &Position,
+    body_velocity: &Velocity,
+    body_angular_velocity: &AngularVelocity,
+    point: &Position,
+) -> Velocity {
     body_velocity
         + body_angular_velocity
             .as_vector()
@@ -803,26 +804,26 @@ pub fn compute_velocity_of_world_space_point_on_body(
 
 /// Evolves the given [`Position`] linearly with the given [`Velocity`] for the
 /// given duration.
-pub fn advance_position(position: &PositionA, velocity: &VelocityA, duration: f32) -> PositionA {
+pub fn advance_position(position: &Position, velocity: &Velocity, duration: f32) -> Position {
     position + velocity * duration
 }
 
-/// Evolves the given [`Orientation`] with the given [`AngularVelocity`] for the
+/// Evolves the given orientation with the given angular velocity for the
 /// given duration.
 pub fn advance_orientation(
-    orientation: &OrientationA,
-    angular_velocity: &AngularVelocityA,
+    orientation: &Orientation,
+    angular_velocity: &AngularVelocity,
     duration: f32,
-) -> OrientationA {
+) -> Orientation {
     let angle = angular_velocity.angular_speed().radians() * duration;
     let (sin_half_angle, cos_half_angle) = (0.5 * angle).sin_cos();
 
-    let rotation = QuaternionA::from_parts(
+    let rotation = Quaternion::from_parts(
         sin_half_angle * angular_velocity.axis_of_rotation(),
         cos_half_angle,
     );
 
-    OrientationA::normalized_from(rotation * orientation.as_quaternion())
+    Orientation::normalized_from(rotation * orientation.as_quaternion())
 }
 
 #[cfg(test)]
@@ -832,7 +833,7 @@ mod tests {
     use impact_math::{
         Float,
         angle::Radians,
-        vector::{UnitVector3A, Vector3},
+        vector::{UnitVector3, Vector3P},
     };
     use proptest::prelude::*;
 
@@ -841,8 +842,8 @@ mod tests {
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
-        ) -> PositionA {
-            Point3A::new(position_coord_x, position_coord_y, position_coord_z)
+        ) -> Position {
+            Point3::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -851,8 +852,8 @@ mod tests {
             rotation_roll in 0.0..f32::TWO_PI,
             rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
             rotation_yaw in 0.0..f32::TWO_PI,
-        ) -> OrientationA {
-            OrientationA::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
+        ) -> Orientation {
+            Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
         }
     }
 
@@ -861,8 +862,8 @@ mod tests {
             force_coord_x in -max_force_coord..max_force_coord,
             force_coord_y in -max_force_coord..max_force_coord,
             force_coord_z in -max_force_coord..max_force_coord,
-        ) -> ForceA {
-            Vector3A::new(force_coord_x, force_coord_y, force_coord_z)
+        ) -> Force {
+            Vector3::new(force_coord_x, force_coord_y, force_coord_z)
         }
     }
 
@@ -871,27 +872,27 @@ mod tests {
             torque_coord_x in -max_torque_coord..max_torque_coord,
             torque_coord_y in -max_torque_coord..max_torque_coord,
             torque_coord_z in -max_torque_coord..max_torque_coord,
-        ) -> ForceA {
-            Vector3A::new(torque_coord_x, torque_coord_y, torque_coord_z)
+        ) -> Force {
+            Vector3::new(torque_coord_x, torque_coord_y, torque_coord_z)
         }
     }
 
     fn dummy_dynamic_rigid_body() -> DynamicRigidBody {
         DynamicRigidBody::new(
             1.0,
-            InertiaTensor::identity(),
-            Position::origin(),
-            Orientation::identity(),
-            Velocity::zeros(),
-            AngularVelocity::zero(),
+            InertiaTensorP::identity(),
+            PositionP::origin(),
+            OrientationP::identity(),
+            VelocityP::zeros(),
+            AngularVelocityP::zero(),
         )
     }
 
     #[test]
     fn should_get_zero_force_and_torque_for_new_dynamic_body() {
         let body = dummy_dynamic_rigid_body();
-        assert_abs_diff_eq!(body.total_force(), &Force::zeros());
-        assert_abs_diff_eq!(body.total_torque(), &Torque::zeros());
+        assert_abs_diff_eq!(body.total_force(), &ForceP::zeros());
+        assert_abs_diff_eq!(body.total_torque(), &TorqueP::zeros());
     }
 
     proptest! {
@@ -903,7 +904,7 @@ mod tests {
             let mut body = dummy_dynamic_rigid_body();
             body.apply_force_at_center_of_mass(&force_1);
             body.apply_force_at_center_of_mass(&force_2);
-            prop_assert!(abs_diff_eq!(body.total_force().aligned(), &(force_1 + force_2)));
+            prop_assert!(abs_diff_eq!(body.total_force().unpack(), &(force_1 + force_2)));
         }
     }
 
@@ -918,7 +919,7 @@ mod tests {
             let mut body = dummy_dynamic_rigid_body();
             body.apply_force(&force_1, &force_position_1);
             body.apply_force(&force_2, &force_position_2);
-            prop_assert!(abs_diff_eq!(body.total_force().aligned(), &(force_1 + force_2)));
+            prop_assert!(abs_diff_eq!(body.total_force().unpack(), &(force_1 + force_2)));
         }
     }
 
@@ -931,7 +932,7 @@ mod tests {
             let mut body = dummy_dynamic_rigid_body();
             body.apply_torque(&torque_1);
             body.apply_torque(&torque_2);
-            prop_assert!(abs_diff_eq!(body.total_torque().aligned(), &(torque_1 + torque_2)));
+            prop_assert!(abs_diff_eq!(body.total_torque().unpack(), &(torque_1 + torque_2)));
         }
     }
 
@@ -944,105 +945,105 @@ mod tests {
             let mut body = dummy_dynamic_rigid_body();
             body.apply_force(&force, &force_position);
             prop_assert!(abs_diff_eq!(
-                body.total_torque().aligned(),
-                &((force_position - body.position().aligned()).cross(&force))
+                body.total_torque().unpack(),
+                &((force_position - body.position().unpack()).cross(&force))
             ));
         }
     }
 
     #[test]
     fn should_retain_dynamic_body_velocities_when_advancing_for_zero_time() {
-        let velocity = Velocity::unit_z();
-        let angular_velocity = AngularVelocity::from_vector(Vector3::unit_x());
+        let velocity = VelocityP::unit_z();
+        let angular_velocity = AngularVelocityP::from_vector(Vector3P::unit_x());
 
         let mut body = DynamicRigidBody::new(
             1.0,
-            InertiaTensor::identity(),
-            Position::origin(),
-            Orientation::identity(),
+            InertiaTensorP::identity(),
+            PositionP::origin(),
+            OrientationP::identity(),
             velocity,
             angular_velocity,
         );
 
-        body.apply_force(&ForceA::unit_x(), &Point3A::new(0.0, 1.0, 0.0));
+        body.apply_force(&Force::unit_x(), &Point3::new(0.0, 1.0, 0.0));
 
         body.advance_momentum(0.0);
-        assert_abs_diff_eq!(body.compute_velocity(), velocity.aligned());
+        assert_abs_diff_eq!(body.compute_velocity(), velocity.unpack());
 
         body.advance_angular_momentum(0.0);
         assert_abs_diff_eq!(
             body.compute_angular_velocity(),
-            angular_velocity.aligned(),
+            angular_velocity.unpack(),
             epsilon = 1e-9
         );
     }
 
     #[test]
     fn should_retain_dynamic_body_velocities_with_zero_force() {
-        let velocity = Velocity::zeros();
-        let angular_velocity = AngularVelocity::zero();
+        let velocity = VelocityP::zeros();
+        let angular_velocity = AngularVelocityP::zero();
 
         let mut body = DynamicRigidBody::new(
             1.0,
-            InertiaTensor::identity(),
-            Position::origin(),
-            Orientation::identity(),
+            InertiaTensorP::identity(),
+            PositionP::origin(),
+            OrientationP::identity(),
             velocity,
             angular_velocity,
         );
 
         body.advance_momentum(1.0);
-        assert_abs_diff_eq!(body.compute_velocity(), velocity.aligned());
+        assert_abs_diff_eq!(body.compute_velocity(), velocity.unpack());
 
         body.advance_angular_momentum(1.0);
         assert_abs_diff_eq!(
             body.compute_angular_velocity(),
-            angular_velocity.aligned(),
+            angular_velocity.unpack(),
             epsilon = 1e-9
         );
     }
 
     #[test]
     fn should_change_dynamic_body_velocities_with_nonzero_force_and_torque() {
-        let position = Position::origin();
-        let orientation = Orientation::identity();
-        let velocity = Velocity::unit_z();
-        let angular_velocity = AngularVelocity::from_vector(Vector3::unit_x());
+        let position = PositionP::origin();
+        let orientation = OrientationP::identity();
+        let velocity = VelocityP::unit_z();
+        let angular_velocity = AngularVelocityP::from_vector(Vector3P::unit_x());
 
         let mut body = DynamicRigidBody::new(
             1.0,
-            InertiaTensor::identity(),
+            InertiaTensorP::identity(),
             position,
             orientation,
             velocity,
             angular_velocity,
         );
 
-        body.apply_force(&ForceA::unit_x(), &Point3A::new(0.0, 1.0, 0.0));
+        body.apply_force(&Force::unit_x(), &Point3::new(0.0, 1.0, 0.0));
 
         body.advance_momentum(1.0);
-        assert_abs_diff_ne!(body.compute_velocity(), velocity.aligned());
+        assert_abs_diff_ne!(body.compute_velocity(), velocity.unpack());
 
         body.advance_angular_momentum(1.0);
         assert_abs_diff_ne!(
             body.compute_angular_velocity(),
-            angular_velocity.aligned(),
+            angular_velocity.unpack(),
             epsilon = 1e-9
         );
     }
 
     #[test]
     fn advancing_orientation_with_zero_angular_speed_gives_same_orientation() {
-        let orientation = OrientationA::identity();
-        let angular_velocity = AngularVelocityA::new(UnitVector3A::unit_x(), Radians(0.0));
+        let orientation = Orientation::identity();
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_x(), Radians(0.0));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 1.2);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
 
     #[test]
     fn advancing_orientation_by_zero_duration_gives_same_orientation() {
-        let orientation = OrientationA::identity();
-        let angular_velocity = AngularVelocityA::new(UnitVector3A::unit_x(), Radians(1.2));
+        let orientation = Orientation::identity();
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_x(), Radians(1.2));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, 0.0);
         assert_abs_diff_eq!(advanced_orientation, orientation);
     }
@@ -1051,9 +1052,8 @@ mod tests {
     fn advancing_orientation_about_its_own_axis_works() {
         let angular_speed = 0.1;
         let duration = 2.0;
-        let orientation = OrientationA::from_axis_angle(&UnitVector3A::unit_y(), 0.1);
-        let angular_velocity =
-            AngularVelocityA::new(UnitVector3A::unit_y(), Radians(angular_speed));
+        let orientation = Orientation::from_axis_angle(&UnitVector3::unit_y(), 0.1);
+        let angular_velocity = AngularVelocity::new(UnitVector3::unit_y(), Radians(angular_speed));
         let advanced_orientation = advance_orientation(&orientation, &angular_velocity, duration);
         assert_abs_diff_eq!(
             advanced_orientation.angle(),

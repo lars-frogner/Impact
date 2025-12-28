@@ -5,7 +5,7 @@ use crate::{
     VertexAttributeSet, texture_projection::TextureProjection,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_math::{hash64, point::Point3, vector::Vector3};
+use impact_math::{hash64, point::Point3P, vector::Vector3P};
 use roc_integration::roc;
 use std::fmt;
 
@@ -185,13 +185,13 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PlanarTextureProjection {
         /// The origin of the plane, where the texture coordinates will be zero.
-        pub origin: Point3,
+        pub origin: Point3P,
         /// The axis along which the U texture coordinate will increase. The texture
         /// coordinate will be unity at the tip of the vector.
-        pub u_vector: Vector3,
+        pub u_vector: Vector3P,
         /// The axis along which the V texture coordinate will increase. The texture
         /// coordinate will be unity at the tip of the vector.
-        pub v_vector: Vector3,
+        pub v_vector: Vector3P,
     }
 }
 
@@ -522,7 +522,7 @@ impl PlanarTextureProjection {
     /// texture coordinates will increase. The texture coordinates will be zero
     /// at the origin and unity at the tip of the respective u- or v-vector.
     #[roc(body = "{ origin, u_vector, v_vector }")]
-    pub fn new(origin: Point3, u_vector: Vector3, v_vector: Vector3) -> Self {
+    pub fn new(origin: Point3P, u_vector: Vector3P, v_vector: Vector3P) -> Self {
         Self {
             origin,
             u_vector,
@@ -543,9 +543,9 @@ impl PlanarTextureProjection {
     new(origin, u_vector, v_vector)
     "#)]
     pub fn for_rectangle(rectangle: RectangleMesh, n_repeats_u: f32, n_repeats_v: f32) -> Self {
-        let origin = Point3::new(-0.5, 0.0, 0.5);
-        let u_vector = Vector3::new(rectangle.extent_x / n_repeats_u, 0.0, 0.0);
-        let v_vector = Vector3::new(0.0, 0.0, -rectangle.extent_z / n_repeats_v);
+        let origin = Point3P::new(-0.5, 0.0, 0.5);
+        let u_vector = Vector3P::new(rectangle.extent_x / n_repeats_u, 0.0, 0.0);
+        let v_vector = Vector3P::new(0.0, 0.0, -rectangle.extent_z / n_repeats_v);
         Self::new(origin, u_vector, v_vector)
     }
 
@@ -557,9 +557,9 @@ impl PlanarTextureProjection {
     /// On error from [`PlanarTextureProjection::new`].
     pub fn create(&self) -> crate::texture_projection::PlanarTextureProjection {
         crate::texture_projection::PlanarTextureProjection::new(
-            self.origin.aligned(),
-            self.u_vector.aligned(),
-            self.v_vector.aligned(),
+            self.origin.unpack(),
+            self.u_vector.unpack(),
+            self.v_vector.unpack(),
         )
         .unwrap()
     }

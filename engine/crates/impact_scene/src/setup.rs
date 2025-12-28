@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_material::{MaterialID, MaterialRegistry};
-use impact_math::transform::{Isometry3, Similarity3};
+use impact_math::transform::{Isometry3P, Similarity3P};
 use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
 use impact_model::transform::{
     InstanceModelLightTransform, InstanceModelViewTransformWithPrevious,
@@ -79,7 +79,7 @@ pub fn setup_scene_graph_parent_node(
 
 pub fn setup_scene_graph_group_node(
     scene_graph: &mut SceneGraph,
-    group_to_parent_transform: Isometry3,
+    group_to_parent_transform: Isometry3P,
     parent: Option<&SceneGraphParentNodeHandle>,
 ) -> SceneGraphGroupNodeHandle {
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
@@ -94,7 +94,7 @@ pub fn setup_scene_graph_model_instance_node(
     material_registry: &MaterialRegistry,
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
-    model_to_parent_transform: Similarity3,
+    model_to_parent_transform: Similarity3P,
     mesh_id: TriangleMeshID,
     material_id: MaterialID,
     parent: Option<&SceneGraphParentNodeHandle>,
@@ -163,7 +163,7 @@ pub fn setup_scene_graph_model_instance_node(
             parent_node_id,
             model_to_parent_transform,
             model_id,
-            bounding_sphere.map(|sphere| sphere.unaligned()),
+            bounding_sphere.map(|sphere| sphere.pack()),
             feature_ids_for_rendering,
             feature_ids_for_shadow_mapping,
             flags.into(),

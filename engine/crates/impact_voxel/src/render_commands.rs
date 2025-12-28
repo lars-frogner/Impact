@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
-use impact_geometry::{FrustumA, OrientedBoxA};
+use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -22,7 +22,7 @@ use impact_gpu::{
     timestamp_query::TimestampQueryRegistry,
     wgpu,
 };
-use impact_math::transform::Similarity3A;
+use impact_math::transform::Similarity3;
 use impact_mesh::gpu_resource::VertexBufferable;
 use impact_model::{
     InstanceFeature,
@@ -150,7 +150,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_omnidirectional_light_shadow_cubemap_face_update<GR>(
         &self,
-        positive_z_cubemap_face_frustum: &FrustumA,
+        positive_z_cubemap_face_frustum: &Frustum,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -171,7 +171,7 @@ impl VoxelRenderCommands {
 
     pub fn record_before_unidirectional_light_shadow_map_cascade_update<GR>(
         &self,
-        cascade_frustum: &OrientedBoxA,
+        cascade_frustum: &OrientedBox,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -394,7 +394,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_shadow_mapping_with_frustum<GR>(
         &self,
-        frustum: &FrustumA,
+        frustum: &Frustum,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -435,7 +435,7 @@ impl VoxelChunkCullingPass {
 
     fn record_for_shadow_mapping_with_orthographic_frustum<GR>(
         &self,
-        orthographic_frustum: &OrientedBoxA,
+        orthographic_frustum: &OrientedBox,
         instance_range_id: u32,
         gpu_resources: &GR,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
@@ -486,7 +486,7 @@ impl VoxelChunkCullingPass {
         visible_voxel_object_ids: &[VoxelObjectID],
         visible_voxel_object_to_frustum_transforms: &[T],
         instance_range_for_transforms: Range<u32>,
-        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3A) -> CullingFrustum,
+        obtain_frustum_planes_in_voxel_object_space: &impl Fn(&Similarity3) -> CullingFrustum,
         for_indexed_draw_calls: bool,
         tag: Cow<'static, str>,
     ) -> Result<()>
@@ -576,8 +576,8 @@ impl VoxelChunkCullingPass {
     fn compute_transform_from_frustum_space_to_normalized_voxel_object_space(
         voxel_object_to_frustum_transform: InstanceModelViewTransform,
         voxel_extent: f32,
-    ) -> Similarity3A {
-        Similarity3A::from(voxel_object_to_frustum_transform)
+    ) -> Similarity3 {
+        Similarity3::from(voxel_object_to_frustum_transform)
             .applied_to_scaling(voxel_extent)
             .inverted()
     }

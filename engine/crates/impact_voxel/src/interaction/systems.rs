@@ -76,9 +76,6 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                 if flags.is_disabled() {
                     return;
                 }
-
-                let reference_frame = reference_frame.aligned();
-
                 entities.push(VoxelAbsorbingSphereEntity {
                     sphere: *sphere,
                     sphere_to_world_transform: reference_frame.create_transform_to_parent_space(),
@@ -99,8 +96,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
                 let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let reference_frame = reference_frame.aligned();
-                let group_to_root_transform = parent_node.group_to_root_transform().aligned();
+                let group_to_root_transform = parent_node.group_to_root_transform().unpack();
 
                 let sphere_to_world_transform =
                     group_to_root_transform * reference_frame.create_transform_to_parent_space();
@@ -128,9 +124,6 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                 if flags.is_disabled() {
                     return;
                 }
-
-                let reference_frame = reference_frame.aligned();
-
                 entities.push(VoxelAbsorbingCapsuleEntity {
                     capsule: *capsule,
                     capsule_to_world_transform: reference_frame.create_transform_to_parent_space(),
@@ -151,8 +144,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
                 let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let reference_frame = reference_frame.aligned();
-                let group_to_root_transform = parent_node.group_to_root_transform().aligned();
+                let group_to_root_transform = parent_node.group_to_root_transform().unpack();
 
                 let capsule_to_world_transform =
                     group_to_root_transform * reference_frame.create_transform_to_parent_space();

@@ -1,6 +1,6 @@
 //! Points.
 
-use crate::vector::{Vector2, Vector3, Vector3A};
+use crate::vector::{Vector2, Vector3, Vector3P};
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
 use std::{
@@ -22,27 +22,9 @@ pub struct Point2 {
 
 /// A 3-dimensional point.
 ///
-/// This type only supports a few basic operations, as is primarily intended for
-/// compact storage inside other types and collections. For computations, prefer
-/// the SIMD-friendly 16-byte aligned [`Point3A`].
-#[repr(C)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(into = "[f32; 3]", from = "[f32; 3]")
-)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Point3 {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-
-/// A 3-dimensional point aligned to 16 bytes.
-///
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an extra 4 bytes in size and 16-byte alignment.
-/// For cache-friendly storage, prefer [`Point3`].
+/// For cache-friendly storage, prefer the packed 4-byte aligned [`Point3P`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -50,8 +32,26 @@ pub struct Point3 {
     serde(transparent)
 )]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
-pub struct Point3A {
+pub struct Point3 {
     inner: glam::Vec3A,
+}
+
+/// A 3-dimensional point. This is the "packed" version.
+///
+/// This type only supports a few basic operations, as is primarily intended for
+/// compact storage inside other types and collections. For computations, prefer
+/// the SIMD-friendly 16-byte aligned [`Point3`].
+#[repr(C)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 3]", from = "[f32; 3]")
+)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+pub struct Point3P {
+    x: f32,
+    y: f32,
+    z: f32,
 }
 
 impl Point2 {
@@ -119,8 +119,8 @@ impl Point2 {
 
     /// Converts the point to 3D by appending the given z-component.
     #[inline]
-    pub const fn extended(&self, z: f32) -> Point3 {
-        Point3::new(self.x(), self.y(), z)
+    pub const fn extended(&self, z: f32) -> Point3P {
+        Point3P::new(self.x(), self.y(), z)
     }
 
     /// Computes the distance between two points.
@@ -242,182 +242,6 @@ impl Point3 {
     /// Creates a new point with the given components.
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
-    }
-
-    /// Creates a point at the origin.
-    #[inline]
-    pub const fn origin() -> Self {
-        Self::new(0.0, 0.0, 0.0)
-    }
-
-    /// The x-component.
-    #[inline]
-    pub const fn x(&self) -> f32 {
-        self.x
-    }
-
-    /// The y-component.
-    #[inline]
-    pub const fn y(&self) -> f32 {
-        self.y
-    }
-
-    /// The z-component.
-    #[inline]
-    pub const fn z(&self) -> f32 {
-        self.z
-    }
-
-    /// A mutable reference to the x-component.
-    #[inline]
-    pub const fn x_mut(&mut self) -> &mut f32 {
-        &mut self.x
-    }
-
-    /// A mutable reference to the y-component.
-    #[inline]
-    pub const fn y_mut(&mut self) -> &mut f32 {
-        &mut self.y
-    }
-
-    /// A mutable reference to the z-component.
-    #[inline]
-    pub const fn z_mut(&mut self) -> &mut f32 {
-        &mut self.z
-    }
-
-    /// The 2D point containing the x- and y-components of this point.
-    #[inline]
-    pub fn xy(&self) -> Point2 {
-        Point2::new(self.x(), self.y())
-    }
-
-    /// This point as a [`Vector3`].
-    #[inline]
-    pub fn as_vector(&self) -> &Vector3 {
-        bytemuck::cast_ref(self)
-    }
-
-    /// Converts the point to the 16-byte aligned SIMD-friendly [`Point3A`].
-    #[inline]
-    pub fn aligned(&self) -> Point3A {
-        Point3A::new(self.x(), self.y(), self.z())
-    }
-}
-
-impl From<Vector3> for Point3 {
-    #[inline]
-    fn from(vector: Vector3) -> Self {
-        Self::new(vector.x(), vector.y(), vector.z())
-    }
-}
-
-impl From<Point3> for Vector3 {
-    #[inline]
-    fn from(point: Point3) -> Self {
-        Vector3::new(point.x(), point.y(), point.z())
-    }
-}
-
-impl From<[f32; 3]> for Point3 {
-    #[inline]
-    fn from([x, y, z]: [f32; 3]) -> Self {
-        Self::new(x, y, z)
-    }
-}
-
-impl From<Point3> for [f32; 3] {
-    #[inline]
-    fn from(point: Point3) -> Self {
-        [point.x(), point.y(), point.z()]
-    }
-}
-
-impl_binop!(Add, add, Point3, Vector3, Point3, |a, b| {
-    Point3::new(a.x + b.x(), a.y + b.y(), a.z + b.z())
-});
-
-impl_binop!(Sub, sub, Point3, Vector3, Point3, |a, b| {
-    Point3::new(a.x - b.x(), a.y - b.y(), a.z - b.z())
-});
-
-impl_binop!(Sub, sub, Point3, Point3, Vector3, |a, b| {
-    Vector3::new(a.x - b.x, a.y - b.y, a.z - b.z)
-});
-
-impl_binop!(Mul, mul, Point3, f32, Point3, |a, b| {
-    Point3::new(a.x * b, a.y * b, a.z * b)
-});
-
-impl_binop!(Mul, mul, f32, Point3, Point3, |a, b| { b.mul(*a) });
-
-impl_binop!(Div, div, Point3, f32, Point3, |a, b| { a.mul(b.recip()) });
-
-impl_binop_assign!(AddAssign, add_assign, Point3, Vector3, |a, b| {
-    a.x += b.x();
-    a.y += b.y();
-    a.z += b.z();
-});
-
-impl_binop_assign!(SubAssign, sub_assign, Point3, Vector3, |a, b| {
-    a.x -= b.x();
-    a.y -= b.y();
-    a.z -= b.z();
-});
-
-impl_binop_assign!(MulAssign, mul_assign, Point3, f32, |a, b| {
-    a.x *= b;
-    a.y *= b;
-    a.z *= b;
-});
-
-impl_binop_assign!(DivAssign, div_assign, Point3, f32, |a, b| {
-    a.mul_assign(b.recip());
-});
-
-impl Index<usize> for Point3 {
-    type Output = f32;
-
-    #[inline]
-    fn index(&self, idx: usize) -> &Self::Output {
-        match idx {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => panic!("index out of bounds"),
-        }
-    }
-}
-
-impl IndexMut<usize> for Point3 {
-    #[inline]
-    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-        match idx {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => panic!("index out of bounds"),
-        }
-    }
-}
-
-impl_abs_diff_eq!(Point3, |a, b, epsilon| {
-    a.x.abs_diff_eq(&b.x, epsilon)
-        && a.y.abs_diff_eq(&b.y, epsilon)
-        && a.z.abs_diff_eq(&b.z, epsilon)
-});
-
-impl_relative_eq!(Point3, |a, b, epsilon, max_relative| {
-    a.x.relative_eq(&b.x, epsilon, max_relative)
-        && a.y.relative_eq(&b.y, epsilon, max_relative)
-        && a.z.relative_eq(&b.z, epsilon, max_relative)
-});
-
-impl Point3A {
-    /// Creates a new point with the given components.
-    #[inline]
-    pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self::wrap(glam::Vec3A::new(x, y, z))
     }
 
@@ -501,16 +325,16 @@ impl Point3A {
         (point_b.inner - point_a.inner).length_squared()
     }
 
-    /// This point as a [`Vector3A`].
+    /// This point as a [`Vector3`].
     #[inline]
-    pub fn as_vector(&self) -> &Vector3A {
+    pub fn as_vector(&self) -> &Vector3 {
         bytemuck::cast_ref(self)
     }
 
-    /// Converts the point to the 4-byte aligned cache-friendly [`Point3`].
+    /// Converts the point to the 4-byte aligned cache-friendly [`Point3P`].
     #[inline]
-    pub fn unaligned(&self) -> Point3 {
-        Point3::new(self.x(), self.y(), self.z())
+    pub fn pack(&self) -> Point3P {
+        Point3P::new(self.x(), self.y(), self.z())
     }
 
     #[inline]
@@ -524,71 +348,71 @@ impl Point3A {
     }
 }
 
-impl From<Vector3A> for Point3A {
+impl From<Vector3> for Point3 {
     #[inline]
-    fn from(vector: Vector3A) -> Self {
+    fn from(vector: Vector3) -> Self {
         Self::new(vector.x(), vector.y(), vector.z())
     }
 }
 
-impl From<Point3A> for Vector3A {
+impl From<Point3> for Vector3 {
     #[inline]
-    fn from(point: Point3A) -> Self {
-        Vector3A::new(point.x(), point.y(), point.z())
+    fn from(point: Point3) -> Self {
+        Vector3::new(point.x(), point.y(), point.z())
     }
 }
 
-impl From<[f32; 3]> for Point3A {
+impl From<[f32; 3]> for Point3 {
     #[inline]
     fn from([x, y, z]: [f32; 3]) -> Self {
         Self::new(x, y, z)
     }
 }
 
-impl From<Point3A> for [f32; 3] {
+impl From<Point3> for [f32; 3] {
     #[inline]
-    fn from(point: Point3A) -> Self {
+    fn from(point: Point3) -> Self {
         [point.x(), point.y(), point.z()]
     }
 }
 
-impl_binop!(Add, add, Point3A, Vector3A, Point3A, |a, b| {
-    Point3A::wrap(a.inner.add(b.unwrap()))
+impl_binop!(Add, add, Point3, Vector3, Point3, |a, b| {
+    Point3::wrap(a.inner.add(b.unwrap()))
 });
 
-impl_binop!(Sub, sub, Point3A, Vector3A, Point3A, |a, b| {
-    Point3A::wrap(a.inner.sub(b.unwrap()))
+impl_binop!(Sub, sub, Point3, Vector3, Point3, |a, b| {
+    Point3::wrap(a.inner.sub(b.unwrap()))
 });
 
-impl_binop!(Sub, sub, Point3A, Point3A, Vector3A, |a, b| {
-    Vector3A::wrap(a.inner.sub(b.inner))
+impl_binop!(Sub, sub, Point3, Point3, Vector3, |a, b| {
+    Vector3::wrap(a.inner.sub(b.inner))
 });
 
-impl_binop!(Mul, mul, Point3A, f32, Point3A, |a, b| {
-    Point3A::wrap(a.inner.mul(*b))
+impl_binop!(Mul, mul, Point3, f32, Point3, |a, b| {
+    Point3::wrap(a.inner.mul(*b))
 });
 
-impl_binop!(Mul, mul, f32, Point3A, Point3A, |a, b| { b.mul(*a) });
+impl_binop!(Mul, mul, f32, Point3, Point3, |a, b| { b.mul(*a) });
 
-impl_binop!(Div, div, Point3A, f32, Point3A, |a, b| { a.mul(b.recip()) });
+impl_binop!(Div, div, Point3, f32, Point3, |a, b| { a.mul(b.recip()) });
 
-impl_binop_assign!(AddAssign, add_assign, Point3A, Vector3A, |a, b| {
+impl_binop_assign!(AddAssign, add_assign, Point3, Vector3, |a, b| {
     a.inner.add_assign(b.unwrap());
 });
 
-impl_binop_assign!(SubAssign, sub_assign, Point3A, Vector3A, |a, b| {
+impl_binop_assign!(SubAssign, sub_assign, Point3, Vector3, |a, b| {
     a.inner.sub_assign(b.unwrap());
 });
 
-impl_binop_assign!(MulAssign, mul_assign, Point3A, f32, |a, b| {
+impl_binop_assign!(MulAssign, mul_assign, Point3, f32, |a, b| {
     a.inner.mul_assign(*b);
 });
 
-impl_binop_assign!(DivAssign, div_assign, Point3A, f32, |a, b| {
+impl_binop_assign!(DivAssign, div_assign, Point3, f32, |a, b| {
     a.inner.div_assign(*b);
 });
 
-impl Index<usize> for Point3A {
+impl Index<usize> for Point3 {
     type Output = f32;
 
     #[inline]
@@ -597,15 +421,15 @@ impl Index<usize> for Point3A {
     }
 }
 
-impl IndexMut<usize> for Point3A {
+impl IndexMut<usize> for Point3 {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.inner.index_mut(index)
     }
 }
 
-impl fmt::Debug for Point3A {
+impl fmt::Debug for Point3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Point3A")
+        f.debug_struct("Point3")
             .field("x", &self.inner.x)
             .field("y", &self.inner.y)
             .field("z", &self.inner.z)
@@ -613,18 +437,194 @@ impl fmt::Debug for Point3A {
     }
 }
 
-impl_abs_diff_eq!(Point3A, |a, b, epsilon| {
+impl_abs_diff_eq!(Point3, |a, b, epsilon| {
     a.inner.abs_diff_eq(b.inner, epsilon)
 });
 
-impl_relative_eq!(Point3A, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Point3, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
+});
+
+impl Point3P {
+    /// Creates a new point with the given components.
+    #[inline]
+    pub const fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+
+    /// Creates a point at the origin.
+    #[inline]
+    pub const fn origin() -> Self {
+        Self::new(0.0, 0.0, 0.0)
+    }
+
+    /// The x-component.
+    #[inline]
+    pub const fn x(&self) -> f32 {
+        self.x
+    }
+
+    /// The y-component.
+    #[inline]
+    pub const fn y(&self) -> f32 {
+        self.y
+    }
+
+    /// The z-component.
+    #[inline]
+    pub const fn z(&self) -> f32 {
+        self.z
+    }
+
+    /// A mutable reference to the x-component.
+    #[inline]
+    pub const fn x_mut(&mut self) -> &mut f32 {
+        &mut self.x
+    }
+
+    /// A mutable reference to the y-component.
+    #[inline]
+    pub const fn y_mut(&mut self) -> &mut f32 {
+        &mut self.y
+    }
+
+    /// A mutable reference to the z-component.
+    #[inline]
+    pub const fn z_mut(&mut self) -> &mut f32 {
+        &mut self.z
+    }
+
+    /// The 2D point containing the x- and y-components of this point.
+    #[inline]
+    pub fn xy(&self) -> Point2 {
+        Point2::new(self.x(), self.y())
+    }
+
+    /// This point as a [`Vector3P`].
+    #[inline]
+    pub fn as_vector(&self) -> &Vector3P {
+        bytemuck::cast_ref(self)
+    }
+
+    /// Converts the point to the 16-byte aligned SIMD-friendly [`Point3`].
+    #[inline]
+    pub fn unpack(&self) -> Point3 {
+        Point3::new(self.x(), self.y(), self.z())
+    }
+}
+
+impl From<Vector3P> for Point3P {
+    #[inline]
+    fn from(vector: Vector3P) -> Self {
+        Self::new(vector.x(), vector.y(), vector.z())
+    }
+}
+
+impl From<Point3P> for Vector3P {
+    #[inline]
+    fn from(point: Point3P) -> Self {
+        Vector3P::new(point.x(), point.y(), point.z())
+    }
+}
+
+impl From<[f32; 3]> for Point3P {
+    #[inline]
+    fn from([x, y, z]: [f32; 3]) -> Self {
+        Self::new(x, y, z)
+    }
+}
+
+impl From<Point3P> for [f32; 3] {
+    #[inline]
+    fn from(point: Point3P) -> Self {
+        [point.x(), point.y(), point.z()]
+    }
+}
+
+impl_binop!(Add, add, Point3P, Vector3P, Point3P, |a, b| {
+    Point3P::new(a.x + b.x(), a.y + b.y(), a.z + b.z())
+});
+
+impl_binop!(Sub, sub, Point3P, Vector3P, Point3P, |a, b| {
+    Point3P::new(a.x - b.x(), a.y - b.y(), a.z - b.z())
+});
+
+impl_binop!(Sub, sub, Point3P, Point3P, Vector3P, |a, b| {
+    Vector3P::new(a.x - b.x, a.y - b.y, a.z - b.z)
+});
+
+impl_binop!(Mul, mul, Point3P, f32, Point3P, |a, b| {
+    Point3P::new(a.x * b, a.y * b, a.z * b)
+});
+
+impl_binop!(Mul, mul, f32, Point3P, Point3P, |a, b| { b.mul(*a) });
+
+impl_binop!(Div, div, Point3P, f32, Point3P, |a, b| { a.mul(b.recip()) });
+
+impl_binop_assign!(AddAssign, add_assign, Point3P, Vector3P, |a, b| {
+    a.x += b.x();
+    a.y += b.y();
+    a.z += b.z();
+});
+
+impl_binop_assign!(SubAssign, sub_assign, Point3P, Vector3P, |a, b| {
+    a.x -= b.x();
+    a.y -= b.y();
+    a.z -= b.z();
+});
+
+impl_binop_assign!(MulAssign, mul_assign, Point3P, f32, |a, b| {
+    a.x *= b;
+    a.y *= b;
+    a.z *= b;
+});
+
+impl_binop_assign!(DivAssign, div_assign, Point3P, f32, |a, b| {
+    a.mul_assign(b.recip());
+});
+
+impl Index<usize> for Point3P {
+    type Output = f32;
+
+    #[inline]
+    fn index(&self, idx: usize) -> &Self::Output {
+        match idx {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => panic!("index out of bounds"),
+        }
+    }
+}
+
+impl IndexMut<usize> for Point3P {
+    #[inline]
+    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+        match idx {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            2 => &mut self.z,
+            _ => panic!("index out of bounds"),
+        }
+    }
+}
+
+impl_abs_diff_eq!(Point3P, |a, b, epsilon| {
+    a.x.abs_diff_eq(&b.x, epsilon)
+        && a.y.abs_diff_eq(&b.y, epsilon)
+        && a.z.abs_diff_eq(&b.z, epsilon)
+});
+
+impl_relative_eq!(Point3P, |a, b, epsilon, max_relative| {
+    a.x.relative_eq(&b.x, epsilon, max_relative)
+        && a.y.relative_eq(&b.y, epsilon, max_relative)
+        && a.z.relative_eq(&b.z, epsilon, max_relative)
 });
 
 impl_roc_for_library_provided_primitives! {
 //  Type       Pkg    Parents  Module  Roc name  Postfix  Precision
     Point2  => core,  None,    Point2, Point2,   None,    PrecisionIrrelevant,
-    Point3  => core,  None,    Point3, Point3,   None,    PrecisionIrrelevant,
+    Point3P  => core,  None,   Point3, Point3,   None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -822,10 +822,10 @@ mod tests {
         assert_eq!(p.y(), 2.0);
     }
 
-    // Point3 tests (unaligned)
+    // Point3P tests
     #[test]
     fn point3_new_works() {
-        let p = Point3::new(1.0, 2.0, 3.0);
+        let p = Point3P::new(1.0, 2.0, 3.0);
         assert_eq!(p.x(), 1.0);
         assert_eq!(p.y(), 2.0);
         assert_eq!(p.z(), 3.0);
@@ -833,7 +833,7 @@ mod tests {
 
     #[test]
     fn point3_origin_gives_zero_point() {
-        let origin = Point3::origin();
+        let origin = Point3P::origin();
         assert_eq!(origin.x(), 0.0);
         assert_eq!(origin.y(), 0.0);
         assert_eq!(origin.z(), 0.0);
@@ -841,7 +841,7 @@ mod tests {
 
     #[test]
     fn point3_component_accessors_work() {
-        let mut p = Point3::new(1.0, 2.0, 3.0);
+        let mut p = Point3P::new(1.0, 2.0, 3.0);
         assert_eq!(p.x(), 1.0);
         assert_eq!(p.y(), 2.0);
         assert_eq!(p.z(), 3.0);
@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn point3_xy_extraction_works() {
-        let p3 = Point3::new(1.0, 2.0, 3.0);
+        let p3 = Point3P::new(1.0, 2.0, 3.0);
         let xy = p3.xy();
         assert_eq!(xy.x(), 1.0);
         assert_eq!(xy.y(), 2.0);
@@ -864,7 +864,7 @@ mod tests {
 
     #[test]
     fn point3_as_vector_works() {
-        let p = Point3::new(3.0, 4.0, 5.0);
+        let p = Point3P::new(3.0, 4.0, 5.0);
         let v = p.as_vector();
         assert_eq!(v.x(), 3.0);
         assert_eq!(v.y(), 4.0);
@@ -873,8 +873,8 @@ mod tests {
 
     #[test]
     fn point3_aligned_converts_to_point3a() {
-        let p3 = Point3::new(1.0, 2.0, 3.0);
-        let p3a = p3.aligned();
+        let p3 = Point3P::new(1.0, 2.0, 3.0);
+        let p3a = p3.unpack();
         assert_eq!(p3a.x(), 1.0);
         assert_eq!(p3a.y(), 2.0);
         assert_eq!(p3a.z(), 3.0);
@@ -882,13 +882,13 @@ mod tests {
 
     #[test]
     fn point3_vector_conversions_work() {
-        let v = Vector3::new(2.0, 3.0, 4.0);
-        let p = Point3::from(v);
+        let v = Vector3P::new(2.0, 3.0, 4.0);
+        let p = Point3P::from(v);
         assert_eq!(p.x(), 2.0);
         assert_eq!(p.y(), 3.0);
         assert_eq!(p.z(), 4.0);
 
-        let v_back = Vector3::from(p);
+        let v_back = Vector3P::from(p);
         assert_eq!(v_back.x(), 2.0);
         assert_eq!(v_back.y(), 3.0);
         assert_eq!(v_back.z(), 4.0);
@@ -897,7 +897,7 @@ mod tests {
     #[test]
     fn point3_array_conversions_work() {
         let arr: [f32; 3] = [1.0, 2.0, 3.0];
-        let p = Point3::from(arr);
+        let p = Point3P::from(arr);
         assert_eq!(p.x(), 1.0);
         assert_eq!(p.y(), 2.0);
         assert_eq!(p.z(), 3.0);
@@ -908,8 +908,8 @@ mod tests {
 
     #[test]
     fn point3_arithmetic_with_vector_works() {
-        let p = Point3::new(1.0, 2.0, 3.0);
-        let v = Vector3::new(4.0, 5.0, 6.0);
+        let p = Point3P::new(1.0, 2.0, 3.0);
+        let v = Vector3P::new(4.0, 5.0, 6.0);
 
         let add_result = &p + &v;
         assert_eq!(add_result.x(), 5.0);
@@ -924,8 +924,8 @@ mod tests {
 
     #[test]
     fn point3_assignment_operations_work() {
-        let mut p = Point3::new(1.0, 2.0, 3.0);
-        let v = Vector3::new(4.0, 5.0, 6.0);
+        let mut p = Point3P::new(1.0, 2.0, 3.0);
+        let v = Vector3P::new(4.0, 5.0, 6.0);
 
         p += &v;
         assert_eq!(p.x(), 5.0);
@@ -950,7 +950,7 @@ mod tests {
 
     #[test]
     fn point3_arithmetic_with_scalar_works() {
-        let p = Point3::new(2.0, 3.0, 4.0);
+        let p = Point3P::new(2.0, 3.0, 4.0);
 
         let mul_result = &p * 2.0;
         assert_eq!(mul_result.x(), 4.0);
@@ -970,8 +970,8 @@ mod tests {
 
     #[test]
     fn point3_subtraction_gives_vector() {
-        let p1 = Point3::new(5.0, 7.0, 9.0);
-        let p2 = Point3::new(2.0, 3.0, 4.0);
+        let p1 = Point3P::new(5.0, 7.0, 9.0);
+        let p2 = Point3P::new(2.0, 3.0, 4.0);
 
         let diff = &p1 - &p2;
         assert_eq!(diff.x(), 3.0);
@@ -981,7 +981,7 @@ mod tests {
 
     #[test]
     fn point3_indexing_works() {
-        let mut p = Point3::new(1.0, 2.0, 3.0);
+        let mut p = Point3P::new(1.0, 2.0, 3.0);
         assert_eq!(p[0], 1.0);
         assert_eq!(p[1], 2.0);
         assert_eq!(p[2], 3.0);
@@ -997,31 +997,31 @@ mod tests {
     #[test]
     #[should_panic]
     fn point3_indexing_panics_on_out_of_bounds() {
-        let p = Point3::new(1.0, 2.0, 3.0);
+        let p = Point3P::new(1.0, 2.0, 3.0);
         let _ = p[3]; // Should panic
     }
 
     #[test]
     fn point3_point3a_cross_conversions_work() {
-        // Point3 -> Point3A
-        let p3 = Point3::new(1.0, 2.0, 3.0);
-        let p3a = p3.aligned();
+        // Point3P -> Point3
+        let p3 = Point3P::new(1.0, 2.0, 3.0);
+        let p3a = p3.unpack();
         assert_eq!(p3a.x(), 1.0);
         assert_eq!(p3a.y(), 2.0);
         assert_eq!(p3a.z(), 3.0);
 
-        // Point3A -> Point3
-        let p3a = Point3A::new(4.0, 5.0, 6.0);
-        let p3 = p3a.unaligned();
+        // Point3 -> Point3P
+        let p3a = Point3::new(4.0, 5.0, 6.0);
+        let p3 = p3a.pack();
         assert_eq!(p3.x(), 4.0);
         assert_eq!(p3.y(), 5.0);
         assert_eq!(p3.z(), 6.0);
     }
 
-    // Point3A tests (aligned)
+    // Point3 tests (aligned)
     #[test]
     fn point3a_new_works() {
-        let p = Point3A::new(1.0, 2.0, 3.0);
+        let p = Point3::new(1.0, 2.0, 3.0);
         assert_eq!(p.x(), 1.0);
         assert_eq!(p.y(), 2.0);
         assert_eq!(p.z(), 3.0);
@@ -1029,7 +1029,7 @@ mod tests {
 
     #[test]
     fn point3a_origin_gives_zero_point() {
-        let origin = Point3A::origin();
+        let origin = Point3::origin();
         assert_eq!(origin.x(), 0.0);
         assert_eq!(origin.y(), 0.0);
         assert_eq!(origin.z(), 0.0);
@@ -1037,9 +1037,9 @@ mod tests {
 
     #[test]
     fn point3a_center_of_calculates_midpoint() {
-        let p1 = Point3A::new(0.0, 0.0, 0.0);
-        let p2 = Point3A::new(4.0, 6.0, 8.0);
-        let center = Point3A::center_of(&p1, &p2);
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(4.0, 6.0, 8.0);
+        let center = Point3::center_of(&p1, &p2);
         assert_eq!(center.x(), 2.0);
         assert_eq!(center.y(), 3.0);
         assert_eq!(center.z(), 4.0);
@@ -1047,7 +1047,7 @@ mod tests {
 
     #[test]
     fn point3a_component_accessors_work() {
-        let mut p = Point3A::new(1.0, 2.0, 3.0);
+        let mut p = Point3::new(1.0, 2.0, 3.0);
         assert_eq!(p.x(), 1.0);
         assert_eq!(p.y(), 2.0);
         assert_eq!(p.z(), 3.0);
@@ -1062,7 +1062,7 @@ mod tests {
 
     #[test]
     fn point3a_as_vector_works() {
-        let p = Point3A::new(3.0, 4.0, 5.0);
+        let p = Point3::new(3.0, 4.0, 5.0);
         let v = p.as_vector();
         assert_eq!(v.x(), 3.0);
         assert_eq!(v.y(), 4.0);
@@ -1071,8 +1071,8 @@ mod tests {
 
     #[test]
     fn point3a_min_max_with_work() {
-        let p1 = Point3A::new(1.0, 4.0, 2.0);
-        let p2 = Point3A::new(3.0, 2.0, 5.0);
+        let p1 = Point3::new(1.0, 4.0, 2.0);
+        let p2 = Point3::new(3.0, 2.0, 5.0);
 
         let min_p = p1.min_with(&p2);
         assert_eq!(min_p.x(), 1.0);
@@ -1087,7 +1087,7 @@ mod tests {
 
     #[test]
     fn point3a_xy_extraction_works() {
-        let p3 = Point3A::new(1.0, 2.0, 3.0);
+        let p3 = Point3::new(1.0, 2.0, 3.0);
         let xy = p3.xy();
         assert_eq!(xy.x(), 1.0);
         assert_eq!(xy.y(), 2.0);
@@ -1095,20 +1095,20 @@ mod tests {
 
     #[test]
     fn point3a_distance_calculations_work() {
-        let p1 = Point3A::new(0.0, 0.0, 0.0);
-        let p2 = Point3A::new(1.0, 2.0, 2.0);
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(1.0, 2.0, 2.0);
 
-        let distance = Point3A::distance_between(&p1, &p2);
+        let distance = Point3::distance_between(&p1, &p2);
         assert_abs_diff_eq!(distance, 3.0, epsilon = EPSILON);
 
-        let squared_distance = Point3A::squared_distance_between(&p1, &p2);
+        let squared_distance = Point3::squared_distance_between(&p1, &p2);
         assert_abs_diff_eq!(squared_distance, 9.0, epsilon = EPSILON);
     }
 
     #[test]
     fn point3a_unaligned_converts_to_point3() {
-        let p3a = Point3A::new(1.0, 2.0, 3.0);
-        let p3 = p3a.unaligned();
+        let p3a = Point3::new(1.0, 2.0, 3.0);
+        let p3 = p3a.pack();
         assert_eq!(p3.x(), 1.0);
         assert_eq!(p3.y(), 2.0);
         assert_eq!(p3.z(), 3.0);
@@ -1116,13 +1116,13 @@ mod tests {
 
     #[test]
     fn point3a_vector_conversions_work() {
-        let v = Vector3A::new(2.0, 3.0, 4.0);
-        let p = Point3A::from(v);
+        let v = Vector3::new(2.0, 3.0, 4.0);
+        let p = Point3::from(v);
         assert_eq!(p.x(), 2.0);
         assert_eq!(p.y(), 3.0);
         assert_eq!(p.z(), 4.0);
 
-        let v_back = Vector3A::from(p);
+        let v_back = Vector3::from(p);
         assert_eq!(v_back.x(), 2.0);
         assert_eq!(v_back.y(), 3.0);
         assert_eq!(v_back.z(), 4.0);
@@ -1131,7 +1131,7 @@ mod tests {
     #[test]
     fn point3a_array_conversions_work() {
         let arr: [f32; 3] = [1.0, 2.0, 3.0];
-        let p = Point3A::from(arr);
+        let p = Point3::from(arr);
         assert_eq!(p.x(), 1.0);
         assert_eq!(p.y(), 2.0);
         assert_eq!(p.z(), 3.0);
@@ -1142,8 +1142,8 @@ mod tests {
 
     #[test]
     fn point3a_arithmetic_with_vector_works() {
-        let p = Point3A::new(1.0, 2.0, 3.0);
-        let v = Vector3A::new(4.0, 5.0, 6.0);
+        let p = Point3::new(1.0, 2.0, 3.0);
+        let v = Vector3::new(4.0, 5.0, 6.0);
 
         let add_result = &p + &v;
         assert_eq!(add_result.x(), 5.0);
@@ -1158,8 +1158,8 @@ mod tests {
 
     #[test]
     fn point3a_assignment_operations_work() {
-        let mut p = Point3A::new(1.0, 2.0, 3.0);
-        let v = Vector3A::new(4.0, 5.0, 6.0);
+        let mut p = Point3::new(1.0, 2.0, 3.0);
+        let v = Vector3::new(4.0, 5.0, 6.0);
 
         p += &v;
         assert_eq!(p.x(), 5.0);
@@ -1184,7 +1184,7 @@ mod tests {
 
     #[test]
     fn point3a_arithmetic_with_scalar_works() {
-        let p = Point3A::new(2.0, 3.0, 4.0);
+        let p = Point3::new(2.0, 3.0, 4.0);
 
         let mul_result = &p * 2.0;
         assert_eq!(mul_result.x(), 4.0);
@@ -1204,8 +1204,8 @@ mod tests {
 
     #[test]
     fn point3a_subtraction_gives_vector() {
-        let p1 = Point3A::new(5.0, 7.0, 9.0);
-        let p2 = Point3A::new(2.0, 3.0, 4.0);
+        let p1 = Point3::new(5.0, 7.0, 9.0);
+        let p2 = Point3::new(2.0, 3.0, 4.0);
 
         let diff = &p1 - &p2;
         assert_eq!(diff.x(), 3.0);
@@ -1215,7 +1215,7 @@ mod tests {
 
     #[test]
     fn point3a_indexing_works() {
-        let mut p = Point3A::new(1.0, 2.0, 3.0);
+        let mut p = Point3::new(1.0, 2.0, 3.0);
         assert_eq!(p[0], 1.0);
         assert_eq!(p[1], 2.0);
         assert_eq!(p[2], 3.0);
@@ -1231,7 +1231,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn point3a_indexing_panics_on_out_of_bounds() {
-        let p = Point3A::new(1.0, 2.0, 3.0);
+        let p = Point3::new(1.0, 2.0, 3.0);
         let _ = p[3]; // Should panic
     }
 
@@ -1242,12 +1242,12 @@ mod tests {
         assert_eq!(p2.x(), 0.0);
         assert_eq!(p2.y(), 0.0);
 
-        let p3 = Point3::default();
+        let p3 = Point3P::default();
         assert_eq!(p3.x(), 0.0);
         assert_eq!(p3.y(), 0.0);
         assert_eq!(p3.z(), 0.0);
 
-        let p3a = Point3A::default();
+        let p3a = Point3::default();
         assert_eq!(p3a.x(), 0.0);
         assert_eq!(p3a.y(), 0.0);
         assert_eq!(p3a.z(), 0.0);
@@ -1259,11 +1259,11 @@ mod tests {
         let p2_copy = p2;
         assert_eq!(p2.x(), p2_copy.x());
 
-        let p3 = Point3::new(1.0, 2.0, 3.0);
+        let p3 = Point3P::new(1.0, 2.0, 3.0);
         let p3_copy = p3;
         assert_eq!(p3.x(), p3_copy.x());
 
-        let p3a = Point3A::new(1.0, 2.0, 3.0);
+        let p3a = Point3::new(1.0, 2.0, 3.0);
         let p3a_copy = p3a;
         assert_eq!(p3a.x(), p3a_copy.x());
     }
@@ -1276,15 +1276,15 @@ mod tests {
         assert_eq!(p1, p2);
         assert_ne!(p1, p3);
 
-        let q1 = Point3::new(1.0, 2.0, 3.0);
-        let q2 = Point3::new(1.0, 2.0, 3.0);
-        let q3 = Point3::new(3.0, 2.0, 1.0);
+        let q1 = Point3P::new(1.0, 2.0, 3.0);
+        let q2 = Point3P::new(1.0, 2.0, 3.0);
+        let q3 = Point3P::new(3.0, 2.0, 1.0);
         assert_eq!(q1, q2);
         assert_ne!(q1, q3);
 
-        let r1 = Point3A::new(1.0, 2.0, 3.0);
-        let r2 = Point3A::new(1.0, 2.0, 3.0);
-        let r3 = Point3A::new(3.0, 2.0, 1.0);
+        let r1 = Point3::new(1.0, 2.0, 3.0);
+        let r2 = Point3::new(1.0, 2.0, 3.0);
+        let r3 = Point3::new(3.0, 2.0, 1.0);
         assert_eq!(r1, r2);
         assert_ne!(r1, r3);
     }
@@ -1295,13 +1295,13 @@ mod tests {
         let debug_str = format!("{:?}", p2);
         assert!(debug_str.contains("Point2"));
 
-        let p3 = Point3::new(1.0, 2.0, 3.0);
+        let p3 = Point3P::new(1.0, 2.0, 3.0);
         let debug_str = format!("{:?}", p3);
-        assert!(debug_str.contains("Point3"));
+        assert!(debug_str.contains("Point3P"));
 
-        let p3a = Point3A::new(1.0, 2.0, 3.0);
+        let p3a = Point3::new(1.0, 2.0, 3.0);
         let debug_str = format!("{:?}", p3a);
-        assert!(debug_str.contains("Point3A"));
+        assert!(debug_str.contains("Point3"));
     }
 
     #[test]
@@ -1327,7 +1327,7 @@ mod tests {
 
     #[test]
     fn point_arithmetic_maintains_precision() {
-        let p = Point3::new(0.1, 0.2, 0.3);
+        let p = Point3P::new(0.1, 0.2, 0.3);
         let doubled = &p * 2.0;
         let halved = &doubled / 2.0;
 
@@ -1343,28 +1343,28 @@ mod tests {
         let back_to_point = Point2::from(as_vector);
         assert_eq!(original_p2, back_to_point);
 
-        let original_p3 = Point3::new(1.5, 2.5, 3.5);
-        let as_vector = Vector3::from(original_p3);
-        let back_to_point = Point3::from(as_vector);
+        let original_p3 = Point3P::new(1.5, 2.5, 3.5);
+        let as_vector = Vector3P::from(original_p3);
+        let back_to_point = Point3P::from(as_vector);
         assert_eq!(original_p3, back_to_point);
 
-        let original_p3a = Point3A::new(1.5, 2.5, 3.5);
-        let as_vector = Vector3A::from(original_p3a);
-        let back_to_point = Point3A::from(as_vector);
+        let original_p3a = Point3::new(1.5, 2.5, 3.5);
+        let as_vector = Vector3::from(original_p3a);
+        let back_to_point = Point3::from(as_vector);
         assert_eq!(original_p3a, back_to_point);
     }
 
     #[test]
     fn point_distance_is_symmetric() {
-        let p1 = Point3A::new(1.0, 2.0, 3.0);
-        let p2 = Point3A::new(4.0, 6.0, 8.0);
+        let p1 = Point3::new(1.0, 2.0, 3.0);
+        let p2 = Point3::new(4.0, 6.0, 8.0);
 
-        let dist1 = Point3A::distance_between(&p1, &p2);
-        let dist2 = Point3A::distance_between(&p2, &p1);
+        let dist1 = Point3::distance_between(&p1, &p2);
+        let dist2 = Point3::distance_between(&p2, &p1);
         assert_abs_diff_eq!(dist1, dist2, epsilon = EPSILON);
 
-        let sq_dist1 = Point3A::squared_distance_between(&p1, &p2);
-        let sq_dist2 = Point3A::squared_distance_between(&p2, &p1);
+        let sq_dist1 = Point3::squared_distance_between(&p1, &p2);
+        let sq_dist2 = Point3::squared_distance_between(&p2, &p1);
         assert_abs_diff_eq!(sq_dist1, sq_dist2, epsilon = EPSILON);
     }
 
@@ -1388,9 +1388,9 @@ mod tests {
         assert_eq!(center.x(), 0.0);
         assert_eq!(center.y(), 0.0);
 
-        let p3_1 = Point3A::new(-2.0, -4.0, -6.0);
-        let p3_2 = Point3A::new(2.0, 4.0, 6.0);
-        let center3 = Point3A::center_of(&p3_1, &p3_2);
+        let p3_1 = Point3::new(-2.0, -4.0, -6.0);
+        let p3_2 = Point3::new(2.0, 4.0, 6.0);
+        let center3 = Point3::center_of(&p3_1, &p3_2);
         assert_eq!(center3.x(), 0.0);
         assert_eq!(center3.y(), 0.0);
         assert_eq!(center3.z(), 0.0);
@@ -1424,7 +1424,7 @@ mod tests {
 
     #[test]
     fn point_min_max_with_same_point() {
-        let p = Point3A::new(1.0, 2.0, 3.0);
+        let p = Point3::new(1.0, 2.0, 3.0);
 
         let min_p = p.min_with(&p);
         assert_eq!(min_p, p);
@@ -1435,8 +1435,8 @@ mod tests {
 
     #[test]
     fn point_arithmetic_with_zero_vector() {
-        let p = Point3::new(5.0, 10.0, 15.0);
-        let zero_vec = Vector3::new(0.0, 0.0, 0.0);
+        let p = Point3P::new(5.0, 10.0, 15.0);
+        let zero_vec = Vector3P::new(0.0, 0.0, 0.0);
 
         let add_result = &p + &zero_vec;
         assert_eq!(add_result, p);
@@ -1455,7 +1455,7 @@ mod tests {
 
     #[test]
     fn point_scalar_multiplication_by_one() {
-        let p = Point3A::new(5.0, 10.0, 15.0);
+        let p = Point3::new(5.0, 10.0, 15.0);
         let result = &p * 1.0;
         assert_eq!(result, p);
     }

@@ -2,7 +2,7 @@
 
 use crate::{Voxel, chunks::ChunkedVoxelObject, voxel_types::VoxelType};
 use impact_alloc::{AVec, Allocator, avec};
-use impact_math::point::Point3A;
+use impact_math::point::Point3;
 use simdnoise::{NoiseBuilder, Settings};
 use std::mem;
 
@@ -55,7 +55,7 @@ impl VoxelTypeGenerator {
         &self,
         voxels: &mut [Voxel],
         buffers: &mut VoxelTypeGeneratorChunkBuffers<A>,
-        chunk_origin: &Point3A,
+        chunk_origin: &Point3,
     ) {
         match self {
             Self::Same(generator) => {
@@ -126,7 +126,7 @@ impl GradientNoiseVoxelTypeGenerator {
         &self,
         voxels: &mut [Voxel],
         buffers: &mut VoxelTypeGeneratorChunkBuffers<A>,
-        chunk_origin: &Point3A,
+        chunk_origin: &Point3,
     ) {
         assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
 

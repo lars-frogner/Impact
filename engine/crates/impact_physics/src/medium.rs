@@ -1,6 +1,6 @@
 //! Physical media objects can interact with.
 
-use crate::quantities::Velocity;
+use crate::quantities::VelocityP;
 use roc_integration::roc;
 
 /// A physical medium with the same properties and state everywhere.
@@ -11,7 +11,7 @@ pub struct UniformMedium {
     /// The mass density of the medium.
     pub mass_density: f32,
     /// The velocity of the medium.
-    pub velocity: Velocity,
+    pub velocity: VelocityP,
 }
 
 #[roc]
@@ -26,7 +26,7 @@ impl UniformMedium {
 
     /// Creates a new uniform medium with the given mass density and velocity.
     #[roc(body = "{ mass_density, velocity }")]
-    pub fn new(mass_density: f32, velocity: Velocity) -> Self {
+    pub fn new(mass_density: f32, velocity: VelocityP) -> Self {
         Self {
             mass_density,
             velocity,
@@ -36,32 +36,32 @@ impl UniformMedium {
     /// Creates a new vacuum medium (zero mass density and velocity).
     #[roc(body = "new(0.0, Vector3.zero)")]
     pub fn vacuum() -> Self {
-        Self::new(0.0, Velocity::zeros())
+        Self::new(0.0, VelocityP::zeros())
     }
 
     /// Creates a new medium of Earth air at sea level and room temperature with
     /// no wind.
     #[roc(body = "moving_air(Vector3.zero)")]
     pub fn still_air() -> Self {
-        Self::moving_air(Velocity::zeros())
+        Self::moving_air(VelocityP::zeros())
     }
 
     /// Creates a new medium of Earth air at sea level and room temperature with
     /// the given wind velocity.
     #[roc(body = "new(sea_level_air_mass_density, velocity)")]
-    pub fn moving_air(velocity: Velocity) -> Self {
+    pub fn moving_air(velocity: VelocityP) -> Self {
         Self::new(Self::SEA_LEVEL_AIR_MASS_DENSITY, velocity)
     }
 
     /// Creates a new medium of water with no flow.
     #[roc(body = "moving_water(Vector3.zero)")]
     pub fn still_water() -> Self {
-        Self::moving_water(Velocity::zeros())
+        Self::moving_water(VelocityP::zeros())
     }
 
     /// Creates a new medium of water with the given flow velocity.
     #[roc(body = "new(water_mass_density, velocity)")]
-    pub fn moving_water(velocity: Velocity) -> Self {
+    pub fn moving_water(velocity: VelocityP) -> Self {
         Self::new(Self::WATER_MASS_DENSITY, velocity)
     }
 }
@@ -86,7 +86,7 @@ impl<'a> arbitrary::Arbitrary<'a> for UniformMedium {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self {
             mass_density: f32::arbitrary(u)?,
-            velocity: Velocity::new(f32::arbitrary(u)?, f32::arbitrary(u)?, f32::arbitrary(u)?),
+            velocity: VelocityP::new(f32::arbitrary(u)?, f32::arbitrary(u)?, f32::arbitrary(u)?),
         })
     }
 

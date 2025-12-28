@@ -8,7 +8,7 @@ use crate::{
             DragLoadMap, DragLoadMapConfig, DragLoadMapID,
         },
     },
-    quantities::Position,
+    quantities::PositionP,
     rigid_body::DynamicRigidBodyID,
 };
 #[cfg(feature = "postcard")]
@@ -16,7 +16,7 @@ use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::ModelTransform;
-use impact_math::{hash::StringHash32, point::Point3};
+use impact_math::{hash::StringHash32, point::Point3P};
 use roc_integration::roc;
 use std::path::{Path, PathBuf};
 
@@ -46,7 +46,7 @@ pub fn setup_detailed_drag_force<'a>(
     rigid_body_id: DynamicRigidBodyID,
     model_transform: &ModelTransform,
     drag_load_map_id: StringHash32,
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
 ) -> Result<DetailedDragForceGeneratorID> {
     let drag_load_map_id = DragLoadMapID(drag_load_map_id);
 
@@ -70,7 +70,7 @@ pub fn setup_detailed_drag_force<'a>(
                 )
             })?
         } else {
-            let center_of_mass = Point3::from(model_transform.offset);
+            let center_of_mass = Point3P::from(model_transform.offset);
             let map = generate_map(
                 config,
                 &center_of_mass,
@@ -114,9 +114,9 @@ pub fn setup_detailed_drag_force<'a>(
 
 fn generate_map<'a>(
     config: &DragLoadMapConfig,
-    center_of_mass: &Position,
+    center_of_mass: &PositionP,
     drag_load_map_id: DragLoadMapID,
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
 ) -> Result<DragLoadMap> {
     impact_log::info!("Generating drag load map: {drag_load_map_id}");
 
@@ -128,7 +128,7 @@ fn generate_map<'a>(
         config.n_direction_samples; {
         DragLoadMap::compute_from_mesh(
             triangle_vertex_positions,
-            &center_of_mass.aligned(),
+            &center_of_mass.unpack(),
             config.n_direction_samples,
             config.n_theta_coords,
             config.smoothness,

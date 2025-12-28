@@ -9,7 +9,7 @@ use crate::{
     rigid_body::TypedRigidBodyID,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::{Plane, Sphere};
+use impact_geometry::{PlaneP, SphereP};
 use roc_integration::roc;
 
 define_setup_type! {
@@ -20,7 +20,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct SphericalCollidable {
         kind: u32,
-        sphere: Sphere,
+        sphere: SphereP,
         response_params: ContactResponseParameters,
     }
 }
@@ -33,7 +33,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PlanarCollidable {
         kind: u32,
-        plane: Plane,
+        plane: PlaneP,
         response_params: ContactResponseParameters,
     }
 }
@@ -52,7 +52,7 @@ impl SphericalCollidable {
     }"#)]
     pub fn new(
         kind: CollidableKind,
-        sphere: Sphere,
+        sphere: SphereP,
         response_params: ContactResponseParameters,
     ) -> Self {
         Self {
@@ -66,7 +66,7 @@ impl SphericalCollidable {
         CollidableKind::from_u32(self.kind).unwrap()
     }
 
-    pub fn sphere(&self) -> &Sphere {
+    pub fn sphere(&self) -> &SphereP {
         &self.sphere
     }
 
@@ -89,7 +89,7 @@ impl PlanarCollidable {
     }"#)]
     pub fn new(
         kind: CollidableKind,
-        plane: Plane,
+        plane: PlaneP,
         response_params: ContactResponseParameters,
     ) -> Self {
         Self {
@@ -103,7 +103,7 @@ impl PlanarCollidable {
         CollidableKind::from_u32(self.kind).unwrap()
     }
 
-    pub fn plane(&self) -> &Plane {
+    pub fn plane(&self) -> &PlaneP {
         &self.plane
     }
 

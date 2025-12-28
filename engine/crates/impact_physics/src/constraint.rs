@@ -7,13 +7,13 @@ pub mod spherical_joint;
 use crate::{
     anchor::{AnchorManager, TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
     collision::{Collidable, Collision, CollisionWorld},
-    quantities::{Orientation, Position, PositionA, Velocity},
+    quantities::{OrientationP, Position, PositionP, VelocityP},
     rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager, TypedRigidBodyID},
 };
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_containers::HashMap;
-use impact_math::{matrix::Matrix3, vector::Vector3};
+use impact_math::{matrix::Matrix3P, vector::Vector3P};
 use num_traits::Zero;
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
@@ -127,15 +127,15 @@ struct ConstrainedBody {
     /// Inverse of the body's mass.
     pub inverse_mass: f32,
     /// Inverse of the body's inertia tensor (in world space).
-    pub inverse_inertia_tensor: Matrix3,
+    pub inverse_inertia_tensor: Matrix3P,
     /// Position of the body's center of mass (in world space).
-    pub position: Position,
+    pub position: PositionP,
     /// Orientation of the body's reference frame (in world space).
-    pub orientation: Orientation,
+    pub orientation: OrientationP,
     /// Linear velocity of the body' center of mass (in world space).
-    pub velocity: Velocity,
+    pub velocity: VelocityP,
     /// Angular velocity of the body about its center of mass (in world space).
-    pub angular_velocity: Vector3,
+    pub angular_velocity: Vector3P,
 }
 
 impl ConstraintManager {
@@ -272,16 +272,16 @@ impl ConstrainedBody {
     fn from_dynamic_rigid_body(body: &DynamicRigidBody) -> Self {
         let inverse_inertia_tensor = body
             .inertia_tensor()
-            .aligned()
-            .inverse_rotated_matrix(&body.orientation().aligned());
+            .unpack()
+            .inverse_rotated_matrix(&body.orientation().unpack());
 
         Self {
             inverse_mass: body.mass().recip(),
-            inverse_inertia_tensor: inverse_inertia_tensor.unaligned(),
+            inverse_inertia_tensor: inverse_inertia_tensor.pack(),
             position: *body.position(),
             orientation: *body.orientation(),
-            velocity: body.compute_velocity().unaligned(),
-            angular_velocity: body.compute_angular_velocity().as_vector().unaligned(),
+            velocity: body.compute_velocity().pack(),
+            angular_velocity: body.compute_angular_velocity().as_vector().pack(),
         }
     }
 
@@ -289,7 +289,7 @@ impl ConstrainedBody {
     fn from_kinematic_rigid_body(body: &KinematicRigidBody) -> Self {
         Self {
             inverse_mass: 0.0,
-            inverse_inertia_tensor: Matrix3::zeros(),
+            inverse_inertia_tensor: Matrix3P::zeros(),
             position: *body.position(),
             orientation: *body.orientation(),
             velocity: *body.velocity(),
@@ -300,17 +300,17 @@ impl ConstrainedBody {
     /// Transforms the given point to world space from the coordinate system
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
-    fn transform_point_from_body_to_world_frame(&self, point: &PositionA) -> PositionA {
-        self.orientation.aligned().rotate_point(point) + self.position.aligned().as_vector()
+    fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
+        self.orientation.unpack().rotate_point(point) + self.position.unpack().as_vector()
     }
 
     /// Transforms the given point from world space to the coordinate system
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
-    fn transform_point_from_world_to_body_frame(&self, point: &PositionA) -> PositionA {
+    fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
         self.orientation
-            .aligned()
+            .unpack()
             .inverse()
-            .rotate_point(&(point - self.position.aligned().as_vector()))
+            .rotate_point(&(point - self.position.unpack().as_vector()))
     }
 }

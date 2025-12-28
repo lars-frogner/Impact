@@ -26,7 +26,7 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{
-    Float, halton::HaltonSequence, hash::ConstStringHash64, hash64, vector::Vector4,
+    Float, halton::HaltonSequence, hash::ConstStringHash64, hash64, vector::Vector4P,
 };
 use std::borrow::Cow;
 
@@ -71,7 +71,7 @@ pub struct AmbientOcclusionRenderCommands {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct AmbientOcclusionSamples {
-    sample_offsets: [Vector4; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
+    sample_offsets: [Vector4P; MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT],
     sample_count: u32,
     sample_radius: f32,
     sample_normalization: f32,
@@ -227,7 +227,7 @@ impl AmbientOcclusionSamples {
         assert!(sample_count <= MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT as u32);
         assert!(sample_radius > 0.0);
 
-        let mut sample_offsets = [Vector4::zeroed(); MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT];
+        let mut sample_offsets = [Vector4P::zeroed(); MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT];
 
         for (offset, (radius_halton_sample, angle_halton_sample)) in sample_offsets
             [..(sample_count as usize)]

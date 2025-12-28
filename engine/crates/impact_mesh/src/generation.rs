@@ -9,15 +9,15 @@ use crate::{
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::{
     consts::f32::TWO_PI,
-    point::Point3,
-    quaternion::UnitQuaternionA,
-    transform::Similarity3A,
-    vector::{UnitVector3, UnitVector3A, Vector3, Vector3A},
+    point::Point3P,
+    quaternion::UnitQuaternion,
+    transform::Similarity3,
+    vector::{UnitVector3, UnitVector3P, Vector3, Vector3P},
 };
 
 macro_rules! pos {
     [$x:expr, $y:expr, $z:expr] => {
-        $crate::VertexPosition(Point3::new($x, $y, $z))
+        $crate::VertexPosition(Point3P::new($x, $y, $z))
     };
     ($point:expr) => {
         $crate::VertexPosition($point)
@@ -81,7 +81,7 @@ impl TriangleMesh {
             pos![-hex, 0.0, hez],
         ];
 
-        let normal_vectors = vec![normal![UnitVector3::unit_y()]; 4];
+        let normal_vectors = vec![normal![UnitVector3P::unit_y()]; 4];
 
         let indices = vec![0, 3, 1, 1, 3, 2];
 
@@ -151,7 +151,7 @@ impl TriangleMesh {
             pos![-hw, hh, hd],
             pos![-hw, -hh, hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![-UnitVector3::unit_x()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![-UnitVector3P::unit_x()]; 4]);
         add_face_indices();
 
         // Right face
@@ -161,7 +161,7 @@ impl TriangleMesh {
             pos![hw, hh, hd],
             pos![hw, hh, -hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![UnitVector3::unit_x()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![UnitVector3P::unit_x()]; 4]);
         add_face_indices();
 
         // Bottom face
@@ -171,7 +171,7 @@ impl TriangleMesh {
             pos![hw, -hh, hd],
             pos![hw, -hh, -hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![-UnitVector3::unit_y()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![-UnitVector3P::unit_y()]; 4]);
         add_face_indices();
 
         // Top face
@@ -181,7 +181,7 @@ impl TriangleMesh {
             pos![hw, hh, hd],
             pos![-hw, hh, hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![UnitVector3::unit_y()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![UnitVector3P::unit_y()]; 4]);
         add_face_indices();
 
         // Front face
@@ -191,7 +191,7 @@ impl TriangleMesh {
             pos![hw, hh, -hd],
             pos![-hw, hh, -hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![-UnitVector3::unit_z()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![-UnitVector3P::unit_z()]; 4]);
         add_face_indices();
 
         // Back face
@@ -201,7 +201,7 @@ impl TriangleMesh {
             pos![hw, hh, hd],
             pos![hw, -hh, hd],
         ]);
-        normal_vectors.extend_from_slice(&[normal![UnitVector3::unit_z()]; 4]);
+        normal_vectors.extend_from_slice(&[normal![UnitVector3P::unit_z()]; 4]);
         add_face_indices();
 
         Self::new(
@@ -308,7 +308,7 @@ impl TriangleMesh {
         positions.push(top_pos);
 
         // Normal direction at first side vertices
-        let normal_direction = normal!(UnitVector3::unchecked_from(Vector3::new(
+        let normal_direction = normal!(UnitVector3P::unchecked_from(Vector3P::new(
             cos_slope_angle,
             sin_slope_angle,
             0.0
@@ -338,7 +338,7 @@ impl TriangleMesh {
             ];
             positions.push(top_pos);
 
-            let normal_direction = normal!(UnitVector3::unchecked_from(Vector3::new(
+            let normal_direction = normal!(UnitVector3P::unchecked_from(Vector3P::new(
                 cos_polar_angle * cos_slope_angle,
                 sin_slope_angle,
                 sin_polar_angle * cos_slope_angle
@@ -413,9 +413,9 @@ impl TriangleMesh {
 
             normal_vectors.extend_from_slice(&vec![
                 normal!(if front_is_up {
-                    UnitVector3::unit_y()
+                    UnitVector3P::unit_y()
                 } else {
-                    -UnitVector3::unit_y()
+                    -UnitVector3P::unit_y()
                 });
                 (n_circumference_vertices + 1) as usize
             ]);
@@ -468,11 +468,11 @@ impl TriangleMesh {
 
         // Top vertex
         positions.push(pos![0.0, radius, 0.0]);
-        normal_vectors.push(normal!(UnitVector3::unit_y()));
+        normal_vectors.push(normal!(UnitVector3P::unit_y()));
 
         // Bottom vertex
         positions.push(pos![0.0, -radius, 0.0]);
-        normal_vectors.push(normal!(-UnitVector3::unit_y()));
+        normal_vectors.push(normal!(-UnitVector3P::unit_y()));
 
         let mut theta = delta_theta;
 
@@ -492,7 +492,7 @@ impl TriangleMesh {
                     y,
                     radius * sin_phi_sin_theta
                 ]);
-                normal_vectors.push(normal!(UnitVector3::unchecked_from(Vector3::new(
+                normal_vectors.push(normal!(UnitVector3P::unchecked_from(Vector3P::new(
                     cos_phi_sin_theta,
                     cos_theta,
                     sin_phi_sin_theta
@@ -586,11 +586,11 @@ impl TriangleMesh {
 
         // Top vertex
         positions.push(pos![0.0, radius, 0.0]);
-        normal_vectors.push(normal!(UnitVector3::unit_y()));
+        normal_vectors.push(normal!(UnitVector3P::unit_y()));
 
         // Vertex at center of disk
         positions.push(pos![0.0, 0.0, 0.0]);
-        normal_vectors.push(normal!(-UnitVector3::unit_y()));
+        normal_vectors.push(normal!(-UnitVector3P::unit_y()));
 
         let mut theta = delta_theta;
 
@@ -610,7 +610,7 @@ impl TriangleMesh {
                     y,
                     radius * sin_phi_sin_theta
                 ]);
-                normal_vectors.push(normal!(UnitVector3::unchecked_from(Vector3::new(
+                normal_vectors.push(normal!(UnitVector3P::unchecked_from(Vector3P::new(
                     cos_phi_sin_theta,
                     cos_theta,
                     sin_phi_sin_theta
@@ -628,7 +628,7 @@ impl TriangleMesh {
         // Use normal vectors appropriate for the disk for the repeated
         // equatorial positions
         normal_vectors.extend_from_slice(&vec![
-            normal!(-UnitVector3::unit_y());
+            normal!(-UnitVector3P::unit_y());
             n_circumference_vertices as usize
         ]);
 
@@ -720,7 +720,7 @@ impl TriangleMesh {
 
         square.remove_normal_vectors(&mut dirty_mask);
         square.rotate(
-            &UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
             &mut dirty_mask,
         );
         square.set_same_color(color, &mut dirty_mask);
@@ -780,7 +780,7 @@ impl TriangleMesh {
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         cube.remove_normal_vectors(&mut dirty_mask);
-        cube.translate(&Vector3A::same(0.5 * extent), &mut dirty_mask);
+        cube.translate(&Vector3::same(0.5 * extent), &mut dirty_mask);
         cube.set_same_color(color, &mut dirty_mask);
 
         cube
@@ -841,13 +841,13 @@ impl LineSegmentMesh {
     pub fn create_unit_cubemap_frusta() -> Self {
         let mut down_diagonals = Self::create_baseless_unit_pyramid();
         let mut dirty_mask = LineSegmentMeshDirtyMask::empty();
-        down_diagonals.translate(&Vector3A::new(0.0, -1.0, 0.0), &mut dirty_mask);
+        down_diagonals.translate(&Vector3::new(0.0, -1.0, 0.0), &mut dirty_mask);
 
         let mut up_diagonals = Self::create_baseless_unit_pyramid();
         up_diagonals.transform(
-            &Similarity3A::from_parts(
-                Vector3A::new(0.0, 1.0, 0.0),
-                UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI),
+            &Similarity3::from_parts(
+                Vector3::new(0.0, 1.0, 0.0),
+                UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI),
                 1.0,
             ),
             &mut LineSegmentMeshDirtyMask::empty(),
@@ -971,13 +971,13 @@ impl LineSegmentMesh {
 
         let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         xy_circle.rotate(
-            &UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
             &mut dirty_mask,
         );
 
         let mut yz_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         yz_circle.rotate(
-            &UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_2),
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_2),
             &mut dirty_mask,
         );
 

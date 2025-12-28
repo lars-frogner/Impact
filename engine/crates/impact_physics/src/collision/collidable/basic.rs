@@ -13,7 +13,7 @@ use crate::{
     },
     constraint::contact::ContactManifold,
 };
-use impact_math::transform::Isometry3A;
+use impact_math::transform::Isometry3;
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -35,7 +35,7 @@ impl collision::Collidable for Collidable {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3A,
+        transform_to_world_space: &Isometry3,
     ) -> Self {
         match descriptor.local_collidable() {
             Self::Local::Sphere(sphere) => {

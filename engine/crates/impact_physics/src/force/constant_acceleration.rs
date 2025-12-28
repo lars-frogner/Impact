@@ -5,7 +5,7 @@ use crate::{
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_math::vector::Vector3;
+use impact_math::vector::Vector3P;
 use roc_integration::roc;
 
 /// Manages all [`ConstantAccelerationGenerator`]s.
@@ -39,7 +39,7 @@ define_setup_type! {
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ConstantAcceleration(Vector3);
+    pub struct ConstantAcceleration(Vector3P);
 }
 
 impl From<u64> for ConstantAccelerationGeneratorID {
@@ -74,14 +74,14 @@ impl ConstantAcceleration {
     pub const EARTH_DOWNWARD_ACCELERATION: f32 = 9.81;
 
     #[roc(body = "(acceleration,)")]
-    pub fn new(acceleration: Vector3) -> Self {
+    pub fn new(acceleration: Vector3P) -> Self {
         Self(acceleration)
     }
 
     /// Constant acceleration in the negative y-direction.
     #[roc(body = "new((0.0, -acceleration, 0.0))")]
     pub fn downward(acceleration: f32) -> Self {
-        Self::new(Vector3::new(0.0, -acceleration, 0.0))
+        Self::new(Vector3P::new(0.0, -acceleration, 0.0))
     }
 
     /// The downward gravitational acceleration at the surface of Earth.
@@ -92,7 +92,7 @@ impl ConstantAcceleration {
 
     /// Applies the acceleration to the given dynamic rigid body.
     pub fn apply(&self, rigid_body: &mut DynamicRigidBody) {
-        let acceleration = self.0.aligned();
+        let acceleration = self.0.unpack();
 
         let force = acceleration * rigid_body.mass();
         rigid_body.apply_force_at_center_of_mass(&force);

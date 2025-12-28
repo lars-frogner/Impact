@@ -10,11 +10,11 @@ use crate::{
     Voxel, VoxelObjectID, VoxelObjectManager, VoxelPlacement, VoxelSurfacePlacement,
     chunks::ChunkedVoxelObject,
 };
-use impact_geometry::{PlaneA, SphereA};
+use impact_geometry::{Plane, Sphere};
 use impact_math::{
-    point::Point3A,
-    transform::{Isometry3, Isometry3A},
-    vector::{UnitVector3A, Vector3, Vector3A},
+    point::Point3,
+    transform::{Isometry3, Isometry3P},
+    vector::{UnitVector3, Vector3, Vector3P},
 };
 use impact_physics::{
     collision::{
@@ -52,14 +52,14 @@ pub enum LocalCollidable {
 pub struct LocalVoxelObjectCollidable {
     object_id: VoxelObjectID,
     response_params: ContactResponseParameters,
-    origin_offset: Vector3,
+    origin_offset: Vector3P,
 }
 
 #[derive(Clone, Debug)]
 pub struct VoxelObjectCollidable {
     object_id: VoxelObjectID,
     response_params: ContactResponseParameters,
-    transform_to_object_space: Isometry3,
+    transform_to_object_space: Isometry3P,
 }
 
 impl collision::Collidable for Collidable {
@@ -68,7 +68,7 @@ impl collision::Collidable for Collidable {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3A,
+        transform_to_world_space: &Isometry3,
     ) -> Self {
         match descriptor.local_collidable() {
             Self::Local::Sphere(sphere) => {
@@ -79,7 +79,7 @@ impl collision::Collidable for Collidable {
                 Self::VoxelObject(VoxelObjectCollidable::new(
                     voxel_object.object_id,
                     voxel_object.response_params,
-                    voxel_object.origin_offset.aligned(),
+                    voxel_object.origin_offset.unpack(),
                     transform_to_world_space,
                 ))
             }
@@ -198,8 +198,8 @@ impl VoxelObjectCollidable {
     pub fn new(
         object_id: VoxelObjectID,
         response_params: ContactResponseParameters,
-        origin_offset: Vector3A,
-        transform_to_world_space: &Isometry3A,
+        origin_offset: Vector3,
+        transform_to_world_space: &Isometry3,
     ) -> Self {
         let transform_from_object_to_world_space =
             transform_to_world_space.applied_to_translation(&(-origin_offset));
@@ -209,7 +209,7 @@ impl VoxelObjectCollidable {
         Self {
             object_id,
             response_params,
-            transform_to_object_space: transform_to_object_space.unaligned(),
+            transform_to_object_space: transform_to_object_space.pack(),
         }
     }
 
@@ -217,7 +217,7 @@ impl VoxelObjectCollidable {
         self.object_id
     }
 
-    pub fn transform_to_object_space(&self) -> &Isometry3 {
+    pub fn transform_to_object_space(&self) -> &Isometry3P {
         &self.transform_to_object_space
     }
 }
@@ -249,8 +249,8 @@ fn generate_mutual_voxel_object_contact_manifold(
         return;
     };
 
-    let transform_from_world_to_a = transform_from_world_to_a.aligned();
-    let transform_from_world_to_b = transform_from_world_to_b.aligned();
+    let transform_from_world_to_a = transform_from_world_to_a.unpack();
+    let transform_from_world_to_b = transform_from_world_to_b.unpack();
 
     let response_params = ContactResponseParameters::combined(response_params_a, response_params_b);
 
@@ -280,8 +280,8 @@ fn generate_mutual_voxel_object_contact_manifold(
 pub fn for_each_mutual_voxel_object_contact<'a>(
     voxel_object_a: &'a ChunkedVoxelObject,
     voxel_object_b: &'a ChunkedVoxelObject,
-    transform_from_world_to_a: &'a Isometry3A,
-    transform_from_world_to_b: &'a Isometry3A,
+    transform_from_world_to_a: &'a Isometry3,
+    transform_from_world_to_b: &'a Isometry3,
     f: &mut impl FnMut([usize; 3], [usize; 3], ContactGeometry),
 ) {
     let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverted();
@@ -321,7 +321,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 let voxel_b_center =
                     transform_from_world_to_b.inverse_transform_point(&voxel_b_center_in_b);
 
-                let voxel_b_sphere = SphereA::new(voxel_b_center, voxel_b_radius);
+                let voxel_b_sphere = Sphere::new(voxel_b_center, voxel_b_radius);
 
                 let voxel_b_sphere_in_a =
                     voxel_b_sphere.translated_and_rotated(transform_from_world_to_a);
@@ -377,7 +377,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 let voxel_a_center =
                     transform_from_world_to_a.inverse_transform_point(&voxel_a_center_in_a);
 
-                let voxel_a_sphere = SphereA::new(voxel_a_center, voxel_a_radius);
+                let voxel_a_sphere = Sphere::new(voxel_a_center, voxel_a_radius);
 
                 let voxel_a_sphere_in_b =
                     voxel_a_sphere.translated_and_rotated(transform_from_world_to_b);
@@ -450,8 +450,8 @@ fn surface_placements_allow_contact(
 }
 
 fn compute_mutual_voxel_contact_geometry(
-    voxel_a_center: &Point3A,
-    voxel_b_center: &Point3A,
+    voxel_a_center: &Point3,
+    voxel_b_center: &Point3,
     voxel_b_radius: f32,
     max_center_distance: f32,
     max_squared_center_distance: f32,
@@ -466,9 +466,9 @@ fn compute_mutual_voxel_contact_geometry(
     let center_distance = squared_center_distance.sqrt();
 
     let surface_normal = if center_distance > 1e-8 {
-        UnitVector3A::unchecked_from(center_displacement / center_distance)
+        UnitVector3::unchecked_from(center_displacement / center_distance)
     } else {
-        UnitVector3A::unit_z()
+        UnitVector3::unit_z()
     };
 
     let position = voxel_b_center + voxel_b_radius * surface_normal;
@@ -503,8 +503,8 @@ fn generate_sphere_voxel_object_contact_manifold(
     let response_params =
         ContactResponseParameters::combined(response_params, sphere.response_params());
 
-    let transform_to_object_space = transform_to_object_space.aligned();
-    let sphere = sphere.sphere().aligned();
+    let transform_to_object_space = transform_to_object_space.unpack();
+    let sphere = sphere.sphere().unpack();
 
     for_each_sphere_voxel_object_contact(
         voxel_object.object(),
@@ -530,8 +530,8 @@ fn generate_sphere_voxel_object_contact_manifold(
 
 pub fn for_each_sphere_voxel_object_contact(
     voxel_object: &ChunkedVoxelObject,
-    transform_to_object_space: &Isometry3A,
-    sphere: &SphereA,
+    transform_to_object_space: &Isometry3,
+    sphere: &Sphere,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();
@@ -560,9 +560,9 @@ pub fn for_each_sphere_voxel_object_contact(
             let center_distance = squared_center_distance.sqrt();
 
             let surface_normal = if center_distance > 1e-8 {
-                UnitVector3A::unchecked_from(center_displacement / center_distance)
+                UnitVector3::unchecked_from(center_displacement / center_distance)
             } else {
-                UnitVector3A::unit_z()
+                UnitVector3::unit_z()
             };
 
             let position = voxel_center + voxel_radius * surface_normal;
@@ -601,8 +601,8 @@ fn generate_voxel_object_plane_contact_manifold(
     let response_params =
         ContactResponseParameters::combined(response_params, plane.response_params());
 
-    let transform_to_object_space = transform_to_object_space.aligned();
-    let plane = plane.plane().aligned();
+    let transform_to_object_space = transform_to_object_space.unpack();
+    let plane = plane.plane().unpack();
 
     for_each_voxel_object_plane_contact(
         voxel_object.object(),
@@ -628,8 +628,8 @@ fn generate_voxel_object_plane_contact_manifold(
 
 pub fn for_each_voxel_object_plane_contact(
     voxel_object: &ChunkedVoxelObject,
-    transform_to_object_space: &Isometry3A,
-    plane: &PlaneA,
+    transform_to_object_space: &Isometry3,
+    plane: &Plane,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();
@@ -652,7 +652,7 @@ pub fn for_each_voxel_object_plane_contact(
                 transform_to_object_space.inverse_transform_point(&voxel_center_in_object_space);
 
             if let Some(contact_geometry) = determine_sphere_plane_contact_geometry(
-                &SphereA::new(voxel_center, voxel_radius),
+                &Sphere::new(voxel_center, voxel_radius),
                 plane,
             ) {
                 f([i, j, k], contact_geometry);

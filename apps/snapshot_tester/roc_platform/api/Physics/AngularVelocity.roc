@@ -1,8 +1,8 @@
-# Hash: ef570265ff5906352971853a8556cbd527e99ecca17a4deae4b885a3fd2cbde0
-# Generated: 2025-12-28T19:52:23+00:00
-# Rust type: impact_physics::quantities::AngularVelocity
+# Hash: fed4164bd59f5e0b9828d6d0aefd8b77abc353edc74f2c5aba48f6c2000ef2e9
+# Generated: 2025-12-28T22:31:32.972310936
+# Rust type: impact_physics::quantities::AngularVelocityP
 # Type category: POD
-# Commit: 78e3beb5 (dirty)
+# Commit: cc167207 (dirty)
 module [
     AngularVelocity,
     new,
@@ -17,23 +17,23 @@ import core.UnitVector3
 import core.Vector3
 
 ## An angular velocity in 3D space, represented by an axis of rotation and an
-## angular speed.
+## angular speed. This is the "packed" version.
 ##
 ## This type is primarily intended for compact storage inside other types and
 ## collections. For computations, prefer the SIMD-friendly 16-byte aligned
-## [`AngularVelocityA`].
+## [`AngularVelocity`].
 AngularVelocity : {
     axis_of_rotation : UnitVector3.UnitVector3,
     angular_speed : Radians.Radians Binary32,
 }
 
-## Creates a new [`AngularVelocity`] with the given axis of rotation and
+## Creates a new angular velocity with the given axis of rotation and
 ## angular speed.
 new : UnitVector3.UnitVector3, Radians.Radians Binary32 -> AngularVelocity
 new = |axis_of_rotation, angular_speed|
     { axis_of_rotation, angular_speed }
 
-## Creates a new [`AngularVelocity`] from the given angular velocity
+## Creates a new angular velocity from the given angular velocity
 ## vector.
 from_vector : Vector3.Vector3 -> AngularVelocity
 from_vector = |angular_velocity_vector|
@@ -41,7 +41,7 @@ from_vector = |angular_velocity_vector|
         Some((axis_of_rotation, angular_speed)) -> new(axis_of_rotation, angular_speed)
         None -> zero({})
 
-## Creates a new [`AngularVelocity`] with zero angular speed.
+## Creates a new angular velocity with zero angular speed.
 zero : {} -> AngularVelocity
 zero = |{}|
     { axis_of_rotation: UnitVector3.y_axis, angular_speed: 0.0 }

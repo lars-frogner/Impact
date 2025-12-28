@@ -19,10 +19,10 @@ pub use triangle::*;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::Point3,
-    quaternion::{UnitQuaternion, UnitQuaternionA},
-    transform::Similarity3A,
-    vector::{UnitVector3, Vector2, Vector3A, Vector4},
+    point::Point3P,
+    quaternion::{UnitQuaternion, UnitQuaternionP},
+    transform::Similarity3,
+    vector::{UnitVector3P, Vector2, Vector3, Vector4P},
 };
 use roc_integration::roc;
 use std::fmt::{self, Debug};
@@ -57,12 +57,12 @@ pub trait VertexAttribute: Sized {
 /// The 3D position of a mesh vertex.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexPosition(pub Point3);
+pub struct VertexPosition(pub Point3P);
 
 /// The unit normal vector of a mesh at a vertex position.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexNormalVector(pub UnitVector3);
+pub struct VertexNormalVector(pub UnitVector3P);
 
 /// The (u, v) texture coordinates of a mesh at a vertex position.
 #[repr(transparent)]
@@ -76,12 +76,12 @@ pub struct VertexTextureCoords(pub Vector2);
 /// be negated before applying the rotation to it).
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexTangentSpaceQuaternion(pub UnitQuaternion);
+pub struct VertexTangentSpaceQuaternion(pub UnitQuaternionP);
 
 /// The RGBA color of a mesh vertex.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct VertexColor(pub Vector4);
+pub struct VertexColor(pub Vector4P);
 
 bitflags! {
     /// Bitflag encoding a set of [`VertexAttribute`]s.
@@ -148,29 +148,29 @@ impl VertexPosition {
     }
 
     /// Returns the position rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
-        Self(rotation.rotate_point(&self.0.aligned()).unaligned())
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
+        Self(rotation.rotate_point(&self.0.unpack()).pack())
     }
 
     /// Returns the position translated by the given displacement vector.
-    pub fn translated(&self, translation: &Vector3A) -> Self {
-        Self((self.0.aligned() + translation).unaligned())
+    pub fn translated(&self, translation: &Vector3) -> Self {
+        Self((self.0.unpack() + translation).pack())
     }
 
     /// Returns the position transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3A) -> Self {
-        Self(transform.transform_point(&self.0.aligned()).unaligned())
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
+        Self(transform.transform_point(&self.0.unpack()).pack())
     }
 }
 
 impl VertexNormalVector {
     /// Returns the normal vector rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
-        Self(rotation.rotate_unit_vector(&self.0.aligned()).unaligned())
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
+        Self(rotation.rotate_unit_vector(&self.0.unpack()).pack())
     }
 
     /// Returns the normal vector transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3A) -> Self {
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
         self.rotated(transform.rotation())
     }
 }
@@ -178,8 +178,8 @@ impl VertexNormalVector {
 impl VertexTangentSpaceQuaternion {
     /// Returns the tangent space quaternion rotated by the given unit
     /// quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
-        let mut rotated_tangent_space_quaternion = rotation * self.0.aligned();
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
+        let mut rotated_tangent_space_quaternion = rotation * self.0.unpack();
 
         // Preserve encoding of tangent space handedness in real component of
         // tangent space quaternion
@@ -187,25 +187,25 @@ impl VertexTangentSpaceQuaternion {
             rotated_tangent_space_quaternion = -rotated_tangent_space_quaternion;
         }
 
-        Self(rotated_tangent_space_quaternion.unaligned())
+        Self(rotated_tangent_space_quaternion.pack())
     }
 
     /// Returns the tangent space quaternion transformed by the given similarity
     /// transform.
-    pub fn transformed(&self, transform: &Similarity3A) -> Self {
+    pub fn transformed(&self, transform: &Similarity3) -> Self {
         self.rotated(transform.rotation())
     }
 }
 
 impl VertexColor {
-    pub const BLACK: Self = Self(Vector4::new(0.0, 0.0, 0.0, 1.0));
-    pub const WHITE: Self = Self(Vector4::new(1.0, 1.0, 1.0, 1.0));
-    pub const RED: Self = Self(Vector4::new(1.0, 0.0, 0.0, 1.0));
-    pub const GREEN: Self = Self(Vector4::new(0.0, 1.0, 0.0, 1.0));
-    pub const BLUE: Self = Self(Vector4::new(0.0, 0.0, 1.0, 1.0));
-    pub const CYAN: Self = Self(Vector4::new(0.0, 1.0, 1.0, 1.0));
-    pub const MAGENTA: Self = Self(Vector4::new(1.0, 0.0, 1.0, 1.0));
-    pub const YELLOW: Self = Self(Vector4::new(1.0, 1.0, 0.0, 1.0));
+    pub const BLACK: Self = Self(Vector4P::new(0.0, 0.0, 0.0, 1.0));
+    pub const WHITE: Self = Self(Vector4P::new(1.0, 1.0, 1.0, 1.0));
+    pub const RED: Self = Self(Vector4P::new(1.0, 0.0, 0.0, 1.0));
+    pub const GREEN: Self = Self(Vector4P::new(0.0, 1.0, 0.0, 1.0));
+    pub const BLUE: Self = Self(Vector4P::new(0.0, 0.0, 1.0, 1.0));
+    pub const CYAN: Self = Self(Vector4P::new(0.0, 1.0, 1.0, 1.0));
+    pub const MAGENTA: Self = Self(Vector4P::new(1.0, 0.0, 1.0, 1.0));
+    pub const YELLOW: Self = Self(Vector4P::new(1.0, 1.0, 0.0, 1.0));
 
     pub fn with_alpha(self, alpha: f32) -> Self {
         let mut color = self.0;

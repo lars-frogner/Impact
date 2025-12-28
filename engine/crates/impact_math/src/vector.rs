@@ -20,27 +20,9 @@ pub struct Vector2 {
 
 /// A 3-dimensional vector.
 ///
-/// This type only supports a few basic operations, as is primarily intended for
-/// compact storage inside other types and collections. For computations, prefer
-/// the SIMD-friendly 16-byte aligned [`Vector3A`].
-#[repr(C)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(into = "[f32; 3]", from = "[f32; 3]")
-)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Vector3 {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-
-/// A 3-dimensional vector aligned to 16 bytes.
-///
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an extra 4 bytes in size and 16-byte alignment.
-/// For cache-friendly storage, prefer [`Vector3`].
+/// For cache-friendly storage, prefer the packed 4-byte aligned [`Vector3P`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -48,33 +30,34 @@ pub struct Vector3 {
     serde(transparent)
 )]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
-pub struct Vector3A {
+pub struct Vector3 {
     inner: glam::Vec3A,
 }
 
-/// A 3-dimensional vector of unit length.
+/// A 3-dimensional vector. This is the "packed" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
-/// the SIMD-friendly 16-byte aligned [`UnitVector3A`].
+/// the SIMD-friendly 16-byte aligned [`Vector3`].
 #[repr(C)]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 3]", from = "[f32; 3]")
 )]
-#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
-pub struct UnitVector3 {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+pub struct Vector3P {
     x: f32,
     y: f32,
     z: f32,
 }
 
-/// A 3-dimensional vector of unit length aligned to 16 bytes.
+/// A 3-dimensional vector of unit length.
 ///
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an extra 4 bytes in size and 16-byte alignment.
-/// For cache-friendly storage, prefer [`UnitVector3`].
+/// For cache-friendly storage, prefer the packed 4-byte aligned
+/// [`UnitVector3P`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -82,34 +65,33 @@ pub struct UnitVector3 {
     serde(transparent)
 )]
 #[derive(Clone, Copy, PartialEq, Zeroable, Pod)]
-pub struct UnitVector3A {
+pub struct UnitVector3 {
     inner: glam::Vec3A,
 }
 
-/// A 4-dimensional vector.
+/// A 3-dimensional vector of unit length. This is the "packed" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
-/// padding-free storage when combined with smaller types. For computations,
-/// prefer the SIMD-friendly 16-byte aligned [`Vector4A`].
+/// compact storage inside other types and collections. For computations, prefer
+/// the SIMD-friendly 16-byte aligned [`UnitVector3`].
 #[repr(C)]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
-    serde(into = "[f32; 4]", from = "[f32; 4]")
+    serde(into = "[f32; 3]", from = "[f32; 3]")
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Vector4 {
+#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+pub struct UnitVector3P {
     x: f32,
     y: f32,
     z: f32,
-    w: f32,
 }
 
-/// A 4-dimensional vector aligned to 16 bytes.
+/// A 4-dimensional vector.
 ///
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an alignment of 16 bytes. For padding-free
-/// storage together with smaller types, prefer the 4-byte aligned [`Vector4`].
+/// storage together with smaller types, prefer the 4-byte aligned [`Vector4P`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -117,8 +99,27 @@ pub struct Vector4 {
     serde(transparent)
 )]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
-pub struct Vector4A {
+pub struct Vector4 {
     inner: glam::Vec4,
+}
+
+/// A 4-dimensional vector. This is the "packed" version.
+///
+/// This type only supports a few basic operations, as is primarily intended for
+/// padding-free storage when combined with smaller types. For computations,
+/// prefer the SIMD-friendly 16-byte aligned [`Vector4`].
+#[repr(C)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 4]", from = "[f32; 4]")
+)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+pub struct Vector4P {
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
 }
 
 impl Vector2 {
@@ -166,8 +167,8 @@ impl Vector2 {
 
     /// Converts the vector to 3D by appending the given z-component.
     #[inline]
-    pub const fn extended(&self, z: f32) -> Vector3 {
-        Vector3::new(self.x(), self.y(), z)
+    pub const fn extended(&self, z: f32) -> Vector3P {
+        Vector3P::new(self.x(), self.y(), z)
     }
 
     /// Computes the normalized version of the vector.
@@ -337,221 +338,6 @@ impl Vector3 {
     /// Creates a new vector with the given components.
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
-    }
-
-    /// Creates a new vector with all zeros.
-    #[inline]
-    pub const fn zeros() -> Self {
-        Self::same(0.0)
-    }
-
-    /// Creates a new vector with the same value for all components.
-    #[inline]
-    pub const fn same(value: f32) -> Self {
-        Self::new(value, value, value)
-    }
-
-    /// The x-axis unit vector.
-    #[inline]
-    pub const fn unit_x() -> Self {
-        Self::new(1.0, 0.0, 0.0)
-    }
-
-    /// The y-axis unit vector.
-    #[inline]
-    pub const fn unit_y() -> Self {
-        Self::new(0.0, 1.0, 0.0)
-    }
-
-    /// The z-axis unit vector.
-    #[inline]
-    pub const fn unit_z() -> Self {
-        Self::new(0.0, 0.0, 1.0)
-    }
-
-    /// The x-component.
-    #[inline]
-    pub const fn x(&self) -> f32 {
-        self.x
-    }
-
-    /// The y-component.
-    #[inline]
-    pub const fn y(&self) -> f32 {
-        self.y
-    }
-
-    /// The z-component.
-    #[inline]
-    pub const fn z(&self) -> f32 {
-        self.z
-    }
-
-    /// A mutable reference to the x-component.
-    #[inline]
-    pub const fn x_mut(&mut self) -> &mut f32 {
-        &mut self.x
-    }
-
-    /// A mutable reference to the y-component.
-    #[inline]
-    pub const fn y_mut(&mut self) -> &mut f32 {
-        &mut self.y
-    }
-
-    /// A mutable reference to the z-component.
-    #[inline]
-    pub const fn z_mut(&mut self) -> &mut f32 {
-        &mut self.z
-    }
-
-    /// The 2D vector containing the x- and y-components of this vector.
-    #[inline]
-    pub const fn xy(&self) -> Vector2 {
-        Vector2::new(self.x(), self.y())
-    }
-
-    /// Converts the vector to 4D by appending the given w-component.
-    #[inline]
-    pub const fn extended(&self, w: f32) -> Vector4 {
-        Vector4::new(self.x(), self.y(), self.z(), w)
-    }
-
-    /// Computes the normalized version of the vector.
-    #[inline]
-    pub fn normalized(&self) -> Self {
-        self / self.norm()
-    }
-
-    /// Computes the norm (length) of the vector.
-    #[inline]
-    pub fn norm(&self) -> f32 {
-        self.norm_squared().sqrt()
-    }
-
-    /// Computes the square of the norm of the vector.
-    #[inline]
-    pub fn norm_squared(&self) -> f32 {
-        self.dot(self)
-    }
-
-    /// Computes the dot product of this vector with another.
-    #[inline]
-    pub fn dot(&self, other: &Self) -> f32 {
-        self.x * other.x + self.y * other.y + self.z * other.z
-    }
-
-    /// Converts the vector to the 16-byte aligned SIMD-friendly [`Vector3A`].
-    #[inline]
-    pub fn aligned(&self) -> Vector3A {
-        Vector3A::new(self.x(), self.y(), self.z())
-    }
-
-    #[inline]
-    pub(crate) const fn from_glam(vector: glam::Vec3) -> Self {
-        Self::new(vector.x, vector.y, vector.z)
-    }
-}
-
-impl From<[f32; 3]> for Vector3 {
-    #[inline]
-    fn from([x, y, z]: [f32; 3]) -> Self {
-        Self::new(x, y, z)
-    }
-}
-
-impl From<Vector3> for [f32; 3] {
-    #[inline]
-    fn from(vector: Vector3) -> Self {
-        [vector.x(), vector.y(), vector.z()]
-    }
-}
-
-impl_binop!(Add, add, Vector3, Vector3, Vector3, |a, b| {
-    Vector3::new(a.x + b.x, a.y + b.y, a.z + b.z)
-});
-
-impl_binop!(Sub, sub, Vector3, Vector3, Vector3, |a, b| {
-    Vector3::new(a.x - b.x, a.y - b.y, a.z - b.z)
-});
-
-impl_binop!(Mul, mul, Vector3, f32, Vector3, |a, b| {
-    Vector3::new(a.x * b, a.y * b, a.z * b)
-});
-
-impl_binop!(Mul, mul, f32, Vector3, Vector3, |a, b| { b.mul(a) });
-
-impl_binop!(Div, div, Vector3, f32, Vector3, |a, b| { a.mul(b.recip()) });
-
-impl_binop_assign!(AddAssign, add_assign, Vector3, Vector3, |a, b| {
-    a.x += b.x;
-    a.y += b.y;
-    a.z += b.z;
-});
-
-impl_binop_assign!(SubAssign, sub_assign, Vector3, Vector3, |a, b| {
-    a.x -= b.x;
-    a.y -= b.y;
-    a.z -= b.z;
-});
-
-impl_binop_assign!(MulAssign, mul_assign, Vector3, f32, |a, b| {
-    a.x *= b;
-    a.y *= b;
-    a.z *= b;
-});
-
-impl_binop_assign!(DivAssign, div_assign, Vector3, f32, |a, b| {
-    a.mul_assign(b.recip());
-});
-
-impl_unary_op!(Neg, neg, Vector3, Vector3, |val| {
-    Vector3::new(-val.x, -val.y, -val.z)
-});
-
-impl Index<usize> for Vector3 {
-    type Output = f32;
-
-    #[inline]
-    fn index(&self, idx: usize) -> &Self::Output {
-        match idx {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => panic!("index out of bounds"),
-        }
-    }
-}
-
-impl IndexMut<usize> for Vector3 {
-    #[inline]
-    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-        match idx {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => panic!("index out of bounds"),
-        }
-    }
-}
-
-impl_abs_diff_eq!(Vector3, |a, b, epsilon| {
-    a.x.abs_diff_eq(&b.x, epsilon)
-        && a.y.abs_diff_eq(&b.y, epsilon)
-        && a.z.abs_diff_eq(&b.z, epsilon)
-});
-
-impl_relative_eq!(Vector3, |a, b, epsilon, max_relative| {
-    a.x.relative_eq(&b.x, epsilon, max_relative)
-        && a.y.relative_eq(&b.y, epsilon, max_relative)
-        && a.z.relative_eq(&b.z, epsilon, max_relative)
-});
-
-impl Vector3A {
-    /// Creates a new vector with the given components.
-    #[inline]
-    pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self::wrap(glam::Vec3A::new(x, y, z))
     }
 
@@ -657,8 +443,8 @@ impl Vector3A {
 
     /// Converts the vector to 4D by appending the given w-component.
     #[inline]
-    pub fn extended(&self, w: f32) -> Vector4A {
-        Vector4A::new(self.x(), self.y(), self.z(), w)
+    pub fn extended(&self, w: f32) -> Vector4 {
+        Vector4::new(self.x(), self.y(), self.z(), w)
     }
 
     /// Computes the normalized version of the vector.
@@ -736,10 +522,10 @@ impl Vector3A {
         self.inner.max_element()
     }
 
-    /// Converts the vector to the 4-byte aligned cache-friendly [`Vector3`].
+    /// Converts the vector to the 4-byte aligned cache-friendly [`Vector3P`].
     #[inline]
-    pub fn unaligned(&self) -> Vector3 {
-        Vector3::new(self.x(), self.y(), self.z())
+    pub fn pack(&self) -> Vector3P {
+        Vector3P::new(self.x(), self.y(), self.z())
     }
 
     #[inline]
@@ -753,59 +539,57 @@ impl Vector3A {
     }
 }
 
-impl From<[f32; 3]> for Vector3A {
+impl From<[f32; 3]> for Vector3 {
     #[inline]
     fn from([x, y, z]: [f32; 3]) -> Self {
         Self::new(x, y, z)
     }
 }
 
-impl From<Vector3A> for [f32; 3] {
+impl From<Vector3> for [f32; 3] {
     #[inline]
-    fn from(vector: Vector3A) -> Self {
+    fn from(vector: Vector3) -> Self {
         [vector.x(), vector.y(), vector.z()]
     }
 }
 
-impl_binop!(Add, add, Vector3A, Vector3A, Vector3A, |a, b| {
-    Vector3A::wrap(a.inner.add(b.inner))
+impl_binop!(Add, add, Vector3, Vector3, Vector3, |a, b| {
+    Vector3::wrap(a.inner.add(b.inner))
 });
 
-impl_binop!(Sub, sub, Vector3A, Vector3A, Vector3A, |a, b| {
-    Vector3A::wrap(a.inner.sub(b.inner))
+impl_binop!(Sub, sub, Vector3, Vector3, Vector3, |a, b| {
+    Vector3::wrap(a.inner.sub(b.inner))
 });
 
-impl_binop!(Mul, mul, Vector3A, f32, Vector3A, |a, b| {
-    Vector3A::wrap(a.inner.mul(*b))
+impl_binop!(Mul, mul, Vector3, f32, Vector3, |a, b| {
+    Vector3::wrap(a.inner.mul(*b))
 });
 
-impl_binop!(Mul, mul, f32, Vector3A, Vector3A, |a, b| { b.mul(a) });
+impl_binop!(Mul, mul, f32, Vector3, Vector3, |a, b| { b.mul(a) });
 
-impl_binop!(Div, div, Vector3A, f32, Vector3A, |a, b| {
-    a.mul(b.recip())
-});
+impl_binop!(Div, div, Vector3, f32, Vector3, |a, b| { a.mul(b.recip()) });
 
-impl_binop_assign!(AddAssign, add_assign, Vector3A, Vector3A, |a, b| {
+impl_binop_assign!(AddAssign, add_assign, Vector3, Vector3, |a, b| {
     a.inner.add_assign(b.inner);
 });
 
-impl_binop_assign!(SubAssign, sub_assign, Vector3A, Vector3A, |a, b| {
+impl_binop_assign!(SubAssign, sub_assign, Vector3, Vector3, |a, b| {
     a.inner.sub_assign(b.inner);
 });
 
-impl_binop_assign!(MulAssign, mul_assign, Vector3A, f32, |a, b| {
+impl_binop_assign!(MulAssign, mul_assign, Vector3, f32, |a, b| {
     a.inner.mul_assign(*b);
 });
 
-impl_binop_assign!(DivAssign, div_assign, Vector3A, f32, |a, b| {
+impl_binop_assign!(DivAssign, div_assign, Vector3, f32, |a, b| {
     a.inner.div_assign(*b);
 });
 
-impl_unary_op!(Neg, neg, Vector3A, Vector3A, |val| {
-    Vector3A::wrap(val.inner.neg())
+impl_unary_op!(Neg, neg, Vector3, Vector3, |val| {
+    Vector3::wrap(val.inner.neg())
 });
 
-impl Index<usize> for Vector3A {
+impl Index<usize> for Vector3 {
     type Output = f32;
 
     #[inline]
@@ -814,24 +598,24 @@ impl Index<usize> for Vector3A {
     }
 }
 
-impl IndexMut<usize> for Vector3A {
+impl IndexMut<usize> for Vector3 {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.inner.index_mut(index)
     }
 }
 
-impl_abs_diff_eq!(Vector3A, |a, b, epsilon| {
+impl_abs_diff_eq!(Vector3, |a, b, epsilon| {
     a.inner.abs_diff_eq(b.inner, epsilon)
 });
 
-impl_relative_eq!(Vector3A, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Vector3, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
-impl fmt::Debug for Vector3A {
+impl fmt::Debug for Vector3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Vector3A")
+        f.debug_struct("Vector3")
             .field("x", &self.inner.x)
             .field("y", &self.inner.y)
             .field("z", &self.inner.z)
@@ -839,93 +623,41 @@ impl fmt::Debug for Vector3A {
     }
 }
 
-impl UnitVector3 {
-    /// Creates a vector with the given components. The vector is assumed to be
-    /// normalized.
+impl Vector3P {
+    /// Creates a new vector with the given components.
     #[inline]
-    pub const fn new_unchecked(x: f32, y: f32, z: f32) -> Self {
+    pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
-    /// Converts the given vector to a unit vector, assuming it is already
-    /// normalized.
+    /// Creates a new vector with all zeros.
     #[inline]
-    pub const fn unchecked_from(vector: Vector3) -> Self {
-        Self::new_unchecked(vector.x(), vector.y(), vector.z())
+    pub const fn zeros() -> Self {
+        Self::same(0.0)
+    }
+
+    /// Creates a new vector with the same value for all components.
+    #[inline]
+    pub const fn same(value: f32) -> Self {
+        Self::new(value, value, value)
     }
 
     /// The x-axis unit vector.
     #[inline]
     pub const fn unit_x() -> Self {
-        Self::new_unchecked(1.0, 0.0, 0.0)
+        Self::new(1.0, 0.0, 0.0)
     }
 
     /// The y-axis unit vector.
     #[inline]
     pub const fn unit_y() -> Self {
-        Self::new_unchecked(0.0, 1.0, 0.0)
+        Self::new(0.0, 1.0, 0.0)
     }
 
     /// The z-axis unit vector.
     #[inline]
     pub const fn unit_z() -> Self {
-        Self::new_unchecked(0.0, 0.0, 1.0)
-    }
-
-    /// The negative x-axis unit vector.
-    #[inline]
-    pub const fn neg_unit_x() -> Self {
-        Self::new_unchecked(-1.0, 0.0, 0.0)
-    }
-
-    /// The negative y-axis unit vector.
-    #[inline]
-    pub const fn neg_unit_y() -> Self {
-        Self::new_unchecked(0.0, -1.0, 0.0)
-    }
-
-    /// The negative z-axis unit vector.
-    #[inline]
-    pub const fn neg_unit_z() -> Self {
-        Self::new_unchecked(0.0, 0.0, -1.0)
-    }
-
-    /// Creates a unit vector by normalizing the given vector. If the vector has
-    /// zero length, the result will be non-finite.
-    #[inline]
-    pub fn normalized_from(vector: Vector3) -> Self {
-        Self::unchecked_from(vector.normalized())
-    }
-
-    /// Creates a unit vector by normalizing the given vector if its norm
-    /// exceeds the given threshold. Otherwise, returns [`None`].
-    #[inline]
-    pub fn normalized_from_if_above(vector: Vector3, min_norm: f32) -> Option<Self> {
-        Self::normalized_from_and_norm_if_above(vector, min_norm).map(|(v, _norm)| v)
-    }
-
-    /// Creates a unit vector by normalizing the given vector, and returns both
-    /// the vector and the norm. If the norm is zero, the vector will be
-    /// non-finite.
-    #[inline]
-    pub fn normalized_from_and_norm(vector: Vector3) -> (Self, f32) {
-        let norm = vector.norm();
-        (Self::unchecked_from(vector / norm), norm)
-    }
-
-    /// Creates a unit vector by normalizing the given vector if its norm
-    /// exceeds the given threshold, and returns both the vector and the norm.
-    /// Returns [`None`] if the norm does not exceed the threshold.
-    #[inline]
-    pub fn normalized_from_and_norm_if_above(
-        vector: Vector3,
-        min_norm: f32,
-    ) -> Option<(Self, f32)> {
-        let norm_squared = vector.norm_squared();
-        (norm_squared > min_norm.powi(2)).then(|| {
-            let norm = norm_squared.sqrt();
-            (Self::unchecked_from(vector / norm), norm)
-        })
+        Self::new(0.0, 0.0, 1.0)
     }
 
     /// The x-component.
@@ -946,56 +678,131 @@ impl UnitVector3 {
         self.z
     }
 
-    /// This unit vector as a [`Vector3`].
+    /// A mutable reference to the x-component.
     #[inline]
-    pub fn as_vector(&self) -> &Vector3 {
-        self // deref
+    pub const fn x_mut(&mut self) -> &mut f32 {
+        &mut self.x
     }
 
-    /// Converts the vector to the 16-byte aligned SIMD-friendly
-    /// [`UnitVector3A`].
+    /// A mutable reference to the y-component.
     #[inline]
-    pub fn aligned(&self) -> UnitVector3A {
-        UnitVector3A::new_unchecked(self.x(), self.y(), self.z())
+    pub const fn y_mut(&mut self) -> &mut f32 {
+        &mut self.y
+    }
+
+    /// A mutable reference to the z-component.
+    #[inline]
+    pub const fn z_mut(&mut self) -> &mut f32 {
+        &mut self.z
+    }
+
+    /// The 2D vector containing the x- and y-components of this vector.
+    #[inline]
+    pub const fn xy(&self) -> Vector2 {
+        Vector2::new(self.x(), self.y())
+    }
+
+    /// Converts the vector to 4D by appending the given w-component.
+    #[inline]
+    pub const fn extended(&self, w: f32) -> Vector4P {
+        Vector4P::new(self.x(), self.y(), self.z(), w)
+    }
+
+    /// Computes the normalized version of the vector.
+    #[inline]
+    pub fn normalized(&self) -> Self {
+        self / self.norm()
+    }
+
+    /// Computes the norm (length) of the vector.
+    #[inline]
+    pub fn norm(&self) -> f32 {
+        self.norm_squared().sqrt()
+    }
+
+    /// Computes the square of the norm of the vector.
+    #[inline]
+    pub fn norm_squared(&self) -> f32 {
+        self.dot(self)
+    }
+
+    /// Computes the dot product of this vector with another.
+    #[inline]
+    pub fn dot(&self, other: &Self) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    /// Converts the vector to the 16-byte aligned SIMD-friendly [`Vector3`].
+    #[inline]
+    pub fn unpack(&self) -> Vector3 {
+        Vector3::new(self.x(), self.y(), self.z())
+    }
+
+    #[inline]
+    pub(crate) const fn from_glam(vector: glam::Vec3) -> Self {
+        Self::new(vector.x, vector.y, vector.z)
     }
 }
 
-impl Deref for UnitVector3 {
-    type Target = Vector3;
-
+impl From<[f32; 3]> for Vector3P {
     #[inline]
-    fn deref(&self) -> &Self::Target {
-        bytemuck::cast_ref(self)
+    fn from([x, y, z]: [f32; 3]) -> Self {
+        Self::new(x, y, z)
     }
 }
 
-impl From<UnitVector3> for [f32; 3] {
-    fn from(vector: UnitVector3) -> Self {
+impl From<Vector3P> for [f32; 3] {
+    #[inline]
+    fn from(vector: Vector3P) -> Self {
         [vector.x(), vector.y(), vector.z()]
     }
 }
 
-impl From<[f32; 3]> for UnitVector3 {
-    fn from(vector: [f32; 3]) -> Self {
-        Self::normalized_from(vector.into())
-    }
-}
-
-impl_binop!(Mul, mul, UnitVector3, f32, Vector3, |a, b| {
-    Vector3::new(a.x * b, a.y * b, a.z * b)
+impl_binop!(Add, add, Vector3P, Vector3P, Vector3P, |a, b| {
+    Vector3P::new(a.x + b.x, a.y + b.y, a.z + b.z)
 });
 
-impl_binop!(Mul, mul, f32, UnitVector3, Vector3, |a, b| { b.mul(*a) });
+impl_binop!(Sub, sub, Vector3P, Vector3P, Vector3P, |a, b| {
+    Vector3P::new(a.x - b.x, a.y - b.y, a.z - b.z)
+});
 
-impl_binop!(Div, div, UnitVector3, f32, Vector3, |a, b| {
+impl_binop!(Mul, mul, Vector3P, f32, Vector3P, |a, b| {
+    Vector3P::new(a.x * b, a.y * b, a.z * b)
+});
+
+impl_binop!(Mul, mul, f32, Vector3P, Vector3P, |a, b| { b.mul(a) });
+
+impl_binop!(Div, div, Vector3P, f32, Vector3P, |a, b| {
     a.mul(b.recip())
 });
 
-impl_unary_op!(Neg, neg, UnitVector3, UnitVector3, |val| {
-    UnitVector3::new_unchecked(-val.x, -val.y, -val.z)
+impl_binop_assign!(AddAssign, add_assign, Vector3P, Vector3P, |a, b| {
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
 });
 
-impl Index<usize> for UnitVector3 {
+impl_binop_assign!(SubAssign, sub_assign, Vector3P, Vector3P, |a, b| {
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
+});
+
+impl_binop_assign!(MulAssign, mul_assign, Vector3P, f32, |a, b| {
+    a.x *= b;
+    a.y *= b;
+    a.z *= b;
+});
+
+impl_binop_assign!(DivAssign, div_assign, Vector3P, f32, |a, b| {
+    a.mul_assign(b.recip());
+});
+
+impl_unary_op!(Neg, neg, Vector3P, Vector3P, |val| {
+    Vector3P::new(-val.x, -val.y, -val.z)
+});
+
+impl Index<usize> for Vector3P {
     type Output = f32;
 
     #[inline]
@@ -1009,19 +816,31 @@ impl Index<usize> for UnitVector3 {
     }
 }
 
-impl_abs_diff_eq!(UnitVector3, |a, b, epsilon| {
+impl IndexMut<usize> for Vector3P {
+    #[inline]
+    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+        match idx {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            2 => &mut self.z,
+            _ => panic!("index out of bounds"),
+        }
+    }
+}
+
+impl_abs_diff_eq!(Vector3P, |a, b, epsilon| {
     a.x.abs_diff_eq(&b.x, epsilon)
         && a.y.abs_diff_eq(&b.y, epsilon)
         && a.z.abs_diff_eq(&b.z, epsilon)
 });
 
-impl_relative_eq!(UnitVector3, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Vector3P, |a, b, epsilon, max_relative| {
     a.x.relative_eq(&b.x, epsilon, max_relative)
         && a.y.relative_eq(&b.y, epsilon, max_relative)
         && a.z.relative_eq(&b.z, epsilon, max_relative)
 });
 
-impl UnitVector3A {
+impl UnitVector3 {
     /// Creates a vector with the given components. The vector is assumed to be
     /// normalized.
     #[inline]
@@ -1032,7 +851,7 @@ impl UnitVector3A {
     /// Converts the given vector to a unit vector, assuming it is already
     /// normalized.
     #[inline]
-    pub const fn unchecked_from(vector: Vector3A) -> Self {
+    pub const fn unchecked_from(vector: Vector3) -> Self {
         Self::wrap(vector.unwrap())
     }
 
@@ -1075,14 +894,14 @@ impl UnitVector3A {
     /// Creates a unit vector by normalizing the given vector. If the vector has
     /// zero length, the result will be non-finite.
     #[inline]
-    pub fn normalized_from(vector: Vector3A) -> Self {
+    pub fn normalized_from(vector: Vector3) -> Self {
         Self::wrap(vector.unwrap().normalize())
     }
 
     /// Creates a unit vector by normalizing the given vector if its norm
     /// exceeds the given threshold. Otherwise, returns [`None`].
     #[inline]
-    pub fn normalized_from_if_above(vector: Vector3A, min_norm: f32) -> Option<Self> {
+    pub fn normalized_from_if_above(vector: Vector3, min_norm: f32) -> Option<Self> {
         Self::normalized_from_and_norm_if_above(vector, min_norm).map(|(v, _norm)| v)
     }
 
@@ -1090,7 +909,7 @@ impl UnitVector3A {
     /// the vector and the norm. If the norm is zero, the vector will be
     /// non-finite.
     #[inline]
-    pub fn normalized_from_and_norm(vector: Vector3A) -> (Self, f32) {
+    pub fn normalized_from_and_norm(vector: Vector3) -> (Self, f32) {
         let (inner, norm) = vector.unwrap().normalize_and_length();
         (Self::wrap(inner), norm)
     }
@@ -1100,7 +919,7 @@ impl UnitVector3A {
     /// Returns [`None`] if the norm does not exceed the threshold.
     #[inline]
     pub fn normalized_from_and_norm_if_above(
-        vector: Vector3A,
+        vector: Vector3,
         min_norm: f32,
     ) -> Option<(Self, f32)> {
         let v = vector.unwrap();
@@ -1129,17 +948,17 @@ impl UnitVector3A {
         self.inner.z
     }
 
-    /// This unit vector as a [`Vector3A`].
+    /// This unit vector as a [`Vector3`].
     #[inline]
-    pub fn as_vector(&self) -> &Vector3A {
+    pub fn as_vector(&self) -> &Vector3 {
         self // deref
     }
 
     /// Converts the vector to the 4-byte aligned cache-friendly
-    /// [`UnitVector3`].
+    /// [`UnitVector3P`].
     #[inline]
-    pub fn unaligned(&self) -> UnitVector3 {
-        UnitVector3::new_unchecked(self.x(), self.y(), self.z())
+    pub fn pack(&self) -> UnitVector3P {
+        UnitVector3P::new_unchecked(self.x(), self.y(), self.z())
     }
 
     #[inline]
@@ -1148,8 +967,8 @@ impl UnitVector3A {
     }
 }
 
-impl Deref for UnitVector3A {
-    type Target = Vector3A;
+impl Deref for UnitVector3 {
+    type Target = Vector3;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -1157,21 +976,21 @@ impl Deref for UnitVector3A {
     }
 }
 
-impl_binop!(Mul, mul, UnitVector3A, f32, Vector3A, |a, b| {
-    Vector3A::wrap(a.inner.mul(*b))
+impl_binop!(Mul, mul, UnitVector3, f32, Vector3, |a, b| {
+    Vector3::wrap(a.inner.mul(*b))
 });
 
-impl_binop!(Mul, mul, f32, UnitVector3A, Vector3A, |a, b| { b.mul(*a) });
+impl_binop!(Mul, mul, f32, UnitVector3, Vector3, |a, b| { b.mul(*a) });
 
-impl_binop!(Div, div, UnitVector3A, f32, Vector3A, |a, b| {
+impl_binop!(Div, div, UnitVector3, f32, Vector3, |a, b| {
     a.mul(b.recip())
 });
 
-impl_unary_op!(Neg, neg, UnitVector3A, UnitVector3A, |val| {
-    UnitVector3A::wrap(val.inner.neg())
+impl_unary_op!(Neg, neg, UnitVector3, UnitVector3, |val| {
+    UnitVector3::wrap(val.inner.neg())
 });
 
-impl Index<usize> for UnitVector3A {
+impl Index<usize> for UnitVector3 {
     type Output = f32;
 
     #[inline]
@@ -1180,17 +999,17 @@ impl Index<usize> for UnitVector3A {
     }
 }
 
-impl_abs_diff_eq!(UnitVector3A, |a, b, epsilon| {
+impl_abs_diff_eq!(UnitVector3, |a, b, epsilon| {
     a.inner.abs_diff_eq(b.inner, epsilon)
 });
 
-impl_relative_eq!(UnitVector3A, |a, b, epsilon, max_relative| {
+impl_relative_eq!(UnitVector3, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
-impl fmt::Debug for UnitVector3A {
+impl fmt::Debug for UnitVector3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("UnitVector3A")
+        f.debug_struct("UnitVector3")
             .field("x", &self.inner.x)
             .field("y", &self.inner.y)
             .field("z", &self.inner.z)
@@ -1198,47 +1017,93 @@ impl fmt::Debug for UnitVector3A {
     }
 }
 
-impl Vector4 {
-    /// Creates a new vector with the given components.
+impl UnitVector3P {
+    /// Creates a vector with the given components. The vector is assumed to be
+    /// normalized.
     #[inline]
-    pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
-        Self { x, y, z, w }
+    pub const fn new_unchecked(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
     }
 
-    /// Creates a new vector with all zeros.
+    /// Converts the given vector to a unit vector, assuming it is already
+    /// normalized.
     #[inline]
-    pub const fn zeros() -> Self {
-        Self::same(0.0)
-    }
-
-    /// Creates a new vector with the same value for all components.
-    #[inline]
-    pub const fn same(value: f32) -> Self {
-        Self::new(value, value, value, value)
+    pub const fn unchecked_from(vector: Vector3P) -> Self {
+        Self::new_unchecked(vector.x(), vector.y(), vector.z())
     }
 
     /// The x-axis unit vector.
     #[inline]
     pub const fn unit_x() -> Self {
-        Self::new(1.0, 0.0, 0.0, 0.0)
+        Self::new_unchecked(1.0, 0.0, 0.0)
     }
 
     /// The y-axis unit vector.
     #[inline]
     pub const fn unit_y() -> Self {
-        Self::new(0.0, 1.0, 0.0, 0.0)
+        Self::new_unchecked(0.0, 1.0, 0.0)
     }
 
     /// The z-axis unit vector.
     #[inline]
     pub const fn unit_z() -> Self {
-        Self::new(0.0, 0.0, 1.0, 0.0)
+        Self::new_unchecked(0.0, 0.0, 1.0)
     }
 
-    /// The w-axis unit vector.
+    /// The negative x-axis unit vector.
     #[inline]
-    pub const fn unit_w() -> Self {
-        Self::new(0.0, 0.0, 0.0, 1.0)
+    pub const fn neg_unit_x() -> Self {
+        Self::new_unchecked(-1.0, 0.0, 0.0)
+    }
+
+    /// The negative y-axis unit vector.
+    #[inline]
+    pub const fn neg_unit_y() -> Self {
+        Self::new_unchecked(0.0, -1.0, 0.0)
+    }
+
+    /// The negative z-axis unit vector.
+    #[inline]
+    pub const fn neg_unit_z() -> Self {
+        Self::new_unchecked(0.0, 0.0, -1.0)
+    }
+
+    /// Creates a unit vector by normalizing the given vector. If the vector has
+    /// zero length, the result will be non-finite.
+    #[inline]
+    pub fn normalized_from(vector: Vector3P) -> Self {
+        Self::unchecked_from(vector.normalized())
+    }
+
+    /// Creates a unit vector by normalizing the given vector if its norm
+    /// exceeds the given threshold. Otherwise, returns [`None`].
+    #[inline]
+    pub fn normalized_from_if_above(vector: Vector3P, min_norm: f32) -> Option<Self> {
+        Self::normalized_from_and_norm_if_above(vector, min_norm).map(|(v, _norm)| v)
+    }
+
+    /// Creates a unit vector by normalizing the given vector, and returns both
+    /// the vector and the norm. If the norm is zero, the vector will be
+    /// non-finite.
+    #[inline]
+    pub fn normalized_from_and_norm(vector: Vector3P) -> (Self, f32) {
+        let norm = vector.norm();
+        (Self::unchecked_from(vector / norm), norm)
+    }
+
+    /// Creates a unit vector by normalizing the given vector if its norm
+    /// exceeds the given threshold, and returns both the vector and the norm.
+    /// Returns [`None`] if the norm does not exceed the threshold.
+    #[inline]
+    pub fn normalized_from_and_norm_if_above(
+        vector: Vector3P,
+        min_norm: f32,
+    ) -> Option<(Self, f32)> {
+        let norm_squared = vector.norm_squared();
+        (norm_squared > min_norm.powi(2)).then(|| {
+            let norm = norm_squared.sqrt();
+            (Self::unchecked_from(vector / norm), norm)
+        })
     }
 
     /// The x-component.
@@ -1259,109 +1124,56 @@ impl Vector4 {
         self.z
     }
 
-    /// The w-component.
+    /// This unit vector as a [`Vector3P`].
     #[inline]
-    pub const fn w(&self) -> f32 {
-        self.w
+    pub fn as_vector(&self) -> &Vector3P {
+        self // deref
     }
 
-    /// A mutable reference to the x-component.
+    /// Converts the vector to the 16-byte aligned SIMD-friendly
+    /// [`UnitVector3`].
     #[inline]
-    pub const fn x_mut(&mut self) -> &mut f32 {
-        &mut self.x
-    }
-
-    /// A mutable reference to the y-component.
-    #[inline]
-    pub const fn y_mut(&mut self) -> &mut f32 {
-        &mut self.y
-    }
-
-    /// A mutable reference to the z-component.
-    #[inline]
-    pub const fn z_mut(&mut self) -> &mut f32 {
-        &mut self.z
-    }
-
-    /// A mutable reference to the w-component.
-    #[inline]
-    pub const fn w_mut(&mut self) -> &mut f32 {
-        &mut self.w
-    }
-
-    /// The 3D vector containing the x-, y-, and z-components of this vector.
-    #[inline]
-    pub const fn xyz(&self) -> Vector3 {
-        Vector3::new(self.x(), self.y(), self.z())
-    }
-
-    /// Converts the vector to the 16-byte aligned SIMD-friendly [`Vector4A`].
-    #[inline]
-    pub fn aligned(&self) -> Vector4A {
-        Vector4A::new(self.x(), self.y(), self.z(), self.w())
+    pub fn unpack(&self) -> UnitVector3 {
+        UnitVector3::new_unchecked(self.x(), self.y(), self.z())
     }
 }
 
-impl From<[f32; 4]> for Vector4 {
+impl Deref for UnitVector3P {
+    type Target = Vector3P;
+
     #[inline]
-    fn from([x, y, z, w]: [f32; 4]) -> Self {
-        Self::new(x, y, z, w)
+    fn deref(&self) -> &Self::Target {
+        bytemuck::cast_ref(self)
     }
 }
 
-impl From<Vector4> for [f32; 4] {
-    #[inline]
-    fn from(vector: Vector4) -> Self {
-        [vector.x(), vector.y(), vector.z(), vector.w()]
+impl From<UnitVector3P> for [f32; 3] {
+    fn from(vector: UnitVector3P) -> Self {
+        [vector.x(), vector.y(), vector.z()]
     }
 }
 
-impl_binop!(Add, add, Vector4, Vector4, Vector4, |a, b| {
-    Vector4::new(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w)
+impl From<[f32; 3]> for UnitVector3P {
+    fn from(vector: [f32; 3]) -> Self {
+        Self::normalized_from(vector.into())
+    }
+}
+
+impl_binop!(Mul, mul, UnitVector3P, f32, Vector3P, |a, b| {
+    Vector3P::new(a.x * b, a.y * b, a.z * b)
 });
 
-impl_binop!(Sub, sub, Vector4, Vector4, Vector4, |a, b| {
-    Vector4::new(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w)
+impl_binop!(Mul, mul, f32, UnitVector3P, Vector3P, |a, b| { b.mul(*a) });
+
+impl_binop!(Div, div, UnitVector3P, f32, Vector3P, |a, b| {
+    a.mul(b.recip())
 });
 
-impl_binop!(Mul, mul, Vector4, f32, Vector4, |a, b| {
-    Vector4::new(a.x * b, a.y * b, a.z * b, a.w * b)
+impl_unary_op!(Neg, neg, UnitVector3P, UnitVector3P, |val| {
+    UnitVector3P::new_unchecked(-val.x, -val.y, -val.z)
 });
 
-impl_binop!(Mul, mul, f32, Vector4, Vector4, |a, b| { b.mul(a) });
-
-impl_binop!(Div, div, Vector4, f32, Vector4, |a, b| { a.mul(b.recip()) });
-
-impl_binop_assign!(AddAssign, add_assign, Vector4, Vector4, |a, b| {
-    a.x += b.x;
-    a.y += b.y;
-    a.z += b.z;
-    a.w += b.w;
-});
-
-impl_binop_assign!(SubAssign, sub_assign, Vector4, Vector4, |a, b| {
-    a.x -= b.x;
-    a.y -= b.y;
-    a.z -= b.z;
-    a.w -= b.w;
-});
-
-impl_binop_assign!(MulAssign, mul_assign, Vector4, f32, |a, b| {
-    a.x *= b;
-    a.y *= b;
-    a.z *= b;
-    a.w *= b;
-});
-
-impl_binop_assign!(DivAssign, div_assign, Vector4, f32, |a, b| {
-    a.mul_assign(b.recip());
-});
-
-impl_unary_op!(Neg, neg, Vector4, Vector4, |val| {
-    Vector4::new(-val.x, -val.y, -val.z, -val.w)
-});
-
-impl Index<usize> for Vector4 {
+impl Index<usize> for UnitVector3P {
     type Output = f32;
 
     #[inline]
@@ -1370,40 +1182,24 @@ impl Index<usize> for Vector4 {
             0 => &self.x,
             1 => &self.y,
             2 => &self.z,
-            3 => &self.w,
             _ => panic!("index out of bounds"),
         }
     }
 }
 
-impl IndexMut<usize> for Vector4 {
-    #[inline]
-    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-        match idx {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            3 => &mut self.w,
-            _ => panic!("index out of bounds"),
-        }
-    }
-}
-
-impl_abs_diff_eq!(Vector4, |a, b, epsilon| {
+impl_abs_diff_eq!(UnitVector3P, |a, b, epsilon| {
     a.x.abs_diff_eq(&b.x, epsilon)
         && a.y.abs_diff_eq(&b.y, epsilon)
         && a.z.abs_diff_eq(&b.z, epsilon)
-        && a.w.abs_diff_eq(&b.w, epsilon)
 });
 
-impl_relative_eq!(Vector4, |a, b, epsilon, max_relative| {
+impl_relative_eq!(UnitVector3P, |a, b, epsilon, max_relative| {
     a.x.relative_eq(&b.x, epsilon, max_relative)
         && a.y.relative_eq(&b.y, epsilon, max_relative)
         && a.z.relative_eq(&b.z, epsilon, max_relative)
-        && a.w.relative_eq(&b.w, epsilon, max_relative)
 });
 
-impl Vector4A {
+impl Vector4 {
     /// Creates a new vector with the given components.
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
@@ -1496,8 +1292,8 @@ impl Vector4A {
 
     /// The 3D vector containing the x-, y-, and z-components of this vector.
     #[inline]
-    pub fn xyz(&self) -> Vector3A {
-        Vector3A::new(self.x(), self.y(), self.z())
+    pub fn xyz(&self) -> Vector3 {
+        Vector3::new(self.x(), self.y(), self.z())
     }
 
     /// Computes the normalized version of the vector.
@@ -1569,10 +1365,10 @@ impl Vector4A {
         self.inner.max_element()
     }
 
-    /// Converts the vector to the 4-byte aligned cache-friendly [`Vector4`].
+    /// Converts the vector to the 4-byte aligned cache-friendly [`Vector4P`].
     #[inline]
-    pub fn unaligned(&self) -> Vector4 {
-        Vector4::new(self.x(), self.y(), self.z(), self.w())
+    pub fn pack(&self) -> Vector4P {
+        Vector4P::new(self.x(), self.y(), self.z(), self.w())
     }
 
     #[inline]
@@ -1586,59 +1382,57 @@ impl Vector4A {
     }
 }
 
-impl From<[f32; 4]> for Vector4A {
+impl From<[f32; 4]> for Vector4 {
     #[inline]
     fn from([x, y, z, w]: [f32; 4]) -> Self {
         Self::new(x, y, z, w)
     }
 }
 
-impl From<Vector4A> for [f32; 4] {
+impl From<Vector4> for [f32; 4] {
     #[inline]
-    fn from(vector: Vector4A) -> Self {
+    fn from(vector: Vector4) -> Self {
         [vector.x(), vector.y(), vector.z(), vector.w()]
     }
 }
 
-impl_binop!(Add, add, Vector4A, Vector4A, Vector4A, |a, b| {
-    Vector4A::wrap(a.inner.add(b.inner))
+impl_binop!(Add, add, Vector4, Vector4, Vector4, |a, b| {
+    Vector4::wrap(a.inner.add(b.inner))
 });
 
-impl_binop!(Sub, sub, Vector4A, Vector4A, Vector4A, |a, b| {
-    Vector4A::wrap(a.inner.sub(b.inner))
+impl_binop!(Sub, sub, Vector4, Vector4, Vector4, |a, b| {
+    Vector4::wrap(a.inner.sub(b.inner))
 });
 
-impl_binop!(Mul, mul, Vector4A, f32, Vector4A, |a, b| {
-    Vector4A::wrap(a.inner.mul(*b))
+impl_binop!(Mul, mul, Vector4, f32, Vector4, |a, b| {
+    Vector4::wrap(a.inner.mul(*b))
 });
 
-impl_binop!(Mul, mul, f32, Vector4A, Vector4A, |a, b| { b.mul(*a) });
+impl_binop!(Mul, mul, f32, Vector4, Vector4, |a, b| { b.mul(*a) });
 
-impl_binop!(Div, div, Vector4A, f32, Vector4A, |a, b| {
-    a.mul(b.recip())
-});
+impl_binop!(Div, div, Vector4, f32, Vector4, |a, b| { a.mul(b.recip()) });
 
-impl_binop_assign!(AddAssign, add_assign, Vector4A, Vector4A, |a, b| {
+impl_binop_assign!(AddAssign, add_assign, Vector4, Vector4, |a, b| {
     a.inner.add_assign(b.inner);
 });
 
-impl_binop_assign!(SubAssign, sub_assign, Vector4A, Vector4A, |a, b| {
+impl_binop_assign!(SubAssign, sub_assign, Vector4, Vector4, |a, b| {
     a.inner.sub_assign(b.inner);
 });
 
-impl_binop_assign!(MulAssign, mul_assign, Vector4A, f32, |a, b| {
+impl_binop_assign!(MulAssign, mul_assign, Vector4, f32, |a, b| {
     a.inner.mul_assign(*b);
 });
 
-impl_binop_assign!(DivAssign, div_assign, Vector4A, f32, |a, b| {
+impl_binop_assign!(DivAssign, div_assign, Vector4, f32, |a, b| {
     a.inner.div_assign(*b);
 });
 
-impl_unary_op!(Neg, neg, Vector4A, Vector4A, |val| {
-    Vector4A::wrap(val.inner.neg())
+impl_unary_op!(Neg, neg, Vector4, Vector4, |val| {
+    Vector4::wrap(val.inner.neg())
 });
 
-impl Index<usize> for Vector4A {
+impl Index<usize> for Vector4 {
     type Output = f32;
 
     #[inline]
@@ -1647,24 +1441,24 @@ impl Index<usize> for Vector4A {
     }
 }
 
-impl IndexMut<usize> for Vector4A {
+impl IndexMut<usize> for Vector4 {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.inner.index_mut(index)
     }
 }
 
-impl_abs_diff_eq!(Vector4A, |a, b, epsilon| {
+impl_abs_diff_eq!(Vector4, |a, b, epsilon| {
     a.inner.abs_diff_eq(b.inner, epsilon)
 });
 
-impl_relative_eq!(Vector4A, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Vector4, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
-impl fmt::Debug for Vector4A {
+impl fmt::Debug for Vector4 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Vector4A")
+        f.debug_struct("Vector4")
             .field("x", &self.inner.x)
             .field("y", &self.inner.y)
             .field("z", &self.inner.z)
@@ -1673,11 +1467,218 @@ impl fmt::Debug for Vector4A {
     }
 }
 
+impl Vector4P {
+    /// Creates a new vector with the given components.
+    #[inline]
+    pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+        Self { x, y, z, w }
+    }
+
+    /// Creates a new vector with all zeros.
+    #[inline]
+    pub const fn zeros() -> Self {
+        Self::same(0.0)
+    }
+
+    /// Creates a new vector with the same value for all components.
+    #[inline]
+    pub const fn same(value: f32) -> Self {
+        Self::new(value, value, value, value)
+    }
+
+    /// The x-axis unit vector.
+    #[inline]
+    pub const fn unit_x() -> Self {
+        Self::new(1.0, 0.0, 0.0, 0.0)
+    }
+
+    /// The y-axis unit vector.
+    #[inline]
+    pub const fn unit_y() -> Self {
+        Self::new(0.0, 1.0, 0.0, 0.0)
+    }
+
+    /// The z-axis unit vector.
+    #[inline]
+    pub const fn unit_z() -> Self {
+        Self::new(0.0, 0.0, 1.0, 0.0)
+    }
+
+    /// The w-axis unit vector.
+    #[inline]
+    pub const fn unit_w() -> Self {
+        Self::new(0.0, 0.0, 0.0, 1.0)
+    }
+
+    /// The x-component.
+    #[inline]
+    pub const fn x(&self) -> f32 {
+        self.x
+    }
+
+    /// The y-component.
+    #[inline]
+    pub const fn y(&self) -> f32 {
+        self.y
+    }
+
+    /// The z-component.
+    #[inline]
+    pub const fn z(&self) -> f32 {
+        self.z
+    }
+
+    /// The w-component.
+    #[inline]
+    pub const fn w(&self) -> f32 {
+        self.w
+    }
+
+    /// A mutable reference to the x-component.
+    #[inline]
+    pub const fn x_mut(&mut self) -> &mut f32 {
+        &mut self.x
+    }
+
+    /// A mutable reference to the y-component.
+    #[inline]
+    pub const fn y_mut(&mut self) -> &mut f32 {
+        &mut self.y
+    }
+
+    /// A mutable reference to the z-component.
+    #[inline]
+    pub const fn z_mut(&mut self) -> &mut f32 {
+        &mut self.z
+    }
+
+    /// A mutable reference to the w-component.
+    #[inline]
+    pub const fn w_mut(&mut self) -> &mut f32 {
+        &mut self.w
+    }
+
+    /// The 3D vector containing the x-, y-, and z-components of this vector.
+    #[inline]
+    pub const fn xyz(&self) -> Vector3P {
+        Vector3P::new(self.x(), self.y(), self.z())
+    }
+
+    /// Converts the vector to the 16-byte aligned SIMD-friendly [`Vector4`].
+    #[inline]
+    pub fn unpack(&self) -> Vector4 {
+        Vector4::new(self.x(), self.y(), self.z(), self.w())
+    }
+}
+
+impl From<[f32; 4]> for Vector4P {
+    #[inline]
+    fn from([x, y, z, w]: [f32; 4]) -> Self {
+        Self::new(x, y, z, w)
+    }
+}
+
+impl From<Vector4P> for [f32; 4] {
+    #[inline]
+    fn from(vector: Vector4P) -> Self {
+        [vector.x(), vector.y(), vector.z(), vector.w()]
+    }
+}
+
+impl_binop!(Add, add, Vector4P, Vector4P, Vector4P, |a, b| {
+    Vector4P::new(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w)
+});
+
+impl_binop!(Sub, sub, Vector4P, Vector4P, Vector4P, |a, b| {
+    Vector4P::new(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w)
+});
+
+impl_binop!(Mul, mul, Vector4P, f32, Vector4P, |a, b| {
+    Vector4P::new(a.x * b, a.y * b, a.z * b, a.w * b)
+});
+
+impl_binop!(Mul, mul, f32, Vector4P, Vector4P, |a, b| { b.mul(a) });
+
+impl_binop!(Div, div, Vector4P, f32, Vector4P, |a, b| {
+    a.mul(b.recip())
+});
+
+impl_binop_assign!(AddAssign, add_assign, Vector4P, Vector4P, |a, b| {
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
+    a.w += b.w;
+});
+
+impl_binop_assign!(SubAssign, sub_assign, Vector4P, Vector4P, |a, b| {
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
+    a.w -= b.w;
+});
+
+impl_binop_assign!(MulAssign, mul_assign, Vector4P, f32, |a, b| {
+    a.x *= b;
+    a.y *= b;
+    a.z *= b;
+    a.w *= b;
+});
+
+impl_binop_assign!(DivAssign, div_assign, Vector4P, f32, |a, b| {
+    a.mul_assign(b.recip());
+});
+
+impl_unary_op!(Neg, neg, Vector4P, Vector4P, |val| {
+    Vector4P::new(-val.x, -val.y, -val.z, -val.w)
+});
+
+impl Index<usize> for Vector4P {
+    type Output = f32;
+
+    #[inline]
+    fn index(&self, idx: usize) -> &Self::Output {
+        match idx {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            3 => &self.w,
+            _ => panic!("index out of bounds"),
+        }
+    }
+}
+
+impl IndexMut<usize> for Vector4P {
+    #[inline]
+    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+        match idx {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            2 => &mut self.z,
+            3 => &mut self.w,
+            _ => panic!("index out of bounds"),
+        }
+    }
+}
+
+impl_abs_diff_eq!(Vector4P, |a, b, epsilon| {
+    a.x.abs_diff_eq(&b.x, epsilon)
+        && a.y.abs_diff_eq(&b.y, epsilon)
+        && a.z.abs_diff_eq(&b.z, epsilon)
+        && a.w.abs_diff_eq(&b.w, epsilon)
+});
+
+impl_relative_eq!(Vector4P, |a, b, epsilon, max_relative| {
+    a.x.relative_eq(&b.x, epsilon, max_relative)
+        && a.y.relative_eq(&b.y, epsilon, max_relative)
+        && a.z.relative_eq(&b.z, epsilon, max_relative)
+        && a.w.relative_eq(&b.w, epsilon, max_relative)
+});
+
 impl_roc_for_library_provided_primitives! {
 //  Type           Pkg   Parents  Module       Roc name     Postfix  Precision
-    Vector2     => core, None,    Vector2,     Vector2,     None,    PrecisionIrrelevant,
-    Vector3     => core, None,    Vector3,     Vector3,     None,    PrecisionIrrelevant,
-    UnitVector3 => core, None,    UnitVector3, UnitVector3, None,    PrecisionIrrelevant,
+    Vector2      => core, None,    Vector2,     Vector2,     None,    PrecisionIrrelevant,
+    Vector3P     => core, None,    Vector3,     Vector3,     None,    PrecisionIrrelevant,
+    UnitVector3P => core, None,    UnitVector3, UnitVector3, None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -1851,7 +1852,7 @@ mod tests {
 
     #[test]
     fn vector3a_new_works() {
-        let v = Vector3A::new(1.0, 2.0, 3.0);
+        let v = Vector3::new(1.0, 2.0, 3.0);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -1859,17 +1860,17 @@ mod tests {
 
     #[test]
     fn vector3a_unit_vectors_work() {
-        let unit_x = Vector3A::unit_x();
+        let unit_x = Vector3::unit_x();
         assert_eq!(unit_x.x(), 1.0);
         assert_eq!(unit_x.y(), 0.0);
         assert_eq!(unit_x.z(), 0.0);
 
-        let unit_y = Vector3A::unit_y();
+        let unit_y = Vector3::unit_y();
         assert_eq!(unit_y.x(), 0.0);
         assert_eq!(unit_y.y(), 1.0);
         assert_eq!(unit_y.z(), 0.0);
 
-        let unit_z = Vector3A::unit_z();
+        let unit_z = Vector3::unit_z();
         assert_eq!(unit_z.x(), 0.0);
         assert_eq!(unit_z.y(), 0.0);
         assert_eq!(unit_z.z(), 1.0);
@@ -1877,8 +1878,8 @@ mod tests {
 
     #[test]
     fn vector3a_cross_product_works() {
-        let v1 = Vector3A::new(1.0, 0.0, 0.0);
-        let v2 = Vector3A::new(0.0, 1.0, 0.0);
+        let v1 = Vector3::new(1.0, 0.0, 0.0);
+        let v2 = Vector3::new(0.0, 1.0, 0.0);
         let cross = v1.cross(&v2);
         assert_abs_diff_eq!(cross.x(), 0.0, epsilon = EPSILON);
         assert_abs_diff_eq!(cross.y(), 0.0, epsilon = EPSILON);
@@ -1887,8 +1888,8 @@ mod tests {
 
     #[test]
     fn vector3a_cross_product_is_perpendicular() {
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
         let cross = v1.cross(&v2);
 
         // Cross product should be perpendicular to both input vectors
@@ -1898,8 +1899,8 @@ mod tests {
 
     #[test]
     fn vector3a_cross_product_is_anticommutative() {
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
         let cross1 = v1.cross(&v2);
         let cross2 = v2.cross(&v1);
 
@@ -1911,8 +1912,8 @@ mod tests {
 
     #[test]
     fn vector3a_cross_product_of_parallel_vectors_is_zero() {
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(2.0, 4.0, 6.0); // Parallel to v1
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(2.0, 4.0, 6.0); // Parallel to v1
         let cross = v1.cross(&v2);
 
         assert_abs_diff_eq!(cross.x(), 0.0, epsilon = EPSILON);
@@ -1922,7 +1923,7 @@ mod tests {
 
     #[test]
     fn vector3a_xy_extraction_works() {
-        let v3 = Vector3A::new(1.0, 2.0, 3.0);
+        let v3 = Vector3::new(1.0, 2.0, 3.0);
         let xy = v3.xy();
         assert_eq!(xy.x(), 1.0);
         assert_eq!(xy.y(), 2.0);
@@ -1930,7 +1931,7 @@ mod tests {
 
     #[test]
     fn vector4a_new_works() {
-        let v = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let v = Vector4::new(1.0, 2.0, 3.0, 4.0);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -1939,7 +1940,7 @@ mod tests {
 
     #[test]
     fn vector4a_xyz_extraction_works() {
-        let v4 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let v4 = Vector4::new(1.0, 2.0, 3.0, 4.0);
         let xyz = v4.xyz();
         assert_eq!(xyz.x(), 1.0);
         assert_eq!(xyz.y(), 2.0);
@@ -1948,7 +1949,7 @@ mod tests {
 
     #[test]
     fn vector4a_component_mutators_work() {
-        let mut v = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let mut v = Vector4::new(1.0, 2.0, 3.0, 4.0);
 
         *v.x_mut() = 10.0;
         *v.y_mut() = 20.0;
@@ -1963,19 +1964,19 @@ mod tests {
 
     #[test]
     fn unitvector3a_unit_vectors_work() {
-        let unit_x = UnitVector3A::unit_x();
+        let unit_x = UnitVector3::unit_x();
         assert_eq!(unit_x.x(), 1.0);
         assert_eq!(unit_x.y(), 0.0);
         assert_eq!(unit_x.z(), 0.0);
         assert_abs_diff_eq!(unit_x.norm(), 1.0, epsilon = EPSILON);
 
-        let unit_y = UnitVector3A::unit_y();
+        let unit_y = UnitVector3::unit_y();
         assert_eq!(unit_y.x(), 0.0);
         assert_eq!(unit_y.y(), 1.0);
         assert_eq!(unit_y.z(), 0.0);
         assert_abs_diff_eq!(unit_y.norm(), 1.0, epsilon = EPSILON);
 
-        let unit_z = UnitVector3A::unit_z();
+        let unit_z = UnitVector3::unit_z();
         assert_eq!(unit_z.x(), 0.0);
         assert_eq!(unit_z.y(), 0.0);
         assert_eq!(unit_z.z(), 1.0);
@@ -1984,8 +1985,8 @@ mod tests {
 
     #[test]
     fn unitvector3a_normalized_from_works() {
-        let v = Vector3A::new(3.0, 4.0, 0.0);
-        let unit = UnitVector3A::normalized_from(v);
+        let v = Vector3::new(3.0, 4.0, 0.0);
+        let unit = UnitVector3::normalized_from(v);
         assert_abs_diff_eq!(unit.norm(), 1.0, epsilon = EPSILON);
         assert_abs_diff_eq!(unit.x(), 0.6, epsilon = EPSILON);
         assert_abs_diff_eq!(unit.y(), 0.8, epsilon = EPSILON);
@@ -1994,43 +1995,43 @@ mod tests {
 
     #[test]
     fn unitvector3a_normalized_from_if_above_works() {
-        let v_large = Vector3A::new(3.0, 4.0, 0.0);
-        let unit_large = UnitVector3A::normalized_from_if_above(v_large, 1.0);
+        let v_large = Vector3::new(3.0, 4.0, 0.0);
+        let unit_large = UnitVector3::normalized_from_if_above(v_large, 1.0);
         assert!(unit_large.is_some());
         let unit = unit_large.unwrap();
         assert_abs_diff_eq!(unit.norm(), 1.0, epsilon = EPSILON);
 
-        let v_small = Vector3A::new(0.1, 0.1, 0.0);
-        let unit_small = UnitVector3A::normalized_from_if_above(v_small, 1.0);
+        let v_small = Vector3::new(0.1, 0.1, 0.0);
+        let unit_small = UnitVector3::normalized_from_if_above(v_small, 1.0);
         assert!(unit_small.is_none());
     }
 
     #[test]
     fn unitvector3a_normalized_from_and_norm_works() {
-        let v = Vector3A::new(3.0, 4.0, 0.0);
-        let (unit, norm) = UnitVector3A::normalized_from_and_norm(v);
+        let v = Vector3::new(3.0, 4.0, 0.0);
+        let (unit, norm) = UnitVector3::normalized_from_and_norm(v);
         assert_abs_diff_eq!(unit.norm(), 1.0, epsilon = EPSILON);
         assert_abs_diff_eq!(norm, 5.0, epsilon = EPSILON);
     }
 
     #[test]
     fn unitvector3a_normalized_from_and_norm_if_above_works() {
-        let v_large = Vector3A::new(3.0, 4.0, 0.0);
-        let result_large = UnitVector3A::normalized_from_and_norm_if_above(v_large, 1.0);
+        let v_large = Vector3::new(3.0, 4.0, 0.0);
+        let result_large = UnitVector3::normalized_from_and_norm_if_above(v_large, 1.0);
         assert!(result_large.is_some());
         let (unit, norm) = result_large.unwrap();
         assert_abs_diff_eq!(unit.norm(), 1.0, epsilon = EPSILON);
         assert_abs_diff_eq!(norm, 5.0, epsilon = EPSILON);
 
-        let v_small = Vector3A::new(0.1, 0.1, 0.0);
-        let result_small = UnitVector3A::normalized_from_and_norm_if_above(v_small, 1.0);
+        let v_small = Vector3::new(0.1, 0.1, 0.0);
+        let result_small = UnitVector3::normalized_from_and_norm_if_above(v_small, 1.0);
         assert!(result_small.is_none());
     }
 
     #[test]
     fn unitvector3a_unchecked_from_works() {
-        let v = Vector3A::new(1.0, 0.0, 0.0); // Already normalized
-        let unit = UnitVector3A::unchecked_from(v);
+        let v = Vector3::new(1.0, 0.0, 0.0); // Already normalized
+        let unit = UnitVector3::unchecked_from(v);
         assert_eq!(unit.x(), 1.0);
         assert_eq!(unit.y(), 0.0);
         assert_eq!(unit.z(), 0.0);
@@ -2038,7 +2039,7 @@ mod tests {
 
     #[test]
     fn unitvector3a_as_vector_works() {
-        let unit = UnitVector3A::unit_x();
+        let unit = UnitVector3::unit_x();
         let as_vec = unit.as_vector();
         assert_eq!(as_vec.x(), 1.0);
         assert_eq!(as_vec.y(), 0.0);
@@ -2047,8 +2048,8 @@ mod tests {
 
     #[test]
     fn unitvector3a_deref_to_vector3a_works() {
-        let unit = UnitVector3A::unit_x();
-        // Test that UnitVector3A can be used as Vector3A through Deref
+        let unit = UnitVector3::unit_x();
+        // Test that UnitVector3 can be used as Vector3 through Deref
         assert_eq!(unit.x(), 1.0);
         assert_eq!(unit.y(), 0.0);
         assert_eq!(unit.z(), 0.0);
@@ -2057,7 +2058,7 @@ mod tests {
 
     #[test]
     fn unitvector3a_indexing_works() {
-        let unit = UnitVector3A::unit_y();
+        let unit = UnitVector3::unit_y();
         assert_eq!(unit[0], 0.0);
         assert_eq!(unit[1], 1.0);
         assert_eq!(unit[2], 0.0);
@@ -2065,7 +2066,7 @@ mod tests {
 
     #[test]
     fn unitvector3a_arithmetic_with_scalar_works() {
-        let unit = UnitVector3A::unit_x();
+        let unit = UnitVector3::unit_x();
         let scaled = &unit * 2.0;
         assert_eq!(scaled.x(), 2.0);
         assert_eq!(scaled.y(), 0.0);
@@ -2096,10 +2097,10 @@ mod tests {
         assert_abs_diff_eq!(v.min_component(), 1.5, epsilon = EPSILON);
     }
 
-    // Vector3 (non-aligned) tests
+    // Vector3P tests
     #[test]
     fn vector3_new_works() {
-        let v = Vector3::new(1.0, 2.0, 3.0);
+        let v = Vector3P::new(1.0, 2.0, 3.0);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -2107,17 +2108,17 @@ mod tests {
 
     #[test]
     fn vector3_unit_vectors_work() {
-        let unit_x = Vector3::unit_x();
+        let unit_x = Vector3P::unit_x();
         assert_eq!(unit_x.x(), 1.0);
         assert_eq!(unit_x.y(), 0.0);
         assert_eq!(unit_x.z(), 0.0);
 
-        let unit_y = Vector3::unit_y();
+        let unit_y = Vector3P::unit_y();
         assert_eq!(unit_y.x(), 0.0);
         assert_eq!(unit_y.y(), 1.0);
         assert_eq!(unit_y.z(), 0.0);
 
-        let unit_z = Vector3::unit_z();
+        let unit_z = Vector3P::unit_z();
         assert_eq!(unit_z.x(), 0.0);
         assert_eq!(unit_z.y(), 0.0);
         assert_eq!(unit_z.z(), 1.0);
@@ -2125,7 +2126,7 @@ mod tests {
 
     #[test]
     fn vector3_zeros_gives_zero_vector() {
-        let v = Vector3::zeros();
+        let v = Vector3P::zeros();
         assert_eq!(v.x(), 0.0);
         assert_eq!(v.y(), 0.0);
         assert_eq!(v.z(), 0.0);
@@ -2133,7 +2134,7 @@ mod tests {
 
     #[test]
     fn vector3_same_creates_vector_with_repeated_value() {
-        let v = Vector3::same(2.5);
+        let v = Vector3P::same(2.5);
         assert_eq!(v.x(), 2.5);
         assert_eq!(v.y(), 2.5);
         assert_eq!(v.z(), 2.5);
@@ -2141,7 +2142,7 @@ mod tests {
 
     #[test]
     fn vector3_xy_extraction_works() {
-        let v3 = Vector3::new(1.0, 2.0, 3.0);
+        let v3 = Vector3P::new(1.0, 2.0, 3.0);
         let xy = v3.xy();
         assert_eq!(xy.x(), 1.0);
         assert_eq!(xy.y(), 2.0);
@@ -2149,7 +2150,7 @@ mod tests {
 
     #[test]
     fn vector3_extended_works() {
-        let v3 = Vector3::new(1.0, 2.0, 3.0);
+        let v3 = Vector3P::new(1.0, 2.0, 3.0);
         let v4 = v3.extended(4.0);
         assert_eq!(v4.x(), 1.0);
         assert_eq!(v4.y(), 2.0);
@@ -2159,8 +2160,8 @@ mod tests {
 
     #[test]
     fn vector3_aligned_conversion_works() {
-        let v3 = Vector3::new(1.0, 2.0, 3.0);
-        let v3a = v3.aligned();
+        let v3 = Vector3P::new(1.0, 2.0, 3.0);
+        let v3a = v3.unpack();
         assert_eq!(v3a.x(), 1.0);
         assert_eq!(v3a.y(), 2.0);
         assert_eq!(v3a.z(), 3.0);
@@ -2168,14 +2169,14 @@ mod tests {
 
     #[test]
     fn vector3_dot_product_works() {
-        let v1 = Vector3::new(1.0, 2.0, 3.0);
-        let v2 = Vector3::new(4.0, 5.0, 6.0);
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(4.0, 5.0, 6.0);
         assert_abs_diff_eq!(v1.dot(&v2), 32.0, epsilon = EPSILON); // 1*4 + 2*5 + 3*6 = 32
     }
 
     #[test]
     fn vector3_component_mutators_work() {
-        let mut v = Vector3::new(1.0, 2.0, 3.0);
+        let mut v = Vector3P::new(1.0, 2.0, 3.0);
 
         *v.x_mut() = 10.0;
         *v.y_mut() = 20.0;
@@ -2188,7 +2189,7 @@ mod tests {
 
     #[test]
     fn vector3_indexing_works() {
-        let mut v = Vector3::new(1.0, 2.0, 3.0);
+        let mut v = Vector3P::new(1.0, 2.0, 3.0);
         assert_eq!(v[0], 1.0);
         assert_eq!(v[1], 2.0);
         assert_eq!(v[2], 3.0);
@@ -2204,7 +2205,7 @@ mod tests {
     #[test]
     fn vector3_array_conversion_works() {
         let arr: [f32; 3] = [1.0, 2.0, 3.0];
-        let v = Vector3::from(arr);
+        let v = Vector3P::from(arr);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -2215,8 +2216,8 @@ mod tests {
 
     #[test]
     fn vector3_arithmetic_operations_work() {
-        let v1 = Vector3::new(1.0, 2.0, 3.0);
-        let v2 = Vector3::new(4.0, 5.0, 6.0);
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(4.0, 5.0, 6.0);
 
         let add_result = &v1 + &v2;
         assert_eq!(add_result.x(), 5.0);
@@ -2251,8 +2252,8 @@ mod tests {
 
     #[test]
     fn vector3_assignment_operations_work() {
-        let mut v1 = Vector3::new(1.0, 2.0, 3.0);
-        let v2 = Vector3::new(4.0, 5.0, 6.0);
+        let mut v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(4.0, 5.0, 6.0);
 
         v1 += &v2;
         assert_eq!(v1.x(), 5.0);
@@ -2275,10 +2276,10 @@ mod tests {
         assert_eq!(v1.z(), 3.0);
     }
 
-    // Vector4 (non-aligned) tests
+    // Vector4P tests
     #[test]
     fn vector4_new_works() {
-        let v = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v = Vector4P::new(1.0, 2.0, 3.0, 4.0);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -2287,25 +2288,25 @@ mod tests {
 
     #[test]
     fn vector4_unit_vectors_work() {
-        let unit_x = Vector4::unit_x();
+        let unit_x = Vector4P::unit_x();
         assert_eq!(unit_x.x(), 1.0);
         assert_eq!(unit_x.y(), 0.0);
         assert_eq!(unit_x.z(), 0.0);
         assert_eq!(unit_x.w(), 0.0);
 
-        let unit_y = Vector4::unit_y();
+        let unit_y = Vector4P::unit_y();
         assert_eq!(unit_y.x(), 0.0);
         assert_eq!(unit_y.y(), 1.0);
         assert_eq!(unit_y.z(), 0.0);
         assert_eq!(unit_y.w(), 0.0);
 
-        let unit_z = Vector4::unit_z();
+        let unit_z = Vector4P::unit_z();
         assert_eq!(unit_z.x(), 0.0);
         assert_eq!(unit_z.y(), 0.0);
         assert_eq!(unit_z.z(), 1.0);
         assert_eq!(unit_z.w(), 0.0);
 
-        let unit_w = Vector4::unit_w();
+        let unit_w = Vector4P::unit_w();
         assert_eq!(unit_w.x(), 0.0);
         assert_eq!(unit_w.y(), 0.0);
         assert_eq!(unit_w.z(), 0.0);
@@ -2314,7 +2315,7 @@ mod tests {
 
     #[test]
     fn vector4_zeros_gives_zero_vector() {
-        let v = Vector4::zeros();
+        let v = Vector4P::zeros();
         assert_eq!(v.x(), 0.0);
         assert_eq!(v.y(), 0.0);
         assert_eq!(v.z(), 0.0);
@@ -2323,7 +2324,7 @@ mod tests {
 
     #[test]
     fn vector4_same_creates_vector_with_repeated_value() {
-        let v = Vector4::same(1.5);
+        let v = Vector4P::same(1.5);
         assert_eq!(v.x(), 1.5);
         assert_eq!(v.y(), 1.5);
         assert_eq!(v.z(), 1.5);
@@ -2332,7 +2333,7 @@ mod tests {
 
     #[test]
     fn vector4_xyz_extraction_works() {
-        let v4 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v4 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
         let xyz = v4.xyz();
         assert_eq!(xyz.x(), 1.0);
         assert_eq!(xyz.y(), 2.0);
@@ -2341,8 +2342,8 @@ mod tests {
 
     #[test]
     fn vector4_aligned_conversion_works() {
-        let v4 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let v4a = v4.aligned();
+        let v4 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let v4a = v4.unpack();
         assert_eq!(v4a.x(), 1.0);
         assert_eq!(v4a.y(), 2.0);
         assert_eq!(v4a.z(), 3.0);
@@ -2351,7 +2352,7 @@ mod tests {
 
     #[test]
     fn vector4_component_mutators_work() {
-        let mut v = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let mut v = Vector4P::new(1.0, 2.0, 3.0, 4.0);
 
         *v.x_mut() = 10.0;
         *v.y_mut() = 20.0;
@@ -2366,7 +2367,7 @@ mod tests {
 
     #[test]
     fn vector4_indexing_works() {
-        let mut v = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let mut v = Vector4P::new(1.0, 2.0, 3.0, 4.0);
         assert_eq!(v[0], 1.0);
         assert_eq!(v[1], 2.0);
         assert_eq!(v[2], 3.0);
@@ -2385,7 +2386,7 @@ mod tests {
     #[test]
     fn vector4_array_conversion_works() {
         let arr: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
-        let v = Vector4::from(arr);
+        let v = Vector4P::from(arr);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -2397,8 +2398,8 @@ mod tests {
 
     #[test]
     fn vector4_arithmetic_operations_work() {
-        let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
+        let v1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
 
         let add_result = &v1 + &v2;
         assert_eq!(add_result.x(), 6.0);
@@ -2439,8 +2440,8 @@ mod tests {
 
     #[test]
     fn vector4_assignment_operations_work() {
-        let mut v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
+        let mut v1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
 
         v1 += &v2;
         assert_eq!(v1.x(), 6.0);
@@ -2467,20 +2468,20 @@ mod tests {
         assert_eq!(v1.w(), 4.0);
     }
 
-    // UnitVector3 (non-aligned) tests
+    // UnitVector3P tests
     #[test]
     fn unitvector3_unit_vectors_work() {
-        let unit_x = UnitVector3::unit_x();
+        let unit_x = UnitVector3P::unit_x();
         assert_eq!(unit_x.x(), 1.0);
         assert_eq!(unit_x.y(), 0.0);
         assert_eq!(unit_x.z(), 0.0);
 
-        let unit_y = UnitVector3::unit_y();
+        let unit_y = UnitVector3P::unit_y();
         assert_eq!(unit_y.x(), 0.0);
         assert_eq!(unit_y.y(), 1.0);
         assert_eq!(unit_y.z(), 0.0);
 
-        let unit_z = UnitVector3::unit_z();
+        let unit_z = UnitVector3P::unit_z();
         assert_eq!(unit_z.x(), 0.0);
         assert_eq!(unit_z.y(), 0.0);
         assert_eq!(unit_z.z(), 1.0);
@@ -2488,6 +2489,82 @@ mod tests {
 
     #[test]
     fn unitvector3_negative_unit_vectors_work() {
+        let neg_unit_x = UnitVector3P::neg_unit_x();
+        assert_eq!(neg_unit_x.x(), -1.0);
+        assert_eq!(neg_unit_x.y(), 0.0);
+        assert_eq!(neg_unit_x.z(), 0.0);
+
+        let neg_unit_y = UnitVector3P::neg_unit_y();
+        assert_eq!(neg_unit_y.x(), 0.0);
+        assert_eq!(neg_unit_y.y(), -1.0);
+        assert_eq!(neg_unit_y.z(), 0.0);
+
+        let neg_unit_z = UnitVector3P::neg_unit_z();
+        assert_eq!(neg_unit_z.x(), 0.0);
+        assert_eq!(neg_unit_z.y(), 0.0);
+        assert_eq!(neg_unit_z.z(), -1.0);
+    }
+
+    #[test]
+    fn unitvector3_as_vector_works() {
+        let unit = UnitVector3P::unit_x();
+        let as_vec = unit.as_vector();
+        assert_eq!(as_vec.x(), 1.0);
+        assert_eq!(as_vec.y(), 0.0);
+        assert_eq!(as_vec.z(), 0.0);
+    }
+
+    #[test]
+    fn unitvector3_aligned_conversion_works() {
+        let unit = UnitVector3P::unit_x();
+        let unit_a = unit.unpack();
+        assert_eq!(unit_a.x(), 1.0);
+        assert_eq!(unit_a.y(), 0.0);
+        assert_eq!(unit_a.z(), 0.0);
+    }
+
+    #[test]
+    fn unitvector3_deref_to_vector3_works() {
+        let unit = UnitVector3P::unit_x();
+        // Test that UnitVector3P can be used as Vector3P through Deref
+        assert_eq!(unit.x(), 1.0);
+        assert_eq!(unit.y(), 0.0);
+        assert_eq!(unit.z(), 0.0);
+    }
+
+    #[test]
+    fn unitvector3_indexing_works() {
+        let unit = UnitVector3P::unit_y();
+        assert_eq!(unit[0], 0.0);
+        assert_eq!(unit[1], 1.0);
+        assert_eq!(unit[2], 0.0);
+    }
+
+    #[test]
+    fn unitvector3_new_unchecked_works() {
+        let unit = UnitVector3P::new_unchecked(1.0, 0.0, 0.0); // Already normalized
+        assert_eq!(unit.x(), 1.0);
+        assert_eq!(unit.y(), 0.0);
+        assert_eq!(unit.z(), 0.0);
+    }
+
+    #[test]
+    fn unitvector3_normalized_from_works() {
+        let v = Vector3P::new(3.0, 4.0, 0.0);
+        let unit = UnitVector3P::normalized_from(v);
+
+        // Should normalize to unit length
+        let norm = (unit.x() * unit.x() + unit.y() * unit.y() + unit.z() * unit.z()).sqrt();
+        assert_abs_diff_eq!(norm, 1.0, epsilon = EPSILON);
+
+        // Should maintain direction (parallel to original)
+        assert_abs_diff_eq!(unit.x(), 3.0 / 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(unit.y(), 4.0 / 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(unit.z(), 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn unitvector3a_negative_unit_vectors_work() {
         let neg_unit_x = UnitVector3::neg_unit_x();
         assert_eq!(neg_unit_x.x(), -1.0);
         assert_eq!(neg_unit_x.y(), 0.0);
@@ -2505,94 +2582,18 @@ mod tests {
     }
 
     #[test]
-    fn unitvector3_as_vector_works() {
-        let unit = UnitVector3::unit_x();
-        let as_vec = unit.as_vector();
-        assert_eq!(as_vec.x(), 1.0);
-        assert_eq!(as_vec.y(), 0.0);
-        assert_eq!(as_vec.z(), 0.0);
-    }
-
-    #[test]
-    fn unitvector3_aligned_conversion_works() {
-        let unit = UnitVector3::unit_x();
-        let unit_a = unit.aligned();
-        assert_eq!(unit_a.x(), 1.0);
-        assert_eq!(unit_a.y(), 0.0);
-        assert_eq!(unit_a.z(), 0.0);
-    }
-
-    #[test]
-    fn unitvector3_deref_to_vector3_works() {
-        let unit = UnitVector3::unit_x();
-        // Test that UnitVector3 can be used as Vector3 through Deref
-        assert_eq!(unit.x(), 1.0);
-        assert_eq!(unit.y(), 0.0);
-        assert_eq!(unit.z(), 0.0);
-    }
-
-    #[test]
-    fn unitvector3_indexing_works() {
-        let unit = UnitVector3::unit_y();
-        assert_eq!(unit[0], 0.0);
-        assert_eq!(unit[1], 1.0);
-        assert_eq!(unit[2], 0.0);
-    }
-
-    #[test]
-    fn unitvector3_new_unchecked_works() {
-        let unit = UnitVector3::new_unchecked(1.0, 0.0, 0.0); // Already normalized
-        assert_eq!(unit.x(), 1.0);
-        assert_eq!(unit.y(), 0.0);
-        assert_eq!(unit.z(), 0.0);
-    }
-
-    #[test]
-    fn unitvector3_normalized_from_works() {
-        let v = Vector3::new(3.0, 4.0, 0.0);
-        let unit = UnitVector3::normalized_from(v);
-
-        // Should normalize to unit length
-        let norm = (unit.x() * unit.x() + unit.y() * unit.y() + unit.z() * unit.z()).sqrt();
-        assert_abs_diff_eq!(norm, 1.0, epsilon = EPSILON);
-
-        // Should maintain direction (parallel to original)
-        assert_abs_diff_eq!(unit.x(), 3.0 / 5.0, epsilon = EPSILON);
-        assert_abs_diff_eq!(unit.y(), 4.0 / 5.0, epsilon = EPSILON);
-        assert_abs_diff_eq!(unit.z(), 0.0, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn unitvector3a_negative_unit_vectors_work() {
-        let neg_unit_x = UnitVector3A::neg_unit_x();
-        assert_eq!(neg_unit_x.x(), -1.0);
-        assert_eq!(neg_unit_x.y(), 0.0);
-        assert_eq!(neg_unit_x.z(), 0.0);
-
-        let neg_unit_y = UnitVector3A::neg_unit_y();
-        assert_eq!(neg_unit_y.x(), 0.0);
-        assert_eq!(neg_unit_y.y(), -1.0);
-        assert_eq!(neg_unit_y.z(), 0.0);
-
-        let neg_unit_z = UnitVector3A::neg_unit_z();
-        assert_eq!(neg_unit_z.x(), 0.0);
-        assert_eq!(neg_unit_z.y(), 0.0);
-        assert_eq!(neg_unit_z.z(), -1.0);
-    }
-
-    #[test]
     fn unitvector3a_unaligned_conversion_works() {
-        let unit_a = UnitVector3A::unit_x();
-        let unit = unit_a.unaligned();
+        let unit_a = UnitVector3::unit_x();
+        let unit = unit_a.pack();
         assert_eq!(unit.x(), 1.0);
         assert_eq!(unit.y(), 0.0);
         assert_eq!(unit.z(), 0.0);
     }
 
-    // Additional Vector3A tests for complete coverage
+    // Additional Vector3 tests for complete coverage
     #[test]
     fn vector3a_zeros_gives_zero_vector() {
-        let v = Vector3A::zeros();
+        let v = Vector3::zeros();
         assert_eq!(v.x(), 0.0);
         assert_eq!(v.y(), 0.0);
         assert_eq!(v.z(), 0.0);
@@ -2600,7 +2601,7 @@ mod tests {
 
     #[test]
     fn vector3a_same_creates_vector_with_repeated_value() {
-        let v = Vector3A::same(2.5);
+        let v = Vector3::same(2.5);
         assert_eq!(v.x(), 2.5);
         assert_eq!(v.y(), 2.5);
         assert_eq!(v.z(), 2.5);
@@ -2608,7 +2609,7 @@ mod tests {
 
     #[test]
     fn vector3a_extended_works() {
-        let v3 = Vector3A::new(1.0, 2.0, 3.0);
+        let v3 = Vector3::new(1.0, 2.0, 3.0);
         let v4 = v3.extended(4.0);
         assert_eq!(v4.x(), 1.0);
         assert_eq!(v4.y(), 2.0);
@@ -2618,7 +2619,7 @@ mod tests {
 
     #[test]
     fn vector3a_mapped_transforms_components() {
-        let v = Vector3A::new(1.0, -2.0, 3.0);
+        let v = Vector3::new(1.0, -2.0, 3.0);
         let mapped = v.mapped(|x| x * 2.0);
         assert_eq!(mapped.x(), 2.0);
         assert_eq!(mapped.y(), -4.0);
@@ -2627,23 +2628,23 @@ mod tests {
 
     #[test]
     fn vector3a_min_component_returns_smallest_element() {
-        let v = Vector3A::new(3.7, 1.5, 2.1);
+        let v = Vector3::new(3.7, 1.5, 2.1);
         assert_abs_diff_eq!(v.min_component(), 1.5, epsilon = EPSILON);
     }
 
     #[test]
     fn vector3a_unaligned_conversion_works() {
-        let v3a = Vector3A::new(1.0, 2.0, 3.0);
-        let v3 = v3a.unaligned();
+        let v3a = Vector3::new(1.0, 2.0, 3.0);
+        let v3 = v3a.pack();
         assert_eq!(v3.x(), 1.0);
         assert_eq!(v3.y(), 2.0);
         assert_eq!(v3.z(), 3.0);
     }
 
-    // Vector3A tests for complete coverage
+    // Vector3 tests for complete coverage
     #[test]
     fn vector3a_component_mutators_work() {
-        let mut v = Vector3A::new(1.0, 2.0, 3.0);
+        let mut v = Vector3::new(1.0, 2.0, 3.0);
 
         *v.x_mut() = 10.0;
         *v.y_mut() = 20.0;
@@ -2656,14 +2657,14 @@ mod tests {
 
     #[test]
     fn vector3a_norm_calculations_work() {
-        let v = Vector3A::new(1.0, 2.0, 2.0);
+        let v = Vector3::new(1.0, 2.0, 2.0);
         assert_abs_diff_eq!(v.norm(), 3.0, epsilon = EPSILON);
         assert_abs_diff_eq!(v.norm_squared(), 9.0, epsilon = EPSILON);
     }
 
     #[test]
     fn vector3a_normalized_gives_unit_vector() {
-        let v = Vector3A::new(2.0, 0.0, 0.0);
+        let v = Vector3::new(2.0, 0.0, 0.0);
         let normalized = v.normalized();
         assert_abs_diff_eq!(normalized.norm(), 1.0, epsilon = EPSILON);
         assert_abs_diff_eq!(normalized.x(), 1.0, epsilon = EPSILON);
@@ -2673,15 +2674,15 @@ mod tests {
 
     #[test]
     fn vector3a_dot_product_works() {
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
         assert_abs_diff_eq!(v1.dot(&v2), 32.0, epsilon = EPSILON); // 1*4 + 2*5 + 3*6 = 32
     }
 
     #[test]
     fn vector3a_component_operations_work() {
-        let v1 = Vector3A::new(-1.0, 2.0, -3.0);
-        let v2 = Vector3A::new(4.0, -5.0, 6.0);
+        let v1 = Vector3::new(-1.0, 2.0, -3.0);
+        let v2 = Vector3::new(4.0, -5.0, 6.0);
 
         let abs_v = v1.component_abs();
         assert_eq!(abs_v.x(), 1.0);
@@ -2706,14 +2707,14 @@ mod tests {
 
     #[test]
     fn vector3a_max_component_returns_largest_element() {
-        let v = Vector3A::new(1.5, 3.7, 2.1);
+        let v = Vector3::new(1.5, 3.7, 2.1);
         assert_abs_diff_eq!(v.max_component(), 3.7, epsilon = EPSILON);
     }
 
     #[test]
     fn vector3a_arithmetic_operations_work() {
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
 
         let add_result = &v1 + &v2;
         assert_eq!(add_result.x(), 5.0);
@@ -2748,8 +2749,8 @@ mod tests {
 
     #[test]
     fn vector3a_assignment_operations_work() {
-        let mut v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        let mut v1 = Vector3::new(1.0, 2.0, 3.0);
+        let v2 = Vector3::new(4.0, 5.0, 6.0);
 
         v1 += &v2;
         assert_eq!(v1.x(), 5.0);
@@ -2774,7 +2775,7 @@ mod tests {
 
     #[test]
     fn vector3a_indexing_works() {
-        let mut v = Vector3A::new(1.0, 2.0, 3.0);
+        let mut v = Vector3::new(1.0, 2.0, 3.0);
         assert_eq!(v[0], 1.0);
         assert_eq!(v[1], 2.0);
         assert_eq!(v[2], 3.0);
@@ -2790,7 +2791,7 @@ mod tests {
     #[test]
     fn vector3a_array_conversion_works() {
         let arr: [f32; 3] = [1.0, 2.0, 3.0];
-        let v = Vector3A::from(arr);
+        let v = Vector3::from(arr);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -2799,10 +2800,10 @@ mod tests {
         assert_eq!(converted_back, [1.0, 2.0, 3.0]);
     }
 
-    // Vector4A tests for complete coverage
+    // Vector4 tests for complete coverage
     #[test]
     fn vector4a_zeros_gives_zero_vector() {
-        let v = Vector4A::zeros();
+        let v = Vector4::zeros();
         assert_eq!(v.x(), 0.0);
         assert_eq!(v.y(), 0.0);
         assert_eq!(v.z(), 0.0);
@@ -2811,7 +2812,7 @@ mod tests {
 
     #[test]
     fn vector4a_same_creates_vector_with_repeated_value() {
-        let v = Vector4A::same(1.5);
+        let v = Vector4::same(1.5);
         assert_eq!(v.x(), 1.5);
         assert_eq!(v.y(), 1.5);
         assert_eq!(v.z(), 1.5);
@@ -2820,25 +2821,25 @@ mod tests {
 
     #[test]
     fn vector4a_unit_vectors_work() {
-        let unit_x = Vector4A::unit_x();
+        let unit_x = Vector4::unit_x();
         assert_eq!(unit_x.x(), 1.0);
         assert_eq!(unit_x.y(), 0.0);
         assert_eq!(unit_x.z(), 0.0);
         assert_eq!(unit_x.w(), 0.0);
 
-        let unit_y = Vector4A::unit_y();
+        let unit_y = Vector4::unit_y();
         assert_eq!(unit_y.x(), 0.0);
         assert_eq!(unit_y.y(), 1.0);
         assert_eq!(unit_y.z(), 0.0);
         assert_eq!(unit_y.w(), 0.0);
 
-        let unit_z = Vector4A::unit_z();
+        let unit_z = Vector4::unit_z();
         assert_eq!(unit_z.x(), 0.0);
         assert_eq!(unit_z.y(), 0.0);
         assert_eq!(unit_z.z(), 1.0);
         assert_eq!(unit_z.w(), 0.0);
 
-        let unit_w = Vector4A::unit_w();
+        let unit_w = Vector4::unit_w();
         assert_eq!(unit_w.x(), 0.0);
         assert_eq!(unit_w.y(), 0.0);
         assert_eq!(unit_w.z(), 0.0);
@@ -2847,7 +2848,7 @@ mod tests {
 
     #[test]
     fn vector4a_mapped_transforms_components() {
-        let v = Vector4A::new(1.0, -2.0, 3.0, -4.0);
+        let v = Vector4::new(1.0, -2.0, 3.0, -4.0);
         let mapped = v.mapped(|x| x * 2.0);
         assert_eq!(mapped.x(), 2.0);
         assert_eq!(mapped.y(), -4.0);
@@ -2857,14 +2858,14 @@ mod tests {
 
     #[test]
     fn vector4a_min_component_returns_smallest_element() {
-        let v = Vector4A::new(3.7, 1.5, 2.1, 0.8);
+        let v = Vector4::new(3.7, 1.5, 2.1, 0.8);
         assert_abs_diff_eq!(v.min_component(), 0.8, epsilon = EPSILON);
     }
 
     #[test]
     fn vector4a_unaligned_conversion_works() {
-        let v4a = Vector4A::new(1.0, 2.0, 3.0, 4.0);
-        let v4 = v4a.unaligned();
+        let v4a = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v4 = v4a.pack();
         assert_eq!(v4.x(), 1.0);
         assert_eq!(v4.y(), 2.0);
         assert_eq!(v4.z(), 3.0);
@@ -2873,14 +2874,14 @@ mod tests {
 
     #[test]
     fn vector4a_norm_calculations_work() {
-        let v = Vector4A::new(1.0, 2.0, 2.0, 0.0);
+        let v = Vector4::new(1.0, 2.0, 2.0, 0.0);
         assert_abs_diff_eq!(v.norm(), 3.0, epsilon = EPSILON);
         assert_abs_diff_eq!(v.norm_squared(), 9.0, epsilon = EPSILON);
     }
 
     #[test]
     fn vector4a_normalized_gives_unit_vector() {
-        let v = Vector4A::new(2.0, 0.0, 0.0, 0.0);
+        let v = Vector4::new(2.0, 0.0, 0.0, 0.0);
         let normalized = v.normalized();
         assert_abs_diff_eq!(normalized.norm(), 1.0, epsilon = EPSILON);
         assert_abs_diff_eq!(normalized.x(), 1.0, epsilon = EPSILON);
@@ -2891,15 +2892,15 @@ mod tests {
 
     #[test]
     fn vector4a_dot_product_works() {
-        let v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vector4A::new(5.0, 6.0, 7.0, 8.0);
+        let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
         assert_abs_diff_eq!(v1.dot(&v2), 70.0, epsilon = EPSILON); // 1*5 + 2*6 + 3*7 + 4*8 = 70
     }
 
     #[test]
     fn vector4a_component_operations_work() {
-        let v1 = Vector4A::new(-1.0, 2.0, -3.0, 4.0);
-        let v2 = Vector4A::new(5.0, -6.0, 7.0, -8.0);
+        let v1 = Vector4::new(-1.0, 2.0, -3.0, 4.0);
+        let v2 = Vector4::new(5.0, -6.0, 7.0, -8.0);
 
         let abs_v = v1.component_abs();
         assert_eq!(abs_v.x(), 1.0);
@@ -2928,14 +2929,14 @@ mod tests {
 
     #[test]
     fn vector4a_max_component_returns_largest_element() {
-        let v = Vector4A::new(1.5, 3.7, 2.1, 0.8);
+        let v = Vector4::new(1.5, 3.7, 2.1, 0.8);
         assert_abs_diff_eq!(v.max_component(), 3.7, epsilon = EPSILON);
     }
 
     #[test]
     fn vector4a_arithmetic_operations_work() {
-        let v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vector4A::new(5.0, 6.0, 7.0, 8.0);
+        let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
 
         let add_result = &v1 + &v2;
         assert_eq!(add_result.x(), 6.0);
@@ -2976,8 +2977,8 @@ mod tests {
 
     #[test]
     fn vector4a_assignment_operations_work() {
-        let mut v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vector4A::new(5.0, 6.0, 7.0, 8.0);
+        let mut v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
 
         v1 += &v2;
         assert_eq!(v1.x(), 6.0);
@@ -3006,7 +3007,7 @@ mod tests {
 
     #[test]
     fn vector4a_indexing_works() {
-        let mut v = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let mut v = Vector4::new(1.0, 2.0, 3.0, 4.0);
         assert_eq!(v[0], 1.0);
         assert_eq!(v[1], 2.0);
         assert_eq!(v[2], 3.0);
@@ -3025,7 +3026,7 @@ mod tests {
     #[test]
     fn vector4a_array_conversion_works() {
         let arr: [f32; 4] = [1.0, 2.0, 3.0, 4.0];
-        let v = Vector4A::from(arr);
+        let v = Vector4::from(arr);
         assert_eq!(v.x(), 1.0);
         assert_eq!(v.y(), 2.0);
         assert_eq!(v.z(), 3.0);
@@ -3038,8 +3039,8 @@ mod tests {
     // Cross-type conversion tests
     #[test]
     fn vector3_to_vector3a_conversion_works() {
-        let v3 = Vector3::new(1.0, 2.0, 3.0);
-        let v3a = v3.aligned();
+        let v3 = Vector3P::new(1.0, 2.0, 3.0);
+        let v3a = v3.unpack();
         assert_eq!(v3a.x(), 1.0);
         assert_eq!(v3a.y(), 2.0);
         assert_eq!(v3a.z(), 3.0);
@@ -3047,8 +3048,8 @@ mod tests {
 
     #[test]
     fn vector3a_to_vector3_conversion_works() {
-        let v3a = Vector3A::new(1.0, 2.0, 3.0);
-        let v3 = v3a.unaligned();
+        let v3a = Vector3::new(1.0, 2.0, 3.0);
+        let v3 = v3a.pack();
         assert_eq!(v3.x(), 1.0);
         assert_eq!(v3.y(), 2.0);
         assert_eq!(v3.z(), 3.0);
@@ -3056,8 +3057,8 @@ mod tests {
 
     #[test]
     fn vector4_to_vector4a_conversion_works() {
-        let v4 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let v4a = v4.aligned();
+        let v4 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let v4a = v4.unpack();
         assert_eq!(v4a.x(), 1.0);
         assert_eq!(v4a.y(), 2.0);
         assert_eq!(v4a.z(), 3.0);
@@ -3066,8 +3067,8 @@ mod tests {
 
     #[test]
     fn vector4a_to_vector4_conversion_works() {
-        let v4a = Vector4A::new(1.0, 2.0, 3.0, 4.0);
-        let v4 = v4a.unaligned();
+        let v4a = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v4 = v4a.pack();
         assert_eq!(v4.x(), 1.0);
         assert_eq!(v4.y(), 2.0);
         assert_eq!(v4.z(), 3.0);
@@ -3076,8 +3077,8 @@ mod tests {
 
     #[test]
     fn unitvector3_to_unitvector3a_conversion_works() {
-        let unit3 = UnitVector3::unit_x();
-        let unit3a = unit3.aligned();
+        let unit3 = UnitVector3P::unit_x();
+        let unit3a = unit3.unpack();
         assert_eq!(unit3a.x(), 1.0);
         assert_eq!(unit3a.y(), 0.0);
         assert_eq!(unit3a.z(), 0.0);
@@ -3085,8 +3086,8 @@ mod tests {
 
     #[test]
     fn unitvector3a_to_unitvector3_conversion_works() {
-        let unit3a = UnitVector3A::unit_x();
-        let unit3 = unit3a.unaligned();
+        let unit3a = UnitVector3::unit_x();
+        let unit3 = unit3a.pack();
         assert_eq!(unit3.x(), 1.0);
         assert_eq!(unit3.y(), 0.0);
         assert_eq!(unit3.z(), 0.0);
@@ -3103,28 +3104,28 @@ mod tests {
     #[test]
     #[should_panic]
     fn vector3_indexing_panics_on_out_of_bounds() {
-        let v = Vector3::new(1.0, 2.0, 3.0);
+        let v = Vector3P::new(1.0, 2.0, 3.0);
         let _ = v[3]; // Should panic
     }
 
     #[test]
     #[should_panic]
     fn vector3a_indexing_panics_on_out_of_bounds() {
-        let v = Vector3A::new(1.0, 2.0, 3.0);
+        let v = Vector3::new(1.0, 2.0, 3.0);
         let _ = v[3]; // Should panic
     }
 
     #[test]
     #[should_panic]
     fn vector4_indexing_panics_on_out_of_bounds() {
-        let v = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let v = Vector4P::new(1.0, 2.0, 3.0, 4.0);
         let _ = v[4]; // Should panic
     }
 
     #[test]
     #[should_panic]
     fn vector4a_indexing_panics_on_out_of_bounds() {
-        let v = Vector4A::new(1.0, 2.0, 3.0, 4.0);
+        let v = Vector4::new(1.0, 2.0, 3.0, 4.0);
         let _ = v[4]; // Should panic
     }
 
@@ -3138,7 +3139,7 @@ mod tests {
 
     #[test]
     fn vector3a_normalized_zero_vector_returns_nan() {
-        let zero = Vector3A::zeros();
+        let zero = Vector3::zeros();
         let normalized = zero.normalized();
         assert!(normalized.x().is_nan());
         assert!(normalized.y().is_nan());
@@ -3147,7 +3148,7 @@ mod tests {
 
     #[test]
     fn vector4a_normalized_zero_vector_returns_nan() {
-        let zero = Vector4A::zeros();
+        let zero = Vector4::zeros();
         let normalized = zero.normalized();
         assert!(normalized.x().is_nan());
         assert!(normalized.y().is_nan());
@@ -3157,8 +3158,8 @@ mod tests {
 
     #[test]
     fn unitvector3a_from_zero_vector_returns_nan() {
-        let zero = Vector3A::zeros();
-        let unit = UnitVector3A::normalized_from(zero);
+        let zero = Vector3::zeros();
+        let unit = UnitVector3::normalized_from(zero);
         assert!(unit.norm().is_nan());
     }
 
@@ -3182,21 +3183,29 @@ mod tests {
         let _result7 = &v2 * 2.0; // ref * scalar
         let _result8 = v2 * 2.0; // owned * scalar
 
+        // Test Vector3P
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(4.0, 5.0, 6.0);
+        let _result = &v1 + &v2;
+        let _result = v1 - v2;
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let _result = 2.0 * v1;
+
         // Test Vector3
         let v1 = Vector3::new(1.0, 2.0, 3.0);
         let v2 = Vector3::new(4.0, 5.0, 6.0);
         let _result = &v1 + &v2;
         let _result = v1 - v2;
         let v1 = Vector3::new(1.0, 2.0, 3.0);
-        let _result = 2.0 * v1;
+        let _result = &v1 * 2.0;
 
-        // Test Vector3A
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let v2 = Vector3A::new(4.0, 5.0, 6.0);
+        // Test Vector4
+        let v1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
         let _result = &v1 + &v2;
         let _result = v1 - v2;
-        let v1 = Vector3A::new(1.0, 2.0, 3.0);
-        let _result = &v1 * 2.0;
+        let v1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let _result = v1 / 2.0;
 
         // Test Vector4
         let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
@@ -3204,20 +3213,12 @@ mod tests {
         let _result = &v1 + &v2;
         let _result = v1 - v2;
         let v1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let _result = v1 / 2.0;
-
-        // Test Vector4A
-        let v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vector4A::new(5.0, 6.0, 7.0, 8.0);
-        let _result = &v1 + &v2;
-        let _result = v1 - v2;
-        let v1 = Vector4A::new(1.0, 2.0, 3.0, 4.0);
         let _result = 3.0 * &v1;
     }
 
     #[test]
     fn vector_arithmetic_maintains_precision() {
-        let v = Vector3A::new(0.1, 0.2, 0.3);
+        let v = Vector3::new(0.1, 0.2, 0.3);
         let doubled = &v * 2.0;
         let halved = &doubled / 2.0;
 
@@ -3228,7 +3229,7 @@ mod tests {
 
     #[test]
     fn unitvector3a_maintains_unit_length_through_operations() {
-        let unit = UnitVector3A::normalized_from(Vector3A::new(1.0, 2.0, 3.0));
+        let unit = UnitVector3::normalized_from(Vector3::new(1.0, 2.0, 3.0));
         let scaled_back = (&unit * 5.0) / 5.0;
 
         assert_abs_diff_eq!(scaled_back.norm(), 1.0, epsilon = EPSILON);

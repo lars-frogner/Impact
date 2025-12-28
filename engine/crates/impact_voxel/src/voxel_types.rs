@@ -15,7 +15,7 @@ use impact_gpu::{
 use impact_io::image::{Image, ImageMetadata, PixelFormat};
 use impact_math::{
     hash::Hash32,
-    vector::{Vector3, Vector4},
+    vector::{Vector3P, Vector4P},
 };
 use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
@@ -58,7 +58,7 @@ pub enum VoxelColor {
     Textured(PathBuf),
 }
 
-pub type RBGColor = Vector3;
+pub type RBGColor = Vector3P;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
@@ -91,7 +91,7 @@ pub struct VoxelTypeRegistry {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct FixedVoxelMaterialProperties {
-    properties: Vector4,
+    properties: Vector4P,
 }
 
 impl VoxelType {
@@ -490,7 +490,7 @@ impl FixedVoxelMaterialProperties {
         emissive_luminance: f32,
     ) -> Self {
         Self {
-            properties: Vector4::new(
+            properties: Vector4P::new(
                 specular_reflectance,
                 roughness_scale,
                 metalness,
@@ -534,7 +534,7 @@ impl Default for VoxelTypeSpecifications {
         Self(vec![VoxelTypeSpecification {
             name: Cow::Borrowed("Default"),
             mass_density: 1.0,
-            color: VoxelColor::Uniform(Vector3::new(0.9, 0.9, 0.9)),
+            color: VoxelColor::Uniform(Vector3P::new(0.9, 0.9, 0.9)),
             specular_reflectance: 0.02,
             roughness: VoxelRoughness::Uniform(0.5),
             metalness: 0.0,

@@ -2,7 +2,7 @@
 
 use super::{AnchoredTwoBodyConstraint, ConstrainedBody, PreparedTwoBodyConstraint};
 use crate::anchor::{TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef};
-use impact_math::vector::Vector3;
+use impact_math::vector::Vector3P;
 
 #[derive(Clone, Debug)]
 pub struct SphericalJoint {
@@ -18,7 +18,7 @@ pub struct ResolvedSphericalJoint<'a> {
 
 #[derive(Clone, Debug)]
 pub struct PreparedSphericalJoint {
-    _attachment_point_displacement: Vector3,
+    _attachment_point_displacement: Vector3P,
 }
 
 impl AnchoredTwoBodyConstraint for SphericalJoint {
@@ -35,12 +35,12 @@ impl AnchoredTwoBodyConstraint for SphericalJoint {
         anchor_a: TypedRigidBodyAnchorRef<'a>,
         anchor_b: TypedRigidBodyAnchorRef<'a>,
     ) -> Self::Prepared {
-        let body_a_position = body_a.position.aligned();
-        let body_b_position = body_b.position.aligned();
-        let body_a_orientation = body_a.orientation.aligned();
-        let body_b_orientation = body_b.orientation.aligned();
-        let anchor_a_point = anchor_a.point().aligned();
-        let anchor_b_point = anchor_b.point().aligned();
+        let body_a_position = body_a.position.unpack();
+        let body_b_position = body_b.position.unpack();
+        let body_a_orientation = body_a.orientation.unpack();
+        let body_b_orientation = body_b.orientation.unpack();
+        let anchor_a_point = anchor_a.point().unpack();
+        let anchor_b_point = anchor_b.point().unpack();
 
         let body_a_attachment_point =
             body_a_position + body_a_orientation.rotate_vector(anchor_a_point.as_vector());
@@ -51,7 +51,7 @@ impl AnchoredTwoBodyConstraint for SphericalJoint {
         let attachment_point_displacement = body_a_attachment_point - body_b_attachment_point;
 
         PreparedSphericalJoint {
-            _attachment_point_displacement: attachment_point_displacement.unaligned(),
+            _attachment_point_displacement: attachment_point_displacement.pack(),
         }
     }
 }

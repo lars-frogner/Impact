@@ -13,25 +13,23 @@ pub mod projection;
 pub mod reference_frame;
 pub mod sphere;
 
-pub use axis_aligned_box::{AxisAlignedBox, AxisAlignedBoxA};
-pub use capsule::{Capsule, CapsuleA};
-pub use frustum::{Frustum, FrustumA};
-pub use model_transform::{ModelTransform, ModelTransformA};
-pub use oriented_box::{OrientedBox, OrientedBoxA};
-pub use plane::{Plane, PlaneA};
-pub use reference_frame::{ReferenceFrame, ReferenceFrameA};
-pub use sphere::{Sphere, SphereA};
+pub use axis_aligned_box::{AxisAlignedBox, AxisAlignedBoxP};
+pub use capsule::{Capsule, CapsuleP};
+pub use frustum::{Frustum, FrustumP};
+pub use model_transform::ModelTransform;
+pub use oriented_box::{OrientedBox, OrientedBoxP};
+pub use plane::{Plane, PlaneP};
+pub use reference_frame::ReferenceFrame;
+pub use sphere::{Sphere, SphereP};
 
 use impact_math::{
     angle::{Angle, Radians},
     consts::f32::PI,
-    vector::{UnitVector3A, Vector3A},
+    vector::{UnitVector3, Vector3},
 };
 
 /// Uses the Frisvad method.
-pub fn orthonormal_basis_with_z_axis(
-    z: UnitVector3A,
-) -> (UnitVector3A, UnitVector3A, UnitVector3A) {
+pub fn orthonormal_basis_with_z_axis(z: UnitVector3) -> (UnitVector3, UnitVector3, UnitVector3) {
     let zx = z.x();
     let zy = z.y();
     let zz = z.z();
@@ -40,11 +38,11 @@ pub fn orthonormal_basis_with_z_axis(
     let a = -1.0 / (sign + zz);
     let b = zx * zy * a;
 
-    let x = Vector3A::new(1.0 + sign * zx * zx * a, sign * b, -sign * zx);
-    let y = Vector3A::new(b, sign + zy * zy * a, -zy);
+    let x = Vector3::new(1.0 + sign * zx * zx * a, sign * b, -sign * zx);
+    let y = Vector3::new(b, sign + zy * zy * a, -zy);
 
-    let x = UnitVector3A::normalized_from(x);
-    let y = UnitVector3A::normalized_from(y);
+    let x = UnitVector3::normalized_from(x);
+    let y = UnitVector3::normalized_from(y);
 
     (x, y, z)
 }
@@ -59,7 +57,7 @@ pub fn orthonormal_basis_with_z_axis(
 /// If the given number of directions is zero.
 pub fn compute_uniformly_distributed_radial_directions(
     n_direction_samples: usize,
-) -> impl Iterator<Item = UnitVector3A> {
+) -> impl Iterator<Item = UnitVector3> {
     let idx_norm = if n_direction_samples > 1 {
         (n_direction_samples - 1) as f32
     } else {
@@ -83,7 +81,7 @@ pub fn compute_uniformly_distributed_radial_directions(
         let x = horizontal_radius * cos_azimuthal_angle;
         let y = horizontal_radius * sin_azimuthal_angle;
 
-        UnitVector3A::normalized_from(Vector3A::new(x, y, z))
+        UnitVector3::normalized_from(Vector3::new(x, y, z))
     })
 }
 

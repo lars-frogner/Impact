@@ -55,7 +55,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
          camera_props: &setup::PerspectiveCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
-            let frame = frame.copied().unwrap_or_default().aligned();
+            let frame = frame.copied().unwrap_or_default();
 
             let camera = PerspectiveCamera::new(
                 camera_manager.camera_context().aspect_ratio,
@@ -71,8 +71,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id = scene_graph
-                .create_camera_node(parent_node_id, camera_to_parent_transform.unaligned());
+            let node_id =
+                scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform.pack());
 
             camera_manager.set_active_camera(camera, node_id);
 
@@ -112,7 +112,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
          camera_props: &setup::OrthographicCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
-            let frame = frame.copied().unwrap_or_default().aligned();
+            let frame = frame.copied().unwrap_or_default();
 
             let camera = OrthographicCamera::new(
                 camera_manager.camera_context().aspect_ratio,
@@ -128,8 +128,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id = scene_graph
-                .create_camera_node(parent_node_id, camera_to_parent_transform.unaligned());
+            let node_id =
+                scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform.pack());
 
             camera_manager.set_active_camera(camera, node_id);
 

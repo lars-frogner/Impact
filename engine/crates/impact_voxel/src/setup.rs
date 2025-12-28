@@ -16,7 +16,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_math::{hash::Hash32, vector::Vector3};
+use impact_math::{hash::Hash32, vector::Vector3P};
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -155,7 +155,7 @@ define_setup_type! {
         pub radius_2: f32,
         /// The offset in number of voxels in each dimension between the centers of
         /// the two spheres.
-        pub center_offsets: Vector3,
+        pub center_offsets: Vector3P,
         /// The smoothness of the union operation.
         pub smoothness: f32,
     }
@@ -476,7 +476,7 @@ impl VoxelSphereUnion {
         voxel_extent: f32,
         radius_1: f32,
         radius_2: f32,
-        center_offsets: Vector3,
+        center_offsets: Vector3P,
         smoothness: f32,
     ) -> Self {
         assert!(voxel_extent > 0.0);
@@ -504,7 +504,7 @@ impl VoxelSphereUnion {
     }
 
     pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
-        let center_offsets = self.center_offsets.aligned();
+        let center_offsets = self.center_offsets.unpack();
         let sphere_1_id = graph.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
         let sphere_2_id = graph.add_node(SDFNode::new_translation(sphere_2_id, center_offsets));
@@ -629,8 +629,8 @@ pub fn create_model_instance_node_for_voxel_object(
     ModelTransform,
     SceneEntityFlags,
 )> {
-    let model_transform = model_transform.copied().unwrap_or_default().aligned();
-    let frame = frame.copied().unwrap_or_default().aligned();
+    let model_transform = model_transform.copied().unwrap_or_default();
+    let frame = frame.copied().unwrap_or_default();
     let flags = flags.copied().unwrap_or_default();
 
     let voxel_object = voxel_object_manager
@@ -681,14 +681,14 @@ pub fn create_model_instance_node_for_voxel_object(
     Ok((
         SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
             parent_node_id,
-            model_to_parent_transform.unaligned(),
+            model_to_parent_transform.pack(),
             model_id,
-            bounding_sphere.map(|sphere| sphere.unaligned()),
+            bounding_sphere.map(|sphere| sphere.pack()),
             FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
             FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
             flags.into(),
         )),
-        model_transform.unaligned(),
+        model_transform,
         flags,
     ))
 }
@@ -700,7 +700,7 @@ fn setup_rigid_body_for_new_voxel_object(
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
 ) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
-    let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
+    let mut model_transform = model_transform.copied().unwrap_or_default();
     let frame = frame.copied().unwrap_or_default();
     let motion = motion.copied().unwrap_or_default();
 
@@ -719,5 +719,5 @@ fn setup_rigid_body_for_new_voxel_object(
         motion,
     );
 
-    Ok((rigid_body_id, model_transform.unaligned(), frame, motion))
+    Ok((rigid_body_id, model_transform, frame, motion))
 }
