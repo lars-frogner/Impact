@@ -43,17 +43,16 @@ pub fn setup_local_force(
     local_force: LocalForce,
     model_transform: Option<&ModelTransform>,
 ) -> LocalForceGeneratorID {
-    let mut point = local_force.point.aligned();
+    let mut point = local_force.point.unpack();
 
     if let Some(transform) = model_transform {
-        let transform = transform.aligned();
         // Transform point to body-fixed frame
         point = transform.transform_point_from_model_space_to_entity_space(&point);
     }
 
     let anchor = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
         rigid_body_id,
-        point: point.unaligned(),
+        point: point.pack(),
     });
 
     force_generator_manager
@@ -70,11 +69,10 @@ pub fn setup_dynamic_dynamic_spring_force(
     properties: DynamicDynamicSpringForceProperties,
     model_transform: Option<&ModelTransform>,
 ) -> DynamicDynamicSpringForceGeneratorID {
-    let mut point_1 = properties.attachment_point_1.aligned();
-    let mut point_2 = properties.attachment_point_2.aligned();
+    let mut point_1 = properties.attachment_point_1.unpack();
+    let mut point_2 = properties.attachment_point_2.unpack();
 
     if let Some(transform) = model_transform {
-        let transform = transform.aligned();
         // Transform points to body-fixed frame
         point_1 = transform.transform_point_from_model_space_to_entity_space(&point_1);
         point_2 = transform.transform_point_from_model_space_to_entity_space(&point_2);
@@ -82,12 +80,12 @@ pub fn setup_dynamic_dynamic_spring_force(
 
     let anchor_1 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
         rigid_body_id: properties.rigid_body_1,
-        point: point_1.unaligned(),
+        point: point_1.pack(),
     });
 
     let anchor_2 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
         rigid_body_id: properties.rigid_body_2,
-        point: point_2.unaligned(),
+        point: point_2.pack(),
     });
 
     force_generator_manager
@@ -105,11 +103,10 @@ pub fn setup_dynamic_kinematic_spring_force(
     properties: DynamicKinematicSpringForceProperties,
     model_transform: Option<&ModelTransform>,
 ) -> DynamicKinematicSpringForceGeneratorID {
-    let mut point_1 = properties.attachment_point_1.aligned();
-    let mut point_2 = properties.attachment_point_2.aligned();
+    let mut point_1 = properties.attachment_point_1.unpack();
+    let mut point_2 = properties.attachment_point_2.unpack();
 
     if let Some(transform) = model_transform {
-        let transform = transform.aligned();
         // Transform points to body-fixed frame
         point_1 = transform.transform_point_from_model_space_to_entity_space(&point_1);
         point_2 = transform.transform_point_from_model_space_to_entity_space(&point_2);
@@ -117,14 +114,14 @@ pub fn setup_dynamic_kinematic_spring_force(
 
     let anchor_1 = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
         rigid_body_id: properties.rigid_body_1,
-        point: point_1.unaligned(),
+        point: point_1.pack(),
     });
 
     let anchor_2 = anchor_manager
         .kinematic_mut()
         .insert(KinematicRigidBodyAnchor {
             rigid_body_id: properties.rigid_body_2,
-            point: point_2.unaligned(),
+            point: point_2.pack(),
         });
 
     force_generator_manager

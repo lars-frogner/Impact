@@ -1,50 +1,50 @@
-use crate::transform::{Isometry3, Isometry3A};
+use crate::transform::{Isometry3, Isometry3P};
 use impact_profiling::benchmark::Benchmarker;
 
-pub fn align_isometry(benchmarker: impl Benchmarker) {
+pub fn unpack_isometry(benchmarker: impl Benchmarker) {
     let a = create_isometry();
-    benchmarker.benchmark(&mut || a.aligned());
+    benchmarker.benchmark(&mut || a.unpack());
 }
 
-pub fn unalign_isometry(benchmarker: impl Benchmarker) {
+pub fn pack_isometry(benchmarker: impl Benchmarker) {
     let a = create_isometrya();
-    benchmarker.benchmark(&mut || a.unaligned());
+    benchmarker.benchmark(&mut || a.pack());
 }
 
-pub fn mul_isometry_aligned(benchmarker: impl Benchmarker) {
+pub fn mul_isometry_unpacked(benchmarker: impl Benchmarker) {
     let a = create_isometrya();
     let b = create_isometrya();
     benchmarker.benchmark(&mut || a * b);
 }
 
-pub fn mul_isometry_both_unaligned_as_aligned(benchmarker: impl Benchmarker) {
+pub fn mul_isometry_both_packed_as_unpacked(benchmarker: impl Benchmarker) {
     let a = create_isometry();
     let b = create_isometry();
-    benchmarker.benchmark(&mut || a.aligned() * b.aligned());
+    benchmarker.benchmark(&mut || a.unpack() * b.unpack());
 }
 
-pub fn mul_isometry_one_unaligned_as_aligned(benchmarker: impl Benchmarker) {
+pub fn mul_isometry_one_packed_as_unpacked(benchmarker: impl Benchmarker) {
     let a = create_isometrya();
     let b = create_isometry();
-    benchmarker.benchmark(&mut || a * b.aligned());
+    benchmarker.benchmark(&mut || a * b.unpack());
 }
 
-pub fn mul_isometry_one_unaligned_as_aligned_to_unaligned(benchmarker: impl Benchmarker) {
+pub fn mul_isometry_one_packed_as_unpacked_to_packed(benchmarker: impl Benchmarker) {
     let a = create_isometrya();
     let b = create_isometry();
-    benchmarker.benchmark(&mut || (a * b.aligned()).unaligned());
+    benchmarker.benchmark(&mut || (a * b.unpack()).pack());
 }
 
-pub fn mul_isometry_both_unaligned_as_aligned_to_unaligned(benchmarker: impl Benchmarker) {
+pub fn mul_isometry_both_packed_as_unpacked_to_packed(benchmarker: impl Benchmarker) {
     let a = create_isometry();
     let b = create_isometry();
-    benchmarker.benchmark(&mut || (a.aligned() * b.aligned()).unaligned());
+    benchmarker.benchmark(&mut || (a.unpack() * b.unpack()).pack());
 }
 
-fn create_isometry() -> Isometry3 {
+fn create_isometry() -> Isometry3P {
+    Isometry3P::identity()
+}
+
+fn create_isometrya() -> Isometry3 {
     Isometry3::identity()
-}
-
-fn create_isometrya() -> Isometry3A {
-    Isometry3A::identity()
 }

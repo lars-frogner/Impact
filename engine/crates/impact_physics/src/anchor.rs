@@ -8,7 +8,7 @@
 //! that rely on those anchors.
 
 use crate::{
-    quantities::Position,
+    quantities::PositionP,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, TypedRigidBodyID},
 };
 use impact_containers::{HashMap, hash_map::Entry};
@@ -38,7 +38,7 @@ pub struct DynamicRigidBodyAnchor {
     /// The dynamic rigid body the anchor is attached to.
     pub rigid_body_id: DynamicRigidBodyID,
     /// The point where the anchor is attached, in the body-fixed frame.
-    pub point: Position,
+    pub point: PositionP,
 }
 
 /// An anchor point on a kinematic rigid body.
@@ -47,7 +47,7 @@ pub struct KinematicRigidBodyAnchor {
     /// The kinematic rigid body the anchor is attached to.
     pub rigid_body_id: KinematicRigidBodyID,
     /// The point where the anchor is attached, in the body-fixed frame.
-    pub point: Position,
+    pub point: PositionP,
 }
 
 /// Reference to an anchor point on a dynamic or kinematic rigid body.
@@ -100,7 +100,7 @@ impl From<u64> for KinematicRigidBodyAnchorID {
 impl Anchor for DynamicRigidBodyAnchor {
     type ID = DynamicRigidBodyAnchorID;
     type RigidBodyID = DynamicRigidBodyID;
-    type Point = Position;
+    type Point = PositionP;
 
     fn rigid_body_id(&self) -> Self::RigidBodyID {
         self.rigid_body_id
@@ -118,7 +118,7 @@ impl Anchor for DynamicRigidBodyAnchor {
 impl Anchor for KinematicRigidBodyAnchor {
     type ID = KinematicRigidBodyAnchorID;
     type RigidBodyID = KinematicRigidBodyID;
-    type Point = Position;
+    type Point = PositionP;
 
     fn rigid_body_id(&self) -> Self::RigidBodyID {
         self.rigid_body_id
@@ -143,7 +143,7 @@ impl<'a> TypedRigidBodyAnchorRef<'a> {
     }
 
     /// Returns the position of the anchor in the body-fixed frame.
-    pub fn point(&self) -> &Position {
+    pub fn point(&self) -> &PositionP {
         match self {
             Self::Dynamic(anchor) => &anchor.point,
             Self::Kinematic(anchor) => &anchor.point,

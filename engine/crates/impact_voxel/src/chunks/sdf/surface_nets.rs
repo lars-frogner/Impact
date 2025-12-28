@@ -6,7 +6,7 @@ use crate::{
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
-use impact_math::{point::Point3A, vector::Vector3A};
+use impact_math::{point::Point3, vector::Vector3};
 use std::array;
 
 /// The output buffers used by
@@ -119,7 +119,7 @@ impl VoxelChunkSignedDistanceField {
     pub fn compute_surface_nets_mesh(
         &self,
         voxel_extent: f32,
-        position_offset: &Vector3A,
+        position_offset: &Vector3,
         buffer: &mut SurfaceNetsBuffer,
     ) {
         buffer.reset();
@@ -140,7 +140,7 @@ impl VoxelChunkSignedDistanceField {
     fn estimate_surface_nets_surface(
         &self,
         voxel_extent: f32,
-        position_offset: &Vector3A,
+        position_offset: &Vector3,
         buffer: &mut SurfaceNetsBuffer,
     ) {
         for i in 0..Self::grid_size_u32() - 1 {
@@ -151,7 +151,7 @@ impl VoxelChunkSignedDistanceField {
                         self.estimate_surface_net_vertex_attributes_in_cube(linear_idx)
                     {
                         let position = voxel_extent
-                            * (centroid + Vector3A::new(i as f32, j as f32, k as f32))
+                            * (centroid + Vector3::new(i as f32, j as f32, k as f32))
                             + position_offset;
 
                         buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
@@ -187,7 +187,7 @@ impl VoxelChunkSignedDistanceField {
     fn estimate_surface_net_vertex_attributes_in_cube(
         &self,
         min_corner_linear_idx: u32,
-    ) -> Option<(Point3A, Vector3A, SurfaceNetsVertexMaterials)> {
+    ) -> Option<(Point3, Vector3, SurfaceNetsVertexMaterials)> {
         let mut corner_dists = [0.0; 8];
         let mut corner_has_voxel = [false; 8];
         let mut corner_material_indices = [0; 8];
@@ -337,14 +337,14 @@ impl VoxelChunkSignedDistanceField {
         let v3 = linear_idx_to_vertex_index[p1 - axis_c_linear_idx];
         let v4 = linear_idx_to_vertex_index[p1 - axis_b_linear_idx - axis_c_linear_idx];
         let (pos1, pos2, pos3, pos4) = (
-            Point3A::from(positions[v1 as usize].0),
-            Point3A::from(positions[v2 as usize].0),
-            Point3A::from(positions[v3 as usize].0),
-            Point3A::from(positions[v4 as usize].0),
+            Point3::from(positions[v1 as usize].0),
+            Point3::from(positions[v2 as usize].0),
+            Point3::from(positions[v3 as usize].0),
+            Point3::from(positions[v4 as usize].0),
         );
         // Split the quad along the shorter axis, rather than the longer one.
         let quad =
-            if Point3A::distance_between(&pos1, &pos4) < Point3A::distance_between(&pos2, &pos3) {
+            if Point3::distance_between(&pos1, &pos4) < Point3::distance_between(&pos2, &pos3) {
                 if negative_face {
                     [v1, v4, v2, v1, v3, v4]
                 } else {
@@ -359,9 +359,9 @@ impl VoxelChunkSignedDistanceField {
     }
 }
 
-fn centroid_of_edge_intersections(dists: &[f32; 8]) -> Point3A {
+fn centroid_of_edge_intersections(dists: &[f32; 8]) -> Point3 {
     let mut count = 0;
-    let mut sum = Point3A::origin();
+    let mut sum = Point3::origin();
     for &[corner1, corner2] in &CUBE_EDGES {
         let d1 = dists[corner1 as usize];
         let d2 = dists[corner2 as usize];
@@ -387,7 +387,7 @@ fn estimate_surface_edge_intersection(
     corner2: u32,
     value1: f32,
     value2: f32,
-) -> Point3A {
+) -> Point3 {
     let interp1 = value1 / (value1 - value2);
     let interp2 = 1.0 - interp1;
 
@@ -402,20 +402,20 @@ fn estimate_surface_edge_intersection(
 /// bilinear interpolation between the differences along those edges based on
 /// the position of the surface (s).
 #[inline]
-fn sdf_gradient(dists: &[f32; 8], s: Point3A) -> Vector3A {
+fn sdf_gradient(dists: &[f32; 8], s: Point3) -> Vector3 {
     let s = s.as_vector();
 
-    let p00 = Vector3A::new(dists[0b100], dists[0b010], dists[0b001]);
-    let n00 = Vector3A::new(dists[0b000], dists[0b000], dists[0b000]);
+    let p00 = Vector3::new(dists[0b100], dists[0b010], dists[0b001]);
+    let n00 = Vector3::new(dists[0b000], dists[0b000], dists[0b000]);
 
-    let p01 = Vector3A::new(dists[0b101], dists[0b110], dists[0b011]);
-    let n01 = Vector3A::new(dists[0b001], dists[0b100], dists[0b010]);
+    let p01 = Vector3::new(dists[0b101], dists[0b110], dists[0b011]);
+    let n01 = Vector3::new(dists[0b001], dists[0b100], dists[0b010]);
 
-    let p10 = Vector3A::new(dists[0b110], dists[0b011], dists[0b101]);
-    let n10 = Vector3A::new(dists[0b010], dists[0b001], dists[0b100]);
+    let p10 = Vector3::new(dists[0b110], dists[0b011], dists[0b101]);
+    let n10 = Vector3::new(dists[0b010], dists[0b001], dists[0b100]);
 
-    let p11 = Vector3A::new(dists[0b111], dists[0b111], dists[0b111]);
-    let n11 = Vector3A::new(dists[0b011], dists[0b101], dists[0b110]);
+    let p11 = Vector3::new(dists[0b111], dists[0b111], dists[0b111]);
+    let n11 = Vector3::new(dists[0b011], dists[0b101], dists[0b110]);
 
     // Each dimension encodes an edge delta, giving 12 in total.
     let d00 = p00 - n00; // Edges (0bx00, 0b0y0, 0b00z)
@@ -423,7 +423,7 @@ fn sdf_gradient(dists: &[f32; 8], s: Point3A) -> Vector3A {
     let d10 = p10 - n10; // Edges (0bx10, 0b0y1, 0b10z)
     let d11 = p11 - n11; // Edges (0bx11, 0b1y1, 0b11z)
 
-    let neg = Vector3A::same(1.0) - s;
+    let neg = Vector3::same(1.0) - s;
 
     // Do bilinear interpolation between 4 edges in each dimension.
     neg.yzx().component_mul(&neg.zxy()).component_mul(&d00)
@@ -662,15 +662,15 @@ const CUBE_CORNERS: [[u32; 3]; 8] = [
     [1, 1, 1],
 ];
 
-const CUBE_CORNER_POINTS: [Point3A; 8] = [
-    Point3A::new(0.0, 0.0, 0.0),
-    Point3A::new(0.0, 0.0, 1.0),
-    Point3A::new(0.0, 1.0, 0.0),
-    Point3A::new(0.0, 1.0, 1.0),
-    Point3A::new(1.0, 0.0, 0.0),
-    Point3A::new(1.0, 0.0, 1.0),
-    Point3A::new(1.0, 1.0, 0.0),
-    Point3A::new(1.0, 1.0, 1.0),
+const CUBE_CORNER_POINTS: [Point3; 8] = [
+    Point3::new(0.0, 0.0, 0.0),
+    Point3::new(0.0, 0.0, 1.0),
+    Point3::new(0.0, 1.0, 0.0),
+    Point3::new(0.0, 1.0, 1.0),
+    Point3::new(1.0, 0.0, 0.0),
+    Point3::new(1.0, 0.0, 1.0),
+    Point3::new(1.0, 1.0, 0.0),
+    Point3::new(1.0, 1.0, 1.0),
 ];
 
 const CUBE_EDGES: [[u32; 2]; 12] = [

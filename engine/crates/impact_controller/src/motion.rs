@@ -4,7 +4,7 @@ use super::{MotionChanged, MotionController};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use bytemuck::{Pod, Zeroable};
 use impact_math::Float;
-use impact_physics::quantities::{OrientationA, Velocity, VelocityA};
+use impact_physics::quantities::{Orientation, Velocity, VelocityP};
 use roc_integration::roc;
 
 define_component_type! {
@@ -12,7 +12,7 @@ define_component_type! {
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ControlledVelocity(Velocity);
+    pub struct ControlledVelocity(VelocityP);
 }
 
 /// Motion controller allowing for motion at constant speed along the axes of an
@@ -22,7 +22,7 @@ pub struct SemiDirectionalMotionController {
     movement_speed: f32,
     vertical_control: bool,
     state: SemiDirectionalMotionState,
-    local_velocity: VelocityA,
+    local_velocity: Velocity,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -79,18 +79,18 @@ impl ControlledVelocity {
     /// Creates a new controlled velocity.
     #[roc(body = "(Vector3.zero,)")]
     pub fn new() -> Self {
-        Self(Velocity::zeros())
+        Self(VelocityP::zeros())
     }
 
     /// Assigns a new controlled velocity and updates the given total velocity
     /// to account for the change in controlled velocity.
     pub fn apply_new_controlled_velocity(
         &mut self,
-        new_controlled_velocity: VelocityA,
-        total_velocity: &mut VelocityA,
+        new_controlled_velocity: Velocity,
+        total_velocity: &mut Velocity,
     ) {
-        *total_velocity = *total_velocity - self.0.aligned() + new_controlled_velocity;
-        self.0 = new_controlled_velocity.unaligned();
+        *total_velocity = *total_velocity - self.0.unpack() + new_controlled_velocity;
+        self.0 = new_controlled_velocity.pack();
     }
 }
 
@@ -107,17 +107,17 @@ impl SemiDirectionalMotionController {
             movement_speed: config.movement_speed,
             vertical_control: config.vertical_control,
             state: SemiDirectionalMotionState::new(),
-            local_velocity: VelocityA::zeros(),
+            local_velocity: Velocity::zeros(),
         }
     }
 
     /// Computes the velocity of the controlled entity in its local coordinate
     /// system.
-    fn compute_local_velocity(&self) -> VelocityA {
+    fn compute_local_velocity(&self) -> Velocity {
         if self.state.motion_state() == MotionState::Still
             || abs_diff_eq!(self.movement_speed, f32::ZERO)
         {
-            VelocityA::zeros()
+            Velocity::zeros()
         } else {
             // For scaling the magnitude to unity
             let mut n_nonzero_components = f32::ZERO;
@@ -160,7 +160,7 @@ impl SemiDirectionalMotionController {
 
             let magnitude_scale = f32::ONE / f32::sqrt(n_nonzero_components);
 
-            VelocityA::new(velocity_x, velocity_y, velocity_z) * magnitude_scale
+            Velocity::new(velocity_x, velocity_y, velocity_z) * magnitude_scale
         }
     }
 }
@@ -170,7 +170,7 @@ impl MotionController for SemiDirectionalMotionController {
         self.movement_speed
     }
 
-    fn compute_controlled_velocity(&self, orientation: &OrientationA) -> VelocityA {
+    fn compute_controlled_velocity(&self, orientation: &Orientation) -> Velocity {
         let mut controlled_velocity = orientation.rotate_vector(&self.local_velocity);
         if !self.vertical_control {
             *controlled_velocity.y_mut() = 0.0;
@@ -308,29 +308,29 @@ mod tests {
             });
         assert_eq!(
             controller.local_velocity,
-            VelocityA::zeros(),
+            Velocity::zeros(),
             "Not stationary directly after initalization"
         );
 
         assert!(controller.update_motion(Moving, Forwards).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, VelocityA::new(0.0, 0.0, speed));
+        assert_abs_diff_eq!(controller.local_velocity, Velocity::new(0.0, 0.0, speed));
 
         assert!(!controller.update_motion(Moving, Forwards).motion_changed());
 
         assert!(controller.update_motion(Moving, Backwards).motion_changed());
         assert_eq!(
             controller.local_velocity,
-            VelocityA::zeros(),
+            Velocity::zeros(),
             "Motion does not cancel"
         );
 
         assert!(controller.update_motion(Moving, Left).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, VelocityA::new(-speed, 0.0, 0.0));
+        assert_abs_diff_eq!(controller.local_velocity, Velocity::new(-speed, 0.0, 0.0));
 
         assert!(controller.stop().motion_changed());
         assert_eq!(
             controller.local_velocity,
-            VelocityA::zeros(),
+            Velocity::zeros(),
             "Stopping command not working"
         );
 
@@ -339,7 +339,7 @@ mod tests {
         assert!(controller.update_motion(Moving, Backwards).motion_changed());
         assert_abs_diff_eq!(
             controller.local_velocity,
-            VelocityA::new(0.0, speed, -speed) / SQRT_2, // Magnitude should be `speed`
+            Velocity::new(0.0, speed, -speed) / SQRT_2, // Magnitude should be `speed`
             epsilon = 1e-6
         );
 
@@ -347,7 +347,7 @@ mod tests {
         assert!(controller.update_motion(Still, Backwards).motion_changed());
         assert_eq!(
             controller.local_velocity,
-            VelocityA::zeros(),
+            Velocity::zeros(),
             "Undoing updates does not stop motion"
         );
     }
@@ -362,19 +362,19 @@ mod tests {
             });
 
         controller.update_motion(Moving, Down);
-        assert_abs_diff_eq!(controller.local_velocity, VelocityA::new(0.0, -speed, 0.0));
+        assert_abs_diff_eq!(controller.local_velocity, Velocity::new(0.0, -speed, 0.0));
 
         let speed = 8.1;
         assert!(controller.set_movement_speed(speed).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, VelocityA::new(0.0, -speed, 0.0));
+        assert_abs_diff_eq!(controller.local_velocity, Velocity::new(0.0, -speed, 0.0));
 
         let speed = -0.1;
         assert!(controller.set_movement_speed(speed).motion_changed());
-        assert_abs_diff_eq!(controller.local_velocity, VelocityA::new(0.0, -speed, 0.0));
+        assert_abs_diff_eq!(controller.local_velocity, Velocity::new(0.0, -speed, 0.0));
 
         assert!(!controller.set_movement_speed(speed).motion_changed());
 
         assert!(controller.set_movement_speed(0.0).motion_changed());
-        assert_eq!(controller.local_velocity, VelocityA::zeros());
+        assert_eq!(controller.local_velocity, Velocity::zeros());
     }
 }

@@ -5,24 +5,24 @@ use crate::{
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
     material::ContactResponseParameters,
 };
-use impact_geometry::{PlaneA, Sphere, SphereA};
-use impact_math::{transform::Isometry3A, vector::UnitVector3A};
+use impact_geometry::{Plane, Sphere, SphereP};
+use impact_math::{transform::Isometry3, vector::UnitVector3};
 
 #[derive(Clone, Debug)]
 pub struct SphereCollidable {
-    sphere: Sphere,
+    sphere: SphereP,
     response_params: ContactResponseParameters,
 }
 
 impl SphereCollidable {
-    pub fn new(sphere: Sphere, response_params: ContactResponseParameters) -> Self {
+    pub fn new(sphere: SphereP, response_params: ContactResponseParameters) -> Self {
         Self {
             sphere,
             response_params,
         }
     }
 
-    pub fn sphere(&self) -> &Sphere {
+    pub fn sphere(&self) -> &SphereP {
         &self.sphere
     }
 
@@ -30,11 +30,11 @@ impl SphereCollidable {
         &self.response_params
     }
 
-    pub fn transformed(&self, transform: &Isometry3A) -> Self {
-        let sphere = self.sphere.aligned();
+    pub fn transformed(&self, transform: &Isometry3) -> Self {
+        let sphere = self.sphere.unpack();
         let transformed_sphere = sphere.translated_and_rotated(transform);
         Self {
-            sphere: transformed_sphere.unaligned(),
+            sphere: transformed_sphere.pack(),
             response_params: self.response_params,
         }
     }
@@ -55,8 +55,8 @@ pub fn generate_sphere_sphere_contact_manifold(
     contact_manifold: &mut ContactManifold,
 ) {
     if let Some(geometry) = determine_sphere_sphere_contact_geometry(
-        &sphere_a.sphere.aligned(),
-        &sphere_b.sphere.aligned(),
+        &sphere_a.sphere.unpack(),
+        &sphere_b.sphere.unpack(),
     ) {
         let id =
             super::contact_id_from_collidable_ids(sphere_a_collidable_id, sphere_b_collidable_id);
@@ -83,10 +83,9 @@ pub fn generate_sphere_plane_contact_manifold(
     plane_collidable_id: CollidableID,
     contact_manifold: &mut ContactManifold,
 ) {
-    if let Some(geometry) = determine_sphere_plane_contact_geometry(
-        &sphere.sphere().aligned(),
-        &plane.plane().aligned(),
-    ) {
+    if let Some(geometry) =
+        determine_sphere_plane_contact_geometry(&sphere.sphere().unpack(), &plane.plane().unpack())
+    {
         let id = super::contact_id_from_collidable_ids(sphere_collidable_id, plane_collidable_id);
 
         let response_params =
@@ -103,8 +102,8 @@ pub fn generate_sphere_plane_contact_manifold(
 }
 
 pub fn determine_sphere_sphere_contact_geometry(
-    sphere_a: &SphereA,
-    sphere_b: &SphereA,
+    sphere_a: &Sphere,
+    sphere_b: &Sphere,
 ) -> Option<ContactGeometry> {
     let center_displacement = sphere_a.center() - sphere_b.center();
     let squared_center_distance = center_displacement.norm_squared();
@@ -117,9 +116,9 @@ pub fn determine_sphere_sphere_contact_geometry(
     let center_distance = squared_center_distance.sqrt();
 
     let surface_normal = if center_distance > 1e-8 {
-        UnitVector3A::unchecked_from(center_displacement / center_distance)
+        UnitVector3::unchecked_from(center_displacement / center_distance)
     } else {
-        UnitVector3A::unit_z()
+        UnitVector3::unit_z()
     };
 
     let position = sphere_b.center() + sphere_b.radius() * surface_normal;
@@ -137,8 +136,8 @@ pub fn determine_sphere_sphere_contact_geometry(
 }
 
 pub fn determine_sphere_plane_contact_geometry(
-    sphere: &SphereA,
-    plane: &PlaneA,
+    sphere: &Sphere,
+    plane: &Plane,
 ) -> Option<ContactGeometry> {
     let signed_distance = plane.compute_signed_distance(sphere.center());
     let penetration_depth = sphere.radius() - signed_distance;

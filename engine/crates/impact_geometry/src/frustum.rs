@@ -1,32 +1,15 @@
 //! Representation of frustums.
 
-use crate::{AxisAlignedBoxA, Plane, PlaneA, SphereA};
+use crate::{AxisAlignedBox, Plane, PlaneP, Sphere};
 use approx::AbsDiffEq;
 use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
-    matrix::{Matrix4, Matrix4A},
-    point::Point3A,
-    quaternion::UnitQuaternionA,
-    transform::{Projective3A, Similarity3A},
-    vector::{UnitVector3A, Vector3A},
+    matrix::{Matrix4, Matrix4P},
+    point::Point3,
+    quaternion::UnitQuaternion,
+    transform::{Projective3, Similarity3},
+    vector::{UnitVector3, Vector3},
 };
-
-/// A frustum, which in general is a pyramid truncated at the top. It is here
-/// represented by the six planes making up the faces of the truncated pyramid.
-///
-/// The planes are created in such a way that their negative halfspaces
-/// correspond to the space outside the frustum.
-///
-/// This type only supports a few basic operations, as is primarily intended for
-/// compact storage inside other types and collections. For computations, prefer
-/// the SIMD-friendly 16-byte aligned [`FrustumA`].
-#[derive(Clone, Debug, PartialEq)]
-pub struct Frustum {
-    planes: [Plane; 6],
-    largest_signed_dist_aab_corner_indices_for_planes: [u8; 6],
-    transform_matrix: Matrix4,
-    inverse_transform_matrix: Matrix4,
-}
 
 /// A frustum, which in general is a pyramid truncated at the top. It is here
 /// represented by the six planes making up the faces of the truncated pyramid.
@@ -37,16 +20,73 @@ pub struct Frustum {
 /// The planes and transform matrices are stored in 128-bit SIMD registers for
 /// efficient computation. That leads to an extra 102 bytes in size (16 for each
 /// plane and 6 due to additional padding) and 16-byte alignment. For
-/// cache-friendly storage, prefer [`Frustum`].
+/// cache-friendly storage, prefer the packed 4-byte aligned [`FrustumP`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct FrustumA {
-    planes: [PlaneA; 6],
+pub struct Frustum {
+    planes: [Plane; 6],
     largest_signed_dist_aab_corner_indices_for_planes: [u8; 6],
-    transform_matrix: Matrix4A,
-    inverse_transform_matrix: Matrix4A,
+    transform_matrix: Matrix4,
+    inverse_transform_matrix: Matrix4,
+}
+
+/// A frustum, which in general is a pyramid truncated at the top. It is here
+/// represented by the six planes making up the faces of the truncated pyramid.
+/// This is the "packed" version.
+///
+/// The planes are created in such a way that their negative halfspaces
+/// correspond to the space outside the frustum.
+///
+/// This type only supports a few basic operations, as is primarily intended for
+/// compact storage inside other types and collections. For computations, prefer
+/// the SIMD-friendly 16-byte aligned [`Frustum`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct FrustumP {
+    planes: [PlaneP; 6],
+    largest_signed_dist_aab_corner_indices_for_planes: [u8; 6],
+    transform_matrix: Matrix4P,
+    inverse_transform_matrix: Matrix4P,
 }
 
 impl Frustum {
+    /// Creates the frustum representing the clip space of the
+    /// given transform.
+    ///
+    /// This function uses the method of Gribb and Hartmann (2001)
+    /// "Fast Extraction of Viewing Frustum Planes from the
+    /// World-View-Projection Matrix".
+    pub fn from_transform(transform: &Projective3) -> Self {
+        let planes = Self::planes_from_transform_matrix(transform.matrix());
+
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+
+        Self {
+            planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
+            transform_matrix: *transform.matrix(),
+            inverse_transform_matrix: *transform.inverted().matrix(),
+        }
+    }
+
+    /// Creates the frustum representing the clip space of the given transform
+    /// matrix, using the given matrix inverse rather than computing it.
+    pub fn from_transform_matrix_with_inverse(
+        transform_matrix: Matrix4,
+        inverse_transform_matrix: Matrix4,
+    ) -> Self {
+        let planes = Self::planes_from_transform_matrix(&transform_matrix);
+
+        let largest_signed_dist_aab_corner_indices_for_planes =
+            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
+
+        Self {
+            planes,
+            largest_signed_dist_aab_corner_indices_for_planes,
+            transform_matrix,
+            inverse_transform_matrix,
+        }
+    }
+
     /// Returns the planes defining the faces of the frustum.
     #[inline]
     pub const fn planes(&self) -> &[Plane; 6] {
@@ -108,143 +148,6 @@ impl Frustum {
         -self.far_plane().displacement()
     }
 
-    /// Converts the frustum to the 16-byte aligned SIMD-friendly [`FrustumA`].
-    #[inline]
-    pub fn aligned(&self) -> FrustumA {
-        FrustumA {
-            planes: self.planes.map(|plane| plane.aligned()),
-            largest_signed_dist_aab_corner_indices_for_planes: self
-                .largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix: self.transform_matrix.aligned(),
-            inverse_transform_matrix: self.inverse_transform_matrix.aligned(),
-        }
-    }
-}
-
-impl AbsDiffEq for Frustum {
-    type Epsilon = f32;
-
-    fn default_epsilon() -> f32 {
-        f32::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
-        self.planes[0].abs_diff_eq(&other.planes[0], epsilon)
-            && self.planes[1].abs_diff_eq(&other.planes[1], epsilon)
-            && self.planes[2].abs_diff_eq(&other.planes[2], epsilon)
-            && self.planes[3].abs_diff_eq(&other.planes[3], epsilon)
-            && self.planes[4].abs_diff_eq(&other.planes[4], epsilon)
-            && self.planes[5].abs_diff_eq(&other.planes[5], epsilon)
-            && self
-                .transform_matrix
-                .abs_diff_eq(&other.transform_matrix, epsilon)
-            && self
-                .inverse_transform_matrix
-                .abs_diff_eq(&other.inverse_transform_matrix, epsilon)
-    }
-}
-
-impl FrustumA {
-    /// Creates the frustum representing the clip space of the
-    /// given transform.
-    ///
-    /// This function uses the method of Gribb and Hartmann (2001)
-    /// "Fast Extraction of Viewing Frustum Planes from the
-    /// World-View-Projection Matrix".
-    pub fn from_transform(transform: &Projective3A) -> Self {
-        let planes = Self::planes_from_transform_matrix(transform.matrix());
-
-        let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
-
-        Self {
-            planes,
-            largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix: *transform.matrix(),
-            inverse_transform_matrix: *transform.inverted().matrix(),
-        }
-    }
-
-    /// Creates the frustum representing the clip space of the given transform
-    /// matrix, using the given matrix inverse rather than computing it.
-    pub fn from_transform_matrix_with_inverse(
-        transform_matrix: Matrix4A,
-        inverse_transform_matrix: Matrix4A,
-    ) -> Self {
-        let planes = Self::planes_from_transform_matrix(&transform_matrix);
-
-        let largest_signed_dist_aab_corner_indices_for_planes =
-            Self::determine_largest_signed_dist_aab_corner_indices_for_all_planes(&planes);
-
-        Self {
-            planes,
-            largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix,
-            inverse_transform_matrix,
-        }
-    }
-
-    /// Returns the planes defining the faces of the frustum.
-    #[inline]
-    pub const fn planes(&self) -> &[PlaneA; 6] {
-        &self.planes
-    }
-
-    /// Returns the plane defining the left face of the frustum.
-    #[inline]
-    pub const fn left_plane(&self) -> &PlaneA {
-        &self.planes[0]
-    }
-
-    /// Returns the plane defining the right face of the frustum.
-    #[inline]
-    pub const fn right_plane(&self) -> &PlaneA {
-        &self.planes[1]
-    }
-
-    /// Returns the plane defining the bottom face of the frustum.
-    #[inline]
-    pub const fn bottom_plane(&self) -> &PlaneA {
-        &self.planes[2]
-    }
-
-    /// Returns the plane defining the top face of the frustum.
-    #[inline]
-    pub const fn top_plane(&self) -> &PlaneA {
-        &self.planes[3]
-    }
-
-    /// Returns the near plane of the frustum.
-    #[inline]
-    pub const fn near_plane(&self) -> &PlaneA {
-        &self.planes[4]
-    }
-
-    /// Returns the far plane of the frustum.
-    #[inline]
-    pub const fn far_plane(&self) -> &PlaneA {
-        &self.planes[5]
-    }
-
-    /// Returns the matrix of the transform into the clip space
-    /// that this frustum represents.
-    #[inline]
-    pub const fn transform_matrix(&self) -> &Matrix4A {
-        &self.transform_matrix
-    }
-
-    /// Returns the distance from the frustum apex to the near plane.
-    #[inline]
-    pub fn near_distance(&self) -> f32 {
-        self.near_plane().displacement()
-    }
-
-    /// Returns the distance from the frustum apex to the far plane.
-    #[inline]
-    pub fn far_distance(&self) -> f32 {
-        -self.far_plane().displacement()
-    }
-
     /// Computes the vertical height of the frustum at the given distance from
     /// the apex towards the far plane.
     pub fn height_at_distance(&self, distance: f32) -> f32 {
@@ -252,17 +155,17 @@ impl FrustumA {
 
         let top_point =
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(0.0, 1.0, clip_space_depth));
+                .project_point(&Point3::new(0.0, 1.0, clip_space_depth));
         let bottom_point =
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(0.0, -1.0, clip_space_depth));
+                .project_point(&Point3::new(0.0, -1.0, clip_space_depth));
 
         (top_point.y() - bottom_point.y()).abs()
     }
 
     /// Whether the given point is strictly inside the frustum.
     #[inline]
-    pub fn contains_point(&self, point: &Point3A) -> bool {
+    pub fn contains_point(&self, point: &Point3) -> bool {
         self.planes
             .iter()
             .all(|plane| plane.point_lies_in_positive_halfspace(point))
@@ -274,7 +177,7 @@ impl FrustumA {
     /// always return `true` if the sphere is really inside. If the boundaries
     /// exactly touch each other, the sphere is considered inside.
     #[inline]
-    pub fn could_contain_part_of_sphere(&self, sphere: &SphereA) -> bool {
+    pub fn could_contain_part_of_sphere(&self, sphere: &Sphere) -> bool {
         self.planes
             .iter()
             .all(|plane| plane.compute_signed_distance(sphere.center()) >= -sphere.radius())
@@ -288,7 +191,7 @@ impl FrustumA {
     #[inline]
     pub fn could_contain_part_of_axis_aligned_box(
         &self,
-        axis_aligned_box: &AxisAlignedBoxA,
+        axis_aligned_box: &AxisAlignedBox,
     ) -> bool {
         self.planes
             .iter()
@@ -304,24 +207,24 @@ impl FrustumA {
     }
 
     /// Computes the 8 corners of the frustum.
-    pub fn compute_corners(&self) -> [Point3A; 8] {
+    pub fn compute_corners(&self) -> [Point3; 8] {
         [
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(-1.0, -1.0, 0.0)),
+                .project_point(&Point3::new(-1.0, -1.0, 0.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(-1.0, -1.0, 1.0)),
+                .project_point(&Point3::new(-1.0, -1.0, 1.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(-1.0, 1.0, 0.0)),
+                .project_point(&Point3::new(-1.0, 1.0, 0.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(-1.0, 1.0, 1.0)),
+                .project_point(&Point3::new(-1.0, 1.0, 1.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(1.0, -1.0, 0.0)),
+                .project_point(&Point3::new(1.0, -1.0, 0.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(1.0, -1.0, 1.0)),
+                .project_point(&Point3::new(1.0, -1.0, 1.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(1.0, 1.0, 0.0)),
+                .project_point(&Point3::new(1.0, 1.0, 0.0)),
             self.inverse_transform_matrix
-                .project_point(&Point3A::new(1.0, 1.0, 1.0)),
+                .project_point(&Point3::new(1.0, 1.0, 1.0)),
         ]
     }
 
@@ -330,49 +233,49 @@ impl FrustumA {
     pub fn compute_corners_of_subfrustum(
         &self,
         clip_space_depth_limits: UpperExclusiveBounds<f32>,
-    ) -> [Point3A; 8] {
+    ) -> [Point3; 8] {
         let (lower_linear_depth, upper_linear_depth) = clip_space_depth_limits.bounds();
         let lower_clip_space_depth =
             self.convert_linear_depth_to_clip_space_depth(lower_linear_depth);
         let upper_clip_space_depth =
             self.convert_linear_depth_to_clip_space_depth(upper_linear_depth);
         [
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 -1.0,
                 -1.0,
                 lower_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 -1.0,
                 -1.0,
                 upper_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 -1.0,
                 1.0,
                 lower_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 -1.0,
                 1.0,
                 upper_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 1.0,
                 -1.0,
                 lower_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 1.0,
                 -1.0,
                 upper_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 1.0,
                 1.0,
                 lower_clip_space_depth,
             )),
-            self.inverse_transform_matrix.project_point(&Point3A::new(
+            self.inverse_transform_matrix.project_point(&Point3::new(
                 1.0,
                 1.0,
                 upper_clip_space_depth,
@@ -385,7 +288,7 @@ impl FrustumA {
     #[inline]
     pub fn convert_view_distance_to_clip_space_depth(&self, distance: f32) -> f32 {
         self.transform_matrix
-            .project_point(&Point3A::from(
+            .project_point(&Point3::from(
                 self.near_plane().unit_normal().as_vector() * distance,
             ))
             .z()
@@ -395,7 +298,7 @@ impl FrustumA {
     #[inline]
     pub fn convert_clip_space_depth_to_view_distance(&self, clip_space_depth: f32) -> f32 {
         self.inverse_transform_matrix
-            .project_point(&Point3A::new(0.0, 0.0, clip_space_depth))
+            .project_point(&Point3::new(0.0, 0.0, clip_space_depth))
             .z()
     }
 
@@ -425,7 +328,7 @@ impl FrustumA {
 
     /// Computes the center point of the frustum.
     #[inline]
-    pub fn compute_center(&self) -> Point3A {
+    pub fn compute_center(&self) -> Point3 {
         let corners = self.compute_corners();
         let n_corners = corners.len();
 
@@ -438,8 +341,8 @@ impl FrustumA {
 
     /// Computes the frustum's axis-aligned bounding box.
     #[inline]
-    pub fn compute_aabb(&self) -> AxisAlignedBoxA {
-        AxisAlignedBoxA::aabb_for_point_array(&self.compute_corners())
+    pub fn compute_aabb(&self) -> AxisAlignedBox {
+        AxisAlignedBox::aabb_for_point_array(&self.compute_corners())
     }
 
     /// Computes the axis-aligned bounding box for the part of the frustum lying
@@ -448,15 +351,15 @@ impl FrustumA {
     pub fn compute_aabb_for_subfrustum(
         &self,
         linear_depth_limits: UpperExclusiveBounds<f32>,
-    ) -> AxisAlignedBoxA {
-        AxisAlignedBoxA::aabb_for_point_array(
+    ) -> AxisAlignedBox {
+        AxisAlignedBox::aabb_for_point_array(
             &self.compute_corners_of_subfrustum(linear_depth_limits),
         )
     }
 
     /// Computes the frustum resulting from rotating this frustum with the given
     /// rotation quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
+    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         let rotated_planes = [
             self.planes[0].rotated(rotation),
             self.planes[1].rotated(rotation),
@@ -485,7 +388,7 @@ impl FrustumA {
 
     /// Computes the frustum resulting from transforming this frustum with the
     /// given similarity transform.
-    pub fn transformed(&self, transformation: &Similarity3A) -> Self {
+    pub fn transformed(&self, transformation: &Similarity3) -> Self {
         let transformed_planes = self.transformed_planes(transformation);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -509,7 +412,7 @@ impl FrustumA {
 
     /// Computes the planes of the frustum resulting from transforming this
     /// frustum with the given similarity transform.
-    pub fn transformed_planes(&self, transformation: &Similarity3A) -> [PlaneA; 6] {
+    pub fn transformed_planes(&self, transformation: &Similarity3) -> [Plane; 6] {
         [
             self.planes[0].transformed(transformation),
             self.planes[1].transformed(transformation),
@@ -520,19 +423,19 @@ impl FrustumA {
         ]
     }
 
-    /// Converts the frustum to the 4-byte aligned cache-friendly [`Frustum`].
+    /// Converts the frustum to the 4-byte aligned cache-friendly [`FrustumP`].
     #[inline]
-    pub fn unaligned(&self) -> Frustum {
-        Frustum {
-            planes: self.planes.clone().map(|plane| plane.unaligned()),
+    pub fn pack(&self) -> FrustumP {
+        FrustumP {
+            planes: self.planes.clone().map(|plane| plane.pack()),
             largest_signed_dist_aab_corner_indices_for_planes: self
                 .largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix: self.transform_matrix.unaligned(),
-            inverse_transform_matrix: self.inverse_transform_matrix.unaligned(),
+            transform_matrix: self.transform_matrix.pack(),
+            inverse_transform_matrix: self.inverse_transform_matrix.pack(),
         }
     }
 
-    fn planes_from_transform_matrix(transform_matrix: &Matrix4A) -> [PlaneA; 6] {
+    fn planes_from_transform_matrix(transform_matrix: &Matrix4) -> [Plane; 6] {
         let c1 = transform_matrix.column_1();
         let c2 = transform_matrix.column_2();
         let c3 = transform_matrix.column_3();
@@ -581,15 +484,15 @@ impl FrustumA {
         normal_y: f32,
         normal_z: f32,
         displacement: f32,
-    ) -> PlaneA {
+    ) -> Plane {
         let (unit_normal, norm) =
-            UnitVector3A::normalized_from_and_norm(Vector3A::new(normal_x, normal_y, normal_z));
+            UnitVector3::normalized_from_and_norm(Vector3::new(normal_x, normal_y, normal_z));
 
-        PlaneA::new(unit_normal, displacement / norm)
+        Plane::new(unit_normal, displacement / norm)
     }
 
     #[cfg(test)]
-    fn from_transform_matrix(transform_matrix: Matrix4A) -> Self {
+    fn from_transform_matrix(transform_matrix: Matrix4) -> Self {
         let planes = Self::planes_from_transform_matrix(&transform_matrix);
 
         let largest_signed_dist_aab_corner_indices_for_planes =
@@ -606,9 +509,9 @@ impl FrustumA {
     /// Determines the corner of any axis-aligned bounding box that will have
     /// the largest signed distance in the space of the given plane. The corner
     /// is represented by an index following the convention of
-    /// [`AxisAlignedBoxA::corner`].
+    /// [`AxisAlignedBox::corner`].
     #[inline]
-    pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &PlaneA) -> u8 {
+    pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane) -> u8 {
         let normal = plane.unit_normal();
         match (
             normal.x().is_sign_negative(),
@@ -628,7 +531,7 @@ impl FrustumA {
 
     #[inline]
     fn determine_largest_signed_dist_aab_corner_indices_for_all_planes(
-        planes: &[PlaneA; 6],
+        planes: &[Plane; 6],
     ) -> [u8; 6] {
         [
             Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[0]),
@@ -641,7 +544,105 @@ impl FrustumA {
     }
 }
 
-impl AbsDiffEq for FrustumA {
+impl AbsDiffEq for Frustum {
+    type Epsilon = f32;
+
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
+        self.planes[0].abs_diff_eq(&other.planes[0], epsilon)
+            && self.planes[1].abs_diff_eq(&other.planes[1], epsilon)
+            && self.planes[2].abs_diff_eq(&other.planes[2], epsilon)
+            && self.planes[3].abs_diff_eq(&other.planes[3], epsilon)
+            && self.planes[4].abs_diff_eq(&other.planes[4], epsilon)
+            && self.planes[5].abs_diff_eq(&other.planes[5], epsilon)
+            && self
+                .transform_matrix
+                .abs_diff_eq(&other.transform_matrix, epsilon)
+            && self
+                .inverse_transform_matrix
+                .abs_diff_eq(&other.inverse_transform_matrix, epsilon)
+    }
+}
+
+impl FrustumP {
+    /// Returns the planes defining the faces of the frustum.
+    #[inline]
+    pub const fn planes(&self) -> &[PlaneP; 6] {
+        &self.planes
+    }
+
+    /// Returns the plane defining the left face of the frustum.
+    #[inline]
+    pub const fn left_plane(&self) -> &PlaneP {
+        &self.planes[0]
+    }
+
+    /// Returns the plane defining the right face of the frustum.
+    #[inline]
+    pub const fn right_plane(&self) -> &PlaneP {
+        &self.planes[1]
+    }
+
+    /// Returns the plane defining the bottom face of the frustum.
+    #[inline]
+    pub const fn bottom_plane(&self) -> &PlaneP {
+        &self.planes[2]
+    }
+
+    /// Returns the plane defining the top face of the frustum.
+    #[inline]
+    pub const fn top_plane(&self) -> &PlaneP {
+        &self.planes[3]
+    }
+
+    /// Returns the near plane of the frustum.
+    #[inline]
+    pub const fn near_plane(&self) -> &PlaneP {
+        &self.planes[4]
+    }
+
+    /// Returns the far plane of the frustum.
+    #[inline]
+    pub const fn far_plane(&self) -> &PlaneP {
+        &self.planes[5]
+    }
+
+    /// Returns the matrix of the transform into the clip space
+    /// that this frustum represents.
+    #[inline]
+    pub const fn transform_matrix(&self) -> &Matrix4P {
+        &self.transform_matrix
+    }
+
+    /// Returns the distance from the frustum apex to the near plane.
+    #[inline]
+    pub fn near_distance(&self) -> f32 {
+        self.near_plane().displacement()
+    }
+
+    /// Returns the distance from the frustum apex to the far plane.
+    #[inline]
+    pub fn far_distance(&self) -> f32 {
+        -self.far_plane().displacement()
+    }
+
+    /// Converts the frustum to the 16-byte aligned SIMD-friendly [`Frustum`].
+    #[inline]
+    pub fn unpack(&self) -> Frustum {
+        Frustum {
+            planes: self.planes.map(|plane| plane.unpack()),
+            largest_signed_dist_aab_corner_indices_for_planes: self
+                .largest_signed_dist_aab_corner_indices_for_planes,
+            transform_matrix: self.transform_matrix.unpack(),
+            inverse_transform_matrix: self.inverse_transform_matrix.unpack(),
+        }
+    }
+}
+
+impl AbsDiffEq for FrustumP {
     type Epsilon = f32;
 
     fn default_epsilon() -> f32 {
@@ -675,7 +676,7 @@ mod tests {
     fn computing_frustum_near_and_far_distance_works() {
         let near = 0.21;
         let far = 160.2;
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(near, far))
                 .as_projective(),
         );
@@ -686,13 +687,13 @@ mod tests {
 
     #[test]
     fn inside_points_are_reported_as_inside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for x in [-0.999, 0.999] {
             for y in [-0.999, 0.999] {
                 for z in [-0.999, 0.999] {
-                    assert!(frustum.contains_point(&Point3A::new(x, y, z)));
+                    assert!(frustum.contains_point(&Point3::new(x, y, z)));
                 }
             }
         }
@@ -700,13 +701,13 @@ mod tests {
 
     #[test]
     fn outside_points_are_reported_as_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for x in [-1.001, 1.001] {
             for y in [-1.001, 1.001] {
                 for z in [-1.001, 1.001] {
-                    assert!(!frustum.contains_point(&Point3A::new(x, y, z)));
+                    assert!(!frustum.contains_point(&Point3::new(x, y, z)));
                 }
             }
         }
@@ -714,7 +715,7 @@ mod tests {
 
     #[test]
     fn safely_outside_spheres_are_reported_as_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for x in [-2, 0, 2] {
@@ -729,8 +730,8 @@ mod tests {
                         _ => f32::sqrt(3.0),
                     };
                     for dist_fraction in [0.5, 0.3, 0.1] {
-                        let sphere = SphereA::new(
-                            Point3A::new(x as f32, y as f32, z as f32),
+                        let sphere = Sphere::new(
+                            Point3::new(x as f32, y as f32, z as f32),
                             dist_fraction * dist_to_frustum,
                         );
                         assert!(!frustum.could_contain_part_of_sphere(&sphere));
@@ -742,7 +743,7 @@ mod tests {
 
     #[test]
     fn barely_inside_spheres_are_reported_as_not_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for x in [-2, 0, 2] {
@@ -756,8 +757,8 @@ mod tests {
                         (0, _, _) | (_, 0, _) | (_, _, 0) => f32::sqrt(2.0),
                         _ => f32::sqrt(3.0),
                     };
-                    let sphere = SphereA::new(
-                        Point3A::new(x as f32, y as f32, z as f32),
+                    let sphere = Sphere::new(
+                        Point3::new(x as f32, y as f32, z as f32),
                         1.001 * dist_to_frustum,
                     );
                     assert!(frustum.could_contain_part_of_sphere(&sphere));
@@ -768,30 +769,30 @@ mod tests {
 
     #[test]
     fn centered_spheres_are_reported_as_not_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for radius in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
-            let sphere = SphereA::new(Point3A::origin(), radius);
+            let sphere = Sphere::new(Point3::origin(), radius);
             assert!(frustum.could_contain_part_of_sphere(&sphere));
         }
     }
 
     #[test]
     fn inside_sphere_is_reported_as_not_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
                 .as_projective(),
         );
 
-        let sphere = SphereA::new(Point3A::new(3.37632, -3.3647947, -2.6214356), 1.0);
+        let sphere = Sphere::new(Point3::new(3.37632, -3.3647947, -2.6214356), 1.0);
 
         assert!(frustum.could_contain_part_of_sphere(&sphere));
     }
 
     #[test]
     fn outside_aabs_are_reported_as_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for x in [-2, 0, 2] {
@@ -801,11 +802,11 @@ mod tests {
                         if x == 0 && y == 0 && z == 0 {
                             continue;
                         }
-                        let center = Point3A::new(x as f32, y as f32, z as f32);
+                        let center = Point3::new(x as f32, y as f32, z as f32);
                         let corner_offset =
-                            Vector3A::new(offset_fraction, offset_fraction, offset_fraction);
+                            Vector3::new(offset_fraction, offset_fraction, offset_fraction);
                         let aab =
-                            AxisAlignedBoxA::new(center - corner_offset, center + corner_offset);
+                            AxisAlignedBox::new(center - corner_offset, center + corner_offset);
                         assert!(!frustum.could_contain_part_of_axis_aligned_box(&aab));
                     }
                 }
@@ -815,15 +816,15 @@ mod tests {
 
     #[test]
     fn barely_inside_aabs_are_reported_as_not_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for x in [-2, 0, 2] {
             for y in [-2, 0, 2] {
                 for z in [-2, 0, 2] {
-                    let center = Point3A::new(x as f32, y as f32, z as f32);
-                    let corner_offset = Vector3A::new(1.0, 1.0, 1.0) * 1.001;
-                    let aab = AxisAlignedBoxA::new(center - corner_offset, center + corner_offset);
+                    let center = Point3::new(x as f32, y as f32, z as f32);
+                    let corner_offset = Vector3::new(1.0, 1.0, 1.0) * 1.001;
+                    let aab = AxisAlignedBox::new(center - corner_offset, center + corner_offset);
                     assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
                 }
             }
@@ -832,14 +833,14 @@ mod tests {
 
     #[test]
     fn centered_aabs_are_reported_as_not_outside() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0).as_projective(),
         );
         for half_extent in [0.01, 0.999, 1.001, 2.0, 10.0, 0.0] {
-            let corner_offset = Vector3A::new(1.0, 1.0, 1.0) * half_extent;
-            let aab = AxisAlignedBoxA::new(
-                Point3A::origin() - corner_offset,
-                Point3A::origin() + corner_offset,
+            let corner_offset = Vector3::new(1.0, 1.0, 1.0) * half_extent;
+            let aab = AxisAlignedBox::new(
+                Point3::origin() - corner_offset,
+                Point3::origin() + corner_offset,
             );
             assert!(frustum.could_contain_part_of_axis_aligned_box(&aab));
         }
@@ -847,14 +848,14 @@ mod tests {
 
     #[test]
     fn corners_of_transformed_frustum_equal_transformed_corners_of_original_frustum() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
                 .as_projective(),
         );
 
-        let transformation = Similarity3A::from_parts(
-            Vector3A::new(2.1, -5.9, 0.01),
-            UnitQuaternionA::from_euler_angles(0.1, 0.2, 180.0),
+        let transformation = Similarity3::from_parts(
+            Vector3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 180.0),
             7.0,
         );
 
@@ -872,14 +873,14 @@ mod tests {
 
     #[test]
     fn transforming_frustum_and_then_transforming_with_inverse_gives_original_frustum() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
                 .as_projective(),
         );
 
-        let transformation = Similarity3A::from_parts(
-            Vector3A::new(2.1, -5.9, 0.01),
-            UnitQuaternionA::from_euler_angles(0.1, 0.2, 180.0),
+        let transformation = Similarity3::from_parts(
+            Vector3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 180.0),
             7.0,
         );
 
@@ -892,21 +893,21 @@ mod tests {
 
     #[test]
     fn creating_frustum_for_transform_of_transformed_frustum_gives_transformed_frustum() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(56.0), UpperExclusiveBounds::new(0.21, 160.2))
                 .as_projective(),
         );
 
-        let transformation = Similarity3A::from_parts(
-            Vector3A::new(2.1, -5.9, 0.01),
-            UnitQuaternionA::from_euler_angles(0.1, 0.2, 0.3),
+        let transformation = Similarity3::from_parts(
+            Vector3::new(2.1, -5.9, 0.01),
+            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
             7.0,
         );
 
         let transformed_frustum = frustum.transformed(&transformation);
 
         let frustum_from_transformed =
-            FrustumA::from_transform_matrix(*transformed_frustum.transform_matrix());
+            Frustum::from_transform_matrix(*transformed_frustum.transform_matrix());
 
         assert_abs_diff_eq!(
             transformed_frustum,
@@ -918,30 +919,26 @@ mod tests {
     #[test]
     fn computing_orthographic_frustum_corners_works() {
         let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
         );
 
         let corners = frustum.compute_corners();
 
-        assert_abs_diff_eq!(corners[0], Point3A::new(left, bottom, near), epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[1], Point3A::new(left, bottom, far), epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[2], Point3A::new(left, top, near), epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[3], Point3A::new(left, top, far), epsilon = 1e-5);
-        assert_abs_diff_eq!(
-            corners[4],
-            Point3A::new(right, bottom, near),
-            epsilon = 1e-5
-        );
-        assert_abs_diff_eq!(corners[5], Point3A::new(right, bottom, far), epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[6], Point3A::new(right, top, near), epsilon = 1e-5);
-        assert_abs_diff_eq!(corners[7], Point3A::new(right, top, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[0], Point3::new(left, bottom, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[1], Point3::new(left, bottom, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[2], Point3::new(left, top, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[3], Point3::new(left, top, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[4], Point3::new(right, bottom, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[5], Point3::new(right, bottom, far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[6], Point3::new(right, top, near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[7], Point3::new(right, top, far), epsilon = 1e-5);
     }
 
     #[test]
     fn computing_orthographic_subfrustum_corners_works() {
         let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
         );
 
@@ -957,46 +954,38 @@ mod tests {
 
         assert_abs_diff_eq!(
             corners[0],
-            Point3A::new(left, bottom, new_near),
+            Point3::new(left, bottom, new_near),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             corners[1],
-            Point3A::new(left, bottom, new_far),
+            Point3::new(left, bottom, new_far),
             epsilon = 1e-5
         );
-        assert_abs_diff_eq!(
-            corners[2],
-            Point3A::new(left, top, new_near),
-            epsilon = 1e-5
-        );
-        assert_abs_diff_eq!(corners[3], Point3A::new(left, top, new_far), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[2], Point3::new(left, top, new_near), epsilon = 1e-5);
+        assert_abs_diff_eq!(corners[3], Point3::new(left, top, new_far), epsilon = 1e-5);
         assert_abs_diff_eq!(
             corners[4],
-            Point3A::new(right, bottom, new_near),
+            Point3::new(right, bottom, new_near),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             corners[5],
-            Point3A::new(right, bottom, new_far),
+            Point3::new(right, bottom, new_far),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             corners[6],
-            Point3A::new(right, top, new_near),
+            Point3::new(right, top, new_near),
             epsilon = 1e-5
         );
-        assert_abs_diff_eq!(
-            corners[7],
-            Point3A::new(right, top, new_far),
-            epsilon = 1e-5
-        );
+        assert_abs_diff_eq!(corners[7], Point3::new(right, top, new_far), epsilon = 1e-5);
     }
 
     #[test]
     fn computing_orthographic_frustum_center_works() {
         let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
         );
 
@@ -1004,7 +993,7 @@ mod tests {
 
         assert_abs_diff_eq!(
             center,
-            Point3A::new(
+            Point3::new(
                 0.5 * (left + right),
                 0.5 * (bottom + top),
                 0.5 * (near + far)
@@ -1016,7 +1005,7 @@ mod tests {
     #[test]
     fn computing_orthographic_frustum_aabb_works() {
         let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
         );
 
@@ -1024,12 +1013,12 @@ mod tests {
 
         assert_abs_diff_eq!(
             aabb.lower_corner(),
-            &Point3A::new(left, bottom, near),
+            &Point3::new(left, bottom, near),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &Point3A::new(right, top, far),
+            &Point3::new(right, top, far),
             epsilon = 1e-5
         );
     }
@@ -1037,7 +1026,7 @@ mod tests {
     #[test]
     fn computing_orthographic_subfrustum_aabb_works() {
         let (left, right, bottom, top, near, far) = (0.1, 1.2, 2.3, 3.4, 4.5, 5.6);
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
         );
 
@@ -1053,24 +1042,24 @@ mod tests {
 
         assert_abs_diff_eq!(
             aabb.lower_corner(),
-            &Point3A::new(left, bottom, new_near),
+            &Point3::new(left, bottom, new_near),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &Point3A::new(right, top, new_far),
+            &Point3::new(right, top, new_far),
             epsilon = 1e-5
         );
     }
 
     #[test]
     fn should_determine_correct_largest_signed_dist_aab_corner_indices() {
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
                 .as_projective(),
         );
 
-        let aab = AxisAlignedBoxA::new(Point3A::origin(), Point3A::new(1.0, 1.0, 1.0));
+        let aab = AxisAlignedBox::new(Point3::origin(), Point3::new(1.0, 1.0, 1.0));
 
         for plane_idx in 0..6 {
             let plane = &frustum.planes[plane_idx];
@@ -1089,7 +1078,7 @@ mod tests {
     #[test]
     fn computing_frustum_height_at_distance_works() {
         // Test with perspective frustum with 90 degree FOV
-        let frustum = FrustumA::from_transform(
+        let frustum = Frustum::from_transform(
             PerspectiveTransform::new(1.0, Degrees(90.0), UpperExclusiveBounds::new(1.0, 10.0))
                 .as_projective(),
         );
@@ -1105,7 +1094,7 @@ mod tests {
 
         // Test with orthographic frustum - height should be constant
         let (left, right, bottom, top, near, far) = (-1.0, 1.0, -2.0, 2.0, 1.0, 10.0);
-        let ortho_frustum = FrustumA::from_transform(
+        let ortho_frustum = Frustum::from_transform(
             OrthographicTransform::new(left, right, bottom, top, near, far).as_projective(),
         );
 

@@ -9,7 +9,7 @@ pub mod orientation;
 #[cfg(feature = "ecs")]
 pub mod systems;
 
-use impact_physics::quantities::{OrientationA, VelocityA};
+use impact_physics::quantities::{Orientation, Velocity};
 use motion::{
     MotionControllerConfig, MotionDirection, MotionState, SemiDirectionalMotionController,
 };
@@ -25,7 +25,7 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 
     /// Computes the world space velocity that should be added to the controlled
     /// entity's velocity when in motion.
-    fn compute_controlled_velocity(&self, orientation: &OrientationA) -> VelocityA;
+    fn compute_controlled_velocity(&self, orientation: &Orientation) -> Velocity;
 
     /// Updates the overall motion state of the controlled entity based on the
     /// given [`MotionState`] specifying whether the entity should be moving
@@ -57,7 +57,7 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
     /// Modifies the given orientation of a controlled entity so that the
     /// current changes in orientation are applied to it.
-    fn update_orientation(&self, orientation: &mut OrientationA);
+    fn update_orientation(&self, orientation: &mut Orientation);
 
     /// Whether the orientation has changed since calling
     /// [`reset_orientation_change`](Self::reset_orientation_change).

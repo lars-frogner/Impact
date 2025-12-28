@@ -11,8 +11,8 @@ use crate::{
     voxel_types::VoxelType,
 };
 use impact_alloc::{Allocator, Global};
-use impact_geometry::AxisAlignedBoxA;
-use impact_math::{hash64, point::Point3A, stringhash64_newtype, vector::Vector3A};
+use impact_geometry::AxisAlignedBox;
+use impact_math::{hash64, point::Point3, stringhash64_newtype, vector::Vector3};
 use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
 use roc_integration::roc;
 use sdf::{SDFGenerator, SDFGeneratorChunkBuffers};
@@ -71,7 +71,7 @@ pub trait ChunkedVoxelGenerator {
 pub struct SDFVoxelGenerator<A: Allocator> {
     voxel_extent: f32,
     grid_shape: [usize; 3],
-    shifted_grid_center: Point3A,
+    shifted_grid_center: Point3,
     sdf_generator: SDFGenerator<A>,
     voxel_type_generator: VoxelTypeGenerator,
 }
@@ -234,7 +234,7 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
         });
 
         let grid_center_relative_to_domain_lower_corner =
-            Point3A::from(grid_shape.map(|n| 0.5 * n as f32));
+            Point3::from(grid_shape.map(|n| 0.5 * n as f32));
 
         // Since the domain can be translated relative to the origin of the root
         // SDF coordinate space, we subtract the domain center to get the grid
@@ -246,7 +246,7 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
         // in the voxel object to account for the fact that we want to evaluate the
         // SDF at the center of each voxel
         let shifted_grid_center_relative_to_sdf_origin =
-            grid_center_relative_to_sdf_origin - Vector3A::same(0.5);
+            grid_center_relative_to_sdf_origin - Vector3::same(0.5);
 
         Self {
             voxel_extent,
@@ -259,8 +259,8 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
 
     /// Returns the center of the voxel grid in the root SDF coordinate space.
     /// The coordinates are in whole voxels.
-    pub fn grid_center(&self) -> Point3A {
-        self.shifted_grid_center + Vector3A::same(0.5) // Unshift
+    pub fn grid_center(&self) -> Point3 {
+        self.shifted_grid_center + Vector3::same(0.5) // Unshift
     }
 }
 
@@ -308,12 +308,12 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
             return;
         }
 
-        let chunk_origin_in_root_space = Point3A::from(chunk_origin.map(|idx| idx as f32))
-            - self.shifted_grid_center.as_vector();
+        let chunk_origin_in_root_space =
+            Point3::from(chunk_origin.map(|idx| idx as f32)) - self.shifted_grid_center.as_vector();
 
-        let chunk_aabb_in_root_space = AxisAlignedBoxA::new(
+        let chunk_aabb_in_root_space = AxisAlignedBox::new(
             chunk_origin_in_root_space,
-            chunk_origin_in_root_space + Vector3A::same(ChunkedVoxelObject::chunk_size() as f32),
+            chunk_origin_in_root_space + Vector3::same(ChunkedVoxelObject::chunk_size() as f32),
         );
 
         self.sdf_generator

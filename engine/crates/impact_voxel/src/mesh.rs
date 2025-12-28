@@ -6,11 +6,11 @@ use crate::chunks::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
-use impact_geometry::{FrustumA, OrientedBoxA, PlaneA};
+use impact_geometry::{Frustum, OrientedBox, Plane};
 use impact_math::{
-    point::{Point3, Point3A},
-    transform::Similarity3A,
-    vector::{UnitVector3, Vector3A},
+    point::{Point3, Point3P},
+    transform::Similarity3,
+    vector::{UnitVector3P, Vector3},
 };
 use std::{array, collections::BTreeSet, ops::Range};
 
@@ -108,13 +108,13 @@ pub struct VoxelMeshModifications<'a> {
 pub struct CullingFrustum {
     pub planes: [FrustumPlane; 6],
     pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
-    pub apex_position: Point3,
+    pub apex_position: Point3P,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct FrustumPlane {
-    pub unit_normal: UnitVector3,
+    pub unit_normal: UnitVector3P,
     pub displacement: f32,
 }
 
@@ -423,7 +423,7 @@ impl ChunkedVoxelObjectMesh {
     fn vertex_position_offset_for_chunk(
         voxel_object: &ChunkedVoxelObject,
         chunk_indices: &[usize; 3],
-    ) -> Vector3A {
+    ) -> Vector3 {
         let voxel_extent = voxel_object.voxel_extent();
         let chunk_extent = voxel_object.chunk_extent();
 
@@ -433,7 +433,7 @@ impl ChunkedVoxelObjectMesh {
         // of the vertices for the surface nets mesh. We also need to add
         // half a voxel extent to account for the SDF values being specified
         // at voxel centers, at half-voxel coordinates in the voxel object.
-        Vector3A::new(
+        Vector3::new(
             chunk_indices[0] as f32 * chunk_extent - 0.5 * voxel_extent,
             chunk_indices[1] as f32 * chunk_extent - 0.5 * voxel_extent,
             chunk_indices[2] as f32 * chunk_extent - 0.5 * voxel_extent,
@@ -498,14 +498,14 @@ impl ChunkSubmesh {
 impl CullingFrustum {
     /// Gathers the given frustum planes and apex position into a
     /// `CullingFrustum`.
-    pub fn from_planes_and_apex_position(planes: [PlaneA; 6], apex_position: Point3) -> Self {
+    pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3P) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
-            u32::from(FrustumA::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
+            u32::from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
         });
         let planes = planes.map(|plane| {
             let (unit_normal, displacement) = plane.into_normal_and_displacement();
             FrustumPlane {
-                unit_normal: unit_normal.unaligned(),
+                unit_normal: unit_normal.pack(),
                 displacement,
             }
         });
@@ -521,11 +521,11 @@ impl CullingFrustum {
     ///
     /// The frustum is assumed to be in the space where the apex is at the
     /// origin before transformation.
-    pub fn for_transformed_frustum(frustum: &FrustumA, transformation: &Similarity3A) -> Self {
-        let apex_position = Point3A::from(*transformation.translation());
+    pub fn for_transformed_frustum(frustum: &Frustum, transformation: &Similarity3) -> Self {
+        let apex_position = Point3::from(*transformation.translation());
         Self::from_planes_and_apex_position(
             frustum.transformed_planes(transformation),
-            apex_position.unaligned(),
+            apex_position.pack(),
         )
     }
 
@@ -541,8 +541,8 @@ impl CullingFrustum {
     /// infinity for an orthographic frustum, this can be emulated by
     /// passing in a sufficiently large distance.
     pub fn for_transformed_orthographic_frustum(
-        orthographic_frustum: &OrientedBoxA,
-        transformation: &Similarity3A,
+        orthographic_frustum: &OrientedBox,
+        transformation: &Similarity3,
         apex_distance: f32,
     ) -> Self {
         let transformed_box = orthographic_frustum.transformed(transformation);
@@ -551,7 +551,7 @@ impl CullingFrustum {
             transformed_box.center() - apex_distance * transformed_view_diection;
         Self::from_planes_and_apex_position(
             transformed_box.compute_bounding_planes(),
-            transformed_apex_position.unaligned(),
+            transformed_apex_position.pack(),
         )
     }
 }

@@ -1,8 +1,8 @@
-# Hash: e385db1c8347334487f886ab86dea2c3aa0173daeb30195024cd60ddff6159e8
-# Generated: 2025-12-28T19:54:00+00:00
-# Rust type: impact_physics::inertia::InertiaTensor
+# Hash: 778537f211333e5858182f7e14ae2d1ffa7d515599e058bf831fdd6d93dc447d
+# Generated: 2025-12-28T22:30:14.624366642
+# Rust type: impact_physics::inertia::InertiaTensorP
 # Type category: POD
-# Commit: 78e3beb5 (dirty)
+# Commit: cc167207 (dirty)
 module [
     InertiaTensor,
     write_bytes,
@@ -11,11 +11,11 @@ module [
 
 import core.Matrix3
 
-## The inertia tensor of a physical body.
+## The inertia tensor of a physical body. This the "packed" version.
 ##
 ## This type is primarily intended for compact storage inside other types and
 ## collections. For computations, prefer the SIMD-friendly 16-byte aligned
-## [`InertiaTensorA`].
+## [`InertiaTensor`].
 InertiaTensor : {
     matrix : Matrix3.Matrix3,
     inverse_matrix : Matrix3.Matrix3,

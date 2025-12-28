@@ -2,7 +2,7 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{Orientation, Position, PositionA, Velocity, VelocityA},
+    quantities::{OrientationP, Position, PositionP, Velocity, VelocityP},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_ne;
@@ -48,10 +48,10 @@ define_setup_type! {
         /// will coincide with the direction from the orbited body to the periapsis,
         /// the second with the direction of the velocity at the periapsis and the
         /// third with the normal of the orbital plane.
-        pub orientation: Orientation,
+        pub orientation: OrientationP,
         /// The position of the focal point where the body being orbited would be
         /// located.
-        pub focal_position: Position,
+        pub focal_position: PositionP,
         /// Half the longest diameter of the orbital ellipse.
         pub semi_major_axis: f32,
         /// The eccentricity of the orbital ellipse (0 is circular, 1 is a line).
@@ -83,8 +83,8 @@ impl OrbitalTrajectoryDriver {
         else {
             return;
         };
-        rigid_body.set_position(Position::origin());
-        rigid_body.set_velocity(Velocity::zeros());
+        rigid_body.set_position(PositionP::origin());
+        rigid_body.set_velocity(VelocityP::zeros());
     }
 
     /// Applies the driven properties for the given time to the appropriate
@@ -118,8 +118,8 @@ impl OrbitalTrajectory {
     "#)]
     pub fn new(
         periapsis_time: f32,
-        orientation: Orientation,
-        focal_position: Position,
+        orientation: OrientationP,
+        focal_position: PositionP,
         semi_major_axis: f32,
         eccentricity: f32,
         period: f32,
@@ -146,7 +146,7 @@ impl OrbitalTrajectory {
     /// - If the eccentricity is not between zero (inclusive) and one
     ///   (exclusive).
     /// - If the period is zero.
-    pub fn compute_position_and_velocity(&self, time: f32) -> (Position, Velocity) {
+    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionP, VelocityP) {
         assert!(
             self.semi_major_axis > 0.0,
             "Semi-major axis of orbital trajectory does not exceed zero"
@@ -164,8 +164,8 @@ impl OrbitalTrajectory {
             "Period of orbital trajectory is zero"
         );
 
-        let orientation = self.orientation.aligned();
-        let focal_position = self.focal_position.aligned();
+        let orientation = self.orientation.unpack();
+        let focal_position = self.focal_position.unpack();
 
         let mean_angular_speed = Self::compute_mean_angular_speed(self.period);
 
@@ -227,8 +227,8 @@ impl OrbitalTrajectory {
         let world_space_orbital_velocity = orientation.rotate_vector(&orbital_velocity);
 
         (
-            world_space_orbital_position.unaligned(),
-            world_space_orbital_velocity.unaligned(),
+            world_space_orbital_position.pack(),
+            world_space_orbital_velocity.pack(),
         )
     }
 
@@ -308,8 +308,8 @@ impl OrbitalTrajectory {
         cos_true_anomaly: f32,
         sin_true_anomaly: f32,
         orbital_distance: f32,
-    ) -> PositionA {
-        PositionA::new(
+    ) -> Position {
+        Position::new(
             orbital_distance * cos_true_anomaly,
             orbital_distance * sin_true_anomaly,
             0.0,
@@ -350,8 +350,8 @@ impl OrbitalTrajectory {
         sin_true_anomaly: f32,
         radial_speed: f32,
         tangential_speed: f32,
-    ) -> VelocityA {
-        VelocityA::new(
+    ) -> Velocity {
+        Velocity::new(
             radial_speed * cos_true_anomaly - tangential_speed * sin_true_anomaly,
             radial_speed * sin_true_anomaly + tangential_speed * cos_true_anomaly,
             0.0,
@@ -362,12 +362,12 @@ impl OrbitalTrajectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::{Direction, Orientation, OrientationA};
+    use crate::quantities::{DirectionP, Orientation, OrientationP};
     use approx::abs_diff_eq;
     use impact_math::{
         consts::f32::{FRAC_PI_2, PI, TWO_PI},
-        point::Point3A,
-        vector::UnitVector3,
+        point::Point3,
+        vector::UnitVector3P,
     };
     use proptest::prelude::*;
 
@@ -376,8 +376,8 @@ mod tests {
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
-        ) -> Position {
-            Position::new(position_coord_x, position_coord_y, position_coord_z)
+        ) -> PositionP {
+            PositionP::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -385,8 +385,8 @@ mod tests {
         fn direction_strategy()(
             phi in 0.0..TWO_PI,
             theta in 0.0..PI,
-        ) -> Direction {
-            Direction::new_unchecked(
+        ) -> DirectionP {
+            DirectionP::new_unchecked(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -399,8 +399,8 @@ mod tests {
             rotation_roll in 0.0..TWO_PI,
             rotation_pitch in -FRAC_PI_2..FRAC_PI_2,
             rotation_yaw in 0.0..TWO_PI,
-        ) -> Orientation {
-            OrientationA::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).unaligned()
+        ) -> OrientationP {
+            Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).pack()
         }
     }
 
@@ -409,8 +409,8 @@ mod tests {
     fn should_panic_if_semi_major_axis_is_zero() {
         let trajectory = OrbitalTrajectory::new(
             0.0,
-            Orientation::identity(),
-            Position::origin(),
+            OrientationP::identity(),
+            PositionP::origin(),
             0.0,
             0.0,
             1.0,
@@ -423,8 +423,8 @@ mod tests {
     fn should_panic_if_semi_major_axis_is_negative() {
         let trajectory = OrbitalTrajectory::new(
             0.0,
-            Orientation::identity(),
-            Position::origin(),
+            OrientationP::identity(),
+            PositionP::origin(),
             -0.1,
             0.0,
             1.0,
@@ -437,8 +437,8 @@ mod tests {
     fn should_panic_if_eccentricity_is_negative() {
         let trajectory = OrbitalTrajectory::new(
             0.0,
-            Orientation::identity(),
-            Position::origin(),
+            OrientationP::identity(),
+            PositionP::origin(),
             1.0,
             -0.1,
             0.0,
@@ -451,8 +451,8 @@ mod tests {
     fn should_panic_if_eccentricity_is_one() {
         let trajectory = OrbitalTrajectory::new(
             0.0,
-            Orientation::identity(),
-            Position::origin(),
+            OrientationP::identity(),
+            PositionP::origin(),
             1.0,
             1.0,
             0.0,
@@ -465,8 +465,8 @@ mod tests {
     fn should_panic_if_period_is_zero() {
         let trajectory = OrbitalTrajectory::new(
             0.0,
-            Orientation::identity(),
-            Position::origin(),
+            OrientationP::identity(),
+            PositionP::origin(),
             1.0,
             0.0,
             0.0,
@@ -502,10 +502,10 @@ mod tests {
                 semi_major_axis * (1.0 - eccentricity.powi(2)) / (1.0 - eccentricity);
 
             let correct_periapsis_position = focal_position
-                + orientation.aligned().rotate_point(&(Point3A::new(periapsis_distance, 0.0, 0.0))).as_vector().unaligned();
+                + orientation.unpack().rotate_point(&(Point3::new(periapsis_distance, 0.0, 0.0))).as_vector().pack();
 
             let correct_apoapsis_position = focal_position
-                + orientation.aligned().rotate_point(&(Point3A::new(-apoapsis_distance, 0.0, 0.0))).as_vector().unaligned();
+                + orientation.unpack().rotate_point(&(Point3::new(-apoapsis_distance, 0.0, 0.0))).as_vector().pack();
 
             let periapsis_position = trajectory.compute_position_and_velocity(periapsis_time).0;
             let apoapsis_position = trajectory.compute_position_and_velocity(apoapsis_time).0;
@@ -554,12 +554,12 @@ mod tests {
             let apoapsis_displacement = apoapsis_position - focal_position;
 
             prop_assert!(abs_diff_eq!(
-                UnitVector3::normalized_from(periapsis_velocity).dot(&UnitVector3::normalized_from(periapsis_displacement)),
+                UnitVector3P::normalized_from(periapsis_velocity).dot(&UnitVector3P::normalized_from(periapsis_displacement)),
                 0.0,
                 epsilon = 1e-2
             ));
             prop_assert!(abs_diff_eq!(
-               UnitVector3::normalized_from(apoapsis_velocity).dot(&UnitVector3::normalized_from(apoapsis_displacement)),
+               UnitVector3P::normalized_from(apoapsis_velocity).dot(&UnitVector3P::normalized_from(apoapsis_displacement)),
                 0.0,
                 epsilon = 1e-2
             ));
@@ -634,7 +634,7 @@ mod tests {
                 .normalized();
 
             prop_assert!(abs_diff_eq!(
-                UnitVector3::normalized_from(periapsis_velocity_direction).dot(&UnitVector3::normalized_from(apoapsis_velocity_direction)),
+                UnitVector3P::normalized_from(periapsis_velocity_direction).dot(&UnitVector3P::normalized_from(apoapsis_velocity_direction)),
                 -1.0,
                 epsilon = 1e-2
             ));
@@ -670,7 +670,7 @@ mod tests {
                 epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(
-                UnitVector3::normalized_from(velocity).dot(&UnitVector3::normalized_from(displacement)),
+                UnitVector3P::normalized_from(velocity).dot(&UnitVector3P::normalized_from(displacement)),
                 0.0,
                 epsilon = 1e-3
             ));

@@ -1,16 +1,16 @@
 //! Projection transformations.
 
-use crate::{AxisAlignedBox, FrustumA};
+use crate::{AxisAlignedBoxP, Frustum};
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
-    matrix::Matrix4A,
-    point::{Point2, Point3A},
-    quaternion::{QuaternionA, UnitQuaternionA},
-    transform::{Projective3A, Similarity3A},
-    vector::{Vector3A, Vector4A},
+    matrix::Matrix4,
+    point::{Point2, Point3},
+    quaternion::{Quaternion, UnitQuaternion},
+    transform::{Projective3, Similarity3},
+    vector::{Vector3, Vector4},
 };
 use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
@@ -20,13 +20,13 @@ use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct PerspectiveTransform {
-    matrix: Matrix4A,
+    matrix: Matrix4,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct OrthographicTransform {
-    matrix: Matrix4A,
+    matrix: Matrix4,
 }
 
 /// Projects 3D points onto a face of a cubemap.
@@ -35,7 +35,7 @@ pub struct OrthographicTransform {
 pub struct CubeMapper {
     /// Rotations bringing points that lie in front of each cube face to the
     /// same relative locations with respect to the positive z face.
-    pub rotations_to_positive_z_face: [UnitQuaternionA; 6],
+    pub rotations_to_positive_z_face: [UnitQuaternion; 6],
 }
 
 /// One of the six faces of a cubemap. The enum value corresponds to the
@@ -65,7 +65,7 @@ impl PerspectiveTransform {
         near_and_far_distance: UpperExclusiveBounds<f32>,
     ) -> Self {
         let mut transform = Self {
-            matrix: Matrix4A::identity(),
+            matrix: Matrix4::identity(),
         };
 
         transform.set_vertical_field_of_view(vertical_field_of_view);
@@ -79,16 +79,16 @@ impl PerspectiveTransform {
     }
 
     /// Returns a reference to perspective transformation seen as a
-    /// [`Projective3A`].
+    /// [`Projective3`].
     #[inline]
-    pub fn as_projective(&self) -> &Projective3A {
+    pub fn as_projective(&self) -> &Projective3 {
         bytemuck::cast_ref(self)
     }
 
-    /// Returns the perspective transformation as a [`Projective3A`].
+    /// Returns the perspective transformation as a [`Projective3`].
     #[inline]
-    pub fn to_projective(self) -> Projective3A {
-        Projective3A::from_matrix_unchecked(self.matrix)
+    pub fn to_projective(self) -> Projective3 {
+        Projective3::from_matrix_unchecked(self.matrix)
     }
 
     /// Returns the ratio of width to height of the view frustum.
@@ -116,7 +116,7 @@ impl PerspectiveTransform {
     }
 
     #[inline]
-    pub fn project_point(&self, point: &Point3A) -> Point3A {
+    pub fn project_point(&self, point: &Point3) -> Point3 {
         self.matrix.project_point(point)
     }
 
@@ -162,7 +162,7 @@ impl OrthographicTransform {
     /// If the extent of the view box along any axis is zero.
     pub fn new(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         let mut transform = Self {
-            matrix: Matrix4A::identity(),
+            matrix: Matrix4::identity(),
         };
 
         transform.set_left_and_right(left, right);
@@ -206,7 +206,7 @@ impl OrthographicTransform {
     /// Creates a new orthographic transformation with the given axis-aligned
     /// box as the view box.
     #[inline]
-    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox) -> Self {
+    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBoxP) -> Self {
         let lower = axis_aligned_box.lower_corner();
         let upper = axis_aligned_box.upper_corner();
         Self::new(
@@ -230,9 +230,9 @@ impl OrthographicTransform {
         top: f32,
         near: f32,
         far: f32,
-    ) -> (Vector3A, [f32; 3]) {
+    ) -> (Vector3, [f32; 3]) {
         (
-            Vector3A::new(
+            Vector3::new(
                 Self::compute_translation_x(left, right),
                 Self::compute_translation_y(bottom, top),
                 Self::compute_translation_z(near, far),
@@ -249,34 +249,34 @@ impl OrthographicTransform {
     /// represented by the given translation and nonuniform scaling.
     #[inline]
     pub fn compute_center_and_half_extents_from_translation_and_scaling(
-        translation: &Vector3A,
+        translation: &Vector3,
         &[sx, sy, sz]: &[f32; 3],
-    ) -> (Point3A, Vector3A) {
+    ) -> (Point3, Vector3) {
         (
-            Point3A::new(
+            Point3::new(
                 -translation.x(),
                 -translation.y(),
                 0.5 * (1.0 / sz - 2.0 * translation.z()),
             ),
-            Vector3A::new(1.0 / sx, 1.0 / sy, -0.5 / sz),
+            Vector3::new(1.0 / sx, 1.0 / sy, -0.5 / sz),
         )
     }
 
     /// Returns a reference to orthographic transformation seen as a
-    /// [`Projective3A`].
+    /// [`Projective3`].
     #[inline]
-    pub fn as_projective(&self) -> &Projective3A {
+    pub fn as_projective(&self) -> &Projective3 {
         bytemuck::cast_ref(self)
     }
 
-    /// Returns the orthographic transformation as a [`Projective3A`].
+    /// Returns the orthographic transformation as a [`Projective3`].
     #[inline]
-    pub fn to_projective(self) -> Projective3A {
-        Projective3A::from_matrix_unchecked(self.matrix)
+    pub fn to_projective(self) -> Projective3 {
+        Projective3::from_matrix_unchecked(self.matrix)
     }
 
     #[inline]
-    pub fn project_point(&self, point: &Point3A) -> Point3A {
+    pub fn project_point(&self, point: &Point3) -> Point3 {
         self.matrix.project_point(point)
     }
 
@@ -344,49 +344,45 @@ impl CubeMapper {
     /// within a cube face would, after being rotated with the corresponding
     /// rotation here, have the same texture coordinate within the positive z
     /// face.
-    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternionA; 6] = [
+    const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternion; 6] = [
         // From positive x face:
-        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), -0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), -0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(
             0.0,
             -FRAC_1_SQRT_2,
             0.0,
             FRAC_1_SQRT_2,
         ))),
         // From negative x face:
-        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), 0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), 0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(
             0.0,
             FRAC_1_SQRT_2,
             0.0,
             FRAC_1_SQRT_2,
         ))),
         // From positive y face:
-        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), 0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), 0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(
             FRAC_1_SQRT_2,
             0.0,
             0.0,
             FRAC_1_SQRT_2,
         ))),
         // From negative y face:
-        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), -0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), -0.5 * PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(
             -FRAC_1_SQRT_2,
             0.0,
             0.0,
             FRAC_1_SQRT_2,
         ))),
         // From positive z face:
-        // UnitQuaternionA::identity()
-        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
-            0.0, 0.0, 0.0, 1.0,
-        ))),
+        // UnitQuaternion::identity()
+        UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(0.0, 0.0, 0.0, 1.0))),
         // From negative z face:
-        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
-            0.0, 1.0, 0.0, 0.0,
-        ))),
+        // UnitQuaternionP::from_axis_angle(&UnitVector3P::unit_y(), PI)
+        UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(0.0, 1.0, 0.0, 0.0))),
     ];
 
     /// Returns a quaternion representing the rotation from the given cube face
@@ -395,20 +391,20 @@ impl CubeMapper {
     /// the returned rotation, have the same texture coordinate within the
     /// positive z face.
     #[inline]
-    pub const fn rotation_to_positive_z_face_from_face(face: CubemapFace) -> UnitQuaternionA {
+    pub const fn rotation_to_positive_z_face_from_face(face: CubemapFace) -> UnitQuaternion {
         Self::ROTATIONS_TO_POSITIVE_Z_FACE[face.as_idx_usize()]
     }
 
     /// Computes the cubemap-space frustum for the positive z cubemap face,
     /// using the given near and far distance.
-    pub fn compute_frustum_for_positive_z_face(near_distance: f32, far_distance: f32) -> FrustumA {
+    pub fn compute_frustum_for_positive_z_face(near_distance: f32, far_distance: f32) -> Frustum {
         let (projection_matrix, inverse_projection_matrix) =
             Self::create_projection_matrix_and_inverse_for_positive_z_face(
                 near_distance,
                 far_distance,
             );
 
-        FrustumA::from_transform_matrix_with_inverse(projection_matrix, inverse_projection_matrix)
+        Frustum::from_transform_matrix_with_inverse(projection_matrix, inverse_projection_matrix)
     }
 
     /// Computes the frustum for the given cubemap face, using the given
@@ -416,10 +412,10 @@ impl CubeMapper {
     /// full cubemap in the parent space) and the given near and far distance.
     pub fn compute_transformed_frustum_for_face(
         face: CubemapFace,
-        transform_to_cube_space: &Similarity3A,
+        transform_to_cube_space: &Similarity3,
         near_distance: f32,
         far_distance: f32,
-    ) -> FrustumA {
+    ) -> Frustum {
         let (view_projection_matrix, inverse_view_projection_matrix) =
             Self::compute_view_projection_matrix_and_inverse_for_face(
                 face,
@@ -428,7 +424,7 @@ impl CubeMapper {
                 far_distance,
             );
 
-        FrustumA::from_transform_matrix_with_inverse(
+        Frustum::from_transform_matrix_with_inverse(
             view_projection_matrix,
             inverse_view_projection_matrix,
         )
@@ -439,7 +435,7 @@ impl CubeMapper {
     /// The given rotation to cube space will be applied to each point prior to
     /// projection onto a cubemap face.
     #[inline]
-    pub fn new(rotation_to_cube_space: UnitQuaternionA) -> Self {
+    pub fn new(rotation_to_cube_space: UnitQuaternion) -> Self {
         let rotations_to_positive_z_face = [
             Self::ROTATIONS_TO_POSITIVE_Z_FACE[0] * rotation_to_cube_space,
             Self::ROTATIONS_TO_POSITIVE_Z_FACE[1] * rotation_to_cube_space,
@@ -460,7 +456,7 @@ impl CubeMapper {
     /// cubemap.
     #[inline]
     pub fn new_in_cube_space() -> Self {
-        Self::new(UnitQuaternionA::identity())
+        Self::new(UnitQuaternion::identity())
     }
 
     /// Projects the given 3D point onto the given cubemap face, producing a 2D
@@ -470,7 +466,7 @@ impl CubeMapper {
     ///
     /// If the x- or y-coordinate after projection lies outside the -1.0 to 1.0
     /// range, the point belongs to another face.
-    pub fn map_point_onto_face(&self, face: CubemapFace, point: &Point3A) -> Point2 {
+    pub fn map_point_onto_face(&self, face: CubemapFace, point: &Point3) -> Point2 {
         let rotated_point =
             self.rotations_to_positive_z_face[face.as_idx_usize()].rotate_point(point);
         Self::map_point_to_positive_z_face(&rotated_point)
@@ -478,10 +474,10 @@ impl CubeMapper {
 
     fn compute_view_projection_matrix_and_inverse_for_face(
         face: CubemapFace,
-        view_transform: &Similarity3A,
+        view_transform: &Similarity3,
         near_distance: f32,
         far_distance: f32,
-    ) -> (Matrix4A, Matrix4A) {
+    ) -> (Matrix4, Matrix4) {
         let (projection_matrix_for_positive_z_face, inverse_projection_matrix_for_positive_z_face) =
             Self::create_projection_matrix_and_inverse_for_positive_z_face(
                 near_distance,
@@ -503,8 +499,8 @@ impl CubeMapper {
     fn create_projection_matrix_and_inverse_for_positive_z_face(
         near_distance: f32,
         far_distance: f32,
-    ) -> (Matrix4A, Matrix4A) {
-        let mut matrix = Matrix4A::identity();
+    ) -> (Matrix4, Matrix4) {
+        let mut matrix = Matrix4::identity();
 
         let inverse_distance_span = 1.0 / (far_distance - near_distance);
 
@@ -514,7 +510,7 @@ impl CubeMapper {
         *matrix.element_mut(3, 2) = 1.0;
         *matrix.element_mut(3, 3) = 0.0;
 
-        let mut inverse_matrix = Matrix4A::identity();
+        let mut inverse_matrix = Matrix4::identity();
 
         *inverse_matrix.element_mut(2, 2) = 0.0;
         *inverse_matrix.element_mut(2, 3) = 1.0;
@@ -526,7 +522,7 @@ impl CubeMapper {
     }
 
     #[inline]
-    fn map_point_to_positive_z_face(point: &Point3A) -> Point2 {
+    fn map_point_to_positive_z_face(point: &Point3) -> Point2 {
         let inverse_point_z = 1.0 / point.z();
         Point2::new(point.x() * inverse_point_z, point.y() * inverse_point_z)
     }
@@ -613,7 +609,7 @@ mod tests {
         let transform =
             PerspectiveTransform::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
 
-        let point = Point3A::new(1.2, 2.4, 1.8);
+        let point = Point3::new(1.2, 2.4, 1.8);
 
         assert_abs_diff_eq!(
             transform.project_point(&point),
@@ -632,7 +628,7 @@ mod tests {
             UpperExclusiveBounds::new(near_distance, far_distance),
         );
 
-        let point = Point3A::new(0.0, 0.0, -near_distance);
+        let point = Point3::new(0.0, 0.0, -near_distance);
         assert_abs_diff_eq!(transform.project_point(&point).z(), 0.0);
     }
 
@@ -646,7 +642,7 @@ mod tests {
             UpperExclusiveBounds::new(near_distance, far_distance),
         );
 
-        let point = Point3A::new(0.0, 0.0, -far_distance);
+        let point = Point3::new(0.0, 0.0, -far_distance);
         assert_abs_diff_eq!(transform.project_point(&point).z(), 1.0);
     }
 
@@ -658,22 +654,22 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3A::new(far, far, far)),
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(far, far, far)),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3A::new(far, -far, -far)),
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(far, -far, -far)),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3A::new(near, near, near)),
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(near, near, near)),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3A::new(near, -near, -near)),
+            mapper.map_point_onto_face(CubemapFace::PositiveX, &Point3::new(near, -near, -near)),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
@@ -687,22 +683,22 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3A::new(-far, far, far)),
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-far, far, far)),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3A::new(-far, -far, -far)),
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-far, -far, -far)),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3A::new(-near, near, near)),
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-near, near, near)),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3A::new(-near, -near, -near)),
+            mapper.map_point_onto_face(CubemapFace::NegativeX, &Point3::new(-near, -near, -near)),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
@@ -716,22 +712,22 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3A::new(far, far, far)),
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(far, far, far)),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3A::new(-far, far, -far)),
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(-far, far, -far)),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3A::new(near, near, near)),
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(near, near, near)),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3A::new(-near, near, -near)),
+            mapper.map_point_onto_face(CubemapFace::PositiveY, &Point3::new(-near, near, -near)),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
@@ -745,22 +741,22 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3A::new(far, -far, far)),
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(far, -far, far)),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3A::new(-far, -far, -far)),
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(-far, -far, -far)),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3A::new(near, -near, near)),
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(near, -near, near)),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3A::new(-near, -near, -near)),
+            mapper.map_point_onto_face(CubemapFace::NegativeY, &Point3::new(-near, -near, -near)),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
@@ -774,22 +770,22 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3A::new(far, far, far)),
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(far, far, far)),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3A::new(-far, -far, far)),
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(-far, -far, far)),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3A::new(near, near, near)),
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(near, near, near)),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3A::new(-near, -near, near)),
+            mapper.map_point_onto_face(CubemapFace::PositiveZ, &Point3::new(-near, -near, near)),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
@@ -803,22 +799,22 @@ mod tests {
         let far = 10.0;
 
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3A::new(far, far, -far)),
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(far, far, -far)),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3A::new(-far, -far, -far)),
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(-far, -far, -far)),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3A::new(near, near, -near)),
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(near, near, -near)),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3A::new(-near, -near, -near)),
+            mapper.map_point_onto_face(CubemapFace::NegativeZ, &Point3::new(-near, -near, -near)),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
@@ -831,34 +827,32 @@ mod tests {
 
         let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveX,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             near,
             far,
         );
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.project_point(&Point3A::new(far, far, far)).xy(),
+            projection.project_point(&Point3::new(far, far, far)).xy(),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            projection
-                .project_point(&Point3A::new(far, -far, -far))
-                .xy(),
+            projection.project_point(&Point3::new(far, -far, -far)).xy(),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(near, near, near))
+                .project_point(&Point3::new(near, near, near))
                 .xy(),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(near, -near, -near))
+                .project_point(&Point3::new(near, -near, -near))
                 .xy(),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
@@ -872,34 +866,34 @@ mod tests {
 
         let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::NegativeX,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             near,
             far,
         );
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.project_point(&Point3A::new(-far, far, far)).xy(),
+            projection.project_point(&Point3::new(-far, far, far)).xy(),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-far, -far, -far))
+                .project_point(&Point3::new(-far, -far, -far))
                 .xy(),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-near, near, near))
+                .project_point(&Point3::new(-near, near, near))
                 .xy(),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-near, -near, -near))
+                .project_point(&Point3::new(-near, -near, -near))
                 .xy(),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
@@ -913,34 +907,32 @@ mod tests {
 
         let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveY,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             near,
             far,
         );
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.project_point(&Point3A::new(far, far, far)).xy(),
+            projection.project_point(&Point3::new(far, far, far)).xy(),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            projection
-                .project_point(&Point3A::new(-far, far, -far))
-                .xy(),
+            projection.project_point(&Point3::new(-far, far, -far)).xy(),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(near, near, near))
+                .project_point(&Point3::new(near, near, near))
                 .xy(),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-near, near, -near))
+                .project_point(&Point3::new(-near, near, -near))
                 .xy(),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
@@ -954,34 +946,34 @@ mod tests {
 
         let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::NegativeY,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             near,
             far,
         );
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.project_point(&Point3A::new(far, -far, far)).xy(),
+            projection.project_point(&Point3::new(far, -far, far)).xy(),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-far, -far, -far))
+                .project_point(&Point3::new(-far, -far, -far))
                 .xy(),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(near, -near, near))
+                .project_point(&Point3::new(near, -near, near))
                 .xy(),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-near, -near, -near))
+                .project_point(&Point3::new(-near, -near, -near))
                 .xy(),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
@@ -995,34 +987,32 @@ mod tests {
 
         let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveZ,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             near,
             far,
         );
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.project_point(&Point3A::new(far, far, far)).xy(),
+            projection.project_point(&Point3::new(far, far, far)).xy(),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
-            projection
-                .project_point(&Point3A::new(-far, -far, far))
-                .xy(),
+            projection.project_point(&Point3::new(-far, -far, far)).xy(),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(near, near, near))
+                .project_point(&Point3::new(near, near, near))
                 .xy(),
             Point2::new(1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-near, -near, near))
+                .project_point(&Point3::new(-near, -near, near))
                 .xy(),
             Point2::new(-1.0, -1.0),
             epsilon = 1e-5
@@ -1036,34 +1026,34 @@ mod tests {
 
         let frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::NegativeZ,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             near,
             far,
         );
         let projection = frustum.transform_matrix();
 
         assert_abs_diff_eq!(
-            projection.project_point(&Point3A::new(far, far, -far)).xy(),
+            projection.project_point(&Point3::new(far, far, -far)).xy(),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-far, -far, -far))
+                .project_point(&Point3::new(-far, -far, -far))
                 .xy(),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(near, near, -near))
+                .project_point(&Point3::new(near, near, -near))
                 .xy(),
             Point2::new(-1.0, 1.0),
             epsilon = 1e-5
         );
         assert_abs_diff_eq!(
             projection
-                .project_point(&Point3A::new(-near, -near, -near))
+                .project_point(&Point3::new(-near, -near, -near))
                 .xy(),
             Point2::new(1.0, -1.0),
             epsilon = 1e-5
@@ -1074,7 +1064,7 @@ mod tests {
     fn computed_frusta_for_different_cubemap_faces_are_consistent() {
         let positive_z_frustum = CubeMapper::compute_transformed_frustum_for_face(
             CubemapFace::PositiveZ,
-            &Similarity3A::identity(),
+            &Similarity3::identity(),
             0.1,
             10.0,
         );
@@ -1082,7 +1072,7 @@ mod tests {
         for face in CubemapFace::all() {
             let frustum_rotated_to_positive_z = CubeMapper::compute_transformed_frustum_for_face(
                 face,
-                &Similarity3A::identity(),
+                &Similarity3::identity(),
                 0.1,
                 10.0,
             )

@@ -9,7 +9,7 @@ use crate::{
     shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
 };
 use impact_containers::tracking::CollectionChange;
-use impact_geometry::{AxisAlignedBoxA, FrustumA, OrientedBoxA, projection::CubeMapper};
+use impact_geometry::{AxisAlignedBox, Frustum, OrientedBox, projection::CubeMapper};
 use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
@@ -19,7 +19,7 @@ use impact_gpu::{
     },
     wgpu,
 };
-use impact_math::{hash::ConstStringHash64, vector::Vector3};
+use impact_math::{hash::ConstStringHash64, vector::Vector3P};
 use std::{fmt, hash::Hash};
 
 /// Contains all GPU resources for light sources, including uniform buffers and
@@ -103,7 +103,7 @@ pub struct ShadowableUnidirectionalLightMetadata {
 
 #[derive(Clone, Debug)]
 struct PackedOrthographicTranslationAndScaling {
-    translation: Vector3,
+    translation: Vector3P,
     scaling: [f32; 3],
 }
 
@@ -977,7 +977,7 @@ impl LightMetadata for OmnidirectionalLightMetadata {
 impl ShadowableOmnidirectionalLightMetadata {
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> FrustumA {
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
         CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
     }
 }
@@ -1015,7 +1015,7 @@ impl ShadowableUnidirectionalLightMetadata {
     pub fn create_light_space_orthographic_aabb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBoxA {
+    ) -> AxisAlignedBox {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
     }
 
@@ -1025,8 +1025,8 @@ impl ShadowableUnidirectionalLightMetadata {
     pub fn create_light_space_orthographic_obb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> OrientedBoxA {
-        OrientedBoxA::from_axis_aligned_box(
+    ) -> OrientedBox {
+        OrientedBox::from_axis_aligned_box(
             &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
         )
     }
@@ -1052,7 +1052,7 @@ impl LightMetadata for ShadowableUnidirectionalLightMetadata {
 }
 
 impl PackedOrthographicTranslationAndScaling {
-    fn compute_aabb(&self) -> AxisAlignedBoxA {
-        crate::compute_orthographic_transform_aabb(&self.translation.aligned(), &self.scaling)
+    fn compute_aabb(&self) -> AxisAlignedBox {
+        crate::compute_orthographic_transform_aabb(&self.translation.unpack(), &self.scaling)
     }
 }

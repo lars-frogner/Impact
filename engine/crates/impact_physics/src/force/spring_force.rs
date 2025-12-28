@@ -3,12 +3,12 @@
 use crate::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID, KinematicRigidBodyAnchorID},
     force::ForceGeneratorRegistry,
-    quantities::Position,
+    quantities::PositionP,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use impact_math::vector::UnitVector3A;
+use impact_math::vector::UnitVector3;
 use roc_integration::roc;
 
 /// Manages all [`DynamicDynamicSpringForceGenerator`]s.
@@ -74,10 +74,10 @@ define_setup_type! {
         pub rigid_body_2: DynamicRigidBodyID,
         /// The point where the spring is attached to the first body, in that
         /// body's model space.
-        pub attachment_point_1: Position,
+        pub attachment_point_1: PositionP,
         /// The point where the spring is attached to the second body, in that
         /// body's model space.
-        pub attachment_point_2: Position,
+        pub attachment_point_2: PositionP,
         /// The spring connecting the bodies.
         pub spring: Spring,
     }
@@ -96,10 +96,10 @@ define_setup_type! {
         pub rigid_body_2: KinematicRigidBodyID,
         /// The point where the spring is attached to the first (dynamic) body,
         /// in that body's model space.
-        pub attachment_point_1: Position,
+        pub attachment_point_1: PositionP,
         /// The point where the spring is attached to the second (kinematic)
         /// body, in that body's model space.
-        pub attachment_point_2: Position,
+        pub attachment_point_2: PositionP,
         /// The spring connecting the bodies.
         pub spring: Spring,
     }
@@ -148,15 +148,15 @@ impl DynamicDynamicSpringForceGenerator {
             return;
         };
 
-        let anchor_point_1 = anchor_1.point.aligned();
-        let anchor_point_2 = anchor_2.point.aligned();
+        let anchor_point_1 = anchor_1.point.unpack();
+        let anchor_point_2 = anchor_2.point.unpack();
 
         let attachment_point_1 =
             rigid_body_1.transform_point_from_body_to_world_space(&anchor_point_1);
         let attachment_point_2 =
             rigid_body_2.transform_point_from_body_to_world_space(&anchor_point_2);
 
-        let Some((spring_direction, length)) = UnitVector3A::normalized_from_and_norm_if_above(
+        let Some((spring_direction, length)) = UnitVector3::normalized_from_and_norm_if_above(
             attachment_point_2 - attachment_point_1,
             f32::EPSILON,
         ) else {
@@ -202,15 +202,15 @@ impl DynamicKinematicSpringForceGenerator {
             return;
         };
 
-        let anchor_point_1 = anchor_1.point.aligned();
-        let anchor_point_2 = anchor_2.point.aligned();
+        let anchor_point_1 = anchor_1.point.unpack();
+        let anchor_point_2 = anchor_2.point.unpack();
 
         let attachment_point_1 =
             rigid_body_1.transform_point_from_body_to_world_space(&anchor_point_1);
         let attachment_point_2 =
             rigid_body_2.transform_point_from_body_to_world_space(&anchor_point_2);
 
-        let Some((spring_direction, length)) = UnitVector3A::normalized_from_and_norm_if_above(
+        let Some((spring_direction, length)) = UnitVector3::normalized_from_and_norm_if_above(
             attachment_point_2 - attachment_point_1,
             f32::EPSILON,
         ) else {
@@ -242,9 +242,9 @@ impl DynamicDynamicSpringForceProperties {
     #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
     pub fn new(
         rigid_body_1: DynamicRigidBodyID,
-        attachment_point_1: Position,
+        attachment_point_1: PositionP,
         rigid_body_2: DynamicRigidBodyID,
-        attachment_point_2: Position,
+        attachment_point_2: PositionP,
         spring: Spring,
     ) -> Self {
         Self {
@@ -262,9 +262,9 @@ impl DynamicKinematicSpringForceProperties {
     #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
     pub fn new(
         rigid_body_1: DynamicRigidBodyID,
-        attachment_point_1: Position,
+        attachment_point_1: PositionP,
         rigid_body_2: KinematicRigidBodyID,
-        attachment_point_2: Position,
+        attachment_point_2: PositionP,
         spring: Spring,
     ) -> Self {
         Self {

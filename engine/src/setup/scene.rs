@@ -114,12 +114,12 @@ fn setup_scene_graph_group_nodes_for_new_entities(
         |frame: Option<&ReferenceFrame>,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphGroupNodeHandle {
-            let frame = frame.copied().unwrap_or_default().aligned();
+            let frame = frame.copied().unwrap_or_default();
             let transform_to_parent_space = frame.create_transform_to_parent_space();
 
             impact_scene::setup::setup_scene_graph_group_node(
                 &mut scene_graph,
-                transform_to_parent_space.unaligned(),
+                transform_to_parent_space.pack(),
                 parent,
             )
         },
@@ -152,8 +152,8 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             ModelTransform,
             SceneEntityFlags
         )> {
-            let model_transform = model_transform.copied().unwrap_or_default().aligned();
-            let frame = frame.copied().unwrap_or_default().aligned();
+            let model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
 
             let model_to_parent_transform = frame.create_transform_to_parent_space()
                 * model_transform.create_transform_to_entity_space();
@@ -165,7 +165,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 &resource_manager.materials,
                 &mut model_instance_manager,
                 &mut scene_graph,
-                model_to_parent_transform.unaligned(),
+                model_to_parent_transform.pack(),
                 *mesh_id,
                 *material_id,
                 parent,
@@ -173,7 +173,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 uncullable,
             )?;
 
-            Ok((node_handle, model_transform.unaligned(), flags))
+            Ok((node_handle, model_transform, flags))
         },
         ![SceneGraphModelInstanceNodeHandle]
     )

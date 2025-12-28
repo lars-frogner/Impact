@@ -3,7 +3,7 @@
 use crate::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
     force::ForceGeneratorRegistry,
-    quantities::{Force, Position},
+    quantities::{ForceP, PositionP},
     rigid_body::RigidBodyManager,
 };
 use bytemuck::{Pod, Zeroable};
@@ -27,7 +27,7 @@ pub struct LocalForceGenerator {
     /// The anchor point where the force is applied.
     pub anchor: DynamicRigidBodyAnchorID,
     /// The force vector in the body-fixed frame.
-    pub force: Force,
+    pub force: ForceP,
 }
 
 define_setup_type! {
@@ -39,9 +39,9 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct LocalForce {
         /// The force vector in the body-fixed frame.
-        pub force: Force,
+        pub force: ForceP,
         /// The point where the force is applied, in the body's model space.
-        pub point: Position,
+        pub point: PositionP,
     }
 }
 
@@ -63,8 +63,8 @@ impl LocalForceGenerator {
             return;
         };
 
-        let local_force = self.force.aligned();
-        let local_anchor_point = anchor.point.aligned();
+        let local_force = self.force.unpack();
+        let local_anchor_point = anchor.point.unpack();
 
         let force = rigid_body.transform_vector_from_body_to_world_space(&local_force);
         let anchor_point = rigid_body.transform_point_from_body_to_world_space(&local_anchor_point);
@@ -76,7 +76,7 @@ impl LocalForceGenerator {
 #[roc]
 impl LocalForce {
     #[roc(body = "{ force, point }")]
-    pub fn new(force: Force, point: Position) -> Self {
+    pub fn new(force: ForceP, point: PositionP) -> Self {
         Self { force, point }
     }
 }

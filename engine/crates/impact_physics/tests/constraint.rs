@@ -1,11 +1,11 @@
 //! Constraint resolution tests.
 
 use approx::assert_abs_diff_eq;
-use impact_geometry::{Plane, ReferenceFrame, Sphere};
+use impact_geometry::{PlaneP, ReferenceFrame, SphereP};
 use impact_math::{
     angle::{Angle, Radians},
-    point::Point3,
-    vector::{Vector3, Vector3A},
+    point::Point3P,
+    vector::{Vector3, Vector3P},
 };
 use impact_physics::{
     anchor::AnchorManager,
@@ -17,27 +17,27 @@ use impact_physics::{
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     inertia::InertialProperties,
     material::ContactResponseParameters,
-    quantities::{Motion, Orientation, Position, Velocity, VelocityA},
+    quantities::{Motion, OrientationP, PositionP, Velocity, VelocityP},
     rigid_body::{self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 
 #[derive(Clone, Debug)]
 struct SphereBody {
-    sphere: Sphere,
-    velocity: Velocity,
+    sphere: SphereP,
+    velocity: VelocityP,
     mass_density: f32,
     restitution_coef: f32,
 }
 
 #[derive(Clone, Debug)]
 struct PlaneBody {
-    origin: Position,
-    orientation: Orientation,
+    origin: PositionP,
+    orientation: OrientationP,
     restitution_coef: f32,
 }
 
 impl SphereBody {
-    fn new(sphere: Sphere, velocity: Velocity, mass_density: f32, restitution_coef: f32) -> Self {
+    fn new(sphere: SphereP, velocity: VelocityP, mass_density: f32, restitution_coef: f32) -> Self {
         Self {
             sphere,
             velocity,
@@ -46,13 +46,13 @@ impl SphereBody {
         }
     }
 
-    fn center(&self) -> &Position {
+    fn center(&self) -> &PositionP {
         self.sphere.center()
     }
 }
 
 impl PlaneBody {
-    fn new(origin: Position, orientation: Orientation, restitution_coef: f32) -> Self {
+    fn new(origin: PositionP, orientation: OrientationP, restitution_coef: f32) -> Self {
         Self {
             origin,
             orientation,
@@ -89,7 +89,7 @@ fn setup_sphere_bodies(
 
                 let collidable = SphericalCollidable::new(
                     CollidableKind::Dynamic,
-                    Sphere::new(Position::origin(), sphere.radius()),
+                    SphereP::new(PositionP::origin(), sphere.radius()),
                     ContactResponseParameters {
                         restitution_coef,
                         ..Default::default()
@@ -133,7 +133,7 @@ fn setup_plane_bodies(
 
                 let collidable = PlanarCollidable::new(
                     CollidableKind::Static,
-                    Plane::XZ_PLANE,
+                    PlaneP::XZ_PLANE,
                     ContactResponseParameters {
                         restitution_coef,
                         ..Default::default()
@@ -182,8 +182,8 @@ fn setup_bodies_and_run_constraints(
 fn separated_bodies_unaffected_by_contact_constraints() {
     let spheres = [0.0, 2.1].map(|x| {
         SphereBody::new(
-            Sphere::new(Point3::new(x, 0.0, 0.0), 1.0),
-            Velocity::zeros(),
+            SphereP::new(Point3P::new(x, 0.0, 0.0), 1.0),
+            VelocityP::zeros(),
             1.0,
             1.0,
         )
@@ -205,7 +205,7 @@ fn separated_bodies_unaffected_by_contact_constraints() {
     for (id, sphere) in sphere_body_ids.into_iter().zip(spheres) {
         let body = rigid_body_manager.dynamic_rigid_body(id);
         assert_eq!(body.position(), sphere.center());
-        assert_eq!(body.compute_velocity(), sphere.velocity.aligned());
+        assert_eq!(body.compute_velocity(), sphere.velocity.unpack());
         assert_abs_diff_eq!(
             body.compute_angular_velocity().angular_speed(),
             Radians::zero()
@@ -216,8 +216,8 @@ fn separated_bodies_unaffected_by_contact_constraints() {
 fn test_binary_sphere_collision(
     sphere_a: SphereBody,
     sphere_b: SphereBody,
-    expected_velocity_a: Velocity,
-    expected_velocity_b: Velocity,
+    expected_velocity_a: VelocityP,
+    expected_velocity_b: VelocityP,
 ) {
     let mut rigid_body_manager = RigidBodyManager::new();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig {
@@ -238,10 +238,10 @@ fn test_binary_sphere_collision(
 
     let body_a = rigid_body_manager.dynamic_rigid_body(sphere_body_ids[0]);
     assert_eq!(body_a.position(), sphere_a.center());
-    assert_eq!(body_a.orientation(), &Orientation::identity());
+    assert_eq!(body_a.orientation(), &OrientationP::identity());
     assert_abs_diff_eq!(
         body_a.compute_velocity(),
-        expected_velocity_a.aligned(),
+        expected_velocity_a.unpack(),
         epsilon = 1e-6
     );
     assert_abs_diff_eq!(
@@ -252,10 +252,10 @@ fn test_binary_sphere_collision(
 
     let body_b = rigid_body_manager.dynamic_rigid_body(sphere_body_ids[1]);
     assert_eq!(body_b.position(), sphere_b.center());
-    assert_eq!(body_b.orientation(), &Orientation::identity());
+    assert_eq!(body_b.orientation(), &OrientationP::identity());
     assert_abs_diff_eq!(
         body_b.compute_velocity(),
-        expected_velocity_b.aligned(),
+        expected_velocity_b.unpack(),
         epsilon = 1e-6
     );
     assert_abs_diff_eq!(
@@ -274,20 +274,20 @@ fn moving_sphere_colliding_head_on_with_same_mass_stationary_sphere() {
 
     test_binary_sphere_collision(
         SphereBody::new(
-            Sphere::new(Position::origin(), radius),
-            Vector3::new(speed, 0.0, 0.0),
+            SphereP::new(PositionP::origin(), radius),
+            Vector3P::new(speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
         SphereBody::new(
-            Sphere::new(Point3::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
-            Velocity::zeros(),
+            SphereP::new(Point3P::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
+            VelocityP::zeros(),
             mass_density,
             restitution,
         ),
         // Sphere A will transfer all its velocity to B
-        Velocity::zeros(),
-        Vector3::new(speed, 0.0, 0.0),
+        VelocityP::zeros(),
+        Vector3P::new(speed, 0.0, 0.0),
     );
 }
 
@@ -299,20 +299,20 @@ fn moving_sphere_colliding_head_on_with_very_massive_stationary_sphere() {
 
     test_binary_sphere_collision(
         SphereBody::new(
-            Sphere::new(Position::origin(), radius),
-            Vector3::new(speed, 0.0, 0.0),
+            SphereP::new(PositionP::origin(), radius),
+            Vector3P::new(speed, 0.0, 0.0),
             1.0,
             restitution,
         ),
         SphereBody::new(
-            Sphere::new(Point3::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
-            Velocity::zeros(),
+            SphereP::new(Point3P::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
+            VelocityP::zeros(),
             1e9,
             restitution,
         ),
         // Sphere A will invert its velocity
-        Vector3::new(-speed, 0.0, 0.0),
-        Velocity::zeros(),
+        Vector3P::new(-speed, 0.0, 0.0),
+        VelocityP::zeros(),
     );
 }
 
@@ -325,20 +325,20 @@ fn moving_sphere_colliding_head_on_with_inelastic_same_mass_stationary_sphere() 
 
     test_binary_sphere_collision(
         SphereBody::new(
-            Sphere::new(Position::origin(), radius),
-            Vector3::new(speed, 0.0, 0.0),
+            SphereP::new(PositionP::origin(), radius),
+            Vector3P::new(speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
         SphereBody::new(
-            Sphere::new(Point3::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
-            Velocity::zeros(),
+            SphereP::new(Point3P::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
+            VelocityP::zeros(),
             mass_density,
             restitution,
         ),
         // Both spheres will continue with half the impact speed
-        Vector3::new(0.5 * speed, 0.0, 0.0),
-        Vector3::new(0.5 * speed, 0.0, 0.0),
+        Vector3P::new(0.5 * speed, 0.0, 0.0),
+        Vector3P::new(0.5 * speed, 0.0, 0.0),
     );
 }
 
@@ -352,19 +352,19 @@ fn grazing_sphere_collision() {
 
     test_binary_sphere_collision(
         SphereBody::new(
-            Sphere::new(Point3::new(1e-6, 0.0, 0.0), radius),
-            Vector3::new(speed, 0.0, 0.0),
+            SphereP::new(Point3P::new(1e-6, 0.0, 0.0), radius),
+            Vector3P::new(speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
         SphereBody::new(
-            Sphere::new(Point3::new(offset, offset, 0.0), radius),
-            Vector3::new(-speed, 0.0, 0.0),
+            SphereP::new(Point3P::new(offset, offset, 0.0), radius),
+            Vector3P::new(-speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
-        Vector3::new(0.0, -speed, 0.0),
-        Vector3::new(0.0, speed, 0.0),
+        Vector3P::new(0.0, -speed, 0.0),
+        Vector3P::new(0.0, speed, 0.0),
     );
 }
 
@@ -376,14 +376,14 @@ fn sphere_colliding_with_static_plane() {
     let restitution_coef = 1.0;
 
     let sphere = SphereBody::new(
-        Sphere::new(Point3::new(0.0, radius - 1e-6, 0.0), radius),
-        Vector3::new(speed_x, -speed_y, 0.0),
+        SphereP::new(Point3P::new(0.0, radius - 1e-6, 0.0), radius),
+        Vector3P::new(speed_x, -speed_y, 0.0),
         1.0,
         restitution_coef,
     );
     let plane = PlaneBody::new(
-        Position::origin(),
-        Orientation::identity(),
+        PositionP::origin(),
+        OrientationP::identity(),
         restitution_coef,
     );
 
@@ -406,10 +406,10 @@ fn sphere_colliding_with_static_plane() {
 
     let body = rigid_body_manager.dynamic_rigid_body(sphere_body_ids[0]);
     assert_eq!(body.position(), sphere.center());
-    assert_eq!(body.orientation(), &Orientation::identity());
+    assert_eq!(body.orientation(), &OrientationP::identity());
     assert_abs_diff_eq!(
         body.compute_velocity(),
-        Vector3A::new(speed_x, speed_y, 0.0),
+        Vector3::new(speed_x, speed_y, 0.0),
         epsilon = 1e-6
     );
     assert_abs_diff_eq!(
@@ -428,17 +428,17 @@ fn position_correction_of_interpenetrating_spheres() {
 
     let spheres = [
         SphereBody::new(
-            Sphere::new(Point3::new(0.5 * penetration, 0.0, 0.0), radius),
-            Velocity::zeros(),
+            SphereP::new(Point3P::new(0.5 * penetration, 0.0, 0.0), radius),
+            VelocityP::zeros(),
             mass_density,
             restitution_coef,
         ),
         SphereBody::new(
-            Sphere::new(
-                Point3::new(2.0 * radius - 0.5 * penetration, 0.0, 0.0),
+            SphereP::new(
+                Point3P::new(2.0 * radius - 0.5 * penetration, 0.0, 0.0),
                 radius,
             ),
-            Velocity::zeros(),
+            VelocityP::zeros(),
             mass_density,
             restitution_coef,
         ),
@@ -466,11 +466,11 @@ fn position_correction_of_interpenetrating_spheres() {
         let body = rigid_body_manager.dynamic_rigid_body(id);
         assert_abs_diff_eq!(
             body.position(),
-            &Point3::new(2.0 * radius * (idx as f32), 0.0, 0.0),
+            &Point3P::new(2.0 * radius * (idx as f32), 0.0, 0.0),
             epsilon = 1e-6
         );
-        assert_eq!(body.orientation(), &Orientation::identity());
-        assert_eq!(body.compute_velocity(), VelocityA::zeros());
+        assert_eq!(body.orientation(), &OrientationP::identity());
+        assert_eq!(body.compute_velocity(), Velocity::zeros());
         assert_abs_diff_eq!(
             body.compute_angular_velocity().angular_speed(),
             Radians::zero()
