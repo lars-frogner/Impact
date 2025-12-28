@@ -108,22 +108,22 @@ roc_codegen = [
     "roc_integration_macros/roc_codegen",
     "dep:bitflags",
     "dep:blake3",
-    "dep:chrono",
     "dep:inventory",
+    "dep:rustc-hash",
+    "dep:time",
 ]
 
 [dependencies]
 anyhow = "1.0"
 bitflags = { version = "2.6", optional = true }
 blake3 = { version = "1.8", optional = true }
-bytemuck = { version = "1.23", features = ["derive"] }
-chrono = { version = "0.4", optional = true }
+bytemuck = { version = "1.24", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"], optional = true }
 const-fnv1a-hash = "1.1"
 hashbrown = "0.16"
 inventory = { version = "0.3", optional = true }
-nalgebra = { version = "0.34", features = ["bytemuck"] }
-rustc-hash = "2.1"
+rustc-hash = { version = "2.1", optional = true }
+time = { version = "0.3", features = ["formatting"], optional = true }
 
 roc_integration_macros = { path = "roc_integration_macros" }
 
