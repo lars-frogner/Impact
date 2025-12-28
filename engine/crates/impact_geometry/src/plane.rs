@@ -9,7 +9,6 @@ use impact_math::{
     transform::{Isometry3, Similarity3},
     vector::{UnitVector3, UnitVector3P},
 };
-use num_traits::Signed;
 
 /// A plane in 3D, represented by a unit normal and a displacement.
 ///
@@ -158,7 +157,7 @@ impl Plane {
             IntersectsPlane::No
         };
 
-        if signed_distance.is_negative() {
+        if signed_distance.is_sign_negative() {
             SphereRelationToPlane::CenterInNegativeHalfspace(intersects_plane)
         } else {
             SphereRelationToPlane::CenterInPositiveHalfspace(intersects_plane)

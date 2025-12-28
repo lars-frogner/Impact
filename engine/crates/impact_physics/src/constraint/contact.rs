@@ -9,7 +9,6 @@ use impact_math::{
     quaternion::UnitQuaternion,
     vector::{UnitVector3, UnitVector3P, Vector3},
 };
-use num_traits::Zero;
 use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
 
@@ -448,17 +447,13 @@ impl PreparedTwoBodyConstraint for PreparedContact {
     }
 }
 
-impl Zero for ContactImpulses {
-    fn zero() -> Self {
+impl Default for ContactImpulses {
+    fn default() -> Self {
         Self {
             normal: 0.0,
             tangent: 0.0,
             bitangent: 0.0,
         }
-    }
-
-    fn is_zero(&self) -> bool {
-        self.normal == 0.0 && self.tangent == 0.0 && self.bitangent == 0.0
     }
 }
 

@@ -26,7 +26,11 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{
-    Float, halton::HaltonSequence, hash::ConstStringHash64, hash64, vector::Vector4P,
+    consts::f32::{PI, TWO_PI},
+    halton::HaltonSequence,
+    hash::ConstStringHash64,
+    hash64,
+    vector::Vector4P,
 };
 use std::borrow::Cow;
 
@@ -232,7 +236,7 @@ impl AmbientOcclusionSamples {
         for (offset, (radius_halton_sample, angle_halton_sample)) in sample_offsets
             [..(sample_count as usize)]
             .iter_mut()
-            .zip(HaltonSequence::<f32>::new(2).zip(HaltonSequence::<f32>::new(3)))
+            .zip(HaltonSequence::new(2).zip(HaltonSequence::new(3)))
         {
             // Take square root of the sampled value (which is uniformly
             // distributed between 0 and 1) to ensure uniform distribution over
@@ -240,14 +244,14 @@ impl AmbientOcclusionSamples {
             let radius_fraction = f32::sqrt(radius_halton_sample);
             let radius = sample_radius * radius_fraction;
 
-            let angle = angle_halton_sample * f32::TWO_PI;
+            let angle = angle_halton_sample * TWO_PI;
             let (sin_angle, cos_angle) = f32::sin_cos(angle);
 
             *offset.x_mut() = radius * cos_angle;
             *offset.y_mut() = radius * sin_angle;
         }
 
-        let sample_normalization = 2.0 * intensity_scale / (f32::PI * (sample_count as f32));
+        let sample_normalization = 2.0 * intensity_scale / (PI * (sample_count as f32));
 
         Self {
             sample_offsets,

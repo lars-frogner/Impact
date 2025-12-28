@@ -54,7 +54,6 @@ impact_scene = { path = "../impact_scene" }
 impact_texture = { path = "../impact_texture" }
 impact_thread = { path = "../impact_thread" }
 inventory = { workspace = true, optional = true }
-num-traits = { workspace = true }
 ordered-float = "5.0"
 parking_lot = { workspace = true }
 pastey = { workspace = true }

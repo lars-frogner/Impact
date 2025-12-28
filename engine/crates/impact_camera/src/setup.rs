@@ -10,7 +10,7 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct PerspectiveCamera {
-        vertical_field_of_view: Radians<f32>,
+        vertical_field_of_view: Radians,
         near_distance: f32,
         far_distance: f32,
     }
@@ -22,7 +22,7 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct OrthographicCamera {
-        vertical_field_of_view: Radians<f32>,
+        vertical_field_of_view: Radians,
         near_distance: f32,
         far_distance: f32,
     }
@@ -48,7 +48,7 @@ impl PerspectiveCamera {
         far_distance,
     }"#)]
     pub fn new(
-        vertical_field_of_view: Radians<f32>,
+        vertical_field_of_view: Radians,
         near_distance: f32,
         far_distance: f32,
     ) -> Self {
@@ -64,7 +64,7 @@ impl PerspectiveCamera {
     }
 
     /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<f32> {
+    pub fn vertical_field_of_view(&self) -> Radians {
         self.vertical_field_of_view
     }
 
@@ -99,7 +99,7 @@ impl OrthographicCamera {
         far_distance
     }"#)]
     pub fn new(
-        vertical_field_of_view: Radians<f32>,
+        vertical_field_of_view: Radians,
         near_distance: f32,
         far_distance: f32,
     ) -> Self {
@@ -115,7 +115,7 @@ impl OrthographicCamera {
     }
 
     /// Returns the vertical field of view angle in radians.
-    pub fn vertical_field_of_view(&self) -> Radians<f32> {
+    pub fn vertical_field_of_view(&self) -> Radians {
         self.vertical_field_of_view
     }
 

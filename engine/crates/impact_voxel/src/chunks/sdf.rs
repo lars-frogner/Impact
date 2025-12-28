@@ -338,12 +338,26 @@ impl ChunkedVoxelObject {
         let chunk_k = isize::try_from(chunk_k).unwrap();
 
         for (dim, side, [di, dj, dk]) in ADJACENT_FACE_OFFSETS {
-            let adjacent_chunk = self.get_chunk(chunk_i + di, chunk_j + dj, chunk_k + dk);
+            let i = chunk_i + di;
+            let j = chunk_j + dj;
+            let k = chunk_k + dk;
+            let adjacent_chunk = if i < 0 || j < 0 || k < 0 {
+                VoxelChunk::Empty
+            } else {
+                self.get_chunk(i as usize, j as usize, k as usize)
+            };
             self.fill_sdf_face_padding_for_adjacent_chunk(sdf, dim, side, &adjacent_chunk);
         }
 
         for (face_dim, face_side, secondary_side, [di, dj, dk]) in ADJACENT_EDGE_OFFSETS {
-            let adjacent_chunk = self.get_chunk(chunk_i + di, chunk_j + dj, chunk_k + dk);
+            let i = chunk_i + di;
+            let j = chunk_j + dj;
+            let k = chunk_k + dk;
+            let adjacent_chunk = if i < 0 || j < 0 || k < 0 {
+                VoxelChunk::Empty
+            } else {
+                self.get_chunk(i as usize, j as usize, k as usize)
+            };
             self.fill_sdf_edge_padding_for_adjacent_chunk(
                 sdf,
                 face_dim,
@@ -354,7 +368,14 @@ impl ChunkedVoxelObject {
         }
 
         for (x_side, y_side, z_side, [di, dj, dk]) in ADJACENT_CORNER_OFFSETS {
-            let adjacent_chunk = self.get_chunk(chunk_i + di, chunk_j + dj, chunk_k + dk);
+            let i = chunk_i + di;
+            let j = chunk_j + dj;
+            let k = chunk_k + dk;
+            let adjacent_chunk = if i < 0 || j < 0 || k < 0 {
+                VoxelChunk::Empty
+            } else {
+                self.get_chunk(i as usize, j as usize, k as usize)
+            };
             self.fill_sdf_corner_padding_for_adjacent_chunk(
                 sdf,
                 x_side,
@@ -490,18 +511,22 @@ impl ChunkedVoxelObject {
 
             // The SDF for the chunk is padded by one voxel
             let lower_chunk_sdf_voxel_indices = lower_chunk_voxel_indices
-                .map(|voxel_index| isize::try_from(voxel_index).unwrap() - 1);
+                .map(|voxel_index| voxel_index as isize - 1);
 
             sdf.loop_over_sdf_values(&LoopForChunkSDF::over_all()).execute(
                 &mut |sdf_indices, &signed_dist| {
                     let voxel_indices = [
-                        lower_chunk_sdf_voxel_indices[0] + isize::try_from(sdf_indices[0]).unwrap(),
-                        lower_chunk_sdf_voxel_indices[1] + isize::try_from(sdf_indices[1]).unwrap(),
-                        lower_chunk_sdf_voxel_indices[2] + isize::try_from(sdf_indices[2]).unwrap(),
+                        lower_chunk_sdf_voxel_indices[0] + sdf_indices[0] as isize,
+                        lower_chunk_sdf_voxel_indices[1] + sdf_indices[1] as isize,
+                        lower_chunk_sdf_voxel_indices[2] + sdf_indices[2] as isize,
                     ];
 
-                    let voxel =
-                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
+                    let voxel = if voxel_indices.iter().any(|voxel_index| *voxel_index < 0) {
+                        None
+                    } else {
+                        let voxel_indices = voxel_indices.map(|voxel_index| voxel_index as usize);
+                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2])
+                    };
 
                     if signed_dist.is_sign_negative() && voxel.is_none_or(|voxel| voxel.is_empty()) {
                         panic!(
@@ -518,13 +543,17 @@ impl ChunkedVoxelObject {
             sdf.loop_over_voxel_types(&LoopForChunkSDF::over_all()).execute(
                 &mut |sdf_indices, &voxel_type| {
                     let voxel_indices = [
-                        lower_chunk_sdf_voxel_indices[0] + isize::try_from(sdf_indices[0]).unwrap(),
-                        lower_chunk_sdf_voxel_indices[1] + isize::try_from(sdf_indices[1]).unwrap(),
-                        lower_chunk_sdf_voxel_indices[2] + isize::try_from(sdf_indices[2]).unwrap(),
+                        lower_chunk_sdf_voxel_indices[0] + sdf_indices[0] as isize,
+                        lower_chunk_sdf_voxel_indices[1] + sdf_indices[1] as isize,
+                        lower_chunk_sdf_voxel_indices[2] + sdf_indices[2] as isize,
                     ];
 
-                    let voxel =
-                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2]);
+                    let voxel = if voxel_indices.iter().any(|voxel_index| *voxel_index < 0) {
+                        None
+                    } else {
+                        let voxel_indices = voxel_indices.map(|voxel_index| voxel_index as usize);
+                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2])
+                    };
 
                     if matches!(voxel, Some(v) if v.voxel_type() != voxel_type) {
                         panic!(

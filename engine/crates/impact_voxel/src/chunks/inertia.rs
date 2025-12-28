@@ -6,7 +6,7 @@ use crate::{
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
 };
 use approx::{AbsDiffEq, RelativeEq};
-use impact_math::{Float, matrix::Matrix3, point::Point3, vector::Vector3};
+use impact_math::{matrix::Matrix3, point::Point3, vector::Vector3};
 use impact_physics::inertia::{InertiaTensor, InertialProperties};
 use std::ops::Range;
 
@@ -456,12 +456,12 @@ fn compute_moments_for_voxel(
 
     let mass = voxel_extent_pow_3 * voxel_density;
 
-    let moments = (f32::ONE_HALF * voxel_extent_pow_2 * voxel_density) * squared_coord_diff;
+    let moments = (0.5 * voxel_extent_pow_2 * voxel_density) * squared_coord_diff;
 
-    let moments_of_inertia = (f32::ONE_THIRD * voxel_extent_pow_2 * voxel_density)
+    let moments_of_inertia = ((1.0 / 3.0) * voxel_extent_pow_2 * voxel_density)
         * (cubed_coord_diff.yxx() + cubed_coord_diff.zzy());
 
-    let products_of_inertia = (f32::ONE_FOURTH * voxel_extent * voxel_density)
+    let products_of_inertia = (0.25 * voxel_extent * voxel_density)
         * squared_coord_diff.component_mul(&squared_coord_diff.yzx());
 
     (mass, moments, moments_of_inertia, products_of_inertia)
@@ -548,9 +548,9 @@ fn compute_moments_for_non_uniform_chunk(
     let voxel_extent_pow_3 = voxel_extent_pow_2 * voxel_extent;
 
     mass *= voxel_extent_pow_3;
-    moments *= f32::ONE_HALF * voxel_extent_pow_2;
-    moments_of_inertia *= f32::ONE_THIRD * voxel_extent_pow_2;
-    products_of_inertia *= f32::ONE_FOURTH * voxel_extent;
+    moments *= 0.5 * voxel_extent_pow_2;
+    moments_of_inertia *= (1.0 / 3.0) * voxel_extent_pow_2;
+    products_of_inertia *= 0.25 * voxel_extent;
 
     (mass, moments, moments_of_inertia, products_of_inertia)
 }
@@ -601,11 +601,11 @@ fn compute_moments_for_uniform_chunk(
     let chunk_extent_pow_3 = chunk_extent_pow_2 * chunk_extent;
 
     let mass = chunk_extent_pow_3 * density;
-    let moments = (f32::ONE_HALF * chunk_extent_pow_2 * density) * h2_sub_l2;
+    let moments = (0.5 * chunk_extent_pow_2 * density) * h2_sub_l2;
     let moments_of_inertia =
-        (f32::ONE_THIRD * chunk_extent_pow_2 * density) * (h3_sub_l3.yxx() + h3_sub_l3.zzy());
+        ((1.0 / 3.0) * chunk_extent_pow_2 * density) * (h3_sub_l3.yxx() + h3_sub_l3.zzy());
     let products_of_inertia =
-        (f32::ONE_FOURTH * chunk_extent * density) * h2_sub_l2.component_mul(&h2_sub_l2.yzx());
+        (0.25 * chunk_extent * density) * h2_sub_l2.component_mul(&h2_sub_l2.yzx());
 
     (mass, moments, moments_of_inertia, products_of_inertia)
 }

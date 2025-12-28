@@ -1,6 +1,6 @@
 //! Different units for angles.
 
-use crate::Float;
+use crate::consts::f32::{FRAC_1_PI, PI};
 use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use std::{
@@ -9,345 +9,316 @@ use std::{
 };
 
 /// Represents an angle.
-pub trait Angle<F>: Copy {
+pub trait Angle: Copy {
     /// Creates a zero angle.
     fn zero() -> Self;
 
     /// Returns the angle as degrees.
-    fn as_degrees(self) -> Degrees<F>;
+    fn as_degrees(self) -> Degrees;
 
     /// Returns the angle as radians.
-    fn as_radians(self) -> Radians<F>;
+    fn as_radians(self) -> Radians;
 
     /// Returns the value of the angle in degrees.
-    fn degrees(self) -> F;
+    fn degrees(self) -> f32;
 
     /// Returns the value of the angle in radians.
-    fn radians(self) -> F;
+    fn radians(self) -> f32;
 }
 
 // An angle in degrees.
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod)]
-pub struct Degrees<F>(pub F);
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Zeroable, Pod)]
+pub struct Degrees(pub f32);
 
 // An angle in radians.
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Zeroable, Pod)]
-pub struct Radians<F>(pub F);
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Zeroable, Pod)]
+pub struct Radians(pub f32);
 
-impl<F> Degrees<F> {
-    fn value(self) -> F {
+impl Degrees {
+    fn value(self) -> f32 {
         self.0
     }
 }
 
-impl<F> Radians<F> {
-    fn value(self) -> F {
+impl Radians {
+    fn value(self) -> f32 {
         self.0
     }
 }
 
-impl<F: Float> Angle<F> for Degrees<F> {
+impl Angle for Degrees {
     fn zero() -> Self {
-        Self(F::ZERO)
+        Self(0.0)
     }
 
-    fn as_degrees(self) -> Degrees<F> {
+    fn as_degrees(self) -> Degrees {
         self
     }
 
-    fn as_radians(self) -> Radians<F> {
+    fn as_radians(self) -> Radians {
         Radians::from(self)
     }
 
-    fn degrees(self) -> F {
+    fn degrees(self) -> f32 {
         self.value()
     }
 
-    fn radians(self) -> F {
+    fn radians(self) -> f32 {
         Radians::from(self).value()
     }
 }
 
-impl<F: Float> Angle<F> for Radians<F> {
+impl Angle for Radians {
     fn zero() -> Self {
-        Self(F::ZERO)
+        Self(0.0)
     }
 
-    fn as_degrees(self) -> Degrees<F> {
+    fn as_degrees(self) -> Degrees {
         Degrees::from(self)
     }
 
-    fn as_radians(self) -> Radians<F> {
+    fn as_radians(self) -> Radians {
         self
     }
 
-    fn degrees(self) -> F {
+    fn degrees(self) -> f32 {
         Degrees::from(self).value()
     }
 
-    fn radians(self) -> F {
+    fn radians(self) -> f32 {
         self.value()
     }
 }
 
-impl<F: Float> From<Radians<F>> for Degrees<F> {
-    fn from(rad: Radians<F>) -> Self {
+impl From<Radians> for Degrees {
+    fn from(rad: Radians) -> Self {
         Self(radians_to_degrees(rad.value()))
     }
 }
 
-impl<F: Float> From<Degrees<F>> for Radians<F> {
-    fn from(deg: Degrees<F>) -> Self {
+impl From<Degrees> for Radians {
+    fn from(deg: Degrees) -> Self {
         Self(degrees_to_radians(deg.value()))
     }
 }
 
-impl<F: Add<Output = F>> Add for Degrees<F> {
+impl Add for Degrees {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
         Self(self.value() + rhs.value())
     }
 }
 
-impl<F: Add<Output = F>> Add for Radians<F> {
+impl Add for Radians {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
         Self(self.value() + rhs.value())
     }
 }
 
-impl<F: Float> Add<Radians<F>> for Degrees<F> {
+impl Add<Radians> for Degrees {
     type Output = Self;
-    fn add(self, rhs: Radians<F>) -> Self {
+    fn add(self, rhs: Radians) -> Self {
         Self(self.value() + Self::from(rhs).value())
     }
 }
 
-impl<F: Float> Add<Degrees<F>> for Radians<F> {
+impl Add<Degrees> for Radians {
     type Output = Self;
-    fn add(self, rhs: Degrees<F>) -> Self {
+    fn add(self, rhs: Degrees) -> Self {
         Self(self.value() + Self::from(rhs).value())
     }
 }
 
-impl<F: Sub<Output = F>> Sub for Degrees<F> {
+impl Sub for Degrees {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self {
         Self(self.value() - rhs.value())
     }
 }
 
-impl<F: Sub<Output = F>> Sub for Radians<F> {
+impl Sub for Radians {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self {
         Self(self.value() - rhs.value())
     }
 }
 
-impl<F: Float> Sub<Radians<F>> for Degrees<F> {
+impl Sub<Radians> for Degrees {
     type Output = Self;
-    fn sub(self, rhs: Radians<F>) -> Self {
+    fn sub(self, rhs: Radians) -> Self {
         Self(self.value() - Self::from(rhs).value())
     }
 }
 
-impl<F: Float> Sub<Degrees<F>> for Radians<F> {
+impl Sub<Degrees> for Radians {
     type Output = Self;
-    fn sub(self, rhs: Degrees<F>) -> Self {
+    fn sub(self, rhs: Degrees) -> Self {
         Self(self.value() - Self::from(rhs).value())
     }
 }
 
-impl<F: Mul<Output = F>> Mul<F> for Degrees<F> {
+impl Mul<f32> for Degrees {
     type Output = Self;
-    fn mul(self, rhs: F) -> Self {
+    fn mul(self, rhs: f32) -> Self {
         Self(self.value() * rhs)
     }
 }
 
-impl<F: Mul<Output = F>> Mul<F> for Radians<F> {
+impl Mul<f32> for Radians {
     type Output = Self;
-    fn mul(self, rhs: F) -> Self {
+    fn mul(self, rhs: f32) -> Self {
         Self(self.value() * rhs)
     }
 }
 
-impl<F: Div<Output = F>> Div<F> for Degrees<F> {
+impl Div<f32> for Degrees {
     type Output = Self;
-    fn div(self, rhs: F) -> Self {
+    fn div(self, rhs: f32) -> Self {
         Self(self.value() / rhs)
     }
 }
 
-impl<F: Div<Output = F>> Div<F> for Radians<F> {
+impl Div<f32> for Radians {
     type Output = Self;
-    fn div(self, rhs: F) -> Self {
+    fn div(self, rhs: f32) -> Self {
         Self(self.value() / rhs)
     }
 }
 
-impl<F: Float> PartialEq<Radians<F>> for Degrees<F> {
-    fn eq(&self, rhs: &Radians<F>) -> bool {
+impl PartialEq<Radians> for Degrees {
+    fn eq(&self, rhs: &Radians) -> bool {
         self.value() == Self::from(*rhs).value()
     }
 }
 
-impl<F: Float> PartialEq<Degrees<F>> for Radians<F> {
-    fn eq(&self, rhs: &Degrees<F>) -> bool {
+impl PartialEq<Degrees> for Radians {
+    fn eq(&self, rhs: &Degrees) -> bool {
         self.value() == Self::from(*rhs).value()
     }
 }
 
-impl<F: Float> PartialOrd<Radians<F>> for Degrees<F> {
-    fn partial_cmp(&self, rhs: &Radians<F>) -> Option<Ordering> {
+impl PartialOrd<Radians> for Degrees {
+    fn partial_cmp(&self, rhs: &Radians) -> Option<Ordering> {
         self.value().partial_cmp(&Self::from(*rhs).value())
     }
 }
 
-impl<F: Float> PartialOrd<Degrees<F>> for Radians<F> {
-    fn partial_cmp(&self, rhs: &Degrees<F>) -> Option<Ordering> {
+impl PartialOrd<Degrees> for Radians {
+    fn partial_cmp(&self, rhs: &Degrees) -> Option<Ordering> {
         self.value().partial_cmp(&Self::from(*rhs).value())
     }
 }
 
-impl<T> AbsDiffEq for Degrees<T>
-where
-    T: Copy + AbsDiffEq,
-    T::Epsilon: Copy,
-{
-    type Epsilon = T::Epsilon;
+impl AbsDiffEq for Degrees {
+    type Epsilon = f32;
 
-    fn default_epsilon() -> T::Epsilon {
-        T::default_epsilon()
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
     }
 
-    fn abs_diff_eq(&self, other: &Self, epsilon: T::Epsilon) -> bool {
-        T::abs_diff_eq(&self.value(), &other.value(), epsilon)
+    fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
+        f32::abs_diff_eq(&self.value(), &other.value(), epsilon)
     }
 }
 
-impl<T> AbsDiffEq for Radians<T>
-where
-    T: Copy + AbsDiffEq,
-    T::Epsilon: Copy,
-{
-    type Epsilon = T::Epsilon;
+impl AbsDiffEq for Radians {
+    type Epsilon = f32;
 
-    fn default_epsilon() -> T::Epsilon {
-        T::default_epsilon()
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
     }
 
-    fn abs_diff_eq(&self, other: &Self, epsilon: T::Epsilon) -> bool {
-        T::abs_diff_eq(&self.value(), &other.value(), epsilon)
+    fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
+        f32::abs_diff_eq(&self.value(), &other.value(), epsilon)
     }
 }
 
-impl<T: Float> AbsDiffEq<Radians<T>> for Degrees<T> {
-    type Epsilon = T::Epsilon;
+impl AbsDiffEq<Radians> for Degrees {
+    type Epsilon = f32;
 
-    fn default_epsilon() -> T::Epsilon {
-        T::default_epsilon()
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
     }
 
-    fn abs_diff_eq(&self, other: &Radians<T>, epsilon: T::Epsilon) -> bool {
-        T::abs_diff_eq(&self.value(), &other.degrees(), epsilon)
-    }
-}
-
-impl<T: Float> AbsDiffEq<Degrees<T>> for Radians<T> {
-    type Epsilon = T::Epsilon;
-
-    fn default_epsilon() -> T::Epsilon {
-        T::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Degrees<T>, epsilon: T::Epsilon) -> bool {
-        T::abs_diff_eq(&self.value(), &other.radians(), epsilon)
+    fn abs_diff_eq(&self, other: &Radians, epsilon: f32) -> bool {
+        f32::abs_diff_eq(&self.value(), &other.degrees(), epsilon)
     }
 }
 
-impl<T> RelativeEq for Degrees<T>
-where
-    T: Copy + RelativeEq,
-    T::Epsilon: Copy,
-{
-    fn default_max_relative() -> T::Epsilon {
-        T::default_max_relative()
+impl AbsDiffEq<Degrees> for Radians {
+    type Epsilon = f32;
+
+    fn default_epsilon() -> f32 {
+        f32::default_epsilon()
     }
 
-    fn relative_eq(&self, other: &Self, epsilon: T::Epsilon, max_relative: T::Epsilon) -> bool {
-        T::relative_eq(&self.value(), &other.value(), epsilon, max_relative)
+    fn abs_diff_eq(&self, other: &Degrees, epsilon: f32) -> bool {
+        f32::abs_diff_eq(&self.value(), &other.radians(), epsilon)
     }
 }
 
-impl<T: Float> RelativeEq<Radians<T>> for Degrees<T> {
-    fn default_max_relative() -> T::Epsilon {
-        T::default_max_relative()
+impl RelativeEq for Degrees {
+    fn default_max_relative() -> f32 {
+        f32::default_max_relative()
     }
 
-    fn relative_eq(
-        &self,
-        other: &Radians<T>,
-        epsilon: T::Epsilon,
-        max_relative: T::Epsilon,
-    ) -> bool {
-        T::relative_eq(&self.value(), &other.degrees(), epsilon, max_relative)
+    fn relative_eq(&self, other: &Self, epsilon: f32, max_relative: f32) -> bool {
+        f32::relative_eq(&self.value(), &other.value(), epsilon, max_relative)
     }
 }
 
-impl<T: Float> RelativeEq<Degrees<T>> for Radians<T> {
-    fn default_max_relative() -> T::Epsilon {
-        T::default_max_relative()
+impl RelativeEq<Radians> for Degrees {
+    fn default_max_relative() -> f32 {
+        f32::default_max_relative()
     }
 
-    fn relative_eq(
-        &self,
-        other: &Degrees<T>,
-        epsilon: T::Epsilon,
-        max_relative: T::Epsilon,
-    ) -> bool {
-        T::relative_eq(&self.value(), &other.radians(), epsilon, max_relative)
+    fn relative_eq(&self, other: &Radians, epsilon: f32, max_relative: f32) -> bool {
+        f32::relative_eq(&self.value(), &other.degrees(), epsilon, max_relative)
     }
 }
 
-impl<T> RelativeEq for Radians<T>
-where
-    T: Copy + RelativeEq,
-    T::Epsilon: Copy,
-{
-    fn default_max_relative() -> T::Epsilon {
-        T::default_max_relative()
+impl RelativeEq<Degrees> for Radians {
+    fn default_max_relative() -> f32 {
+        f32::default_max_relative()
     }
 
-    fn relative_eq(&self, other: &Self, epsilon: T::Epsilon, max_relative: T::Epsilon) -> bool {
-        T::relative_eq(&self.value(), &other.value(), epsilon, max_relative)
+    fn relative_eq(&self, other: &Degrees, epsilon: f32, max_relative: f32) -> bool {
+        f32::relative_eq(&self.value(), &other.radians(), epsilon, max_relative)
+    }
+}
+
+impl RelativeEq for Radians {
+    fn default_max_relative() -> f32 {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: f32, max_relative: f32) -> bool {
+        f32::relative_eq(&self.value(), &other.value(), epsilon, max_relative)
     }
 }
 
 roc_integration::impl_roc_for_library_provided_primitives! {
-//  Type            Pkg   Parents  Module   Roc name  Postfix      Precision
-    Radians<f32> => core, None,    Radians, Radians,  Some("_32"), SinglePrecision,
-    Radians<f64> => core, None,    Radians, Radians,  Some("_64"), DoublePrecision,
-    Degrees<f32> => core, None,    Degrees, Degrees,  Some("_32"), SinglePrecision,
-    Degrees<f64> => core, None,    Degrees, Degrees,  Some("_64"), DoublePrecision,
+//  Type       Pkg   Parents  Module   Roc name  Postfix  Precision
+    Radians => core, None,    Radians, Radians,  None,  PrecisionIrrelevant,
+    Degrees => core, None,    Degrees, Degrees,  None,  PrecisionIrrelevant,
 }
 
-pub fn radians_to_degrees<F: Float>(radians: F) -> F {
-    radians * F::from_f64(180.0).unwrap() * <F as Float>::FRAC_1_PI
+pub fn radians_to_degrees(radians: f32) -> f32 {
+    radians * (180.0 * FRAC_1_PI)
 }
 
-pub fn degrees_to_radians<F: Float>(degrees: F) -> F {
-    degrees * <F as Float>::PI / F::from_f64(180.0).unwrap()
+pub fn degrees_to_radians(degrees: f32) -> f32 {
+    degrees * (PI / 180.0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::consts::f32::PI;
     use approx::assert_abs_diff_eq;
 
     #[test]

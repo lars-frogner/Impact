@@ -8,7 +8,6 @@ use impact_gpu::{
     texture::{Sampler, SamplerConfig, Texture, TextureAddressingConfig, TextureFilteringConfig},
     wgpu,
 };
-use num_traits::AsPrimitive;
 use roc_integration::roc;
 use std::fmt::Display;
 
@@ -278,12 +277,6 @@ impl RenderAttachmentQuantity {
     /// attachment quantity.
     pub const fn all_bindings() -> &'static [(u32, u32); Self::count()] {
         &RENDER_ATTACHMENT_BINDINGS
-    }
-
-    /// Returns the enum variant corresponding to the given integer, or [`None`]
-    /// if the integer has no corresponding enum variant.
-    pub fn from_index(number: impl AsPrimitive<usize>) -> Option<Self> {
-        RENDER_ATTACHMENT_QUANTITIES.get(number.as_()).copied()
     }
 
     /// The index of this render attachment quantity.

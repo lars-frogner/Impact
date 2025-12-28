@@ -3,7 +3,6 @@
 use super::{MotionChanged, MotionController};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
 use impact_physics::quantities::{Orientation, Velocity, VelocityP};
 use roc_integration::roc;
 
@@ -114,18 +113,17 @@ impl SemiDirectionalMotionController {
     /// Computes the velocity of the controlled entity in its local coordinate
     /// system.
     fn compute_local_velocity(&self) -> Velocity {
-        if self.state.motion_state() == MotionState::Still
-            || abs_diff_eq!(self.movement_speed, f32::ZERO)
+        if self.state.motion_state() == MotionState::Still || abs_diff_eq!(self.movement_speed, 0.0)
         {
             Velocity::zeros()
         } else {
             // For scaling the magnitude to unity
-            let mut n_nonzero_components = f32::ZERO;
+            let mut n_nonzero_components = 0.0;
 
             let velocity_x = if self.state.right == self.state.left {
-                f32::ZERO
+                0.0
             } else {
-                n_nonzero_components += f32::ONE;
+                n_nonzero_components += 1.0;
                 if self.state.right.is_moving() {
                     self.movement_speed
                 } else {
@@ -134,9 +132,9 @@ impl SemiDirectionalMotionController {
             };
 
             let velocity_y = if self.state.up == self.state.down {
-                f32::ZERO
+                0.0
             } else {
-                n_nonzero_components += f32::ONE;
+                n_nonzero_components += 1.0;
                 if self.state.up.is_moving() {
                     self.movement_speed
                 } else {
@@ -145,9 +143,9 @@ impl SemiDirectionalMotionController {
             };
 
             let velocity_z = if self.state.forwards == self.state.backwards {
-                f32::ZERO
+                0.0
             } else {
-                n_nonzero_components += f32::ONE;
+                n_nonzero_components += 1.0;
                 if self.state.forwards.is_moving() {
                     self.movement_speed
                 } else {
@@ -156,9 +154,9 @@ impl SemiDirectionalMotionController {
             };
 
             // We should have motion in this branch
-            assert_abs_diff_ne!(n_nonzero_components, f32::ZERO);
+            assert_abs_diff_ne!(n_nonzero_components, 0.0);
 
-            let magnitude_scale = f32::ONE / f32::sqrt(n_nonzero_components);
+            let magnitude_scale = 1.0 / f32::sqrt(n_nonzero_components);
 
             Velocity::new(velocity_x, velocity_y, velocity_z) * magnitude_scale
         }

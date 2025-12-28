@@ -831,8 +831,8 @@ mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use impact_math::{
-        Float,
         angle::Radians,
+        consts::f32::{FRAC_PI_2, TWO_PI},
         vector::{UnitVector3, Vector3P},
     };
     use proptest::prelude::*;
@@ -849,9 +849,9 @@ mod tests {
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..f32::TWO_PI,
-            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
-            rotation_yaw in 0.0..f32::TWO_PI,
+            rotation_roll in 0.0..TWO_PI,
+            rotation_pitch in -FRAC_PI_2..FRAC_PI_2,
+            rotation_yaw in 0.0..TWO_PI,
         ) -> Orientation {
             Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
         }

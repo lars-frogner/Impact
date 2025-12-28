@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::Float;
+use impact_math::consts::f32::TWO_PI;
 use roc_integration::roc;
 
 /// Manages all [`CircularTrajectoryDriver`]s.
@@ -164,11 +164,11 @@ impl CircularTrajectory {
     }
 
     fn compute_angular_speed(period: f32) -> f32 {
-        f32::TWO_PI / period
+        TWO_PI / period
     }
 
     fn compute_angle(initial_time: f32, angular_speed: f32, time: f32) -> f32 {
-        angular_speed * (time - initial_time) % f32::TWO_PI
+        angular_speed * (time - initial_time) % TWO_PI
     }
 
     fn compute_circular_displacement(radius: f32, cos_angle: f32, sin_angle: f32) -> Position {
@@ -193,7 +193,10 @@ mod tests {
     use super::*;
     use crate::quantities::{DirectionP, Orientation, OrientationP};
     use approx::abs_diff_eq;
-    use impact_math::{Float, vector::UnitVector3P};
+    use impact_math::{
+        consts::f32::{FRAC_PI_2, PI},
+        vector::UnitVector3P,
+    };
     use proptest::prelude::*;
 
     prop_compose! {
@@ -208,8 +211,8 @@ mod tests {
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..f32::TWO_PI,
-            theta in 0.0..f32::PI,
+            phi in 0.0..TWO_PI,
+            theta in 0.0..PI,
         ) -> DirectionP {
             DirectionP::new_unchecked(
                 f32::cos(phi) * f32::sin(theta),
@@ -221,9 +224,9 @@ mod tests {
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..f32::TWO_PI,
-            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
-            rotation_yaw in 0.0..f32::TWO_PI,
+            rotation_roll in 0.0..TWO_PI,
+            rotation_pitch in -FRAC_PI_2..FRAC_PI_2,
+            rotation_yaw in 0.0..TWO_PI,
         ) -> OrientationP {
             Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).pack()
         }
@@ -318,7 +321,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(displacement.norm(), radius, epsilon = 1e-3 * radius));
             prop_assert!(abs_diff_eq!(
                 velocity.norm(),
-                f32::TWO_PI * radius / period,
+                TWO_PI * radius / period,
                 epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(

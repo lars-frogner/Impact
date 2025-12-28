@@ -11,7 +11,6 @@ use impact_physics::{
     rigid_body::RigidBodyManager,
 };
 use impact_voxel::{VoxelObjectManager, collidable::CollisionWorld};
-use num_traits::cast::FromPrimitive;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{path::Path, time::Duration};
@@ -293,7 +292,7 @@ impl PhysicsSimulator {
     }
 
     fn compute_substep_duration(&self) -> f32 {
-        self.scaled_time_step_duration() / f32::from_u32(self.n_substeps()).unwrap()
+        self.scaled_time_step_duration() / self.n_substeps() as f32
     }
 }
 

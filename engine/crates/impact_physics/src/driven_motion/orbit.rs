@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, consts::f32::TWO_PI};
+use impact_math::consts::f32::{PI, TWO_PI};
 use roc_integration::roc;
 use roots::{self, SimpleConvergency};
 
@@ -297,7 +297,7 @@ impl OrbitalTrajectory {
 
     fn compute_sin_true_anomaly(eccentric_anomaly: f32, cos_true_anomaly: f32) -> f32 {
         let sin_true_anomaly = f32::sqrt(1.0 - cos_true_anomaly.powi(2));
-        if eccentric_anomaly <= f32::PI {
+        if eccentric_anomaly <= PI {
             sin_true_anomaly
         } else {
             -sin_true_anomaly
@@ -364,11 +364,7 @@ mod tests {
     use super::*;
     use crate::quantities::{DirectionP, Orientation, OrientationP};
     use approx::abs_diff_eq;
-    use impact_math::{
-        consts::f32::{FRAC_PI_2, PI, TWO_PI},
-        point::Point3,
-        vector::UnitVector3P,
-    };
+    use impact_math::{consts::f32::FRAC_PI_2, point::Point3, vector::UnitVector3P};
     use proptest::prelude::*;
 
     prop_compose! {

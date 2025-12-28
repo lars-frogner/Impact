@@ -25,7 +25,7 @@ pub trait Camera: Debug + Send + Sync + 'static {
     fn projection_transform(&self) -> &Projective3;
 
     /// Returns the vertical field of view angle in radians.
-    fn vertical_field_of_view(&self) -> Radians<f32>;
+    fn vertical_field_of_view(&self) -> Radians;
 
     /// Returns the frustum representing the view volume of the
     /// camera.
@@ -61,7 +61,7 @@ pub struct PerspectiveCamera {
 #[derive(Debug)]
 pub struct OrthographicCamera {
     aspect_ratio: f32,
-    vertical_field_of_view: Radians<f32>,
+    vertical_field_of_view: Radians,
     near_and_far_distance: UpperExclusiveBounds<f32>,
     orthographic_transform: OrthographicTransform,
     view_frustum: Frustum,
@@ -78,7 +78,7 @@ impl PerspectiveCamera {
     /// # Panics
     /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
     /// zero.
-    pub fn new<A: Angle<f32>>(
+    pub fn new<A: Angle>(
         aspect_ratio: f32,
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<f32>,
@@ -109,7 +109,7 @@ impl PerspectiveCamera {
     ///
     /// # Panics
     /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle<f32>>(&mut self, fov: A) {
+    pub fn set_vertical_field_of_view<A: Angle>(&mut self, fov: A) {
         self.perspective_transform.set_vertical_field_of_view(fov);
         self.update_frustum_and_notify_change();
     }
@@ -131,7 +131,7 @@ impl Camera for PerspectiveCamera {
         self.perspective_transform.as_projective()
     }
 
-    fn vertical_field_of_view(&self) -> Radians<f32> {
+    fn vertical_field_of_view(&self) -> Radians {
         self.perspective_transform.vertical_field_of_view()
     }
 
@@ -165,7 +165,7 @@ impl OrthographicCamera {
     ///
     /// # Panics
     /// If `aspect_ratio` or `vertical_field_of_view` is zero.
-    pub fn new<A: Angle<f32>>(
+    pub fn new<A: Angle>(
         aspect_ratio: f32,
         vertical_field_of_view: A,
         near_and_far_distance: UpperExclusiveBounds<f32>,
@@ -202,7 +202,7 @@ impl OrthographicCamera {
     ///
     /// # Panics
     /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle<f32>>(&mut self, fov: A) {
+    pub fn set_vertical_field_of_view<A: Angle>(&mut self, fov: A) {
         let fov = fov.as_radians();
         assert_abs_diff_ne!(fov, Radians::zero());
         self.vertical_field_of_view = fov;
@@ -230,7 +230,7 @@ impl Camera for OrthographicCamera {
         self.orthographic_transform.as_projective()
     }
 
-    fn vertical_field_of_view(&self) -> Radians<f32> {
+    fn vertical_field_of_view(&self) -> Radians {
         self.vertical_field_of_view
     }
 

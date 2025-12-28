@@ -11,7 +11,7 @@ use impact_alloc::{
 };
 use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::{
-    Float,
+    consts::f32::FRAC_1_SQRT_3,
     matrix::Matrix4,
     point::Point3,
     quaternion::{Quaternion, UnitQuaternion},
@@ -1270,7 +1270,7 @@ impl SphereSDF {
 
     #[inline]
     fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
-        let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
+        let extent_of_internal_box_in_sphere = self.radius * FRAC_1_SQRT_3;
 
         let expanded_half_extents = Vector3::same(extent_of_internal_box_in_sphere + margin);
 
@@ -1318,7 +1318,7 @@ impl CapsuleSDF {
 
     #[inline]
     fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
-        let extent_of_internal_box_in_sphere = self.radius * f32::FRAC_1_SQRT_3;
+        let extent_of_internal_box_in_sphere = self.radius * FRAC_1_SQRT_3;
 
         let mut expanded_half_extents = Vector3::same(extent_of_internal_box_in_sphere + margin);
         *expanded_half_extents.y_mut() += self.half_segment_length;

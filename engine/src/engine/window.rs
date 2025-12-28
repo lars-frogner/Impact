@@ -94,7 +94,7 @@ impl Engine {
         }
     }
 
-    fn current_vertical_field_of_view(&self) -> Option<Radians<f32>> {
+    fn current_vertical_field_of_view(&self) -> Option<Radians> {
         Some(
             self.scene()
                 .oread()
@@ -114,6 +114,6 @@ impl Engine {
     }
 }
 
-fn radians_per_pixel(vertical_field_of_view: Radians<f32>, window_height: NonZeroU32) -> f64 {
+fn radians_per_pixel(vertical_field_of_view: Radians, window_height: NonZeroU32) -> f64 {
     f64::from(vertical_field_of_view.radians()) / f64::from(window_height.get())
 }

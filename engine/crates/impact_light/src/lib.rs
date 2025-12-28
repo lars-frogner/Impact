@@ -19,9 +19,9 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{
-    Float,
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
+    consts::f32::FRAC_1_PI,
     point::{Point3, Point3P},
     quaternion::{UnitQuaternion, UnitQuaternionP},
     transform::{Isometry3, Similarity3},
@@ -119,7 +119,7 @@ define_component_type! {
         pub direction: UnitVector3P,
         /// The angular extent of the light source, which determines the extent of
         /// specular highlights.
-        pub angular_source_extent: Degrees<f32>,
+        pub angular_source_extent: Degrees,
     }
 }
 
@@ -140,7 +140,7 @@ define_component_type! {
         pub direction: UnitVector3P,
         /// The angular extent of the light source, which determines the extent of
         /// specular highlights and the softness of shadows.
-        pub angular_source_extent: Degrees<f32>,
+        pub angular_source_extent: Degrees,
     }
 }
 
@@ -430,7 +430,7 @@ impl UnidirectionalEmission {
     pub fn new(
         perpendicular_illuminance: Illumninance,
         direction: UnitVector3P,
-        angular_source_extent: Degrees<f32>,
+        angular_source_extent: Degrees,
     ) -> Self {
         Self {
             perpendicular_illuminance,
@@ -449,7 +449,7 @@ impl ShadowableUnidirectionalEmission {
     pub fn new(
         perpendicular_illuminance: Illumninance,
         direction: UnitVector3P,
-        angular_source_extent: Degrees<f32>,
+        angular_source_extent: Degrees,
     ) -> Self {
         Self {
             perpendicular_illuminance,
@@ -1417,7 +1417,7 @@ impl UnidirectionalLight {
     pub fn new(
         camera_space_direction: UnitVector3P,
         illuminance: Illumninance,
-        angular_extent: impl Angle<f32>,
+        angular_extent: impl Angle,
         flags: LightFlags,
     ) -> Self {
         Self {
@@ -1450,11 +1450,11 @@ impl UnidirectionalLight {
     }
 
     /// Sets the angular extent of the light to the given value.
-    pub fn set_angular_extent(&mut self, angular_extent: impl Angle<f32>) {
+    pub fn set_angular_extent(&mut self, angular_extent: impl Angle) {
         self.tan_angular_radius = Self::tan_angular_radius_from_angular_extent(angular_extent);
     }
 
-    fn tan_angular_radius_from_angular_extent(angular_extent: impl Angle<f32>) -> f32 {
+    fn tan_angular_radius_from_angular_extent(angular_extent: impl Angle) -> f32 {
         f32::tan(0.5 * angular_extent.radians())
     }
 }
@@ -1463,7 +1463,7 @@ impl ShadowableUnidirectionalLight {
     pub fn new(
         camera_space_direction: UnitVector3P,
         illuminance: Illumninance,
-        angular_extent: impl Angle<f32>,
+        angular_extent: impl Angle,
         flags: LightFlags,
     ) -> Self {
         Self {
@@ -1567,7 +1567,7 @@ impl ShadowableUnidirectionalLight {
     }
 
     /// Sets the angular extent of the light to the given value.
-    pub fn set_angular_extent(&mut self, angular_extent: impl Angle<f32>) {
+    pub fn set_angular_extent(&mut self, angular_extent: impl Angle) {
         self.tan_angular_radius =
             UnidirectionalLight::tan_angular_radius_from_angular_extent(angular_extent);
     }
@@ -1761,7 +1761,7 @@ impl OrthographicTranslationAndScaling {
 /// Computes the isotropic luminance incident on any surface in a light field
 /// with the given uniform illuminance.
 pub fn compute_luminance_for_uniform_illuminance(illuminance: &Illumninance) -> Luminance {
-    illuminance * f32::FRAC_1_PI
+    illuminance * FRAC_1_PI
 }
 
 fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> f32 {
