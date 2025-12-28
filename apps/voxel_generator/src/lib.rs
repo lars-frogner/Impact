@@ -17,7 +17,7 @@ use impact::{
     engine::{Engine, EngineConfig},
     impact_alloc::{Allocator, Global},
     impact_ecs::world::EntityID,
-    impact_geometry::{ModelTransform, ReferenceFrame},
+    impact_geometry::{ModelTransformA, ReferenceFrame},
     impact_io,
     impact_thread::pool::{DynamicThreadPool, ThreadPool},
     input::{
@@ -99,7 +99,7 @@ impl Application for VoxelGeneratorApp {
             OBJECT_ENTITY_ID,
             (
                 &voxel_object_id,
-                &model_transform,
+                &model_transform.unaligned(),
                 &ReferenceFrame::unoriented([0.0; 3].into()),
             ),
         )?;
@@ -112,7 +112,7 @@ impl Application for VoxelGeneratorApp {
             generate_next_voxel_object(&self.thread_pool, &mut self.user_interface.write().editor)
         {
             engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
-                *model_transform = new_model_transform;
+                *model_transform = new_model_transform.unaligned();
                 Ok(())
             })?;
             engine.with_component(OBJECT_ENTITY_ID, |voxel_object_id| {
@@ -234,7 +234,7 @@ impl UserInterface {
 fn generate_next_voxel_object(
     thread_pool: &DynamicThreadPool,
     editor: &mut Editor,
-) -> Option<(MeshedChunkedVoxelObject, ModelTransform)> {
+) -> Option<(MeshedChunkedVoxelObject, ModelTransformA)> {
     let generator = editor.build_next_voxel_sdf_generator(Global)?;
     Some((
         MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
@@ -248,7 +248,7 @@ fn generate_next_voxel_object(
 fn generate_next_voxel_object_or_default(
     thread_pool: &DynamicThreadPool,
     editor: &mut Editor,
-) -> (MeshedChunkedVoxelObject, ModelTransform) {
+) -> (MeshedChunkedVoxelObject, ModelTransformA) {
     let generator = editor.build_next_voxel_sdf_generator_or_default(Global);
     (
         MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
@@ -259,8 +259,8 @@ fn generate_next_voxel_object_or_default(
     )
 }
 
-fn compute_model_transform<A: Allocator>(generator: &SDFVoxelGenerator<A>) -> ModelTransform {
-    ModelTransform::with_offset(generator.voxel_extent() * generator.grid_center().as_vector())
+fn compute_model_transform<A: Allocator>(generator: &SDFVoxelGenerator<A>) -> ModelTransformA {
+    ModelTransformA::with_offset(generator.voxel_extent() * generator.grid_center().as_vector())
 }
 
 fn num_threads() -> NonZeroUsize {

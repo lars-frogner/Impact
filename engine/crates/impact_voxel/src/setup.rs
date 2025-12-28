@@ -504,10 +504,10 @@ impl VoxelSphereUnion {
     }
 
     pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
+        let center_offsets = self.center_offsets.aligned();
         let sphere_1_id = graph.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
-        let sphere_2_id =
-            graph.add_node(SDFNode::new_translation(sphere_2_id, self.center_offsets));
+        let sphere_2_id = graph.add_node(SDFNode::new_translation(sphere_2_id, center_offsets));
         graph.add_node(SDFNode::new_union(
             sphere_1_id,
             sphere_2_id,
@@ -629,8 +629,8 @@ pub fn create_model_instance_node_for_voxel_object(
     ModelTransform,
     SceneEntityFlags,
 )> {
-    let model_transform = model_transform.copied().unwrap_or_default();
-    let frame = frame.copied().unwrap_or_default();
+    let model_transform = model_transform.copied().unwrap_or_default().aligned();
+    let frame = frame.copied().unwrap_or_default().aligned();
     let flags = flags.copied().unwrap_or_default();
 
     let voxel_object = voxel_object_manager
@@ -650,7 +650,7 @@ pub fn create_model_instance_node_for_voxel_object(
     );
 
     let model_to_parent_transform = frame.create_transform_to_parent_space()
-        * model_transform.crate_transform_to_entity_space();
+        * model_transform.create_transform_to_entity_space();
 
     // Add entries for the model-to-camera and model-to-light transforms
     // for the scene graph to access and modify using the returned IDs
@@ -681,14 +681,14 @@ pub fn create_model_instance_node_for_voxel_object(
     Ok((
         SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
             parent_node_id,
-            model_to_parent_transform,
+            model_to_parent_transform.unaligned(),
             model_id,
-            bounding_sphere,
+            bounding_sphere.map(|sphere| sphere.unaligned()),
             FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
             FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
             flags.into(),
         )),
-        model_transform,
+        model_transform.unaligned(),
         flags,
     ))
 }
@@ -700,7 +700,7 @@ fn setup_rigid_body_for_new_voxel_object(
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
 ) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
-    let mut model_transform = model_transform.copied().unwrap_or_default();
+    let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
     let frame = frame.copied().unwrap_or_default();
     let motion = motion.copied().unwrap_or_default();
 
@@ -719,5 +719,5 @@ fn setup_rigid_body_for_new_voxel_object(
         motion,
     );
 
-    Ok((rigid_body_id, model_transform, frame, motion))
+    Ok((rigid_body_id, model_transform.unaligned(), frame, motion))
 }

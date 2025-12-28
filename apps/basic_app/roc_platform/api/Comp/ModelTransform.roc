@@ -1,8 +1,8 @@
-# Hash: 2ee31ad7940f089ab203774bdd711d9b4b6a0573660db166484271b556f54c6c
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: 33f5de2758c612747753d58b7e2921e599532c902333d33bd81d4bcd2df4e3a4
+# Generated: 2025-12-28T19:54:00+00:00
 # Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
-# Commit: d4c84c05 (dirty)
+# Commit: 78e3beb5 (dirty)
 module [
     ModelTransform,
     identity,
@@ -35,6 +35,10 @@ import core.Vector3
 
 ## The similarity transform from the local space of a model to the space of
 ## a parent entity using the model.
+##
+## This type only supports a few basic operations, as is primarily intended for
+## compact storage inside other types and collections. For computations, prefer
+## the SIMD-friendly 16-byte aligned [`ModelTransformA`].
 ModelTransform : {
     ## The offset subtracted from a model-space position before scaling to
     ## transform it to the parent entity's space.

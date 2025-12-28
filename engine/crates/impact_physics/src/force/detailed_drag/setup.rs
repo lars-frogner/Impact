@@ -128,7 +128,7 @@ fn generate_map<'a>(
         config.n_direction_samples; {
         DragLoadMap::compute_from_mesh(
             triangle_vertex_positions,
-            center_of_mass,
+            &center_of_mass.aligned(),
             config.n_direction_samples,
             config.n_theta_coords,
             config.smoothness,

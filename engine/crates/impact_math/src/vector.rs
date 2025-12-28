@@ -1,6 +1,8 @@
 //! Vectors.
 
 use bytemuck::{Pod, Zeroable};
+use core::fmt;
+use glam::Vec3Swizzles;
 use roc_integration::impl_roc_for_library_provided_primitives;
 use std::ops::{Deref, Index, IndexMut, Mul, MulAssign};
 
@@ -11,7 +13,7 @@ use std::ops::{Deref, Index, IndexMut, Mul, MulAssign};
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector2 {
     inner: glam::Vec2,
 }
@@ -22,7 +24,11 @@ pub struct Vector2 {
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`Vector3A`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 3]", from = "[f32; 3]")
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector3 {
     x: f32,
@@ -41,7 +47,7 @@ pub struct Vector3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector3A {
     inner: glam::Vec3A,
 }
@@ -52,7 +58,11 @@ pub struct Vector3A {
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`UnitVector3A`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 3]", from = "[f32; 3]")
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
 pub struct UnitVector3 {
     x: f32,
@@ -71,7 +81,7 @@ pub struct UnitVector3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, PartialEq, Zeroable, Pod)]
 pub struct UnitVector3A {
     inner: glam::Vec3A,
 }
@@ -82,7 +92,11 @@ pub struct UnitVector3A {
 /// padding-free storage when combined with smaller types. For computations,
 /// prefer the SIMD-friendly 16-byte aligned [`Vector4A`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 4]", from = "[f32; 4]")
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector4 {
     x: f32,
@@ -102,7 +116,7 @@ pub struct Vector4 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector4A {
     inner: glam::Vec4,
 }
@@ -310,6 +324,15 @@ impl_relative_eq!(Vector2, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
+impl fmt::Debug for Vector2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Vector2")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .finish()
+    }
+}
+
 impl Vector3 {
     /// Creates a new vector with the given components.
     #[inline]
@@ -393,6 +416,24 @@ impl Vector3 {
     #[inline]
     pub const fn extended(&self, w: f32) -> Vector4 {
         Vector4::new(self.x(), self.y(), self.z(), w)
+    }
+
+    /// Computes the normalized version of the vector.
+    #[inline]
+    pub fn normalized(&self) -> Self {
+        self / self.norm()
+    }
+
+    /// Computes the norm (length) of the vector.
+    #[inline]
+    pub fn norm(&self) -> f32 {
+        self.norm_squared().sqrt()
+    }
+
+    /// Computes the square of the norm of the vector.
+    #[inline]
+    pub fn norm_squared(&self) -> f32 {
+        self.dot(self)
     }
 
     /// Computes the dot product of this vector with another.
@@ -586,6 +627,34 @@ impl Vector3A {
         Vector2::new(self.x(), self.y())
     }
 
+    /// Creates a vector where the x-, y- and z-components are the y-, z- and
+    /// x-component of this vector.
+    #[inline]
+    pub fn yzx(&self) -> Self {
+        Self::wrap(self.inner.yzx())
+    }
+
+    /// Creates a vector where the x-, y- and z-components are the z-, x- and
+    /// y-component of this vector.
+    #[inline]
+    pub fn zxy(&self) -> Self {
+        Self::wrap(self.inner.zxy())
+    }
+
+    /// Creates a vector where the x-, y- and z-components are the y-, x- and
+    /// x-component of this vector.
+    #[inline]
+    pub fn yxx(&self) -> Self {
+        Self::wrap(self.inner.yxx())
+    }
+
+    /// Creates a vector where the x-, y- and z-components are the z-, z- and
+    /// y-component of this vector.
+    #[inline]
+    pub fn zzy(&self) -> Self {
+        Self::wrap(self.inner.zzy())
+    }
+
     /// Converts the vector to 4D by appending the given w-component.
     #[inline]
     pub fn extended(&self, w: f32) -> Vector4A {
@@ -760,6 +829,16 @@ impl_relative_eq!(Vector3A, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
+impl fmt::Debug for Vector3A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Vector3A")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .field("z", &self.inner.z)
+            .finish()
+    }
+}
+
 impl UnitVector3 {
     /// Creates a vector with the given components. The vector is assumed to be
     /// normalized.
@@ -811,6 +890,44 @@ impl UnitVector3 {
         Self::new_unchecked(0.0, 0.0, -1.0)
     }
 
+    /// Creates a unit vector by normalizing the given vector. If the vector has
+    /// zero length, the result will be non-finite.
+    #[inline]
+    pub fn normalized_from(vector: Vector3) -> Self {
+        Self::unchecked_from(vector.normalized())
+    }
+
+    /// Creates a unit vector by normalizing the given vector if its norm
+    /// exceeds the given threshold. Otherwise, returns [`None`].
+    #[inline]
+    pub fn normalized_from_if_above(vector: Vector3, min_norm: f32) -> Option<Self> {
+        Self::normalized_from_and_norm_if_above(vector, min_norm).map(|(v, _norm)| v)
+    }
+
+    /// Creates a unit vector by normalizing the given vector, and returns both
+    /// the vector and the norm. If the norm is zero, the vector will be
+    /// non-finite.
+    #[inline]
+    pub fn normalized_from_and_norm(vector: Vector3) -> (Self, f32) {
+        let norm = vector.norm();
+        (Self::unchecked_from(vector / norm), norm)
+    }
+
+    /// Creates a unit vector by normalizing the given vector if its norm
+    /// exceeds the given threshold, and returns both the vector and the norm.
+    /// Returns [`None`] if the norm does not exceed the threshold.
+    #[inline]
+    pub fn normalized_from_and_norm_if_above(
+        vector: Vector3,
+        min_norm: f32,
+    ) -> Option<(Self, f32)> {
+        let norm_squared = vector.norm_squared();
+        (norm_squared > min_norm.powi(2)).then(|| {
+            let norm = norm_squared.sqrt();
+            (Self::unchecked_from(vector / norm), norm)
+        })
+    }
+
     /// The x-component.
     #[inline]
     pub const fn x(&self) -> f32 {
@@ -841,16 +958,6 @@ impl UnitVector3 {
     pub fn aligned(&self) -> UnitVector3A {
         UnitVector3A::new_unchecked(self.x(), self.y(), self.z())
     }
-
-    #[inline]
-    pub(crate) const fn from_glam(vector: glam::Vec3) -> Self {
-        Self::new_unchecked(vector.x, vector.y, vector.z)
-    }
-
-    #[inline]
-    pub(crate) const fn to_glam(self) -> glam::Vec3 {
-        glam::Vec3::new(self.x, self.y, self.z)
-    }
 }
 
 impl Deref for UnitVector3 {
@@ -859,6 +966,18 @@ impl Deref for UnitVector3 {
     #[inline]
     fn deref(&self) -> &Self::Target {
         bytemuck::cast_ref(self)
+    }
+}
+
+impl From<UnitVector3> for [f32; 3] {
+    fn from(vector: UnitVector3) -> Self {
+        [vector.x(), vector.y(), vector.z()]
+    }
+}
+
+impl From<[f32; 3]> for UnitVector3 {
+    fn from(vector: [f32; 3]) -> Self {
+        Self::normalized_from(vector.into())
     }
 }
 
@@ -1068,6 +1187,16 @@ impl_abs_diff_eq!(UnitVector3A, |a, b, epsilon| {
 impl_relative_eq!(UnitVector3A, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
+
+impl fmt::Debug for UnitVector3A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UnitVector3A")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .field("z", &self.inner.z)
+            .finish()
+    }
+}
 
 impl Vector4 {
     /// Creates a new vector with the given components.
@@ -1532,6 +1661,17 @@ impl_abs_diff_eq!(Vector4A, |a, b, epsilon| {
 impl_relative_eq!(Vector4A, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
+
+impl fmt::Debug for Vector4A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Vector4A")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .field("z", &self.inner.z)
+            .field("w", &self.inner.w)
+            .finish()
+    }
+}
 
 impl_roc_for_library_provided_primitives! {
 //  Type           Pkg   Parents  Module       Roc name     Postfix  Precision
@@ -2405,6 +2545,21 @@ mod tests {
         assert_eq!(unit.x(), 1.0);
         assert_eq!(unit.y(), 0.0);
         assert_eq!(unit.z(), 0.0);
+    }
+
+    #[test]
+    fn unitvector3_normalized_from_works() {
+        let v = Vector3::new(3.0, 4.0, 0.0);
+        let unit = UnitVector3::normalized_from(v);
+
+        // Should normalize to unit length
+        let norm = (unit.x() * unit.x() + unit.y() * unit.y() + unit.z() * unit.z()).sqrt();
+        assert_abs_diff_eq!(norm, 1.0, epsilon = EPSILON);
+
+        // Should maintain direction (parallel to original)
+        assert_abs_diff_eq!(unit.x(), 3.0 / 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(unit.y(), 4.0 / 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(unit.z(), 0.0, epsilon = EPSILON);
     }
 
     #[test]

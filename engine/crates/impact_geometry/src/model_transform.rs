@@ -124,10 +124,10 @@ impl ModelTransformA {
         Self { offset, scale }
     }
 
-    /// Creates the [`Similarity3`] for the transform from model space to the
+    /// Creates the [`Similarity3A`] for the transform from model space to the
     /// space of the parent entity.
     #[inline]
-    pub fn crate_transform_to_entity_space(&self) -> Similarity3A {
+    pub fn create_transform_to_entity_space(&self) -> Similarity3A {
         Similarity3A::from_scaled_translation(-self.offset, self.scale)
     }
 
@@ -195,13 +195,13 @@ mod tests {
         let mut frame = ReferenceFrameA::new(position, orientation);
         let point_within_frame = Point3A::new(-2.0, 0.5, 3.0);
         let point_before = (frame.create_transform_to_parent_space()
-            * model_transform.crate_transform_to_entity_space())
+            * model_transform.create_transform_to_entity_space())
         .transform_point(&point_within_frame);
 
         model_transform.update_offset_while_preserving_entity_position(&mut frame, new_offset);
 
         let point_after = (frame.create_transform_to_parent_space()
-            * model_transform.crate_transform_to_entity_space())
+            * model_transform.create_transform_to_entity_space())
         .transform_point(&point_within_frame);
 
         assert_eq!(frame.orientation, orientation);

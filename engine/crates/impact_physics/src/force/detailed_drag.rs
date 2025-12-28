@@ -6,11 +6,12 @@ mod equirectangular_map;
 pub mod setup;
 
 pub use drag_load::DragLoad;
+use impact_alloc::arena::ArenaPool;
 
 use crate::{
     force::ForceGeneratorRegistry,
     medium::UniformMedium,
-    quantities::{Direction, Position},
+    quantities::{Direction, DirectionA, PositionA},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use anyhow::{Result, anyhow, bail};
@@ -198,16 +199,18 @@ impl DetailedDragForce {
         drag_load_map_repository: &DragLoadMapRepository,
         rigid_body: &mut DynamicRigidBody,
     ) {
-        let velocity = rigid_body.compute_velocity();
+        let body_orientation = rigid_body.orientation().aligned();
+        let body_velocity = rigid_body.compute_velocity();
+        let medium_velocity = medium.velocity.aligned();
 
-        let velocity_relative_to_medium = velocity - medium.velocity;
+        let velocity_relative_to_medium = body_velocity - medium_velocity;
         let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
 
         if squared_body_speed_relative_to_medium > 0.0 {
             let body_space_velocity_relative_to_medium =
                 rigid_body.transform_vector_from_world_to_body_space(&velocity_relative_to_medium);
 
-            let body_space_direction_of_motion_relative_to_medium = Direction::unchecked_from(
+            let body_space_direction_of_motion_relative_to_medium = DirectionA::unchecked_from(
                 body_space_velocity_relative_to_medium
                     / f32::sqrt(squared_body_speed_relative_to_medium),
             );
@@ -223,7 +226,7 @@ impl DetailedDragForce {
                 self.scaling,
                 medium.mass_density,
                 self.drag_coefficient,
-                rigid_body.orientation(),
+                &body_orientation,
                 squared_body_speed_relative_to_medium,
             );
 
@@ -352,7 +355,7 @@ impl DragLoadMap {
     /// If the given number of direction samples or theta coordinates is zero.
     pub fn compute_from_mesh<'a>(
         triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3; 3]>,
-        center_of_mass: &Position,
+        center_of_mass: &PositionA,
         n_direction_samples: usize,
         n_theta_coords: usize,
         smoothness: f32,
@@ -369,8 +372,11 @@ impl DragLoadMap {
         let angular_interpolation_distance =
             compute_angular_interpolation_distance_from_smoothness(smoothness, n_direction_samples);
 
+        let arena = ArenaPool::get_arena();
+
         let drag_loads =
             drag_load::compute_aggregate_drag_loads_for_uniformly_distributed_directions(
+                &arena,
                 triangle_vertex_positions,
                 center_of_mass,
                 n_direction_samples,
@@ -397,8 +403,10 @@ fn generate_map_from_drag_loads(
     let mut averaging_map = EquirectangularMap::<AveragingDragLoad>::empty(n_theta_coords);
 
     for (direction, load) in drag_loads {
-        let direction_phi = compute_phi(direction);
-        let direction_theta = compute_theta(direction);
+        let direction = direction.aligned();
+
+        let direction_phi = compute_phi(&direction);
+        let direction_theta = compute_theta(&direction);
 
         // Increase the interpolation distance when we are closer to the poles
         // to account for the disproportionate number of grid cells that must be
@@ -432,11 +440,11 @@ fn generate_map_from_drag_loads(
     averaging_map.map_values(|averaging_load| averaging_load.into_average_load())
 }
 
-fn compute_phi(direction: &Direction) -> Radians<f32> {
+fn compute_phi(direction: &DirectionA) -> Radians<f32> {
     Radians(f32::atan2(direction.y(), direction.x()))
 }
 
-fn compute_theta(direction: &Direction) -> Radians<f32> {
+fn compute_theta(direction: &DirectionA) -> Radians<f32> {
     Radians(f32::acos(direction.z()))
 }
 

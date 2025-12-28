@@ -10,10 +10,10 @@ use crate::{
 };
 use impact_containers::HashSet;
 use impact_geometry::{
-    AxisAlignedBox, Capsule, OrientedBox, Plane, Sphere,
+    AxisAlignedBoxA, CapsuleA, OrientedBoxA, PlaneA, SphereA,
     oriented_box::compute_box_intersection_bounds,
 };
-use impact_math::{point::Point3, transform::Isometry3};
+use impact_math::{point::Point3A, transform::Isometry3A};
 use std::{array, ops::Range};
 
 pub type VoxelRanges = [Range<usize>; 3];
@@ -33,7 +33,7 @@ impl ChunkedVoxelObject {
     /// that are fully outside the negative halfspace of the plane.
     pub fn for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &self,
-        plane: &Plane,
+        plane: &PlaneA,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         let normalized_plane = plane.scaled(self.inverse_voxel_extent);
@@ -54,7 +54,7 @@ impl ChunkedVoxelObject {
     /// that are fully outside the sphere.
     pub fn for_each_surface_voxel_maybe_intersecting_sphere(
         &self,
-        sphere: &Sphere,
+        sphere: &SphereA,
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
@@ -153,7 +153,7 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_sphere(
         &mut self,
-        sphere: &Sphere,
+        sphere: &SphereA,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
         let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
@@ -221,7 +221,7 @@ impl ChunkedVoxelObject {
                                         i, j, k,
                                     );
 
-                                let normalized_distance_squared = Point3::squared_distance_between(
+                                let normalized_distance_squared = Point3A::squared_distance_between(
                                     normalized_sphere.center(),
                                     &normalized_voxel_center_position,
                                 );
@@ -291,7 +291,7 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_capsule(
         &mut self,
-        capsule: &Capsule,
+        capsule: &CapsuleA,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
         let normalized_capsule = capsule.scaled(self.inverse_voxel_extent);
@@ -424,7 +424,7 @@ impl ChunkedVoxelObject {
         i: usize,
         j: usize,
         k: usize,
-    ) -> Point3 {
+    ) -> Point3A {
         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
@@ -436,7 +436,7 @@ impl ChunkedVoxelObject {
         i: usize,
         j: usize,
         k: usize,
-    ) -> AxisAlignedBox {
+    ) -> AxisAlignedBoxA {
         voxel_aabb_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
@@ -508,7 +508,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_negative_halfspace_of_plane_brute_force(
         &self,
-        plane: &Plane,
+        plane: &PlaneA,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -532,7 +532,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_surface_voxel_touching_sphere_brute_force(
         &self,
-        sphere: &Sphere,
+        sphere: &SphereA,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -540,7 +540,7 @@ impl ChunkedVoxelObject {
                 for k in self.occupied_voxel_ranges[2].clone() {
                     let voxel_center_position =
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
-                    if Point3::distance_between(&voxel_center_position, sphere.center())
+                    if Point3A::distance_between(&voxel_center_position, sphere.center())
                         <= 0.5 * self.voxel_extent + sphere.radius()
                         && let Some(voxel) = self.get_voxel(i, j, k)
                         && let Some(VoxelPlacement::Surface(_)) = voxel.placement()
@@ -555,7 +555,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_sphere_brute_force(
         &self,
-        sphere: &Sphere,
+        sphere: &SphereA,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         for i in self.occupied_voxel_ranges[0].clone() {
@@ -576,7 +576,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     fn for_each_non_empty_voxel_in_capsule_brute_force(
         &self,
-        capsule: &Capsule,
+        capsule: &CapsuleA,
         f: &mut impl FnMut([usize; 3], &Voxel),
     ) {
         let containment_tester = capsule.create_point_containment_tester();
@@ -600,7 +600,7 @@ impl ChunkedVoxelObject {
     #[inline]
     pub fn voxel_ranges_in_object_touching_aab(
         &self,
-        normalized_aab: &AxisAlignedBox,
+        normalized_aab: &AxisAlignedBoxA,
     ) -> VoxelRanges {
         voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), normalized_aab)
     }
@@ -610,7 +610,7 @@ impl ChunkedVoxelObject {
     #[inline]
     pub fn voxel_ranges_in_object_touching_sphere(
         &self,
-        normalized_sphere: &Sphere,
+        normalized_sphere: &SphereA,
     ) -> VoxelRanges {
         voxel_ranges_touching_sphere(self.occupied_voxel_ranges.clone(), normalized_sphere)
     }
@@ -618,21 +618,21 @@ impl ChunkedVoxelObject {
     /// The plane should be in normalized voxel object space (where voxel extent
     /// is 1.0).
     #[inline]
-    pub fn voxel_ranges_in_object_within_plane(&self, normalized_plane: &Plane) -> VoxelRanges {
+    pub fn voxel_ranges_in_object_within_plane(&self, normalized_plane: &PlaneA) -> VoxelRanges {
         voxel_ranges_within_plane(self.occupied_voxel_ranges.clone(), normalized_plane)
     }
 
     pub fn determine_voxel_ranges_encompassing_intersection(
         object_a: &Self,
         object_b: &Self,
-        transform_from_b_to_a: &Isometry3,
+        transform_from_b_to_a: &Isometry3A,
     ) -> Option<(VoxelRanges, VoxelRanges)> {
         let object_a_aabb = normalized_aabb_from_voxel_ranges(&object_a.occupied_voxel_ranges)
             .scaled(object_a.voxel_extent);
         let object_b_aabb = normalized_aabb_from_voxel_ranges(&object_b.occupied_voxel_ranges)
             .scaled(object_b.voxel_extent);
 
-        let object_b_obb = OrientedBox::from_axis_aligned_box(&object_b_aabb);
+        let object_b_obb = OrientedBoxA::from_axis_aligned_box(&object_b_aabb);
 
         let object_b_obb_in_a = object_b_obb.translated_and_rotated(transform_from_b_to_a);
 
@@ -673,7 +673,7 @@ fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usiz
 #[inline]
 fn voxel_ranges_within_plane(
     max_voxel_ranges: VoxelRanges,
-    normalized_plane: &Plane,
+    normalized_plane: &PlaneA,
 ) -> VoxelRanges {
     let normalized_aabb = normalized_aabb_from_voxel_ranges(&max_voxel_ranges);
 
@@ -688,7 +688,7 @@ fn voxel_ranges_within_plane(
 #[inline]
 fn voxel_ranges_touching_aab(
     max_voxel_ranges: VoxelRanges,
-    normalized_aab: &AxisAlignedBox,
+    normalized_aab: &AxisAlignedBoxA,
 ) -> VoxelRanges {
     let lower_corner = normalized_aab.lower_corner();
     let upper_corner = normalized_aab.upper_corner();
@@ -709,7 +709,7 @@ fn voxel_ranges_touching_aab(
 #[inline]
 fn voxel_ranges_touching_sphere(
     max_voxel_ranges: VoxelRanges,
-    normalized_sphere: &Sphere,
+    normalized_sphere: &SphereA,
 ) -> VoxelRanges {
     voxel_ranges_touching_aab(max_voxel_ranges, &normalized_sphere.compute_aabb())
 }
@@ -720,8 +720,8 @@ fn voxel_center_position_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> Point3 {
-    Point3::new(
+) -> Point3A {
+    Point3A::new(
         (i as f32 + 0.5) * voxel_extent,
         (j as f32 + 0.5) * voxel_extent,
         (k as f32 + 0.5) * voxel_extent,
@@ -733,8 +733,8 @@ fn normalized_voxel_center_position_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> Point3 {
-    Point3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5)
+) -> Point3A {
+    Point3A::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5)
 }
 
 #[inline]
@@ -742,14 +742,14 @@ fn normalized_chunk_aabb_from_chunk_indices(
     chunk_i: usize,
     chunk_j: usize,
     chunk_k: usize,
-) -> AxisAlignedBox {
-    AxisAlignedBox::new(
-        Point3::new(
+) -> AxisAlignedBoxA {
+    AxisAlignedBoxA::new(
+        Point3A::new(
             (chunk_i * CHUNK_SIZE) as f32,
             (chunk_j * CHUNK_SIZE) as f32,
             (chunk_k * CHUNK_SIZE) as f32,
         ),
-        Point3::new(
+        Point3A::new(
             ((chunk_i + 1) * CHUNK_SIZE) as f32,
             ((chunk_j + 1) * CHUNK_SIZE) as f32,
             ((chunk_k + 1) * CHUNK_SIZE) as f32,
@@ -763,14 +763,14 @@ fn voxel_aabb_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
-) -> AxisAlignedBox {
-    AxisAlignedBox::new(
-        Point3::new(
+) -> AxisAlignedBoxA {
+    AxisAlignedBoxA::new(
+        Point3A::new(
             i as f32 * voxel_extent,
             j as f32 * voxel_extent,
             k as f32 * voxel_extent,
         ),
-        Point3::new(
+        Point3A::new(
             (i as f32 + 1.0) * voxel_extent,
             (j as f32 + 1.0) * voxel_extent,
             (k as f32 + 1.0) * voxel_extent,
@@ -779,20 +779,20 @@ fn voxel_aabb_from_object_voxel_indices(
 }
 
 #[inline]
-fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox {
-    let lower_corner = Point3::new(
+fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBoxA {
+    let lower_corner = Point3A::new(
         voxel_ranges[0].start as f32,
         voxel_ranges[1].start as f32,
         voxel_ranges[2].start as f32,
     );
 
-    let upper_corner = Point3::new(
+    let upper_corner = Point3A::new(
         voxel_ranges[0].end as f32,
         voxel_ranges[1].end as f32,
         voxel_ranges[2].end as f32,
     );
 
-    AxisAlignedBox::new(lower_corner, upper_corner)
+    AxisAlignedBoxA::new(lower_corner, upper_corner)
 }
 
 #[cfg(feature = "fuzzing")]
@@ -804,17 +804,17 @@ pub mod fuzzing {
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
     use impact_alloc::Global;
-    use impact_math::vector::{UnitVector3, Vector3};
+    use impact_math::vector::{UnitVector3A, Vector3A};
     use std::mem;
 
     #[derive(Clone, Debug)]
-    pub struct ArbitraryPlane(Plane);
+    pub struct ArbitraryPlane(PlaneA);
 
     #[derive(Clone, Debug)]
-    pub struct ArbitrarySphere(Sphere);
+    pub struct ArbitrarySphere(SphereA);
 
     #[derive(Clone, Debug)]
-    pub struct ArbitraryCapsule(Capsule);
+    pub struct ArbitraryCapsule(CapsuleA);
 
     impl Arbitrary<'_> for ArbitraryPlane {
         fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
@@ -825,8 +825,8 @@ pub mod fuzzing {
             if abs_diff_eq!(nx, 0.0) && abs_diff_eq!(ny, 0.0) && abs_diff_eq!(nz, 0.0) {
                 nz = 1e-3;
             }
-            Ok(Self(Plane::new(
-                UnitVector3::normalized_from(Vector3::new(nx, ny, nz)),
+            Ok(Self(PlaneA::new(
+                UnitVector3A::normalized_from(Vector3A::new(nx, ny, nz)),
                 displacement,
             )))
         }
@@ -843,7 +843,7 @@ pub mod fuzzing {
             let x = 1e3 * arbitrary_norm_f32(u)?;
             let y = 1e3 * arbitrary_norm_f32(u)?;
             let z = 1e3 * arbitrary_norm_f32(u)?;
-            Ok(Self(Sphere::new(Point3::new(x, y, z), radius)))
+            Ok(Self(SphereA::new(Point3A::new(x, y, z), radius)))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
@@ -857,17 +857,17 @@ pub mod fuzzing {
             let start_x = 1e3 * arbitrary_norm_f32(u)?;
             let start_y = 1e3 * arbitrary_norm_f32(u)?;
             let start_z = 1e3 * arbitrary_norm_f32(u)?;
-            let segment_start = Point3::new(start_x, start_y, start_z);
+            let segment_start = Point3A::new(start_x, start_y, start_z);
 
             let dir_x = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let dir_y = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let dir_z = 2.0 * arbitrary_norm_f32(u)? - 1.0;
             let length = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
-            let segment_vector = Vector3::new(dir_x, dir_y, dir_z).normalized() * length;
+            let segment_vector = Vector3A::new(dir_x, dir_y, dir_z).normalized() * length;
 
             let radius = u.arbitrary_len::<usize>()?.min(1000) as f32 + arbitrary_norm_f32(u)?;
 
-            Ok(Self(Capsule::new(segment_start, segment_vector, radius)))
+            Ok(Self(CapsuleA::new(segment_start, segment_vector, radius)))
         }
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
@@ -1089,7 +1089,7 @@ mod tests {
         voxel_types::VoxelType,
     };
     use impact_alloc::Global;
-    use impact_math::vector::{UnitVector3, Vector3};
+    use impact_math::vector::{UnitVector3A, Vector3A};
 
     #[test]
     fn finding_surface_voxels_intersecting_negative_halfspace_of_plane_finds_correct_voxels() {
@@ -1107,8 +1107,8 @@ mod tests {
         );
         let object = ChunkedVoxelObject::generate(&generator);
 
-        let plane = Plane::new(
-            UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 1.0)),
+        let plane = PlaneA::new(
+            UnitVector3A::normalized_from(Vector3A::new(1.0, 1.0, 1.0)),
             plane_displacement,
         );
 
@@ -1158,9 +1158,9 @@ mod tests {
         );
         let object = ChunkedVoxelObject::generate(&generator);
 
-        let sphere = Sphere::new(
+        let sphere = SphereA::new(
             object.compute_aabb().center()
-                - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
+                - object_radius * UnitVector3A::normalized_from(Vector3A::same(1.0)),
             sphere_radius,
         );
 
@@ -1201,9 +1201,9 @@ mod tests {
         );
         let mut object = ChunkedVoxelObject::generate(&generator);
 
-        let sphere = Sphere::new(
+        let sphere = SphereA::new(
             object.compute_aabb().center()
-                - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
+                - object_radius * UnitVector3A::normalized_from(Vector3A::same(1.0)),
             sphere_radius,
         );
 
@@ -1231,7 +1231,7 @@ mod tests {
     #[test]
     fn modifying_voxels_within_capsule_finds_correct_voxels() {
         let object_radius = 10.0;
-        let capsule_direction = UnitVector3::normalized_from(-Vector3::new(1.0, 1.0, 1.0));
+        let capsule_direction = UnitVector3A::normalized_from(-Vector3A::new(1.0, 1.0, 1.0));
         let capsule_vector = 10.0 * capsule_direction;
         let capsule_radius = 0.4 * object_radius;
 
@@ -1246,7 +1246,7 @@ mod tests {
         );
         let mut object = ChunkedVoxelObject::generate(&generator);
 
-        let capsule = Capsule::new(
+        let capsule = CapsuleA::new(
             object.compute_aabb().center() - (-object_radius) * capsule_direction,
             capsule_vector,
             capsule_radius,

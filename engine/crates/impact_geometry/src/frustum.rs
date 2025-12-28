@@ -606,7 +606,7 @@ impl FrustumA {
     /// Determines the corner of any axis-aligned bounding box that will have
     /// the largest signed distance in the space of the given plane. The corner
     /// is represented by an index following the convention of
-    /// [`AxisAlignedBox::corner`].
+    /// [`AxisAlignedBoxA::corner`].
     #[inline]
     pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &PlaneA) -> u8 {
         let normal = plane.unit_normal();

@@ -1,8 +1,8 @@
-# Hash: e9161116d3dbd5e19d96cfec2eddf06976c8d0dcf7e14b6d5d763622ed0c3fb7
-# Generated: 2025-12-21T23:08:03+00:00
+# Hash: c0782ee4150e4ba4fc96736bf22f639a0061522e108cdc7ea1cb1c209700d9d4
+# Generated: 2025-12-28T19:52:23+00:00
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: d4c84c05 (dirty)
+# Commit: 78e3beb5 (dirty)
 module [
     ReferenceFrame,
     new,
@@ -32,6 +32,10 @@ import core.Point3
 import core.UnitQuaternion
 
 ## A reference frame defined by an origin position and an orientation.
+##
+## This type only supports a few basic operations, as is primarily intended for
+## compact storage inside other types and collections. For computations, prefer
+## the SIMD-friendly 16-byte aligned [`ReferenceFrameA`].
 ReferenceFrame : {
     ## The coordinates of the origin of the entity's reference frame measured
     ## in the parent space.

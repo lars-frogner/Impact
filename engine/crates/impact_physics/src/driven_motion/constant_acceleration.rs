@@ -134,15 +134,19 @@ impl ConstantAccelerationTrajectory {
 
     /// Computes the position and velocity for the trajectory at the given time.
     pub fn compute_position_and_velocity(&self, time: f32) -> (Position, Velocity) {
+        let initial_position = self.initial_position.aligned();
+        let initial_velocity = self.initial_velocity.aligned();
+        let acceleration = self.acceleration.aligned();
+
         let time_offset = time - self.initial_time;
 
-        let position = self.initial_position
-            + time_offset * self.initial_velocity
-            + (0.5 * time_offset.powi(2)) * self.acceleration;
+        let position = initial_position
+            + time_offset * initial_velocity
+            + (0.5 * time_offset.powi(2)) * acceleration;
 
-        let velocity = self.initial_velocity + time_offset * self.acceleration;
+        let velocity = initial_velocity + time_offset * acceleration;
 
-        (position, velocity)
+        (position.unaligned(), velocity.unaligned())
     }
 }
 

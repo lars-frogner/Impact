@@ -11,7 +11,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::LightGPUResources;
 use impact_geometry::{
-    AxisAlignedBox, Frustum, OrientedBox, Sphere,
+    AxisAlignedBoxA, FrustumA, OrientedBoxA, SphereA,
     projection::{CubeMapper, CubemapFace, OrthographicTransform},
 };
 use impact_gpu::{
@@ -22,10 +22,10 @@ use impact_math::{
     Float,
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
-    point::Point3,
-    quaternion::UnitQuaternion,
-    transform::{Isometry3, Similarity3},
-    vector::{UnitVector3, Vector3},
+    point::{Point3, Point3A},
+    quaternion::{UnitQuaternion, UnitQuaternionA},
+    transform::{Isometry3A, Similarity3A},
+    vector::{UnitVector3, UnitVector3A, Vector3, Vector3A},
 };
 use roc_integration::roc;
 use shadow_map::{CascadeIdx, ShadowMappingConfig};
@@ -1213,8 +1213,8 @@ impl ShadowableOmnidirectionalLight {
     pub fn create_transform_to_positive_z_cubemap_face_space(
         &self,
         face: CubemapFace,
-        transform_to_camera_space: &Similarity3,
-    ) -> Similarity3 {
+        transform_to_camera_space: &Similarity3A,
+    ) -> Similarity3A {
         self.create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
             * transform_to_camera_space
     }
@@ -1224,7 +1224,7 @@ impl ShadowableOmnidirectionalLight {
     pub fn create_transform_from_camera_space_to_positive_z_cubemap_face_space(
         &self,
         face: CubemapFace,
-    ) -> Isometry3 {
+    ) -> Isometry3A {
         self.create_camera_to_light_space_transform()
             .rotated(&CubeMapper::rotation_to_positive_z_face_from_face(face))
     }
@@ -1275,11 +1275,13 @@ impl ShadowableOmnidirectionalLight {
     /// unnecessary draw calls.
     pub fn orient_and_scale_cubemap_for_shadow_casting_models(
         &mut self,
-        camera_space_bounding_sphere: &Sphere,
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox>,
+        camera_space_bounding_sphere: &SphereA,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBoxA>,
     ) {
-        let bounding_sphere_center_distance = Point3::distance_between(
-            &self.camera_space_position,
+        let camera_space_position = self.camera_space_position.aligned();
+
+        let bounding_sphere_center_distance = Point3A::distance_between(
+            &camera_space_position,
             camera_space_bounding_sphere.center(),
         );
 
@@ -1292,23 +1294,23 @@ impl ShadowableOmnidirectionalLight {
             // z-axis points towards the center of the volume containing visible
             // models
             let camera_to_light_space_rotation =
-                Self::compute_camera_to_light_space_rotation(&UnitVector3::normalized_from(
-                    camera_space_aabb_for_visible_models.center() - self.camera_space_position,
+                Self::compute_camera_to_light_space_rotation(&UnitVector3A::normalized_from(
+                    camera_space_aabb_for_visible_models.center() - camera_space_position,
                 ));
 
             // Use the farthest point of the volume containing visible models as
             // the far distance
-            let far_distance = Point3::distance_between(
+            let far_distance = Point3A::distance_between(
                 &camera_space_aabb_for_visible_models
-                    .compute_farthest_corner(&self.camera_space_position),
-                &self.camera_space_position,
+                    .compute_farthest_corner(&camera_space_position),
+                &camera_space_position,
             );
 
             (camera_to_light_space_rotation, far_distance)
         } else {
             // In this case no models are visible, so the rotation does not
             // matter
-            let camera_to_light_space_rotation = UnitQuaternion::identity();
+            let camera_to_light_space_rotation = UnitQuaternionA::identity();
 
             let far_distance =
                 bounding_sphere_center_distance + camera_space_bounding_sphere.radius();
@@ -1316,7 +1318,7 @@ impl ShadowableOmnidirectionalLight {
             (camera_to_light_space_rotation, far_distance)
         };
 
-        self.camera_to_light_space_rotation = camera_to_light_space_rotation;
+        self.camera_to_light_space_rotation = camera_to_light_space_rotation.unaligned();
 
         // The near distance must never be farther than the closest model to the
         // light source
@@ -1331,40 +1333,40 @@ impl ShadowableOmnidirectionalLight {
 
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> FrustumA {
         CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
     }
 
     /// Computes the frustum for the given cubemap face in camera space.
-    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum {
+    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> FrustumA {
         CubeMapper::compute_transformed_frustum_for_face(
             face,
-            &Similarity3::from_isometry(self.create_camera_to_light_space_transform()),
+            &Similarity3A::from_isometry(self.create_camera_to_light_space_transform()),
             self.near_distance,
             self.far_distance,
         )
     }
 
     /// Returns the transform from camera space to the local space of the light.
-    pub fn create_camera_to_light_space_transform(&self) -> Isometry3 {
-        Isometry3::from_rotated_translation(
-            -self.camera_space_position.as_vector(),
-            self.camera_to_light_space_rotation,
+    pub fn create_camera_to_light_space_transform(&self) -> Isometry3A {
+        Isometry3A::from_rotated_translation(
+            -self.camera_space_position.as_vector().aligned(),
+            self.camera_to_light_space_rotation.aligned(),
         )
     }
 
     /// Returns the transform from the local space of the light to camera space.
-    pub fn create_light_space_to_camera_transform(&self) -> Isometry3 {
-        Isometry3::from_parts(
-            *self.camera_space_position.as_vector(),
-            self.camera_to_light_space_rotation.inverse(),
+    pub fn create_light_space_to_camera_transform(&self) -> Isometry3A {
+        Isometry3A::from_parts(
+            self.camera_space_position.as_vector().aligned(),
+            self.camera_to_light_space_rotation.aligned().inverse(),
         )
     }
 
     /// Whether the given cubemap face frustum may contain any visible models.
     pub fn camera_space_frustum_for_face_may_contain_visible_models(
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox>,
-        camera_space_face_frustum: &Frustum,
+        camera_space_aabb_for_visible_models: Option<&AxisAlignedBoxA>,
+        camera_space_face_frustum: &FrustumA,
     ) -> bool {
         if let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models {
             !camera_space_face_frustum
@@ -1392,8 +1394,8 @@ impl ShadowableOmnidirectionalLight {
     }
 
     fn compute_camera_to_light_space_rotation(
-        camera_space_direction: &UnitVector3,
-    ) -> UnitQuaternion {
+        camera_space_direction: &UnitVector3A,
+    ) -> UnitQuaternionA {
         let direction_is_very_close_to_vertical =
             f32::abs(camera_space_direction.y().abs() - 1.0) < 1e-3;
 
@@ -1404,9 +1406,9 @@ impl ShadowableOmnidirectionalLight {
         // in which case we map the -z-direction in camera space to the
         // y-direction in light space
         if direction_is_very_close_to_vertical {
-            UnitQuaternion::look_at_rh(camera_space_direction, &-Vector3::unit_z())
+            UnitQuaternionA::look_to_rh(camera_space_direction, &UnitVector3A::neg_unit_z())
         } else {
-            UnitQuaternion::look_at_rh(camera_space_direction, &Vector3::unit_y())
+            UnitQuaternionA::look_to_rh(camera_space_direction, &UnitVector3A::unit_y())
         }
     }
 }
@@ -1467,7 +1469,8 @@ impl ShadowableUnidirectionalLight {
         Self {
             camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
                 &camera_space_direction,
-            ),
+            )
+            .unaligned(),
             camera_space_direction,
             near_partition_depth: 0.0,
             perpendicular_illuminance: illuminance,
@@ -1504,9 +1507,9 @@ impl ShadowableUnidirectionalLight {
     /// transform into the light's space.
     pub fn create_transform_to_light_space(
         &self,
-        transform_to_camera_space: &Similarity3,
-    ) -> Similarity3 {
-        transform_to_camera_space.rotated(&self.camera_to_light_space_rotation)
+        transform_to_camera_space: &Similarity3A,
+    ) -> Similarity3A {
+        transform_to_camera_space.rotated(&self.camera_to_light_space_rotation.aligned())
     }
 
     /// Creates an axis-aligned bounding box in the light's reference frame
@@ -1515,7 +1518,7 @@ impl ShadowableUnidirectionalLight {
     pub fn create_light_space_orthographic_aabb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBox {
+    ) -> AxisAlignedBoxA {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
     }
 
@@ -1525,8 +1528,8 @@ impl ShadowableUnidirectionalLight {
     pub fn create_light_space_orthographic_obb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> OrientedBox {
-        OrientedBox::from_axis_aligned_box(
+    ) -> OrientedBoxA {
+        OrientedBoxA::from_axis_aligned_box(
             &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
         )
     }
@@ -1555,7 +1558,7 @@ impl ShadowableUnidirectionalLight {
     pub fn set_camera_space_direction(&mut self, camera_space_direction: UnitVector3) {
         self.camera_space_direction = camera_space_direction;
         self.camera_to_light_space_rotation =
-            Self::compute_camera_to_light_space_rotation(&camera_space_direction);
+            Self::compute_camera_to_light_space_rotation(&camera_space_direction).unaligned();
     }
 
     /// Sets the perpendicular illuminance of the light to the given value.
@@ -1573,8 +1576,8 @@ impl ShadowableUnidirectionalLight {
     /// the near and far distance required for encompassing visible models.
     pub fn update_cascade_partition_depths(
         &mut self,
-        camera_space_view_frustum: &Frustum,
-        camera_space_bounding_sphere: &Sphere,
+        camera_space_view_frustum: &FrustumA,
+        camera_space_bounding_sphere: &SphereA,
     ) {
         const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
 
@@ -1635,14 +1638,16 @@ impl ShadowableUnidirectionalLight {
     /// into each cascade, will be included in the clip space for that cascade.
     pub fn bound_orthographic_transforms_to_cascaded_view_frustum(
         &mut self,
-        camera_space_view_frustum: &Frustum,
-        camera_space_bounding_sphere: &Sphere,
+        camera_space_view_frustum: &FrustumA,
+        camera_space_bounding_sphere: &SphereA,
     ) {
+        let camera_to_light_space_rotation = self.camera_to_light_space_rotation.aligned();
+
         // Rotate to light space, where the light direction is -z
         let light_space_view_frustum =
-            camera_space_view_frustum.rotated(&self.camera_to_light_space_rotation);
+            camera_space_view_frustum.rotated(&camera_to_light_space_rotation);
         let light_space_bounding_sphere =
-            camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
+            camera_space_bounding_sphere.rotated(&camera_to_light_space_rotation);
 
         let bounding_sphere_aabb = light_space_bounding_sphere.compute_aabb();
 
@@ -1697,10 +1702,10 @@ impl ShadowableUnidirectionalLight {
     pub fn bounding_sphere_may_cast_visible_shadow_in_cascade(
         &self,
         cascade_idx: CascadeIdx,
-        camera_space_bounding_sphere: &Sphere,
+        camera_space_bounding_sphere: &SphereA,
     ) -> bool {
         let light_space_bounding_sphere =
-            camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation);
+            camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation.aligned());
 
         let orthographic_aabb = self.create_light_space_orthographic_aabb_for_cascade(cascade_idx);
 
@@ -1709,7 +1714,9 @@ impl ShadowableUnidirectionalLight {
 
     fn compute_camera_to_light_space_rotation(
         camera_space_direction: &UnitVector3,
-    ) -> UnitQuaternion {
+    ) -> UnitQuaternionA {
+        let camera_space_direction = camera_space_direction.aligned();
+
         let direction_is_very_close_to_vertical =
             f32::abs(camera_space_direction.y().abs() - 1.0) < 1e-3;
 
@@ -1720,19 +1727,22 @@ impl ShadowableUnidirectionalLight {
         // in which case we map the -z-direction in camera space to the
         // y-direction in light space
         if direction_is_very_close_to_vertical {
-            UnitQuaternion::look_at_rh(camera_space_direction, &-Vector3::unit_z())
+            UnitQuaternionA::look_to_rh(&camera_space_direction, &UnitVector3A::neg_unit_z())
         } else {
-            UnitQuaternion::look_at_rh(camera_space_direction, &Vector3::unit_y())
+            UnitQuaternionA::look_to_rh(&camera_space_direction, &UnitVector3A::unit_y())
         }
     }
 }
 
 impl OrthographicTranslationAndScaling {
     fn set_planes(&mut self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) {
-        (self.translation, self.scaling) =
+        let (translation, scaling) =
             OrthographicTransform::compute_orthographic_translation_and_scaling(
                 left, right, bottom, top, near, far,
             );
+
+        self.translation = translation.unaligned();
+        self.scaling = scaling;
 
         // Use same scaling in x- and y-direction so that projected shadow map
         // texels are always square
@@ -1743,8 +1753,8 @@ impl OrthographicTranslationAndScaling {
         }
     }
 
-    fn compute_aabb(&self) -> AxisAlignedBox {
-        compute_orthographic_transform_aabb(&self.translation, &self.scaling)
+    fn compute_aabb(&self) -> AxisAlignedBoxA {
+        compute_orthographic_transform_aabb(&self.translation.aligned(), &self.scaling)
     }
 }
 
@@ -1759,9 +1769,9 @@ fn compute_scalar_luminance_from_rgb_luminance(rgb_luminance: &Luminance) -> f32
 }
 
 fn compute_orthographic_transform_aabb(
-    translation: &Vector3,
+    translation: &Vector3A,
     scaling: &[f32; 3],
-) -> AxisAlignedBox {
+) -> AxisAlignedBoxA {
     let (orthographic_center, orthographic_half_extents) =
         OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(
             translation,
@@ -1772,7 +1782,7 @@ fn compute_orthographic_transform_aabb(
     let orthographic_upper_corner = orthographic_center + orthographic_half_extents;
 
     let orthographic_aabb =
-        AxisAlignedBox::new(orthographic_lower_corner, orthographic_upper_corner);
+        AxisAlignedBoxA::new(orthographic_lower_corner, orthographic_upper_corner);
 
     orthographic_aabb
 }

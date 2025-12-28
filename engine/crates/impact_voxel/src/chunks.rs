@@ -19,8 +19,8 @@ use disconnection::{
 };
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
-use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::point::Point3;
+use impact_geometry::{AxisAlignedBoxA, SphereA};
+use impact_math::point::{Point3, Point3A};
 use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
@@ -794,33 +794,34 @@ impl ChunkedVoxelObject {
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
     /// the object.
     #[inline]
-    pub fn compute_aabb(&self) -> AxisAlignedBox {
-        let lower_corner = Point3::new(
+    pub fn compute_aabb(&self) -> AxisAlignedBoxA {
+        let lower_corner = Point3A::new(
             self.occupied_voxel_ranges[0].start as f32 * self.voxel_extent,
             self.occupied_voxel_ranges[1].start as f32 * self.voxel_extent,
             self.occupied_voxel_ranges[2].start as f32 * self.voxel_extent,
         );
 
-        let upper_corner = Point3::new(
+        let upper_corner = Point3A::new(
             self.occupied_voxel_ranges[0].end as f32 * self.voxel_extent,
             self.occupied_voxel_ranges[1].end as f32 * self.voxel_extent,
             self.occupied_voxel_ranges[2].end as f32 * self.voxel_extent,
         );
 
-        AxisAlignedBox::new(lower_corner, upper_corner)
+        AxisAlignedBoxA::new(lower_corner, upper_corner)
     }
 
     /// Computes a sphere enclosing all non-empty voxels in the object.
     #[inline]
-    pub fn compute_bounding_sphere(&self) -> Sphere {
-        let bounding_sphere_for_outer_voxel_centers =
-            Sphere::bounding_sphere_for_points(&self.compute_occupied_voxel_range_corner_centers());
+    pub fn compute_bounding_sphere(&self) -> SphereA {
+        let bounding_sphere_for_outer_voxel_centers = SphereA::bounding_sphere_for_points(
+            &self.compute_occupied_voxel_range_corner_centers(),
+        );
 
         // If we add the distance from the center to the corner of a voxel, the
         // bounding sphere will encompass all voxels
         let additional_radius = 0.5 * f32::sqrt(3.0) * self.voxel_extent();
 
-        Sphere::new(
+        SphereA::new(
             *bounding_sphere_for_outer_voxel_centers.center(),
             bounding_sphere_for_outer_voxel_centers.radius() + additional_radius,
         )
@@ -846,7 +847,10 @@ impl ChunkedVoxelObject {
             [rx.end - 1, ry.end - 1, rz.start],
             [rx.end - 1, ry.end - 1, rz.end - 1],
         ]
-        .map(|[i, j, k]| self.voxel_center_position_from_object_voxel_indices(i, j, k))
+        .map(|[i, j, k]| {
+            self.voxel_center_position_from_object_voxel_indices(i, j, k)
+                .unaligned()
+        })
     }
 
     /// Calls the given closure for each voxel in the given non-uniform chunk,
@@ -3448,12 +3452,12 @@ mod tests {
         let generator = OffsetBoxVoxelGenerator::with_default([1; 3]);
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
-        assert_abs_diff_eq!(aabb.lower_corner(), &Point3::new(0.0, 0.0, 0.0));
+        assert_abs_diff_eq!(aabb.lower_corner(), &Point3A::new(0.0, 0.0, 0.0));
         assert_abs_diff_eq!(
             aabb.upper_corner(),
             // The occupied voxel range has chunk granularity, so the AABB will never be smaller
             // than a single chunk
-            &Point3::new(
+            &Point3A::new(
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
@@ -3466,10 +3470,10 @@ mod tests {
         let generator = OffsetBoxVoxelGenerator::with_default([CHUNK_SIZE; 3]);
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
-        assert_abs_diff_eq!(aabb.lower_corner(), &Point3::new(0.0, 0.0, 0.0));
+        assert_abs_diff_eq!(aabb.lower_corner(), &Point3A::new(0.0, 0.0, 0.0));
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &Point3::new(
+            &Point3A::new(
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
@@ -3484,10 +3488,10 @@ mod tests {
             OffsetBoxVoxelGenerator::with_default([2 * CHUNK_SIZE, 3 * CHUNK_SIZE, 4 * CHUNK_SIZE]);
         let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
         let aabb = object.compute_aabb();
-        assert_abs_diff_eq!(aabb.lower_corner(), &Point3::new(0.0, 0.0, 0.0));
+        assert_abs_diff_eq!(aabb.lower_corner(), &Point3A::new(0.0, 0.0, 0.0));
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &Point3::new(
+            &Point3A::new(
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
                 generator.voxel_extent() * (3 * CHUNK_SIZE) as f32,
                 generator.voxel_extent() * (4 * CHUNK_SIZE) as f32,
@@ -3551,7 +3555,7 @@ mod tests {
         let aabb = object.compute_aabb();
         assert_abs_diff_eq!(
             aabb.lower_corner(),
-            &Point3::new(
+            &Point3A::new(
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
                 generator.voxel_extent() * CHUNK_SIZE as f32,
@@ -3559,7 +3563,7 @@ mod tests {
         );
         assert_abs_diff_eq!(
             aabb.upper_corner(),
-            &Point3::new(
+            &Point3A::new(
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,
                 generator.voxel_extent() * (2 * CHUNK_SIZE) as f32,

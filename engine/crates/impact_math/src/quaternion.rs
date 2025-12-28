@@ -1,13 +1,13 @@
 //! Quaternions.
 
 use crate::{
-    matrix::{Matrix3, Matrix4A},
+    matrix::{Matrix3A, Matrix4A},
     point::Point3A,
-    vector::{UnitVector3, UnitVector3A, Vector3, Vector3A, Vector4, Vector4A},
+    vector::{UnitVector3A, Vector3, Vector3A, Vector4, Vector4A},
 };
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
-use std::ops::Mul;
+use std::{fmt, ops::Mul};
 
 /// A quaternion.
 ///
@@ -15,7 +15,11 @@ use std::ops::Mul;
 /// padding-free storage when combined with smaller types. For computations,
 /// prefer the SIMD-friendly 16-byte aligned [`QuaternionA`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 4]", from = "[f32; 4]")
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
 pub struct Quaternion {
     imag: Vector3,
@@ -34,7 +38,7 @@ pub struct Quaternion {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, PartialEq, Zeroable, Pod)]
 pub struct QuaternionA {
     inner: glam::Quat,
 }
@@ -45,7 +49,11 @@ pub struct QuaternionA {
 /// padding-free storage when combined with smaller types. For computations,
 /// prefer the SIMD-friendly 16-byte aligned [`UnitQuaternionA`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 4]", from = "[f32; 4]")
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
 pub struct UnitQuaternion {
     imag: Vector3,
@@ -64,7 +72,7 @@ pub struct UnitQuaternion {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, PartialEq, Zeroable, Pod)]
 pub struct UnitQuaternionA {
     inner: glam::Quat,
 }
@@ -114,7 +122,7 @@ impl Quaternion {
     /// [`QuaternionA`].
     #[inline]
     pub fn aligned(&self) -> QuaternionA {
-        QuaternionA::from_parts(*self.imag(), self.real())
+        QuaternionA::from_parts(self.imag().aligned(), self.real())
     }
 }
 
@@ -136,7 +144,7 @@ impl_relative_eq!(Quaternion, |a, b, epsilon, max_relative| {
 impl QuaternionA {
     /// Creates a quaternion with the given imaginary and real parts.
     #[inline]
-    pub const fn from_parts(imag: Vector3, real: f32) -> Self {
+    pub fn from_parts(imag: Vector3A, real: f32) -> Self {
         Self::wrap(glam::Quat::from_xyzw(imag.x(), imag.y(), imag.z(), real))
     }
 
@@ -149,7 +157,7 @@ impl QuaternionA {
 
     /// Creates a quaternion with the given imaginary part and zero real part.
     #[inline]
-    pub const fn from_imag(imag: Vector3) -> Self {
+    pub fn from_imag(imag: Vector3A) -> Self {
         Self::wrap(glam::Quat::from_xyzw(imag.x(), imag.y(), imag.z(), 0.0))
     }
 
@@ -161,8 +169,8 @@ impl QuaternionA {
 
     /// The imaginary part of the quaternion.
     #[inline]
-    pub fn imag(&self) -> Vector3 {
-        Vector3::from_glam(self.inner.xyz())
+    pub fn imag(&self) -> Vector3A {
+        Vector3A::wrap(self.inner.xyz().to_vec3a())
     }
 
     /// The real part of the quaternion.
@@ -175,7 +183,7 @@ impl QuaternionA {
     /// [`Quaternion`].
     #[inline]
     pub fn unaligned(&self) -> Quaternion {
-        Quaternion::from_parts(self.imag(), self.real())
+        Quaternion::from_parts(self.imag().unaligned(), self.real())
     }
 
     #[inline]
@@ -273,13 +281,13 @@ impl UnitQuaternion {
 
     /// The imaginary part of the quaternion.
     #[inline]
-    pub fn imag(&self) -> &Vector3 {
+    pub const fn imag(&self) -> &Vector3 {
         &self.imag
     }
 
     /// The real part of the quaternion.
     #[inline]
-    pub fn real(&self) -> f32 {
+    pub const fn real(&self) -> f32 {
         self.real
     }
 
@@ -293,7 +301,7 @@ impl UnitQuaternion {
     /// [`UnitQuaternionA`].
     #[inline]
     pub fn aligned(&self) -> UnitQuaternionA {
-        UnitQuaternionA::unchecked_from(self.as_quaternion().aligned())
+        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(self.imag().aligned(), self.real()))
     }
 }
 
@@ -336,8 +344,8 @@ impl UnitQuaternionA {
     /// Creates a unit quaternion representing a rotation of the given angle (in
     /// radians) about the given axis.
     #[inline]
-    pub fn from_axis_angle(axis: &UnitVector3, angle: f32) -> Self {
-        Self::wrap(glam::Quat::from_axis_angle(axis.to_glam(), angle))
+    pub fn from_axis_angle(axis: &UnitVector3A, angle: f32) -> Self {
+        Self::wrap(glam::Quat::from_axis_angle(axis.unwrap().to_vec3(), angle))
     }
 
     /// Creates a unit quaternion representing the rotation of the given Euler
@@ -356,31 +364,37 @@ impl UnitQuaternionA {
     /// Creates a unit quaternion representing the smallest rotation from one
     /// direction to another.
     #[inline]
-    pub fn rotation_between_axes(from: &UnitVector3, to: &UnitVector3) -> Self {
-        Self::wrap(glam::Quat::from_rotation_arc(from.to_glam(), to.to_glam()))
+    pub fn rotation_between_axes(from: &UnitVector3A, to: &UnitVector3A) -> Self {
+        Self::wrap(glam::Quat::from_rotation_arc(
+            from.unwrap().to_vec3(),
+            to.unwrap().to_vec3(),
+        ))
     }
 
     /// Creates a unit quaternion reprenting the rotation aligning the positive
     /// z-axis with the given view direction and the positive y-axis with the
     /// given up direction.
     #[inline]
-    pub fn look_to_rh(dir: &UnitVector3, up: &UnitVector3) -> Self {
-        Self::wrap(glam::Quat::look_to_rh(dir.to_glam(), up.to_glam()))
+    pub fn look_to_rh(dir: &UnitVector3A, up: &UnitVector3A) -> Self {
+        Self::wrap(glam::Quat::look_to_rh(
+            dir.unwrap().to_vec3(),
+            up.unwrap().to_vec3(),
+        ))
     }
 
     /// Creates a unit quaternion representing the orientation of the reference
     /// frame with the given three basis vectors. The vectors are assumed
     /// normalized and perpendicular.
     #[inline]
-    pub fn from_basis_unchecked(basis: &[Vector3; 3]) -> Self {
-        // `glam::Mat3` is column-major, so we can just cast the reference
-        Self::wrap(glam::Quat::from_mat3(bytemuck::cast_ref(basis)))
+    pub fn from_basis_unchecked(basis: &[Vector3A; 3]) -> Self {
+        // `glam::Mat3A` is column-major, so we can just cast the reference
+        Self::wrap(glam::Quat::from_mat3a(bytemuck::cast_ref(basis)))
     }
 
     /// The imaginary part of the quaternion.
     #[inline]
-    pub fn imag(&self) -> Vector3 {
-        Vector3::from_glam(self.inner.xyz())
+    pub fn imag(&self) -> Vector3A {
+        Vector3A::wrap(self.inner.xyz().to_vec3a())
     }
 
     /// The real part of the quaternion.
@@ -398,14 +412,14 @@ impl UnitQuaternionA {
 
     /// Computes the axis and angle of this rotation.
     #[inline]
-    pub fn axis_angle(&self) -> (UnitVector3, f32) {
+    pub fn axis_angle(&self) -> (UnitVector3A, f32) {
         let (axis, angle) = self.inner.to_axis_angle();
-        (UnitVector3::from_glam(axis), angle)
+        (UnitVector3A::wrap(axis.to_vec3a()), angle)
     }
 
     /// Computes the axis of this rotation.
     #[inline]
-    pub fn axis(&self) -> UnitVector3 {
+    pub fn axis(&self) -> UnitVector3A {
         self.axis_angle().0
     }
 
@@ -423,8 +437,8 @@ impl UnitQuaternionA {
 
     /// Converts the quaternion to a 3x3 rotation matrix.
     #[inline]
-    pub fn to_rotation_matrix(&self) -> Matrix3 {
-        Matrix3::from_glam(glam::Mat3::from_quat(self.inner))
+    pub fn to_rotation_matrix(&self) -> Matrix3A {
+        Matrix3A::wrap(glam::Mat3A::from_quat(self.inner))
     }
 
     /// Converts the quaternion to a 4x4 homogeneous matrix.
@@ -461,10 +475,10 @@ impl UnitQuaternionA {
     /// [`UnitQuaternion`].
     #[inline]
     pub fn unaligned(&self) -> UnitQuaternion {
-        UnitQuaternion {
-            imag: self.imag(),
-            real: self.real(),
-        }
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(
+            Vector3::from_glam(self.inner.xyz()),
+            self.real(),
+        ))
     }
 
     #[inline]
@@ -522,6 +536,55 @@ impl_relative_eq!(UnitQuaternionA, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
+impl From<Quaternion> for [f32; 4] {
+    fn from(q: Quaternion) -> [f32; 4] {
+        [q.imag.x(), q.imag.y(), q.imag.z(), q.real]
+    }
+}
+
+impl From<[f32; 4]> for Quaternion {
+    fn from(arr: [f32; 4]) -> Quaternion {
+        Quaternion::from_parts(Vector3::new(arr[0], arr[1], arr[2]), arr[3])
+    }
+}
+
+impl From<UnitQuaternion> for [f32; 4] {
+    fn from(q: UnitQuaternion) -> [f32; 4] {
+        [q.imag.x(), q.imag.y(), q.imag.z(), q.real]
+    }
+}
+
+impl From<[f32; 4]> for UnitQuaternion {
+    fn from(arr: [f32; 4]) -> UnitQuaternion {
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(
+            Vector3::new(arr[0], arr[1], arr[2]),
+            arr[3],
+        ))
+    }
+}
+
+impl fmt::Debug for QuaternionA {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QuaternionA")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .field("z", &self.inner.z)
+            .field("w", &self.inner.w)
+            .finish()
+    }
+}
+
+impl fmt::Debug for UnitQuaternionA {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("UnitQuaternionA")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .field("z", &self.inner.z)
+            .field("w", &self.inner.w)
+            .finish()
+    }
+}
+
 // The Roc definitions and impementations of these types are hand-coded in a
 // Roc library rather than generated.
 impl_roc_for_library_provided_primitives! {
@@ -544,7 +607,7 @@ mod tests {
     #[test]
     fn quaternion_from_parts_works() {
         let real = 1.0;
-        let imag = Vector3::new(2.0, 3.0, 4.0);
+        let imag = Vector3A::new(2.0, 3.0, 4.0);
         let quat = QuaternionA::from_parts(imag, real);
 
         assert_eq!(quat.real(), 1.0);
@@ -553,7 +616,7 @@ mod tests {
 
     #[test]
     fn quaternion_from_imag_works() {
-        let imag = Vector3::new(2.0, 3.0, 4.0);
+        let imag = Vector3A::new(2.0, 3.0, 4.0);
         let quat = QuaternionA::from_imag(imag);
 
         assert_eq!(quat.real(), 0.0);
@@ -562,7 +625,7 @@ mod tests {
 
     #[test]
     fn quaternion_real_and_imag_accessors_work() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 5.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 5.0);
 
         assert_eq!(quat.real(), 5.0);
         let imag = quat.imag();
@@ -573,7 +636,7 @@ mod tests {
 
     #[test]
     fn quaternion_neg_works() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, -2.0, 3.0), 2.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, -2.0, 3.0), 2.0);
         let negated = -quat;
 
         assert_eq!(negated.real(), -2.0);
@@ -585,8 +648,8 @@ mod tests {
 
     #[test]
     fn quaternion_addition_works() {
-        let q1 = QuaternionA::from_parts(Vector3::new(2.0, 3.0, 4.0), 1.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(1.0, 1.0, 1.0), 2.0);
+        let q1 = QuaternionA::from_parts(Vector3A::new(2.0, 3.0, 4.0), 1.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(1.0, 1.0, 1.0), 2.0);
 
         let result = &q1 + &q2;
         assert_eq!(result.real(), 3.0);
@@ -598,8 +661,8 @@ mod tests {
 
     #[test]
     fn quaternion_multiplication_works() {
-        let q1 = QuaternionA::from_parts(Vector3::new(0.0, 0.0, 0.0), 1.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(1.0, 0.0, 0.0), 0.0);
+        let q1 = QuaternionA::from_parts(Vector3A::new(0.0, 0.0, 0.0), 1.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(1.0, 0.0, 0.0), 0.0);
 
         let result = &q1 * &q2;
         // i * 1 = i, so real = 0, imag = (1, 0, 0)
@@ -633,7 +696,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_normalized_from_works() {
-        let quat = QuaternionA::from_parts(Vector3::new(0.0, 0.0, 0.0), 2.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(0.0, 0.0, 0.0), 2.0);
         let unit = UnitQuaternionA::normalized_from(quat);
 
         // Should normalize to (1, 0, 0, 0)
@@ -646,7 +709,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_unchecked_from_works() {
-        let quat = QuaternionA::from_parts(Vector3::new(0.0, 0.0, 0.0), 1.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(0.0, 0.0, 0.0), 1.0);
         let unit = UnitQuaternionA::unchecked_from(quat);
 
         assert_eq!(unit.real(), 1.0);
@@ -658,7 +721,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_from_axis_angle_works() {
-        let axis = UnitVector3::unit_z();
+        let axis = UnitVector3A::unit_z();
         let angle = PI / 2.0; // 90 degrees
         let unit = UnitQuaternionA::from_axis_angle(&axis, angle);
 
@@ -683,13 +746,13 @@ mod tests {
 
     #[test]
     fn unit_quaternion_rotation_between_axes_works() {
-        let axis_x = UnitVector3::unit_x();
-        let axis_y = UnitVector3::unit_y();
+        let axis_x = UnitVector3A::unit_x();
+        let axis_y = UnitVector3A::unit_y();
 
         let rotation = UnitQuaternionA::rotation_between_axes(&axis_x, &axis_y);
 
         // Should rotate X axis to Y axis
-        let rotated = rotation.rotate_unit_vector(&axis_x.aligned());
+        let rotated = rotation.rotate_unit_vector(&axis_x);
         assert_abs_diff_eq!(rotated.y(), 1.0, epsilon = EPSILON);
         assert_abs_diff_eq!(rotated.x(), 0.0, epsilon = EPSILON);
         assert_abs_diff_eq!(rotated.z(), 0.0, epsilon = EPSILON);
@@ -697,8 +760,8 @@ mod tests {
 
     #[test]
     fn unit_quaternion_look_to_rh_works() {
-        let dir = UnitVector3::neg_unit_z(); // Looking down negative Z
-        let up = UnitVector3::unit_y(); // Y is up
+        let dir = UnitVector3A::neg_unit_z(); // Looking down negative Z
+        let up = UnitVector3A::unit_y(); // Y is up
 
         let look_at = UnitQuaternionA::look_to_rh(&dir, &up);
 
@@ -709,9 +772,9 @@ mod tests {
     #[test]
     fn unit_quaternion_from_basis_unchecked_works() {
         let basis = [
-            Vector3::new(1.0, 0.0, 0.0), // X axis
-            Vector3::new(0.0, 1.0, 0.0), // Y axis
-            Vector3::new(0.0, 0.0, 1.0), // Z axis
+            Vector3A::new(1.0, 0.0, 0.0), // X axis
+            Vector3A::new(0.0, 1.0, 0.0), // Y axis
+            Vector3A::new(0.0, 0.0, 1.0), // Z axis
         ];
 
         let quat = UnitQuaternionA::from_basis_unchecked(&basis);
@@ -722,7 +785,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_inverse_works() {
-        let axis = UnitVector3::unit_z();
+        let axis = UnitVector3A::unit_z();
         let angle = PI / 4.0;
         let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
         let inverse = quat.inverse();
@@ -738,7 +801,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_negated_works() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 4.0);
         let negated = -quat;
 
         // Negated quaternion represents the same rotation
@@ -753,7 +816,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_real_and_imag_works() {
-        let axis = UnitVector3::unit_z();
+        let axis = UnitVector3A::unit_z();
         let angle = PI / 2.0;
         let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
 
@@ -767,7 +830,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_axis_angle_extraction_works() {
-        let original_axis = UnitVector3::unit_y();
+        let original_axis = UnitVector3A::unit_y();
         let original_angle = PI / 3.0;
         let quat = UnitQuaternionA::from_axis_angle(&original_axis, original_angle);
 
@@ -779,7 +842,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_axis_extraction_works() {
-        let original_axis = UnitVector3::unit_x();
+        let original_axis = UnitVector3A::unit_x();
         let quat = UnitQuaternionA::from_axis_angle(&original_axis, PI / 4.0);
 
         let extracted_axis = quat.axis();
@@ -789,7 +852,7 @@ mod tests {
     #[test]
     fn unit_quaternion_angle_extraction_works() {
         let original_angle = PI / 6.0;
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), original_angle);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), original_angle);
 
         let extracted_angle = quat.angle();
         assert_abs_diff_eq!(extracted_angle, original_angle, epsilon = EPSILON);
@@ -811,7 +874,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_to_quaternion_works() {
-        let unit = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0);
+        let unit = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0);
         let quat = unit.as_quaternion();
 
         assert_abs_diff_eq!(quat.real(), unit.real(), epsilon = EPSILON);
@@ -824,8 +887,8 @@ mod tests {
 
     #[test]
     fn unit_quaternion_to_rotation_matrix_works() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
-        let matrix = quat.to_rotation_matrix().aligned();
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0);
+        let matrix = quat.to_rotation_matrix();
 
         // 90 degree rotation around Z should map X to Y
         let x_axis = Vector3A::new(1.0, 0.0, 0.0);
@@ -838,7 +901,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_to_homogeneous_matrix_works() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0);
         let matrix = quat.to_homogeneous_matrix();
 
         // Should be a 4x4 matrix with rotation in upper-left 3x3 and no translation
@@ -850,7 +913,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_rotate_point_works() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0);
         let point = Point3A::new(1.0, 0.0, 0.0);
 
         let rotated = quat.rotate_point(&point);
@@ -863,7 +926,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_rotate_vector_works() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0);
         let vector = Vector3A::new(1.0, 0.0, 0.0);
 
         let rotated = quat.rotate_vector(&vector);
@@ -876,7 +939,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_rotate_unit_vector_works() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0);
         let unit_vector = UnitVector3A::unit_x();
 
         let rotated = quat.rotate_unit_vector(&unit_vector);
@@ -889,13 +952,13 @@ mod tests {
 
     #[test]
     fn unit_quaternion_multiplication_works() {
-        let q1 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0);
-        let q2 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0);
+        let q1 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0);
+        let q2 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0);
 
         let result = &q1 * &q2;
 
         // Two 45-degree rotations should equal one 90-degree rotation
-        let expected = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0);
+        let expected = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0);
 
         assert_abs_diff_eq!(result.angle(), expected.angle(), epsilon = EPSILON);
     }
@@ -915,7 +978,7 @@ mod tests {
     // Edge case tests
     #[test]
     fn quaternion_scalar_multiplication_by_zero() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let result = &quat * 0.0;
 
         assert_eq!(result.real(), 0.0);
@@ -927,7 +990,7 @@ mod tests {
 
     #[test]
     fn quaternion_scalar_multiplication_by_one() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let result = &quat * 1.0;
 
         assert_eq!(result.real(), quat.real());
@@ -940,7 +1003,7 @@ mod tests {
 
     #[test]
     fn quaternion_scalar_multiplication_by_negative() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let result = &quat * -1.0;
 
         assert_eq!(result.real(), -4.0);
@@ -952,7 +1015,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_from_axis_angle_with_negative_angle() {
-        let axis = UnitVector3::unit_z();
+        let axis = UnitVector3A::unit_z();
         let angle = -PI / 4.0;
         let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
 
@@ -967,7 +1030,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_from_axis_angle_with_zero_angle() {
-        let axis = UnitVector3::unit_x();
+        let axis = UnitVector3A::unit_x();
         let angle = 0.0;
         let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
 
@@ -981,7 +1044,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_from_axis_angle_with_full_rotation() {
-        let axis = UnitVector3::unit_y();
+        let axis = UnitVector3A::unit_y();
         let angle = 2.0 * PI;
         let quat = UnitQuaternionA::from_axis_angle(&axis, angle);
 
@@ -996,7 +1059,7 @@ mod tests {
 
     #[test]
     fn quaternion_addition_with_itself() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let result = &quat + &quat;
 
         assert_eq!(result.real(), 8.0);
@@ -1008,7 +1071,7 @@ mod tests {
 
     #[test]
     fn quaternion_subtraction_with_itself() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let result = &quat - &quat;
 
         assert_abs_diff_eq!(result.real(), 0.0, epsilon = EPSILON);
@@ -1020,7 +1083,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_double_negation_gives_original() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 6.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 6.0);
         let double_negated = -(-quat);
 
         assert_abs_diff_eq!(double_negated.real(), quat.real(), epsilon = EPSILON);
@@ -1033,7 +1096,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_rotation_between_parallel_axes() {
-        let axis = UnitVector3::unit_x();
+        let axis = UnitVector3A::unit_x();
         let rotation = UnitQuaternionA::rotation_between_axes(&axis, &axis);
 
         // Rotating from an axis to itself should be identity
@@ -1042,8 +1105,8 @@ mod tests {
 
     #[test]
     fn unit_quaternion_rotation_between_opposite_axes() {
-        let axis_x = UnitVector3::unit_x();
-        let axis_neg_x = UnitVector3::neg_unit_x();
+        let axis_x = UnitVector3A::unit_x();
+        let axis_neg_x = UnitVector3A::neg_unit_x();
 
         let rotation = UnitQuaternionA::rotation_between_axes(&axis_x, &axis_neg_x);
 
@@ -1093,8 +1156,8 @@ mod tests {
     // General trait tests
     #[test]
     fn quaternion_operations_with_different_reference_combinations_work() {
-        let q1 = QuaternionA::from_parts(Vector3::new(0.0, 0.0, 0.0), 1.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(1.0, 0.0, 0.0), 0.0);
+        let q1 = QuaternionA::from_parts(Vector3A::new(0.0, 0.0, 0.0), 1.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(1.0, 0.0, 0.0), 0.0);
 
         // Test all combinations of reference/owned for binary operations
         let _result1 = &q1 + &q2; // ref + ref
@@ -1103,8 +1166,8 @@ mod tests {
         let _result4 = q1 + q2; // owned + owned
 
         // Recreate since they were moved
-        let q1 = QuaternionA::from_parts(Vector3::new(0.0, 0.0, 0.0), 1.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(1.0, 0.0, 0.0), 0.0);
+        let q1 = QuaternionA::from_parts(Vector3A::new(0.0, 0.0, 0.0), 1.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(1.0, 0.0, 0.0), 0.0);
 
         let _result5 = &q1 * &q2; // ref * ref
         let _result6 = &q1 * q2; // ref * owned
@@ -1115,7 +1178,7 @@ mod tests {
     #[test]
     fn unit_quaternion_operations_with_different_reference_combinations_work() {
         let u1 = UnitQuaternionA::identity();
-        let u2 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0);
+        let u2 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 4.0);
 
         // Test all combinations for multiplication
         let _result1 = &u1 * &u2; // ref * ref
@@ -1126,9 +1189,9 @@ mod tests {
 
     #[test]
     fn quaternion_rotation_composition_is_associative() {
-        let q1 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), 0.1);
-        let q2 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), 0.2);
-        let q3 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), 0.3);
+        let q1 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), 0.1);
+        let q2 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), 0.2);
+        let q3 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), 0.3);
 
         let left_assoc = &(&q1 * &q2) * &q3;
         let right_assoc = &q1 * &(&q2 * &q3);
@@ -1144,7 +1207,7 @@ mod tests {
 
     #[test]
     fn quaternion_rotation_preserves_vector_length() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 3.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 3.0);
         let vector = Vector3A::new(2.0, 3.0, 4.0);
         let original_length = vector.norm();
 
@@ -1157,7 +1220,7 @@ mod tests {
     #[test]
     fn quaternion_identity_is_neutral_element() {
         let identity = UnitQuaternionA::identity();
-        let test_quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 6.0);
+        let test_quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 6.0);
 
         let left_mult = &identity * &test_quat;
         let right_mult = &test_quat * &identity;
@@ -1169,7 +1232,7 @@ mod tests {
 
     #[test]
     fn quaternion_inverse_is_correct() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), PI / 4.0);
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), PI / 4.0);
         let inverse = quat.inverse();
 
         let vector = Vector3A::new(1.0, 0.0, 0.0);
@@ -1193,8 +1256,8 @@ mod tests {
 
     #[test]
     fn quaternion_matrix_conversion_preserves_rotation() {
-        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0);
-        let matrix = quat.to_rotation_matrix().aligned();
+        let quat = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 4.0);
+        let matrix = quat.to_rotation_matrix();
 
         let vector = Vector3A::new(0.0, 1.0, 0.0);
         let quat_rotated = quat.rotate_vector(&vector);
@@ -1267,7 +1330,7 @@ mod tests {
 
     #[test]
     fn quaternion_a_unaligned_conversion_works() {
-        let quat_a = QuaternionA::from_parts(Vector3::new(5.0, 6.0, 7.0), 8.0);
+        let quat_a = QuaternionA::from_parts(Vector3A::new(5.0, 6.0, 7.0), 8.0);
         let unaligned = quat_a.unaligned();
 
         assert_eq!(unaligned.real(), 8.0);
@@ -1280,8 +1343,8 @@ mod tests {
     // Tests for QuaternionA arithmetic operations
     #[test]
     fn quaternion_a_subtraction_works() {
-        let q1 = QuaternionA::from_parts(Vector3::new(4.0, 5.0, 6.0), 3.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 1.0);
+        let q1 = QuaternionA::from_parts(Vector3A::new(4.0, 5.0, 6.0), 3.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 1.0);
 
         let result = &q1 - &q2;
         assert_eq!(result.real(), 2.0);
@@ -1293,7 +1356,7 @@ mod tests {
 
     #[test]
     fn quaternion_a_scalar_multiplication_works() {
-        let quat = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let scalar = 2.0;
 
         let result1 = &quat * scalar;
@@ -1314,7 +1377,7 @@ mod tests {
 
     #[test]
     fn quaternion_a_scalar_division_works() {
-        let quat = QuaternionA::from_parts(Vector3::new(2.0, 4.0, 6.0), 8.0);
+        let quat = QuaternionA::from_parts(Vector3A::new(2.0, 4.0, 6.0), 8.0);
         let scalar = 2.0;
 
         let result = &quat / scalar;
@@ -1327,8 +1390,8 @@ mod tests {
 
     #[test]
     fn quaternion_a_assignment_operations_work() {
-        let mut q1 = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(1.0, 1.0, 1.0), 1.0);
+        let mut q1 = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(1.0, 1.0, 1.0), 1.0);
 
         q1 += q2;
         assert_eq!(q1.real(), 5.0);
@@ -1402,7 +1465,7 @@ mod tests {
     // Tests for UnitQuaternionA scalar operations
     #[test]
     fn unit_quaternion_a_scalar_multiplication_gives_quaternion_a() {
-        let unit = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0);
+        let unit = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0);
         let scalar = 2.0;
 
         let result1 = &unit * scalar;
@@ -1426,7 +1489,7 @@ mod tests {
 
     #[test]
     fn unit_quaternion_a_scalar_division_gives_quaternion_a() {
-        let unit = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 3.0);
+        let unit = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 3.0);
         let scalar = 0.5;
 
         let result = &unit / scalar;
@@ -1445,7 +1508,7 @@ mod tests {
     // Tests for From trait implementations
     #[test]
     fn conversion_from_quaternion_a_to_quaternion_works() {
-        let quat_a = QuaternionA::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
+        let quat_a = QuaternionA::from_parts(Vector3A::new(1.0, 2.0, 3.0), 4.0);
         let quat = quat_a.unaligned();
 
         assert_eq!(quat.real(), 4.0);
@@ -1493,8 +1556,8 @@ mod tests {
 
     #[test]
     fn quaternion_a_quaternion_multiplication_assignment_works() {
-        let mut q1 = QuaternionA::from_parts(Vector3::new(1.0, 0.0, 0.0), 0.0);
-        let q2 = QuaternionA::from_parts(Vector3::new(0.0, 1.0, 0.0), 0.0);
+        let mut q1 = QuaternionA::from_parts(Vector3A::new(1.0, 0.0, 0.0), 0.0);
+        let q2 = QuaternionA::from_parts(Vector3A::new(0.0, 1.0, 0.0), 0.0);
 
         q1 *= q2;
 
@@ -1508,8 +1571,8 @@ mod tests {
 
     #[test]
     fn unit_quaternion_a_multiplication_assignment_works() {
-        let mut q1 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0);
-        let q2 = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0);
+        let mut q1 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0);
+        let q2 = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0);
 
         q1 *= q2;
 

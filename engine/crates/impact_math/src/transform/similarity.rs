@@ -408,7 +408,7 @@ mod tests {
     use super::*;
     use crate::{
         matrix::Matrix4,
-        vector::{UnitVector3, Vector4},
+        vector::{UnitVector3A, Vector4},
     };
     use approx::assert_abs_diff_eq;
     use std::f32::consts::PI;
@@ -419,11 +419,11 @@ mod tests {
     const TRANSLATION_2: Vector3A = Vector3A::new(4.0, 5.0, 6.0);
 
     fn rotation_90_z() -> UnitQuaternionA {
-        UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0)
+        UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0)
     }
 
     fn rotation_45_x() -> UnitQuaternionA {
-        UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0)
+        UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 4.0)
     }
 
     // Identity tests
@@ -1119,7 +1119,7 @@ mod tests {
     fn composing_many_small_transformations_works() {
         let mut sim = Similarity3A::identity();
         let small_translation = Vector3A::new(0.001, 0.001, 0.001);
-        let small_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), 0.01);
+        let small_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), 0.01);
         let small_scaling = 1.01;
 
         for _ in 0..100 {
@@ -1153,7 +1153,7 @@ mod tests {
     fn similarity3_from_parts_stores_components_correctly() {
         let translation = Vector3::new(1.0, 2.0, 3.0);
         let rotation =
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), PI / 3.0).unaligned();
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), PI / 3.0).unaligned();
         let scaling = 2.0;
         let sim = Similarity3::from_parts(translation, rotation, scaling);
 
@@ -1166,7 +1166,7 @@ mod tests {
     fn similarity3_from_isometry_has_unit_scaling() {
         let isometry = Isometry3::from_parts(
             Vector3::new(1.0, 2.0, 3.0),
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 6.0).unaligned(),
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 6.0).unaligned(),
         );
         let sim = Similarity3::from_isometry(isometry);
 
@@ -1183,7 +1183,7 @@ mod tests {
     fn similarity3_aligned_returns_similarity3a() {
         let sim3 = Similarity3::from_parts(
             Vector3::new(1.0, 2.0, 3.0),
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0).unaligned(),
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0).unaligned(),
             1.5,
         );
         let sim3a = sim3.aligned();
@@ -1200,7 +1200,7 @@ mod tests {
     fn similarity3a_unaligned_returns_similarity3() {
         let sim3a = Similarity3A::from_parts(
             Vector3A::new(4.0, 5.0, 6.0),
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), PI / 3.0),
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), PI / 3.0),
             0.8,
         );
         let sim3 = sim3a.unaligned();
@@ -1217,7 +1217,7 @@ mod tests {
     #[test]
     fn converting_similarity3_to_similarity3a_preserves_components() {
         let rotation =
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 2.0).unaligned();
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 2.0).unaligned();
         let sim3 = Similarity3::from_parts(Vector3::new(7.0, 8.0, 9.0), rotation, 3.0);
         let sim3a = sim3.aligned();
 
@@ -1233,7 +1233,7 @@ mod tests {
     fn converting_similarity3a_to_similarity3_preserves_components() {
         let sim3a = Similarity3A::from_parts(
             Vector3A::new(10.0, 11.0, 12.0),
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 6.0),
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 6.0),
             0.5,
         );
         let sim3 = sim3a.unaligned();
@@ -1277,7 +1277,7 @@ mod tests {
     #[test]
     fn similarity3_from_rotation_has_zero_translation_unit_scaling() {
         let rotation =
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), PI / 4.0).unaligned();
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), PI / 4.0).unaligned();
         let sim = Similarity3::from_rotation(rotation);
 
         assert_abs_diff_eq!(*sim.translation(), Vector3::zeros(), epsilon = EPSILON);
@@ -1302,7 +1302,7 @@ mod tests {
     #[test]
     fn similarity3_to_isometry_drops_scaling() {
         let rotation =
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 4.0).unaligned();
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 4.0).unaligned();
         let sim = Similarity3::from_parts(Vector3::new(1.0, 2.0, 3.0), rotation, 3.0);
         let iso = sim.to_isometry();
 

@@ -111,7 +111,7 @@ impl ReferenceFrameA {
         Self::new(Point3A::origin(), orientation)
     }
 
-    /// Creates the [`Isometry3`] transform from the entity's reference frame
+    /// Creates the [`Isometry3A`] transform from the entity's reference frame
     /// to the parent space.
     #[inline]
     pub fn create_transform_to_parent_space(&self) -> Isometry3A {

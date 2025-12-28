@@ -5,7 +5,7 @@ use impact_geometry::{Plane, ReferenceFrame, Sphere};
 use impact_math::{
     angle::{Angle, Radians},
     point::Point3,
-    vector::Vector3,
+    vector::{Vector3, Vector3A},
 };
 use impact_physics::{
     anchor::AnchorManager,
@@ -17,7 +17,7 @@ use impact_physics::{
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     inertia::InertialProperties,
     material::ContactResponseParameters,
-    quantities::{Motion, Orientation, Position, Velocity},
+    quantities::{Motion, Orientation, Position, Velocity, VelocityA},
     rigid_body::{self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 
@@ -205,7 +205,7 @@ fn separated_bodies_unaffected_by_contact_constraints() {
     for (id, sphere) in sphere_body_ids.into_iter().zip(spheres) {
         let body = rigid_body_manager.dynamic_rigid_body(id);
         assert_eq!(body.position(), sphere.center());
-        assert_eq!(body.compute_velocity(), sphere.velocity);
+        assert_eq!(body.compute_velocity(), sphere.velocity.aligned());
         assert_abs_diff_eq!(
             body.compute_angular_velocity().angular_speed(),
             Radians::zero()
@@ -241,7 +241,7 @@ fn test_binary_sphere_collision(
     assert_eq!(body_a.orientation(), &Orientation::identity());
     assert_abs_diff_eq!(
         body_a.compute_velocity(),
-        expected_velocity_a,
+        expected_velocity_a.aligned(),
         epsilon = 1e-6
     );
     assert_abs_diff_eq!(
@@ -255,7 +255,7 @@ fn test_binary_sphere_collision(
     assert_eq!(body_b.orientation(), &Orientation::identity());
     assert_abs_diff_eq!(
         body_b.compute_velocity(),
-        expected_velocity_b,
+        expected_velocity_b.aligned(),
         epsilon = 1e-6
     );
     assert_abs_diff_eq!(
@@ -409,7 +409,7 @@ fn sphere_colliding_with_static_plane() {
     assert_eq!(body.orientation(), &Orientation::identity());
     assert_abs_diff_eq!(
         body.compute_velocity(),
-        Vector3::new(speed_x, speed_y, 0.0),
+        Vector3A::new(speed_x, speed_y, 0.0),
         epsilon = 1e-6
     );
     assert_abs_diff_eq!(
@@ -470,7 +470,7 @@ fn position_correction_of_interpenetrating_spheres() {
             epsilon = 1e-6
         );
         assert_eq!(body.orientation(), &Orientation::identity());
-        assert_eq!(body.compute_velocity(), Velocity::zeros());
+        assert_eq!(body.compute_velocity(), VelocityA::zeros());
         assert_abs_diff_eq!(
             body.compute_angular_velocity().angular_speed(),
             Radians::zero()

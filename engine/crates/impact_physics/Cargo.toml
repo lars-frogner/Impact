@@ -10,7 +10,7 @@ arbitrary = ["dep:arbitrary"]
 postcard = ["dep:postcard", "serde"]
 ecs = ["dep:inventory", "dep:impact_ecs", "impact_geometry/ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
-serde = ["dep:serde", "nalgebra/serde-serialize", "impact_math/serde"]
+serde = ["dep:serde", "impact_math/serde"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -19,6 +19,7 @@ arbitrary = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
 bitflags = { workspace = true }
 bytemuck = { workspace = true }
+impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
@@ -26,13 +27,11 @@ impact_io = { path = "../impact_io" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
-nalgebra = { workspace = true }
 num-traits = { workspace = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 roots = "0.0.8"
 serde = { workspace = true, optional = true }
-simba = { workspace = true }
 tinyvec = { workspace = true }
 
 [dev-dependencies]

@@ -20,9 +20,9 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     point::Point3,
-    quaternion::UnitQuaternion,
-    transform::Similarity3,
-    vector::{UnitVector3, Vector2, Vector3, Vector4},
+    quaternion::{UnitQuaternion, UnitQuaternionA},
+    transform::Similarity3A,
+    vector::{UnitVector3, Vector2, Vector3A, Vector4},
 };
 use roc_integration::roc;
 use std::fmt::{self, Debug};
@@ -148,29 +148,29 @@ impl VertexPosition {
     }
 
     /// Returns the position rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
-        Self(rotation.transform_point(&self.0))
+    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
+        Self(rotation.rotate_point(&self.0.aligned()).unaligned())
     }
 
     /// Returns the position translated by the given displacement vector.
-    pub fn translated(&self, translation: &Vector3) -> Self {
-        Self(self.0 + translation)
+    pub fn translated(&self, translation: &Vector3A) -> Self {
+        Self((self.0.aligned() + translation).unaligned())
     }
 
     /// Returns the position transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3) -> Self {
-        Self(transform.transform_point(&self.0))
+    pub fn transformed(&self, transform: &Similarity3A) -> Self {
+        Self(transform.transform_point(&self.0.aligned()).unaligned())
     }
 }
 
 impl VertexNormalVector {
     /// Returns the normal vector rotated by the given unit quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
-        Self(rotation.rotate_unit_vector(&self.0))
+    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
+        Self(rotation.rotate_unit_vector(&self.0.aligned()).unaligned())
     }
 
     /// Returns the normal vector transformed by the given similarity transform.
-    pub fn transformed(&self, transform: &Similarity3) -> Self {
+    pub fn transformed(&self, transform: &Similarity3A) -> Self {
         self.rotated(transform.rotation())
     }
 }
@@ -178,21 +178,21 @@ impl VertexNormalVector {
 impl VertexTangentSpaceQuaternion {
     /// Returns the tangent space quaternion rotated by the given unit
     /// quaternion.
-    pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
-        let mut rotated_tangent_space_quaternion = rotation * self.0;
+    pub fn rotated(&self, rotation: &UnitQuaternionA) -> Self {
+        let mut rotated_tangent_space_quaternion = rotation * self.0.aligned();
 
         // Preserve encoding of tangent space handedness in real component of
         // tangent space quaternion
         if (rotated_tangent_space_quaternion.real() < 0.0) != (self.0.real() < 0.0) {
-            rotated_tangent_space_quaternion = rotated_tangent_space_quaternion.negated();
+            rotated_tangent_space_quaternion = -rotated_tangent_space_quaternion;
         }
 
-        Self(rotated_tangent_space_quaternion)
+        Self(rotated_tangent_space_quaternion.unaligned())
     }
 
     /// Returns the tangent space quaternion transformed by the given similarity
     /// transform.
-    pub fn transformed(&self, transform: &Similarity3) -> Self {
+    pub fn transformed(&self, transform: &Similarity3A) -> Self {
         self.rotated(transform.rotation())
     }
 }

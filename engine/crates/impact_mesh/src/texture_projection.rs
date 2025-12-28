@@ -3,8 +3,8 @@
 use anyhow::{Result, bail};
 use approx::abs_diff_eq;
 use impact_math::{
-    point::Point3,
-    vector::{UnitVector3, Vector2, Vector3},
+    point::{Point3, Point3A},
+    vector::{UnitVector3A, Vector2, Vector3, Vector3A},
 };
 
 /// Represents a projection of 3D positions into UV texture coordinates.
@@ -13,16 +13,16 @@ pub trait TextureProjection {
     fn identifier(&self) -> String;
 
     /// Computes the UV texture coordinates for the given position.
-    fn project_position(&self, position: &Point3) -> Vector2;
+    fn project_position(&self, position: &Point3A) -> Vector2;
 }
 
 /// Projection of 3D positions onto a plane defined by an origin and two vectors
 /// defining the axes along which the U and V texture coordinates will increase.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlanarTextureProjection {
-    origin: Point3,
-    u_direction: UnitVector3,
-    v_normal_to_u_direction: UnitVector3,
+    origin: Point3A,
+    u_direction: UnitVector3A,
+    v_normal_to_u_direction: UnitVector3A,
     v_direction_comp_along_u_direction: f32,
     inverse_v_direction_comp_normal_to_u_direction: f32,
     inverse_u_vector_length: f32,
@@ -49,19 +49,20 @@ impl PlanarTextureProjection {
     /// Returns an error if:
     /// - If the u- or v-vector has zero length.
     /// - If the u- and v-vectors are colinear.
-    pub fn new(origin: Point3, u_vector: Vector3, v_vector: Vector3) -> Result<Self> {
-        let (u_direction, u_vector_length) = UnitVector3::normalized_from_and_norm(u_vector);
+    pub fn new(origin: Point3A, u_vector: Vector3A, v_vector: Vector3A) -> Result<Self> {
+        let (u_direction, u_vector_length) = UnitVector3A::normalized_from_and_norm(u_vector);
         if abs_diff_eq!(u_vector_length, 0.0) {
             bail!("u_vector has zero length");
         }
-        let (v_direction, v_vector_length) = UnitVector3::normalized_from_and_norm(v_vector);
+        let (v_direction, v_vector_length) = UnitVector3A::normalized_from_and_norm(v_vector);
         if abs_diff_eq!(v_vector_length, 0.0) {
             bail!("v_vector has zero length");
         }
 
-        let (v_normal_to_u_direction, v_normal_to_u_length) = UnitVector3::normalized_from_and_norm(
-            v_direction.as_vector() - u_direction * v_direction.dot(&u_direction),
-        );
+        let (v_normal_to_u_direction, v_normal_to_u_length) =
+            UnitVector3A::normalized_from_and_norm(
+                v_direction.as_vector() - u_direction * v_direction.dot(&u_direction),
+            );
         if abs_diff_eq!(v_normal_to_u_length, 0.0) {
             bail!("u_vector and v_vector are parallel");
         }
@@ -87,7 +88,7 @@ impl TextureProjection for PlanarTextureProjection {
         format!("{self:?}")
     }
 
-    fn project_position(&self, position: &Point3) -> Vector2 {
+    fn project_position(&self, position: &Point3A) -> Vector2 {
         let displacement = position - self.origin;
 
         let displacement_along_u_direction = displacement.dot(&self.u_direction);
@@ -111,9 +112,9 @@ mod tests {
 
     #[test]
     fn plane_texture_projection_works() {
-        let origin = Point3::new(-0.3, 3.9, 12.8);
-        let u_vector = Vector3::new(-2.1, 4.8, 0.2);
-        let v_vector = Vector3::new(6.3, -8.1, 5.5);
+        let origin = Point3A::new(-0.3, 3.9, 12.8);
+        let u_vector = Vector3A::new(-2.1, 4.8, 0.2);
+        let v_vector = Vector3A::new(6.3, -8.1, 5.5);
         let projection = PlanarTextureProjection::new(origin, u_vector, v_vector).unwrap();
 
         assert_abs_diff_eq!(

@@ -9,7 +9,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::HashMap;
-use impact_math::transform::Isometry3;
+use impact_math::transform::Isometry3A;
 use roc_integration::roc;
 use std::fmt;
 
@@ -19,7 +19,7 @@ pub trait Collidable: Sized + fmt::Debug {
 
     fn from_descriptor(
         descriptor: &CollidableDescriptor<Self>,
-        transform_to_world_space: &Isometry3,
+        transform_to_world_space: &Isometry3A,
     ) -> Self;
 
     fn generate_contact_manifold(
@@ -152,7 +152,7 @@ impl<C: Collidable> CollisionWorld<C> {
             };
 
             let transform_to_world_space =
-                Isometry3::from_parts(*position.as_vector(), *orientation);
+                Isometry3A::from_parts(position.as_vector().aligned(), orientation.aligned());
 
             let collidable = CollidableWithId::new(
                 collidable_id,

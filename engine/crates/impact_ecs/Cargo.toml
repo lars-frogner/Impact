@@ -8,7 +8,11 @@ license = { workspace = true }
 [features]
 arbitrary = ["dep:arbitrary"]
 cli = ["dep:clap"]
-benchmark = ["impact_profiling"]
+benchmark = ["dep:impact_profiling"]
+criterion = [
+    "benchmark",
+    "impact_profiling/criterion",
+]
 roc_codegen = ["roc_integration/roc_codegen"]
 
 [dependencies]
@@ -42,9 +46,9 @@ required-features = ["cli"]
 [[bench]]
 name = "entity"
 harness = false
-required-features = ["benchmark"]
+required-features = ["criterion"]
 
 [[bench]]
 name = "query"
 harness = false
-required-features = ["benchmark"]
+required-features = ["criterion"]

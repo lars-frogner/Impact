@@ -6,8 +6,8 @@ use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    hash::StringHash64, hash64, point::Point3, quaternion::UnitQuaternion, transform::Similarity3,
-    vector::Vector3,
+    hash::StringHash64, hash64, point::Point3, quaternion::UnitQuaternionA,
+    transform::Similarity3A, vector::Vector3A,
 };
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
@@ -154,7 +154,11 @@ impl LineSegmentMesh {
     }
 
     /// Applies the given rotation to the mesh, rotating the vertex positions.
-    pub fn rotate(&mut self, rotation: &UnitQuaternion, dirty_mask: &mut LineSegmentMeshDirtyMask) {
+    pub fn rotate(
+        &mut self,
+        rotation: &UnitQuaternionA,
+        dirty_mask: &mut LineSegmentMeshDirtyMask,
+    ) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }
@@ -163,7 +167,7 @@ impl LineSegmentMesh {
 
     /// Applies the given displacement vector to the mesh, translating the
     /// vertex positions.
-    pub fn translate(&mut self, translation: &Vector3, dirty_mask: &mut LineSegmentMeshDirtyMask) {
+    pub fn translate(&mut self, translation: &Vector3A, dirty_mask: &mut LineSegmentMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.translated(translation);
         }
@@ -174,7 +178,7 @@ impl LineSegmentMesh {
     /// vertex positions.
     pub fn transform(
         &mut self,
-        transform: &Similarity3,
+        transform: &Similarity3A,
         dirty_mask: &mut LineSegmentMeshDirtyMask,
     ) {
         for position in &mut self.positions {

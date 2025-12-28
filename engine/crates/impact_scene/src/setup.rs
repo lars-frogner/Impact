@@ -163,7 +163,7 @@ pub fn setup_scene_graph_model_instance_node(
             parent_node_id,
             model_to_parent_transform,
             model_id,
-            bounding_sphere,
+            bounding_sphere.map(|sphere| sphere.unaligned()),
             feature_ids_for_rendering,
             feature_ids_for_shadow_mapping,
             flags.into(),

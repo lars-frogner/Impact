@@ -2,12 +2,12 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{Orientation, Position, Velocity},
+    quantities::{Orientation, Position, PositionA, Velocity, VelocityA},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, point::Point3, vector::Vector3};
+use impact_math::Float;
 use roc_integration::roc;
 
 /// Manages all [`CircularTrajectoryDriver`]s.
@@ -135,6 +135,8 @@ impl CircularTrajectory {
             "Period of circular trajectory is zero"
         );
 
+        let orientation = self.orientation.aligned();
+
         let angular_speed = Self::compute_angular_speed(self.period);
 
         let angle = Self::compute_angle(self.initial_time, angular_speed, time);
@@ -143,20 +145,22 @@ impl CircularTrajectory {
         let circular_displacement =
             Self::compute_circular_displacement(self.radius, cos_angle, sin_angle);
 
-        let world_space_circular_displacement =
-            self.orientation.transform_point(&circular_displacement);
+        let world_space_circular_displacement = orientation.rotate_point(&circular_displacement);
 
         let world_space_circular_position =
-            self.center_position + world_space_circular_displacement.as_vector();
+            self.center_position.aligned() + world_space_circular_displacement.as_vector();
 
         let tangential_speed = self.radius * angular_speed;
 
         let circular_velocity =
             Self::compute_circular_velocity(cos_angle, sin_angle, tangential_speed);
 
-        let world_space_circular_velocity = self.orientation.transform_vector(&circular_velocity);
+        let world_space_circular_velocity = orientation.rotate_vector(&circular_velocity);
 
-        (world_space_circular_position, world_space_circular_velocity)
+        (
+            world_space_circular_position.unaligned(),
+            world_space_circular_velocity.unaligned(),
+        )
     }
 
     fn compute_angular_speed(period: f32) -> f32 {
@@ -167,16 +171,16 @@ impl CircularTrajectory {
         angular_speed * (time - initial_time) % f32::TWO_PI
     }
 
-    fn compute_circular_displacement(radius: f32, cos_angle: f32, sin_angle: f32) -> Position {
-        Point3::new(radius * cos_angle, radius * sin_angle, 0.0)
+    fn compute_circular_displacement(radius: f32, cos_angle: f32, sin_angle: f32) -> PositionA {
+        PositionA::new(radius * cos_angle, radius * sin_angle, 0.0)
     }
 
     fn compute_circular_velocity(
         cos_angle: f32,
         sin_angle: f32,
         tangential_speed: f32,
-    ) -> Velocity {
-        Vector3::new(
+    ) -> VelocityA {
+        VelocityA::new(
             -tangential_speed * sin_angle,
             tangential_speed * cos_angle,
             0.0,
@@ -187,7 +191,7 @@ impl CircularTrajectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::{Direction, Orientation};
+    use crate::quantities::{Direction, Orientation, OrientationA};
     use approx::abs_diff_eq;
     use impact_math::{Float, vector::UnitVector3};
     use proptest::prelude::*;
@@ -198,7 +202,7 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            Point3::new(position_coord_x, position_coord_y, position_coord_z)
+            Position::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -207,11 +211,11 @@ mod tests {
             phi in 0.0..f32::TWO_PI,
             theta in 0.0..f32::PI,
         ) -> Direction {
-            Direction::normalized_from(Vector3::new(
+            Direction::new_unchecked(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
-            ))
+            )
         }
     }
 
@@ -221,7 +225,7 @@ mod tests {
             rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
             rotation_yaw in 0.0..f32::TWO_PI,
         ) -> Orientation {
-            Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
+            OrientationA::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).unaligned()
         }
     }
 

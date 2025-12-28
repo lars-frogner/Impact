@@ -9,8 +9,7 @@ use crate::{
     UnidirectionalLight, UnidirectionalLightID,
 };
 use impact_math::{
-    angle::Degrees, point::Point3, quaternion::UnitQuaternion, transform::Isometry3,
-    vector::UnitVector3,
+    angle::Degrees, point::Point3A, quaternion::UnitQuaternionA, transform::Isometry3A,
 };
 
 pub fn setup_ambient_light(
@@ -28,14 +27,14 @@ pub fn setup_ambient_light(
 
 pub fn setup_omnidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3,
-    position: &Point3,
+    view_transform: &Isometry3A,
+    position: &Point3A,
     omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
 ) -> OmnidirectionalLightID {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = OmnidirectionalLight::new(
-        position,
+        position.unaligned(),
         omnidirectional_emission.luminous_intensity,
         f32::max(omnidirectional_emission.source_extent, 0.0),
         flags,
@@ -47,14 +46,14 @@ pub fn setup_omnidirectional_light(
 
 pub fn setup_shadowable_omnidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3,
-    position: &Point3,
+    view_transform: &Isometry3A,
+    position: &Point3A,
     omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
 ) -> ShadowableOmnidirectionalLightID {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = ShadowableOmnidirectionalLight::new(
-        position,
+        position.unaligned(),
         omnidirectional_emission.luminous_intensity,
         f32::max(omnidirectional_emission.source_extent, 0.0),
         flags,
@@ -66,16 +65,15 @@ pub fn setup_shadowable_omnidirectional_light(
 
 pub fn setup_unidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3,
+    view_transform: &Isometry3A,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) -> UnidirectionalLightID {
-    // The view transform contains no scaling, so the direction remains normalized
-    let direction = UnitVector3::unchecked_from(
-        view_transform.transform_vector(&unidirectional_emission.direction),
-    );
+    let direction = unidirectional_emission.direction.aligned();
+    let camera_space_direction = view_transform.transform_unit_vector(&direction);
+
     let unidirectional_light = UnidirectionalLight::new(
-        direction,
+        camera_space_direction.unaligned(),
         unidirectional_emission.perpendicular_illuminance,
         Degrees(f32::max(
             unidirectional_emission.angular_source_extent.0,
@@ -90,16 +88,15 @@ pub fn setup_unidirectional_light(
 
 pub fn setup_shadowable_unidirectional_light(
     light_manager: &mut LightManager,
-    view_transform: &Isometry3,
+    view_transform: &Isometry3A,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) -> ShadowableUnidirectionalLightID {
-    // The view transform contains no scaling, so the direction remains normalized
-    let direction = UnitVector3::unchecked_from(
-        view_transform.transform_vector(&unidirectional_emission.direction),
-    );
+    let direction = unidirectional_emission.direction.aligned();
+    let camera_space_direction = view_transform.transform_unit_vector(&direction);
+
     let unidirectional_light = ShadowableUnidirectionalLight::new(
-        direction,
+        camera_space_direction.unaligned(),
         unidirectional_emission.perpendicular_illuminance,
         Degrees(f32::max(
             unidirectional_emission.angular_source_extent.0,
@@ -123,13 +120,13 @@ pub fn sync_ambient_light_in_storage(
 pub fn sync_omnidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: OmnidirectionalLightID,
-    view_transform: &Isometry3,
-    position: &Point3,
+    view_transform: &Isometry3A,
+    position: &Point3A,
     omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
 ) {
     let light = light_manager.omnidirectional_light_mut(light_id);
-    light.set_camera_space_position(view_transform.transform_point(position));
+    light.set_camera_space_position(view_transform.transform_point(position).unaligned());
     light.set_luminous_intensity(omnidirectional_emission.luminous_intensity);
     light.set_emissive_extent(omnidirectional_emission.source_extent);
     light.set_flags(flags);
@@ -138,13 +135,13 @@ pub fn sync_omnidirectional_light_in_storage(
 pub fn sync_shadowable_omnidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableOmnidirectionalLightID,
-    view_transform: &Isometry3,
-    position: &Point3,
+    view_transform: &Isometry3A,
+    position: &Point3A,
     omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
 ) {
     let light = light_manager.shadowable_omnidirectional_light_mut(light_id);
-    light.set_camera_space_position(view_transform.transform_point(position));
+    light.set_camera_space_position(view_transform.transform_point(position).unaligned());
     light.set_luminous_intensity(omnidirectional_emission.luminous_intensity);
     light.set_emissive_extent(omnidirectional_emission.source_extent);
     light.set_flags(flags);
@@ -153,14 +150,15 @@ pub fn sync_shadowable_omnidirectional_light_in_storage(
 pub fn sync_unidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: UnidirectionalLightID,
-    view_transform: &Isometry3,
+    view_transform: &Isometry3A,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) {
+    let direction = unidirectional_emission.direction.aligned();
+    let camera_space_direction = view_transform.transform_unit_vector(&direction);
+
     let light = light_manager.unidirectional_light_mut(light_id);
-    light.set_camera_space_direction(UnitVector3::unchecked_from(
-        view_transform.transform_vector(&unidirectional_emission.direction),
-    ));
+    light.set_camera_space_direction(camera_space_direction.unaligned());
     light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
     light.set_angular_extent(unidirectional_emission.angular_source_extent);
     light.set_flags(flags);
@@ -169,17 +167,17 @@ pub fn sync_unidirectional_light_in_storage(
 pub fn sync_unidirectional_light_with_orientation_in_storage(
     light_manager: &mut LightManager,
     light_id: UnidirectionalLightID,
-    view_transform: &Isometry3,
-    orientation: &UnitQuaternion,
+    view_transform: &Isometry3A,
+    orientation: &UnitQuaternionA,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
 ) {
-    let world_direction = orientation.transform_vector(&unidirectional_emission.direction);
+    let direction = unidirectional_emission.direction.aligned();
+    let world_direction = orientation.rotate_unit_vector(&direction);
+    let camera_space_direction = view_transform.transform_unit_vector(&world_direction);
 
     let light = light_manager.unidirectional_light_mut(light_id);
-    light.set_camera_space_direction(UnitVector3::unchecked_from(
-        view_transform.transform_vector(&world_direction),
-    ));
+    light.set_camera_space_direction(camera_space_direction.unaligned());
     light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
     light.set_angular_extent(unidirectional_emission.angular_source_extent);
     light.set_flags(flags);
@@ -188,14 +186,15 @@ pub fn sync_unidirectional_light_with_orientation_in_storage(
 pub fn sync_shadowable_unidirectional_light_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableUnidirectionalLightID,
-    view_transform: &Isometry3,
+    view_transform: &Isometry3A,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) {
+    let direction = unidirectional_emission.direction.aligned();
+    let camera_space_direction = view_transform.transform_unit_vector(&direction);
     let light = light_manager.shadowable_unidirectional_light_mut(light_id);
-    light.set_camera_space_direction(UnitVector3::unchecked_from(
-        view_transform.transform_vector(&unidirectional_emission.direction),
-    ));
+
+    light.set_camera_space_direction(camera_space_direction.unaligned());
     light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
     light.set_angular_extent(unidirectional_emission.angular_source_extent);
     light.set_flags(flags);
@@ -204,17 +203,17 @@ pub fn sync_shadowable_unidirectional_light_in_storage(
 pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
     light_manager: &mut LightManager,
     light_id: ShadowableUnidirectionalLightID,
-    view_transform: &Isometry3,
-    orientation: &UnitQuaternion,
+    view_transform: &Isometry3A,
+    orientation: &UnitQuaternionA,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
 ) {
-    let world_direction = orientation.transform_vector(&unidirectional_emission.direction);
+    let direction = unidirectional_emission.direction.aligned();
+    let world_direction = orientation.rotate_unit_vector(&direction);
+    let camera_space_direction = view_transform.transform_unit_vector(&world_direction);
 
     let light = light_manager.shadowable_unidirectional_light_mut(light_id);
-    light.set_camera_space_direction(UnitVector3::unchecked_from(
-        view_transform.transform_vector(&world_direction),
-    ));
+    light.set_camera_space_direction(camera_space_direction.unaligned());
     light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
     light.set_angular_extent(unidirectional_emission.angular_source_extent);
     light.set_flags(flags);

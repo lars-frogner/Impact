@@ -35,19 +35,23 @@ impl AnchoredTwoBodyConstraint for SphericalJoint {
         anchor_a: TypedRigidBodyAnchorRef<'a>,
         anchor_b: TypedRigidBodyAnchorRef<'a>,
     ) -> Self::Prepared {
-        let body_a_attachment_point = body_a.position
-            + body_a
-                .orientation
-                .transform_vector(anchor_a.point().as_vector());
-        let body_b_attachment_point = body_b.position
-            + body_b
-                .orientation
-                .transform_vector(anchor_b.point().as_vector());
+        let body_a_position = body_a.position.aligned();
+        let body_b_position = body_b.position.aligned();
+        let body_a_orientation = body_a.orientation.aligned();
+        let body_b_orientation = body_b.orientation.aligned();
+        let anchor_a_point = anchor_a.point().aligned();
+        let anchor_b_point = anchor_b.point().aligned();
+
+        let body_a_attachment_point =
+            body_a_position + body_a_orientation.rotate_vector(anchor_a_point.as_vector());
+
+        let body_b_attachment_point =
+            body_b_position + body_b_orientation.rotate_vector(anchor_b_point.as_vector());
 
         let attachment_point_displacement = body_a_attachment_point - body_b_attachment_point;
 
         PreparedSphericalJoint {
-            _attachment_point_displacement: attachment_point_displacement,
+            _attachment_point_displacement: attachment_point_displacement.unaligned(),
         }
     }
 }

@@ -4,7 +4,7 @@ use crate::SphereA;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::{Point3, Point3A},
+    point::Point3A,
     quaternion::UnitQuaternionA,
     transform::{Isometry3A, Similarity3A},
     vector::{UnitVector3, UnitVector3A},
@@ -94,16 +94,6 @@ impl Plane {
         }
     }
 
-    /// Creates a new plane defined by the given unit normal
-    /// vector and point in the plane.
-    #[inline]
-    pub fn from_normal_and_point(unit_normal: UnitVector3, point_in_plane: &Point3) -> Self {
-        Self::new(
-            unit_normal,
-            Self::calculate_displacement(&unit_normal, point_in_plane),
-        )
-    }
-
     /// Returns the unit normal vector of the plane.
     #[inline]
     pub const fn unit_normal(&self) -> &UnitVector3 {
@@ -126,11 +116,6 @@ impl Plane {
     #[inline]
     pub fn aligned(&self) -> PlaneA {
         PlaneA::new(self.unit_normal.aligned(), self.displacement)
-    }
-
-    #[inline]
-    fn calculate_displacement(unit_normal: &UnitVector3, point_in_plane: &Point3) -> f32 {
-        unit_normal.dot(point_in_plane.as_vector())
     }
 }
 

@@ -3,7 +3,10 @@
 use crate::vector::{Vector2, Vector3, Vector3A};
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
-use std::ops::{Index, IndexMut, Mul, MulAssign};
+use std::{
+    fmt,
+    ops::{Index, IndexMut, Mul, MulAssign},
+};
 
 /// A 2-dimensional point.
 #[repr(transparent)]
@@ -12,7 +15,7 @@ use std::ops::{Index, IndexMut, Mul, MulAssign};
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Point2 {
     inner: glam::Vec2,
 }
@@ -23,7 +26,11 @@ pub struct Point2 {
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`Point3A`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 3]", from = "[f32; 3]")
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Point3 {
     x: f32,
@@ -42,7 +49,7 @@ pub struct Point3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Point3A {
     inner: glam::Vec3A,
 }
@@ -214,6 +221,15 @@ impl IndexMut<usize> for Point2 {
     }
 }
 
+impl fmt::Debug for Point2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Point2")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .finish()
+    }
+}
+
 impl_abs_diff_eq!(Point2, |a, b, epsilon| {
     a.inner.abs_diff_eq(b.inner, epsilon)
 });
@@ -233,12 +249,6 @@ impl Point3 {
     #[inline]
     pub const fn origin() -> Self {
         Self::new(0.0, 0.0, 0.0)
-    }
-
-    /// Computes the center position between two points.
-    #[inline]
-    pub fn center_of(point_a: &Self, point_b: &Self) -> Self {
-        0.5 * (point_a + point_b.as_vector())
     }
 
     /// The x-component.
@@ -593,6 +603,16 @@ impl IndexMut<usize> for Point3A {
     }
 }
 
+impl fmt::Debug for Point3A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Point3A")
+            .field("x", &self.inner.x)
+            .field("y", &self.inner.y)
+            .field("z", &self.inner.z)
+            .finish()
+    }
+}
+
 impl_abs_diff_eq!(Point3A, |a, b, epsilon| {
     a.inner.abs_diff_eq(b.inner, epsilon)
 });
@@ -817,16 +837,6 @@ mod tests {
         assert_eq!(origin.x(), 0.0);
         assert_eq!(origin.y(), 0.0);
         assert_eq!(origin.z(), 0.0);
-    }
-
-    #[test]
-    fn point3_center_of_calculates_midpoint() {
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(4.0, 6.0, 8.0);
-        let center = Point3::center_of(&p1, &p2);
-        assert_eq!(center.x(), 2.0);
-        assert_eq!(center.y(), 3.0);
-        assert_eq!(center.z(), 4.0);
     }
 
     #[test]

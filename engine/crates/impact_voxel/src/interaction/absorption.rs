@@ -13,7 +13,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_geometry::{Capsule, Sphere};
-use impact_math::{point::Point3, transform::Isometry3, vector::Vector3};
+use impact_math::{point::Point3, transform::Isometry3A, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
     rigid_body::RigidBodyManager,
@@ -197,11 +197,11 @@ pub fn apply_absorption<C>(
             return;
         };
 
+        let reference_frame = rigid_body.reference_frame().aligned();
+
         let local_center_of_mass = physics_context
             .inertial_property_manager
             .derive_center_of_mass();
-
-        let reference_frame = rigid_body.reference_frame();
 
         let voxel_object_to_world_transform = reference_frame
             .create_transform_to_parent_space()
@@ -281,7 +281,7 @@ pub fn apply_absorption<C>(
                         anchor_id,
                         DynamicRigidBodyAnchor {
                             rigid_body_id,
-                            point,
+                            point: point.unaligned(),
                         },
                     );
                 }
@@ -302,12 +302,13 @@ fn apply_sphere_absorption(
     time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
-    world_to_voxel_object_transform: &Isometry3,
+    world_to_voxel_object_transform: &Isometry3A,
     absorbing_sphere: &VoxelAbsorbingSphere,
-    sphere_to_world_transform: &Isometry3,
+    sphere_to_world_transform: &Isometry3A,
 ) {
-    let sphere_in_voxel_object_space = absorbing_sphere
-        .sphere()
+    let sphere = absorbing_sphere.sphere().aligned();
+
+    let sphere_in_voxel_object_space = sphere
         .translated_and_rotated(sphere_to_world_transform)
         .translated_and_rotated(world_to_voxel_object_transform);
 
@@ -336,12 +337,13 @@ fn apply_capsule_absorption(
     time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
-    world_to_voxel_object_transform: &Isometry3,
+    world_to_voxel_object_transform: &Isometry3A,
     absorbing_capsule: &VoxelAbsorbingCapsule,
-    capsule_to_world_transform: &Isometry3,
+    capsule_to_world_transform: &Isometry3A,
 ) {
-    let capsule_in_voxel_object_space = absorbing_capsule
-        .capsule()
+    let capsule = absorbing_capsule.capsule().aligned();
+
+    let capsule_in_voxel_object_space = capsule
         .translated_and_rotated(capsule_to_world_transform)
         .translated_and_rotated(world_to_voxel_object_transform);
 

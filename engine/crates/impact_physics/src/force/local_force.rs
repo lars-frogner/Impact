@@ -63,9 +63,13 @@ impl LocalForceGenerator {
             return;
         };
 
-        let force = rigid_body.transform_vector_from_body_to_world_space(&self.force);
-        let point = rigid_body.transform_point_from_body_to_world_space(&anchor.point);
-        rigid_body.apply_force(&force, &point);
+        let local_force = self.force.aligned();
+        let local_anchor_point = anchor.point.aligned();
+
+        let force = rigid_body.transform_vector_from_body_to_world_space(&local_force);
+        let anchor_point = rigid_body.transform_point_from_body_to_world_space(&local_anchor_point);
+
+        rigid_body.apply_force(&force, &anchor_point);
     }
 }
 

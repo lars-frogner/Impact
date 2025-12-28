@@ -26,7 +26,7 @@ ecs = [
 fuzzing = ["arbitrary"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 ron = ["impact_io/ron", "serde"]
-serde = ["dep:serde", "nalgebra/serde-serialize", "impact_alloc/serde"]
+serde = ["dep:serde", "impact_alloc/serde"]
 unchecked = []
 
 [dependencies]
@@ -36,7 +36,6 @@ arbitrary = { workspace = true, optional = true }
 bitflags = { workspace = true }
 bytemuck = { workspace = true }
 cfg-if = { workspace = true }
-glam = "0.30"
 impact_alloc = { path = "../impact_alloc" }
 impact_camera = { path = "../impact_camera" }
 impact_containers = { path = "../impact_containers" }
@@ -55,7 +54,6 @@ impact_scene = { path = "../impact_scene" }
 impact_texture = { path = "../impact_texture" }
 impact_thread = { path = "../impact_thread" }
 inventory = { workspace = true, optional = true }
-nalgebra = { workspace = true }
 num-traits = { workspace = true }
 ordered-float = "5.0"
 parking_lot = { workspace = true }

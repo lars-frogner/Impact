@@ -6,7 +6,7 @@ use crate::{
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
-use glam::{Vec3A, Vec3Swizzles};
+use impact_math::{point::Point3A, vector::Vector3A};
 use std::array;
 
 /// The output buffers used by
@@ -119,7 +119,7 @@ impl VoxelChunkSignedDistanceField {
     pub fn compute_surface_nets_mesh(
         &self,
         voxel_extent: f32,
-        position_offset: &Vec3A,
+        position_offset: &Vector3A,
         buffer: &mut SurfaceNetsBuffer,
     ) {
         buffer.reset();
@@ -140,7 +140,7 @@ impl VoxelChunkSignedDistanceField {
     fn estimate_surface_nets_surface(
         &self,
         voxel_extent: f32,
-        position_offset: &Vec3A,
+        position_offset: &Vector3A,
         buffer: &mut SurfaceNetsBuffer,
     ) {
         for i in 0..Self::grid_size_u32() - 1 {
@@ -151,7 +151,7 @@ impl VoxelChunkSignedDistanceField {
                         self.estimate_surface_net_vertex_attributes_in_cube(linear_idx)
                     {
                         let position = voxel_extent
-                            * (Vec3A::from([i as f32, j as f32, k as f32]) + centroid)
+                            * (centroid + Vector3A::new(i as f32, j as f32, k as f32))
                             + position_offset;
 
                         buffer.voxel_linear_idx_to_vertex_index[linear_idx as usize] =
@@ -187,7 +187,7 @@ impl VoxelChunkSignedDistanceField {
     fn estimate_surface_net_vertex_attributes_in_cube(
         &self,
         min_corner_linear_idx: u32,
-    ) -> Option<(Vec3A, Vec3A, SurfaceNetsVertexMaterials)> {
+    ) -> Option<(Point3A, Vector3A, SurfaceNetsVertexMaterials)> {
         let mut corner_dists = [0.0; 8];
         let mut corner_has_voxel = [false; 8];
         let mut corner_material_indices = [0; 8];
@@ -337,36 +337,37 @@ impl VoxelChunkSignedDistanceField {
         let v3 = linear_idx_to_vertex_index[p1 - axis_c_linear_idx];
         let v4 = linear_idx_to_vertex_index[p1 - axis_b_linear_idx - axis_c_linear_idx];
         let (pos1, pos2, pos3, pos4) = (
-            Vec3A::from(positions[v1 as usize].0),
-            Vec3A::from(positions[v2 as usize].0),
-            Vec3A::from(positions[v3 as usize].0),
-            Vec3A::from(positions[v4 as usize].0),
+            Point3A::from(positions[v1 as usize].0),
+            Point3A::from(positions[v2 as usize].0),
+            Point3A::from(positions[v3 as usize].0),
+            Point3A::from(positions[v4 as usize].0),
         );
         // Split the quad along the shorter axis, rather than the longer one.
-        let quad = if pos1.distance_squared(pos4) < pos2.distance_squared(pos3) {
-            if negative_face {
-                [v1, v4, v2, v1, v3, v4]
+        let quad =
+            if Point3A::distance_between(&pos1, &pos4) < Point3A::distance_between(&pos2, &pos3) {
+                if negative_face {
+                    [v1, v4, v2, v1, v3, v4]
+                } else {
+                    [v1, v2, v4, v1, v4, v3]
+                }
+            } else if negative_face {
+                [v2, v3, v4, v2, v1, v3]
             } else {
-                [v1, v2, v4, v1, v4, v3]
-            }
-        } else if negative_face {
-            [v2, v3, v4, v2, v1, v3]
-        } else {
-            [v2, v4, v3, v2, v3, v1]
-        };
+                [v2, v4, v3, v2, v3, v1]
+            };
         indices.extend_from_slice(&quad);
     }
 }
 
-fn centroid_of_edge_intersections(dists: &[f32; 8]) -> Vec3A {
+fn centroid_of_edge_intersections(dists: &[f32; 8]) -> Point3A {
     let mut count = 0;
-    let mut sum = Vec3A::ZERO;
+    let mut sum = Point3A::origin();
     for &[corner1, corner2] in &CUBE_EDGES {
         let d1 = dists[corner1 as usize];
         let d2 = dists[corner2 as usize];
         if opposite_signs(d1, d2) {
             count += 1;
-            sum += estimate_surface_edge_intersection(corner1, corner2, d1, d2);
+            sum += estimate_surface_edge_intersection(corner1, corner2, d1, d2).as_vector();
         }
     }
 
@@ -386,12 +387,12 @@ fn estimate_surface_edge_intersection(
     corner2: u32,
     value1: f32,
     value2: f32,
-) -> Vec3A {
+) -> Point3A {
     let interp1 = value1 / (value1 - value2);
     let interp2 = 1.0 - interp1;
 
-    interp2 * CUBE_CORNER_VECTORS[corner1 as usize]
-        + interp1 * CUBE_CORNER_VECTORS[corner2 as usize]
+    interp2 * CUBE_CORNER_POINTS[corner1 as usize]
+        + interp1 * CUBE_CORNER_POINTS[corner2 as usize].as_vector()
 }
 
 /// Calculates an unnormalized surface normal vector as the gradient of the
@@ -401,18 +402,20 @@ fn estimate_surface_edge_intersection(
 /// bilinear interpolation between the differences along those edges based on
 /// the position of the surface (s).
 #[inline]
-fn sdf_gradient(dists: &[f32; 8], s: Vec3A) -> Vec3A {
-    let p00 = Vec3A::from([dists[0b100], dists[0b010], dists[0b001]]);
-    let n00 = Vec3A::from([dists[0b000], dists[0b000], dists[0b000]]);
+fn sdf_gradient(dists: &[f32; 8], s: Point3A) -> Vector3A {
+    let s = s.as_vector();
 
-    let p01 = Vec3A::from([dists[0b101], dists[0b110], dists[0b011]]);
-    let n01 = Vec3A::from([dists[0b001], dists[0b100], dists[0b010]]);
+    let p00 = Vector3A::new(dists[0b100], dists[0b010], dists[0b001]);
+    let n00 = Vector3A::new(dists[0b000], dists[0b000], dists[0b000]);
 
-    let p10 = Vec3A::from([dists[0b110], dists[0b011], dists[0b101]]);
-    let n10 = Vec3A::from([dists[0b010], dists[0b001], dists[0b100]]);
+    let p01 = Vector3A::new(dists[0b101], dists[0b110], dists[0b011]);
+    let n01 = Vector3A::new(dists[0b001], dists[0b100], dists[0b010]);
 
-    let p11 = Vec3A::from([dists[0b111], dists[0b111], dists[0b111]]);
-    let n11 = Vec3A::from([dists[0b011], dists[0b101], dists[0b110]]);
+    let p10 = Vector3A::new(dists[0b110], dists[0b011], dists[0b101]);
+    let n10 = Vector3A::new(dists[0b010], dists[0b001], dists[0b100]);
+
+    let p11 = Vector3A::new(dists[0b111], dists[0b111], dists[0b111]);
+    let n11 = Vector3A::new(dists[0b011], dists[0b101], dists[0b110]);
 
     // Each dimension encodes an edge delta, giving 12 in total.
     let d00 = p00 - n00; // Edges (0bx00, 0b0y0, 0b00z)
@@ -420,13 +423,13 @@ fn sdf_gradient(dists: &[f32; 8], s: Vec3A) -> Vec3A {
     let d10 = p10 - n10; // Edges (0bx10, 0b0y1, 0b10z)
     let d11 = p11 - n11; // Edges (0bx11, 0b1y1, 0b11z)
 
-    let neg = Vec3A::ONE - s;
+    let neg = Vector3A::same(1.0) - s;
 
     // Do bilinear interpolation between 4 edges in each dimension.
-    neg.yzx() * neg.zxy() * d00
-        + neg.yzx() * s.zxy() * d01
-        + s.yzx() * neg.zxy() * d10
-        + s.yzx() * s.zxy() * d11
+    neg.yzx().component_mul(&neg.zxy()).component_mul(&d00)
+        + neg.yzx().component_mul(&s.zxy()).component_mul(&d01)
+        + s.yzx().component_mul(&neg.zxy()).component_mul(&d10)
+        + s.yzx().component_mul(&s.zxy()).component_mul(&d11)
 }
 
 macro_rules! sorting_network {
@@ -659,15 +662,15 @@ const CUBE_CORNERS: [[u32; 3]; 8] = [
     [1, 1, 1],
 ];
 
-const CUBE_CORNER_VECTORS: [Vec3A; 8] = [
-    Vec3A::new(0.0, 0.0, 0.0),
-    Vec3A::new(0.0, 0.0, 1.0),
-    Vec3A::new(0.0, 1.0, 0.0),
-    Vec3A::new(0.0, 1.0, 1.0),
-    Vec3A::new(1.0, 0.0, 0.0),
-    Vec3A::new(1.0, 0.0, 1.0),
-    Vec3A::new(1.0, 1.0, 0.0),
-    Vec3A::new(1.0, 1.0, 1.0),
+const CUBE_CORNER_POINTS: [Point3A; 8] = [
+    Point3A::new(0.0, 0.0, 0.0),
+    Point3A::new(0.0, 0.0, 1.0),
+    Point3A::new(0.0, 1.0, 0.0),
+    Point3A::new(0.0, 1.0, 1.0),
+    Point3A::new(1.0, 0.0, 0.0),
+    Point3A::new(1.0, 0.0, 1.0),
+    Point3A::new(1.0, 1.0, 0.0),
+    Point3A::new(1.0, 1.0, 1.0),
 ];
 
 const CUBE_EDGES: [[u32; 2]; 12] = [

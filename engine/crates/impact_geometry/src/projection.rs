@@ -10,7 +10,7 @@ use impact_math::{
     point::{Point2, Point3A},
     quaternion::{QuaternionA, UnitQuaternionA},
     transform::{Projective3A, Similarity3A},
-    vector::{Vector3, Vector3A},
+    vector::{Vector3A, Vector4A},
 };
 use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
 
@@ -346,35 +346,47 @@ impl CubeMapper {
     /// face.
     const ROTATIONS_TO_POSITIVE_Z_FACE: [UnitQuaternionA; 6] = [
         // From positive x face:
-        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), -0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(
-            Vector3::new(0.0, -FRAC_1_SQRT_2, 0.0),
+        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), -0.5 * PI)
+        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+            0.0,
+            -FRAC_1_SQRT_2,
+            0.0,
             FRAC_1_SQRT_2,
-        )),
+        ))),
         // From negative x face:
-        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), 0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(
-            Vector3::new(0.0, FRAC_1_SQRT_2, 0.0),
+        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), 0.5 * PI)
+        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+            0.0,
             FRAC_1_SQRT_2,
-        )),
+            0.0,
+            FRAC_1_SQRT_2,
+        ))),
         // From positive y face:
-        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), 0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(
-            Vector3::new(FRAC_1_SQRT_2, 0.0, 0.0),
+        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), 0.5 * PI)
+        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
             FRAC_1_SQRT_2,
-        )),
+            0.0,
+            0.0,
+            FRAC_1_SQRT_2,
+        ))),
         // From negative y face:
-        // UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), -0.5 * PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(
-            Vector3::new(-FRAC_1_SQRT_2, 0.0, 0.0),
+        // UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), -0.5 * PI)
+        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+            -FRAC_1_SQRT_2,
+            0.0,
+            0.0,
             FRAC_1_SQRT_2,
-        )),
+        ))),
         // From positive z face:
-        // UnitQuaternion::identity()
-        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(Vector3::new(0.0, 0.0, 0.0), 1.0)),
+        // UnitQuaternionA::identity()
+        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+            0.0, 0.0, 0.0, 1.0,
+        ))),
         // From negative z face:
         // UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), PI)
-        UnitQuaternionA::unchecked_from(QuaternionA::from_parts(Vector3::new(0.0, 1.0, 0.0), 0.0)),
+        UnitQuaternionA::unchecked_from(QuaternionA::from_vector(Vector4A::new(
+            0.0, 1.0, 0.0, 0.0,
+        ))),
     ];
 
     /// Returns a quaternion representing the rotation from the given cube face

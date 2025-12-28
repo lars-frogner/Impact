@@ -2,8 +2,7 @@
 
 use crate::component::{ComponentCategory, ComponentDescriptor, ComponentFlags, ComponentID};
 use anyhow::{Result, anyhow, bail};
-use impact_containers::NoHashMap;
-use impact_containers::hash_map::Entry;
+use impact_containers::{NoHashMap, hash_map::Entry};
 
 /// Registry for holding metadata about all
 /// [`Component`](crate::component::Component)s.

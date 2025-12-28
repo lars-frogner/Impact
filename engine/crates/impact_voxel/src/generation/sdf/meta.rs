@@ -16,17 +16,15 @@ use impact_alloc::{
     avec,
 };
 use impact_containers::FixedQueue;
-use impact_geometry::{
-    Sphere, compute_uniformly_distributed_radial_directions, rotation_between_axes,
-};
+use impact_geometry::{SphereA, compute_uniformly_distributed_radial_directions};
 use impact_math::{
     angle::{Angle, Degrees},
     consts::f32::TWO_PI,
-    point::Point3,
-    quaternion::UnitQuaternion,
+    point::Point3A,
+    quaternion::UnitQuaternionA,
     splitmix,
-    transform::Similarity3,
-    vector::{UnitVector3, Vector3},
+    transform::Similarity3A,
+    vector::{UnitVector3A, Vector3A},
 };
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
 use rand::{
@@ -110,7 +108,7 @@ struct Instance {
     shape: InstanceShape,
     /// Transform from the local space of this instance's shape into this
     /// instance's coordinate space.
-    transform: Similarity3,
+    transform: Similarity3A,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1225,24 +1223,24 @@ impl MetaSDFNode {
 }
 
 impl Instance {
-    fn shapeless(transform: Similarity3) -> Self {
+    fn shapeless(transform: Similarity3A) -> Self {
         Self {
             shape: InstanceShape::None,
             transform,
         }
     }
 
-    fn with_transform(&self, transform: Similarity3) -> Self {
+    fn with_transform(&self, transform: Similarity3A) -> Self {
         Self {
             shape: self.shape,
             transform,
         }
     }
 
-    fn with_applied_transform(&self, transform: Similarity3) -> Self {
+    fn with_applied_transform(&self, transform: Similarity3A) -> Self {
         Self {
             shape: self.shape,
-            transform: transform * self.transform,
+            transform: transform * &self.transform,
         }
     }
 }
@@ -1250,7 +1248,7 @@ impl Instance {
 impl MetaPoints {
     fn resolve<A: Allocator>(&self, arena: A) -> MetaSDFNodeOutput<A> {
         MetaSDFNodeOutput::Instances(
-            avec![in arena; Instance::shapeless(Similarity3::identity()); self.count as usize],
+            avec![in arena; Instance::shapeless(Similarity3A::identity()); self.count as usize],
         )
     }
 }
@@ -1271,7 +1269,7 @@ impl MetaSpheres {
                     center_y: params.center_y,
                     center_z: params.center_z,
                 }),
-                transform: Similarity3::identity(),
+                transform: Similarity3A::identity(),
             });
 
             if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
@@ -1300,7 +1298,7 @@ impl MetaCapsules {
                     center_y: params.center_y,
                     center_z: params.center_z,
                 }),
-                transform: Similarity3::identity(),
+                transform: Similarity3A::identity(),
             });
 
             if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
@@ -1330,7 +1328,7 @@ impl MetaBoxes {
                     center_y: params.center_y,
                     center_z: params.center_z,
                 }),
-                transform: Similarity3::identity(),
+                transform: Similarity3A::identity(),
             });
 
             if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
@@ -1357,7 +1355,7 @@ impl MetaTranslation {
             self.sampling,
             |rng| self.sample_params(rng),
             |params, input_instance| {
-                let translation = Vector3::new(
+                let translation = Vector3A::new(
                     params.translation_x,
                     params.translation_y,
                     params.translation_z,
@@ -1462,20 +1460,20 @@ impl MetaSimilarity {
                     Degrees(params.roll_angle),
                 );
 
-                let translation = Vector3::new(
+                let translation = Vector3A::new(
                     params.translation_x,
                     params.translation_y,
                     params.translation_z,
                 );
 
-                let transform = Similarity3::from_parts(translation, rotation, scaling);
+                let transform = Similarity3A::from_parts(translation, rotation, scaling);
 
                 match self.composition {
                     CompositionMode::Post => {
-                        input_instance.with_transform(transform * input_instance.transform)
+                        input_instance.with_transform(transform * &input_instance.transform)
                     }
                     CompositionMode::Pre => {
-                        input_instance.with_transform(input_instance.transform * transform)
+                        input_instance.with_transform(&input_instance.transform * transform)
                     }
                 }
             },
@@ -1558,9 +1556,9 @@ impl MetaStratifiedGridTransforms {
             let jy = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[1];
             let jz = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[2];
 
-            let transform = Similarity3::from_parts(
-                Vector3::new(x + jx, y + jy, z + jz),
-                UnitQuaternion::identity(),
+            let transform = Similarity3A::from_parts(
+                Vector3A::new(x + jx, y + jy, z + jz),
+                UnitQuaternionA::identity(),
                 1.0,
             );
 
@@ -1617,16 +1615,18 @@ impl MetaSphereSurfaceTransforms {
             let translation = radius * jittered_direction;
 
             let rotation = match self.rotation {
-                SphereSurfaceRotation::Identity => UnitQuaternion::identity(),
-                SphereSurfaceRotation::RadialOutwards => {
-                    rotation_between_axes(&UnitVector3::unit_y(), &jittered_direction)
-                }
-                SphereSurfaceRotation::RadialInwards => {
-                    rotation_between_axes(&(-UnitVector3::unit_y()), &jittered_direction)
-                }
+                SphereSurfaceRotation::Identity => UnitQuaternionA::identity(),
+                SphereSurfaceRotation::RadialOutwards => UnitQuaternionA::rotation_between_axes(
+                    &UnitVector3A::unit_y(),
+                    &jittered_direction,
+                ),
+                SphereSurfaceRotation::RadialInwards => UnitQuaternionA::rotation_between_axes(
+                    &(-UnitVector3A::unit_y()),
+                    &jittered_direction,
+                ),
             };
 
-            let transform = Similarity3::from_parts(translation, rotation, 1.0);
+            let transform = Similarity3A::from_parts(translation, rotation, 1.0);
 
             output_instances.push(input_instance.with_applied_transform(transform));
         }
@@ -1686,7 +1686,7 @@ impl MetaClosestTranslationToSurface {
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_translation_to_surface =
-            |subject_node_to_parent_transform: &Similarity3| {
+            |subject_node_to_parent_transform: &Similarity3A| {
                 compute_translation_to_closest_point_on_surface(
                     &generator,
                     &mut buffers,
@@ -1757,7 +1757,7 @@ impl MetaRayTranslationToSurface {
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
         let mut compute_translation_to_surface =
-            |subject_node_to_parent_transform: &Similarity3, sphere_in_subject_space: &Sphere| {
+            |subject_node_to_parent_transform: &Similarity3A, sphere_in_subject_space: &SphereA| {
                 compute_spherecast_translation_to_surface(
                     &generator,
                     &mut buffers_1x1x1,
@@ -1765,7 +1765,7 @@ impl MetaRayTranslationToSurface {
                     &surface_sdf_node_to_parent_transform,
                     subject_node_to_parent_transform,
                     sphere_in_subject_space,
-                    &UnitVector3::unit_y(),
+                    &UnitVector3A::unit_y(),
                     128,
                     0.1,
                     0.5,
@@ -1775,15 +1775,15 @@ impl MetaRayTranslationToSurface {
         // We ignore the center coordinates of the shape, which allows the
         // actual shape to be offset relative to the shape used for intersection
         let sphere_for_shape = |shape: &InstanceShape| match shape {
-            InstanceShape::None => Sphere::new(Point3::origin(), 0.0),
+            InstanceShape::None => SphereA::new(Point3A::origin(), 0.0),
             &InstanceShape::Sphere(SphereShape { radius, .. }) => {
-                Sphere::new(Point3::origin(), radius)
+                SphereA::new(Point3A::origin(), radius)
             }
             &InstanceShape::Capsule(CapsuleShape {
                 segment_length,
                 radius,
                 ..
-            }) => Sphere::new(Point3::new(0.0, 0.5 * segment_length, 0.0), radius),
+            }) => SphereA::new(Point3A::new(0.0, 0.5 * segment_length, 0.0), radius),
             &InstanceShape::Box(BoxShape {
                 extent_x,
                 extent_y,
@@ -1792,7 +1792,7 @@ impl MetaRayTranslationToSurface {
             }) => {
                 // Use an inscribed sphere rather than the actual box
                 let radius = 0.5 * extent_x.min(extent_y).min(extent_z);
-                Sphere::new(Point3::new(0.0, 0.5 * extent_y - radius, 0.0), radius)
+                SphereA::new(Point3A::new(0.0, 0.5 * extent_y - radius, 0.0), radius)
             }
         };
 
@@ -1803,7 +1803,7 @@ impl MetaRayTranslationToSurface {
             let subject_node_to_parent_transform = &subject_instance.transform;
 
             let sphere_in_subject_space = match self.anchor {
-                RayTranslationAnchor::Origin => Sphere::new(Point3::origin(), 0.0),
+                RayTranslationAnchor::Origin => SphereA::new(Point3A::origin(), 0.0),
                 RayTranslationAnchor::ShapeBoundaryAtOrigin => {
                     sphere_for_shape(&subject_instance.shape)
                 }
@@ -1863,7 +1863,7 @@ impl MetaRotationToGradient {
         let gradient_sdf_node_to_parent_transform =
             graph.nodes()[sdf_node_id as usize].node_to_parent_transform();
 
-        let mut compute_rotation_to_gradient = |subject_node_to_parent_transform: &Similarity3| {
+        let mut compute_rotation_to_gradient = |subject_node_to_parent_transform: &Similarity3A| {
             compute_rotation_to_gradient(
                 &generator,
                 &mut buffers,
@@ -1972,7 +1972,7 @@ impl MetaSDFInstantiation {
                     center_z,
                 }) => (
                     graph.add_node(SDFNode::new_sphere(radius)),
-                    Point3::new(center_x, center_y, center_z),
+                    Point3A::new(center_x, center_y, center_z),
                 ),
                 InstanceShape::Capsule(CapsuleShape {
                     segment_length,
@@ -1982,7 +1982,7 @@ impl MetaSDFInstantiation {
                     center_z,
                 }) => (
                     graph.add_node(SDFNode::new_capsule(segment_length, radius)),
-                    Point3::new(center_x, center_y, center_z),
+                    Point3A::new(center_x, center_y, center_z),
                 ),
                 InstanceShape::Box(BoxShape {
                     extent_x,
@@ -1993,7 +1993,7 @@ impl MetaSDFInstantiation {
                     center_z,
                 }) => (
                     graph.add_node(SDFNode::new_box([extent_x, extent_y, extent_z])),
-                    Point3::new(center_x, center_y, center_z),
+                    Point3A::new(center_x, center_y, center_z),
                 ),
             };
 
@@ -2003,7 +2003,7 @@ impl MetaSDFInstantiation {
             let rotation = transform.rotation();
             let translation = transform.translation();
 
-            if abs_diff_ne!(&center, &Point3::origin()) {
+            if abs_diff_ne!(&center, &Point3A::origin()) {
                 output_node_id = graph.add_node(SDFNode::new_translation(
                     output_node_id,
                     *center.as_vector(),
@@ -2012,10 +2012,10 @@ impl MetaSDFInstantiation {
             if abs_diff_ne!(scaling, 1.0) {
                 output_node_id = graph.add_node(SDFNode::new_scaling(output_node_id, scaling));
             }
-            if abs_diff_ne!(rotation, &UnitQuaternion::identity()) {
+            if abs_diff_ne!(rotation, &UnitQuaternionA::identity()) {
                 output_node_id = graph.add_node(SDFNode::new_rotation(output_node_id, *rotation));
             }
-            if abs_diff_ne!(translation, &Vector3::zeros()) {
+            if abs_diff_ne!(translation, &Vector3A::zeros()) {
                 output_node_id =
                     graph.add_node(SDFNode::new_translation(output_node_id, *translation));
             }
@@ -2078,11 +2078,11 @@ impl MetaTransformApplication {
                 if abs_diff_ne!(scaling, 1.0) {
                     output_node_id = graph.add_node(SDFNode::new_scaling(output_node_id, scaling));
                 }
-                if abs_diff_ne!(rotation, &UnitQuaternion::identity()) {
+                if abs_diff_ne!(rotation, &UnitQuaternionA::identity()) {
                     output_node_id =
                         graph.add_node(SDFNode::new_rotation(output_node_id, *rotation));
                 }
-                if abs_diff_ne!(translation, &Vector3::zeros()) {
+                if abs_diff_ne!(translation, &Vector3A::zeros()) {
                     output_node_id =
                         graph.add_node(SDFNode::new_translation(output_node_id, *translation));
                 }
@@ -2456,11 +2456,11 @@ where
 fn compute_translation_to_closest_point_on_surface<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
-    surface_sdf_node_to_parent_transform: &Similarity3,
-    subject_node_to_parent_transform: &Similarity3,
+    surface_sdf_node_to_parent_transform: &Similarity3A,
+    subject_node_to_parent_transform: &Similarity3A,
     max_iterations: u32,
     max_distance_from_surface: f32,
-) -> Option<Vector3> {
+) -> Option<Vector3A> {
     // The basis for this computation is that the surface node (for which we
     // sample the SDF) and the subject node (which we will translate) have the
     // *same* parent space. In other words, we assume that no additional
@@ -2473,7 +2473,7 @@ fn compute_translation_to_closest_point_on_surface<A: Allocator>(
     // is the origin, and we start by transforming that to the (common) parent
     // space.
     let subject_center_in_parent_space =
-        subject_node_to_parent_transform.transform_point(&Point3::origin());
+        subject_node_to_parent_transform.transform_point(&Point3A::origin());
 
     // We can now transform it from the common parent space to the space of the
     // surface node
@@ -2526,9 +2526,9 @@ fn compute_translation_to_closest_point_on_surface<A: Allocator>(
 fn compute_rotation_to_gradient<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
-    gradient_sdf_node_to_parent_transform: &Similarity3,
-    subject_node_to_parent_transform: &Similarity3,
-) -> Option<UnitQuaternion> {
+    gradient_sdf_node_to_parent_transform: &Similarity3A,
+    subject_node_to_parent_transform: &Similarity3A,
+) -> Option<UnitQuaternionA> {
     // The basis for this computation is that the gradient node (for which we
     // sample the SDF) and the subject node (which we will rotate) have the
     // *same* parent space. In other words, we assume that no additional
@@ -2541,7 +2541,7 @@ fn compute_rotation_to_gradient<A: Allocator>(
     // the origin, and we start by transforming that to the (common) parent
     // space.
     let subject_center_in_parent_space =
-        subject_node_to_parent_transform.transform_point(&Point3::origin());
+        subject_node_to_parent_transform.transform_point(&Point3A::origin());
 
     // We can now transform it from the common parent space to the space of the
     // gradient node and sample the gradient
@@ -2560,31 +2560,35 @@ fn compute_rotation_to_gradient<A: Allocator>(
     // space.
 
     let subject_y_axis_in_parent_space =
-        subject_node_to_parent_transform.transform_vector(&Vector3::unit_y());
+        subject_node_to_parent_transform.transform_vector(&Vector3A::unit_y());
 
     let gradient_in_parent_space =
         gradient_sdf_node_to_parent_transform.transform_vector(&gradient);
 
     // If the source (y-axis) or destination (gradient) vector has length zero,
     // we can't determine the rotation, so we abort
-    let y_axis = UnitVector3::normalized_from_if_above(subject_y_axis_in_parent_space, 1e-8)?;
-    let gradient_direction = UnitVector3::normalized_from_if_above(gradient_in_parent_space, 1e-8)?;
+    let y_axis = UnitVector3A::normalized_from_if_above(subject_y_axis_in_parent_space, 1e-8)?;
+    let gradient_direction =
+        UnitVector3A::normalized_from_if_above(gradient_in_parent_space, 1e-8)?;
 
-    Some(rotation_between_axes(&y_axis, &gradient_direction))
+    Some(UnitQuaternionA::rotation_between_axes(
+        &y_axis,
+        &gradient_direction,
+    ))
 }
 
 fn compute_spherecast_translation_to_surface<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
     buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
-    surface_sdf_node_to_parent_transform: &Similarity3,
-    subject_node_to_parent_transform: &Similarity3,
-    sphere_in_subject_space: &Sphere,
-    direction_in_subject_space: &UnitVector3,
+    surface_sdf_node_to_parent_transform: &Similarity3A,
+    subject_node_to_parent_transform: &Similarity3A,
+    sphere_in_subject_space: &SphereA,
+    direction_in_subject_space: &UnitVector3A,
     max_steps: u32,
     tolerance: f32,
     safety_factor: f32,
-) -> Option<Vector3> {
+) -> Option<Vector3A> {
     // The basis for this computation is that the surface node (for which we
     // sample the SDF) and the subject node (where the sphere is defined) have
     // the *same* parent space. In other words, we assume that no additional
@@ -2613,12 +2617,12 @@ fn compute_spherecast_translation_to_surface<A: Allocator>(
     let sphere_radius_in_surface_space =
         surface_sdf_node_to_parent_transform.scaling().recip() * sphere_radius_in_parent_space;
 
-    let sphere_in_surface_space = Sphere::new(
+    let sphere_in_surface_space = SphereA::new(
         sphere_center_in_surface_sdf_space,
         sphere_radius_in_surface_space,
     );
 
-    let direction_in_surface_sdf_space = UnitVector3::normalized_from_if_above(
+    let direction_in_surface_sdf_space = UnitVector3A::normalized_from_if_above(
         surface_sdf_node_to_parent_transform.inverse_transform_vector(&direction_in_parent_space),
         1e-8,
     )?;
@@ -2648,12 +2652,12 @@ fn compute_spherecast_translation_to_surface_same_space<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
     buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
-    sphere: &Sphere,
-    direction: &UnitVector3,
+    sphere: &SphereA,
+    direction: &UnitVector3A,
     max_steps: u32,
     tolerance: f32,
     safety_factor: f32,
-) -> Option<Vector3> {
+) -> Option<Vector3A> {
     assert!(safety_factor > 0.0 && safety_factor <= 1.0);
 
     let ray_origin = sphere.center();
@@ -2749,12 +2753,12 @@ fn compute_smallest_signed_distance_on_sphere<A: Allocator>(
     buffers_1x1x1: &mut SDFGeneratorBlockBuffers<1, A>,
     buffers_2x2x2: &mut SDFGeneratorBlockBuffers<8, A>,
     radius: f32,
-    position: &Point3,
+    position: &Point3A,
 ) -> Option<f32> {
     let closest_point_on_sphere = if abs_diff_ne!(radius, 0.0) {
         let (_, gradient) =
             sample_signed_distance_with_gradient(generator, buffers_2x2x2, position);
-        let gradient_direction = UnitVector3::normalized_from_if_above(gradient, 1e-8)?;
+        let gradient_direction = UnitVector3A::normalized_from_if_above(gradient, 1e-8)?;
 
         position - radius * gradient_direction
     } else {
@@ -2770,11 +2774,11 @@ fn compute_smallest_signed_distance_on_sphere<A: Allocator>(
 fn sample_signed_distance_with_gradient<A: Allocator>(
     generator: &SDFGenerator<A>,
     buffers: &mut SDFGeneratorBlockBuffers<8, A>,
-    sampling_position: &Point3,
-) -> (f32, Vector3) {
+    sampling_position: &Point3A,
+) -> (f32, Vector3A) {
     const SAMPLE_BLOCK_SIZE: usize = 2;
 
-    let block_origin = sampling_position - Vector3::same(0.5 * (SAMPLE_BLOCK_SIZE - 1) as f32);
+    let block_origin = sampling_position - Vector3A::same(0.5 * (SAMPLE_BLOCK_SIZE - 1) as f32);
 
     generator.compute_signed_distances_for_block_preserving_gradients::<SAMPLE_BLOCK_SIZE, _>(
         buffers,
@@ -2802,9 +2806,9 @@ fn compute_center_value_of_2x2x2_samples(signed_distances: &[f32; 8]) -> f32 {
 /// calculating the analytic gradient of the trilinear interpolation of the
 /// samples at the center.
 #[inline]
-fn compute_gradient_from_2x2x2_samples(signed_distances: &[f32; 8]) -> Vector3 {
+fn compute_gradient_from_2x2x2_samples(signed_distances: &[f32; 8]) -> Vector3A {
     let &[d000, d001, d010, d011, d100, d101, d110, d111] = signed_distances;
-    0.25 * Vector3::new(
+    0.25 * Vector3A::new(
         (d100 + d110 + d101 + d111) - (d000 + d010 + d001 + d011),
         (d010 + d110 + d011 + d111) - (d000 + d100 + d001 + d101),
         (d001 + d101 + d011 + d111) - (d000 + d100 + d010 + d110),
@@ -2812,10 +2816,10 @@ fn compute_gradient_from_2x2x2_samples(signed_distances: &[f32; 8]) -> Vector3 {
 }
 
 fn compute_jittered_direction(
-    direction: UnitVector3,
+    direction: UnitVector3A,
     max_jitter_angle: f32,
     rng: &mut ParamRng,
-) -> UnitVector3 {
+) -> UnitVector3A {
     assert!(max_jitter_angle >= 0.0);
     if abs_diff_eq!(max_jitter_angle, 0.0) {
         return direction;
@@ -2823,7 +2827,7 @@ fn compute_jittered_direction(
 
     let angle = rng.random_range(0.0..=max_jitter_angle);
 
-    let mut axis = Vector3::new(
+    let mut axis = Vector3A::new(
         rng.random_range(-1.0..=1.0),
         rng.random_range(-1.0..=1.0),
         rng.random_range(-1.0..=1.0),
@@ -2832,19 +2836,19 @@ fn compute_jittered_direction(
     // Retain only the component perpendicular to `direction`
     axis -= axis.dot(&direction) * direction;
 
-    let axis = UnitVector3::normalized_from_if_above(axis, 1e-8).unwrap_or_else(|| {
+    let axis = UnitVector3A::normalized_from_if_above(axis, 1e-8).unwrap_or_else(|| {
         // `axis` was either zero or parallel to `direction`, so we pick an
         // arbitrary non-parallel axis
         let axis = if direction.z().abs() < 0.9 {
-            UnitVector3::unit_z()
+            UnitVector3A::unit_z()
         } else {
-            UnitVector3::unit_x()
+            UnitVector3A::unit_x()
         };
         let axis = axis.as_vector() - axis.dot(&direction) * direction;
-        UnitVector3::normalized_from(axis)
+        UnitVector3A::normalized_from(axis)
     });
 
-    let rotation = UnitQuaternion::from_axis_angle(&axis, angle);
+    let rotation = UnitQuaternionA::from_axis_angle(&axis, angle);
 
     rotation.rotate_unit_vector(&direction)
 }
@@ -2853,7 +2857,7 @@ fn unit_quaternion_from_tilt_turn_roll(
     tilt_angle: Degrees<f32>,
     turn_angle: Degrees<f32>,
     roll_angle: Degrees<f32>,
-) -> UnitQuaternion {
+) -> UnitQuaternionA {
     let polar_angle = tilt_angle.radians();
     let azimuthal_angle = turn_angle.radians();
     let roll_angle = roll_angle.radians();
@@ -2861,15 +2865,16 @@ fn unit_quaternion_from_tilt_turn_roll(
     let (sin_polar_angle, cos_polar_angle) = polar_angle.sin_cos();
     let (sin_azimuthal_angle, cos_azimuthal_angle) = azimuthal_angle.sin_cos();
 
-    let direction = UnitVector3::unchecked_from(Vector3::new(
+    let direction = UnitVector3A::unchecked_from(Vector3A::new(
         sin_polar_angle * cos_azimuthal_angle,
         cos_polar_angle,
         sin_polar_angle * sin_azimuthal_angle,
     ));
 
-    let rotation_without_roll = rotation_between_axes(&UnitVector3::unit_y(), &direction);
+    let rotation_without_roll =
+        UnitQuaternionA::rotation_between_axes(&UnitVector3A::unit_y(), &direction);
 
-    let roll_rotation = UnitQuaternion::from_axis_angle(&direction, roll_angle);
+    let roll_rotation = UnitQuaternionA::from_axis_angle(&direction, roll_angle);
 
     roll_rotation * rotation_without_roll
 }

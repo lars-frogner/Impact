@@ -1,6 +1,6 @@
 //! Representation of boxes with arbitrary orientations.
 
-use crate::{AxisAlignedBox, AxisAlignedBoxA, PlaneA};
+use crate::{AxisAlignedBoxA, PlaneA};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     point::{Point3, Point3A},
@@ -53,16 +53,6 @@ impl OrientedBox {
     #[inline]
     pub const fn aligned_at_origin(half_extents: Vector3) -> Self {
         Self::new(Point3::origin(), UnitQuaternion::identity(), half_extents)
-    }
-
-    /// Creates a new box corresponding to the given axis aligned box.
-    #[inline]
-    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBox) -> Self {
-        Self::new(
-            axis_aligned_box.center(),
-            UnitQuaternion::identity(),
-            0.5 * axis_aligned_box.extents(),
-        )
     }
 
     /// Returns the center of the box.
@@ -410,16 +400,13 @@ mod tests {
     use super::*;
     use crate::{FrustumA, projection::OrthographicTransform};
     use approx::assert_abs_diff_eq;
-    use impact_math::{
-        consts::f32::{FRAC_PI_2, FRAC_PI_4, FRAC_PI_6},
-        vector::UnitVector3,
-    };
+    use impact_math::consts::f32::{FRAC_PI_2, FRAC_PI_4, FRAC_PI_6};
 
     #[test]
     fn oriented_box_axes_are_correct() {
         let oriented_box = OrientedBoxA::new(
             Point3A::origin(),
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), FRAC_PI_2),
             Vector3A::same(1.0),
         );
         assert_abs_diff_eq!(oriented_box.compute_width_axis(), UnitVector3A::unit_x());
@@ -428,7 +415,7 @@ mod tests {
 
         let oriented_box = OrientedBoxA::new(
             Point3A::origin(),
-            UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), -FRAC_PI_2),
+            UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), -FRAC_PI_2),
             Vector3A::same(1.0),
         );
         assert_abs_diff_eq!(oriented_box.compute_width_axis(), UnitVector3A::unit_z());
@@ -504,7 +491,7 @@ mod tests {
     #[test]
     fn rotated_box_contains_center_point() {
         let center = Point3A::new(1.0, 2.0, 3.0);
-        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_4);
+        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_4);
         let oriented_box = OrientedBoxA::new(center, rotation, Vector3A::new(1.0, 1.0, 1.0));
 
         assert!(oriented_box.contains_point(&center));
@@ -513,7 +500,7 @@ mod tests {
     #[test]
     fn rotated_box_contains_rotated_corner_point() {
         let center = Point3A::new(0.0, 0.0, 0.0);
-        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_4);
+        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_4);
         let oriented_box = OrientedBoxA::new(center, rotation, Vector3A::new(1.0, 1.0, 1.0));
 
         // Corner in box frame, transformed to world frame
@@ -525,7 +512,7 @@ mod tests {
 
     #[test]
     fn rotated_box_excludes_exterior_points() {
-        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_4);
+        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_4);
         let oriented_box =
             OrientedBoxA::new(Point3A::origin(), rotation, Vector3A::new(1.0, 1.0, 1.0));
 
@@ -705,7 +692,7 @@ mod tests {
             AxisAlignedBoxA::new(Point3A::new(-1.0, -1.0, -1.0), Point3A::new(1.0, 1.0, 1.0));
 
         // Box B: rotated 45 degrees around Z axis
-        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_4);
+        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_4);
         let box_b = OrientedBoxA::new(
             Point3A::new(0.0, 0.0, 0.0),
             rotation,
@@ -839,7 +826,7 @@ mod tests {
             AxisAlignedBoxA::new(Point3A::new(-1.0, -1.0, -1.0), Point3A::new(1.0, 1.0, 1.0));
 
         // Box B: translated and rotated
-        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_y(), FRAC_PI_6);
+        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), FRAC_PI_6);
         let box_b = OrientedBoxA::new(
             Point3A::new(0.5, 0.5, 0.0),
             rotation,
