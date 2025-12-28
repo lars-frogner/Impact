@@ -17,7 +17,7 @@ use crate::gizmo::{
 };
 use approx::abs_diff_ne;
 use impact_ecs::{query, world::World as ECSWorld};
-use impact_geometry::{ReferenceFrame, rotation_between_axes};
+use impact_geometry::{ReferenceFrame, ReferenceFrameA};
 use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
@@ -25,10 +25,10 @@ use impact_light::{
 use impact_math::{
     angle::Angle,
     consts::f32::PI,
-    point::Point3,
-    quaternion::UnitQuaternion,
-    transform::{Isometry3, Similarity3},
-    vector::{UnitVector3, Vector3},
+    point::Point3A,
+    quaternion::{UnitQuaternion, UnitQuaternionA},
+    transform::{Isometry3A, Similarity3A},
+    vector::{UnitVector3A, Vector3, Vector3A},
 };
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_physics::{
@@ -235,12 +235,15 @@ pub fn buffer_transforms_for_gizmos(
         {
             return;
         }
+
+        let frame = frame.aligned();
+
         buffer_transforms_for_kinematics_gizmos(
             model_instance_manager,
             gizmo_manager.parameters(),
             scene_camera,
             &camera_position,
-            frame,
+            &frame,
             motion,
             gizmos.visible_gizmos,
         );
@@ -259,13 +262,16 @@ pub fn buffer_transforms_for_gizmos(
         {
             return;
         }
+
+        let frame = frame.aligned();
+
         buffer_transforms_for_dynamics_gizmos(
             rigid_body_manager,
             model_instance_manager,
             gizmo_manager.parameters(),
             scene_camera,
             &camera_position,
-            frame,
+            &frame,
             *rigid_body_id,
             gizmos.visible_gizmos,
         );
@@ -405,17 +411,20 @@ fn compute_transform_for_bounding_sphere_gizmo(
     node: &ModelInstanceNode,
     model_view_transform: InstanceModelViewTransform,
 ) -> Option<InstanceModelViewTransform> {
-    let bounding_sphere = node.get_model_bounding_sphere()?;
+    let bounding_sphere = node.get_model_bounding_sphere()?.aligned();
+
     let center = bounding_sphere.center();
     let radius = bounding_sphere.radius();
 
     let bounding_sphere_from_unit_sphere =
-        Similarity3::from_parts(*center.as_vector(), UnitQuaternion::identity(), radius);
+        Similarity3A::from_parts(*center.as_vector(), UnitQuaternionA::identity(), radius);
 
-    let model_view_transform = Similarity3::from(model_view_transform);
+    let model_view_transform = Similarity3A::from(model_view_transform);
+
+    let instance_model_view_transform = model_view_transform * bounding_sphere_from_unit_sphere;
 
     Some(InstanceModelViewTransform::from(
-        model_view_transform * bounding_sphere_from_unit_sphere,
+        &instance_model_view_transform,
     ))
 }
 
@@ -473,7 +482,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     let light_space_to_camera_transform = light.create_light_space_to_camera_transform();
 
     let cubemap_near_plane_transform = InstanceModelViewTransform::from(
-        Similarity3::from_isometry(light_space_to_camera_transform)
+        &Similarity3A::from_isometry(light_space_to_camera_transform)
             .applied_to_scaling(light.near_distance()),
     );
 
@@ -484,7 +493,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     );
 
     let cubemap_far_plane_transform = InstanceModelViewTransform::from(
-        Similarity3::from_isometry(light_space_to_camera_transform)
+        &Similarity3A::from_isometry(light_space_to_camera_transform)
             .applied_to_scaling(light.far_distance()),
     );
 
@@ -549,6 +558,8 @@ fn buffer_transforms_for_anchor_gizmos(
 ) {
     const RADIUS: f32 = 0.1;
 
+    let frame = frame.aligned();
+
     let anchor_points: TinyVec<[_; 8]> = match rigid_body_id {
         TypedRigidBodyID::Dynamic(rigid_body_id) => anchor_manager
             .dynamic()
@@ -563,10 +574,12 @@ fn buffer_transforms_for_anchor_gizmos(
     };
 
     for anchor_point in anchor_points {
+        let anchor_point = anchor_point.aligned();
+
         let world_sphere_from_unit_sphere_transform = frame.create_transform_to_parent_space()
-            * Similarity3::from_parts(
+            * Similarity3A::from_parts(
                 *anchor_point.as_vector(),
-                UnitQuaternion::identity(),
+                UnitQuaternionA::identity(),
                 RADIUS,
             );
 
@@ -575,7 +588,7 @@ fn buffer_transforms_for_anchor_gizmos(
 
         model_instance_manager.buffer_instance_feature(
             GizmoType::Anchors.only_model_id(),
-            &InstanceModelViewTransform::from(view_sphere_from_unit_sphere_transform),
+            &InstanceModelViewTransform::from(&view_sphere_from_unit_sphere_transform),
         );
     }
 }
@@ -584,13 +597,15 @@ fn buffer_transforms_for_kinematics_gizmos(
     model_instance_manager: &mut ModelInstanceManager,
     parameters: &GizmoParameters,
     scene_camera: &SceneCamera,
-    camera_position: &Point3,
-    frame: &ReferenceFrame,
+    camera_position: &Point3A,
+    frame: &ReferenceFrameA,
     motion: &Motion,
     visible_gizmos: GizmoSet,
 ) {
     if visible_gizmos.contains(GizmoType::LinearVelocity.as_set()) {
-        let (direction, speed) = UnitVector3::normalized_from_and_norm(motion.linear_velocity);
+        let linear_velocity = motion.linear_velocity.aligned();
+
+        let (direction, speed) = UnitVector3A::normalized_from_and_norm(linear_velocity);
 
         let length = parameters.linear_velocity_scale * speed;
 
@@ -613,13 +628,15 @@ fn buffer_transforms_for_kinematics_gizmos(
             parameters.angular_velocity_scale * motion.angular_velocity.angular_speed().radians();
 
         if abs_diff_ne!(length, 0.0) {
+            let axis_of_rotation = motion.angular_velocity.axis_of_rotation().aligned();
+
             model_instance_manager.buffer_instance_feature(
                 GizmoType::AngularVelocity.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
                     camera_position,
                     frame.position,
-                    *motion.angular_velocity.axis_of_rotation(),
+                    axis_of_rotation,
                     length,
                 ),
             );
@@ -632,8 +649,8 @@ fn buffer_transforms_for_dynamics_gizmos(
     model_instance_manager: &mut ModelInstanceManager,
     parameters: &GizmoParameters,
     scene_camera: &SceneCamera,
-    camera_position: &Point3,
-    frame: &ReferenceFrame,
+    camera_position: &Point3A,
+    frame: &ReferenceFrameA,
     rigid_body_id: DynamicRigidBodyID,
     visible_gizmos: GizmoSet,
 ) {
@@ -647,9 +664,9 @@ fn buffer_transforms_for_dynamics_gizmos(
             parameters.center_of_mass_sphere_density,
         );
 
-        let world_sphere_from_unit_sphere_transform = Similarity3::from_parts(
+        let world_sphere_from_unit_sphere_transform = Similarity3A::from_parts(
             *frame.position.as_vector(),
-            UnitQuaternion::identity(),
+            UnitQuaternionA::identity(),
             radius,
         );
 
@@ -658,13 +675,14 @@ fn buffer_transforms_for_dynamics_gizmos(
 
         model_instance_manager.buffer_instance_feature(
             GizmoType::CenterOfMass.only_model_id(),
-            &InstanceModelViewTransform::from(view_sphere_from_unit_sphere_transform),
+            &InstanceModelViewTransform::from(&view_sphere_from_unit_sphere_transform),
         );
     }
 
     if visible_gizmos.contains(GizmoType::AngularMomentum.as_set()) {
-        let (axis, magnitude) =
-            UnitVector3::normalized_from_and_norm(*rigid_body.angular_momentum());
+        let angular_momentum = rigid_body.angular_momentum().aligned();
+
+        let (axis, magnitude) = UnitVector3A::normalized_from_and_norm(angular_momentum);
 
         let length = parameters.angular_momentum_scale * magnitude;
 
@@ -683,8 +701,9 @@ fn buffer_transforms_for_dynamics_gizmos(
     }
 
     if visible_gizmos.contains(GizmoType::Force.as_set()) {
-        let (direction, magnitude) =
-            UnitVector3::normalized_from_and_norm(*rigid_body.total_force());
+        let total_force = rigid_body.total_force().aligned();
+
+        let (direction, magnitude) = UnitVector3A::normalized_from_and_norm(total_force);
 
         let length = parameters.force_scale * magnitude;
 
@@ -703,7 +722,9 @@ fn buffer_transforms_for_dynamics_gizmos(
     }
 
     if visible_gizmos.contains(GizmoType::Torque.as_set()) {
-        let (axis, magnitude) = UnitVector3::normalized_from_and_norm(*rigid_body.total_torque());
+        let total_torque = rigid_body.total_torque().aligned();
+
+        let (axis, magnitude) = UnitVector3A::normalized_from_and_norm(total_torque);
 
         let length = parameters.torque_scale * magnitude;
 
@@ -728,9 +749,9 @@ fn sphere_radius_from_mass_and_density(mass: f32, density: f32) -> f32 {
 
 fn model_view_transform_for_vector_gizmo(
     scene_camera: &SceneCamera,
-    camera_position: &Point3,
-    position: Point3,
-    direction: UnitVector3,
+    camera_position: &Point3A,
+    position: Point3A,
+    direction: UnitVector3A,
     length: f32,
 ) -> InstanceModelViewTransform {
     let rotation = compute_rotation_to_camera_space_for_cylindrical_billboard(
@@ -739,9 +760,12 @@ fn model_view_transform_for_vector_gizmo(
         direction,
     );
 
-    let model_to_world_transform = Similarity3::from_parts(*position.as_vector(), rotation, length);
+    let model_to_world_transform =
+        Similarity3A::from_parts(*position.as_vector(), rotation, length);
 
-    (scene_camera.view_transform() * model_to_world_transform).into()
+    let instance_model_view_transform = scene_camera.view_transform() * model_to_world_transform;
+
+    InstanceModelViewTransform::from(&instance_model_view_transform)
 }
 
 /// Computes the model-view rotation of a billboard model such that:
@@ -750,33 +774,33 @@ fn model_view_transform_for_vector_gizmo(
 /// - The z-axis in the billboard's model space points as directly as possible
 ///   towards the camera.
 fn compute_rotation_to_camera_space_for_cylindrical_billboard(
-    camera_position: Point3,
-    billboard_position: Point3,
-    billboard_axis: UnitVector3,
-) -> UnitQuaternion {
+    camera_position: Point3A,
+    billboard_position: Point3A,
+    billboard_axis: UnitVector3A,
+) -> UnitQuaternionA {
     let y_axis = billboard_axis;
 
-    let to_camera = UnitVector3::normalized_from(camera_position - billboard_position);
+    let to_camera = UnitVector3A::normalized_from(camera_position - billboard_position);
 
     // Project the vector from the billboard to the camera onto the plane
     // perpendicular to the y-axis
     let z_vector = to_camera.as_vector() - y_axis.dot(&to_camera) * y_axis;
 
     let z_axis = if z_vector.norm_squared() > 1e-6 {
-        UnitVector3::normalized_from(z_vector)
+        UnitVector3A::normalized_from(z_vector)
     } else {
         // View direction is aligned with the y-axis, use fallback
         let fallback_axis = if y_axis.x().abs() < 0.9 {
-            UnitVector3::unit_x()
+            UnitVector3A::unit_x()
         } else {
-            UnitVector3::unit_z()
+            UnitVector3A::unit_z()
         };
-        UnitVector3::normalized_from(fallback_axis.cross(&y_axis))
+        UnitVector3A::normalized_from(fallback_axis.cross(&y_axis))
     };
 
-    let x_axis = UnitVector3::normalized_from(y_axis.cross(&z_axis));
+    let x_axis = UnitVector3A::normalized_from(y_axis.cross(&z_axis));
 
-    UnitQuaternion::from_basis_unchecked(&[
+    UnitQuaternionA::from_basis_unchecked(&[
         *x_axis.as_vector(),
         *y_axis.as_vector(),
         *z_axis.as_vector(),
@@ -788,7 +812,7 @@ fn buffer_transforms_for_collider_gizmos(
     collision_world: &CollisionWorld,
     voxel_object_manager: &VoxelObjectManager,
     scene_camera: &SceneCamera,
-    camera_position: &Point3,
+    camera_position: &Point3A,
     collidable_id: CollidableID,
     visible_gizmos: GizmoSet,
 ) {
@@ -817,11 +841,11 @@ fn buffer_transforms_for_collider_gizmos(
 
     match collidable.collidable() {
         Collidable::Sphere(sphere_collidable) => {
-            let sphere = sphere_collidable.sphere();
+            let sphere = sphere_collidable.sphere().aligned();
 
-            let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
+            let unit_sphere_to_sphere_collider_transform = Similarity3A::from_parts(
                 *sphere.center().as_vector(),
-                UnitQuaternion::identity(),
+                UnitQuaternionA::identity(),
                 sphere.radius(),
             );
 
@@ -830,29 +854,32 @@ fn buffer_transforms_for_collider_gizmos(
 
             model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id,
-                &InstanceModelViewTransform::from(model_to_camera_transform),
+                &InstanceModelViewTransform::from(&model_to_camera_transform),
             );
         }
         Collidable::Plane(plane_collidable) => {
-            let plane = plane_collidable.plane();
+            let plane = plane_collidable.plane().aligned();
 
             // Make the plane appear infinite by putting the center of the mesh
             // at the camera position (projected so as not to change the plane
             // displacement) and scaling the mesh to reach the camera's far
             // distance
             let translation = plane.project_point_onto_plane(camera_position);
-            let rotation = rotation_between_axes(&UnitVector3::unit_z(), plane.unit_normal());
+            let rotation = UnitQuaternionA::rotation_between_axes(
+                &UnitVector3A::unit_z(),
+                plane.unit_normal(),
+            );
             let scaling = scene_camera.camera().view_frustum().far_distance();
 
             let unit_square_to_plane_collider_transform =
-                Similarity3::from_parts(*translation.as_vector(), rotation, scaling);
+                Similarity3A::from_parts(*translation.as_vector(), rotation, scaling);
 
             let model_to_camera_transform =
                 scene_camera.view_transform() * unit_square_to_plane_collider_transform;
 
             model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id,
-                &InstanceModelViewTransform::from(model_to_camera_transform),
+                &InstanceModelViewTransform::from(&model_to_camera_transform),
             );
         }
         Collidable::VoxelObject(voxel_object_collidable) => {
@@ -865,9 +892,11 @@ fn buffer_transforms_for_collider_gizmos(
 
             let voxel_radius = 0.5 * voxel_object.voxel_extent();
 
-            let transform_from_object_to_world_space = voxel_object_collidable
+            let transform_to_object_space = voxel_object_collidable
                 .transform_to_object_space()
-                .inverted();
+                .aligned();
+
+            let transform_from_object_to_world_space = transform_to_object_space.inverted();
 
             let transform_from_object_to_camera_space =
                 scene_camera.view_transform() * transform_from_object_to_world_space;
@@ -886,8 +915,8 @@ fn buffer_transforms_for_collider_gizmos(
                     .transform_point(&voxel_center_in_object_space);
 
                 let model_to_camera_transform = InstanceModelViewTransform {
-                    translation: *voxel_center_in_camera_space.as_vector(),
-                    rotation: *rotation_from_object_to_camera_space,
+                    translation: voxel_center_in_camera_space.as_vector().unaligned(),
+                    rotation: rotation_from_object_to_camera_space.unaligned(),
                     scaling: scaling_from_object_to_camera_space,
                 };
 
@@ -923,7 +952,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
         return;
     };
 
-    let model_view_transform = Similarity3::from(
+    let model_view_transform = Similarity3A::from(
         model_instance_manager
             .feature::<InstanceModelViewTransformWithPrevious>(
                 node.model_view_transform_feature_id(),
@@ -960,7 +989,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             };
 
             let chunk_offset_in_voxels =
-                CHUNK_SIZE as f32 * Vector3::new(chunk_i as f32, chunk_j as f32, chunk_k as f32);
+                CHUNK_SIZE as f32 * Vector3A::new(chunk_i as f32, chunk_j as f32, chunk_k as f32);
 
             let chunk_transform = model_view_transform
                 .applied_to_scaling(voxel_extent)
@@ -968,7 +997,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
 
             model_instance_manager.buffer_instance_feature(
                 model_id,
-                &InstanceModelViewTransform::from(chunk_transform),
+                &InstanceModelViewTransform::from(&chunk_transform),
             );
         });
 }
@@ -1005,6 +1034,8 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
             ),
             _ => return,
         };
+    let transform_from_world_to_a = transform_from_world_to_a.aligned();
+    let transform_from_world_to_b = transform_from_world_to_b.aligned();
 
     let Some(object_a) = voxel_object_manager.get_voxel_object(object_a_id) else {
         return;
@@ -1037,7 +1068,7 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     let mut transforms = Vec::with_capacity(256);
 
     let mut add_transforms = |voxel_object: &ChunkedVoxelObject,
-                              transform_from_object_to_camera_space: &Isometry3,
+                              transform_from_object_to_camera_space: &Isometry3A,
                               i,
                               j,
                               k| {
@@ -1048,8 +1079,8 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
             transform_from_object_to_camera_space.transform_point(&voxel_center_in_object_space);
 
         let model_to_camera_transform = InstanceModelViewTransform {
-            translation: *voxel_center_in_camera_space.as_vector(),
-            rotation: *transform_from_object_to_camera_space.rotation(),
+            translation: voxel_center_in_camera_space.as_vector().unaligned(),
+            rotation: transform_from_object_to_camera_space.rotation().unaligned(),
             scaling: 0.5 * voxel_object.voxel_extent(),
         };
 

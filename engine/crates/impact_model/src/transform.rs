@@ -4,7 +4,7 @@ use crate::ModelInstanceManager;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
-use impact_math::{quaternion::UnitQuaternion, transform::Similarity3, vector::Vector3};
+use impact_math::{quaternion::UnitQuaternion, transform::Similarity3A, vector::Vector3};
 use std::hash::Hash;
 
 /// Trait for types that can be referenced as an [`InstanceModelViewTransform`].
@@ -68,24 +68,24 @@ impl InstanceModelViewTransform {
     }
 }
 
-impl From<Similarity3> for InstanceModelViewTransform {
-    fn from(transform: Similarity3) -> Self {
+impl From<&Similarity3A> for InstanceModelViewTransform {
+    fn from(transform: &Similarity3A) -> Self {
         InstanceModelViewTransform {
-            rotation: *transform.rotation(),
-            translation: *transform.translation(),
+            rotation: transform.rotation().unaligned(),
+            translation: transform.translation().unaligned(),
             scaling: transform.scaling(),
         }
     }
 }
 
-impl From<InstanceModelViewTransform> for Similarity3 {
+impl From<InstanceModelViewTransform> for Similarity3A {
     fn from(transform: InstanceModelViewTransform) -> Self {
         let InstanceModelViewTransform {
             rotation,
             translation,
             scaling,
         } = transform;
-        Similarity3::from_parts(translation, rotation, scaling)
+        Similarity3A::from_parts(translation.aligned(), rotation.aligned(), scaling)
     }
 }
 
@@ -167,13 +167,13 @@ impl InstanceModelLightTransform {
     }
 }
 
-impl From<Similarity3> for InstanceModelLightTransform {
-    fn from(transform: Similarity3) -> Self {
+impl From<&Similarity3A> for InstanceModelLightTransform {
+    fn from(transform: &Similarity3A) -> Self {
         Self(InstanceModelViewTransform::from(transform))
     }
 }
 
-impl From<InstanceModelLightTransform> for Similarity3 {
+impl From<InstanceModelLightTransform> for Similarity3A {
     fn from(transform: InstanceModelLightTransform) -> Self {
         transform.0.into()
     }

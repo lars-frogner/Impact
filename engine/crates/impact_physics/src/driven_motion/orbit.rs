@@ -2,12 +2,12 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{Orientation, Position, Velocity},
+    quantities::{Orientation, Position, PositionA, Velocity, VelocityA},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{Float, point::Point3, vector::Vector3};
+use impact_math::{Float, consts::f32::TWO_PI};
 use roc_integration::roc;
 use roots::{self, SimpleConvergency};
 
@@ -164,6 +164,9 @@ impl OrbitalTrajectory {
             "Period of orbital trajectory is zero"
         );
 
+        let orientation = self.orientation.aligned();
+        let focal_position = self.focal_position.aligned();
+
         let mean_angular_speed = Self::compute_mean_angular_speed(self.period);
 
         let mean_anomaly =
@@ -191,11 +194,10 @@ impl OrbitalTrajectory {
             orbital_distance,
         );
 
-        let world_space_orbital_displacement =
-            self.orientation.transform_point(&orbital_displacement);
+        let world_space_orbital_displacement = orientation.rotate_point(&orbital_displacement);
 
         let world_space_orbital_position =
-            self.focal_position + world_space_orbital_displacement.as_vector();
+            focal_position + world_space_orbital_displacement.as_vector();
 
         let rate_of_change_of_true_anomaly = Self::compute_rate_of_change_of_true_anomaly(
             self.eccentricity,
@@ -222,17 +224,20 @@ impl OrbitalTrajectory {
             tangential_speed,
         );
 
-        let world_space_orbital_velocity = self.orientation.transform_vector(&orbital_velocity);
+        let world_space_orbital_velocity = orientation.rotate_vector(&orbital_velocity);
 
-        (world_space_orbital_position, world_space_orbital_velocity)
+        (
+            world_space_orbital_position.unaligned(),
+            world_space_orbital_velocity.unaligned(),
+        )
     }
 
     fn compute_mean_angular_speed(period: f32) -> f32 {
-        f32::TWO_PI / period
+        TWO_PI / period
     }
 
     fn compute_mean_anomaly(periapsis_time: f32, mean_angular_speed: f32, time: f32) -> f32 {
-        mean_angular_speed * (time - periapsis_time) % f32::TWO_PI
+        mean_angular_speed * (time - periapsis_time) % TWO_PI
     }
 
     fn compute_eccentric_anomaly(eccentricity: f32, mean_anomaly: f32) -> f32 {
@@ -252,7 +257,7 @@ impl OrbitalTrajectory {
         } else {
             let mut convergency = Self::ECCENTRIC_ANOMALY_CONVERGENCY;
 
-            roots::find_root_regula_falsi(0.0, f32::TWO_PI, kepler_equation, &mut convergency)
+            roots::find_root_regula_falsi(0.0, TWO_PI, kepler_equation, &mut convergency)
                 .expect("Could not solve Kepler's equation for the eccentric anomaly")
         }
     }
@@ -303,8 +308,8 @@ impl OrbitalTrajectory {
         cos_true_anomaly: f32,
         sin_true_anomaly: f32,
         orbital_distance: f32,
-    ) -> Position {
-        Point3::new(
+    ) -> PositionA {
+        PositionA::new(
             orbital_distance * cos_true_anomaly,
             orbital_distance * sin_true_anomaly,
             0.0,
@@ -345,8 +350,8 @@ impl OrbitalTrajectory {
         sin_true_anomaly: f32,
         radial_speed: f32,
         tangential_speed: f32,
-    ) -> Velocity {
-        Vector3::new(
+    ) -> VelocityA {
+        VelocityA::new(
             radial_speed * cos_true_anomaly - tangential_speed * sin_true_anomaly,
             radial_speed * sin_true_anomaly + tangential_speed * cos_true_anomaly,
             0.0,
@@ -357,9 +362,13 @@ impl OrbitalTrajectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::{Direction, Orientation};
+    use crate::quantities::{Direction, Orientation, OrientationA};
     use approx::abs_diff_eq;
-    use impact_math::{Float, vector::UnitVector3};
+    use impact_math::{
+        consts::f32::{FRAC_PI_2, PI, TWO_PI},
+        point::Point3A,
+        vector::UnitVector3,
+    };
     use proptest::prelude::*;
 
     prop_compose! {
@@ -368,30 +377,30 @@ mod tests {
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
         ) -> Position {
-            Point3::new(position_coord_x, position_coord_y, position_coord_z)
+            Position::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
     prop_compose! {
         fn direction_strategy()(
-            phi in 0.0..f32::TWO_PI,
-            theta in 0.0..f32::PI,
+            phi in 0.0..TWO_PI,
+            theta in 0.0..PI,
         ) -> Direction {
-            Direction::normalized_from(Vector3::new(
+            Direction::new_unchecked(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
-            ))
+            )
         }
     }
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..f32::TWO_PI,
-            rotation_pitch in -f32::FRAC_PI_2..f32::FRAC_PI_2,
-            rotation_yaw in 0.0..f32::TWO_PI,
+            rotation_roll in 0.0..TWO_PI,
+            rotation_pitch in -FRAC_PI_2..FRAC_PI_2,
+            rotation_yaw in 0.0..TWO_PI,
         ) -> Orientation {
-            Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw)
+            OrientationA::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).unaligned()
         }
     }
 
@@ -493,10 +502,10 @@ mod tests {
                 semi_major_axis * (1.0 - eccentricity.powi(2)) / (1.0 - eccentricity);
 
             let correct_periapsis_position = focal_position
-                + orientation.transform_point(&(Point3::new(periapsis_distance, 0.0, 0.0))).as_vector();
+                + orientation.aligned().rotate_point(&(Point3A::new(periapsis_distance, 0.0, 0.0))).as_vector().unaligned();
 
             let correct_apoapsis_position = focal_position
-                + orientation.transform_point(&(Point3::new(-apoapsis_distance, 0.0, 0.0))).as_vector();
+                + orientation.aligned().rotate_point(&(Point3A::new(-apoapsis_distance, 0.0, 0.0))).as_vector().unaligned();
 
             let periapsis_position = trajectory.compute_position_and_velocity(periapsis_time).0;
             let apoapsis_position = trajectory.compute_position_and_velocity(apoapsis_time).0;
@@ -657,7 +666,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(displacement.norm(), radius, epsilon = 1e-3 * radius));
             prop_assert!(abs_diff_eq!(
                 velocity.norm(),
-                f32::TWO_PI * radius / period,
+                TWO_PI * radius / period,
                 epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(

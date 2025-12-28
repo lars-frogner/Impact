@@ -2,8 +2,8 @@
 
 use super::OrientationController;
 use bytemuck::{Pod, Zeroable};
-use impact_math::{quaternion::UnitQuaternion, vector::UnitVector3};
-use impact_physics::quantities::{AngularVelocity, Orientation};
+use impact_math::{quaternion::UnitQuaternionA, vector::UnitVector3A};
+use impact_physics::quantities::{AngularVelocity, AngularVelocityA, OrientationA};
 use roc_integration::roc;
 
 define_component_type! {
@@ -21,7 +21,7 @@ define_component_type! {
 /// upright).
 #[derive(Clone, Debug)]
 pub struct CameraOrientationController {
-    orientation_change: Orientation,
+    orientation_change: OrientationA,
     orientation_has_changed: bool,
 }
 
@@ -33,8 +33,8 @@ pub struct CameraOrientationController {
 /// world's horizontal plane.
 #[derive(Clone, Debug)]
 pub struct RollFreeCameraOrientationController {
-    yaw_change: Orientation,
-    pitch_change: Orientation,
+    yaw_change: OrientationA,
+    pitch_change: OrientationA,
     orientation_has_changed: bool,
 }
 
@@ -60,12 +60,12 @@ impl ControlledAngularVelocity {
     /// velocity.
     pub fn apply_new_controlled_angular_velocity(
         &mut self,
-        new_control_angular_velocity: AngularVelocity,
-        total_angular_velocity: &mut AngularVelocity,
+        new_control_angular_velocity: AngularVelocityA,
+        total_angular_velocity: &mut AngularVelocityA,
     ) {
-        *total_angular_velocity -= self.0;
-        *total_angular_velocity += new_control_angular_velocity;
-        self.0 = new_control_angular_velocity;
+        *total_angular_velocity =
+            &*total_angular_velocity - self.0.aligned() + &new_control_angular_velocity;
+        self.0 = new_control_angular_velocity.unaligned();
     }
 }
 
@@ -79,15 +79,15 @@ impl CameraOrientationController {
     /// Creates a new first-person camera orientation controller.
     pub fn new() -> Self {
         Self {
-            orientation_change: Orientation::identity(),
+            orientation_change: OrientationA::identity(),
             orientation_has_changed: false,
         }
     }
 }
 
 impl OrientationController for CameraOrientationController {
-    fn update_orientation(&self, orientation: &mut Orientation) {
-        *orientation = *orientation * self.orientation_change;
+    fn update_orientation(&self, orientation: &mut OrientationA) {
+        *orientation *= self.orientation_change;
     }
 
     fn orientation_has_changed(&self) -> bool {
@@ -103,7 +103,7 @@ impl OrientationController for CameraOrientationController {
     }
 
     fn reset_orientation_change(&mut self) {
-        self.orientation_change = Orientation::identity();
+        self.orientation_change = OrientationA::identity();
         self.orientation_has_changed = false;
     }
 }
@@ -118,15 +118,15 @@ impl RollFreeCameraOrientationController {
     /// Creates a new roll-free first-person camera orientation controller.
     pub fn new() -> Self {
         Self {
-            pitch_change: Orientation::identity(),
-            yaw_change: Orientation::identity(),
+            pitch_change: OrientationA::identity(),
+            yaw_change: OrientationA::identity(),
             orientation_has_changed: false,
         }
     }
 }
 
 impl OrientationController for RollFreeCameraOrientationController {
-    fn update_orientation(&self, orientation: &mut Orientation) {
+    fn update_orientation(&self, orientation: &mut OrientationA) {
         *orientation = self.yaw_change * (*orientation) * self.pitch_change;
     }
 
@@ -136,13 +136,13 @@ impl OrientationController for RollFreeCameraOrientationController {
 
     fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32) {
         self.yaw_change = compute_yaw_rotation(-delta_x) * self.yaw_change;
-        self.pitch_change = self.pitch_change * compute_pitch_rotation(delta_y);
+        self.pitch_change *= compute_pitch_rotation(delta_y);
         self.orientation_has_changed = true;
     }
 
     fn reset_orientation_change(&mut self) {
-        self.yaw_change = Orientation::identity();
-        self.pitch_change = Orientation::identity();
+        self.yaw_change = OrientationA::identity();
+        self.pitch_change = OrientationA::identity();
         self.orientation_has_changed = false;
     }
 }
@@ -153,10 +153,10 @@ impl Default for RollFreeCameraOrientationController {
     }
 }
 
-fn compute_yaw_rotation(angular_displacement_x: f32) -> Orientation {
-    UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), angular_displacement_x)
+fn compute_yaw_rotation(angular_displacement_x: f32) -> OrientationA {
+    UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_y(), angular_displacement_x)
 }
 
-fn compute_pitch_rotation(angular_displacement_y: f32) -> Orientation {
-    UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), angular_displacement_y)
+fn compute_pitch_rotation(angular_displacement_y: f32) -> OrientationA {
+    UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), angular_displacement_y)
 }

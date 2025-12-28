@@ -46,11 +46,11 @@ pub fn setup_voxel_objects_for_new_entities(
             if let Some(physics_context) =
                 voxel_object_manager.get_physics_context(*voxel_object_id)
             {
-                ModelTransform::with_offset(
-                    physics_context
-                        .inertial_property_manager
-                        .derive_center_of_mass(),
-                )
+                let center_of_mass = physics_context
+                    .inertial_property_manager
+                    .derive_center_of_mass();
+
+                ModelTransform::with_offset(center_of_mass.unaligned())
             } else {
                 model_transform.copied().unwrap_or_default()
             }

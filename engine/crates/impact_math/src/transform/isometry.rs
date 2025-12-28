@@ -273,7 +273,7 @@ impl_relative_eq!(Isometry3A, |a, b, epsilon, max_relative| {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vector::{UnitVector3, Vector3};
+    use Vector3;
     use approx::assert_abs_diff_eq;
     use std::f32::consts::PI;
 
@@ -284,15 +284,15 @@ mod tests {
     const TRANSLATION_3: Vector3 = Vector3::new(1.5, 2.5, 3.5);
 
     fn rotation_90_z() -> UnitQuaternionA {
-        UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0)
+        UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0)
     }
 
     fn rotation_45_x() -> UnitQuaternionA {
-        UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0)
+        UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI / 4.0)
     }
 
     fn rotation_90_z_unaligned() -> UnitQuaternion {
-        UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0).unaligned()
+        UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), PI / 2.0).unaligned()
     }
 
     // Isometry3 tests (unaligned version)
@@ -845,7 +845,7 @@ mod tests {
     #[test]
     fn creating_isometry3a_with_very_small_rotations_works() {
         let small_angle = 1e-6;
-        let small_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_x(), small_angle);
+        let small_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), small_angle);
         let iso = Isometry3A::from_rotation(small_rotation);
 
         assert_abs_diff_eq!(*iso.rotation(), small_rotation, epsilon = 1e-9);
@@ -861,7 +861,7 @@ mod tests {
 
     #[test]
     fn creating_isometry3a_with_multiple_full_rotations_works() {
-        let full_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), 4.0 * PI);
+        let full_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), 4.0 * PI);
         let iso = Isometry3A::from_rotation(full_rotation);
 
         // Should be equivalent to identity (within floating point precision)
@@ -873,7 +873,7 @@ mod tests {
     fn composing_many_small_isometry3a_transformations_works() {
         let mut iso = Isometry3A::identity();
         let small_translation = Vector3A::new(0.001, 0.001, 0.001);
-        let small_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), 0.1);
+        let small_rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), 0.1);
 
         for _ in 0..100 {
             iso = iso.translated(&small_translation);

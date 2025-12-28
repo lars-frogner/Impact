@@ -7,7 +7,7 @@ pub mod spherical_joint;
 use crate::{
     anchor::{AnchorManager, TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
     collision::{Collidable, Collision, CollisionWorld},
-    quantities::{Orientation, Position, Velocity},
+    quantities::{Orientation, Position, PositionA, Velocity},
     rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager, TypedRigidBodyID},
 };
 use bytemuck::{Pod, Zeroable};
@@ -272,15 +272,16 @@ impl ConstrainedBody {
     fn from_dynamic_rigid_body(body: &DynamicRigidBody) -> Self {
         let inverse_inertia_tensor = body
             .inertia_tensor()
-            .inverse_rotated_matrix(body.orientation());
+            .aligned()
+            .inverse_rotated_matrix(&body.orientation().aligned());
 
         Self {
             inverse_mass: body.mass().recip(),
-            inverse_inertia_tensor,
+            inverse_inertia_tensor: inverse_inertia_tensor.unaligned(),
             position: *body.position(),
             orientation: *body.orientation(),
-            velocity: body.compute_velocity(),
-            angular_velocity: body.compute_angular_velocity().as_vector(),
+            velocity: body.compute_velocity().unaligned(),
+            angular_velocity: body.compute_angular_velocity().as_vector().unaligned(),
         }
     }
 
@@ -299,15 +300,17 @@ impl ConstrainedBody {
     /// Transforms the given point to world space from the coordinate system
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
-    fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
-        self.orientation.transform_point(point) + self.position.as_vector()
+    fn transform_point_from_body_to_world_frame(&self, point: &PositionA) -> PositionA {
+        self.orientation.aligned().rotate_point(point) + self.position.aligned().as_vector()
     }
 
     /// Transforms the given point from world space to the coordinate system
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
-    fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
+    fn transform_point_from_world_to_body_frame(&self, point: &PositionA) -> PositionA {
         self.orientation
-            .inverse_transform_point(&(point - self.position.as_vector()))
+            .aligned()
+            .inverse()
+            .rotate_point(&(point - self.position.aligned().as_vector()))
     }
 }

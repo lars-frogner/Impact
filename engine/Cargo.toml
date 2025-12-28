@@ -43,7 +43,6 @@ cfg-if = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 const-fnv1a-hash = "1.1"
 inventory = "0.3"
-nalgebra = "0.34"
 nohash-hasher = "0.2"
 num-traits = "0.2"
 parking_lot = "0.12"
@@ -53,7 +52,6 @@ postcard = { version = "1.1", default-features = false, features = [
 ] }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
-simba = "0.9"
 tinyvec = { version = "1.10", features = ["alloc"] }
 
 [workspace.lints.rust]
@@ -281,7 +279,6 @@ impact_texture = { path = "crates/impact_texture", features = [
 impact_thread = { path = "crates/impact_thread" }
 impact_voxel = { path = "crates/impact_voxel", features = ["ecs", "ron"] }
 inventory = { workspace = true }
-nalgebra = { workspace = true, features = ["bytemuck", "serde-serialize"] }
 nohash-hasher = { workspace = true }
 num-traits = { workspace = true }
 parking_lot = { workspace = true }

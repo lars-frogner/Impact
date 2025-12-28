@@ -10,9 +10,9 @@ use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::{
     consts::f32::TWO_PI,
     point::Point3,
-    quaternion::UnitQuaternion,
-    transform::Similarity3,
-    vector::{UnitVector3, Vector3},
+    quaternion::UnitQuaternionA,
+    transform::Similarity3A,
+    vector::{UnitVector3, UnitVector3A, Vector3, Vector3A},
 };
 
 macro_rules! pos {
@@ -720,7 +720,7 @@ impl TriangleMesh {
 
         square.remove_normal_vectors(&mut dirty_mask);
         square.rotate(
-            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
+            &UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), FRAC_PI_2),
             &mut dirty_mask,
         );
         square.set_same_color(color, &mut dirty_mask);
@@ -780,10 +780,7 @@ impl TriangleMesh {
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         cube.remove_normal_vectors(&mut dirty_mask);
-        cube.translate(
-            &Vector3::new(0.5 * extent, 0.5 * extent, 0.5 * extent),
-            &mut dirty_mask,
-        );
+        cube.translate(&Vector3A::same(0.5 * extent), &mut dirty_mask);
         cube.set_same_color(color, &mut dirty_mask);
 
         cube
@@ -844,13 +841,13 @@ impl LineSegmentMesh {
     pub fn create_unit_cubemap_frusta() -> Self {
         let mut down_diagonals = Self::create_baseless_unit_pyramid();
         let mut dirty_mask = LineSegmentMeshDirtyMask::empty();
-        down_diagonals.translate(&Vector3::new(0.0, -1.0, 0.0), &mut dirty_mask);
+        down_diagonals.translate(&Vector3A::new(0.0, -1.0, 0.0), &mut dirty_mask);
 
         let mut up_diagonals = Self::create_baseless_unit_pyramid();
         up_diagonals.transform(
-            &Similarity3::from_parts(
-                Vector3::new(0.0, 1.0, 0.0),
-                UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI),
+            &Similarity3A::from_parts(
+                Vector3A::new(0.0, 1.0, 0.0),
+                UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), PI),
                 1.0,
             ),
             &mut LineSegmentMeshDirtyMask::empty(),
@@ -974,13 +971,13 @@ impl LineSegmentMesh {
 
         let mut xy_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         xy_circle.rotate(
-            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), FRAC_PI_2),
+            &UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_x(), FRAC_PI_2),
             &mut dirty_mask,
         );
 
         let mut yz_circle = Self::new(xz_circle.positions().to_vec(), Vec::new());
         yz_circle.rotate(
-            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_2),
+            &UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_2),
             &mut dirty_mask,
         );
 

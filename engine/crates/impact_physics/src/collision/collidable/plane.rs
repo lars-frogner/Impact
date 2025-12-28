@@ -2,7 +2,7 @@
 
 use crate::material::ContactResponseParameters;
 use impact_geometry::Plane;
-use impact_math::transform::Isometry3;
+use impact_math::transform::Isometry3A;
 
 #[derive(Clone, Debug)]
 pub struct PlaneCollidable {
@@ -26,9 +26,11 @@ impl PlaneCollidable {
         &self.response_params
     }
 
-    pub fn transformed(&self, transform: &Isometry3) -> Self {
+    pub fn transformed(&self, transform: &Isometry3A) -> Self {
+        let plane = self.plane.aligned();
+        let transformed_plane = plane.translated_and_rotated(transform);
         Self {
-            plane: self.plane.translated_and_rotated(transform),
+            plane: transformed_plane.unaligned(),
             response_params: self.response_params,
         }
     }

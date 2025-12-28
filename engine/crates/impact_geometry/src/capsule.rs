@@ -308,7 +308,7 @@ mod tests {
     use super::*;
     use crate::AxisAlignedBoxA;
     use approx::assert_abs_diff_eq;
-    use impact_math::{consts::f32::FRAC_PI_2, quaternion::UnitQuaternionA, vector::UnitVector3};
+    use impact_math::{consts::f32::FRAC_PI_2, quaternion::UnitQuaternionA, vector::UnitVector3A};
 
     #[test]
     #[should_panic]
@@ -362,7 +362,7 @@ mod tests {
 
         let capsule = CapsuleA::new(segment_start, segment_vector, radius);
 
-        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_2);
+        let rotation = UnitQuaternionA::from_axis_angle(&UnitVector3A::unit_z(), FRAC_PI_2);
         let transform = Similarity3A::from_rotation(rotation);
 
         let transformed_capsule = capsule.transformed(&transform);

@@ -37,7 +37,6 @@ impact_model = { path = "../impact_model" }
 impact_scene = { path = "../impact_scene" }
 impact_texture = { path = "../impact_texture", features = ["postcard"] }
 inventory = { workspace = true, optional = true }
-nalgebra = { workspace = true }
 num-traits = { workspace = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }

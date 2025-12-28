@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_containers::HashSet;
-use impact_geometry::{Frustum, OrientedBox, projection::CubemapFace};
+use impact_geometry::{FrustumA, OrientedBoxA, projection::CubemapFace};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, shader::ShaderManager,
     timestamp_query::TimestampQueryRegistry, wgpu,
@@ -239,7 +239,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
         record_additional_commands_before_face_update: &mut impl FnMut(
-            &Frustum,
+            &FrustumA,
             InstanceFeatureBufferRangeID,
             &mut TimestampQueryRegistry<'_>,
             &mut wgpu::CommandEncoder,
@@ -607,7 +607,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
         record_additional_commands_before_cascade_update: &mut impl FnMut(
-            &OrientedBox,
+            &OrientedBoxA,
             InstanceFeatureBufferRangeID,
             &mut TimestampQueryRegistry<'_>,
             &mut wgpu::CommandEncoder,

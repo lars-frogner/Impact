@@ -7,7 +7,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
-use std::ops::Mul;
+use std::{fmt, ops::Mul};
 
 /// A 3x3 matrix.
 ///
@@ -15,7 +15,11 @@ use std::ops::Mul;
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`Matrix3A`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 9]", from = "[f32; 9]")
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix3 {
     column_1: Vector3,
@@ -34,7 +38,7 @@ pub struct Matrix3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix3A {
     inner: glam::Mat3A,
 }
@@ -45,7 +49,11 @@ pub struct Matrix3A {
 /// padding-free storage when combined with smaller types. For computations,
 /// prefer the SIMD-friendly 16-byte aligned [`Matrix4A`].
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "[f32; 16]", from = "[f32; 16]")
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix4 {
     column_1: Vector4,
@@ -65,7 +73,7 @@ pub struct Matrix4 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
+#[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix4A {
     inner: glam::Mat4,
 }
@@ -148,15 +156,6 @@ impl Matrix3 {
             self.column_3().aligned(),
         )
     }
-
-    #[inline]
-    pub(crate) const fn from_glam(matrix: glam::Mat3) -> Self {
-        Self::from_columns(
-            Vector3::from_glam(matrix.x_axis),
-            Vector3::from_glam(matrix.y_axis),
-            Vector3::from_glam(matrix.z_axis),
-        )
-    }
 }
 
 impl_abs_diff_eq!(Matrix3, |a, b, epsilon| {
@@ -186,12 +185,8 @@ impl Matrix3A {
 
     /// Creates a diagonal matrix with the given vector as the diagonal.
     #[inline]
-    pub const fn from_diagonal(diagonal: &Vector3) -> Self {
-        Self::wrap(glam::Mat3A::from_diagonal(glam::Vec3::new(
-            diagonal.x(),
-            diagonal.y(),
-            diagonal.z(),
-        )))
+    pub fn from_diagonal(diagonal: &Vector3A) -> Self {
+        Self::wrap(glam::Mat3A::from_diagonal(diagonal.unwrap().to_vec3()))
     }
 
     /// Creates a matrix with the given columns.
@@ -697,12 +692,12 @@ impl Matrix4A {
     /// upper left 3x3 matrix representing the linear (rotation and scaling)
     /// part of the transform.
     #[inline]
-    pub fn linear_part(&self) -> Matrix3 {
+    pub fn linear_part(&self) -> Matrix3A {
         let m = &self.inner;
-        Matrix3::from_glam(glam::Mat3::from_cols(
-            m.x_axis.truncate(),
-            m.y_axis.truncate(),
-            m.z_axis.truncate(),
+        Matrix3A::wrap(glam::Mat3A::from_cols(
+            m.x_axis.truncate().to_vec3a(),
+            m.y_axis.truncate().to_vec3a(),
+            m.z_axis.truncate().to_vec3a(),
         ))
     }
 
@@ -828,6 +823,94 @@ impl_relative_eq!(Matrix4A, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
+impl From<Matrix3> for [f32; 9] {
+    fn from(m: Matrix3) -> [f32; 9] {
+        [
+            m.column_1.x(),
+            m.column_1.y(),
+            m.column_1.z(),
+            m.column_2.x(),
+            m.column_2.y(),
+            m.column_2.z(),
+            m.column_3.x(),
+            m.column_3.y(),
+            m.column_3.z(),
+        ]
+    }
+}
+
+impl From<[f32; 9]> for Matrix3 {
+    fn from(arr: [f32; 9]) -> Matrix3 {
+        Matrix3::from_columns(
+            Vector3::new(arr[0], arr[1], arr[2]),
+            Vector3::new(arr[3], arr[4], arr[5]),
+            Vector3::new(arr[6], arr[7], arr[8]),
+        )
+    }
+}
+
+impl From<Matrix4> for [f32; 16] {
+    fn from(m: Matrix4) -> [f32; 16] {
+        [
+            m.column_1.x(),
+            m.column_1.y(),
+            m.column_1.z(),
+            m.column_1.w(),
+            m.column_2.x(),
+            m.column_2.y(),
+            m.column_2.z(),
+            m.column_2.w(),
+            m.column_3.x(),
+            m.column_3.y(),
+            m.column_3.z(),
+            m.column_3.w(),
+            m.column_4.x(),
+            m.column_4.y(),
+            m.column_4.z(),
+            m.column_4.w(),
+        ]
+    }
+}
+
+impl From<[f32; 16]> for Matrix4 {
+    fn from(arr: [f32; 16]) -> Matrix4 {
+        Matrix4::from_columns(
+            Vector4::new(arr[0], arr[1], arr[2], arr[3]),
+            Vector4::new(arr[4], arr[5], arr[6], arr[7]),
+            Vector4::new(arr[8], arr[9], arr[10], arr[11]),
+            Vector4::new(arr[12], arr[13], arr[14], arr[15]),
+        )
+    }
+}
+
+impl fmt::Debug for Matrix3A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let col1 = self.inner.x_axis;
+        let col2 = self.inner.y_axis;
+        let col3 = self.inner.z_axis;
+        f.debug_struct("Matrix3A")
+            .field("column_1", &[col1.x, col1.y, col1.z])
+            .field("column_2", &[col2.x, col2.y, col2.z])
+            .field("column_3", &[col3.x, col3.y, col3.z])
+            .finish()
+    }
+}
+
+impl fmt::Debug for Matrix4A {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let col1 = self.inner.x_axis;
+        let col2 = self.inner.y_axis;
+        let col3 = self.inner.z_axis;
+        let col4 = self.inner.w_axis;
+        f.debug_struct("Matrix4A")
+            .field("column_1", &[col1.x, col1.y, col1.z, col1.w])
+            .field("column_2", &[col2.x, col2.y, col2.z, col2.w])
+            .field("column_3", &[col3.x, col3.y, col3.z, col3.w])
+            .field("column_4", &[col4.x, col4.y, col4.z, col4.w])
+            .finish()
+    }
+}
+
 impl_roc_for_library_provided_primitives! {
 //  Type       Pkg   Parents  Module   Roc name  Postfix  Precision
     Matrix3 => core, None,    Matrix3, Matrix3,  None,    PrecisionIrrelevant,
@@ -937,7 +1020,7 @@ mod tests {
 
     #[test]
     fn converting_matrix3a_to_matrix3_works() {
-        let matrix_a = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix_a = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
         let matrix = matrix_a.unaligned();
 
         assert_eq!(matrix.column_1().x(), 1.0);
@@ -1080,7 +1163,7 @@ mod tests {
 
     #[test]
     fn creating_matrix3a_from_diagonal_works() {
-        let diag = Vector3::new(2.0, 3.0, 4.0);
+        let diag = Vector3A::new(2.0, 3.0, 4.0);
         let matrix = Matrix3A::from_diagonal(&diag);
 
         assert_eq!(matrix.element(0, 0), 2.0);
@@ -1118,7 +1201,7 @@ mod tests {
 
     #[test]
     fn accessing_matrix3a_elements_works() {
-        let mut matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let mut matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
 
         assert_eq!(matrix.element(0, 0), 1.0);
         assert_eq!(matrix.element(1, 1), 2.0);
@@ -1183,11 +1266,11 @@ mod tests {
 
     #[test]
     fn extracting_matrix3a_diagonal_works() {
-        let diag_vec = Vector3::new(2.0, 3.0, 4.0);
+        let diag_vec = Vector3A::new(2.0, 3.0, 4.0);
         let matrix = Matrix3A::from_diagonal(&diag_vec);
         let extracted_diag = matrix.diagonal();
 
-        assert_eq!(extracted_diag.unaligned(), diag_vec);
+        assert_eq!(extracted_diag, diag_vec);
     }
 
     #[test]
@@ -1213,7 +1296,7 @@ mod tests {
 
     #[test]
     fn negating_matrix3a_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(2.0, -3.0, 4.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(2.0, -3.0, 4.0));
         let negated = -matrix;
 
         assert_eq!(negated.element(0, 0), -2.0);
@@ -1223,7 +1306,7 @@ mod tests {
 
     #[test]
     fn mapping_matrix3a_elements_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
         let mapped = matrix.mapped(|x| x * 2.0);
 
         assert_eq!(mapped.element(0, 0), 2.0);
@@ -1250,19 +1333,19 @@ mod tests {
 
     #[test]
     fn finding_matrix3a_min_element_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(5.0, 1.0, 3.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(5.0, 1.0, 3.0));
         assert_abs_diff_eq!(matrix.min_element(), 0.0, epsilon = EPSILON); // off-diagonal zeros
     }
 
     #[test]
     fn finding_matrix3a_max_element_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 5.0, 3.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 5.0, 3.0));
         assert_abs_diff_eq!(matrix.max_element(), 5.0, epsilon = EPSILON);
     }
 
     #[test]
     fn converting_matrix3a_to_unaligned_works() {
-        let matrix_a = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix_a = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
         let matrix = matrix_a.unaligned();
 
         assert_eq!(matrix.column_1().x(), 1.0);
@@ -1282,8 +1365,8 @@ mod tests {
 
     #[test]
     fn matrix3a_arithmetic_operations_work() {
-        let m1 = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let m2 = Matrix3A::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
+        let m1 = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
+        let m2 = Matrix3A::from_diagonal(&Vector3A::new(2.0, 3.0, 4.0));
 
         let add_result = &m1 + &m2;
         assert_eq!(add_result.element(0, 0), 3.0);
@@ -1303,7 +1386,7 @@ mod tests {
 
     #[test]
     fn matrix3a_vector_multiplication_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(2.0, 3.0, 4.0));
         let vector = Vector3A::new(1.0, 1.0, 1.0);
 
         let result = &matrix * &vector;
@@ -1314,7 +1397,7 @@ mod tests {
 
     #[test]
     fn matrix3a_scalar_multiplication_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
 
         let mul_right = &matrix * 2.0;
         assert_eq!(mul_right.element(0, 0), 2.0);
@@ -1329,7 +1412,7 @@ mod tests {
 
     #[test]
     fn matrix3a_division_works() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(2.0, 4.0, 6.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(2.0, 4.0, 6.0));
         let divided = &matrix / 2.0;
 
         assert_eq!(divided.element(0, 0), 1.0);
@@ -1339,8 +1422,8 @@ mod tests {
 
     #[test]
     fn matrix3a_assignment_operations_work() {
-        let mut matrix1 = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let matrix2 = Matrix3A::from_diagonal(&Vector3::new(1.0, 1.0, 1.0));
+        let mut matrix1 = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
+        let matrix2 = Matrix3A::from_diagonal(&Vector3A::new(1.0, 1.0, 1.0));
 
         matrix1 += matrix2;
         assert_eq!(matrix1.element(0, 0), 2.0);
@@ -1514,7 +1597,7 @@ mod tests {
         let col4 = Vector4A::new(13.0, 14.0, 15.0, 16.0);
         let matrix = Matrix4A::from_columns(col1, col2, col3, col4);
 
-        let linear = matrix.linear_part().aligned();
+        let linear = matrix.linear_part();
 
         // Linear part is the upper-left 3x3 submatrix
         for i in 0..3 {
@@ -1782,7 +1865,7 @@ mod tests {
     #[test]
     fn matrix_operations_with_zero_matrix() {
         let zero = Matrix3A::zeros();
-        let test_matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let test_matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
 
         // Adding zero matrix should not change the matrix
         let added = &test_matrix + &zero;
@@ -1803,7 +1886,7 @@ mod tests {
 
     #[test]
     fn matrix_with_negative_values() {
-        let negative_diag = Vector3::new(-1.0, -2.0, -3.0);
+        let negative_diag = Vector3A::new(-1.0, -2.0, -3.0);
         let matrix = Matrix3A::from_diagonal(&negative_diag);
 
         assert_eq!(matrix.element(0, 0), -1.0);
@@ -1830,7 +1913,7 @@ mod tests {
 
     #[test]
     fn matrix_scalar_multiplication_by_one() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
         let result = &matrix * 1.0;
 
         assert_eq!(result, matrix);
@@ -1838,7 +1921,7 @@ mod tests {
 
     #[test]
     fn matrix_scalar_multiplication_by_negative() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
         let result = &matrix * -1.0;
 
         assert_eq!(result.element(0, 0), -1.0);
@@ -1848,8 +1931,8 @@ mod tests {
 
     #[test]
     fn matrix_addition_is_commutative() {
-        let m1 = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let m2 = Matrix3A::from_diagonal(&Vector3::new(4.0, 5.0, 6.0));
+        let m1 = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
+        let m2 = Matrix3A::from_diagonal(&Vector3A::new(4.0, 5.0, 6.0));
 
         let result1 = &m1 + &m2;
         let result2 = &m2 + &m1;
@@ -1859,9 +1942,9 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_is_associative() {
-        let m1 = Matrix3A::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
-        let m2 = Matrix3A::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let m3 = Matrix3A::from_diagonal(&Vector3::new(3.0, 2.0, 1.0));
+        let m1 = Matrix3A::from_diagonal(&Vector3A::new(2.0, 3.0, 4.0));
+        let m2 = Matrix3A::from_diagonal(&Vector3A::new(1.0, 2.0, 3.0));
+        let m3 = Matrix3A::from_diagonal(&Vector3A::new(3.0, 2.0, 1.0));
 
         let result1 = (&m1 * &m2) * &m3;
         let result2 = &m1 * (&m2 * &m3);
@@ -1921,7 +2004,7 @@ mod tests {
 
     #[test]
     fn matrix_arithmetic_maintains_precision() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(0.1, 0.2, 0.3));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(0.1, 0.2, 0.3));
         let doubled = &matrix * 2.0;
         let halved = &doubled * 0.5;
 
@@ -1939,7 +2022,7 @@ mod tests {
     #[test]
     fn matrix_identity_properties_hold() {
         let identity3 = Matrix3A::identity();
-        let test_matrix3 = Matrix3A::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
+        let test_matrix3 = Matrix3A::from_diagonal(&Vector3A::new(2.0, 3.0, 4.0));
 
         let left_mult = &identity3 * &test_matrix3;
         let right_mult = &test_matrix3 * &identity3;
@@ -1975,7 +2058,7 @@ mod tests {
 
     #[test]
     fn matrix_inversion_properties_hold() {
-        let matrix = Matrix3A::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
+        let matrix = Matrix3A::from_diagonal(&Vector3A::new(2.0, 3.0, 4.0));
         let inverse = matrix.inverted();
         let product = &matrix * &inverse;
 

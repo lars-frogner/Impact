@@ -9,7 +9,7 @@ use crate::{
     shadow_map::{CascadeIdx, CascadedShadowMapTexture, ShadowCubemapTexture, ShadowMappingConfig},
 };
 use impact_containers::tracking::CollectionChange;
-use impact_geometry::{AxisAlignedBox, Frustum, OrientedBox, projection::CubeMapper};
+use impact_geometry::{AxisAlignedBoxA, FrustumA, OrientedBoxA, projection::CubeMapper};
 use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
@@ -977,7 +977,7 @@ impl LightMetadata for OmnidirectionalLightMetadata {
 impl ShadowableOmnidirectionalLightMetadata {
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
+    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> FrustumA {
         CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
     }
 }
@@ -1015,7 +1015,7 @@ impl ShadowableUnidirectionalLightMetadata {
     pub fn create_light_space_orthographic_aabb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBox {
+    ) -> AxisAlignedBoxA {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
     }
 
@@ -1025,8 +1025,8 @@ impl ShadowableUnidirectionalLightMetadata {
     pub fn create_light_space_orthographic_obb_for_cascade(
         &self,
         cascade_idx: CascadeIdx,
-    ) -> OrientedBox {
-        OrientedBox::from_axis_aligned_box(
+    ) -> OrientedBoxA {
+        OrientedBoxA::from_axis_aligned_box(
             &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
         )
     }
@@ -1052,7 +1052,7 @@ impl LightMetadata for ShadowableUnidirectionalLightMetadata {
 }
 
 impl PackedOrthographicTranslationAndScaling {
-    fn compute_aabb(&self) -> AxisAlignedBox {
-        crate::compute_orthographic_transform_aabb(&self.translation, &self.scaling)
+    fn compute_aabb(&self) -> AxisAlignedBoxA {
+        crate::compute_orthographic_transform_aabb(&self.translation.aligned(), &self.scaling)
     }
 }

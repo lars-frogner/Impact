@@ -17,4 +17,7 @@ pub mod splitmix;
 pub mod transform;
 pub mod vector;
 
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
+
 pub use num::Float;

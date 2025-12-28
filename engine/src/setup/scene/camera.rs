@@ -55,6 +55,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
          camera_props: &setup::PerspectiveCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
+            let frame = frame.copied().unwrap_or_default().aligned();
+
             let camera = PerspectiveCamera::new(
                 camera_manager.camera_context().aspect_ratio,
                 camera_props.vertical_field_of_view(),
@@ -64,16 +66,13 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
                 ),
             );
 
-            let camera_to_parent_transform = frame
-                .copied()
-                .unwrap_or_default()
-                .create_transform_to_parent_space();
+            let camera_to_parent_transform = frame.create_transform_to_parent_space();
 
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id =
-                scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
+            let node_id = scene_graph
+                .create_camera_node(parent_node_id, camera_to_parent_transform.unaligned());
 
             camera_manager.set_active_camera(camera, node_id);
 
@@ -113,6 +112,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
          camera_props: &setup::OrthographicCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> SceneGraphCameraNodeHandle {
+            let frame = frame.copied().unwrap_or_default().aligned();
+
             let camera = OrthographicCamera::new(
                 camera_manager.camera_context().aspect_ratio,
                 camera_props.vertical_field_of_view(),
@@ -122,16 +123,13 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
                 ),
             );
 
-            let camera_to_parent_transform = frame
-                .copied()
-                .unwrap_or_default()
-                .create_transform_to_parent_space();
+            let camera_to_parent_transform = frame.create_transform_to_parent_space();
 
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id =
-                scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform);
+            let node_id = scene_graph
+                .create_camera_node(parent_node_id, camera_to_parent_transform.unaligned());
 
             camera_manager.set_active_camera(camera, node_id);
 

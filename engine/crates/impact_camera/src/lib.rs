@@ -9,27 +9,27 @@ pub mod setup;
 use approx::assert_abs_diff_ne;
 use impact_containers::tracking::EntityChangeTracker;
 use impact_geometry::{
-    Frustum,
+    FrustumA,
     projection::{OrthographicTransform, PerspectiveTransform},
 };
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
-    transform::Projective3,
+    transform::Projective3A,
 };
 use std::fmt::Debug;
 
 /// Represents a 3D camera.
 pub trait Camera: Debug + Send + Sync + 'static {
     /// Returns the projection transform used by the camera.
-    fn projection_transform(&self) -> &Projective3;
+    fn projection_transform(&self) -> &Projective3A;
 
     /// Returns the vertical field of view angle in radians.
     fn vertical_field_of_view(&self) -> Radians<f32>;
 
     /// Returns the frustum representing the view volume of the
     /// camera.
-    fn view_frustum(&self) -> &Frustum;
+    fn view_frustum(&self) -> &FrustumA;
 
     /// Returns the ratio of width to height of the camera's view plane.
     fn aspect_ratio(&self) -> f32;
@@ -52,7 +52,7 @@ pub trait Camera: Debug + Send + Sync + 'static {
 #[derive(Debug)]
 pub struct PerspectiveCamera {
     perspective_transform: PerspectiveTransform,
-    view_frustum: Frustum,
+    view_frustum: FrustumA,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
 }
@@ -64,7 +64,7 @@ pub struct OrthographicCamera {
     vertical_field_of_view: Radians<f32>,
     near_and_far_distance: UpperExclusiveBounds<f32>,
     orthographic_transform: OrthographicTransform,
-    view_frustum: Frustum,
+    view_frustum: FrustumA,
     /// Tracker for whether the projection transform has changed.
     projection_transform_change_tracker: EntityChangeTracker,
 }
@@ -86,7 +86,7 @@ impl PerspectiveCamera {
         let perspective_transform =
             PerspectiveTransform::new(aspect_ratio, vertical_field_of_view, near_and_far_distance);
 
-        let view_frustum = Frustum::from_transform(perspective_transform.as_projective());
+        let view_frustum = FrustumA::from_transform(perspective_transform.as_projective());
 
         Self {
             perspective_transform,
@@ -121,13 +121,13 @@ impl PerspectiveCamera {
     }
 
     fn update_frustum_and_notify_change(&mut self) {
-        self.view_frustum = Frustum::from_transform(self.perspective_transform.as_projective());
+        self.view_frustum = FrustumA::from_transform(self.perspective_transform.as_projective());
         self.projection_transform_change_tracker.notify_change();
     }
 }
 
 impl Camera for PerspectiveCamera {
-    fn projection_transform(&self) -> &Projective3 {
+    fn projection_transform(&self) -> &Projective3A {
         self.perspective_transform.as_projective()
     }
 
@@ -135,7 +135,7 @@ impl Camera for PerspectiveCamera {
         self.perspective_transform.vertical_field_of_view()
     }
 
-    fn view_frustum(&self) -> &Frustum {
+    fn view_frustum(&self) -> &FrustumA {
         &self.view_frustum
     }
 
@@ -176,7 +176,7 @@ impl OrthographicCamera {
             near_and_far_distance.clone(),
         );
 
-        let view_frustum = Frustum::from_transform(orthographic_transform.as_projective());
+        let view_frustum = FrustumA::from_transform(orthographic_transform.as_projective());
 
         Self {
             aspect_ratio,
@@ -220,13 +220,13 @@ impl OrthographicCamera {
             self.vertical_field_of_view,
             self.near_and_far_distance.clone(),
         );
-        self.view_frustum = Frustum::from_transform(self.orthographic_transform.as_projective());
+        self.view_frustum = FrustumA::from_transform(self.orthographic_transform.as_projective());
         self.projection_transform_change_tracker.notify_change();
     }
 }
 
 impl Camera for OrthographicCamera {
-    fn projection_transform(&self) -> &Projective3 {
+    fn projection_transform(&self) -> &Projective3A {
         self.orthographic_transform.as_projective()
     }
 
@@ -234,7 +234,7 @@ impl Camera for OrthographicCamera {
         self.vertical_field_of_view
     }
 
-    fn view_frustum(&self) -> &Frustum {
+    fn view_frustum(&self) -> &FrustumA {
         &self.view_frustum
     }
 

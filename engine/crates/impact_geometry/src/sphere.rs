@@ -140,7 +140,7 @@ impl SphereA {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn bounding_sphere_for_points(points: &[Point3A]) -> Self {
+    pub fn bounding_sphere_for_points(points: &[Point3]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create bounding sphere for empty point slice"
@@ -148,18 +148,18 @@ impl SphereA {
 
         let one_over_count = (points.len() as f32).recip();
 
-        let first_point = *points[0].as_vector();
+        let first_point = points[0].as_vector().aligned();
 
         let centroid = Point3A::from(
             one_over_count
                 * points
                     .iter()
                     .skip(1)
-                    .fold(first_point, |sum, point| sum + point.as_vector()),
+                    .fold(first_point, |sum, point| sum + point.as_vector().aligned()),
         );
 
         let max_squared_dist_from_centroid = points.iter().fold(0.0, |max_squared_dist, point| {
-            Point3A::squared_distance_between(point, &centroid).max(max_squared_dist)
+            Point3A::squared_distance_between(&point.aligned(), &centroid).max(max_squared_dist)
         });
 
         Self::new(centroid, max_squared_dist_from_centroid.sqrt())
@@ -403,23 +403,23 @@ mod tests {
 
     #[test]
     fn bounding_sphere_for_single_point_is_correct() {
-        let point = Point3A::new(0.1, 0.2, 0.3);
+        let point = Point3::new(0.1, 0.2, 0.3);
         let bounding_sphere = SphereA::bounding_sphere_for_points(&[point]);
-        assert_abs_diff_eq!(bounding_sphere.center(), &point);
+        assert_abs_diff_eq!(bounding_sphere.center(), &point.aligned());
         assert_abs_diff_eq!(bounding_sphere.radius(), 0.0);
     }
 
     #[test]
     fn bounding_sphere_for_two_points_is_correct() {
-        let points = [Point3A::new(0.1, 0.2, 0.3), Point3A::new(-0.3, 0.6, 0.7)];
+        let points = [Point3::new(0.1, 0.2, 0.3), Point3::new(-0.3, 0.6, 0.7)];
         let bounding_sphere = SphereA::bounding_sphere_for_points(&points);
         assert_abs_diff_eq!(
             bounding_sphere.center(),
-            &(0.5 * (points[0].as_vector() + points[1].as_vector())).into()
+            &Point3A::center_of(&points[0].aligned(), &points[1].aligned())
         );
         assert_abs_diff_eq!(
             bounding_sphere.radius(),
-            0.5 * Point3A::distance_between(&points[0], &points[1])
+            0.5 * Point3A::distance_between(&points[0].aligned(), &points[1].aligned())
         );
     }
 

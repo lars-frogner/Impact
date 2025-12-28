@@ -1,8 +1,8 @@
-# Hash: 66a477d127534cb8f6d11d20e5c149e05722eebc56db19f3e02a3038d77bbed6
-# Generated: 2025-12-21T23:08:03+00:00
+# Hash: ef570265ff5906352971853a8556cbd527e99ecca17a4deae4b885a3fd2cbde0
+# Generated: 2025-12-28T19:52:23+00:00
 # Rust type: impact_physics::quantities::AngularVelocity
 # Type category: POD
-# Commit: d4c84c05 (dirty)
+# Commit: 78e3beb5 (dirty)
 module [
     AngularVelocity,
     new,
@@ -18,6 +18,10 @@ import core.Vector3
 
 ## An angular velocity in 3D space, represented by an axis of rotation and an
 ## angular speed.
+##
+## This type is primarily intended for compact storage inside other types and
+## collections. For computations, prefer the SIMD-friendly 16-byte aligned
+## [`AngularVelocityA`].
 AngularVelocity : {
     axis_of_rotation : UnitVector3.UnitVector3,
     angular_speed : Radians.Radians Binary32,

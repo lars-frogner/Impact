@@ -8,14 +8,14 @@ use approx::{abs_diff_eq, abs_diff_ne};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{arena::ArenaPool, avec};
-use impact_geometry::{AxisAlignedBox, Sphere};
+use impact_geometry::{AxisAlignedBoxA, SphereA};
 use impact_math::{
     hash::StringHash64,
     hash64,
     point::Point3,
-    quaternion::UnitQuaternion,
-    transform::Similarity3,
-    vector::{UnitVector3, Vector3},
+    quaternion::UnitQuaternionA,
+    transform::Similarity3A,
+    vector::{UnitVector3, UnitVector3A, Vector3, Vector3A},
 };
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
@@ -252,9 +252,9 @@ impl TriangleMesh {
 
     /// Computes the axis-aligned bounding box enclosing all vertices in the
     /// mesh, or returns [`None`] if the mesh has no vertices.
-    pub fn compute_aabb(&self) -> Option<AxisAlignedBox> {
+    pub fn compute_aabb(&self) -> Option<AxisAlignedBoxA> {
         if self.has_positions() {
-            Some(AxisAlignedBox::aabb_for_points(bytemuck::cast_slice(
+            Some(AxisAlignedBoxA::aabb_for_points(bytemuck::cast_slice(
                 self.positions(),
             )))
         } else {
@@ -264,9 +264,9 @@ impl TriangleMesh {
 
     /// Finds a sphere enclosing all vertices in the mesh, or returns [`None`]
     /// if the mesh has no vertices.
-    pub fn compute_bounding_sphere(&self) -> Option<Sphere> {
+    pub fn compute_bounding_sphere(&self) -> Option<SphereA> {
         if self.has_positions() {
-            Some(Sphere::bounding_sphere_for_points(bytemuck::cast_slice(
+            Some(SphereA::bounding_sphere_for_points(bytemuck::cast_slice(
                 self.positions(),
             )))
         } else {
@@ -289,15 +289,17 @@ impl TriangleMesh {
         let mut summed_normal_vectors = avec![in &arena; Vector3::zeros(); self.n_vertices()];
 
         for [idx0, idx1, idx2] in self.triangle_indices() {
-            let p0 = &self.positions[idx0].0;
-            let p1 = &self.positions[idx1].0;
-            let p2 = &self.positions[idx2].0;
+            let p0 = self.positions[idx0].0.aligned();
+            let p1 = self.positions[idx1].0.aligned();
+            let p2 = self.positions[idx2].0.aligned();
 
-            let face_normal_vector = UnitVector3::normalized_from((p1 - p0).cross(&(p2 - p0)));
+            let face_normal_vector = UnitVector3A::normalized_from((p1 - p0).cross(&(p2 - p0)));
 
-            summed_normal_vectors[idx0] += face_normal_vector.as_vector();
-            summed_normal_vectors[idx1] += face_normal_vector.as_vector();
-            summed_normal_vectors[idx2] += face_normal_vector.as_vector();
+            for idx in [idx0, idx1, idx2] {
+                let summed_normal_vector = &mut summed_normal_vectors[idx];
+                let new_sum = summed_normal_vector.aligned() + face_normal_vector.as_vector();
+                *summed_normal_vector = new_sum.unaligned();
+            }
         }
 
         self.normal_vectors = summed_normal_vectors
@@ -325,7 +327,7 @@ impl TriangleMesh {
 
         for position in &self.positions {
             self.texture_coords.push(VertexTextureCoords(
-                projection.project_position(&position.0),
+                projection.project_position(&position.0.aligned()),
             ));
         }
 
@@ -432,7 +434,11 @@ impl TriangleMesh {
             // Use Gram-Schmidt to make the summed tangent and bitangent
             // orthogonal to the normal vector and each other, then normalize
 
-            let orthogonal_tangent = summed_tangent - normal.0 * normal.0.dot(&summed_tangent);
+            let summed_tangent = summed_tangent.aligned();
+            let summed_bitangent = summed_bitangent.aligned();
+            let normal = normal.0.aligned();
+
+            let orthogonal_tangent = summed_tangent - normal * normal.dot(&summed_tangent);
 
             let inv_orthogonal_tangent_squared_length = 1.0 / orthogonal_tangent.norm_squared();
 
@@ -442,19 +448,19 @@ impl TriangleMesh {
 
             if inv_orthogonal_tangent_squared_length.is_finite() {
                 let orthogonal_bitangent = summed_bitangent
-                    - normal.0 * normal.0.dot(&summed_bitangent)
+                    - normal * normal.dot(&summed_bitangent)
                     - orthogonal_tangent
                         * (orthogonal_tangent.dot(&summed_bitangent)
                             * inv_orthogonal_tangent_squared_length);
 
-                tangent = UnitVector3::unchecked_from(
+                tangent = UnitVector3A::unchecked_from(
                     orthogonal_tangent * f32::sqrt(inv_orthogonal_tangent_squared_length),
                 );
 
-                bitangent = UnitVector3::normalized_from(orthogonal_bitangent);
+                bitangent = UnitVector3A::normalized_from(orthogonal_bitangent);
 
                 // Check if basis is left-handed
-                if tangent.cross(&bitangent).dot(&normal.0) < 0.0 {
+                if tangent.cross(&bitangent).dot(&normal) < 0.0 {
                     // Make sure tangent, bitangent and normal form a
                     // right-handed bases, as this is required for converting
                     // the basis to a rotation quaternion. But we note the fact
@@ -464,41 +470,40 @@ impl TriangleMesh {
                     is_lefthanded = true;
                 }
             } else {
-                if abs_diff_ne!(normal.0.x().abs(), 1.0) {
+                if abs_diff_ne!(normal.x().abs(), 1.0) {
                     tangent =
-                        UnitVector3::normalized_from(Vector3::unit_x() - normal.0 * normal.0.x());
+                        UnitVector3A::normalized_from(Vector3A::unit_x() - normal * normal.x());
                 } else {
                     tangent =
-                        UnitVector3::normalized_from(Vector3::unit_y() - normal.0 * normal.0.y());
+                        UnitVector3A::normalized_from(Vector3A::unit_y() - normal * normal.y());
                 }
 
-                bitangent = UnitVector3::normalized_from(normal.0.cross(&tangent));
+                bitangent = UnitVector3A::normalized_from(normal.cross(&tangent));
             }
 
             // Convert right-handed orthonormal basis vectors to rotation
             // quaternion
-            let mut tangent_space_quaternion = UnitQuaternion::from_basis_unchecked(&[
+            let mut tangent_space_quaternion = UnitQuaternionA::from_basis_unchecked(&[
                 *tangent.as_vector(),
                 *bitangent.as_vector(),
-                *normal.0.as_vector(),
-            ])
-            .to_quaternion();
+                *normal.as_vector(),
+            ]);
 
             // Make sure real component is always positive initially (negating a
             // quaternion gives same rotation)
             if tangent_space_quaternion.real() < 0.0 {
-                tangent_space_quaternion = tangent_space_quaternion.negated();
+                tangent_space_quaternion = -tangent_space_quaternion;
             }
 
             // If we have a left-handed basis, negate the quaternion so that the
             // real component is negative (but we still have the same rotation)
             if is_lefthanded {
-                tangent_space_quaternion = tangent_space_quaternion.negated();
+                tangent_space_quaternion = -tangent_space_quaternion;
             }
 
             self.tangent_space_quaternions
                 .push(VertexTangentSpaceQuaternion(
-                    UnitQuaternion::unchecked_from(tangent_space_quaternion),
+                    tangent_space_quaternion.unaligned(),
                 ));
         }
 
@@ -528,7 +533,7 @@ impl TriangleMesh {
     }
 
     /// Adds the given translation to the vertex positions of the mesh.
-    pub fn translate(&mut self, translation: &Vector3, dirty_mask: &mut TriangleMeshDirtyMask) {
+    pub fn translate(&mut self, translation: &Vector3A, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.translated(translation);
         }
@@ -537,7 +542,7 @@ impl TriangleMesh {
 
     /// Applies the given rotation quaternion to the mesh, rotating vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn rotate(&mut self, rotation: &UnitQuaternion, dirty_mask: &mut TriangleMeshDirtyMask) {
+    pub fn rotate(&mut self, rotation: &UnitQuaternionA, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.rotated(rotation);
         }
@@ -557,7 +562,7 @@ impl TriangleMesh {
 
     /// Applies the given similarity transform to the mesh, transforming vertex
     /// positions, normal vectors and tangent space quaternions.
-    pub fn transform(&mut self, transform: &Similarity3, dirty_mask: &mut TriangleMeshDirtyMask) {
+    pub fn transform(&mut self, transform: &Similarity3A, dirty_mask: &mut TriangleMeshDirtyMask) {
         for position in &mut self.positions {
             *position = position.transformed(transform);
         }

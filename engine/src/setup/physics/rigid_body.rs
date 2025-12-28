@@ -61,7 +61,7 @@ pub fn setup_rigid_bodies_for_new_entities(
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
-            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
@@ -84,7 +84,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform.unaligned(), frame, motion)
         },
         ![DynamicRigidBodyID]
     );
@@ -101,7 +101,7 @@ pub fn setup_rigid_bodies_for_new_entities(
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
-            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
@@ -123,7 +123,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform.unaligned(), frame, motion)
         },
         ![DynamicRigidBodyID]
     );
@@ -140,7 +140,7 @@ pub fn setup_rigid_bodies_for_new_entities(
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
-            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
@@ -162,7 +162,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform.unaligned(), frame, motion)
         },
         ![DynamicRigidBodyID]
     );
@@ -178,7 +178,7 @@ pub fn setup_rigid_bodies_for_new_entities(
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
-            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
@@ -201,7 +201,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform.unaligned(), frame, motion)
         },
         [SphereMesh],
         ![DynamicRigidBodyID]
@@ -218,7 +218,7 @@ pub fn setup_rigid_bodies_for_new_entities(
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
-            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
@@ -241,7 +241,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform.unaligned(), frame, motion)
         },
         [HemisphereMesh],
         ![DynamicRigidBodyID]
@@ -260,7 +260,7 @@ pub fn setup_rigid_bodies_for_new_entities(
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
-            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let mut model_transform = model_transform.copied().unwrap_or_default().aligned();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
@@ -287,7 +287,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            Ok((rigid_body_id, model_transform, frame, motion))
+            Ok((rigid_body_id, model_transform.unaligned(), frame, motion))
         },
         ![DynamicRigidBodyID]
     )?;

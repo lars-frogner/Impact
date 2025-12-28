@@ -2774,7 +2774,7 @@ pub mod fuzzing {
     };
     use approx::assert_relative_eq;
     use impact_alloc::Global;
-    use impact_math::vector::Vector3;
+    use impact_math::vector::Vector3A;
 
     pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator<Global>) {
         let object = ChunkedVoxelObject::generate(&generator);
@@ -2833,7 +2833,7 @@ pub mod fuzzing {
                 max_relative = 1e-8,
             );
 
-            disconnected_inertial_property_manager.offset_reference_point_by(&Vector3::from(
+            disconnected_inertial_property_manager.offset_reference_point_by(&Vector3A::from(
                 origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
             ));
 
@@ -2858,7 +2858,7 @@ mod tests {
         voxel_types::VoxelType,
     };
     use impact_alloc::Global;
-    use impact_math::vector::Vector3;
+    use impact_math::vector::Vector3A;
 
     #[test]
     fn connected_region_count_is_correct_for_single_voxel() {
@@ -2883,7 +2883,7 @@ mod tests {
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(25.0));
         let sphere_2_id = graph.add_node(SDFNode::new_translation(
             sphere_2_id,
-            Vector3::new(60.0, 0.0, 0.0),
+            Vector3A::new(60.0, 0.0, 0.0),
         ));
         graph.add_node(SDFNode::new_union(sphere_1_id, sphere_2_id, 1.0));
         let sdf_generator = graph.build_in(Global).unwrap();

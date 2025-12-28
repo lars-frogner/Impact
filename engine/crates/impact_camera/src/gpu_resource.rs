@@ -2,7 +2,7 @@
 
 use crate::Camera;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::Frustum;
+use impact_geometry::FrustumA;
 use impact_gpu::{
     assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
@@ -15,7 +15,7 @@ use impact_math::{
     halton::HaltonSequence,
     hash::ConstStringHash64,
     quaternion::UnitQuaternion,
-    transform::{Isometry3, Projective3},
+    transform::{Isometry3A, Projective3},
     vector::Vector4,
 };
 use std::{borrow::Cow, sync::LazyLock};
@@ -26,7 +26,7 @@ pub trait BufferableCamera {
     fn camera(&self) -> &dyn Camera;
 
     /// Returns a reference to the camera's view transform.
-    fn view_transform(&self) -> &Isometry3;
+    fn view_transform(&self) -> &Isometry3A;
 
     /// Returns whether jittering is enabled for the camera.
     fn jitter_enabled(&self) -> bool;
@@ -43,8 +43,8 @@ const JITTER_BASES: (u64, u64) = (2, 3);
 /// transform.
 #[derive(Debug)]
 pub struct CameraGPUResource {
-    view_transform: Isometry3,
-    view_frustum: Frustum,
+    view_transform: Isometry3A,
+    view_frustum: FrustumA,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
     jitter_enabled: bool,
@@ -134,7 +134,7 @@ impl CameraGPUResource {
     }
 
     /// Returns the frustum representing the view volume of the camera.
-    pub fn view_frustum(&self) -> &Frustum {
+    pub fn view_frustum(&self) -> &FrustumA {
         &self.view_frustum
     }
 
@@ -167,7 +167,7 @@ impl CameraGPUResource {
 
     /// Returns the camera rotation quaternion push constant.
     pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternion {
-        *self.view_transform.rotation()
+        self.view_transform.rotation().unaligned()
     }
 
     /// Creates the bind group layout entry for the camera projection uniform,
@@ -235,7 +235,7 @@ impl CameraProjectionUniform {
     }
 
     fn new(camera: &impl BufferableCamera) -> Self {
-        let transform = *camera.camera().projection_transform();
+        let transform = camera.camera().projection_transform().unaligned();
 
         let frustum_far_plane_corners =
             Self::compute_far_plane_corners(camera.camera().view_frustum());
@@ -260,7 +260,7 @@ impl CameraProjectionUniform {
         }
     }
 
-    fn compute_far_plane_corners(view_frustum: &Frustum) -> [Vector4; 4] {
+    fn compute_far_plane_corners(view_frustum: &FrustumA) -> [Vector4; 4] {
         let corners = view_frustum.compute_corners();
         [
             Vector4::new(corners[1].x(), corners[1].y(), corners[1].z(), 0.0), // lower left

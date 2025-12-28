@@ -557,9 +557,9 @@ impl PlanarTextureProjection {
     /// On error from [`PlanarTextureProjection::new`].
     pub fn create(&self) -> crate::texture_projection::PlanarTextureProjection {
         crate::texture_projection::PlanarTextureProjection::new(
-            self.origin,
-            self.u_vector,
-            self.v_vector,
+            self.origin.aligned(),
+            self.u_vector.aligned(),
+            self.v_vector.aligned(),
         )
         .unwrap()
     }

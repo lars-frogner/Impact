@@ -73,12 +73,6 @@ impl AxisAlignedBox {
         &self.upper_corner
     }
 
-    /// Calculates and returns the center point of the box.
-    #[inline]
-    pub fn center(&self) -> Point3 {
-        Point3::center_of(self.lower_corner(), self.upper_corner())
-    }
-
     /// Returns the extents of the box along the three axes.
     #[inline]
     pub fn extents(&self) -> Vector3 {
@@ -125,26 +119,26 @@ impl AxisAlignedBoxA {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[Point3A]) -> Self {
+    pub fn aabb_for_points(points: &[Point3]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create AABB for empty point slice"
         );
 
-        let first_point = points[0];
+        let first_point = points[0].aligned();
 
         let lower_corner = points
             .iter()
             .skip(1)
             .fold(first_point, |lower_corner, point| {
-                lower_corner.min_with(point)
+                lower_corner.min_with(&point.aligned())
             });
 
         let upper_corner = points
             .iter()
             .skip(1)
             .fold(first_point, |upper_corner, point| {
-                upper_corner.max_with(point)
+                upper_corner.max_with(&point.aligned())
             });
 
         Self::new(lower_corner, upper_corner)
@@ -379,7 +373,7 @@ impl AxisAlignedBoxA {
 
         // Performance trick: transform half-extents by the element-wise
         // absolute value of the linear 3x3 part
-        let rotation_scale = homogeneous_transform.linear_part().aligned();
+        let rotation_scale = homogeneous_transform.linear_part();
         let abs_rotation_scale = rotation_scale.mapped(f32::abs);
         let transformed_half_extents = abs_rotation_scale * self.half_extents();
 
