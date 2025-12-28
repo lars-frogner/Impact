@@ -5,7 +5,6 @@ mod roc;
 
 use crate::{HashMap, HashSet, RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::{SecondsFormat, Utc};
 use roc::OptionalExports;
 use std::{
     borrow::Cow,
@@ -14,6 +13,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
 };
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 /// Options for listing types.
 #[derive(Clone, Debug)]
@@ -537,7 +537,11 @@ fn get_field_type<'a>(
 }
 
 fn obtain_timestamp() -> String {
-    Utc::now().to_rfc3339_opts(SecondsFormat::Secs, false)
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap()
+        .trim_end_matches('Z')
+        .to_string()
 }
 
 fn obtain_git_commit_sha() -> Option<&'static str> {
