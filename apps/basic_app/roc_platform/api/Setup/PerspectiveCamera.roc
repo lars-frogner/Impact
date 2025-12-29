@@ -1,8 +1,8 @@
-# Hash: 1447fbe3daa79e98eacc9a73c3bcba6a2cf6bb1df939bf7e7ec35f4a522f3fdb
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 877e8862f34e3ca9d10495fdf503602b499cbf42bc3f0ca19dcdbabc65e679de
+# Generated: 2025-12-29T15:58:28.236932766
 # Rust type: impact_camera::setup::PerspectiveCamera
 # Type category: Component
-# Commit: f9b55709 (dirty)
+# Commit: 68743830 (dirty)
 module [
     PerspectiveCamera,
     new,
@@ -21,7 +21,7 @@ import core.Radians
 
 ## Properties of a [`PerspectiveCamera`](crate::PerspectiveCamera).
 PerspectiveCamera : {
-    vertical_field_of_view : Radians.Radians Binary32,
+    vertical_field_of_view : Radians.Radians,
     near_distance : F32,
     far_distance : F32,
 }
@@ -33,7 +33,7 @@ PerspectiveCamera : {
 ## # Panics
 ## If the field of view or the near distance does not exceed zero, or if
 ## the far distance does not exceed the near distance.
-new : Radians.Radians Binary32, F32, F32 -> PerspectiveCamera
+new : Radians.Radians, F32, F32 -> PerspectiveCamera
 new = |vertical_field_of_view, near_distance, far_distance|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect vertical_field_of_view > 0.0
@@ -53,7 +53,7 @@ new = |vertical_field_of_view, near_distance, far_distance|
 ## If the field of view or the near distance does not exceed zero, or if
 ## the far distance does not exceed the near distance.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Radians.Radians Binary32, F32, F32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Radians.Radians, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
     add(entity_data, new(vertical_field_of_view, near_distance, far_distance))
 
@@ -66,7 +66,7 @@ add_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
 ## the far distance does not exceed the near distance.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Radians.Radians Binary32), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Radians.Radians), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, vertical_field_of_view, near_distance, far_distance|
     add_multiple(
         entity_data,
@@ -135,7 +135,7 @@ write_bytes : List U8, PerspectiveCamera -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(12)
-    |> Radians.write_bytes_32(value.vertical_field_of_view)
+    |> Radians.write_bytes(value.vertical_field_of_view)
     |> Builtin.write_bytes_f32(value.near_distance)
     |> Builtin.write_bytes_f32(value.far_distance)
 
@@ -145,7 +145,7 @@ from_bytes : List U8 -> Result PerspectiveCamera _
 from_bytes = |bytes|
     Ok(
         {
-            vertical_field_of_view: bytes |> List.sublist({ start: 0, len: 4 }) |> Radians.from_bytes_32?,
+            vertical_field_of_view: bytes |> List.sublist({ start: 0, len: 4 }) |> Radians.from_bytes?,
             near_distance: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
             far_distance: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
         },

@@ -1,8 +1,8 @@
-# Hash: fed4164bd59f5e0b9828d6d0aefd8b77abc353edc74f2c5aba48f6c2000ef2e9
-# Generated: 2025-12-28T22:32:06.539540994
+# Hash: 2a54f2647f289d3ff85aea92292a5cc7f14163c39dff92b7e536858beb3f9f21
+# Generated: 2025-12-29T15:56:38.519989298
 # Rust type: impact_physics::quantities::AngularVelocityP
 # Type category: POD
-# Commit: cc167207 (dirty)
+# Commit: 68743830 (dirty)
 module [
     AngularVelocity,
     new,
@@ -24,12 +24,12 @@ import core.Vector3
 ## [`AngularVelocity`].
 AngularVelocity : {
     axis_of_rotation : UnitVector3.UnitVector3,
-    angular_speed : Radians.Radians Binary32,
+    angular_speed : Radians.Radians,
 }
 
 ## Creates a new angular velocity with the given axis of rotation and
 ## angular speed.
-new : UnitVector3.UnitVector3, Radians.Radians Binary32 -> AngularVelocity
+new : UnitVector3.UnitVector3, Radians.Radians -> AngularVelocity
 new = |axis_of_rotation, angular_speed|
     { axis_of_rotation, angular_speed }
 
@@ -53,7 +53,7 @@ write_bytes = |bytes, value|
     bytes
     |> List.reserve(16)
     |> UnitVector3.write_bytes(value.axis_of_rotation)
-    |> Radians.write_bytes_32(value.angular_speed)
+    |> Radians.write_bytes(value.angular_speed)
 
 ## Deserializes a value of [AngularVelocity] from its bytes in the
 ## representation used by the engine.
@@ -62,7 +62,7 @@ from_bytes = |bytes|
     Ok(
         {
             axis_of_rotation: bytes |> List.sublist({ start: 0, len: 12 }) |> UnitVector3.from_bytes?,
-            angular_speed: bytes |> List.sublist({ start: 12, len: 4 }) |> Radians.from_bytes_32?,
+            angular_speed: bytes |> List.sublist({ start: 12, len: 4 }) |> Radians.from_bytes?,
         },
     )
 
