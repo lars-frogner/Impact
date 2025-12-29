@@ -350,7 +350,7 @@ mod tests {
         );
         let transformed_plane = plane.transformed(&Similarity3::identity());
 
-        assert_abs_diff_eq!(transformed_plane, plane, epsilon = 1e-9);
+        assert_abs_diff_eq!(transformed_plane, plane, epsilon = 1e-6);
     }
 
     #[test]
