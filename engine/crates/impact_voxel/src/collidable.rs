@@ -323,8 +323,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                 let voxel_b_sphere = Sphere::new(voxel_b_center, voxel_b_radius);
 
-                let voxel_b_sphere_in_a =
-                    voxel_b_sphere.translated_and_rotated(transform_from_world_to_a);
+                let voxel_b_sphere_in_a = voxel_b_sphere.iso_transformed(transform_from_world_to_a);
 
                 let voxel_b_sphere_in_norm_a =
                     voxel_b_sphere_in_a.scaled(voxel_object_a.inverse_voxel_extent());
@@ -379,8 +378,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                 let voxel_a_sphere = Sphere::new(voxel_a_center, voxel_a_radius);
 
-                let voxel_a_sphere_in_b =
-                    voxel_a_sphere.translated_and_rotated(transform_from_world_to_b);
+                let voxel_a_sphere_in_b = voxel_a_sphere.iso_transformed(transform_from_world_to_b);
 
                 let voxel_a_sphere_in_norm_b =
                     voxel_a_sphere_in_b.scaled(voxel_object_b.inverse_voxel_extent());
@@ -536,7 +534,7 @@ pub fn for_each_sphere_voxel_object_contact(
 ) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();
 
-    let sphere_in_object_space = sphere.translated_and_rotated(transform_to_object_space);
+    let sphere_in_object_space = sphere.iso_transformed(transform_to_object_space);
 
     let max_center_distance = sphere.radius() + voxel_radius;
     let max_squared_center_distance = max_center_distance.powi(2);
@@ -634,7 +632,7 @@ pub fn for_each_voxel_object_plane_contact(
 ) {
     let voxel_radius = 0.5 * voxel_object.voxel_extent();
 
-    let plane_in_object_space = plane.translated_and_rotated(transform_to_object_space);
+    let plane_in_object_space = plane.iso_transformed(transform_to_object_space);
 
     voxel_object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &plane_in_object_space,

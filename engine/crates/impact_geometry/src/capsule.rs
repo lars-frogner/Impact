@@ -119,7 +119,7 @@ impl Capsule {
     /// Computes the capsule resulting from transforming this capsule with the
     /// given isometry transform.
     #[inline]
-    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
+    pub fn iso_transformed(&self, transform: &Isometry3) -> Self {
         Self::new(
             transform.transform_point(self.segment_start()),
             transform.transform_vector(self.segment_vector()),

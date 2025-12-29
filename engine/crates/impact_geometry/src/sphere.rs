@@ -225,7 +225,7 @@ impl Sphere {
     /// Computes the sphere resulting from transforming this
     /// sphere with the given isometry transform.
     #[inline]
-    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
+    pub fn iso_transformed(&self, transform: &Isometry3) -> Self {
         Self::new(transform.transform_point(self.center()), self.radius())
     }
 
