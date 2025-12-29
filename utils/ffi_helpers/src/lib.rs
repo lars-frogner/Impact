@@ -1,4 +1,4 @@
-//! Utilities for making FFI less error prone.
+//! Helpers for making FFI less error prone.
 
 #[macro_export]
 macro_rules! define_ffi {

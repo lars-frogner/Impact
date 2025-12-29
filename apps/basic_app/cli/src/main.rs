@@ -1,6 +1,6 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
-use ffi_utils::define_ffi;
+use ffi_helpers::define_ffi;
 use std::path::PathBuf;
 
 #[cfg(feature = "fuzzing")]
