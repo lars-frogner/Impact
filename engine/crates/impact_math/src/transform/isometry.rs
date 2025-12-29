@@ -274,9 +274,9 @@ impl_relative_eq!(Isometry3P, |a, b, epsilon, max_relative| {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consts::f32::PI;
     use Vector3P;
     use approx::assert_abs_diff_eq;
-    use std::f32::consts::PI;
 
     const EPSILON: f32 = 1e-6;
     const TRANSLATION_1: Vector3 = Vector3::new(1.0, 2.0, 3.0);

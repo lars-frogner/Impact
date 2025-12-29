@@ -1,14 +1,12 @@
 //! Generation of meshes representing geometrical objects.
 
-use std::f32::consts::{FRAC_PI_2, PI};
-
 use crate::{
     FrontFaceSide, LineSegmentMesh, LineSegmentMeshDirtyMask, TriangleMesh, TriangleMeshDirtyMask,
     VertexColor,
 };
 use approx::{abs_diff_eq, abs_diff_ne};
 use impact_math::{
-    consts::f32::TWO_PI,
+    consts::f32::{FRAC_PI_2, PI, TWO_PI},
     point::Point3P,
     quaternion::UnitQuaternion,
     transform::Similarity3,

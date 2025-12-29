@@ -19,7 +19,7 @@ use impact_containers::FixedQueue;
 use impact_geometry::{Sphere, compute_uniformly_distributed_radial_directions};
 use impact_math::{
     angle::{Angle, Degrees},
-    consts::f32::TWO_PI,
+    consts::f32::{PI, TWO_PI},
     point::Point3,
     quaternion::UnitQuaternion,
     random::splitmix,
@@ -27,7 +27,7 @@ use impact_math::{
     vector::{UnitVector3, Vector3},
 };
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
-use std::{array, borrow::Cow, f32::consts::PI, mem};
+use std::{array, borrow::Cow, mem};
 
 #[derive(Clone, Debug)]
 pub struct MetaSDFGraph<A: Allocator = Global> {

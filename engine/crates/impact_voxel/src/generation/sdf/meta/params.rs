@@ -5,9 +5,10 @@ use impact_alloc::{AVec, arena::ArenaPool, avec};
 use impact_containers::FixedQueue;
 use impact_math::{
     angle::{degrees_to_radians, radians_to_degrees},
+    consts::f32::PI,
     power_law::sample_power_law,
 };
-use std::{f32::consts::PI, mem};
+use std::mem;
 use tinyvec::TinyVec;
 
 pub type ParamRng = impact_math::random::Rng;

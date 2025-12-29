@@ -596,8 +596,8 @@ mod tests {
     #![allow(clippy::op_ref)]
 
     use super::*;
+    use crate::consts::f32::PI;
     use approx::assert_abs_diff_eq;
-    use std::f32::consts::PI;
 
     const EPSILON: f32 = 1e-6;
 
