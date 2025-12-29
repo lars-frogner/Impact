@@ -20,8 +20,7 @@ use impact_voxel::{
     generation::{SDFVoxelGenerator, sdf::SDFGraph},
     setup::{
         self, DynamicVoxels, GeneratedVoxelObject, GradientNoiseVoxelTypes,
-        MultifractalNoiseSDFModification, MultiscaleSphereSDFModification, SameVoxelType, VoxelBox,
-        VoxelSphere, VoxelSphereUnion,
+        MultifractalNoiseSDFModification, SameVoxelType, VoxelBox, VoxelSphere, VoxelSphereUnion,
     },
 };
 use parking_lot::RwLock;
@@ -116,19 +115,13 @@ pub fn setup_voxel_objects_for_new_entities(
         components,
         |voxel_box: &VoxelBox,
          voxel_type: &SameVoxelType,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
             let node_id = voxel_box.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
+            setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
             let sdf_generator = graph.build_in(&arena)?;
 
@@ -159,19 +152,13 @@ pub fn setup_voxel_objects_for_new_entities(
         components,
         |voxel_sphere: &VoxelSphere,
          voxel_type: &SameVoxelType,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
             let node_id = voxel_sphere.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
+            setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
             let sdf_generator = graph.build_in(&arena)?;
 
@@ -202,19 +189,13 @@ pub fn setup_voxel_objects_for_new_entities(
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
          voxel_type: &SameVoxelType,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
             let node_id = voxel_sphere_union.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
+            setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
             let sdf_generator = graph.build_in(&arena)?;
 
@@ -295,19 +276,13 @@ pub fn setup_voxel_objects_for_new_entities(
         components,
         |voxel_box: &VoxelBox,
          voxel_types: &GradientNoiseVoxelTypes,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
             let node_id = voxel_box.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
+            setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
             let sdf_generator = graph.build_in(&arena)?;
 
@@ -338,19 +313,13 @@ pub fn setup_voxel_objects_for_new_entities(
         components,
         |voxel_sphere: &VoxelSphere,
          voxel_types: &GradientNoiseVoxelTypes,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
             let node_id = voxel_sphere.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
+            setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
             let sdf_generator = graph.build_in(&arena)?;
 
@@ -381,19 +350,13 @@ pub fn setup_voxel_objects_for_new_entities(
         components,
         |voxel_sphere_union: &VoxelSphereUnion,
          voxel_types: &GradientNoiseVoxelTypes,
-         multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
          -> Result<VoxelObjectID> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
             let node_id = voxel_sphere_union.add(&mut graph);
-            setup::apply_modifications(
-                &mut graph,
-                node_id,
-                multiscale_sphere_modification,
-                multifractal_noise_modification,
-            );
+            setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
             let sdf_generator = graph.build_in(&arena)?;
 

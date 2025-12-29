@@ -72,7 +72,6 @@ pub enum MetaSDFNode {
 
     // SDF modifiers
     MultifractalNoiseSDFModifier(MetaMultifractalNoiseSDFModifier),
-    MultiscaleSphereSDFModifier(MetaMultiscaleSphereSDFModifier),
 
     // SDF combination
     SDFUnion(MetaSDFUnion),
@@ -612,51 +611,6 @@ define_meta_node_params! {
     }
 }
 
-/// Perturbation of one or more SDFs by intersecting and combining with grids
-/// of spheres on multiple scales.
-///
-/// Input: `SDFGroup` or `SingleSDF`
-/// Output: Same as input
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug)]
-pub struct MetaMultiscaleSphereSDFModifier {
-    /// ID of the child SDF node to modify.
-    pub child_id: MetaSDFNodeID,
-    /// Number of sphere scales to combine for detail variation.
-    pub octaves: DiscreteParamSpec,
-    /// Maximum scale of variation in the multiscale pattern, in voxels.
-    pub max_scale: ContParamSpec,
-    /// Scale multiplier between successive octaves.
-    pub persistence: ContParamSpec,
-    /// Amount to expand the pattern being modified before intersecting with
-    /// spheres, in factors of the max scale.
-    pub inflation: ContParamSpec,
-    /// Smoothness factor for intersecting spheres with the inflated version of
-    /// the pattern being modified.
-    pub intersection_smoothness: ContParamSpec,
-    /// Smoothness factor for combining the intersected sphere pattern with the
-    /// original pattern.
-    pub union_smoothness: ContParamSpec,
-    /// Seed for generating random sphere radii as well as randomized
-    /// parameter values.
-    pub seed: u32,
-    /// How to sample parameters from distributions when there are multiple
-    /// SDFs.
-    pub sampling: ParameterSamplingMode,
-}
-
-define_meta_node_params! {
-    MetaMultiscaleSphereSDFModifier,
-    struct MetaMultiscaleSphereParams {
-        octaves: u32,
-        max_scale: f32,
-        persistence: f32,
-        inflation: f32,
-        intersection_smoothness: f32,
-        union_smoothness: f32,
-    }
-}
-
 /// Smooth union of two SDFs.
 ///
 /// Input 1: `SingleSDF`
@@ -857,9 +811,6 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                 })
                                 | MetaSDFNode::MultifractalNoiseSDFModifier(
                                     MetaMultifractalNoiseSDFModifier { child_id, .. },
-                                )
-                                | MetaSDFNode::MultiscaleSphereSDFModifier(
-                                    MetaMultiscaleSphereSDFModifier { child_id, .. },
                                 )
                                 | MetaSDFNode::SDFGroupUnion(MetaSDFGroupUnion {
                                     child_id, ..
@@ -1122,11 +1073,6 @@ impl MetaSDFNode {
                 child_id,
                 ..
             }) => combine_seeded_unary(0x50, seed, child_id),
-            Self::MultiscaleSphereSDFModifier(MetaMultiscaleSphereSDFModifier {
-                seed,
-                child_id,
-                ..
-            }) => combine_seeded_unary(0x51, seed, child_id),
             Self::SDFUnion(MetaSDFUnion {
                 child_1_id,
                 child_2_id,
@@ -1203,9 +1149,6 @@ impl MetaSDFNode {
             Self::MultifractalNoiseSDFModifier(node) => node
                 .resolve(arena, graph, outputs, seed)
                 .context("Failed to resolve MultifractalNoiseSDFModifier node"),
-            Self::MultiscaleSphereSDFModifier(node) => node
-                .resolve(arena, graph, outputs, seed)
-                .context("Failed to resolve MultiscaleSphereSDFModifier node"),
             Self::SDFUnion(node) => node
                 .resolve(graph, outputs)
                 .context("Failed to resolve SDFUnion node"),
@@ -2119,38 +2062,6 @@ impl MetaMultifractalNoiseSDFModifier {
                     params.lacunarity,
                     params.persistence,
                     params.amplitude,
-                    *seed,
-                )
-            },
-        )
-    }
-}
-
-impl MetaMultiscaleSphereSDFModifier {
-    fn resolve<AR: Allocator, AG: Allocator>(
-        &self,
-        arena: AR,
-        graph: &mut SDFGraph<AG>,
-        outputs: &[MetaSDFNodeOutput<AR>],
-        seed: u64,
-    ) -> Result<MetaSDFNodeOutput<AR>> {
-        resolve_unary_sdf_op(
-            arena,
-            graph,
-            "MultiscaleSphereSDFModifier",
-            seed,
-            &outputs[self.child_id as usize],
-            self.sampling,
-            |rng| Ok((self.sample_params(rng)?, rng.random::<u32>())),
-            |(params, seed), input_node_id| {
-                SDFNode::new_multiscale_sphere(
-                    input_node_id,
-                    params.octaves,
-                    params.max_scale,
-                    params.persistence,
-                    params.inflation,
-                    params.intersection_smoothness,
-                    params.union_smoothness,
                     *seed,
                 )
             },

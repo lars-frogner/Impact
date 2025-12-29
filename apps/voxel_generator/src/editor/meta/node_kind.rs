@@ -10,12 +10,12 @@ use impact_containers::NoHashMap;
 use impact_dev_ui::option_panels::LabelAndHoverText;
 use impact_voxel::generation::sdf::meta::{
     CompositionMode, MetaBoxes, MetaCapsules, MetaClosestTranslationToSurface,
-    MetaMultifractalNoiseSDFModifier, MetaMultiscaleSphereSDFModifier, MetaPoints,
-    MetaRayTranslationToSurface, MetaRotation, MetaRotationToGradient, MetaSDFGroupUnion,
-    MetaSDFInstantiation, MetaSDFIntersection, MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction,
-    MetaSDFUnion, MetaScaling, MetaSimilarity, MetaSphereSurfaceTransforms, MetaSpheres,
-    MetaStochasticSelection, MetaStratifiedGridTransforms, MetaTransformApplication,
-    MetaTranslation, ParameterSamplingMode, RayTranslationAnchor, SphereSurfaceRotation,
+    MetaMultifractalNoiseSDFModifier, MetaPoints, MetaRayTranslationToSurface, MetaRotation,
+    MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFInstantiation, MetaSDFIntersection,
+    MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction, MetaSDFUnion, MetaScaling, MetaSimilarity,
+    MetaSphereSurfaceTransforms, MetaSpheres, MetaStochasticSelection,
+    MetaStratifiedGridTransforms, MetaTransformApplication, MetaTranslation, ParameterSamplingMode,
+    RayTranslationAnchor, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,6 @@ pub enum MetaNodeKind {
     SDFInstantiation,
     TransformApplication,
     MultifractalNoiseSDFModifier,
-    MultiscaleSphereSDFModifier,
     SDFUnion,
     SDFSubtraction,
     SDFIntersection,
@@ -1307,124 +1306,6 @@ impl SpecificMetaNodeKind for MetaMultifractalNoiseSDFModifier {
     }
 }
 
-impl SpecificMetaNodeKind for MetaMultiscaleSphereSDFModifier {
-    const LABEL: LabelAndHoverText = LabelAndHoverText {
-        label: "Multiscale sphere SDF modifier",
-        hover_text: "Perturbation of one or more SDFs by intersecting and combining with grids of spheres on multiple scales.",
-    };
-    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::SameAsInput { slot: 0 };
-    const CHILD_PORT_KINDS: MetaChildPortKinds =
-        single_child_port_kind(MetaChildPortKind::SDFGroup);
-
-    fn params() -> MetaNodeParams {
-        let mut params = MetaNodeParams::new();
-        params.push(MetaDistributedParam::new_fixed_constant_discrete_value(
-            LabelAndHoverText {
-                label: "Octaves",
-                hover_text: "Number of sphere scales to combine for detail variation.",
-            },
-            0,
-        ));
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Max scale",
-                    hover_text: "Maximum scale of variation in the multiscale pattern, in voxels.",
-                },
-                10.0,
-            )
-            .with_min_value(0.0)
-            .with_speed(0.01),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Persistence",
-                    hover_text: "Scale multiplier between successive octaves.",
-                },
-                0.5,
-            )
-            .with_min_value(0.0)
-            .with_max_value(1.0)
-            .with_speed(0.001),
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Inflation",
-                    hover_text: "Amount to expand the pattern being modified before intersecting with spheres, in factors of the max scale.",
-                },
-                1.0,
-            )
-            .with_min_value(0.0)
-            .with_speed(0.005)
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Intersection smoothness",
-                    hover_text: "Smoothness factor for intersecting spheres with the inflated version of the pattern being modified.",
-                },
-                1.0,
-            )
-            .with_min_value(0.0)
-            .with_speed(0.001)
-        );
-        params.push(
-            MetaDistributedParam::new_fixed_constant_continuous_value(
-                LabelAndHoverText {
-                    label: "Union smoothness",
-                    hover_text: "Smoothness factor for combining the intersected sphere pattern with the original pattern.",
-                },
-                0.3,
-            )
-            .with_min_value(0.0)
-            .with_speed(0.001)
-        );
-        params.push(
-            MetaUIntParam::new(
-                LabelAndHoverText {
-                    label: "Seed",
-                    hover_text: "Seed for generating random sphere radii as well as randomized parameter values.",
-                },
-                0,
-            )
-        );
-        params.push(
-            MetaEnumParam::new(
-                LabelAndHoverText {
-                    label: "Sampling",
-                    hover_text: "How to sample parameters from distributions when there are multiple SDFs.",
-                },
-                 EnumParamVariants::from_iter(["Only once", "Per SDF"]),
-                "Only once",
-            )
-        );
-        params
-    }
-
-    fn build<A: Allocator>(
-        id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
-        children: &[Option<MetaNodeLink>],
-        params: &[MetaNodeParam],
-    ) -> Option<MetaSDFNode> {
-        assert_eq!(params.len(), 8);
-        Some(MetaSDFNode::MultiscaleSphereSDFModifier(
-            MetaMultiscaleSphereSDFModifier {
-                child_id: unary_child(id_map, children)?,
-                octaves: (&params[0]).into(),
-                max_scale: (&params[1]).into(),
-                persistence: (&params[2]).into(),
-                inflation: (&params[3]).into(),
-                intersection_smoothness: (&params[4]).into(),
-                union_smoothness: (&params[5]).into(),
-                seed: (&params[6]).into(),
-                sampling: ParameterSamplingMode::try_from_str(params[7].enum_value()).unwrap(),
-            },
-        ))
-    }
-}
-
 impl SpecificMetaNodeKind for MetaSDFUnion {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
         label: "SDF union",
@@ -1580,7 +1461,7 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
 }
 
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 22] {
+    pub const fn all_non_root() -> [Self; 21] {
         [
             Self::Points,
             Self::Spheres,
@@ -1599,7 +1480,6 @@ impl MetaNodeKind {
             Self::SDFInstantiation,
             Self::TransformApplication,
             Self::MultifractalNoiseSDFModifier,
-            Self::MultiscaleSphereSDFModifier,
             Self::SDFUnion,
             Self::SDFSubtraction,
             Self::SDFIntersection,
@@ -1630,9 +1510,7 @@ impl MetaNodeKind {
             Self::SDFInstantiation | Self::TransformApplication => {
                 MetaNodeKindGroup::SDFFromInstances
             }
-            Self::MultifractalNoiseSDFModifier | Self::MultiscaleSphereSDFModifier => {
-                MetaNodeKindGroup::SDFModifiers
-            }
+            Self::MultifractalNoiseSDFModifier => MetaNodeKindGroup::SDFModifiers,
             Self::SDFUnion | Self::SDFSubtraction | Self::SDFIntersection | Self::SDFGroupUnion => {
                 MetaNodeKindGroup::SDFCombination
             }
@@ -1659,7 +1537,6 @@ impl MetaNodeKind {
             Self::SDFInstantiation => MetaSDFInstantiation::LABEL,
             Self::TransformApplication => MetaTransformApplication::LABEL,
             Self::MultifractalNoiseSDFModifier => MetaMultifractalNoiseSDFModifier::LABEL,
-            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::LABEL,
             Self::SDFUnion => MetaSDFUnion::LABEL,
             Self::SDFSubtraction => MetaSDFSubtraction::LABEL,
             Self::SDFIntersection => MetaSDFIntersection::LABEL,
@@ -1689,7 +1566,6 @@ impl MetaNodeKind {
             Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::PARENT_PORT_KIND
             }
-            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::PARENT_PORT_KIND,
             Self::SDFUnion => MetaSDFUnion::PARENT_PORT_KIND,
             Self::SDFSubtraction => MetaSDFSubtraction::PARENT_PORT_KIND,
             Self::SDFIntersection => MetaSDFIntersection::PARENT_PORT_KIND,
@@ -1719,7 +1595,6 @@ impl MetaNodeKind {
             Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::CHILD_PORT_KINDS
             }
-            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::CHILD_PORT_KINDS,
             Self::SDFUnion => MetaSDFUnion::CHILD_PORT_KINDS,
             Self::SDFSubtraction => MetaSDFSubtraction::CHILD_PORT_KINDS,
             Self::SDFIntersection => MetaSDFIntersection::CHILD_PORT_KINDS,
@@ -1759,7 +1634,6 @@ impl MetaNodeKind {
             Self::SDFInstantiation => MetaSDFInstantiation::params(),
             Self::TransformApplication => MetaTransformApplication::params(),
             Self::MultifractalNoiseSDFModifier => MetaMultifractalNoiseSDFModifier::params(),
-            Self::MultiscaleSphereSDFModifier => MetaMultiscaleSphereSDFModifier::params(),
             Self::SDFUnion => MetaSDFUnion::params(),
             Self::SDFSubtraction => MetaSDFSubtraction::params(),
             Self::SDFIntersection => MetaSDFIntersection::params(),
@@ -1801,9 +1675,6 @@ impl MetaNodeKind {
             Self::TransformApplication => MetaTransformApplication::build(id_map, children, params),
             Self::MultifractalNoiseSDFModifier => {
                 MetaMultifractalNoiseSDFModifier::build(id_map, children, params)
-            }
-            Self::MultiscaleSphereSDFModifier => {
-                MetaMultiscaleSphereSDFModifier::build(id_map, children, params)
             }
             Self::SDFUnion => MetaSDFUnion::build(id_map, children, params),
             Self::SDFSubtraction => MetaSDFSubtraction::build(id_map, children, params),

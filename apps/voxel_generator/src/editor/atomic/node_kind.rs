@@ -1,7 +1,7 @@
 use super::{AtomicFloatParam, AtomicNode, AtomicNodeParams, AtomicPortConfig, AtomicUIntParam};
 use impact_voxel::generation::sdf::{
-    BoxSDF, CapsuleSDF, MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFIntersection,
-    SDFRotation, SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion, SphereSDF,
+    BoxSDF, CapsuleSDF, MultifractalNoiseSDFModifier, SDFIntersection, SDFRotation, SDFScaling,
+    SDFSubtraction, SDFTranslation, SDFUnion, SphereSDF,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,7 +14,6 @@ pub enum AtomicNodeKind {
     Rotation,
     Scaling,
     MultifractalNoise,
-    MultiscaleSphere,
     Union,
     Subtraction,
     Intersection,
@@ -77,20 +76,6 @@ impl AtomicNode {
         Self::new_unary(AtomicNodeKind::MultifractalNoise, params, node.child_id)
     }
 
-    pub fn for_multiscale_sphere(node: &MultiscaleSphereSDFModifier) -> Self {
-        let mut params = AtomicNodeParams::new();
-        params.push(AtomicUIntParam::new("Octaves", node.octaves()).into());
-        params.push(AtomicFloatParam::new("Max scale", node.max_scale()).into());
-        params.push(AtomicFloatParam::new("Persistence", node.persistence()).into());
-        params.push(AtomicFloatParam::new("Inflation", node.inflation()).into());
-        params.push(
-            AtomicFloatParam::new("Intersection smoothness", node.intersection_smoothness()).into(),
-        );
-        params.push(AtomicFloatParam::new("Union smoothness", node.union_smoothness()).into());
-        params.push(AtomicUIntParam::new("Seed", node.seed()).into());
-        Self::new_unary(AtomicNodeKind::MultiscaleSphere, params, node.child_id)
-    }
-
     pub fn for_union(node: &SDFUnion) -> Self {
         let mut params = AtomicNodeParams::new();
         params.push(AtomicFloatParam::new("Smoothness", node.smoothness.get()).into());
@@ -136,7 +121,6 @@ impl AtomicNodeKind {
             Self::Rotation => "Rotation",
             Self::Scaling => "Scaling",
             Self::MultifractalNoise => "Multifractal noise",
-            Self::MultiscaleSphere => "Multiscale sphere",
             Self::Union => "Union",
             Self::Subtraction => "Subtraction",
             Self::Intersection => "Intersection",
@@ -147,11 +131,9 @@ impl AtomicNodeKind {
         match self {
             Self::Output => AtomicPortConfig::root(),
             Self::Sphere | Self::Capsule | Self::Box => AtomicPortConfig::leaf(),
-            Self::Translation
-            | Self::Rotation
-            | Self::Scaling
-            | Self::MultifractalNoise
-            | Self::MultiscaleSphere => AtomicPortConfig::unary(),
+            Self::Translation | Self::Rotation | Self::Scaling | Self::MultifractalNoise => {
+                AtomicPortConfig::unary()
+            }
             Self::Union | Self::Subtraction | Self::Intersection => AtomicPortConfig::binary(),
         }
     }
