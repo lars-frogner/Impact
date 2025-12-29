@@ -32,7 +32,7 @@ impl SphereCollidable {
 
     pub fn transformed(&self, transform: &Isometry3) -> Self {
         let sphere = self.sphere.unpack();
-        let transformed_sphere = sphere.translated_and_rotated(transform);
+        let transformed_sphere = sphere.iso_transformed(transform);
         Self {
             sphere: transformed_sphere.pack(),
             response_params: self.response_params,

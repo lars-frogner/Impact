@@ -194,7 +194,7 @@ impl Plane {
     /// Computes the plane resulting from transforming this plane with the given
     /// isometry transform.
     #[inline]
-    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
+    pub fn iso_transformed(&self, transform: &Isometry3) -> Self {
         let point_in_plane = Point3::from(self.unit_normal.as_vector() * self.displacement);
         let transformed_point_in_plane = transform.transform_point(&point_in_plane);
         let transformed_unit_normal =

@@ -308,8 +308,8 @@ fn apply_sphere_absorption(
     let sphere = absorbing_sphere.sphere().unpack();
 
     let sphere_in_voxel_object_space = sphere
-        .translated_and_rotated(sphere_to_world_transform)
-        .translated_and_rotated(world_to_voxel_object_transform);
+        .iso_transformed(sphere_to_world_transform)
+        .iso_transformed(world_to_voxel_object_transform);
 
     let inverse_radius_squared = sphere_in_voxel_object_space.radius_squared().recip();
 
@@ -343,8 +343,8 @@ fn apply_capsule_absorption(
     let capsule = absorbing_capsule.capsule().unpack();
 
     let capsule_in_voxel_object_space = capsule
-        .translated_and_rotated(capsule_to_world_transform)
-        .translated_and_rotated(world_to_voxel_object_transform);
+        .iso_transformed(capsule_to_world_transform)
+        .iso_transformed(world_to_voxel_object_transform);
 
     let inverse_radius_squared = capsule_in_voxel_object_space.radius().powi(2).recip();
 

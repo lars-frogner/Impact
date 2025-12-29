@@ -28,7 +28,7 @@ impl PlaneCollidable {
 
     pub fn transformed(&self, transform: &Isometry3) -> Self {
         let plane = self.plane.unpack();
-        let transformed_plane = plane.translated_and_rotated(transform);
+        let transformed_plane = plane.iso_transformed(transform);
         Self {
             plane: transformed_plane.pack(),
             response_params: self.response_params,

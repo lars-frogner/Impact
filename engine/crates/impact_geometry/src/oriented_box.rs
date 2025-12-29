@@ -147,7 +147,7 @@ impl OrientedBox {
     /// Creates a new box corresponding to transforming this box with the given
     /// isometry transform.
     #[inline]
-    pub fn translated_and_rotated(&self, transform: &Isometry3) -> Self {
+    pub fn iso_transformed(&self, transform: &Isometry3) -> Self {
         Self::new(
             transform.transform_point(&self.center),
             transform.rotation() * self.orientation,
@@ -814,7 +814,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_box_intersection_bounds_with_translated_and_rotated_box_works() {
+    fn compute_box_intersection_bounds_with_iso_transformed_box_works() {
         // Box A: axis-aligned at origin
         let box_a = AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 1.0, 1.0));
 

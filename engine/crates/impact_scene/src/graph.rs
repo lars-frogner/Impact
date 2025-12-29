@@ -556,7 +556,7 @@ impl SceneGraph {
                             merge_spheres(
                                 &mut group_bounding_sphere,
                                 child_group_bounding_sphere
-                                    .translated_and_rotated(&child_group_to_parent_transform),
+                                    .iso_transformed(&child_group_to_parent_transform),
                             );
                         }
                     }
@@ -627,7 +627,7 @@ impl SceneGraph {
             let should_buffer = if let Some(bounding_sphere) = group_node.get_bounding_sphere() {
                 let bounding_sphere_camera_space = bounding_sphere
                     .unpack()
-                    .translated_and_rotated(&group_to_camera_transform);
+                    .iso_transformed(&group_to_camera_transform);
 
                 camera_space_view_frustum
                     .could_contain_part_of_sphere(&bounding_sphere_camera_space)
@@ -731,8 +731,8 @@ impl SceneGraph {
                 if let Some(child_bounding_sphere) = child_group_node.get_bounding_sphere() {
                     let child_bounding_sphere = child_bounding_sphere.unpack();
 
-                    let child_bounding_sphere_camera_space = child_bounding_sphere
-                        .translated_and_rotated(&child_group_to_camera_transform);
+                    let child_bounding_sphere_camera_space =
+                        child_bounding_sphere.iso_transformed(&child_group_to_camera_transform);
 
                     camera_space_view_frustum
                         .could_contain_part_of_sphere(&child_bounding_sphere_camera_space)
@@ -863,7 +863,7 @@ impl SceneGraph {
             let world_space_bounding_sphere = world_space_bounding_sphere.unpack();
 
             let camera_space_bounding_sphere =
-                world_space_bounding_sphere.translated_and_rotated(view_transform);
+                world_space_bounding_sphere.iso_transformed(view_transform);
 
             for (light_id, omnidirectional_light) in
                 light_manager.shadowable_omnidirectional_lights_with_ids_mut()
@@ -960,7 +960,7 @@ impl SceneGraph {
                     group_to_camera_transform * child_group_to_parent_transform;
 
                 let child_camera_space_bounding_sphere =
-                    child_bounding_sphere.translated_and_rotated(&child_group_to_camera_transform);
+                    child_bounding_sphere.iso_transformed(&child_group_to_camera_transform);
 
                 if camera_space_face_frustum
                     .could_contain_part_of_sphere(&child_camera_space_bounding_sphere)
@@ -1056,7 +1056,7 @@ impl SceneGraph {
             let world_space_bounding_sphere = world_space_bounding_sphere.unpack();
 
             let camera_space_bounding_sphere =
-                world_space_bounding_sphere.translated_and_rotated(view_transform);
+                world_space_bounding_sphere.iso_transformed(view_transform);
 
             for (light_id, unidirectional_light) in
                 light_manager.shadowable_unidirectional_lights_with_ids_mut()
@@ -1144,7 +1144,7 @@ impl SceneGraph {
                     group_to_camera_transform * child_group_to_parent_transform;
 
                 let child_camera_space_bounding_sphere =
-                    child_bounding_sphere.translated_and_rotated(&child_group_to_camera_transform);
+                    child_bounding_sphere.iso_transformed(&child_group_to_camera_transform);
 
                 if unidirectional_light.bounding_sphere_may_cast_visible_shadow_in_cascade(
                     cascade_idx,
@@ -2126,10 +2126,10 @@ mod tests {
             bounding_sphere_2.transformed(&model_instance_2_to_parent_transform);
         let correct_group_1_bounding_sphere = Sphere::bounding_sphere_from_pair(
             &bounding_sphere_1,
-            &correct_group_2_bounding_sphere.translated_and_rotated(&group_2_to_parent_transform),
+            &correct_group_2_bounding_sphere.iso_transformed(&group_2_to_parent_transform),
         );
         let correct_root_bounding_sphere =
-            correct_group_1_bounding_sphere.translated_and_rotated(&group_1_to_parent_transform);
+            correct_group_1_bounding_sphere.iso_transformed(&group_1_to_parent_transform);
 
         scene_graph.update_all_bounding_spheres();
         let root_bounding_sphere = scene_graph.group_nodes().node(root).get_bounding_sphere();

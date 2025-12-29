@@ -634,7 +634,7 @@ impl ChunkedVoxelObject {
 
         let object_b_obb = OrientedBox::from_axis_aligned_box(&object_b_aabb);
 
-        let object_b_obb_in_a = object_b_obb.translated_and_rotated(transform_from_b_to_a);
+        let object_b_obb_in_a = object_b_obb.iso_transformed(transform_from_b_to_a);
 
         let (intersection_aabb_in_a, intersection_aabb_in_b_relative_to_center) =
             compute_box_intersection_bounds(&object_a_aabb, &object_b_obb_in_a)?;
