@@ -100,8 +100,6 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
-build = "build.rs"
-
 [features]
 cli = ["dep:clap"]
 roc_codegen = [
@@ -124,9 +122,6 @@ rustc-hash = { version = "2.1", optional = true }
 time = { version = "0.3", features = ["formatting"], optional = true }
 
 roc_integration_macros = { path = "roc_integration_macros" }
-
-[build-dependencies]
-vergen-gitcl = { version = "1.0", features = [] }
 
 [lints]
 workspace = true
