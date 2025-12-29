@@ -23,6 +23,7 @@ arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
+fastrand = "2.3"
 glam = { version = "0.30", features = ["approx", "bytemuck"] }
 impact_containers = { path = "../impact_containers" }
 impact_profiling = { path = "../impact_profiling", optional = true }

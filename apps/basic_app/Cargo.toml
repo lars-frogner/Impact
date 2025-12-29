@@ -114,7 +114,6 @@ tracy = ["impact/tracy"]
 
 fuzzing = [
     "dep:arbitrary",
-    "dep:rand",
     "impact/arbitrary",
     "impact_dev_ui/arbitrary",
 ]
@@ -135,7 +134,6 @@ inventory = "0.3"
 libloading = "0.9"
 parking_lot = "0.12"
 pastey = "0.2"
-rand = { version = "0.9", optional = true }
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }
 

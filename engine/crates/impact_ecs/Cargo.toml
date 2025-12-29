@@ -22,7 +22,6 @@ bitflags = { workspace = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
 const-fnv1a-hash = { workspace = true }
-fastrand = "2.3"
 impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }

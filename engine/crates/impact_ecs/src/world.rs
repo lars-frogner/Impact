@@ -11,6 +11,7 @@ use super::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{NoHashKeyIndexMapper, NoHashMap, hash_map::Entry};
+use impact_math::random::Rng;
 use parking_lot::{RwLock, RwLockReadGuard};
 use std::{
     fmt,
@@ -50,7 +51,7 @@ pub struct World {
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_table_indices_by_id: NoHashKeyIndexMapper<ArchetypeID>,
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
-    rng: fastrand::Rng,
+    rng: Rng,
 }
 
 /// A reference into the entry for an entity in the [`World`].
@@ -137,7 +138,7 @@ impl World {
             entity_archetypes: NoHashMap::default(),
             archetype_table_indices_by_id: NoHashKeyIndexMapper::default(),
             archetype_tables: Vec::new(),
-            rng: fastrand::Rng::with_seed(seed),
+            rng: Rng::with_seed(seed),
         }
     }
 
@@ -465,9 +466,9 @@ impl World {
 
     /// Generates a new [`EntityID`].
     pub fn create_entity_id(&mut self) -> EntityID {
-        let mut id = self.rng.u64(..);
+        let mut id = self.rng.random_u64_in_range(..);
         while self.entity_archetypes.contains_key(&EntityID(id)) {
-            id = self.rng.u64(..);
+            id = self.rng.random_u64_in_range(..);
         }
         EntityID(id)
     }
