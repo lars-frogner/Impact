@@ -177,13 +177,13 @@ impl Matrix3 {
     /// Returns the inverse of this matrix. If the matrix is not invertible, the
     /// result will be non-finite.
     #[inline]
-    pub fn inverted(&self) -> Self {
+    pub fn inverse(&self) -> Self {
         Self::wrap(self.inner.inverse())
     }
 
     /// Returns the transpose of this matrix.
     #[inline]
-    pub fn transposed(&self) -> Self {
+    pub fn transpose(&self) -> Self {
         Self::wrap(self.inner.transpose())
     }
 
@@ -555,13 +555,13 @@ impl Matrix4 {
     /// Returns the inverse of this matrix. If the matrix is not invertible, the
     /// result will be non-finite.
     #[inline]
-    pub fn inverted(&self) -> Self {
+    pub fn inverse(&self) -> Self {
         Self::wrap(self.inner.inverse())
     }
 
     /// Returns the transpose of this matrix.
     #[inline]
-    pub fn transposed(&self) -> Self {
+    pub fn transpose(&self) -> Self {
         Self::wrap(self.inner.transpose())
     }
 
@@ -940,17 +940,17 @@ mod tests {
         let col3 = Vector3::new(7.0, 8.0, 9.0);
         let matrix = Matrix3::from_columns(col1, col2, col3);
 
-        let transposed = matrix.transposed();
+        let transpose = matrix.transpose();
 
-        assert_eq!(transposed.element(0, 0), 1.0);
-        assert_eq!(transposed.element(0, 1), 2.0);
-        assert_eq!(transposed.element(0, 2), 3.0);
-        assert_eq!(transposed.element(1, 0), 4.0);
-        assert_eq!(transposed.element(1, 1), 5.0);
-        assert_eq!(transposed.element(1, 2), 6.0);
-        assert_eq!(transposed.element(2, 0), 7.0);
-        assert_eq!(transposed.element(2, 1), 8.0);
-        assert_eq!(transposed.element(2, 2), 9.0);
+        assert_eq!(transpose.element(0, 0), 1.0);
+        assert_eq!(transpose.element(0, 1), 2.0);
+        assert_eq!(transpose.element(0, 2), 3.0);
+        assert_eq!(transpose.element(1, 0), 4.0);
+        assert_eq!(transpose.element(1, 1), 5.0);
+        assert_eq!(transpose.element(1, 2), 6.0);
+        assert_eq!(transpose.element(2, 0), 7.0);
+        assert_eq!(transpose.element(2, 1), 8.0);
+        assert_eq!(transpose.element(2, 2), 9.0);
     }
 
     #[test]
@@ -961,27 +961,27 @@ mod tests {
             Vector3::new(7.0, 8.0, 9.0),
         );
 
-        let double_transposed = matrix.transposed().transposed();
-        assert_eq!(double_transposed, matrix);
+        let double_transpose = matrix.transpose().transpose();
+        assert_eq!(double_transpose, matrix);
     }
 
     #[test]
     fn matrix3_transpose_of_diagonal_gives_same_matrix() {
         let diag = Vector3::new(1.0, 2.0, 3.0);
         let matrix = Matrix3::from_diagonal(&diag);
-        let transposed = matrix.transposed();
-        assert_eq!(matrix, transposed);
+        let transpose = matrix.transpose();
+        assert_eq!(matrix, transpose);
     }
 
     #[test]
     fn matrix3_inversion_of_identity_gives_identity() {
         let identity = Matrix3::identity();
-        let inverted = identity.inverted();
+        let inverse = identity.inverse();
 
         for i in 0..3 {
             for j in 0..3 {
                 assert_abs_diff_eq!(
-                    inverted.element(i, j),
+                    inverse.element(i, j),
                     identity.element(i, j),
                     epsilon = EPSILON
                 );
@@ -992,7 +992,7 @@ mod tests {
     #[test]
     fn matrix3_inverse_multiplied_with_original_gives_identity() {
         let matrix = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
-        let inverse = matrix.inverted();
+        let inverse = matrix.inverse();
         let product = &matrix * &inverse;
 
         for i in 0..3 {

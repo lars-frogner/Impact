@@ -299,7 +299,7 @@ impl InertiaTensor {
     /// Creates a new inertia tensor corresponding to the given matrix.
     #[inline]
     pub fn from_matrix(matrix: Matrix3) -> Self {
-        let inverse_matrix = matrix.inverted();
+        let inverse_matrix = matrix.inverse();
 
         Self::from_matrix_and_inverse(matrix, inverse_matrix)
     }
@@ -357,7 +357,7 @@ impl InertiaTensor {
     #[inline]
     pub fn rotated_matrix(&self, rotation: &UnitQuaternion) -> Matrix3 {
         let rotation_matrix = rotation.to_rotation_matrix();
-        rotation_matrix * self.matrix * rotation_matrix.transposed()
+        rotation_matrix * self.matrix * rotation_matrix.transpose()
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the
@@ -377,7 +377,7 @@ impl InertiaTensor {
             "Tried multiplying inertia tensor extent with negative factor"
         );
         let rotation_matrix = rotation.to_rotation_matrix();
-        factor.powi(2) * (rotation_matrix * self.matrix * rotation_matrix.transposed())
+        factor.powi(2) * (rotation_matrix * self.matrix * rotation_matrix.transpose())
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the
@@ -385,7 +385,7 @@ impl InertiaTensor {
     #[inline]
     pub fn inverse_rotated_matrix(&self, rotation: &UnitQuaternion) -> Matrix3 {
         let rotation_matrix = rotation.to_rotation_matrix();
-        rotation_matrix * self.inverse_matrix * rotation_matrix.transposed()
+        rotation_matrix * self.inverse_matrix * rotation_matrix.transpose()
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the
@@ -406,7 +406,7 @@ impl InertiaTensor {
         );
         let rotation_matrix = rotation.to_rotation_matrix();
         (1.0 / factor.powi(2))
-            * (rotation_matrix * self.inverse_matrix * rotation_matrix.transposed())
+            * (rotation_matrix * self.inverse_matrix * rotation_matrix.transpose())
     }
 
     /// Computes the inertia tensor corresponding to scaling the mass of the
@@ -449,7 +449,7 @@ impl InertiaTensor {
     #[inline]
     pub fn rotated(&self, rotation: &UnitQuaternion) -> Self {
         let rotation_matrix = rotation.to_rotation_matrix();
-        let transpose_rotation_matrix = rotation_matrix.transposed();
+        let transpose_rotation_matrix = rotation_matrix.transpose();
 
         let rotated_inertia_matrix = rotation_matrix * self.matrix * transpose_rotation_matrix;
 
@@ -966,12 +966,12 @@ mod tests {
             let rotated_inertia_tensor = cube_properties.inertia_tensor().rotated(&rotation);
             prop_assert!(abs_diff_eq!(
                 rotated_inertia_tensor.inverse_matrix(),
-                &rotated_inertia_tensor.matrix().inverted(),
+                &rotated_inertia_tensor.matrix().inverse(),
                 epsilon = 1e-4
             ));
             prop_assert!(abs_diff_eq!(
                 cube_properties.inertia_tensor().inverse_rotated_matrix(&rotation),
-                rotated_inertia_tensor.matrix().inverted(),
+                rotated_inertia_tensor.matrix().inverse(),
                 epsilon = 1e-4
             ));
         }

@@ -502,7 +502,7 @@ impl Frustum {
             planes,
             largest_signed_dist_aab_corner_indices_for_planes,
             transform_matrix,
-            inverse_transform_matrix: transform_matrix.inverted(),
+            inverse_transform_matrix: transform_matrix.inverse(),
         }
     }
 

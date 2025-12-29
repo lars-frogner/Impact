@@ -56,7 +56,7 @@ impl Projective3 {
     /// Computes the inverse of this projective transform.
     #[inline]
     pub fn inverted(&self) -> Self {
-        Self::from_matrix_unchecked(self.matrix.inverted())
+        Self::from_matrix_unchecked(self.matrix.inverse())
     }
 
     /// Projects the given point by applying the matrix and performing
