@@ -7,7 +7,6 @@ use anyhow::{Result, bail};
 use bytemuck::Pod;
 use impact_alloc::{AVec, Allocator};
 use mipmap::MipmapperGenerator;
-use ordered_float::OrderedFloat;
 use std::{
     borrow::Cow,
     hash::{Hash, Hasher},
@@ -170,8 +169,8 @@ impl Hash for SamplerConfig {
         filtering.mag_filter.hash(state);
         filtering.min_filter.hash(state);
         filtering.mipmap_filter.hash(state);
-        OrderedFloat(filtering.lod_min_clamp).hash(state);
-        OrderedFloat(filtering.lod_max_clamp).hash(state);
+        filtering.lod_min_clamp.to_bits().hash(state);
+        filtering.lod_max_clamp.to_bits().hash(state);
         filtering.anisotropy_clamp.hash(state);
     }
 }
