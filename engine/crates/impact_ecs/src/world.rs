@@ -11,7 +11,7 @@ use super::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{NoHashKeyIndexMapper, NoHashMap, hash_map::Entry};
-use impact_math::random::Rng;
+use impact_math::{hash::Hash64, random::Rng};
 use parking_lot::{RwLock, RwLockReadGuard};
 use std::{
     fmt,
@@ -101,7 +101,7 @@ pub struct EntityToUpdate {
 impl EntityID {
     /// Hashes the given string into an entity ID.
     pub const fn hashed_from_str(input: &str) -> Self {
-        Self(const_fnv1a_hash::fnv1a_hash_str_64(input))
+        Self(Hash64::from_str(input).to_u64())
     }
 
     /// Converts the given `u64` into an entity ID. Should only be called

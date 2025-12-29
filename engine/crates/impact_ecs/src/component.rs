@@ -4,6 +4,7 @@ use anyhow::{Result, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{AlignedByteVec, Alignment};
+use impact_math::hash::Hash64;
 use std::{mem, ops::Deref};
 
 /// Represents a component.
@@ -204,7 +205,7 @@ pub struct SingleInstance<T> {
 impl ComponentID {
     /// Hashes the given string into a component ID.
     pub const fn hashed_from_str(input: &str) -> Self {
-        let hash = const_fnv1a_hash::fnv1a_hash_str_64(input);
+        let hash = Hash64::from_str(input).to_u64();
         Self(if hash == 0 { 1 } else { hash })
     }
 
