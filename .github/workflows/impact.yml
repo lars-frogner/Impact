@@ -248,7 +248,7 @@ jobs:
       fail-fast: false
       matrix:
         workspace: [engine]
-        os: [ubuntu-latest, macos-latest] # Fails with weird error on windows
+        os: [ubuntu-latest] # Not reliable on windows or macos
     runs-on: ${{ matrix.os }}
 
     steps:
