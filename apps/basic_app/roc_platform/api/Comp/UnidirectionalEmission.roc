@@ -1,8 +1,8 @@
-# Hash: c7f710094e8c1fbf24ebfe7220913e33d0d04d0d9beef85a6921c480b94439a1
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: 92b26d59d23670b8e31996a2fe8d9bf3630488c2327bd5885eebc120232b0a7f
+# Generated: 2025-12-29T15:58:28.236932766
 # Rust type: impact_light::UnidirectionalEmission
 # Type category: Component
-# Commit: d4c84c05 (dirty)
+# Commit: 68743830 (dirty)
 module [
     UnidirectionalEmission,
     new,
@@ -39,13 +39,13 @@ UnidirectionalEmission : {
     direction : UnitVector3.UnitVector3,
     ## The angular extent of the light source, which determines the extent of
     ## specular highlights.
-    angular_source_extent : Degrees.Degrees Binary32,
+    angular_source_extent : Degrees.Degrees,
 }
 
 ## Creates a new unidirectional emission component with the given
 ## perpendicular illuminance (in lux), direction, and angular
 ## source extent.
-new : Vector3.Vector3, UnitVector3.UnitVector3, Degrees.Degrees Binary32 -> UnidirectionalEmission
+new : Vector3.Vector3, UnitVector3.UnitVector3, Degrees.Degrees -> UnidirectionalEmission
 new = |perpendicular_illuminance, direction, angular_source_extent|
     { perpendicular_illuminance, direction, angular_source_extent }
 
@@ -53,7 +53,7 @@ new = |perpendicular_illuminance, direction, angular_source_extent|
 ## perpendicular illuminance (in lux), direction, and angular
 ## source extent.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3, UnitVector3.UnitVector3, Degrees.Degrees Binary32 -> Entity.ComponentData
+add_new : Entity.ComponentData, Vector3.Vector3, UnitVector3.UnitVector3, Degrees.Degrees -> Entity.ComponentData
 add_new = |entity_data, perpendicular_illuminance, direction, angular_source_extent|
     add(entity_data, new(perpendicular_illuminance, direction, angular_source_extent))
 
@@ -62,7 +62,7 @@ add_new = |entity_data, perpendicular_illuminance, direction, angular_source_ext
 ## source extent.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (UnitVector3.UnitVector3), Entity.Arg.Broadcasted (Degrees.Degrees Binary32) -> Result Entity.MultiComponentData Str
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (UnitVector3.UnitVector3), Entity.Arg.Broadcasted (Degrees.Degrees) -> Result Entity.MultiComponentData Str
 add_multiple_new = |entity_data, perpendicular_illuminance, direction, angular_source_extent|
     add_multiple(
         entity_data,
@@ -163,7 +163,7 @@ write_bytes = |bytes, value|
     |> List.reserve(28)
     |> Vector3.write_bytes(value.perpendicular_illuminance)
     |> UnitVector3.write_bytes(value.direction)
-    |> Degrees.write_bytes_32(value.angular_source_extent)
+    |> Degrees.write_bytes(value.angular_source_extent)
 
 ## Deserializes a value of [UnidirectionalEmission] from its bytes in the
 ## representation used by the engine.
@@ -173,7 +173,7 @@ from_bytes = |bytes|
         {
             perpendicular_illuminance: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             direction: bytes |> List.sublist({ start: 12, len: 12 }) |> UnitVector3.from_bytes?,
-            angular_source_extent: bytes |> List.sublist({ start: 24, len: 4 }) |> Degrees.from_bytes_32?,
+            angular_source_extent: bytes |> List.sublist({ start: 24, len: 4 }) |> Degrees.from_bytes?,
         },
     )
 

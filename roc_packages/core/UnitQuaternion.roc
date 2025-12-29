@@ -15,7 +15,7 @@ module [
     from_bytes,
 ]
 
-import Radians exposing [RadiansF32]
+import Radians exposing [Radians]
 import UnitVector3 exposing [UnitVector3]
 import Vector3 exposing [Vector3]
 import Vector4
@@ -25,7 +25,7 @@ UnitQuaternion : (F32, F32, F32, F32)
 
 identity = from_parts(Vector3.zero, 1.0)
 
-from_axis_angle : UnitVector3, RadiansF32 -> UnitQuaternion
+from_axis_angle : UnitVector3, Radians -> UnitQuaternion
 from_axis_angle = |axis, angle|
     sin_half_angle = Num.sin(0.5 * angle)
     cos_half_angle = Num.cos(0.5 * angle)
