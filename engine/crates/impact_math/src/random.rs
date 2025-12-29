@@ -1,5 +1,7 @@
 //! Randomness.
 
+pub mod halton;
+pub mod power_law;
 pub mod splitmix;
 
 use std::ops::{Range, RangeBounds};
