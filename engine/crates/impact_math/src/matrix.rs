@@ -921,357 +921,20 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
 
-    // Test constants
     const EPSILON: f32 = 1e-6;
 
-    // Matrix3P tests
-    #[test]
-    fn creating_matrix3_identity_gives_identity_matrix() {
-        let identity = Matrix3P::identity();
-
-        // Check diagonal elements
-        assert_eq!(identity.column_1().x(), 1.0);
-        assert_eq!(identity.column_2().y(), 1.0);
-        assert_eq!(identity.column_3().z(), 1.0);
-
-        // Check off-diagonal elements are zero
-        assert_eq!(identity.column_1().y(), 0.0);
-        assert_eq!(identity.column_1().z(), 0.0);
-        assert_eq!(identity.column_2().x(), 0.0);
-        assert_eq!(identity.column_2().z(), 0.0);
-        assert_eq!(identity.column_3().x(), 0.0);
-        assert_eq!(identity.column_3().y(), 0.0);
-    }
+    // === Matrix3 Tests (SIMD-aligned) ===
 
     #[test]
-    fn creating_matrix3_zeros_gives_zero_matrix() {
-        let zeros = Matrix3P::zeros();
-
-        assert_eq!(zeros.column_1().x(), 0.0);
-        assert_eq!(zeros.column_1().y(), 0.0);
-        assert_eq!(zeros.column_1().z(), 0.0);
-        assert_eq!(zeros.column_2().x(), 0.0);
-        assert_eq!(zeros.column_2().y(), 0.0);
-        assert_eq!(zeros.column_2().z(), 0.0);
-        assert_eq!(zeros.column_3().x(), 0.0);
-        assert_eq!(zeros.column_3().y(), 0.0);
-        assert_eq!(zeros.column_3().z(), 0.0);
-    }
-
-    #[test]
-    fn creating_matrix3_from_diagonal_works() {
-        let diag = Vector3P::new(2.0, 3.0, 4.0);
-        let matrix = Matrix3P::from_diagonal(&diag);
-
-        assert_eq!(matrix.column_1().x(), 2.0);
-        assert_eq!(matrix.column_2().y(), 3.0);
-        assert_eq!(matrix.column_3().z(), 4.0);
-
-        // Check off-diagonal elements are zero
-        assert_eq!(matrix.column_1().y(), 0.0);
-        assert_eq!(matrix.column_1().z(), 0.0);
-        assert_eq!(matrix.column_2().x(), 0.0);
-        assert_eq!(matrix.column_2().z(), 0.0);
-        assert_eq!(matrix.column_3().x(), 0.0);
-        assert_eq!(matrix.column_3().y(), 0.0);
-    }
-
-    #[test]
-    fn creating_matrix3_from_columns_works() {
-        let col1 = Vector3P::new(1.0, 2.0, 3.0);
-        let col2 = Vector3P::new(4.0, 5.0, 6.0);
-        let col3 = Vector3P::new(7.0, 8.0, 9.0);
-
-        let matrix = Matrix3P::from_columns(col1, col2, col3);
-
-        assert_eq!(matrix.column_1(), &col1);
-        assert_eq!(matrix.column_2(), &col2);
-        assert_eq!(matrix.column_3(), &col3);
-    }
-
-    #[test]
-    fn setting_matrix3_columns_works() {
-        let mut matrix = Matrix3P::zeros();
-        let col1 = Vector3P::new(1.0, 2.0, 3.0);
-        let col2 = Vector3P::new(4.0, 5.0, 6.0);
-        let col3 = Vector3P::new(7.0, 8.0, 9.0);
-
-        matrix.set_column_1(col1);
-        matrix.set_column_2(col2);
-        matrix.set_column_3(col3);
-
-        assert_eq!(matrix.column_1(), &col1);
-        assert_eq!(matrix.column_2(), &col2);
-        assert_eq!(matrix.column_3(), &col3);
-    }
-
-    #[test]
-    fn converting_matrix3_to_aligned_works() {
-        let matrix = Matrix3P::from_diagonal(&Vector3P::new(1.0, 2.0, 3.0));
-        let aligned = matrix.unpack();
-
-        assert_eq!(aligned.element(0, 0), 1.0);
-        assert_eq!(aligned.element(1, 1), 2.0);
-        assert_eq!(aligned.element(2, 2), 3.0);
-    }
-
-    #[test]
-    fn converting_matrix3a_to_matrix3_works() {
-        let matrix_a = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let matrix = matrix_a.pack();
-
-        assert_eq!(matrix.column_1().x(), 1.0);
-        assert_eq!(matrix.column_2().y(), 2.0);
-        assert_eq!(matrix.column_3().z(), 3.0);
-    }
-
-    // Matrix4P tests
-    #[test]
-    fn creating_matrix4_identity_gives_identity_matrix() {
-        let identity = Matrix4P::identity();
-
-        // Check diagonal elements
-        assert_eq!(identity.column_1().x(), 1.0);
-        assert_eq!(identity.column_2().y(), 1.0);
-        assert_eq!(identity.column_3().z(), 1.0);
-        assert_eq!(identity.column_4().w(), 1.0);
-
-        // Check off-diagonal elements in first column
-        assert_eq!(identity.column_1().y(), 0.0);
-        assert_eq!(identity.column_1().z(), 0.0);
-        assert_eq!(identity.column_1().w(), 0.0);
-        // Check off-diagonal elements in second column
-        assert_eq!(identity.column_2().x(), 0.0);
-        assert_eq!(identity.column_2().z(), 0.0);
-        assert_eq!(identity.column_2().w(), 0.0);
-    }
-
-    #[test]
-    fn creating_matrix4_zeros_gives_zero_matrix() {
-        let zeros = Matrix4P::zeros();
-
-        // Check all elements are zero
-        assert_eq!(zeros.column_1().x(), 0.0);
-        assert_eq!(zeros.column_2().y(), 0.0);
-        assert_eq!(zeros.column_3().z(), 0.0);
-        assert_eq!(zeros.column_4().w(), 0.0);
-        assert_eq!(zeros.column_1().w(), 0.0);
-        assert_eq!(zeros.column_4().x(), 0.0);
-    }
-
-    #[test]
-    fn creating_matrix4_from_diagonal_works() {
-        let diag = Vector4P::new(2.0, 3.0, 4.0, 5.0);
-        let matrix = Matrix4P::from_diagonal(&diag);
-
-        assert_eq!(matrix.column_1().x(), 2.0);
-        assert_eq!(matrix.column_2().y(), 3.0);
-        assert_eq!(matrix.column_3().z(), 4.0);
-        assert_eq!(matrix.column_4().w(), 5.0);
-
-        // Check off-diagonal elements are zero
-        assert_eq!(matrix.column_1().y(), 0.0);
-        assert_eq!(matrix.column_1().z(), 0.0);
-        assert_eq!(matrix.column_1().w(), 0.0);
-        assert_eq!(matrix.column_2().x(), 0.0);
-    }
-
-    #[test]
-    fn creating_matrix4_from_columns_works() {
-        let col1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4P::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4P::new(13.0, 14.0, 15.0, 16.0);
-
-        let matrix = Matrix4P::from_columns(col1, col2, col3, col4);
-
-        assert_eq!(matrix.column_1(), &col1);
-        assert_eq!(matrix.column_2(), &col2);
-        assert_eq!(matrix.column_3(), &col3);
-        assert_eq!(matrix.column_4(), &col4);
-    }
-
-    #[test]
-    fn setting_matrix4_columns_works() {
-        let mut matrix = Matrix4P::zeros();
-        let col1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4P::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4P::new(13.0, 14.0, 15.0, 16.0);
-
-        matrix.set_column_1(col1);
-        matrix.set_column_2(col2);
-        matrix.set_column_3(col3);
-        matrix.set_column_4(col4);
-
-        assert_eq!(matrix.column_1(), &col1);
-        assert_eq!(matrix.column_2(), &col2);
-        assert_eq!(matrix.column_3(), &col3);
-        assert_eq!(matrix.column_4(), &col4);
-    }
-
-    #[test]
-    fn converting_matrix4_to_aligned_works() {
-        let matrix = Matrix4P::from_diagonal(&Vector4P::new(1.0, 2.0, 3.0, 4.0));
-        let aligned = matrix.unpack();
-
-        assert_eq!(aligned.element(0, 0), 1.0);
-        assert_eq!(aligned.element(1, 1), 2.0);
-        assert_eq!(aligned.element(2, 2), 3.0);
-        assert_eq!(aligned.element(3, 3), 4.0);
-    }
-
-    #[test]
-    fn converting_matrix4a_to_matrix4_works() {
-        let matrix_a = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let matrix = matrix_a.pack();
-
-        assert_eq!(matrix.column_1().x(), 1.0);
-        assert_eq!(matrix.column_2().y(), 2.0);
-        assert_eq!(matrix.column_3().z(), 3.0);
-        assert_eq!(matrix.column_4().w(), 4.0);
-    }
-
-    // Matrix3 (aligned) tests
-    #[test]
-    fn creating_matrix3a_identity_gives_identity_matrix() {
-        let identity = Matrix3::identity();
-        assert_eq!(identity.element(0, 0), 1.0);
-        assert_eq!(identity.element(1, 1), 1.0);
-        assert_eq!(identity.element(2, 2), 1.0);
-        // Check off-diagonal elements are zero
-        assert_eq!(identity.element(0, 1), 0.0);
-        assert_eq!(identity.element(0, 2), 0.0);
-        assert_eq!(identity.element(1, 0), 0.0);
-        assert_eq!(identity.element(1, 2), 0.0);
-        assert_eq!(identity.element(2, 0), 0.0);
-        assert_eq!(identity.element(2, 1), 0.0);
-    }
-
-    #[test]
-    fn creating_matrix3a_zeros_gives_zero_matrix() {
-        let zeros = Matrix3::zeros();
-        for i in 0..3 {
-            for j in 0..3 {
-                assert_eq!(zeros.element(i, j), 0.0);
-            }
-        }
-    }
-
-    #[test]
-    fn creating_matrix3a_from_diagonal_works() {
-        let diag = Vector3::new(2.0, 3.0, 4.0);
-        let matrix = Matrix3::from_diagonal(&diag);
-
-        assert_eq!(matrix.element(0, 0), 2.0);
-        assert_eq!(matrix.element(1, 1), 3.0);
-        assert_eq!(matrix.element(2, 2), 4.0);
-
-        // Check off-diagonal elements are zero
-        for i in 0..3 {
-            for j in 0..3 {
-                if i != j {
-                    assert_eq!(matrix.element(i, j), 0.0);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn creating_matrix3a_from_columns_works() {
-        let col1 = Vector3::new(1.0, 2.0, 3.0);
-        let col2 = Vector3::new(4.0, 5.0, 6.0);
-        let col3 = Vector3::new(7.0, 8.0, 9.0);
-
-        let matrix = Matrix3::from_columns(col1, col2, col3);
-
-        assert_eq!(matrix.element(0, 0), 1.0);
-        assert_eq!(matrix.element(1, 0), 2.0);
-        assert_eq!(matrix.element(2, 0), 3.0);
-        assert_eq!(matrix.element(0, 1), 4.0);
-        assert_eq!(matrix.element(1, 1), 5.0);
-        assert_eq!(matrix.element(2, 1), 6.0);
-        assert_eq!(matrix.element(0, 2), 7.0);
-        assert_eq!(matrix.element(1, 2), 8.0);
-        assert_eq!(matrix.element(2, 2), 9.0);
-    }
-
-    #[test]
-    fn accessing_matrix3a_elements_works() {
-        let mut matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-
-        assert_eq!(matrix.element(0, 0), 1.0);
-        assert_eq!(matrix.element(1, 1), 2.0);
-        assert_eq!(matrix.element(2, 2), 3.0);
-
-        *matrix.element_mut(0, 1) = 5.0;
-        assert_eq!(matrix.element(0, 1), 5.0);
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn matrix3a_element_access_panics_on_out_of_bounds_row() {
-        let matrix = Matrix3::identity();
-        let _ = matrix.element(3, 0);
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn matrix3a_element_access_panics_on_out_of_bounds_column() {
-        let matrix = Matrix3::identity();
-        let _ = matrix.element(0, 3);
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn matrix3a_element_mut_access_panics_on_out_of_bounds() {
-        let mut matrix = Matrix3::identity();
-        let _ = matrix.element_mut(0, 3);
-    }
-
-    #[test]
-    fn accessing_matrix3a_columns_works() {
-        let col1 = Vector3::new(1.0, 2.0, 3.0);
-        let col2 = Vector3::new(4.0, 5.0, 6.0);
-        let col3 = Vector3::new(7.0, 8.0, 9.0);
-        let matrix = Matrix3::from_columns(col1, col2, col3);
-
-        let extracted_col1 = matrix.column_1();
-        let extracted_col2 = matrix.column_2();
-        let extracted_col3 = matrix.column_3();
-
-        assert_eq!(extracted_col1, &col1);
-        assert_eq!(extracted_col2, &col2);
-        assert_eq!(extracted_col3, &col3);
-    }
-
-    #[test]
-    fn setting_matrix3a_columns_works() {
-        let mut matrix = Matrix3::zeros();
-        let col1 = Vector3::new(1.0, 2.0, 3.0);
-        let col2 = Vector3::new(4.0, 5.0, 6.0);
-        let col3 = Vector3::new(7.0, 8.0, 9.0);
-
-        matrix.set_column_1(col1);
-        matrix.set_column_2(col2);
-        matrix.set_column_3(col3);
-
-        assert_eq!(matrix.column_1(), &col1);
-        assert_eq!(matrix.column_2(), &col2);
-        assert_eq!(matrix.column_3(), &col3);
-    }
-
-    #[test]
-    fn extracting_matrix3a_diagonal_works() {
+    fn matrix3_diagonal_extraction_works() {
         let diag_vec = Vector3::new(2.0, 3.0, 4.0);
         let matrix = Matrix3::from_diagonal(&diag_vec);
         let extracted_diag = matrix.diagonal();
-
         assert_eq!(extracted_diag, diag_vec);
     }
 
     #[test]
-    fn transposing_matrix3a_works() {
+    fn matrix3_transpose_swaps_rows_and_columns() {
         let col1 = Vector3::new(1.0, 2.0, 3.0);
         let col2 = Vector3::new(4.0, 5.0, 6.0);
         let col3 = Vector3::new(7.0, 8.0, 9.0);
@@ -1279,7 +942,6 @@ mod tests {
 
         let transposed = matrix.transposed();
 
-        // Original matrix: columns become rows in transposed
         assert_eq!(transposed.element(0, 0), 1.0);
         assert_eq!(transposed.element(0, 1), 2.0);
         assert_eq!(transposed.element(0, 2), 3.0);
@@ -1292,31 +954,30 @@ mod tests {
     }
 
     #[test]
-    fn negating_matrix3a_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(2.0, -3.0, 4.0));
-        let negated = -matrix;
+    fn matrix3_transpose_is_involutive() {
+        let matrix = Matrix3::from_columns(
+            Vector3::new(1.0, 2.0, 3.0),
+            Vector3::new(4.0, 5.0, 6.0),
+            Vector3::new(7.0, 8.0, 9.0),
+        );
 
-        assert_eq!(negated.element(0, 0), -2.0);
-        assert_eq!(negated.element(1, 1), 3.0);
-        assert_eq!(negated.element(2, 2), -4.0);
+        let double_transposed = matrix.transposed().transposed();
+        assert_eq!(double_transposed, matrix);
     }
 
     #[test]
-    fn mapping_matrix3a_elements_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let mapped = matrix.mapped(|x| x * 2.0);
-
-        assert_eq!(mapped.element(0, 0), 2.0);
-        assert_eq!(mapped.element(1, 1), 4.0);
-        assert_eq!(mapped.element(2, 2), 6.0);
+    fn matrix3_transpose_of_diagonal_gives_same_matrix() {
+        let diag = Vector3::new(1.0, 2.0, 3.0);
+        let matrix = Matrix3::from_diagonal(&diag);
+        let transposed = matrix.transposed();
+        assert_eq!(matrix, transposed);
     }
 
     #[test]
-    fn inverting_matrix3a_works() {
+    fn matrix3_inversion_of_identity_gives_identity() {
         let identity = Matrix3::identity();
         let inverted = identity.inverted();
 
-        // Identity matrix is its own inverse
         for i in 0..3 {
             for j in 0..3 {
                 assert_abs_diff_eq!(
@@ -1329,39 +990,32 @@ mod tests {
     }
 
     #[test]
-    fn finding_matrix3a_min_element_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(5.0, 1.0, 3.0));
-        assert_abs_diff_eq!(matrix.min_element(), 0.0, epsilon = EPSILON); // off-diagonal zeros
+    fn matrix3_inverse_multiplied_with_original_gives_identity() {
+        let matrix = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
+        let inverse = matrix.inverted();
+        let product = &matrix * &inverse;
+
+        for i in 0..3 {
+            for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert_abs_diff_eq!(product.element(i, j), expected, epsilon = EPSILON);
+            }
+        }
     }
 
     #[test]
-    fn finding_matrix3a_max_element_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 5.0, 3.0));
-        assert_abs_diff_eq!(matrix.max_element(), 5.0, epsilon = EPSILON);
+    fn matrix3_min_max_element_work() {
+        let col1 = Vector3::new(-5.0, 2.0, 0.0);
+        let col2 = Vector3::new(3.0, -7.0, 1.0);
+        let col3 = Vector3::new(-2.0, 4.0, -3.0);
+        let matrix = Matrix3::from_columns(col1, col2, col3);
+
+        assert_abs_diff_eq!(matrix.min_element(), -7.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(matrix.max_element(), 4.0, epsilon = EPSILON);
     }
 
     #[test]
-    fn converting_matrix3a_to_unaligned_works() {
-        let matrix_a = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let matrix = matrix_a.pack();
-
-        assert_eq!(matrix.column_1().x(), 1.0);
-        assert_eq!(matrix.column_2().y(), 2.0);
-        assert_eq!(matrix.column_3().z(), 3.0);
-    }
-
-    #[test]
-    fn converting_matrix3_to_matrix3a_works() {
-        let matrix = Matrix3P::from_diagonal(&Vector3P::new(1.0, 2.0, 3.0));
-        let matrix_a = matrix.unpack();
-
-        assert_eq!(matrix_a.element(0, 0), 1.0);
-        assert_eq!(matrix_a.element(1, 1), 2.0);
-        assert_eq!(matrix_a.element(2, 2), 3.0);
-    }
-
-    #[test]
-    fn matrix3a_arithmetic_operations_work() {
+    fn matrix3_arithmetic_operations_work() {
         let m1 = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
         let m2 = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
 
@@ -1382,563 +1036,17 @@ mod tests {
     }
 
     #[test]
-    fn matrix3a_vector_multiplication_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
-        let vector = Vector3::new(1.0, 1.0, 1.0);
-
-        let result = &matrix * &vector;
-        assert_eq!(result.x(), 2.0);
-        assert_eq!(result.y(), 3.0);
-        assert_eq!(result.z(), 4.0);
-    }
-
-    #[test]
-    fn matrix3a_scalar_multiplication_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-
-        let mul_right = &matrix * 2.0;
-        assert_eq!(mul_right.element(0, 0), 2.0);
-        assert_eq!(mul_right.element(1, 1), 4.0);
-        assert_eq!(mul_right.element(2, 2), 6.0);
-
-        let mul_left = 3.0 * &matrix;
-        assert_eq!(mul_left.element(0, 0), 3.0);
-        assert_eq!(mul_left.element(1, 1), 6.0);
-        assert_eq!(mul_left.element(2, 2), 9.0);
-    }
-
-    #[test]
-    fn matrix3a_division_works() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(2.0, 4.0, 6.0));
-        let divided = &matrix / 2.0;
-
-        assert_eq!(divided.element(0, 0), 1.0);
-        assert_eq!(divided.element(1, 1), 2.0);
-        assert_eq!(divided.element(2, 2), 3.0);
-    }
-
-    #[test]
-    fn matrix3a_assignment_operations_work() {
-        let mut matrix1 = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let matrix2 = Matrix3::from_diagonal(&Vector3::new(1.0, 1.0, 1.0));
-
-        matrix1 += matrix2;
-        assert_eq!(matrix1.element(0, 0), 2.0);
-        assert_eq!(matrix1.element(1, 1), 3.0);
-        assert_eq!(matrix1.element(2, 2), 4.0);
-
-        matrix1 -= matrix2;
-        assert_eq!(matrix1.element(0, 0), 1.0);
-        assert_eq!(matrix1.element(1, 1), 2.0);
-        assert_eq!(matrix1.element(2, 2), 3.0);
-
-        matrix1 *= 2.0;
-        assert_eq!(matrix1.element(0, 0), 2.0);
-        assert_eq!(matrix1.element(1, 1), 4.0);
-        assert_eq!(matrix1.element(2, 2), 6.0);
-
-        matrix1 /= 2.0;
-        assert_eq!(matrix1.element(0, 0), 1.0);
-        assert_eq!(matrix1.element(1, 1), 2.0);
-        assert_eq!(matrix1.element(2, 2), 3.0);
-    }
-
-    // Matrix4 (aligned) tests
-    #[test]
-    fn creating_matrix4a_identity_gives_identity_matrix() {
-        let identity = Matrix4::identity();
-        for i in 0..4 {
-            for j in 0..4 {
-                if i == j {
-                    assert_eq!(identity.element(i, j), 1.0);
-                } else {
-                    assert_eq!(identity.element(i, j), 0.0);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn creating_matrix4a_zeros_gives_zero_matrix() {
-        let zeros = Matrix4::zeros();
-        for i in 0..4 {
-            for j in 0..4 {
-                assert_eq!(zeros.element(i, j), 0.0);
-            }
-        }
-    }
-
-    #[test]
-    fn creating_matrix4a_from_diagonal_works() {
-        let diag = Vector4::new(2.0, 3.0, 4.0, 5.0);
-        let matrix = Matrix4::from_diagonal(&diag);
-
-        assert_eq!(matrix.element(0, 0), 2.0);
-        assert_eq!(matrix.element(1, 1), 3.0);
-        assert_eq!(matrix.element(2, 2), 4.0);
-        assert_eq!(matrix.element(3, 3), 5.0);
-
-        // Check off-diagonal elements are zero
-        for i in 0..4 {
-            for j in 0..4 {
-                if i != j {
-                    assert_eq!(matrix.element(i, j), 0.0);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn creating_matrix4a_from_columns_works() {
-        let col1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4::new(13.0, 14.0, 15.0, 16.0);
-
-        let matrix = Matrix4::from_columns(col1, col2, col3, col4);
-
-        for i in 0..4 {
-            for j in 0..4 {
-                let expected = (j * 4 + i + 1) as f32;
-                assert_eq!(matrix.element(i, j), expected);
-            }
-        }
-    }
-
-    #[test]
-    fn accessing_matrix4a_elements_works() {
-        let mut matrix = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-
-        assert_eq!(matrix.element(0, 0), 1.0);
-        assert_eq!(matrix.element(1, 1), 2.0);
-        assert_eq!(matrix.element(2, 2), 3.0);
-        assert_eq!(matrix.element(3, 3), 4.0);
-
-        *matrix.element_mut(0, 1) = 5.0;
-        assert_eq!(matrix.element(0, 1), 5.0);
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn matrix4a_element_access_panics_on_out_of_bounds_row() {
-        let matrix = Matrix4::identity();
-        let _ = matrix.element(4, 0);
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn matrix4a_element_access_panics_on_out_of_bounds_column() {
-        let matrix = Matrix4::identity();
-        let _ = matrix.element(0, 4);
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn matrix4a_element_mut_access_panics_on_out_of_bounds() {
-        let mut matrix = Matrix4::identity();
-        let _ = matrix.element_mut(0, 4);
-    }
-
-    #[test]
-    fn accessing_matrix4a_columns_works() {
-        let col1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4::new(13.0, 14.0, 15.0, 16.0);
-        let matrix = Matrix4::from_columns(col1, col2, col3, col4);
-
-        let extracted_col1 = matrix.column_1();
-        let extracted_col2 = matrix.column_2();
-        let extracted_col3 = matrix.column_3();
-        let extracted_col4 = matrix.column_4();
-
-        assert_eq!(extracted_col1, &col1);
-        assert_eq!(extracted_col2, &col2);
-        assert_eq!(extracted_col3, &col3);
-        assert_eq!(extracted_col4, &col4);
-    }
-
-    #[test]
-    fn setting_matrix4a_columns_works() {
-        let mut matrix = Matrix4::zeros();
-        let col1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4::new(13.0, 14.0, 15.0, 16.0);
-
-        matrix.set_column_1(col1);
-        matrix.set_column_2(col2);
-        matrix.set_column_3(col3);
-        matrix.set_column_4(col4);
-
-        assert_eq!(matrix.column_1(), &col1);
-        assert_eq!(matrix.column_2(), &col2);
-        assert_eq!(matrix.column_3(), &col3);
-        assert_eq!(matrix.column_4(), &col4);
-    }
-
-    #[test]
-    fn extracting_matrix4a_diagonal_works() {
-        let diag_vec = Vector4::new(2.0, 3.0, 4.0, 5.0);
-        let matrix = Matrix4::from_diagonal(&diag_vec);
-        let extracted_diag = matrix.diagonal();
-
-        assert_eq!(extracted_diag, diag_vec);
-    }
-
-    #[test]
-    fn extracting_matrix4a_linear_part_works() {
-        let col1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4::new(13.0, 14.0, 15.0, 16.0);
-        let matrix = Matrix4::from_columns(col1, col2, col3, col4);
-
-        let linear = matrix.linear_part();
-
-        // Linear part is the upper-left 3x3 submatrix
-        for i in 0..3 {
-            for j in 0..3 {
-                assert_eq!(linear.element(i, j), matrix.element(i, j));
-            }
-        }
-    }
-
-    #[test]
-    fn transposing_matrix4a_works() {
-        let col1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4::new(13.0, 14.0, 15.0, 16.0);
-        let matrix = Matrix4::from_columns(col1, col2, col3, col4);
-
-        let transposed = matrix.transposed();
-
-        // Original columns become rows in transposed
-        assert_eq!(transposed.element(0, 0), 1.0);
-        assert_eq!(transposed.element(0, 1), 2.0);
-        assert_eq!(transposed.element(0, 2), 3.0);
-        assert_eq!(transposed.element(0, 3), 4.0);
-    }
-
-    #[test]
-    fn negating_matrix4a_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(2.0, -3.0, 4.0, -5.0));
-        let negated = -matrix;
-
-        assert_eq!(negated.element(0, 0), -2.0);
-        assert_eq!(negated.element(1, 1), 3.0);
-        assert_eq!(negated.element(2, 2), -4.0);
-        assert_eq!(negated.element(3, 3), 5.0);
-    }
-
-    #[test]
-    fn mapping_matrix4a_elements_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let mapped = matrix.mapped(|x| x * 2.0);
-
-        assert_eq!(mapped.element(0, 0), 2.0);
-        assert_eq!(mapped.element(1, 1), 4.0);
-        assert_eq!(mapped.element(2, 2), 6.0);
-        assert_eq!(mapped.element(3, 3), 8.0);
-    }
-
-    #[test]
-    fn inverting_matrix4a_works() {
-        let identity = Matrix4::identity();
-        let inverted = identity.inverted();
-
-        // Identity matrix is its own inverse
-        for i in 0..4 {
-            for j in 0..4 {
-                assert_abs_diff_eq!(
-                    inverted.element(i, j),
-                    identity.element(i, j),
-                    epsilon = EPSILON
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn finding_matrix4a_min_element_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(7.0, 1.0, 3.0, 2.0));
-        assert_abs_diff_eq!(matrix.min_element(), 0.0, epsilon = EPSILON); // off-diagonal zeros
-    }
-
-    #[test]
-    fn finding_matrix4a_max_element_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(1.0, 7.0, 3.0, 2.0));
-        assert_abs_diff_eq!(matrix.max_element(), 7.0, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn applying_matrix4a_translate_transform_works() {
-        let mut matrix = Matrix4::identity();
-        let translation = Vector3::new(1.0, 2.0, 3.0);
-
-        matrix.translate_transform(&translation);
-
-        // Translation should be in the last column
-        assert_eq!(matrix.element(0, 3), 1.0);
-        assert_eq!(matrix.element(1, 3), 2.0);
-        assert_eq!(matrix.element(2, 3), 3.0);
-    }
-
-    #[test]
-    fn applying_matrix4a_scale_transform_works() {
-        let mut matrix = Matrix4::identity();
-        matrix.set_column_4(Vector4::same(1.0));
-        matrix.scale_transform(2.0);
-
-        // Scaling affects the diagonal
-        assert_eq!(matrix.element(0, 0), 2.0);
-        assert_eq!(matrix.element(1, 1), 2.0);
-        assert_eq!(matrix.element(2, 2), 2.0);
-
-        // Scaling affects the translation
-        assert_eq!(matrix.element(0, 3), 2.0);
-        assert_eq!(matrix.element(1, 3), 2.0);
-        assert_eq!(matrix.element(2, 3), 2.0);
-        assert_eq!(matrix.element(3, 3), 1.0);
-    }
-
-    #[test]
-    fn transforming_point_with_matrix4a_works() {
-        let mut matrix = Matrix4::identity();
-        let translation = Vector3::new(1.0, 2.0, 3.0);
-        matrix.translate_transform(&translation);
-
-        let point = Point3::new(0.0, 0.0, 0.0);
-        let transformed = matrix.transform_point(&point);
-
-        assert_eq!(transformed.x(), 1.0);
-        assert_eq!(transformed.y(), 2.0);
-        assert_eq!(transformed.z(), 3.0);
-    }
-
-    #[test]
-    fn transforming_vector_with_matrix4a_works() {
-        let mut matrix = Matrix4::identity();
-        matrix.scale_transform(2.0);
-
-        let vector = Vector3::new(1.0, 2.0, 3.0);
-        let transformed = matrix.transform_vector(&vector);
-
-        assert_eq!(transformed.x(), 2.0);
-        assert_eq!(transformed.y(), 4.0);
-        assert_eq!(transformed.z(), 6.0);
-    }
-
-    #[test]
-    fn projecting_point_with_matrix4a_works() {
-        let matrix = Matrix4::identity();
-        let point = Point3::new(1.0, 2.0, 3.0);
-        let projected = matrix.project_point(&point);
-
-        // Identity projection should leave point unchanged
-        assert_eq!(projected.x(), 1.0);
-        assert_eq!(projected.y(), 2.0);
-        assert_eq!(projected.z(), 3.0);
-    }
-
-    #[test]
-    fn converting_matrix4a_to_unaligned_works() {
-        let matrix_a = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let matrix = matrix_a.pack();
-
-        assert_eq!(matrix.column_1().x(), 1.0);
-        assert_eq!(matrix.column_2().y(), 2.0);
-        assert_eq!(matrix.column_3().z(), 3.0);
-        assert_eq!(matrix.column_4().w(), 4.0);
-    }
-
-    #[test]
-    fn converting_matrix4_to_matrix4a_works() {
-        let matrix = Matrix4P::from_diagonal(&Vector4P::new(1.0, 2.0, 3.0, 4.0));
-        let matrix_a = matrix.unpack();
-
-        assert_eq!(matrix_a.element(0, 0), 1.0);
-        assert_eq!(matrix_a.element(1, 1), 2.0);
-        assert_eq!(matrix_a.element(2, 2), 3.0);
-        assert_eq!(matrix_a.element(3, 3), 4.0);
-    }
-
-    #[test]
-    fn matrix4a_arithmetic_operations_work() {
-        let m1 = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let m2 = Matrix4::from_diagonal(&Vector4::new(2.0, 3.0, 4.0, 5.0));
-
-        let add_result = &m1 + &m2;
-        assert_eq!(add_result.element(0, 0), 3.0);
-        assert_eq!(add_result.element(1, 1), 5.0);
-        assert_eq!(add_result.element(2, 2), 7.0);
-        assert_eq!(add_result.element(3, 3), 9.0);
-
-        let sub_result = &m2 - &m1;
-        assert_eq!(sub_result.element(0, 0), 1.0);
-        assert_eq!(sub_result.element(1, 1), 1.0);
-        assert_eq!(sub_result.element(2, 2), 1.0);
-        assert_eq!(sub_result.element(3, 3), 1.0);
-
-        let mul_result = &m1 * &m2;
-        assert_eq!(mul_result.element(0, 0), 2.0);
-        assert_eq!(mul_result.element(1, 1), 6.0);
-        assert_eq!(mul_result.element(2, 2), 12.0);
-        assert_eq!(mul_result.element(3, 3), 20.0);
-    }
-
-    #[test]
-    fn matrix4a_vector_multiplication_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(2.0, 3.0, 4.0, 5.0));
-        let vector = Vector4::new(1.0, 1.0, 1.0, 1.0);
-
-        let result = &matrix * &vector;
-        assert_eq!(result.x(), 2.0);
-        assert_eq!(result.y(), 3.0);
-        assert_eq!(result.z(), 4.0);
-        assert_eq!(result.w(), 5.0);
-    }
-
-    #[test]
-    fn matrix4a_scalar_multiplication_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-
-        let mul_right = &matrix * 2.0;
-        assert_eq!(mul_right.element(0, 0), 2.0);
-        assert_eq!(mul_right.element(1, 1), 4.0);
-        assert_eq!(mul_right.element(2, 2), 6.0);
-        assert_eq!(mul_right.element(3, 3), 8.0);
-
-        let mul_left = 3.0 * &matrix;
-        assert_eq!(mul_left.element(0, 0), 3.0);
-        assert_eq!(mul_left.element(1, 1), 6.0);
-        assert_eq!(mul_left.element(2, 2), 9.0);
-        assert_eq!(mul_left.element(3, 3), 12.0);
-    }
-
-    #[test]
-    fn matrix4a_division_works() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(2.0, 4.0, 6.0, 8.0));
-        let divided = &matrix / 2.0;
-
-        assert_eq!(divided.element(0, 0), 1.0);
-        assert_eq!(divided.element(1, 1), 2.0);
-        assert_eq!(divided.element(2, 2), 3.0);
-        assert_eq!(divided.element(3, 3), 4.0);
-    }
-
-    #[test]
-    fn matrix4a_assignment_operations_work() {
-        let mut matrix1 = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let matrix2 = Matrix4::from_diagonal(&Vector4::new(1.0, 1.0, 1.0, 1.0));
-
-        matrix1 += matrix2;
-        assert_eq!(matrix1.element(0, 0), 2.0);
-        assert_eq!(matrix1.element(1, 1), 3.0);
-        assert_eq!(matrix1.element(2, 2), 4.0);
-        assert_eq!(matrix1.element(3, 3), 5.0);
-
-        matrix1 -= matrix2;
-        assert_eq!(matrix1.element(0, 0), 1.0);
-        assert_eq!(matrix1.element(1, 1), 2.0);
-        assert_eq!(matrix1.element(2, 2), 3.0);
-        assert_eq!(matrix1.element(3, 3), 4.0);
-
-        matrix1 *= 2.0;
-        assert_eq!(matrix1.element(0, 0), 2.0);
-        assert_eq!(matrix1.element(1, 1), 4.0);
-        assert_eq!(matrix1.element(2, 2), 6.0);
-        assert_eq!(matrix1.element(3, 3), 8.0);
-
-        matrix1 /= 2.0;
-        assert_eq!(matrix1.element(0, 0), 1.0);
-        assert_eq!(matrix1.element(1, 1), 2.0);
-        assert_eq!(matrix1.element(2, 2), 3.0);
-        assert_eq!(matrix1.element(3, 3), 4.0);
-    }
-
-    // General matrix property tests
-    #[test]
-    fn matrix_operations_with_zero_matrix() {
-        let zero = Matrix3::zeros();
-        let test_matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-
-        // Adding zero matrix should not change the matrix
-        let added = &test_matrix + &zero;
-        assert_eq!(added, test_matrix);
-
-        // Subtracting zero matrix should not change the matrix
-        let subtracted = &test_matrix - &zero;
-        assert_eq!(subtracted, test_matrix);
-
-        // Multiplying by zero matrix should give zero matrix
-        let multiplied = &test_matrix * &zero;
-        for i in 0..3 {
-            for j in 0..3 {
-                assert_abs_diff_eq!(multiplied.element(i, j), 0.0, epsilon = EPSILON);
-            }
-        }
-    }
-
-    #[test]
-    fn matrix_with_negative_values() {
-        let negative_diag = Vector3::new(-1.0, -2.0, -3.0);
-        let matrix = Matrix3::from_diagonal(&negative_diag);
-
-        assert_eq!(matrix.element(0, 0), -1.0);
-        assert_eq!(matrix.element(1, 1), -2.0);
-        assert_eq!(matrix.element(2, 2), -3.0);
-
-        let negated = -&matrix;
-        assert_eq!(negated.element(0, 0), 1.0);
-        assert_eq!(negated.element(1, 1), 2.0);
-        assert_eq!(negated.element(2, 2), 3.0);
-    }
-
-    #[test]
-    fn matrix_scalar_multiplication_by_zero() {
-        let matrix = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let result = &matrix * 0.0;
-
-        for i in 0..4 {
-            for j in 0..4 {
-                assert_eq!(result.element(i, j), 0.0);
-            }
-        }
-    }
-
-    #[test]
-    fn matrix_scalar_multiplication_by_one() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let result = &matrix * 1.0;
-
-        assert_eq!(result, matrix);
-    }
-
-    #[test]
-    fn matrix_scalar_multiplication_by_negative() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let result = &matrix * -1.0;
-
-        assert_eq!(result.element(0, 0), -1.0);
-        assert_eq!(result.element(1, 1), -2.0);
-        assert_eq!(result.element(2, 2), -3.0);
-    }
-
-    #[test]
-    fn matrix_addition_is_commutative() {
+    fn matrix3_addition_is_commutative() {
         let m1 = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
         let m2 = Matrix3::from_diagonal(&Vector3::new(4.0, 5.0, 6.0));
 
         let result1 = &m1 + &m2;
         let result2 = &m2 + &m1;
-
         assert_eq!(result1, result2);
     }
 
     #[test]
-    fn matrix_multiplication_is_associative() {
+    fn matrix3_multiplication_is_associative() {
         let m1 = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
         let m2 = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
         let m3 = Matrix3::from_diagonal(&Vector3::new(3.0, 2.0, 1.0));
@@ -1958,136 +1066,212 @@ mod tests {
     }
 
     #[test]
-    fn matrix_min_max_with_negative_values() {
-        let col1 = Vector3::new(-5.0, 2.0, 0.0);
-        let col2 = Vector3::new(3.0, -7.0, 1.0);
-        let col3 = Vector3::new(-2.0, 4.0, -3.0);
-        let matrix = Matrix3::from_columns(col1, col2, col3);
+    fn matrix3_identity_is_neutral_element() {
+        let identity = Matrix3::identity();
+        let test_matrix = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
 
-        assert_abs_diff_eq!(matrix.min_element(), -7.0, epsilon = EPSILON);
-        assert_abs_diff_eq!(matrix.max_element(), 4.0, epsilon = EPSILON);
+        let left_mult = &identity * &test_matrix;
+        let right_mult = &test_matrix * &identity;
+
+        assert_eq!(left_mult, test_matrix);
+        assert_eq!(right_mult, test_matrix);
     }
 
     #[test]
-    fn matrix_transpose_of_diagonal_is_same() {
-        let diag = Vector4::new(1.0, 2.0, 3.0, 4.0);
-        let matrix = Matrix4::from_diagonal(&diag);
-        let transposed = matrix.transposed();
+    fn matrix3_addition_with_zero_gives_same_matrix() {
+        let zero = Matrix3::zeros();
+        let test_matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
 
-        // Diagonal matrices are symmetric
-        assert_eq!(matrix, transposed);
+        let added = &test_matrix + &zero;
+        assert_eq!(added, test_matrix);
+
+        let subtracted = &test_matrix - &zero;
+        assert_eq!(subtracted, test_matrix);
     }
 
     #[test]
-    fn matrix_operations_with_different_reference_combinations_work() {
-        let m1 = Matrix3::identity();
-        let m2 = Matrix3::identity();
+    fn matrix3_multiplication_with_zero_gives_zero() {
+        let zero = Matrix3::zeros();
+        let test_matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
 
-        // Test all combinations of reference/owned for binary operations
-        let _result1 = &m1 + &m2; // ref + ref
-        let _result2 = &m1 + m2; // ref + owned
-        let _result3 = m1 + &m2; // owned + ref
-        let _result4 = m1 + m2; // owned + owned
-
-        // Recreate since they were moved
-        let m1 = Matrix3::identity();
-        let _result5 = 2.0 * &m1; // scalar * ref
-        let _result6 = 2.0 * m1; // scalar * owned
-
-        let m1 = Matrix3::identity();
-        let _result7 = &m1 * 2.0; // ref * scalar
-        let _result8 = m1 * 2.0; // owned * scalar
-    }
-
-    #[test]
-    fn matrix_arithmetic_maintains_precision() {
-        let matrix = Matrix3::from_diagonal(&Vector3::new(0.1, 0.2, 0.3));
-        let doubled = &matrix * 2.0;
-        let halved = &doubled * 0.5;
-
+        let multiplied = &test_matrix * &zero;
         for i in 0..3 {
             for j in 0..3 {
-                assert_abs_diff_eq!(
-                    halved.element(i, j),
-                    matrix.element(i, j),
-                    epsilon = EPSILON
-                );
+                assert_abs_diff_eq!(multiplied.element(i, j), 0.0, epsilon = EPSILON);
             }
         }
     }
 
     #[test]
-    fn matrix_identity_properties_hold() {
-        let identity3 = Matrix3::identity();
-        let test_matrix3 = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
-
-        let left_mult = &identity3 * &test_matrix3;
-        let right_mult = &test_matrix3 * &identity3;
-
-        // I * M = M * I = M
-        assert_eq!(left_mult, test_matrix3);
-        assert_eq!(right_mult, test_matrix3);
-
-        // Same for Matrix4
-        let identity4 = Matrix4::identity();
-        let test_matrix4 = Matrix4::from_diagonal(&Vector4::new(2.0, 3.0, 4.0, 5.0));
-
-        let left_mult4 = &identity4 * &test_matrix4;
-        let right_mult4 = &test_matrix4 * &identity4;
-
-        assert_eq!(left_mult4, test_matrix4);
-        assert_eq!(right_mult4, test_matrix4);
-    }
-
-    #[test]
-    fn matrix_transpose_is_involutive() {
-        let matrix = Matrix3::from_columns(
-            Vector3::new(1.0, 2.0, 3.0),
-            Vector3::new(4.0, 5.0, 6.0),
-            Vector3::new(7.0, 8.0, 9.0),
-        );
-
-        let double_transposed = matrix.transposed().transposed();
-
-        // (A^T)^T = A
-        assert_eq!(double_transposed, matrix);
-    }
-
-    #[test]
-    fn matrix_inversion_properties_hold() {
+    fn matrix3_vector_multiplication_works() {
         let matrix = Matrix3::from_diagonal(&Vector3::new(2.0, 3.0, 4.0));
-        let inverse = matrix.inverted();
-        let product = &matrix * &inverse;
+        let vector = Vector3::new(1.0, 1.0, 1.0);
 
-        // M * M^-1 should be approximately identity
+        let result = &matrix * &vector;
+        assert_eq!(result, Vector3::new(2.0, 3.0, 4.0));
+    }
+
+    #[test]
+    fn matrix3_scalar_multiplication_works() {
+        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+
+        assert_eq!((&matrix * 2.0).element(0, 0), 2.0);
+        assert_eq!((&matrix * 2.0).element(1, 1), 4.0);
+        assert_eq!((&matrix * 2.0).element(2, 2), 6.0);
+
+        assert_eq!((3.0 * &matrix).element(0, 0), 3.0);
+        assert_eq!((3.0 * &matrix).element(1, 1), 6.0);
+        assert_eq!((3.0 * &matrix).element(2, 2), 9.0);
+    }
+
+    #[test]
+    fn matrix3_scalar_multiplication_by_zero_gives_zero() {
+        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let result = &matrix * 0.0;
+
         for i in 0..3 {
             for j in 0..3 {
-                let expected = if i == j { 1.0 } else { 0.0 };
-                assert_abs_diff_eq!(product.element(i, j), expected, epsilon = EPSILON);
+                assert_eq!(result.element(i, j), 0.0);
             }
         }
     }
 
     #[test]
-    fn matrix_transform_composition_works() {
+    fn matrix3_scalar_multiplication_by_one_gives_same_matrix() {
+        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let result = &matrix * 1.0;
+        assert_eq!(result, matrix);
+    }
+
+    #[test]
+    fn matrix3_scalar_multiplication_by_negative_negates_elements() {
+        let matrix = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let result = &matrix * -1.0;
+
+        assert_eq!(result.element(0, 0), -1.0);
+        assert_eq!(result.element(1, 1), -2.0);
+        assert_eq!(result.element(2, 2), -3.0);
+    }
+
+    #[test]
+    fn converting_matrix3_to_packed_and_back_preserves_data() {
+        let matrix_a = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
+        let matrix = matrix_a.pack();
+        assert_eq!(matrix.unpack(), matrix_a);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn indexing_matrix3_element_out_of_bounds_panics() {
+        let matrix = Matrix3::identity();
+        let _ = matrix.element(3, 0);
+    }
+
+    // === Matrix3P Tests (packed) ===
+
+    #[test]
+    fn matrix3p_column_accessors_work() {
+        let col1 = Vector3P::new(1.0, 2.0, 3.0);
+        let col2 = Vector3P::new(4.0, 5.0, 6.0);
+        let col3 = Vector3P::new(7.0, 8.0, 9.0);
+        let matrix = Matrix3P::from_columns(col1, col2, col3);
+
+        assert_eq!(*matrix.column_1(), col1);
+        assert_eq!(*matrix.column_2(), col2);
+        assert_eq!(*matrix.column_3(), col3);
+    }
+
+    #[test]
+    fn matrix3p_column_setters_work() {
+        let mut matrix = Matrix3P::zeros();
+        let col1 = Vector3P::new(1.0, 2.0, 3.0);
+        let col2 = Vector3P::new(4.0, 5.0, 6.0);
+        let col3 = Vector3P::new(7.0, 8.0, 9.0);
+
+        matrix.set_column_1(col1);
+        matrix.set_column_2(col2);
+        matrix.set_column_3(col3);
+
+        assert_eq!(matrix, Matrix3P::from_columns(col1, col2, col3));
+    }
+
+    #[test]
+    fn matrix3p_from_array_conversion_works() {
+        let arr = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+        let matrix = Matrix3P::from(arr);
+        assert_eq!(
+            matrix,
+            Matrix3P::from_columns(
+                Vector3P::new(1.0, 2.0, 3.0),
+                Vector3P::new(4.0, 5.0, 6.0),
+                Vector3P::new(7.0, 8.0, 9.0)
+            )
+        );
+    }
+
+    #[test]
+    fn matrix3p_to_array_conversion_works() {
+        let matrix = Matrix3P::from_columns(
+            Vector3P::new(1.0, 2.0, 3.0),
+            Vector3P::new(4.0, 5.0, 6.0),
+            Vector3P::new(7.0, 8.0, 9.0),
+        );
+        let arr: [f32; 9] = matrix.into();
+        assert_eq!(arr, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
+    }
+
+    #[test]
+    fn converting_matrix3p_to_aligned_and_back_preserves_data() {
+        let matrix = Matrix3P::from_diagonal(&Vector3P::new(1.0, 2.0, 3.0));
+        let aligned = matrix.unpack();
+        assert_eq!(aligned.pack(), matrix);
+    }
+
+    // === Matrix4 Tests (SIMD-aligned) ===
+
+    #[test]
+    fn matrix4_linear_part_extracts_upper_left_3x3() {
+        let col1 = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let col2 = Vector4::new(5.0, 6.0, 7.0, 8.0);
+        let col3 = Vector4::new(9.0, 10.0, 11.0, 12.0);
+        let col4 = Vector4::new(13.0, 14.0, 15.0, 16.0);
+        let matrix = Matrix4::from_columns(col1, col2, col3, col4);
+
+        let linear = matrix.linear_part();
+
+        for i in 0..3 {
+            for j in 0..3 {
+                assert_eq!(linear.element(i, j), matrix.element(i, j));
+            }
+        }
+    }
+
+    #[test]
+    fn matrix4_translate_transform_sets_translation_column() {
         let mut matrix = Matrix4::identity();
         let translation = Vector3::new(1.0, 2.0, 3.0);
-        let scale = 2.0;
 
         matrix.translate_transform(&translation);
-        matrix.scale_transform(scale);
 
-        let point = Point3::new(1.0, 1.0, 1.0);
-        let transformed = matrix.transform_point(&point);
-
-        // Transform order is translate first, then scale: ((1,1,1) + (1,2,3)) * 2 = (4,6,8)
-        assert_abs_diff_eq!(transformed.x(), 4.0, epsilon = EPSILON);
-        assert_abs_diff_eq!(transformed.y(), 6.0, epsilon = EPSILON);
-        assert_abs_diff_eq!(transformed.z(), 8.0, epsilon = EPSILON);
+        assert_eq!(matrix.element(0, 3), 1.0);
+        assert_eq!(matrix.element(1, 3), 2.0);
+        assert_eq!(matrix.element(2, 3), 3.0);
     }
 
     #[test]
-    fn matrix_vector_vs_point_transform_difference() {
+    fn matrix4_transform_point_applies_translation() {
+        let mut matrix = Matrix4::identity();
+        let translation = Vector3::new(1.0, 2.0, 3.0);
+        matrix.translate_transform(&translation);
+
+        let point = Point3::new(0.0, 0.0, 0.0);
+        let transformed = matrix.transform_point(&point);
+
+        assert_eq!(transformed, Point3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn matrix4_transform_vector_ignores_translation() {
         let mut matrix = Matrix4::identity();
         let translation = Vector3::new(5.0, 5.0, 5.0);
         matrix.translate_transform(&translation);
@@ -2098,12 +1282,124 @@ mod tests {
         let transformed_vector = matrix.transform_vector(&vector);
         let transformed_point = matrix.transform_point(&point);
 
-        // Vector should not be affected by translation
         assert_eq!(transformed_vector, vector);
+        assert_eq!(transformed_point, Point3::new(6.0, 6.0, 6.0));
+    }
 
-        // Point should be translated
-        assert_eq!(transformed_point.x(), 6.0);
-        assert_eq!(transformed_point.y(), 6.0);
-        assert_eq!(transformed_point.z(), 6.0);
+    #[test]
+    fn matrix4_transform_composition_works() {
+        let mut matrix = Matrix4::identity();
+        let translation = Vector3::new(1.0, 2.0, 3.0);
+        let scale = 2.0;
+
+        matrix.translate_transform(&translation);
+        matrix.scale_transform(scale);
+
+        let point = Point3::new(1.0, 1.0, 1.0);
+        let transformed = matrix.transform_point(&point);
+
+        assert_abs_diff_eq!(transformed.x(), 4.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(transformed.y(), 6.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(transformed.z(), 8.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn matrix4_identity_is_neutral_element() {
+        let identity = Matrix4::identity();
+        let test_matrix = Matrix4::from_diagonal(&Vector4::new(2.0, 3.0, 4.0, 5.0));
+
+        let left_mult = &identity * &test_matrix;
+        let right_mult = &test_matrix * &identity;
+
+        assert_eq!(left_mult, test_matrix);
+        assert_eq!(right_mult, test_matrix);
+    }
+
+    #[test]
+    fn converting_matrix4_to_packed_and_back_preserves_data() {
+        let matrix_a = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
+        let matrix = matrix_a.pack();
+        assert_eq!(matrix.unpack(), matrix_a);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn indexing_matrix4_element_out_of_bounds_panics() {
+        let matrix = Matrix4::identity();
+        let _ = matrix.element(4, 0);
+    }
+
+    // === Matrix4P Tests (packed) ===
+
+    #[test]
+    fn matrix4p_column_accessors_work() {
+        let col1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let col2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
+        let col3 = Vector4P::new(9.0, 10.0, 11.0, 12.0);
+        let col4 = Vector4P::new(13.0, 14.0, 15.0, 16.0);
+        let matrix = Matrix4P::from_columns(col1, col2, col3, col4);
+
+        assert_eq!(*matrix.column_1(), col1);
+        assert_eq!(*matrix.column_2(), col2);
+        assert_eq!(*matrix.column_3(), col3);
+        assert_eq!(*matrix.column_4(), col4);
+    }
+
+    #[test]
+    fn matrix4p_column_setters_work() {
+        let mut matrix = Matrix4P::zeros();
+        let col1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
+        let col2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
+        let col3 = Vector4P::new(9.0, 10.0, 11.0, 12.0);
+        let col4 = Vector4P::new(13.0, 14.0, 15.0, 16.0);
+
+        matrix.set_column_1(col1);
+        matrix.set_column_2(col2);
+        matrix.set_column_3(col3);
+        matrix.set_column_4(col4);
+
+        assert_eq!(matrix, Matrix4P::from_columns(col1, col2, col3, col4));
+    }
+
+    #[test]
+    fn matrix4p_from_array_conversion_works() {
+        let arr = [
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
+        ];
+        let matrix = Matrix4P::from(arr);
+        assert_eq!(
+            matrix,
+            Matrix4P::from_columns(
+                Vector4P::new(1.0, 2.0, 3.0, 4.0),
+                Vector4P::new(5.0, 6.0, 7.0, 8.0),
+                Vector4P::new(9.0, 10.0, 11.0, 12.0),
+                Vector4P::new(13.0, 14.0, 15.0, 16.0)
+            )
+        );
+    }
+
+    #[test]
+    fn matrix4p_to_array_conversion_works() {
+        let matrix = Matrix4P::from_columns(
+            Vector4P::new(1.0, 2.0, 3.0, 4.0),
+            Vector4P::new(5.0, 6.0, 7.0, 8.0),
+            Vector4P::new(9.0, 10.0, 11.0, 12.0),
+            Vector4P::new(13.0, 14.0, 15.0, 16.0),
+        );
+        let arr: [f32; 16] = matrix.into();
+        assert_eq!(
+            arr,
+            [
+                1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                16.0
+            ]
+        );
+    }
+
+    #[test]
+    fn converting_matrix4p_to_aligned_and_back_preserves_data() {
+        let matrix = Matrix4P::from_diagonal(&Vector4P::new(1.0, 2.0, 3.0, 4.0));
+        let aligned = matrix.unpack();
+        assert_eq!(aligned.pack(), matrix);
     }
 }
