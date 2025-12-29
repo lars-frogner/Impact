@@ -6,13 +6,14 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
+    consts::f32::FRAC_1_SQRT_2,
     matrix::Matrix4,
     point::{Point2, Point3},
     quaternion::{Quaternion, UnitQuaternion},
     transform::{Projective3, Similarity3},
     vector::{Vector3, Vector4},
 };
-use std::{f32::consts::FRAC_1_SQRT_2, fmt::Debug};
+use std::fmt::Debug;
 
 /// A perspective transformation that maps points in a view frustum pointing
 /// along the negative z-axis into the cube spanning from -1 to 1 in x and y and
