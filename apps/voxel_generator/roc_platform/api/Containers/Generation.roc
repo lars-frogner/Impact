@@ -1,8 +1,7 @@
-# Hash: eb8d8bcaa5043a2332035dd8dd43bd4eac9685cde054391ab35910308ce215b3
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: cf81b690bc0dbb07
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_containers::slot_map::Generation
 # Type category: POD
-# Commit: 397d36d3 (dirty)
 module [
     Generation,
     write_bytes,

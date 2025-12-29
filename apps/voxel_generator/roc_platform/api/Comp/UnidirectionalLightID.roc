@@ -1,8 +1,7 @@
-# Hash: 422efaa63f979322aedb7bd2c788890154866648358eef92ca7b934493f51995
-# Generated: 2025-09-20T15:19:09+00:00
+# Hash: a50da3ca18144973
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_light::UnidirectionalLightID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     UnidirectionalLightID,
     add,

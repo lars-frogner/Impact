@@ -1,8 +1,7 @@
-# Hash: a39122df0ef2cd9b4c5d8edb299ebe876abc7bf7cf011b541b592e1513bac7e1
-# Generated: 2025-09-19T18:59:31+00:00
+# Hash: 87555d86d915db8e
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact::input::key::NumpadKey
 # Type category: Inline
-# Commit: ff568180 (dirty)
 module [
     NumpadKey,
     write_bytes,

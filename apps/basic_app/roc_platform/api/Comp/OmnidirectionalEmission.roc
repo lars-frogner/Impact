@@ -1,8 +1,7 @@
-# Hash: c9e0515f11c8931521d11a140ff31c32161eb0802f4b3ed2ceed06bcd2aaaef7
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: d06a028ee3aa8f58
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_light::OmnidirectionalEmission
 # Type category: Component
-# Commit: d4c84c05 (dirty)
 module [
     OmnidirectionalEmission,
     new,

@@ -1,8 +1,7 @@
-# Hash: 39523d553680bab2d4206abcdb6eb7af1120077c0e24c197ca62c8e035715107
-# Generated: 2025-08-01T06:51:20+00:00
+# Hash: 4834c8cb7cd2443e
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_texture::TextureID
 # Type category: POD
-# Commit: 5cd592d6
 module [
     TextureID,
     from_name,

@@ -1,8 +1,7 @@
-# Hash: 17f12331f7b246354925abf1028858922e2e7d3693680d1e21faef824a8243a6
-# Generated: 2025-09-20T15:19:09+00:00
+# Hash: abc0f899dcf15901
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_physics::rigid_body::DynamicRigidBodyID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     DynamicRigidBodyID,
     add,

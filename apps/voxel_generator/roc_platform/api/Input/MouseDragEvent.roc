@@ -1,8 +1,7 @@
-# Hash: 69f0811ee44ca8332bf47cc6c2d55e1d8c31a4c64084f82c221871f35947cf8b
-# Generated: 2025-09-21T09:37:57+00:00
+# Hash: f717181160caf065
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact::input::mouse::MouseDragEvent
 # Type category: Inline
-# Commit: 5fdd98b9 (dirty)
 module [
     MouseDragEvent,
     write_bytes,

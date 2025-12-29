@@ -1,8 +1,7 @@
-# Hash: 896e6acbc3669af50a65fb729642507072b530e21da7c3b2225dbff3a29e004c
-# Generated: 2025-12-21T23:08:03+00:00
+# Hash: 2519bd3f087cf1f3
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_material::setup::physical::ParallaxMap
 # Type category: Component
-# Commit: d4c84c05 (dirty)
 module [
     ParallaxMap,
     new,

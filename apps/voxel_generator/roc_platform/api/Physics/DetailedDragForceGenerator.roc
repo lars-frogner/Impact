@@ -1,8 +1,7 @@
-# Hash: 3323a0ba50380b47f12ccb30c214396de32a103e636192094584e1ff2b459fdf
-# Generated: 2025-12-17T23:57:01+00:00
+# Hash: 6de38bc59853d8f8
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_physics::force::detailed_drag::DetailedDragForceGenerator
 # Type category: POD
-# Commit: 7d41822d (dirty)
 module [
     DetailedDragForceGenerator,
     write_bytes,

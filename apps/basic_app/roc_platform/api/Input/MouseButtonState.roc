@@ -1,8 +1,7 @@
-# Hash: c400552531da66c4707709cf6c58ff5a355c3993bf82bc191eef78e6d09af393
-# Generated: 2025-09-19T18:59:31+00:00
+# Hash: ac8a0e23857c1070
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact::input::mouse::MouseButtonState
 # Type category: Inline
-# Commit: ff568180 (dirty)
 module [
     MouseButtonState,
     write_bytes,

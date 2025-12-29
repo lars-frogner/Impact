@@ -1,8 +1,7 @@
-# Hash: 6092e40e4391b8fc025673454a06bef3a846814cb4fee8109758604c7b1a8ee5
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: 87786c268a6284a2
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_mesh::triangle::TriangleMeshID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     TriangleMeshID,
     from_name,

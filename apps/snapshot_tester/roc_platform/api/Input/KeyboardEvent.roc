@@ -1,8 +1,7 @@
-# Hash: f529af7d56996db4613773fd59966aad29284f20165b815a490d0ccdc56b7903
-# Generated: 2025-09-19T14:54:30+00:00
+# Hash: ff1e3b3e9dbc471f
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact::input::key::KeyboardEvent
 # Type category: Inline
-# Commit: fc08276f (dirty)
 module [
     KeyboardEvent,
     write_bytes,

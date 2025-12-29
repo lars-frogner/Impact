@@ -1,8 +1,7 @@
-# Hash: 2227366697080902b2fe1f44ce276020726577ae66f64a074981cc52c2da88eb
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: 8e927c67b4ccde6f
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_physics::force::constant_acceleration::ConstantAccelerationGeneratorID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     ConstantAccelerationGeneratorID,
     add,

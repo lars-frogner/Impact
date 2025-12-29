@@ -1,8 +1,7 @@
-# Hash: bbbb525c64e29092fddb9f9f40912132b4ff280fc0dae00581fd50cd62b1c4dd
-# Generated: 2025-09-20T10:59:01+00:00
+# Hash: 38ba72e7f5298303
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact::input::mouse::MouseButtonSet
 # Type category: POD
-# Commit: ac7f80d7 (dirty)
 module [
     MouseButtonSet,
     empty,

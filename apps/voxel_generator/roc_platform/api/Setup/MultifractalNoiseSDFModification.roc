@@ -1,8 +1,7 @@
-# Hash: 50c89ef03dbbeaac76496a066f8535a907f5aac0b40e6116f375cd45c7a8fab2
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: f632accfeb74a16b
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_voxel::setup::MultifractalNoiseSDFModification
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     MultifractalNoiseSDFModification,
     new,

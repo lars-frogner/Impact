@@ -1,8 +1,7 @@
-# Hash: 3a60e26a51cd851fca9b9a73051c8dc4462e631b16877fb15886ac2b868d77a4
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: fe8e549ba3b5b953
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact::command::controller::ControllerCommand
 # Type category: Inline
-# Commit: 7d41822d (dirty)
 module [
     ControllerCommand,
     write_bytes,

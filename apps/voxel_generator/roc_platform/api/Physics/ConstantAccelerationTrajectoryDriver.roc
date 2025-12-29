@@ -1,8 +1,7 @@
-# Hash: 1e8008b6bd09783d25ac0fc77d418b70a3a4151df38bd53247b386d9a4f5620b
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 66f2e8ebe91f5015
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectoryDriver
 # Type category: POD
-# Commit: 7d41822d (dirty)
 module [
     ConstantAccelerationTrajectoryDriver,
     write_bytes,

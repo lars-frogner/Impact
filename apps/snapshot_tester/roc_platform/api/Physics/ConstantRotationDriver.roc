@@ -1,8 +1,7 @@
-# Hash: 971f0c069b68393d39a9d2e6fb9599a165444e7d1645410461352d49e0c59113
-# Generated: 2025-12-17T23:58:42+00:00
+# Hash: 52c9cd121e86dff1
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotationDriver
 # Type category: POD
-# Commit: 7d41822d (dirty)
 module [
     ConstantRotationDriver,
     write_bytes,

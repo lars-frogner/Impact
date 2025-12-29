@@ -1,8 +1,7 @@
-# Hash: f549c7c6ec76ee5cf11c6affd8871bbaefa91a32a770302833f2d32ec9cb8ddc
-# Generated: 2025-12-03T23:14:35+00:00
+# Hash: 1d155899a6227c98
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_voxel::generation::VoxelGeneratorID
 # Type category: POD
-# Commit: b393e25e (dirty)
 module [
     VoxelGeneratorID,
     from_name,

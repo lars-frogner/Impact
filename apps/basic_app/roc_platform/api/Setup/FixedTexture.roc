@@ -1,8 +1,7 @@
-# Hash: 255ba73de6a60e02deac7c52d05b6d086b08e3d7230cea2d304d2641f39850fc
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: ce4c6978d63f8a29
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_material::setup::fixed::FixedTexture
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     FixedTexture,
     add,

@@ -1,8 +1,7 @@
-# Hash: ad23b7b7fcb26c0b99fa69b9b72cdd814b30f9a52d7c87a7e916e4f201bc22a7
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: 782d9e7ac74e5d12
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_voxel::setup::DynamicVoxels
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     DynamicVoxels,
     add,

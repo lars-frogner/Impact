@@ -1,8 +1,7 @@
-# Hash: a7fbffee650c8a3fba2ecbdd745c76e83fe49614adf9057672a749086fa10946
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: 1a9a749108939760
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_containers::slot_map::SlotKey
 # Type category: POD
-# Commit: 397d36d3 (dirty)
 module [
     SlotKey,
     write_bytes,

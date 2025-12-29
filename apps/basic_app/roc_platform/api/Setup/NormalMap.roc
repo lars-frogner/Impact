@@ -1,8 +1,7 @@
-# Hash: e83d4304ee8477dce53111d516df988bd26641439d206a1577fd3006a9080819
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: fb10c4c53d87a0ab
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_material::setup::physical::NormalMap
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     NormalMap,
     add,

@@ -1,8 +1,7 @@
-# Hash: 4889169fa692400e5a33d7393c77eaee693141d0530c92b3163fbed7dbc2ca90
-# Generated: 2025-09-20T20:11:32+00:00
+# Hash: 6473dc76b9f9a72d
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact::input::mouse::MouseScrollEvent
 # Type category: Inline
-# Commit: 5fdd98b9 (dirty)
 module [
     MouseScrollEvent,
     write_bytes,

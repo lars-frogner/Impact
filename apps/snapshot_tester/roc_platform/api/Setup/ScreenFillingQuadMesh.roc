@@ -1,8 +1,7 @@
-# Hash: 039be90834b6694894a165ebf5878a01f38b8255f3a23377ce79f399bd94a4ba
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: e538caabae1ff090
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_mesh::setup::ScreenFillingQuadMesh
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     ScreenFillingQuadMesh,
     new,

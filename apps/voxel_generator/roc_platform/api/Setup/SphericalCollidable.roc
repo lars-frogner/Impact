@@ -1,8 +1,7 @@
-# Hash: a171023544346377c7363d043f7a85ea971268fd67e096c96cefb0934de3161b
-# Generated: 2025-12-19T22:41:42+00:00
+# Hash: 1cff6a0fa634b373
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_physics::collision::setup::SphericalCollidable
 # Type category: Component
-# Commit: 2214e649 (dirty)
 module [
     SphericalCollidable,
     new,

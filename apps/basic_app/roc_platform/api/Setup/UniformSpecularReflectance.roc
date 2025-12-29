@@ -1,8 +1,7 @@
-# Hash: f347cf80ca0871d484981ed298e910af0485aed805826ce6ed4f881fafd2ba17
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: bb5707acf123d21a
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_material::setup::physical::UniformSpecularReflectance
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     UniformSpecularReflectance,
     metal,

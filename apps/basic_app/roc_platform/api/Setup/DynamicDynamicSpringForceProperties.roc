@@ -1,8 +1,7 @@
-# Hash: b49f717adcab31317fc427e6f2b85714fc81e586c0353620b4ce200fae814c88
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: 28d63eb9f9ae189f
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_physics::force::spring_force::DynamicDynamicSpringForceProperties
 # Type category: Component
-# Commit: d4c84c05 (dirty)
 module [
     DynamicDynamicSpringForceProperties,
     new,

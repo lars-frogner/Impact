@@ -1,8 +1,7 @@
-# Hash: 39c433d364a13d83c87498b9f4544eea1d049b305f7ca649cbc067fba62f0755
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: ead10a4a6ec59747
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_dev_ui::command::UICommand
 # Type category: Inline
-# Commit: 397d36d3 (dirty)
 module [
     UICommand,
     write_bytes,

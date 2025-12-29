@@ -1,8 +1,7 @@
-# Hash: fa8196c08500edb69f30cced7cecad04095ab9934da2a0c75205a1d4d57d622f
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: bb4d3d764bcb1ccc
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_mesh::setup::HemisphereMesh
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     HemisphereMesh,
     new,

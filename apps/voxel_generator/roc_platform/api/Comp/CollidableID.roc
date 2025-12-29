@@ -1,8 +1,7 @@
-# Hash: 4a368570f0488dd158cf13eb8950799d91fead5e254498016053223657e02963
-# Generated: 2025-09-20T15:19:09+00:00
+# Hash: 25f653b862dc4aa5
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_physics::collision::CollidableID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     CollidableID,
     add,

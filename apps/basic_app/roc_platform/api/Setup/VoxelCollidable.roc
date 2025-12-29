@@ -1,8 +1,7 @@
-# Hash: a80fc21cbe3b994b285b9356234d33bbfe378c92c5fcd98a53c5380b6cf45082
-# Generated: 2025-12-17T23:58:02+00:00
+# Hash: 8ac10f89106175fe
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_voxel::collidable::setup::VoxelCollidable
 # Type category: Component
-# Commit: 7d41822d (dirty)
 module [
     VoxelCollidable,
     new,

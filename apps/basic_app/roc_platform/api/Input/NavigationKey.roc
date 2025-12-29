@@ -1,8 +1,7 @@
-# Hash: 53da30cfc17fa74c50b8d59aa29a164fffeae56a3d8440835a48d810bd55decf
-# Generated: 2025-09-19T18:59:31+00:00
+# Hash: d8c6676bb7524c39
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact::input::key::NavigationKey
 # Type category: Inline
-# Commit: ff568180 (dirty)
 module [
     NavigationKey,
     write_bytes,

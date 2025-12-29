@@ -1,8 +1,7 @@
-# Hash: 17a35fbd4cbd72db5810e272a717b6f8171e171f57e65c4bb2737d4d0421e0d1
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: 5d29b7b40d270e7e
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_mesh::setup::SphericalLightVolumeMesh
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     SphericalLightVolumeMesh,
     new,

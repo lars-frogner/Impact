@@ -1,8 +1,7 @@
-# Hash: 589d9df88500798879e45c15e89195cc358efdf46ec03530e9487a1f48e880cd
-# Generated: 2025-09-20T21:03:53+00:00
+# Hash: 1cf66ea2ae9dff00
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact::input::mouse::CursorDirection
 # Type category: Inline
-# Commit: 5fdd98b9 (dirty)
 module [
     CursorDirection,
     write_bytes,

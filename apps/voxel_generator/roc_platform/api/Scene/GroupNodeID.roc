@@ -1,8 +1,7 @@
-# Hash: b6089f05393da09238ddfaf9f83414f2c3d6dd4b31f25e5d51fa023937fc9434
-# Generated: 2025-07-27T14:52:58+00:00
+# Hash: af2daeb0ed08ddd0
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_scene::graph::GroupNodeID
 # Type category: POD
-# Commit: 397d36d3 (dirty)
 module [
     GroupNodeID,
     write_bytes,
