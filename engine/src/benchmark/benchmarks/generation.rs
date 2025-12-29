@@ -94,22 +94,6 @@ pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
     benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
 }
 
-pub fn generate_object_with_multiscale_spheres(benchmarker: impl Benchmarker) {
-    let mut graph = SDFGraph::new_in(Global);
-    let sphere_id = graph.add_node(SDFNode::new_sphere(40.0));
-    graph.add_node(SDFNode::new_multiscale_sphere(
-        sphere_id, 4, 10.0, 0.5, 1.0, 1.0, 0.3, 0,
-    ));
-    let sdf_generator = graph.build_in(Global).unwrap();
-
-    let generator = SDFVoxelGenerator::new(
-        1.0,
-        sdf_generator,
-        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-    );
-    benchmarker.benchmark(&mut || ChunkedVoxelObject::generate_without_derived_state(&generator));
-}
-
 pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarker) {
     let mut graph = SDFGraph::new_in(Global);
     graph.add_node(SDFNode::new_box([80.0; 3]));

@@ -14,13 +14,12 @@ use impact_math::{
     consts::f32::FRAC_1_SQRT_3,
     matrix::Matrix4,
     point::Point3,
-    quaternion::{Quaternion, UnitQuaternion},
+    quaternion::UnitQuaternion,
     transform::Similarity3,
-    vector::{UnitVector3, Vector3, Vector4},
+    vector::{UnitVector3, Vector3},
 };
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
-use std::{array, f32, mem};
-use twox_hash::XxHash32;
+use std::{f32, mem};
 
 /// A signed distance field generator.
 ///
@@ -74,7 +73,6 @@ pub enum SDFNode {
 
     // Modifiers
     MultifractalNoise(MultifractalNoiseSDFModifier),
-    MultiscaleSphere(MultiscaleSphereSDFModifier),
 
     // Combination
     Union(SDFUnion),
@@ -178,27 +176,6 @@ pub struct MultifractalNoiseSDFModifier {
     persistence: f32,
     amplitude: f32,
     noise_scale: f32,
-    seed: u32,
-}
-
-/// Modifier for a signed distance field that performs a stochastic multiscale
-/// modification of the signed distance around the surface. This is done by
-/// superimposing a field representing a grid of spheres with randomized radii,
-/// which is unioned with the original field aroud the surface. This is repeated
-/// for each octave with successively smaller and more numerous spheres.
-///
-/// See <https://iquilezles.org/articles/fbmsdf/> for more information.
-///
-/// The output will be a valid signed distance field.
-#[derive(Clone, Debug)]
-pub struct MultiscaleSphereSDFModifier {
-    pub child_id: SDFNodeID,
-    octaves: u32,
-    frequency: f32,
-    persistence: f32,
-    scaled_inflation: f32,
-    scaled_intersection_smoothness: Smoothness,
-    union_smoothness: Smoothness,
     seed: u32,
 }
 
@@ -316,10 +293,6 @@ impl<A: Allocator> SDFGenerator<A> {
                                 | SDFNode::MultifractalNoise(MultifractalNoiseSDFModifier {
                                     child_id,
                                     ..
-                                })
-                                | SDFNode::MultiscaleSphere(MultiscaleSphereSDFModifier {
-                                    child_id,
-                                    ..
                                 }) => {
                                     operation_stack.push(BuildOperation::VisitChildren(*child_id));
                                 }
@@ -410,16 +383,6 @@ impl<A: Allocator> SDFGenerator<A> {
                             }) => {
                                 let child_domain = &domains[*child_id as usize];
                                 domains[node_idx] = child_domain.expanded_about_center(*amplitude);
-
-                                leaf_counts[node_idx] = leaf_counts[*child_id as usize];
-                                required_padding[node_idx] = required_padding[*child_id as usize];
-                            }
-                            SDFNode::MultiscaleSphere(
-                                modifier @ MultiscaleSphereSDFModifier { child_id, .. },
-                            ) => {
-                                let child_domain = &domains[*child_id as usize];
-                                domains[node_idx] =
-                                    child_domain.expanded_about_center(modifier.domain_expansion());
 
                                 leaf_counts[node_idx] = leaf_counts[*child_id as usize];
                                 required_padding[node_idx] = required_padding[*child_id as usize];
@@ -515,8 +478,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         SDFNode::Translation(_)
                         | SDFNode::Rotation(_)
                         | SDFNode::Scaling(_)
-                        | SDFNode::MultifractalNoise(_)
-                        | SDFNode::MultiscaleSphere(_) => {}
+                        | SDFNode::MultifractalNoise(_) => {}
                     }
                 }
             }
@@ -608,14 +570,6 @@ impl<A: Allocator> SDFGenerator<A> {
                     // margin might come from a child point as far as `margin +
                     // amplitude` from the child surface
                     let margin_for_child = margin + modifier.amplitude;
-                    margin_stack[stack_top] = margin_for_child;
-                }
-                SDFNode::MultiscaleSphere(modifier) => {
-                    // Transform: The child of this node should have the same
-                    // transform as its parent
-
-                    // Margin: Same logic as for `MultifractalNoise`
-                    let margin_for_child = margin + modifier.domain_expansion();
                     margin_stack[stack_top] = margin_for_child;
                 }
                 &SDFNode::Union(SDFUnion { smoothness, .. })
@@ -827,38 +781,6 @@ impl<A: Allocator> SDFGenerator<A> {
                     );
                     }
                 }
-                SDFNode::MultiscaleSphere(modifier) => {
-                    let block_aabb_in_node_space =
-                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
-
-                    let distances = &mut buffers.signed_distance_stack[stack_top - 1];
-
-                    if !node
-                        .domain_with_margin
-                        .box_lies_outside(&block_aabb_in_node_space)
-                        || !all_block_test_positions_pass_predicate::<SIZE, COUNT>(
-                            &node.transform_to_node_space,
-                            block_origin_in_root_space,
-                            &|idx, position_in_node_space| {
-                                modifier
-                                    .modify_signed_distance(&position_in_node_space, distances[idx])
-                                    >= node.domain_margin
-                            },
-                        )
-                    {
-                        update_signed_distances_for_block::<SIZE, COUNT>(
-                            distances,
-                            &node.transform_to_node_space,
-                            block_origin_in_root_space,
-                            &|signed_distance, position_in_node_space| {
-                                *signed_distance = modifier.modify_signed_distance(
-                                    position_in_node_space,
-                                    *signed_distance,
-                                );
-                            },
-                        );
-                    }
-                }
                 &SDFNode::Union(SDFUnion { smoothness, .. }) => {
                     debug_assert!(stack_top >= 2);
                     stack_top -= 1;
@@ -1024,17 +946,6 @@ impl<A: Allocator> SDFGenerator<A> {
                         block_origin_in_root_space,
                     );
                 }
-                SDFNode::MultiscaleSphere(modifier) => {
-                    update_signed_distances_for_block::<SIZE, COUNT>(
-                        &mut buffers.signed_distance_stack[stack_top - 1],
-                        &node.transform_to_node_space,
-                        block_origin_in_root_space,
-                        &|signed_distance, position_in_node_space| {
-                            *signed_distance = modifier
-                                .modify_signed_distance(position_in_node_space, *signed_distance);
-                        },
-                    );
-                }
                 &SDFNode::Union(SDFUnion { smoothness, .. }) => {
                     debug_assert!(stack_top >= 2);
                     stack_top -= 1;
@@ -1185,29 +1096,6 @@ impl SDFNode {
             lacunarity,
             persistence,
             amplitude,
-            seed,
-        ))
-    }
-
-    #[inline]
-    pub fn new_multiscale_sphere(
-        child_id: SDFNodeID,
-        octaves: u32,
-        max_scale: f32,
-        persistence: f32,
-        inflation: f32,
-        intersection_smoothness: f32,
-        union_smoothness: f32,
-        seed: u32,
-    ) -> Self {
-        Self::MultiscaleSphere(MultiscaleSphereSDFModifier::new(
-            child_id,
-            octaves,
-            max_scale,
-            persistence,
-            inflation,
-            intersection_smoothness,
-            union_smoothness,
             seed,
         ))
     }
@@ -1650,174 +1538,6 @@ impl MultifractalNoiseSDFModifier {
         }
 
         true
-    }
-}
-
-impl MultiscaleSphereSDFModifier {
-    /// Inflation should probably always be 1.0. Intersection smoothness should
-    /// probably exceed inflation.
-    #[inline]
-    pub fn new(
-        child_id: SDFNodeID,
-        octaves: u32,
-        max_scale: f32,
-        persistence: f32,
-        inflation: f32,
-        intersection_smoothness: f32,
-        union_smoothness: f32,
-        seed: u32,
-    ) -> Self {
-        let frequency = 0.5 / max_scale;
-
-        // Scale inflation and intersection smoothness according to the scale of
-        // perturbations
-        let scaled_inflation = max_scale * inflation;
-        let scaled_intersection_smoothness = max_scale * intersection_smoothness;
-
-        Self {
-            child_id,
-            octaves,
-            frequency,
-            persistence,
-            scaled_inflation,
-            scaled_intersection_smoothness: scaled_intersection_smoothness.into(),
-            union_smoothness: union_smoothness.into(),
-            seed,
-        }
-    }
-
-    #[inline]
-    pub fn octaves(&self) -> u32 {
-        self.octaves
-    }
-
-    #[inline]
-    pub fn max_scale(&self) -> f32 {
-        0.5 / self.frequency
-    }
-
-    #[inline]
-    pub fn persistence(&self) -> f32 {
-        self.persistence
-    }
-
-    #[inline]
-    pub fn inflation(&self) -> f32 {
-        self.scaled_inflation / self.max_scale()
-    }
-
-    #[inline]
-    pub fn intersection_smoothness(&self) -> f32 {
-        self.scaled_intersection_smoothness.get() / self.max_scale()
-    }
-
-    #[inline]
-    pub fn union_smoothness(&self) -> f32 {
-        self.union_smoothness.get()
-    }
-
-    #[inline]
-    pub fn seed(&self) -> u32 {
-        self.seed
-    }
-
-    #[inline]
-    fn domain_expansion(&self) -> f32 {
-        self.scaled_inflation + displacement_due_to_smoothness(self.union_smoothness.get())
-    }
-
-    #[inline]
-    fn modify_signed_distance(&self, position_in_node_space: &Point3, signed_distance: f32) -> f32 {
-        /// Rotates with an angle of `2 * pi / golden_ratio` around the axis
-        /// `[1, 1, 1]` (to break up the regular grid pattern).
-        const ROTATION: UnitQuaternion = UnitQuaternion::unchecked_from(Quaternion::from_vector(
-            Vector4::new(0.5381091, 0.5381091, 0.5381091, -0.3623749),
-        ));
-
-        let mut parent_distance = signed_distance;
-        let mut position = self.frequency * position_in_node_space;
-        let mut scale = 1.0;
-
-        for _ in 0..self.octaves {
-            let sphere_grid_distance = scale * self.evaluate_sphere_grid_sdf(&position);
-
-            let intersected_sphere_grid_distance = smooth_sdf_intersection(
-                sphere_grid_distance,
-                parent_distance - self.scaled_inflation * scale,
-                self.scaled_intersection_smoothness.scaled(scale),
-            );
-
-            parent_distance = smooth_sdf_union(
-                intersected_sphere_grid_distance,
-                parent_distance,
-                self.union_smoothness.scaled(scale),
-            );
-
-            position = ROTATION.rotate_point(&(position / self.persistence));
-
-            scale *= self.persistence;
-        }
-        parent_distance
-    }
-
-    #[inline]
-    fn evaluate_sphere_grid_sdf(&self, position: &Point3) -> f32 {
-        const CORNER_OFFSETS: [[i32; 3]; 8] = [
-            [0, 0, 0],
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 1, 1],
-            [1, 0, 0],
-            [1, 0, 1],
-            [1, 1, 0],
-            [1, 1, 1],
-        ];
-        let grid_cell_indices = [
-            position.x().floor() as i32,
-            position.y().floor() as i32,
-            position.z().floor() as i32,
-        ];
-        let offset_in_grid_cell =
-            position.as_vector() - Vector3::from(grid_cell_indices.map(|idx| idx as f32));
-
-        CORNER_OFFSETS
-            .iter()
-            .map(|corner_offsets| {
-                self.evaluate_corner_sphere_sdf(
-                    &grid_cell_indices,
-                    &offset_in_grid_cell,
-                    corner_offsets,
-                )
-            })
-            .min_by(|a, b| a.total_cmp(b))
-            .unwrap()
-    }
-
-    #[inline]
-    fn evaluate_corner_sphere_sdf(
-        &self,
-        grid_cell_indices: &[i32; 3],
-        offset_in_grid_cell: &Vector3,
-        corner_offsets: &[i32; 3],
-    ) -> f32 {
-        let sphere_radius = self.corner_sphere_radius(grid_cell_indices, corner_offsets);
-        let distance_to_sphere_center =
-            (offset_in_grid_cell - Vector3::from(corner_offsets.map(|idx| idx as f32))).norm();
-        distance_to_sphere_center - sphere_radius
-    }
-
-    /// Every sphere gets a random radius based on its location in the grid.
-    #[inline]
-    fn corner_sphere_radius(&self, grid_cell_indices: &[i32; 3], corner_offsets: &[i32; 3]) -> f32 {
-        // The maximum radius is half the extent of a grid cell, i.e. 0.5
-        const HASH_TO_RADIUS: f32 = 0.5 / u32::MAX as f32;
-        let hash = XxHash32::oneshot(
-            self.seed,
-            bytemuck::bytes_of(&array::from_fn::<i32, 3, _>(|idx| {
-                grid_cell_indices[idx] + corner_offsets[idx]
-            })),
-        );
-        HASH_TO_RADIUS * hash as f32
     }
 }
 

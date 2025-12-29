@@ -91,24 +91,6 @@ define_setup_type! {
 
 define_setup_type! {
     target = VoxelObjectID;
-    /// A modification to a voxel signed distance field based on unions with a
-    /// multiscale sphere grid (<https://iquilezles.org/articles/fbmsdf>/).
-    #[roc(parents = "Setup")]
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct MultiscaleSphereSDFModification {
-        pub octaves: u32,
-        pub max_scale: f32,
-        pub persistence: f32,
-        pub inflation: f32,
-        pub intersection_smoothness: f32,
-        pub union_smoothness: f32,
-        pub seed: u32,
-    }
-}
-
-define_setup_type! {
-    target = VoxelObjectID;
     /// An object made of voxels in a box configuration.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -306,39 +288,6 @@ impl GradientNoiseVoxelTypes {
 }
 
 #[roc]
-impl MultiscaleSphereSDFModification {
-    #[roc(body = r#"
-    {
-        octaves,
-        max_scale,
-        persistence,
-        inflation,
-        intersection_smoothness,
-        union_smoothness,
-        seed,
-    }"#)]
-    pub fn new(
-        octaves: u32,
-        max_scale: f32,
-        persistence: f32,
-        inflation: f32,
-        intersection_smoothness: f32,
-        union_smoothness: f32,
-        seed: u32,
-    ) -> Self {
-        Self {
-            octaves,
-            max_scale,
-            persistence,
-            inflation,
-            intersection_smoothness,
-            union_smoothness,
-            seed,
-        }
-    }
-}
-
-#[roc]
 impl MultifractalNoiseSDFModification {
     #[roc(body = r#"
     {
@@ -518,32 +467,9 @@ impl VoxelSphereUnion {
 
 pub fn apply_modifications<A: Allocator>(
     graph: &mut SDFGraph<A>,
-    mut node_id: SDFNodeID,
-    multiscale_sphere_modification: Option<&MultiscaleSphereSDFModification>,
+    node_id: SDFNodeID,
     multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>,
 ) {
-    if let Some(&MultiscaleSphereSDFModification {
-        octaves,
-        max_scale,
-        persistence,
-        inflation,
-        intersection_smoothness,
-        union_smoothness,
-        seed,
-    }) = multiscale_sphere_modification
-    {
-        node_id = graph.add_node(SDFNode::new_multiscale_sphere(
-            node_id,
-            octaves,
-            max_scale,
-            persistence,
-            inflation,
-            intersection_smoothness,
-            union_smoothness,
-            seed,
-        ));
-    }
-
     if let Some(&MultifractalNoiseSDFModification {
         octaves,
         frequency,

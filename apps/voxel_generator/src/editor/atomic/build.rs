@@ -1,8 +1,8 @@
 use super::AtomicNode;
 use impact::impact_alloc::Allocator;
 use impact_voxel::generation::sdf::{
-    MultifractalNoiseSDFModifier, MultiscaleSphereSDFModifier, SDFGraph, SDFIntersection, SDFNode,
-    SDFNodeID, SDFRotation, SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion,
+    MultifractalNoiseSDFModifier, SDFGraph, SDFIntersection, SDFNode, SDFNodeID, SDFRotation,
+    SDFScaling, SDFSubtraction, SDFTranslation, SDFUnion,
 };
 
 pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut Vec<AtomicNode>) {
@@ -15,7 +15,6 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
         SDFNode::Rotation(node) => AtomicNode::for_rotation(node),
         SDFNode::Scaling(node) => AtomicNode::for_scaling(node),
         SDFNode::MultifractalNoise(node) => AtomicNode::for_multifractal_noise(node),
-        SDFNode::MultiscaleSphere(node) => AtomicNode::for_multiscale_sphere(node),
         SDFNode::Union(node) => AtomicNode::for_union(node),
         SDFNode::Subtraction(node) => AtomicNode::for_subtraction(node),
         SDFNode::Intersection(node) => AtomicNode::for_intersection(node),
@@ -27,8 +26,7 @@ pub fn update_viewer_nodes<A: Allocator>(graph: &SDFGraph<A>, viewer_nodes: &mut
             SDFNode::Translation(SDFTranslation { child_id, .. })
             | SDFNode::Rotation(SDFRotation { child_id, .. })
             | SDFNode::Scaling(SDFScaling { child_id, .. })
-            | SDFNode::MultifractalNoise(MultifractalNoiseSDFModifier { child_id, .. })
-            | SDFNode::MultiscaleSphere(MultiscaleSphereSDFModifier { child_id, .. }) => {
+            | SDFNode::MultifractalNoise(MultifractalNoiseSDFModifier { child_id, .. }) => {
                 let child_idx = *child_id as usize;
                 viewer_nodes[child_idx].parents.push(idx as SDFNodeID);
             }

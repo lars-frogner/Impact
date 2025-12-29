@@ -8,7 +8,6 @@ impact_profiling::define_target_enum! {
         generate_sphere_union,
         generate_complex_object,
         generate_object_with_multifractal_noise,
-        generate_object_with_multiscale_spheres,
         generate_box_with_gradient_noise_voxel_types,
         compile_complex_meta_graph,
         build_complex_atomic_graph,
