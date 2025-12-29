@@ -78,8 +78,6 @@ struct ModuleHeader {
     timestamp: String,
     rust_type_path: Option<String>,
     type_category: GeneratedTypeCategory,
-    commit_sha: Option<String>,
-    commit_dirty: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -544,15 +542,6 @@ fn obtain_timestamp() -> String {
         .to_string()
 }
 
-fn obtain_git_commit_sha() -> Option<&'static str> {
-    let sha = env!("VERGEN_GIT_SHA");
-    if sha.is_empty() { None } else { Some(sha) }
-}
-
-fn git_commit_dirty() -> bool {
-    env!("VERGEN_GIT_DIRTY") == "true"
-}
-
 fn compute_module_code_hash(code: &str) -> String {
     format!("{:016x}", common_hashing::hash_str_to_u64(code))
 }
@@ -699,15 +688,11 @@ impl ModuleHeader {
         let code_hash = compute_module_code_hash(module_code);
         let rust_type_path = ty.rust_type_path.map(ToString::to_string);
         let type_category = GeneratedTypeCategory::from_type(ty);
-        let commit_sha = obtain_git_commit_sha().map(ToString::to_string);
-        let commit_dirty = git_commit_dirty();
         Self {
             code_hash,
             timestamp,
             rust_type_path,
             type_category,
-            commit_sha,
-            commit_dirty,
         }
     }
 
@@ -746,26 +731,11 @@ impl ModuleHeader {
         };
         let type_category = GeneratedTypeCategory::parse(type_category_str)?;
 
-        let mut commmit_line = String::new();
-        reader.read_line(&mut commmit_line)?;
-        let Some(commit_str) = Self::extract_module_header_commit_str(&commmit_line) else {
-            return Ok(None);
-        };
-        let (commit_sha, commit_dirty) = if commit_str == "-" {
-            (None, false)
-        } else if let Some(commit_sha) = commit_str.strip_suffix(" (dirty)") {
-            (Some(commit_sha.to_string()), true)
-        } else {
-            (Some(commit_str.to_string()), false)
-        };
-
         Ok(Some(Self {
             code_hash,
             timestamp,
             rust_type_path,
             type_category,
-            commit_sha,
-            commit_dirty,
         }))
     }
 
@@ -784,10 +754,6 @@ impl ModuleHeader {
     fn extract_module_header_type_category_str(fourth_line: &str) -> Option<&str> {
         Some(fourth_line.strip_prefix("# Type category: ")?.trim())
     }
-
-    fn extract_module_header_commit_str(fifth_line: &str) -> Option<&str> {
-        Some(fifth_line.strip_prefix("# Commit: ")?.trim())
-    }
 }
 
 impl fmt::Display for ModuleHeader {
@@ -800,16 +766,6 @@ impl fmt::Display for ModuleHeader {
             self.rust_type_path.as_deref().unwrap_or("-")
         )?;
         writeln!(f, "# Type category: {}", self.type_category)?;
-        writeln!(
-            f,
-            "# Commit: {sha}{dirty}",
-            sha = self.commit_sha.as_deref().unwrap_or("-"),
-            dirty = if self.commit_sha.is_some() && self.commit_dirty {
-                " (dirty)"
-            } else {
-                ""
-            }
-        )?;
         Ok(())
     }
 }
