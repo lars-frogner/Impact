@@ -553,8 +553,8 @@ fn git_commit_dirty() -> bool {
     env!("VERGEN_GIT_DIRTY") == "true"
 }
 
-fn compute_module_code_hash(code: &str) -> blake3::Hash {
-    blake3::hash(code.as_bytes())
+fn compute_module_code_hash(code: &str) -> String {
+    format!("{:016x}", common_hashing::hash_str_to_u64(code))
 }
 
 impl GeneratedTypeCategory {
@@ -673,7 +673,7 @@ impl Module {
     }
 
     fn code_is_unmodified(&self) -> bool {
-        let actual_hash = compute_module_code_hash(&self.code).to_string();
+        let actual_hash = compute_module_code_hash(&self.code);
         self.header.code_hash == actual_hash
     }
 
@@ -696,7 +696,7 @@ impl Module {
 
 impl ModuleHeader {
     fn new(timestamp: String, ty: &RegisteredType, module_code: &str) -> Self {
-        let code_hash = compute_module_code_hash(module_code).to_string();
+        let code_hash = compute_module_code_hash(module_code);
         let rust_type_path = ty.rust_type_path.map(ToString::to_string);
         let type_category = GeneratedTypeCategory::from_type(ty);
         let commit_sha = obtain_git_commit_sha().map(ToString::to_string);

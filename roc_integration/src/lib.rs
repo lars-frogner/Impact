@@ -167,7 +167,7 @@ pub trait RocPod: Roc + bytemuck::Pod {}
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RocTypeID(u64);
 
-// Use hash map and hash set consitent with Engine
+// Use hash map and hash set consistent with Engine
 #[cfg(feature = "roc_codegen")]
 type HashMap<K, V> = hashbrown::HashMap<K, V, rustc_hash::FxBuildHasher>;
 #[cfg(feature = "roc_codegen")]
