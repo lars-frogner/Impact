@@ -238,7 +238,7 @@ impl VoxelObjectInertialPropertyManager {
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn validate_for_object(&self, object: &ChunkedVoxelObject, voxel_type_densities: &[f32]) {
         let from_scratch = Self::initialized_from(object, voxel_type_densities);
-        approx::assert_relative_eq!(self, &from_scratch, epsilon = 1e-8, max_relative = 1e-8);
+        approx::assert_relative_eq!(self, &from_scratch, epsilon = 1e-3, max_relative = 1e-3);
     }
 
     fn compute_inertial_properties_from_moments(

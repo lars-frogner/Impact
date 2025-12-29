@@ -60,7 +60,7 @@ bench = false
 
 [[bin]]
 name = "split_off_disconnected_voxel_object_region"
-path = "fuzz_targets/split_off_disconnected_region.rs"
+path = "fuzz_targets/split_off_disconnected_voxel_object_region.rs"
 test = false
 doc = false
 bench = false

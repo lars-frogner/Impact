@@ -1200,7 +1200,7 @@ impl ChunkedVoxelObject {
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn validate_region_count(&self) {
         let region_count = self.count_regions();
-        assert!(region_count >= 1);
+        assert!(region_count >= 1 || self.contains_only_empty_voxels());
         let expected_region_count = self.count_regions_brute_force();
         assert_eq!(region_count, expected_region_count);
     }
