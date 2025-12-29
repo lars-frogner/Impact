@@ -97,6 +97,11 @@ impl Hash32 {
     pub const fn from_str(string: &str) -> Self {
         Self(const_fnv1a_hash::fnv1a_hash_str_32(string))
     }
+
+    /// Returns the hash as a `u32`.
+    pub const fn to_u32(&self) -> u32 {
+        self.0
+    }
 }
 
 impl From<Hash32> for u32 {
@@ -114,6 +119,11 @@ impl Hash64 {
     /// Computes a 64-bit hash of the given string literal.
     pub const fn from_str(string: &str) -> Self {
         Self(const_fnv1a_hash::fnv1a_hash_str_64(string))
+    }
+
+    /// Returns the hash as a `u64`.
+    pub const fn to_u64(&self) -> u64 {
+        self.0
     }
 }
 
