@@ -18,7 +18,6 @@ use impact_math::{
     transform::Similarity3,
     vector::{UnitVector3, Vector3, Vector4},
 };
-use ordered_float::OrderedFloat;
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::{array, f32, mem};
 use twox_hash::XxHash32;
@@ -1784,15 +1783,14 @@ impl MultiscaleSphereSDFModifier {
         CORNER_OFFSETS
             .iter()
             .map(|corner_offsets| {
-                OrderedFloat(self.evaluate_corner_sphere_sdf(
+                self.evaluate_corner_sphere_sdf(
                     &grid_cell_indices,
                     &offset_in_grid_cell,
                     corner_offsets,
-                ))
+                )
             })
-            .min()
+            .min_by(|a, b| a.total_cmp(b))
             .unwrap()
-            .0
     }
 
     #[inline]
