@@ -68,7 +68,7 @@ pub trait ChunkedVoxelGenerator {
 
 /// Generator for a voxel object from a signed distance field.
 #[derive(Clone, Debug)]
-pub struct SDFVoxelGenerator<A: Allocator> {
+pub struct SDFVoxelGenerator<A: Allocator = Global> {
     voxel_extent: f32,
     grid_shape: [usize; 3],
     shifted_grid_center: Point3,
