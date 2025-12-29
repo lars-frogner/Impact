@@ -47,11 +47,7 @@ impl PerspectiveCamera {
         near_distance,
         far_distance,
     }"#)]
-    pub fn new(
-        vertical_field_of_view: Radians,
-        near_distance: f32,
-        far_distance: f32,
-    ) -> Self {
+    pub fn new(vertical_field_of_view: Radians, near_distance: f32, far_distance: f32) -> Self {
         assert!(vertical_field_of_view.radians() > 0.0);
         assert!(near_distance > 0.0);
         assert!(far_distance > near_distance);
@@ -98,11 +94,7 @@ impl OrthographicCamera {
         near_distance,
         far_distance
     }"#)]
-    pub fn new(
-        vertical_field_of_view: Radians,
-        near_distance: f32,
-        far_distance: f32,
-    ) -> Self {
+    pub fn new(vertical_field_of_view: Radians, near_distance: f32, far_distance: f32) -> Self {
         assert!(vertical_field_of_view.radians() > 0.0);
         assert!(near_distance > 0.0);
         assert!(far_distance > near_distance);
