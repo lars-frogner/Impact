@@ -1,8 +1,7 @@
-# Hash: 1bc50bb527586f0464766366e67e12c2ad14d20c235ef0fcf5c2f0d95ee2366a
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: d23a39d081733718
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_scene::SceneGraphGroupNodeHandle
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     SceneGraphGroupNodeHandle,
     new,

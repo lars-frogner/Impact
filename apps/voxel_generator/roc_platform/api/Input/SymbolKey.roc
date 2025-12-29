@@ -1,8 +1,7 @@
-# Hash: 25308ad19efb940fbb72d21f48656ff0b7a5347a1037af77ec19925b2f68e886
-# Generated: 2025-07-27T14:52:58+00:00
-# Rust type: impact::window::input::key::SymbolKey
+# Hash: bb5b8e525519fcfd
+# Generated: 2025-12-29T23:56:08.53639192
+# Rust type: impact::input::key::SymbolKey
 # Type category: Inline
-# Commit: 397d36d3 (dirty)
 module [
     SymbolKey,
     write_bytes,

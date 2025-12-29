@@ -1,8 +1,7 @@
-# Hash: 840da5a91f639e3fb6b066672d088a48dabb94aefeb398a78f60a88f2701895e
-# Generated: 2025-12-29T15:56:38.519989298
+# Hash: ea255e8ea7cfed90
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_light::ShadowableUnidirectionalEmission
 # Type category: Component
-# Commit: 68743830 (dirty)
 module [
     ShadowableUnidirectionalEmission,
     new,

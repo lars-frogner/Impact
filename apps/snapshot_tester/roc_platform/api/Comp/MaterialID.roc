@@ -1,8 +1,7 @@
-# Hash: ba78825ef485aa7de8e422ffbcc94c2aacb938f6c829fd43bd16a5f14316da0a
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: 0d32a68c1a788969
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_material::MaterialID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     MaterialID,
     from_name,

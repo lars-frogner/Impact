@@ -1,8 +1,7 @@
-# Hash: c47d1dc25dc99a8a6b65b17ca6735db59ee217f4a20a8899f262975bcd9574db
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: f48c29b5d65dc823
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_material::setup::physical::UniformMetalness
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     UniformMetalness,
     dielectric,

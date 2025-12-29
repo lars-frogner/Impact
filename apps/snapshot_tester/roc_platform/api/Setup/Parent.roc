@@ -1,8 +1,7 @@
-# Hash: d04912b96e5f201c6e372dfabf9cc945a7c22fdb8d9b40b4d22d39b0713dce8f
-# Generated: 2025-09-20T12:42:00+00:00
+# Hash: a3dd79a84c0dadc2
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_scene::setup::Parent
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     Parent,
     new,

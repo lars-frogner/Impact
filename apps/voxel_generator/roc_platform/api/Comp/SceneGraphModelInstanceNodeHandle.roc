@@ -1,8 +1,7 @@
-# Hash: 8dd3a43882d81d35eff4ac5132d6281a7ceade549c0578cae34d2adb4e3ee318
-# Generated: 2025-09-20T15:19:09+00:00
+# Hash: 27d52005da22c49b
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_scene::SceneGraphModelInstanceNodeHandle
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     SceneGraphModelInstanceNodeHandle,
     new,

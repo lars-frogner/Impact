@@ -1,8 +1,7 @@
-# Hash: e9161116d3dbd5e19d96cfec2eddf06976c8d0dcf7e14b6d5d763622ed0c3fb7
-# Generated: 2025-12-28T22:31:32.972310936
+# Hash: ea189b568582e40e
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
-# Commit: cc167207 (dirty)
 module [
     ReferenceFrame,
     new,

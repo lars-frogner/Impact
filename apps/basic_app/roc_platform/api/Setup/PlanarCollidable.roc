@@ -1,8 +1,7 @@
-# Hash: 36b0bf84e9bd7b8e41c67a9a812c63144b8ac68f38372373698975f4752d7c22
-# Generated: 2025-12-19T22:40:56+00:00
+# Hash: 79cfecccb03167b0
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_physics::collision::setup::PlanarCollidable
 # Type category: Component
-# Commit: 2214e649 (dirty)
 module [
     PlanarCollidable,
     new,

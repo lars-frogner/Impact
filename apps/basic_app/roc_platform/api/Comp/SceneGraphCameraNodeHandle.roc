@@ -1,8 +1,7 @@
-# Hash: d1f03760ec9baead0871f52b43d37c33d8bee04a0261758627484af71e2bbffc
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: 1647a5301155212a
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_scene::SceneGraphCameraNodeHandle
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     SceneGraphCameraNodeHandle,
     new,

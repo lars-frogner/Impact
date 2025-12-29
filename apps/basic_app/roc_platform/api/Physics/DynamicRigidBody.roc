@@ -1,8 +1,7 @@
-# Hash: a07dbe6aeed3f1d1835cf0bbcb9f65e61caea333e16d7e25757e6793f496c206
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: 167d3d1bb692f544
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_physics::rigid_body::DynamicRigidBody
 # Type category: POD
-# Commit: d4c84c05 (dirty)
 module [
     DynamicRigidBody,
     write_bytes,

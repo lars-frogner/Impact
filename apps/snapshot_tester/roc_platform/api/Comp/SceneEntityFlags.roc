@@ -1,8 +1,7 @@
-# Hash: 7c9c1cd9375eba8dc9a54e9108f3f7adf80c35d8a450c52bd8704ddc4464244d
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: b7ee05742fe0b62a
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_scene::SceneEntityFlags
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     SceneEntityFlags,
     empty,

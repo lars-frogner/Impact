@@ -1,8 +1,7 @@
-# Hash: c9723995a9659d9914e09242a940f4c1704ba130e09ed9f482c8480a19a47bdb
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: 8d4bf17c1972d8e3
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_mesh::setup::SphereMesh
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     SphereMesh,
     new,

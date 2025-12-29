@@ -1,8 +1,7 @@
-# Hash: ab49b7dc939af5869c2e71fd9b1bc829f39585afd3f97895c043114e1d27f8e0
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: 4e31361c88756854
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectoryDriverID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     ConstantAccelerationTrajectoryDriverID,
     add,

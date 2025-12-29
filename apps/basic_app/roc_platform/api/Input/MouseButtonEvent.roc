@@ -1,8 +1,7 @@
-# Hash: ad3ed4a56a0f0daed48277aa13630ce3ab2edaa3e6cbdeaecc939319a52b2705
-# Generated: 2025-09-19T18:59:31+00:00
+# Hash: 832a4f174c75acd2
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact::input::mouse::MouseButtonEvent
 # Type category: Inline
-# Commit: ff568180 (dirty)
 module [
     MouseButtonEvent,
     write_bytes,

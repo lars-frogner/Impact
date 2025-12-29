@@ -1,8 +1,7 @@
-# Hash: f07886b687b6934c023c1b689b9ec52fbadd4b5435f2104d0cc3e26b46d468f1
-# Generated: 2025-09-19T14:54:30+00:00
+# Hash: 5a2d951becb2d5cf
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact::input::key::FunctionKey
 # Type category: Inline
-# Commit: fc08276f (dirty)
 module [
     FunctionKey,
     write_bytes,

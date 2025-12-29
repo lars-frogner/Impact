@@ -1,8 +1,7 @@
-# Hash: 54bdb19301c8fd0a778a902249f505af3c47387acd149ee43e08cb40352b25ae
-# Generated: 2025-09-20T12:42:13+00:00
+# Hash: 509fdf05aaacfe43
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_material::setup::physical::TexturedColor
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     TexturedColor,
     add,

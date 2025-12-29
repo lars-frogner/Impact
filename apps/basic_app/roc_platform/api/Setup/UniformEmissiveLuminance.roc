@@ -1,8 +1,7 @@
-# Hash: 06f1399a10bff0ffd08afa98d55e2ef79f689cbea7eacf1ca1955ce2287a6276
-# Generated: 2025-09-20T12:39:41+00:00
+# Hash: 153313209a808821
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_material::setup::physical::UniformEmissiveLuminance
 # Type category: Component
-# Commit: f9b55709 (dirty)
 module [
     UniformEmissiveLuminance,
     add,

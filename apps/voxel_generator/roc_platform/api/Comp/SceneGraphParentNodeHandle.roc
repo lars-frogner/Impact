@@ -1,8 +1,7 @@
-# Hash: 0c921252cf208d882ebb0a701baa064bbae3d3ae8fbb5fa358e9b3309f74f983
-# Generated: 2025-09-20T15:19:09+00:00
+# Hash: e43d7cda3424059d
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_scene::SceneGraphParentNodeHandle
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     SceneGraphParentNodeHandle,
     new,

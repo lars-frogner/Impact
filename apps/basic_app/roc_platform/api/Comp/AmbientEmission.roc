@@ -1,8 +1,7 @@
-# Hash: 6cb1713a5453c9575554615f65211f8142a440d6dcb89f5379a2ad4617906062
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: 6a43dfcf298cebf6
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_light::AmbientEmission
 # Type category: Component
-# Commit: d4c84c05 (dirty)
 module [
     AmbientEmission,
     new,

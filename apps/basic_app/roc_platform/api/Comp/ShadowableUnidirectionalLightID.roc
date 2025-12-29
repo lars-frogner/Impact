@@ -1,8 +1,7 @@
-# Hash: 6487aac50735974c24701ba135f3badb750551d15618add6bab22e472957303a
-# Generated: 2025-09-20T15:20:25+00:00
+# Hash: 65468d8bd7f60e45
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_light::ShadowableUnidirectionalLightID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     ShadowableUnidirectionalLightID,
     add,

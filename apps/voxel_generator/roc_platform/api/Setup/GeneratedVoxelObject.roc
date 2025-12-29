@@ -1,8 +1,7 @@
-# Hash: c88f6df6c2e61eab30e4b22fd29d8a16771d6247c526e311ccf2d02006a23609
-# Generated: 2025-12-17T23:54:08+00:00
+# Hash: 7f6d254a8af9f121
+# Generated: 2025-12-29T23:56:08.53639192
 # Rust type: impact_voxel::setup::GeneratedVoxelObject
 # Type category: Component
-# Commit: 7d41822d (dirty)
 module [
     GeneratedVoxelObject,
     new,

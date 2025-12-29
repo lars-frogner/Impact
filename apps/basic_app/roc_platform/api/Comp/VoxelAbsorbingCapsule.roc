@@ -1,8 +1,7 @@
-# Hash: 5067bf5c15d0349bb7f035ed147c0d1de69665f6d8a66aee0a36636b1897c21a
-# Generated: 2025-12-21T22:57:59+00:00
+# Hash: 41c584dbd3e65ba2
+# Generated: 2025-12-29T23:54:14.852607239
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingCapsule
 # Type category: Component
-# Commit: d4c84c05 (dirty)
 module [
     VoxelAbsorbingCapsule,
     new,

@@ -1,8 +1,7 @@
-# Hash: e1618fe8f322f06bf983b8d421d7b73bfa04913ffe8fe53333fb20ad2303ba1a
-# Generated: 2025-09-20T15:21:45+00:00
+# Hash: 819aaaf6cb104a2d
+# Generated: 2025-12-29T23:55:22.755341756
 # Rust type: impact_physics::force::spring_force::DynamicDynamicSpringForceGeneratorID
 # Type category: Component
-# Commit: d4065e65 (dirty)
 module [
     DynamicDynamicSpringForceGeneratorID,
     add,
