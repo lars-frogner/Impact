@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use ffi_utils::define_ffi;
+use ffi_helpers::define_ffi;
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 define_ffi! {

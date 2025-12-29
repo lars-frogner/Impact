@@ -1,7 +1,7 @@
 //! Calling functions in a Roc script.
 
-use anyhow::{Context, Result, anyhow};
-use ffi_utils::define_ffi;
+use anyhow::{anyhow, Context, Result};
+use ffi_helpers::define_ffi;
 use impact::{
     command::UserCommand,
     input::{

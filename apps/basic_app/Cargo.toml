@@ -126,7 +126,7 @@ roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 anyhow = "1.0"
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 env_logger = "0.11"
-ffi_utils = { path = "../../ffi_utils" }
+ffi_helpers = { path = "../../utils/ffi_helpers" }
 impact = { path = "../../engine", features = ["egui", "obj", "ply"] }
 impact_log = { path = "../../engine/crates/impact_log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }

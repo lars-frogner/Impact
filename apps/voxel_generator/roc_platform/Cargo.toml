@@ -9,7 +9,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 anyhow = "1.0"
-ffi_utils = { path = "../../../ffi_utils" }
+ffi_helpers = { path = "../../../utils/ffi_helpers" }
 impact_log = { path = "../../../engine/crates/impact_log" }
 libloading = "0.9"
 pastey = "0.2"

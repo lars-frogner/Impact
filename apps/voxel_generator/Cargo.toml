@@ -119,7 +119,7 @@ roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 anyhow = "1.0"
 bitflags = "2.9"
 env_logger = "0.11"
-ffi_utils = { path = "../../ffi_utils" }
+ffi_helpers = { path = "../../utils/ffi_helpers" }
 impact = { path = "../../engine", features = ["egui"] }
 impact_containers = { path = "../../engine/crates/impact_containers", features = ["serde"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }

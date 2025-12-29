@@ -1,8 +1,8 @@
 //! Calling functions in a Roc script.
 
 use crate::testing::TestScene;
-use anyhow::{Context, Result, anyhow};
-use ffi_utils::define_ffi;
+use anyhow::{anyhow, Context, Result};
+use ffi_helpers::define_ffi;
 use impact::roc_integration::Roc;
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
