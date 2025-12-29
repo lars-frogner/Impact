@@ -119,7 +119,7 @@ bitflags = { version = "2.6", optional = true }
 blake3 = { version = "1.8", optional = true }
 bytemuck = { version = "1.24", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"], optional = true }
-const-fnv1a-hash = "1.1"
+common_hashing = { path = '../utils/common_hashing' }
 hashbrown = "0.16"
 inventory = { version = "0.3", optional = true }
 rustc-hash = { version = "2.1", optional = true }
