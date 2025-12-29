@@ -12,9 +12,9 @@ use impact_gpu::{
     wgpu,
 };
 use impact_math::{
-    halton::HaltonSequence,
     hash::ConstStringHash64,
     quaternion::UnitQuaternionP,
+    random::halton::HaltonSequence,
     transform::{Isometry3, Projective3P},
     vector::Vector4P,
 };

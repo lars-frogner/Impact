@@ -27,9 +27,9 @@ use impact_gpu::{
 };
 use impact_math::{
     consts::f32::{PI, TWO_PI},
-    halton::HaltonSequence,
     hash::ConstStringHash64,
     hash64,
+    random::halton::HaltonSequence,
     vector::Vector4P,
 };
 use std::borrow::Cow;
