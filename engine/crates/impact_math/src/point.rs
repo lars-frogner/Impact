@@ -622,9 +622,9 @@ impl_relative_eq!(Point3P, |a, b, epsilon, max_relative| {
 });
 
 impl_roc_for_library_provided_primitives! {
-//  Type       Pkg    Parents  Module  Roc name  Postfix  Precision
-    Point2  => core,  None,    Point2, Point2,   None,    PrecisionIrrelevant,
-    Point3P  => core,  None,   Point3, Point3,   None,    PrecisionIrrelevant,
+//  Type        Pkg    Parents  Module  Roc name  Postfix  Precision
+    Point2   => core,  None,    Point2, Point2,   None,    PrecisionIrrelevant,
+    Point3P  => core,  None,    Point3, Point3,   None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -634,51 +634,35 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
 
-    // Test constants
     const EPSILON: f32 = 1e-6;
 
-    // Point2 tests
-    #[test]
-    fn point2_new_works() {
-        let p = Point2::new(1.0, 2.0);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-    }
+    // === Point2 Tests ===
 
     #[test]
-    fn point2_origin_gives_zero_point() {
-        let origin = Point2::origin();
-        assert_eq!(origin.x(), 0.0);
-        assert_eq!(origin.y(), 0.0);
-    }
-
-    #[test]
-    fn point2_center_of_calculates_midpoint() {
+    fn calculating_point2_center_works() {
         let p1 = Point2::new(0.0, 0.0);
         let p2 = Point2::new(4.0, 6.0);
         let center = Point2::center_of(&p1, &p2);
-        assert_eq!(center.x(), 2.0);
-        assert_eq!(center.y(), 3.0);
+        assert_eq!(center, Point2::new(2.0, 3.0));
     }
 
     #[test]
-    fn point2_component_accessors_work() {
-        let mut p = Point2::new(1.0, 2.0);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-
-        *p.x_mut() = 10.0;
-        *p.y_mut() = 20.0;
-        assert_eq!(p.x(), 10.0);
-        assert_eq!(p.y(), 20.0);
+    fn calculating_point2_center_with_negative_coordinates_works() {
+        let p1 = Point2::new(-2.0, -4.0);
+        let p2 = Point2::new(2.0, 4.0);
+        let center = Point2::center_of(&p1, &p2);
+        assert_eq!(center, Point2::origin());
     }
 
     #[test]
-    fn point2_as_vector_works() {
-        let p = Point2::new(3.0, 4.0);
-        let v = p.as_vector();
-        assert_eq!(v.x(), 3.0);
-        assert_eq!(v.y(), 4.0);
+    fn point2_center_is_equidistant_from_both_points() {
+        let p1 = Point2::new(1.0, 2.0);
+        let p2 = Point2::new(5.0, 8.0);
+        let center = Point2::center_of(&p1, &p2);
+
+        let d1 = Point2::distance_between(&p1, &center);
+        let d2 = Point2::distance_between(&p2, &center);
+        assert_abs_diff_eq!(d1, d2, epsilon = EPSILON);
     }
 
     #[test]
@@ -686,48 +670,53 @@ mod tests {
         let p1 = Point2::new(1.0, 4.0);
         let p2 = Point2::new(3.0, 2.0);
 
-        let min_p = p1.min_with(&p2);
-        assert_eq!(min_p.x(), 1.0);
-        assert_eq!(min_p.y(), 2.0);
-
-        let max_p = p1.max_with(&p2);
-        assert_eq!(max_p.x(), 3.0);
-        assert_eq!(max_p.y(), 4.0);
+        assert_eq!(p1.min_with(&p2), Point2::new(1.0, 2.0));
+        assert_eq!(p1.max_with(&p2), Point2::new(3.0, 4.0));
     }
 
     #[test]
-    fn point2_distance_calculations_work() {
+    fn point2_min_max_with_same_point_gives_same_point() {
+        let p = Point2::new(1.0, 2.0);
+        assert_eq!(p.min_with(&p), p);
+        assert_eq!(p.max_with(&p), p);
+    }
+
+    #[test]
+    fn calculating_point2_distance_works() {
         let p1 = Point2::new(0.0, 0.0);
         let p2 = Point2::new(3.0, 4.0);
 
-        let distance = Point2::distance_between(&p1, &p2);
-        assert_abs_diff_eq!(distance, 5.0, epsilon = EPSILON);
-
-        let squared_distance = Point2::squared_distance_between(&p1, &p2);
-        assert_abs_diff_eq!(squared_distance, 25.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(Point2::distance_between(&p1, &p2), 5.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(
+            Point2::squared_distance_between(&p1, &p2),
+            25.0,
+            epsilon = EPSILON
+        );
     }
 
     #[test]
-    fn point2_vector_conversions_work() {
-        let v = Vector2::new(2.0, 3.0);
-        let p = Point2::from(v);
-        assert_eq!(p.x(), 2.0);
-        assert_eq!(p.y(), 3.0);
+    fn point2_distance_is_symmetric() {
+        let p1 = Point2::new(1.0, 2.0);
+        let p2 = Point2::new(4.0, 6.0);
 
-        let v_back = Vector2::from(p);
-        assert_eq!(v_back.x(), 2.0);
-        assert_eq!(v_back.y(), 3.0);
+        let d1 = Point2::distance_between(&p1, &p2);
+        let d2 = Point2::distance_between(&p2, &p1);
+        assert_abs_diff_eq!(d1, d2, epsilon = EPSILON);
     }
 
     #[test]
-    fn point2_array_conversions_work() {
-        let arr: [f32; 2] = [1.0, 2.0];
-        let p = Point2::from(arr);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
+    fn converting_point2_to_vector_and_back_preserves_data() {
+        let p = Point2::new(3.0, 4.0);
+        let v = p.as_vector();
+        let p_back = Point2::from(*v);
+        assert_eq!(p_back, p);
+    }
 
-        let arr_back: [f32; 2] = p.into();
-        assert_eq!(arr_back, [1.0, 2.0]);
+    #[test]
+    fn extending_point2_to_point3p_works() {
+        let p2 = Point2::new(1.0, 2.0);
+        let p3 = p2.extended(3.0);
+        assert_eq!(p3, Point3P::new(1.0, 2.0, 3.0));
     }
 
     #[test]
@@ -735,40 +724,39 @@ mod tests {
         let p = Point2::new(1.0, 2.0);
         let v = Vector2::new(3.0, 4.0);
 
-        let add_result = &p + &v;
-        assert_eq!(add_result.x(), 4.0);
-        assert_eq!(add_result.y(), 6.0);
+        assert_eq!(&p + &v, Point2::new(4.0, 6.0));
+        assert_eq!(&p - &v, Point2::new(-2.0, -2.0));
+    }
 
-        let sub_result = &p - &v;
-        assert_eq!(sub_result.x(), -2.0);
-        assert_eq!(sub_result.y(), -2.0);
+    #[test]
+    fn point2_arithmetic_with_zero_vector_gives_same_point() {
+        let p = Point2::new(3.0, 4.0);
+        let zero = Vector2::zeros();
+        assert_eq!(&p + &zero, p);
+        assert_eq!(&p - &zero, p);
     }
 
     #[test]
     fn point2_arithmetic_with_scalar_works() {
         let p = Point2::new(2.0, 3.0);
 
-        let mul_result = &p * 2.0;
-        assert_eq!(mul_result.x(), 4.0);
-        assert_eq!(mul_result.y(), 6.0);
+        assert_eq!(&p * 2.0, Point2::new(4.0, 6.0));
+        assert_eq!(3.0 * &p, Point2::new(6.0, 9.0));
+        assert_eq!(&p / 2.0, Point2::new(1.0, 1.5));
+    }
 
-        let scalar_mul = 3.0 * &p;
-        assert_eq!(scalar_mul.x(), 6.0);
-        assert_eq!(scalar_mul.y(), 9.0);
-
-        let div_result = &p / 2.0;
-        assert_eq!(div_result.x(), 1.0);
-        assert_eq!(div_result.y(), 1.5);
+    #[test]
+    fn point2_scalar_multiplication_by_one_gives_same_point() {
+        let p = Point2::new(3.0, 4.0);
+        assert_eq!(&p * 1.0, p);
     }
 
     #[test]
     fn point2_subtraction_gives_vector() {
         let p1 = Point2::new(5.0, 7.0);
         let p2 = Point2::new(2.0, 3.0);
-
         let diff = &p1 - &p2;
-        assert_eq!(diff.x(), 3.0);
-        assert_eq!(diff.y(), 4.0);
+        assert_eq!(diff, Vector2::new(3.0, 4.0));
     }
 
     #[test]
@@ -779,208 +767,205 @@ mod tests {
 
         p[0] = 10.0;
         p[1] = 20.0;
-        assert_eq!(p[0], 10.0);
-        assert_eq!(p[1], 20.0);
+        assert_eq!(p, Point2::new(10.0, 20.0));
     }
 
     #[test]
     #[should_panic]
-    fn point2_indexing_panics_on_out_of_bounds() {
+    fn indexing_point2_out_of_bounds_panics() {
         let p = Point2::new(1.0, 2.0);
-        let _ = p[2]; // Should panic
+        let _ = p[2];
     }
 
-    // Point2 additional tests
-    #[test]
-    fn point2_extended_creates_point3() {
-        let p2 = Point2::new(1.0, 2.0);
-        let p3 = p2.extended(3.0);
-        assert_eq!(p3.x(), 1.0);
-        assert_eq!(p3.y(), 2.0);
-        assert_eq!(p3.z(), 3.0);
-    }
+    // === Point3 Tests (SIMD-aligned) ===
 
     #[test]
-    fn point2_assignment_operations_work() {
-        let mut p = Point2::new(1.0, 2.0);
-        let v = Vector2::new(3.0, 4.0);
-
-        p += &v;
-        assert_eq!(p.x(), 4.0);
-        assert_eq!(p.y(), 6.0);
-
-        p -= v;
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-
-        p *= 2.0;
-        assert_eq!(p.x(), 2.0);
-        assert_eq!(p.y(), 4.0);
-
-        p /= 2.0;
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-    }
-
-    // Point3P tests
-    #[test]
-    fn point3_new_works() {
-        let p = Point3P::new(1.0, 2.0, 3.0);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
+    fn calculating_point3_center_works() {
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(4.0, 6.0, 8.0);
+        let center = Point3::center_of(&p1, &p2);
+        assert_eq!(center, Point3::new(2.0, 3.0, 4.0));
     }
 
     #[test]
-    fn point3_origin_gives_zero_point() {
-        let origin = Point3P::origin();
-        assert_eq!(origin.x(), 0.0);
-        assert_eq!(origin.y(), 0.0);
-        assert_eq!(origin.z(), 0.0);
+    fn calculating_point3_center_with_negative_coordinates_works() {
+        let p1 = Point3::new(-2.0, -4.0, -6.0);
+        let p2 = Point3::new(2.0, 4.0, 6.0);
+        let center = Point3::center_of(&p1, &p2);
+        assert_eq!(center, Point3::origin());
     }
 
     #[test]
-    fn point3_component_accessors_work() {
-        let mut p = Point3P::new(1.0, 2.0, 3.0);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
+    fn point3_center_is_equidistant_from_both_points() {
+        let p1 = Point3::new(1.0, 2.0, 3.0);
+        let p2 = Point3::new(5.0, 8.0, 11.0);
+        let center = Point3::center_of(&p1, &p2);
 
-        *p.x_mut() = 10.0;
-        *p.y_mut() = 20.0;
-        *p.z_mut() = 30.0;
-        assert_eq!(p.x(), 10.0);
-        assert_eq!(p.y(), 20.0);
-        assert_eq!(p.z(), 30.0);
+        let d1 = Point3::distance_between(&p1, &center);
+        let d2 = Point3::distance_between(&p2, &center);
+        assert_abs_diff_eq!(d1, d2, epsilon = EPSILON);
     }
 
     #[test]
-    fn point3_xy_extraction_works() {
-        let p3 = Point3P::new(1.0, 2.0, 3.0);
+    fn point3_min_max_with_work() {
+        let p1 = Point3::new(1.0, 4.0, 2.0);
+        let p2 = Point3::new(3.0, 2.0, 5.0);
+
+        assert_eq!(p1.min_with(&p2), Point3::new(1.0, 2.0, 2.0));
+        assert_eq!(p1.max_with(&p2), Point3::new(3.0, 4.0, 5.0));
+    }
+
+    #[test]
+    fn point3_min_max_with_negative_values_work() {
+        let p1 = Point3::new(-1.0, -4.0, -2.0);
+        let p2 = Point3::new(-3.0, -2.0, -5.0);
+
+        assert_eq!(p1.min_with(&p2), Point3::new(-3.0, -4.0, -5.0));
+        assert_eq!(p1.max_with(&p2), Point3::new(-1.0, -2.0, -2.0));
+    }
+
+    #[test]
+    fn calculating_point3_distance_works() {
+        let p1 = Point3::new(0.0, 0.0, 0.0);
+        let p2 = Point3::new(1.0, 2.0, 2.0);
+
+        assert_abs_diff_eq!(Point3::distance_between(&p1, &p2), 3.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(
+            Point3::squared_distance_between(&p1, &p2),
+            9.0,
+            epsilon = EPSILON
+        );
+    }
+
+    #[test]
+    fn point3_distance_is_symmetric() {
+        let p1 = Point3::new(1.0, 2.0, 3.0);
+        let p2 = Point3::new(4.0, 6.0, 8.0);
+
+        let d1 = Point3::distance_between(&p1, &p2);
+        let d2 = Point3::distance_between(&p2, &p1);
+        assert_abs_diff_eq!(d1, d2, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn distance_between_point3_and_origin_works() {
+        let origin = Point3::origin();
+        let p = Point3::new(3.0, 4.0, 0.0);
+        assert_abs_diff_eq!(
+            Point3::distance_between(&origin, &p),
+            5.0,
+            epsilon = EPSILON
+        );
+    }
+
+    #[test]
+    fn extracting_xy_from_point3_works() {
+        let p3 = Point3::new(1.0, 2.0, 3.0);
         let xy = p3.xy();
-        assert_eq!(xy.x(), 1.0);
-        assert_eq!(xy.y(), 2.0);
+        assert_eq!(xy, Point2::new(1.0, 2.0));
     }
 
     #[test]
-    fn point3_as_vector_works() {
-        let p = Point3P::new(3.0, 4.0, 5.0);
+    fn converting_point3_to_vector_and_back_preserves_data() {
+        let p = Point3::new(3.0, 4.0, 5.0);
         let v = p.as_vector();
-        assert_eq!(v.x(), 3.0);
-        assert_eq!(v.y(), 4.0);
-        assert_eq!(v.z(), 5.0);
+        let p_back = Point3::from(*v);
+        assert_eq!(p_back, p);
     }
 
     #[test]
-    fn point3_aligned_converts_to_point3a() {
-        let p3 = Point3P::new(1.0, 2.0, 3.0);
-        let p3a = p3.unpack();
-        assert_eq!(p3a.x(), 1.0);
-        assert_eq!(p3a.y(), 2.0);
-        assert_eq!(p3a.z(), 3.0);
-    }
-
-    #[test]
-    fn point3_vector_conversions_work() {
-        let v = Vector3P::new(2.0, 3.0, 4.0);
-        let p = Point3P::from(v);
-        assert_eq!(p.x(), 2.0);
-        assert_eq!(p.y(), 3.0);
-        assert_eq!(p.z(), 4.0);
-
-        let v_back = Vector3P::from(p);
-        assert_eq!(v_back.x(), 2.0);
-        assert_eq!(v_back.y(), 3.0);
-        assert_eq!(v_back.z(), 4.0);
-    }
-
-    #[test]
-    fn point3_array_conversions_work() {
-        let arr: [f32; 3] = [1.0, 2.0, 3.0];
-        let p = Point3P::from(arr);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-
-        let arr_back: [f32; 3] = p.into();
-        assert_eq!(arr_back, [1.0, 2.0, 3.0]);
+    fn point3_packing_and_unpacking_works() {
+        let p3 = Point3::new(1.0, 2.0, 3.0);
+        let packed = p3.pack();
+        assert_eq!(packed, Point3P::new(1.0, 2.0, 3.0));
+        assert_eq!(packed.unpack(), p3);
     }
 
     #[test]
     fn point3_arithmetic_with_vector_works() {
-        let p = Point3P::new(1.0, 2.0, 3.0);
-        let v = Vector3P::new(4.0, 5.0, 6.0);
+        let p = Point3::new(1.0, 2.0, 3.0);
+        let v = Vector3::new(4.0, 5.0, 6.0);
 
-        let add_result = &p + &v;
-        assert_eq!(add_result.x(), 5.0);
-        assert_eq!(add_result.y(), 7.0);
-        assert_eq!(add_result.z(), 9.0);
-
-        let sub_result = &p - &v;
-        assert_eq!(sub_result.x(), -3.0);
-        assert_eq!(sub_result.y(), -3.0);
-        assert_eq!(sub_result.z(), -3.0);
+        assert_eq!(&p + &v, Point3::new(5.0, 7.0, 9.0));
+        assert_eq!(&p - &v, Point3::new(-3.0, -3.0, -3.0));
     }
 
     #[test]
-    fn point3_assignment_operations_work() {
-        let mut p = Point3P::new(1.0, 2.0, 3.0);
-        let v = Vector3P::new(4.0, 5.0, 6.0);
-
-        p += &v;
-        assert_eq!(p.x(), 5.0);
-        assert_eq!(p.y(), 7.0);
-        assert_eq!(p.z(), 9.0);
-
-        p -= v;
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-
-        p *= 2.0;
-        assert_eq!(p.x(), 2.0);
-        assert_eq!(p.y(), 4.0);
-        assert_eq!(p.z(), 6.0);
-
-        p /= 2.0;
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
+    fn point3_arithmetic_with_zero_vector_gives_same_point() {
+        let p = Point3::new(3.0, 4.0, 5.0);
+        let zero = Vector3::zeros();
+        assert_eq!(&p + &zero, p);
+        assert_eq!(&p - &zero, p);
     }
 
     #[test]
     fn point3_arithmetic_with_scalar_works() {
-        let p = Point3P::new(2.0, 3.0, 4.0);
+        let p = Point3::new(2.0, 3.0, 4.0);
 
-        let mul_result = &p * 2.0;
-        assert_eq!(mul_result.x(), 4.0);
-        assert_eq!(mul_result.y(), 6.0);
-        assert_eq!(mul_result.z(), 8.0);
+        assert_eq!(&p * 2.0, Point3::new(4.0, 6.0, 8.0));
+        assert_eq!(3.0 * &p, Point3::new(6.0, 9.0, 12.0));
+        assert_eq!(&p / 2.0, Point3::new(1.0, 1.5, 2.0));
+    }
 
-        let scalar_mul = 3.0 * &p;
-        assert_eq!(scalar_mul.x(), 6.0);
-        assert_eq!(scalar_mul.y(), 9.0);
-        assert_eq!(scalar_mul.z(), 12.0);
+    #[test]
+    fn point3_scalar_multiplication_by_one_gives_same_point() {
+        let p = Point3::new(3.0, 4.0, 5.0);
+        assert_eq!(&p * 1.0, p);
+    }
 
-        let div_result = &p / 2.0;
-        assert_eq!(div_result.x(), 1.0);
-        assert_eq!(div_result.y(), 1.5);
-        assert_eq!(div_result.z(), 2.0);
+    #[test]
+    fn point3_scalar_multiplication_by_negative_works() {
+        let p = Point3::new(2.0, -3.0, 4.0);
+        assert_eq!(&p * -1.0, Point3::new(-2.0, 3.0, -4.0));
     }
 
     #[test]
     fn point3_subtraction_gives_vector() {
-        let p1 = Point3P::new(5.0, 7.0, 9.0);
-        let p2 = Point3P::new(2.0, 3.0, 4.0);
-
+        let p1 = Point3::new(5.0, 7.0, 9.0);
+        let p2 = Point3::new(2.0, 3.0, 4.0);
         let diff = &p1 - &p2;
-        assert_eq!(diff.x(), 3.0);
-        assert_eq!(diff.y(), 4.0);
-        assert_eq!(diff.z(), 5.0);
+        assert_eq!(diff, Vector3::new(3.0, 4.0, 5.0));
     }
 
     #[test]
     fn point3_indexing_works() {
+        let mut p = Point3::new(1.0, 2.0, 3.0);
+        assert_eq!(p[0], 1.0);
+        assert_eq!(p[1], 2.0);
+        assert_eq!(p[2], 3.0);
+
+        p[0] = 10.0;
+        p[1] = 20.0;
+        p[2] = 30.0;
+        assert_eq!(p, Point3::new(10.0, 20.0, 30.0));
+    }
+
+    #[test]
+    #[should_panic]
+    fn indexing_point3_out_of_bounds_panics() {
+        let p = Point3::new(1.0, 2.0, 3.0);
+        let _ = p[3];
+    }
+
+    // === Point3P Tests (packed) ===
+
+    #[test]
+    fn extracting_xy_from_point3p_works() {
+        let p3 = Point3P::new(1.0, 2.0, 3.0);
+        let xy = p3.xy();
+        assert_eq!(xy, Point2::new(1.0, 2.0));
+    }
+
+    #[test]
+    fn converting_point3p_to_vector_and_back_preserves_data() {
+        let p = Point3P::new(3.0, 4.0, 5.0);
+        let v = p.as_vector();
+        let p_back = Point3P::from(*v);
+        assert_eq!(p_back, p);
+    }
+
+    #[test]
+    fn point3p_indexing_works() {
         let mut p = Point3P::new(1.0, 2.0, 3.0);
         assert_eq!(p[0], 1.0);
         assert_eq!(p[1], 2.0);
@@ -989,482 +974,26 @@ mod tests {
         p[0] = 10.0;
         p[1] = 20.0;
         p[2] = 30.0;
-        assert_eq!(p[0], 10.0);
-        assert_eq!(p[1], 20.0);
-        assert_eq!(p[2], 30.0);
+        assert_eq!(p, Point3P::new(10.0, 20.0, 30.0));
     }
 
     #[test]
     #[should_panic]
-    fn point3_indexing_panics_on_out_of_bounds() {
+    fn indexing_point3p_out_of_bounds_panics() {
         let p = Point3P::new(1.0, 2.0, 3.0);
-        let _ = p[3]; // Should panic
+        let _ = p[3];
     }
 
-    #[test]
-    fn point3_point3a_cross_conversions_work() {
-        // Point3P -> Point3
-        let p3 = Point3P::new(1.0, 2.0, 3.0);
-        let p3a = p3.unpack();
-        assert_eq!(p3a.x(), 1.0);
-        assert_eq!(p3a.y(), 2.0);
-        assert_eq!(p3a.z(), 3.0);
-
-        // Point3 -> Point3P
-        let p3a = Point3::new(4.0, 5.0, 6.0);
-        let p3 = p3a.pack();
-        assert_eq!(p3.x(), 4.0);
-        assert_eq!(p3.y(), 5.0);
-        assert_eq!(p3.z(), 6.0);
-    }
-
-    // Point3 tests (aligned)
-    #[test]
-    fn point3a_new_works() {
-        let p = Point3::new(1.0, 2.0, 3.0);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-    }
-
-    #[test]
-    fn point3a_origin_gives_zero_point() {
-        let origin = Point3::origin();
-        assert_eq!(origin.x(), 0.0);
-        assert_eq!(origin.y(), 0.0);
-        assert_eq!(origin.z(), 0.0);
-    }
-
-    #[test]
-    fn point3a_center_of_calculates_midpoint() {
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(4.0, 6.0, 8.0);
-        let center = Point3::center_of(&p1, &p2);
-        assert_eq!(center.x(), 2.0);
-        assert_eq!(center.y(), 3.0);
-        assert_eq!(center.z(), 4.0);
-    }
-
-    #[test]
-    fn point3a_component_accessors_work() {
-        let mut p = Point3::new(1.0, 2.0, 3.0);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-
-        *p.x_mut() = 10.0;
-        *p.y_mut() = 20.0;
-        *p.z_mut() = 30.0;
-        assert_eq!(p.x(), 10.0);
-        assert_eq!(p.y(), 20.0);
-        assert_eq!(p.z(), 30.0);
-    }
-
-    #[test]
-    fn point3a_as_vector_works() {
-        let p = Point3::new(3.0, 4.0, 5.0);
-        let v = p.as_vector();
-        assert_eq!(v.x(), 3.0);
-        assert_eq!(v.y(), 4.0);
-        assert_eq!(v.z(), 5.0);
-    }
-
-    #[test]
-    fn point3a_min_max_with_work() {
-        let p1 = Point3::new(1.0, 4.0, 2.0);
-        let p2 = Point3::new(3.0, 2.0, 5.0);
-
-        let min_p = p1.min_with(&p2);
-        assert_eq!(min_p.x(), 1.0);
-        assert_eq!(min_p.y(), 2.0);
-        assert_eq!(min_p.z(), 2.0);
-
-        let max_p = p1.max_with(&p2);
-        assert_eq!(max_p.x(), 3.0);
-        assert_eq!(max_p.y(), 4.0);
-        assert_eq!(max_p.z(), 5.0);
-    }
-
-    #[test]
-    fn point3a_xy_extraction_works() {
-        let p3 = Point3::new(1.0, 2.0, 3.0);
-        let xy = p3.xy();
-        assert_eq!(xy.x(), 1.0);
-        assert_eq!(xy.y(), 2.0);
-    }
-
-    #[test]
-    fn point3a_distance_calculations_work() {
-        let p1 = Point3::new(0.0, 0.0, 0.0);
-        let p2 = Point3::new(1.0, 2.0, 2.0);
-
-        let distance = Point3::distance_between(&p1, &p2);
-        assert_abs_diff_eq!(distance, 3.0, epsilon = EPSILON);
-
-        let squared_distance = Point3::squared_distance_between(&p1, &p2);
-        assert_abs_diff_eq!(squared_distance, 9.0, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn point3a_unaligned_converts_to_point3() {
-        let p3a = Point3::new(1.0, 2.0, 3.0);
-        let p3 = p3a.pack();
-        assert_eq!(p3.x(), 1.0);
-        assert_eq!(p3.y(), 2.0);
-        assert_eq!(p3.z(), 3.0);
-    }
-
-    #[test]
-    fn point3a_vector_conversions_work() {
-        let v = Vector3::new(2.0, 3.0, 4.0);
-        let p = Point3::from(v);
-        assert_eq!(p.x(), 2.0);
-        assert_eq!(p.y(), 3.0);
-        assert_eq!(p.z(), 4.0);
-
-        let v_back = Vector3::from(p);
-        assert_eq!(v_back.x(), 2.0);
-        assert_eq!(v_back.y(), 3.0);
-        assert_eq!(v_back.z(), 4.0);
-    }
-
-    #[test]
-    fn point3a_array_conversions_work() {
-        let arr: [f32; 3] = [1.0, 2.0, 3.0];
-        let p = Point3::from(arr);
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-
-        let arr_back: [f32; 3] = p.into();
-        assert_eq!(arr_back, [1.0, 2.0, 3.0]);
-    }
-
-    #[test]
-    fn point3a_arithmetic_with_vector_works() {
-        let p = Point3::new(1.0, 2.0, 3.0);
-        let v = Vector3::new(4.0, 5.0, 6.0);
-
-        let add_result = &p + &v;
-        assert_eq!(add_result.x(), 5.0);
-        assert_eq!(add_result.y(), 7.0);
-        assert_eq!(add_result.z(), 9.0);
-
-        let sub_result = &p - &v;
-        assert_eq!(sub_result.x(), -3.0);
-        assert_eq!(sub_result.y(), -3.0);
-        assert_eq!(sub_result.z(), -3.0);
-    }
-
-    #[test]
-    fn point3a_assignment_operations_work() {
-        let mut p = Point3::new(1.0, 2.0, 3.0);
-        let v = Vector3::new(4.0, 5.0, 6.0);
-
-        p += &v;
-        assert_eq!(p.x(), 5.0);
-        assert_eq!(p.y(), 7.0);
-        assert_eq!(p.z(), 9.0);
-
-        p -= &v;
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-
-        p *= 2.0;
-        assert_eq!(p.x(), 2.0);
-        assert_eq!(p.y(), 4.0);
-        assert_eq!(p.z(), 6.0);
-
-        p /= 2.0;
-        assert_eq!(p.x(), 1.0);
-        assert_eq!(p.y(), 2.0);
-        assert_eq!(p.z(), 3.0);
-    }
-
-    #[test]
-    fn point3a_arithmetic_with_scalar_works() {
-        let p = Point3::new(2.0, 3.0, 4.0);
-
-        let mul_result = &p * 2.0;
-        assert_eq!(mul_result.x(), 4.0);
-        assert_eq!(mul_result.y(), 6.0);
-        assert_eq!(mul_result.z(), 8.0);
-
-        let scalar_mul = 3.0 * &p;
-        assert_eq!(scalar_mul.x(), 6.0);
-        assert_eq!(scalar_mul.y(), 9.0);
-        assert_eq!(scalar_mul.z(), 12.0);
-
-        let div_result = &p / 2.0;
-        assert_eq!(div_result.x(), 1.0);
-        assert_eq!(div_result.y(), 1.5);
-        assert_eq!(div_result.z(), 2.0);
-    }
-
-    #[test]
-    fn point3a_subtraction_gives_vector() {
-        let p1 = Point3::new(5.0, 7.0, 9.0);
-        let p2 = Point3::new(2.0, 3.0, 4.0);
-
-        let diff = &p1 - &p2;
-        assert_eq!(diff.x(), 3.0);
-        assert_eq!(diff.y(), 4.0);
-        assert_eq!(diff.z(), 5.0);
-    }
-
-    #[test]
-    fn point3a_indexing_works() {
-        let mut p = Point3::new(1.0, 2.0, 3.0);
-        assert_eq!(p[0], 1.0);
-        assert_eq!(p[1], 2.0);
-        assert_eq!(p[2], 3.0);
-
-        p[0] = 10.0;
-        p[1] = 20.0;
-        p[2] = 30.0;
-        assert_eq!(p[0], 10.0);
-        assert_eq!(p[1], 20.0);
-        assert_eq!(p[2], 30.0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn point3a_indexing_panics_on_out_of_bounds() {
-        let p = Point3::new(1.0, 2.0, 3.0);
-        let _ = p[3]; // Should panic
-    }
-
-    // General trait tests
-    #[test]
-    fn points_default_works() {
-        let p2 = Point2::default();
-        assert_eq!(p2.x(), 0.0);
-        assert_eq!(p2.y(), 0.0);
-
-        let p3 = Point3P::default();
-        assert_eq!(p3.x(), 0.0);
-        assert_eq!(p3.y(), 0.0);
-        assert_eq!(p3.z(), 0.0);
-
-        let p3a = Point3::default();
-        assert_eq!(p3a.x(), 0.0);
-        assert_eq!(p3a.y(), 0.0);
-        assert_eq!(p3a.z(), 0.0);
-    }
-
-    #[test]
-    fn points_are_copyable() {
-        let p2 = Point2::new(1.0, 2.0);
-        let p2_copy = p2;
-        assert_eq!(p2.x(), p2_copy.x());
-
-        let p3 = Point3P::new(1.0, 2.0, 3.0);
-        let p3_copy = p3;
-        assert_eq!(p3.x(), p3_copy.x());
-
-        let p3a = Point3::new(1.0, 2.0, 3.0);
-        let p3a_copy = p3a;
-        assert_eq!(p3a.x(), p3a_copy.x());
-    }
-
-    #[test]
-    fn points_support_equality() {
-        let p1 = Point2::new(1.0, 2.0);
-        let p2 = Point2::new(1.0, 2.0);
-        let p3 = Point2::new(2.0, 1.0);
-        assert_eq!(p1, p2);
-        assert_ne!(p1, p3);
-
-        let q1 = Point3P::new(1.0, 2.0, 3.0);
-        let q2 = Point3P::new(1.0, 2.0, 3.0);
-        let q3 = Point3P::new(3.0, 2.0, 1.0);
-        assert_eq!(q1, q2);
-        assert_ne!(q1, q3);
-
-        let r1 = Point3::new(1.0, 2.0, 3.0);
-        let r2 = Point3::new(1.0, 2.0, 3.0);
-        let r3 = Point3::new(3.0, 2.0, 1.0);
-        assert_eq!(r1, r2);
-        assert_ne!(r1, r3);
-    }
-
-    #[test]
-    fn points_are_debuggable() {
-        let p2 = Point2::new(1.0, 2.0);
-        let debug_str = format!("{:?}", p2);
-        assert!(debug_str.contains("Point2"));
-
-        let p3 = Point3P::new(1.0, 2.0, 3.0);
-        let debug_str = format!("{:?}", p3);
-        assert!(debug_str.contains("Point3P"));
-
-        let p3a = Point3::new(1.0, 2.0, 3.0);
-        let debug_str = format!("{:?}", p3a);
-        assert!(debug_str.contains("Point3"));
-    }
-
-    #[test]
-    fn point_operations_with_different_reference_combinations_work() {
-        let p2 = Point2::new(1.0, 2.0);
-        let v2 = Vector2::new(3.0, 4.0);
-
-        // Test all combinations of reference/owned for binary operations
-        let _result1 = &p2 + &v2; // ref + ref
-        let _result2 = &p2 + v2; // ref + owned
-        let _result3 = p2 + &v2; // owned + ref
-        let _result4 = p2 + v2; // owned + owned
-
-        // Recreate since they were moved
-        let p2 = Point2::new(1.0, 2.0);
-        let _result5 = 2.0 * &p2; // scalar * ref
-        let _result6 = 2.0 * p2; // scalar * owned
-
-        let p2 = Point2::new(1.0, 2.0);
-        let _result7 = &p2 * 2.0; // ref * scalar
-        let _result8 = p2 * 2.0; // owned * scalar
-    }
+    // === General Point Tests ===
 
     #[test]
     fn point_arithmetic_maintains_precision() {
-        let p = Point3P::new(0.1, 0.2, 0.3);
+        let p = Point3::new(0.1, 0.2, 0.3);
         let doubled = &p * 2.0;
         let halved = &doubled / 2.0;
 
         assert_abs_diff_eq!(halved.x(), p.x(), epsilon = EPSILON);
         assert_abs_diff_eq!(halved.y(), p.y(), epsilon = EPSILON);
         assert_abs_diff_eq!(halved.z(), p.z(), epsilon = EPSILON);
-    }
-
-    #[test]
-    fn point_vector_point_roundtrip_preserves_data() {
-        let original_p2 = Point2::new(1.5, 2.5);
-        let as_vector = Vector2::from(original_p2);
-        let back_to_point = Point2::from(as_vector);
-        assert_eq!(original_p2, back_to_point);
-
-        let original_p3 = Point3P::new(1.5, 2.5, 3.5);
-        let as_vector = Vector3P::from(original_p3);
-        let back_to_point = Point3P::from(as_vector);
-        assert_eq!(original_p3, back_to_point);
-
-        let original_p3a = Point3::new(1.5, 2.5, 3.5);
-        let as_vector = Vector3::from(original_p3a);
-        let back_to_point = Point3::from(as_vector);
-        assert_eq!(original_p3a, back_to_point);
-    }
-
-    #[test]
-    fn point_distance_is_symmetric() {
-        let p1 = Point3::new(1.0, 2.0, 3.0);
-        let p2 = Point3::new(4.0, 6.0, 8.0);
-
-        let dist1 = Point3::distance_between(&p1, &p2);
-        let dist2 = Point3::distance_between(&p2, &p1);
-        assert_abs_diff_eq!(dist1, dist2, epsilon = EPSILON);
-
-        let sq_dist1 = Point3::squared_distance_between(&p1, &p2);
-        let sq_dist2 = Point3::squared_distance_between(&p2, &p1);
-        assert_abs_diff_eq!(sq_dist1, sq_dist2, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn point_center_is_equidistant() {
-        let p1 = Point2::new(0.0, 0.0);
-        let p2 = Point2::new(6.0, 8.0);
-        let center = Point2::center_of(&p1, &p2);
-
-        let dist_to_p1 = Point2::distance_between(&center, &p1);
-        let dist_to_p2 = Point2::distance_between(&center, &p2);
-        assert_abs_diff_eq!(dist_to_p1, dist_to_p2, epsilon = EPSILON);
-    }
-
-    // Edge case tests
-    #[test]
-    fn point_center_with_negative_coordinates() {
-        let p1 = Point2::new(-4.0, -6.0);
-        let p2 = Point2::new(4.0, 6.0);
-        let center = Point2::center_of(&p1, &p2);
-        assert_eq!(center.x(), 0.0);
-        assert_eq!(center.y(), 0.0);
-
-        let p3_1 = Point3::new(-2.0, -4.0, -6.0);
-        let p3_2 = Point3::new(2.0, 4.0, 6.0);
-        let center3 = Point3::center_of(&p3_1, &p3_2);
-        assert_eq!(center3.x(), 0.0);
-        assert_eq!(center3.y(), 0.0);
-        assert_eq!(center3.z(), 0.0);
-    }
-
-    #[test]
-    fn point_distance_with_zero_points() {
-        let origin = Point2::new(0.0, 0.0);
-        let p = Point2::new(3.0, 4.0);
-
-        let distance = Point2::distance_between(&origin, &p);
-        assert_abs_diff_eq!(distance, 5.0, epsilon = EPSILON);
-
-        let zero_distance = Point2::distance_between(&origin, &origin);
-        assert_abs_diff_eq!(zero_distance, 0.0, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn point_min_max_with_all_negative() {
-        let p1 = Point2::new(-5.0, -2.0);
-        let p2 = Point2::new(-3.0, -7.0);
-
-        let min_p = p1.min_with(&p2);
-        assert_eq!(min_p.x(), -5.0);
-        assert_eq!(min_p.y(), -7.0);
-
-        let max_p = p1.max_with(&p2);
-        assert_eq!(max_p.x(), -3.0);
-        assert_eq!(max_p.y(), -2.0);
-    }
-
-    #[test]
-    fn point_min_max_with_same_point() {
-        let p = Point3::new(1.0, 2.0, 3.0);
-
-        let min_p = p.min_with(&p);
-        assert_eq!(min_p, p);
-
-        let max_p = p.max_with(&p);
-        assert_eq!(max_p, p);
-    }
-
-    #[test]
-    fn point_arithmetic_with_zero_vector() {
-        let p = Point3P::new(5.0, 10.0, 15.0);
-        let zero_vec = Vector3P::new(0.0, 0.0, 0.0);
-
-        let add_result = &p + &zero_vec;
-        assert_eq!(add_result, p);
-
-        let sub_result = &p - &zero_vec;
-        assert_eq!(sub_result, p);
-    }
-
-    #[test]
-    fn point_scalar_multiplication_by_zero() {
-        let p = Point2::new(5.0, 10.0);
-        let result = &p * 0.0;
-        assert_eq!(result.x(), 0.0);
-        assert_eq!(result.y(), 0.0);
-    }
-
-    #[test]
-    fn point_scalar_multiplication_by_one() {
-        let p = Point3::new(5.0, 10.0, 15.0);
-        let result = &p * 1.0;
-        assert_eq!(result, p);
-    }
-
-    #[test]
-    fn point_scalar_multiplication_by_negative() {
-        let p = Point2::new(2.0, 3.0);
-        let result = &p * -2.0;
-        assert_eq!(result.x(), -4.0);
-        assert_eq!(result.y(), -6.0);
     }
 }

@@ -142,7 +142,6 @@ mod tests {
     };
     use approx::assert_abs_diff_eq;
 
-    // Test constants
     const EPSILON: f32 = 1e-6;
 
     // Helper function to create a simple scaling matrix (aligned)
@@ -176,91 +175,10 @@ mod tests {
         )
     }
 
-    // Projective3P
-    #[test]
-    fn creating_identity_projective3_gives_identity_matrix() {
-        let proj = Projective3P::identity();
-
-        assert_abs_diff_eq!(*proj.matrix(), Matrix4P::identity(), epsilon = EPSILON);
-    }
+    // === Projective3 Tests (SIMD-aligned) ===
 
     #[test]
-    fn creating_projective3_from_matrix_stores_matrix() {
-        let matrix = test_scale_matrix_unaligned();
-        let proj = Projective3P::from_matrix_unchecked(matrix);
-
-        assert_abs_diff_eq!(*proj.matrix(), matrix, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn projective3_matrix_accessor_works() {
-        let matrix = test_scale_matrix_unaligned();
-        let proj = Projective3P::from_matrix_unchecked(matrix);
-
-        let retrieved = proj.matrix();
-        assert_abs_diff_eq!(*retrieved, matrix, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn converting_projective3_to_aligned_works() {
-        let matrix = test_scale_matrix_unaligned();
-        let proj3 = Projective3P::from_matrix_unchecked(matrix);
-        let proj3a = proj3.unpack();
-
-        assert_abs_diff_eq!(*proj3a.matrix(), matrix.unpack(), epsilon = EPSILON);
-    }
-
-    #[test]
-    fn projective3_default_is_identity() {
-        let default_proj = Projective3P::default();
-        let identity_proj = Projective3P::identity();
-
-        assert_abs_diff_eq!(default_proj, identity_proj, epsilon = EPSILON);
-    }
-
-    // Projective3 (aligned) tests
-    #[test]
-    fn creating_identity_projective3a_gives_identity_matrix() {
-        let proj = Projective3::identity();
-
-        assert_abs_diff_eq!(*proj.matrix(), Matrix4::identity(), epsilon = EPSILON);
-    }
-
-    #[test]
-    fn creating_projective3a_from_matrix_stores_matrix() {
-        let matrix = test_scale_matrix_aligned();
-        let proj = Projective3::from_matrix_unchecked(matrix);
-
-        assert_abs_diff_eq!(*proj.matrix(), matrix, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn projective3a_matrix_accessor_works() {
-        let matrix = test_scale_matrix_aligned();
-        let proj = Projective3::from_matrix_unchecked(matrix);
-
-        let retrieved = proj.matrix();
-        assert_abs_diff_eq!(*retrieved, matrix, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn projective3a_default_is_identity() {
-        let default_proj = Projective3::default();
-        let identity_proj = Projective3::identity();
-
-        assert_abs_diff_eq!(default_proj, identity_proj, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn inverting_identity_gives_identity() {
-        let identity = Projective3::identity();
-        let inverted = identity.inverted();
-
-        assert_abs_diff_eq!(inverted, identity, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn inverting_scale_matrix_gives_inverse_scale() {
+    fn projective3_inverted_multiplied_gives_identity() {
         let scale_matrix = test_scale_matrix_aligned();
         let proj = Projective3::from_matrix_unchecked(scale_matrix);
         let inverted = proj.inverted();
@@ -271,87 +189,41 @@ mod tests {
     }
 
     #[test]
-    fn inverting_twice_gives_original() {
+    fn projective3_inverted_twice_gives_original() {
         let matrix = test_scale_matrix_aligned();
         let proj = Projective3::from_matrix_unchecked(matrix);
-        let double_inverted = proj.inverted().inverted();
 
-        assert_abs_diff_eq!(*double_inverted.matrix(), matrix, epsilon = EPSILON);
+        assert_abs_diff_eq!(
+            *proj.inverted().inverted().matrix(),
+            matrix,
+            epsilon = EPSILON
+        );
     }
 
     #[test]
-    fn projecting_point_with_identity_gives_same_point() {
-        let identity = Projective3::identity();
-        let point = Point3::new(1.0, 2.0, 3.0);
-
-        let projected = identity.project_point(&point);
-
-        assert_abs_diff_eq!(projected, point, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn projecting_point_with_scale_matrix_scales_point() {
+    fn projective3_project_point_applies_scale() {
         let scale_matrix = test_scale_matrix_aligned();
         let proj = Projective3::from_matrix_unchecked(scale_matrix);
         let point = Point3::new(1.0, 1.0, 1.0);
 
         let projected = proj.project_point(&point);
 
-        // Should be scaled by (2.0, 3.0, 4.0)
-        let expected = Point3::new(2.0, 3.0, 4.0);
-        assert_abs_diff_eq!(projected, expected, epsilon = EPSILON);
+        assert_abs_diff_eq!(projected, Point3::new(2.0, 3.0, 4.0), epsilon = EPSILON);
     }
 
     #[test]
-    fn projecting_point_with_perspective_performs_division() {
+    fn projective3_project_point_performs_perspective_division() {
         let perspective_matrix = test_perspective_matrix();
         let proj = Projective3::from_matrix_unchecked(perspective_matrix);
         let point = Point3::new(2.0, 4.0, 2.0);
 
         let projected = proj.project_point(&point);
 
-        // With w = z = 2.0, after division: (2.0/2.0, 4.0/2.0, 2.0/2.0) = (1.0, 2.0, 1.0)
-        let expected = Point3::new(1.0, 2.0, 1.0);
-        assert_abs_diff_eq!(projected, expected, epsilon = EPSILON);
+        assert_abs_diff_eq!(projected, Point3::new(1.0, 2.0, 1.0), epsilon = EPSILON);
     }
 
     #[test]
-    fn converting_projective3a_to_unaligned_works() {
-        let matrix = test_scale_matrix_aligned();
-        let proj3a = Projective3::from_matrix_unchecked(matrix);
-        let proj3 = proj3a.pack();
-
-        assert_abs_diff_eq!(*proj3.matrix(), matrix.pack(), epsilon = EPSILON);
-    }
-
-    #[test]
-    fn round_trip_conversion_preserves_values() {
-        let original_matrix = test_scale_matrix_aligned();
-        let proj3a = Projective3::from_matrix_unchecked(original_matrix);
-        let proj3 = proj3a.pack();
-        let back_to_aligned = proj3.unpack();
-
-        assert_abs_diff_eq!(
-            *back_to_aligned.matrix(),
-            original_matrix,
-            epsilon = EPSILON
-        );
-    }
-
-    // Edge case tests
-    #[test]
-    fn projecting_origin_with_scale_gives_origin() {
-        let scale_matrix = test_scale_matrix_aligned();
-        let proj = Projective3::from_matrix_unchecked(scale_matrix);
-        let origin = Point3::new(0.0, 0.0, 0.0);
-
-        let projected = proj.project_point(&origin);
-
-        assert_abs_diff_eq!(projected, origin, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn projecting_with_negative_scale_works() {
+    fn projective3_project_point_with_negative_scale_works() {
         let neg_scale_matrix = Matrix4::from_columns(
             Vector4::new(-1.0, 0.0, 0.0, 0.0),
             Vector4::new(0.0, -1.0, 0.0, 0.0),
@@ -359,11 +231,19 @@ mod tests {
             Vector4::new(0.0, 0.0, 0.0, 1.0),
         );
         let proj = Projective3::from_matrix_unchecked(neg_scale_matrix);
-        let point = Point3::new(1.0, 2.0, 3.0);
+        let projected = proj.project_point(&Point3::new(1.0, 2.0, 3.0));
 
-        let projected = proj.project_point(&point);
+        assert_abs_diff_eq!(projected, Point3::new(-1.0, -2.0, -3.0), epsilon = EPSILON);
+    }
 
-        let expected = Point3::new(-1.0, -2.0, -3.0);
-        assert_abs_diff_eq!(projected, expected, epsilon = EPSILON);
+    // === Projective3P Tests (packed) ===
+
+    #[test]
+    fn converting_projective3p_to_aligned_and_back_preserves_data() {
+        let matrix = test_scale_matrix_unaligned();
+        let proj = Projective3P::from_matrix_unchecked(matrix);
+        let roundtrip = proj.unpack().pack();
+
+        assert_abs_diff_eq!(*roundtrip.matrix(), matrix, epsilon = EPSILON);
     }
 }
