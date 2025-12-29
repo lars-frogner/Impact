@@ -7,12 +7,10 @@ use impact_math::{
     angle::{degrees_to_radians, radians_to_degrees},
     power_law::sample_power_law,
 };
-use rand::{Rng, SeedableRng};
-use rand_pcg::Pcg64Mcg;
 use std::{f32::consts::PI, mem};
 use tinyvec::TinyVec;
 
-pub type ParamRng = Pcg64Mcg;
+pub type ParamRng = impact_math::random::Rng;
 
 pub type ParamIdx = u16;
 
@@ -123,7 +121,7 @@ impl DiscreteParamSpec {
             Self::Uniform { min, max } => {
                 let min_value = min.eval(param_values);
                 let max_value = max.eval(param_values).max(min_value);
-                rng.random_range(min_value..=max_value)
+                rng.random_u32_in_range(min_value..=max_value)
             }
         }
     }
@@ -164,7 +162,7 @@ impl ContParamSpec {
             Self::Uniform { min, max } => {
                 let min_value = min.eval(param_values);
                 let max_value = max.eval(param_values).max(min_value);
-                rng.random_range(min_value..=max_value)
+                rng.random_f32_in_range(min_value..max_value)
             }
             Self::UniformCosAngle {
                 min_angle,
@@ -179,7 +177,7 @@ impl ContParamSpec {
                 let min_cos = f32::cos(max_angle);
                 let max_cos = f32::cos(min_angle);
 
-                let cos_angle = rng.random_range(min_cos..=max_cos);
+                let cos_angle = rng.random_f32_in_range(min_cos..max_cos);
 
                 radians_to_degrees(f32::acos(cos_angle))
             }
@@ -187,7 +185,7 @@ impl ContParamSpec {
                 let min_value = min.eval(param_values);
                 let max_value = max.eval(param_values).max(min_value);
                 let exponent = exponent.eval(param_values);
-                sample_power_law(min_value, max_value, exponent, rng.random())
+                sample_power_law(min_value, max_value, exponent, rng.random_f32_fraction())
             }
         }
     }
@@ -245,7 +243,7 @@ impl ParamValueMapping {
 
 #[inline]
 pub fn create_param_rng(seed: u64) -> ParamRng {
-    ParamRng::seed_from_u64(seed)
+    ParamRng::with_seed(seed)
 }
 
 pub fn evaluate_params_for_node<const N: usize>(

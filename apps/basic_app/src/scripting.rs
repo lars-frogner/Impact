@@ -104,7 +104,7 @@ pub mod fuzzing {
     use super::*;
     use anyhow::bail;
     use arbitrary::{Arbitrary, Unstructured};
-    use rand::{Rng, SeedableRng, rngs::StdRng};
+    use impact::impact_math::random::Rng;
 
     pub fn fuzz_test_command_roundtrip(
         n_iterations: usize,
@@ -117,7 +117,7 @@ pub mod fuzzing {
             );
         }
 
-        let mut rng = StdRng::seed_from_u64(seed);
+        let mut rng = Rng::with_seed(seed);
         let mut byte_buffer = [0; std::mem::size_of::<UserCommand>()];
 
         for iteration in 0..n_iterations {
@@ -132,13 +132,13 @@ pub mod fuzzing {
         Ok(())
     }
 
-    fn execute_roundtrip_test(rng: &mut StdRng, byte_buffer: &mut [u8]) -> Result<()> {
+    fn execute_roundtrip_test(rng: &mut Rng, byte_buffer: &mut [u8]) -> Result<()> {
         let command = generate_command(rng, byte_buffer)?;
         test_command_roundtrip(command)
     }
 
-    fn generate_command(rng: &mut StdRng, byte_buffer: &mut [u8]) -> Result<UserCommand> {
-        rng.fill(byte_buffer);
+    fn generate_command(rng: &mut Rng, byte_buffer: &mut [u8]) -> Result<UserCommand> {
+        rng.fill_byte_slice(byte_buffer);
         let command = UserCommand::arbitrary(&mut Unstructured::new(byte_buffer))?;
         Ok(command)
     }

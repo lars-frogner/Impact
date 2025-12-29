@@ -48,7 +48,6 @@ pastey = "0.2"
 postcard = { version = "1.1", default-features = false, features = [
     "alloc",
 ] }
-rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 tinyvec = { version = "1.10", features = ["alloc"] }
 

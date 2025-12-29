@@ -22,16 +22,11 @@ use impact_math::{
     consts::f32::TWO_PI,
     point::Point3,
     quaternion::UnitQuaternion,
-    splitmix,
+    random::splitmix,
     transform::Similarity3,
     vector::{UnitVector3, Vector3},
 };
 use params::{ContParamSpec, DiscreteParamSpec, ParamRng, create_param_rng};
-use rand::{
-    Rng,
-    distr::{Distribution, Uniform},
-    seq::IndexedRandom,
-};
 use std::{array, borrow::Cow, f32::consts::PI, mem};
 
 #[derive(Clone, Debug)]
@@ -102,7 +97,7 @@ enum MetaSDFNodeOutput<A: Allocator> {
     Instances(AVec<Instance, A>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct Instance {
     shape: InstanceShape,
     /// Transform from the local space of this instance's shape into this
@@ -110,8 +105,9 @@ struct Instance {
     transform: Similarity3,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 enum InstanceShape {
+    #[default]
     None,
     Sphere(SphereShape),
     Capsule(CapsuleShape),
@@ -1482,7 +1478,7 @@ impl MetaStratifiedGridTransforms {
 
         let mut output_instances = AVec::with_capacity_in(instance_count, arena);
 
-        let uniform_distr = Uniform::new(-0.5, 0.5).unwrap();
+        let jitter_range = -0.5..0.5;
 
         for (instance_idx, input_instance) in input_instances.iter().enumerate() {
             let grid_cell_idx = (instance_idx * grid_cell_count) / instance_count;
@@ -1495,9 +1491,12 @@ impl MetaStratifiedGridTransforms {
             let y = start_pos[1] + j as f32 * cell_extents[1];
             let z = start_pos[2] + k as f32 * cell_extents[2];
 
-            let jx = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[0];
-            let jy = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[1];
-            let jz = uniform_distr.sample(&mut rng) * jitter_fraction * cell_extents[2];
+            let jx =
+                rng.random_f32_in_range(jitter_range.clone()) * jitter_fraction * cell_extents[0];
+            let jy =
+                rng.random_f32_in_range(jitter_range.clone()) * jitter_fraction * cell_extents[1];
+            let jz =
+                rng.random_f32_in_range(jitter_range.clone()) * jitter_fraction * cell_extents[2];
 
             let transform = Similarity3::from_parts(
                 Vector3::new(x + jx, y + jy, z + jz),
@@ -1850,7 +1849,7 @@ impl MetaStochasticSelection {
         let pick_probability = self.pick_probability.clamp(0.0, 1.0);
 
         let mut single_is_selected =
-            || *pick_count.start() > 0 && rng.random_range(0.0..1.0) < pick_probability;
+            || *pick_count.start() > 0 && rng.random_f32_fraction() < pick_probability;
 
         match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::SingleSDF(None) => MetaSDFNodeOutput::SingleSDF(None),
@@ -1859,20 +1858,34 @@ impl MetaStochasticSelection {
                 MetaSDFNodeOutput::SingleSDF(output_node_id)
             }
             MetaSDFNodeOutput::SDFGroup(input_node_ids) => {
+                let count = rng.random_u32_in_range(pick_count.clone());
+
+                let mut selected_input_node_ids =
+                    avec![0; (count as usize).min(input_node_ids.len())];
+
+                rng.clone_random_subset_from_slice(&mut selected_input_node_ids, input_node_ids);
+
                 let mut output_node_ids = AVec::with_capacity_in(input_node_ids.len(), arena);
-                let count = rng.random_range(pick_count.clone());
-                for &input_node_id in input_node_ids.choose_multiple(&mut rng, count as usize) {
-                    if rng.random_range(0.0..1.0) < pick_probability {
+
+                for input_node_id in selected_input_node_ids {
+                    if rng.random_f32_fraction() < pick_probability {
                         output_node_ids.push(input_node_id);
                     }
                 }
                 MetaSDFNodeOutput::SDFGroup(output_node_ids)
             }
             MetaSDFNodeOutput::Instances(input_instances) => {
+                let count = rng.random_u32_in_range(pick_count.clone());
+
+                let mut selected_input_instances =
+                    avec![Instance::default(); (count as usize).min(input_instances.len())];
+
+                rng.clone_random_subset_from_slice(&mut selected_input_instances, input_instances);
+
                 let mut output_instances = AVec::with_capacity_in(input_instances.len(), arena);
-                let count = rng.random_range(pick_count.clone());
-                for input_instance in input_instances.choose_multiple(&mut rng, count as usize) {
-                    if rng.random_range(0.0..1.0) < pick_probability {
+
+                for input_instance in selected_input_instances {
+                    if rng.random_f32_fraction() < pick_probability {
                         output_instances.push(input_instance.clone());
                     }
                 }
@@ -2053,7 +2066,7 @@ impl MetaMultifractalNoiseSDFModifier {
             seed,
             &outputs[self.child_id as usize],
             self.sampling,
-            |rng| Ok((self.sample_params(rng)?, rng.random::<u32>())),
+            |rng| Ok((self.sample_params(rng)?, rng.random_u32_in_range(..))),
             |(params, seed), input_node_id| {
                 SDFNode::new_multifractal_noise(
                     input_node_id,
@@ -2735,12 +2748,12 @@ fn compute_jittered_direction(
         return direction;
     }
 
-    let angle = rng.random_range(0.0..=max_jitter_angle);
+    let angle = rng.random_f32_in_range(0.0..max_jitter_angle);
 
     let mut axis = Vector3::new(
-        rng.random_range(-1.0..=1.0),
-        rng.random_range(-1.0..=1.0),
-        rng.random_range(-1.0..=1.0),
+        rng.random_f32_in_range(-1.0..1.0),
+        rng.random_f32_in_range(-1.0..1.0),
+        rng.random_f32_in_range(-1.0..1.0),
     );
 
     // Retain only the component perpendicular to `direction`

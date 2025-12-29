@@ -12,7 +12,7 @@ pub mod matrix;
 pub mod point;
 pub mod power_law;
 pub mod quaternion;
-pub mod splitmix;
+pub mod random;
 pub mod transform;
 pub mod vector;
 
