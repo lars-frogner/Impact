@@ -1,19 +1,18 @@
-[workspace]
-members = ["roc_integration_macros"]
-
-[workspace.package]
+[package]
+name = "common_hashing"
+description = "A common place for hashing functions that multiple systems must agree upon"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 
-[workspace.lints.rust]
+[lints.rust]
 future_incompatible = "warn"
 missing_debug_implementations = "warn"
 nonstandard_style = "warn"
 rust_2018_idioms = "warn"
 unexpected_cfgs = "warn"
 
-[workspace.lints.clippy]
+[lints.clippy]
 too_many_arguments = "allow"
 let_and_return = "allow"
 multiple_bound_locations = "allow"
@@ -92,43 +91,3 @@ unused_self = "warn"
 useless_transmute = "warn"
 verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
-
-[package]
-name = "roc_integration"
-description = "Roc language integration with the Impact engine"
-version = { workspace = true }
-edition = { workspace = true }
-license = { workspace = true }
-
-build = "build.rs"
-
-[features]
-cli = ["dep:clap"]
-roc_codegen = [
-    "roc_integration_macros/roc_codegen",
-    "dep:bitflags",
-    "dep:blake3",
-    "dep:inventory",
-    "dep:rustc-hash",
-    "dep:time",
-]
-
-[dependencies]
-anyhow = "1.0"
-bitflags = { version = "2.6", optional = true }
-blake3 = { version = "1.8", optional = true }
-bytemuck = { version = "1.24", features = ["derive"] }
-clap = { version = "4.5", features = ["derive"], optional = true }
-common_hashing = { path = '../utils/common_hashing' }
-hashbrown = "0.16"
-inventory = { version = "0.3", optional = true }
-rustc-hash = { version = "2.1", optional = true }
-time = { version = "0.3", features = ["formatting"], optional = true }
-
-roc_integration_macros = { path = "roc_integration_macros" }
-
-[build-dependencies]
-vergen-gitcl = { version = "1.0", features = [] }
-
-[lints]
-workspace = true

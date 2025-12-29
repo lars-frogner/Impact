@@ -177,7 +177,7 @@ impl RocTypeID {
     pub const fn hashed_from_str(input: &str) -> Self {
         // WARNING: we guarantee that this matches
         // `impact_ecs::component::ComponentID::hashed_from_str`
-        let hash = const_fnv1a_hash::fnv1a_hash_str_64(input);
+        let hash = common_hashing::hash_str_to_u64(input);
         Self(if hash == 0 { 1 } else { hash }) // Reserve the zero ID
     }
 

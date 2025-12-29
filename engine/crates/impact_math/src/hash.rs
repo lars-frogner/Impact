@@ -90,12 +90,12 @@ static STRING_HASH_64_REGISTRY: LazyLock<Mutex<HashMap<Hash64, String>>> =
 impl Hash32 {
     /// Computes a 32-bit hash of the given bytes.
     pub const fn from_bytes(bytes: &[u8]) -> Self {
-        Self(const_fnv1a_hash::fnv1a_hash_32(bytes, None))
+        Self(common_hashing::hash_bytes_to_u32(bytes))
     }
 
     /// Computes a 32-bit hash of the given string literal.
     pub const fn from_str(string: &str) -> Self {
-        Self(const_fnv1a_hash::fnv1a_hash_str_32(string))
+        Self(common_hashing::hash_str_to_u32(string))
     }
 
     /// Returns the hash as a `u32`.
@@ -113,12 +113,12 @@ impl From<Hash32> for u32 {
 impl Hash64 {
     /// Computes a 64-bit hash of the given bytes.
     pub const fn from_bytes(bytes: &[u8]) -> Self {
-        Self(const_fnv1a_hash::fnv1a_hash_64(bytes, None))
+        Self(common_hashing::hash_bytes_to_u64(bytes))
     }
 
     /// Computes a 64-bit hash of the given string literal.
     pub const fn from_str(string: &str) -> Self {
-        Self(const_fnv1a_hash::fnv1a_hash_str_64(string))
+        Self(common_hashing::hash_str_to_u64(string))
     }
 
     /// Returns the hash as a `u64`.
@@ -244,13 +244,10 @@ impl ConstStringHash64 {
 pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> Hash64 {
     let b1 = &hash_1.0.to_le_bytes();
     let b2 = &hash_2.0.to_le_bytes();
-    Hash64(const_fnv1a_hash::fnv1a_hash_64(
-        &[
-            b1[0], b1[1], b1[2], b1[3], b1[4], b1[5], b1[6], b1[7], b2[0], b2[1], b2[2], b2[3],
-            b2[4], b2[5], b2[6], b2[7],
-        ],
-        None,
-    ))
+    Hash64(common_hashing::hash_bytes_to_u64(&[
+        b1[0], b1[1], b1[2], b1[3], b1[4], b1[5], b1[6], b1[7], b2[0], b2[1], b2[2], b2[3], b2[4],
+        b2[5], b2[6], b2[7],
+    ]))
 }
 
 impl Hash for Hash32 {
