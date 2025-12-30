@@ -50,7 +50,7 @@ pub struct Hash64(u64);
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct StringHash32(Hash32);
 
 /// A 64-bit hash of a string.
@@ -67,7 +67,7 @@ pub struct StringHash32(Hash32);
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
 pub struct StringHash64(Hash64);
 
 /// A 64-bit hash of a string literal. Can be constructed at
@@ -106,7 +106,21 @@ impl Hash32 {
 
 impl From<Hash32> for u32 {
     fn from(hash: Hash32) -> Self {
-        hash.0
+        hash.to_u32()
+    }
+}
+
+impl Hash for Hash32 {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u32(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for Hash32 {}
+
+impl fmt::Display for Hash32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -129,7 +143,21 @@ impl Hash64 {
 
 impl From<Hash64> for u64 {
     fn from(hash: Hash64) -> Self {
-        hash.0
+        hash.to_u64()
+    }
+}
+
+impl Hash for Hash64 {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u64(self.0);
+    }
+}
+
+impl nohash_hasher::IsEnabled for Hash64 {}
+
+impl fmt::Display for Hash64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -171,6 +199,18 @@ impl StringHash32 {
     }
 }
 
+impl nohash_hasher::IsEnabled for StringHash32 {}
+
+impl fmt::Display for StringHash32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(string) = STRING_HASH_32_REGISTRY.lock().get(&self.0) {
+            write!(f, "{string}")
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
 impl StringHash64 {
     /// Creates a new [`StringHash64`] for the given string.
     ///
@@ -209,6 +249,18 @@ impl StringHash64 {
     }
 }
 
+impl nohash_hasher::IsEnabled for StringHash64 {}
+
+impl fmt::Display for StringHash64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(string) = STRING_HASH_64_REGISTRY.lock().get(&self.0) {
+            write!(f, "{string}")
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
 impl ConstStringHash64 {
     /// Creates a hash of the given string literal. This method
     /// is evaluated at compile time.
@@ -239,74 +291,18 @@ impl ConstStringHash64 {
     }
 }
 
-/// Computes a 64-bit hash of the concatenated bytes of the
-/// given pair of 64-bit hashes.
-pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> Hash64 {
-    let b1 = &hash_1.0.to_le_bytes();
-    let b2 = &hash_2.0.to_le_bytes();
-    Hash64(common_hashing::hash_bytes_to_u64(&[
-        b1[0], b1[1], b1[2], b1[3], b1[4], b1[5], b1[6], b1[7], b2[0], b2[1], b2[2], b2[3], b2[4],
-        b2[5], b2[6], b2[7],
-    ]))
-}
-
-impl Hash for Hash32 {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        hasher.write_u32(self.0);
-    }
-}
-
-impl nohash_hasher::IsEnabled for Hash32 {}
-
-impl fmt::Display for Hash32 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Hash for Hash64 {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        hasher.write_u64(self.0);
-    }
-}
-
-impl nohash_hasher::IsEnabled for Hash64 {}
-
-impl fmt::Display for Hash64 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl fmt::Display for StringHash32 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(string) = STRING_HASH_32_REGISTRY.lock().get(&self.0) {
-            write!(f, "{string}")
-        } else {
-            write!(f, "{}", self.0)
-        }
-    }
-}
-
-impl fmt::Display for StringHash64 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(string) = STRING_HASH_64_REGISTRY.lock().get(&self.0) {
-            write!(f, "{string}")
-        } else {
-            write!(f, "{}", self.0)
-        }
-    }
-}
-
-impl fmt::Display for ConstStringHash64 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.string)
-    }
-}
-
 impl AsRef<str> for ConstStringHash64 {
     fn as_ref(&self) -> &str {
         self.string
+    }
+}
+
+impl Default for ConstStringHash64 {
+    fn default() -> Self {
+        Self {
+            hash: Hash64(0),
+            string: "",
+        }
     }
 }
 
@@ -337,6 +333,23 @@ impl Hash for ConstStringHash64 {
 }
 
 impl nohash_hasher::IsEnabled for ConstStringHash64 {}
+
+impl fmt::Display for ConstStringHash64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.string)
+    }
+}
+
+/// Computes a 64-bit hash of the concatenated bytes of the
+/// given pair of 64-bit hashes.
+pub const fn compute_hash_64_of_two_hash_64(hash_1: Hash64, hash_2: Hash64) -> Hash64 {
+    let b1 = &hash_1.0.to_le_bytes();
+    let b2 = &hash_2.0.to_le_bytes();
+    Hash64(common_hashing::hash_bytes_to_u64(&[
+        b1[0], b1[1], b1[2], b1[3], b1[4], b1[5], b1[6], b1[7], b2[0], b2[1], b2[2], b2[3], b2[4],
+        b2[5], b2[6], b2[7],
+    ]))
+}
 
 #[cfg(test)]
 mod tests {
