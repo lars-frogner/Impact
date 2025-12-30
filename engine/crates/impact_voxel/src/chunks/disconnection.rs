@@ -14,7 +14,6 @@ use crate::{
     },
     utils::{DataLoop3, Dimension, Side},
 };
-use cfg_if::cfg_if;
 use impact_containers::HashSet;
 use std::{array, cmp::Ordering, iter, mem, ops::Range};
 
@@ -2308,13 +2307,21 @@ fn give_voxels_same_root(parents: &mut [u16], idx_1: usize, idx_2: usize) {
         // Jumping back to update the root of the first voxel every time is much
         // worse for cache locality than updating the root of the adjacent
         // voxel.
-        cfg_if! {
-            if #[cfg(feature = "unchecked")] {
-                unsafe{ *parents.get_unchecked_mut(root_2_idx) = root_1_idx as u16; }
-            } else {
-                parents[root_2_idx] = root_1_idx as u16;
-            }
-        }
+        set_parent(parents, root_2_idx, root_1_idx as u16);
+    }
+}
+
+#[cfg(not(feature = "unchecked"))]
+#[inline(always)]
+fn set_parent(parents: &mut [u16], idx: usize, value: u16) {
+    parents[idx] = value;
+}
+
+#[cfg(feature = "unchecked")]
+#[inline(always)]
+fn set_parent(parents: &mut [u16], idx: usize, value: u16) {
+    unsafe {
+        *parents.get_unchecked_mut(idx) = value;
     }
 }
 
