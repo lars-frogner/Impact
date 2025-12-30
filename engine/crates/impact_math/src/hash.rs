@@ -1,7 +1,7 @@
 //! Hash-related utilities.
 
 use bytemuck::{Pod, Zeroable};
-use impact_containers::HashMap;
+use impact_containers::NoHashMap;
 use parking_lot::Mutex;
 use roc_integration::roc;
 use std::{
@@ -82,10 +82,10 @@ pub struct ConstStringHash64 {
     string: &'static str,
 }
 
-static STRING_HASH_32_REGISTRY: LazyLock<Mutex<HashMap<Hash32, String>>> =
-    LazyLock::new(|| Mutex::new(HashMap::default()));
-static STRING_HASH_64_REGISTRY: LazyLock<Mutex<HashMap<Hash64, String>>> =
-    LazyLock::new(|| Mutex::new(HashMap::default()));
+static STRING_HASH_32_REGISTRY: LazyLock<Mutex<NoHashMap<Hash32, String>>> =
+    LazyLock::new(|| Mutex::new(NoHashMap::default()));
+static STRING_HASH_64_REGISTRY: LazyLock<Mutex<NoHashMap<Hash64, String>>> =
+    LazyLock::new(|| Mutex::new(NoHashMap::default()));
 
 impl Hash32 {
     /// Computes a 32-bit hash of the given bytes.
