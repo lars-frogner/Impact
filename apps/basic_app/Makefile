@@ -121,6 +121,20 @@ clean:
 clean-profiling:
 	rm -rf perf.data profile.perf dhat.out.* heaptrack.*.zst
 
+# Cargo
+
+cargo-clean:
+	cargo clean
+	cargo clean --manifest-path cli/Cargo.toml
+	cargo clean --manifest-path roc_platform/Cargo.toml
+	cargo clean --manifest-path tools/generate_roc/Cargo.toml
+
+cargo-update:
+	cargo update
+	cargo update --manifest-path cli/Cargo.toml
+	cargo update --manifest-path roc_platform/Cargo.toml
+	cargo update --manifest-path tools/generate_roc/Cargo.toml
+
 # Help
 help:
 	@echo "Basic App Build System"
@@ -156,6 +170,10 @@ help:
 	@echo "Cleanup:"
 	@echo "  clean             - Remove build artifacts"
 	@echo "  clean-profiling   - Remove profiling artifacts"
+	@echo ""
+	@echo "Cargo:"
+	@echo "  cargo-clean       - Run `cargo clean` for all crates"
+	@echo "  cargo-update      - Run `cargo update` for all crates"
 	@echo ""
 	@echo "Variables:"
 	@echo "  LOG_LEVEL         - Set log level (default: info)"
