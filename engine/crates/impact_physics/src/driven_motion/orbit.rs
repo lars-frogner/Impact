@@ -9,7 +9,6 @@ use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::consts::f32::{PI, TWO_PI};
 use roc_integration::roc;
-use roots::{self, SimpleConvergency};
 
 /// Manages all [`OrbitalTrajectoryDriver`]s.
 pub type OrbitalTrajectoryRegistry =
@@ -134,11 +133,6 @@ impl OrbitalTrajectory {
         }
     }
 
-    const ECCENTRIC_ANOMALY_CONVERGENCY: SimpleConvergency<f32> = SimpleConvergency {
-        eps: 1e-6,
-        max_iter: 100,
-    };
-
     /// Computes the position and velocity for the trajectory at the given time.
     ///
     /// # Panics
@@ -241,25 +235,31 @@ impl OrbitalTrajectory {
     }
 
     fn compute_eccentric_anomaly(eccentricity: f32, mean_anomaly: f32) -> f32 {
+        const TOLERANCE: f32 = 1e-4;
+        const MAX_ITERATIONS: usize = 100;
+
         let kepler_equation = |eccentric_anomaly| {
             eccentric_anomaly - eccentricity * f32::sin(eccentric_anomaly) - mean_anomaly
         };
 
-        let mut convergency = Self::ECCENTRIC_ANOMALY_CONVERGENCY;
+        let kepler_equation_deriv =
+            |eccentric_anomaly| 1.0 - eccentricity * f32::cos(eccentric_anomaly);
 
-        if let Ok(eccentric_anomaly) = roots::find_root_newton_raphson(
-            mean_anomaly,
-            kepler_equation,
-            |eccentric_anomaly| 1.0 - eccentricity * f32::cos(eccentric_anomaly),
-            &mut convergency,
-        ) {
-            eccentric_anomaly
-        } else {
-            let mut convergency = Self::ECCENTRIC_ANOMALY_CONVERGENCY;
+        let mut eccentric_anomaly = mean_anomaly;
+        let mut error = f32::INFINITY;
+        let mut iteration_count = 0;
 
-            roots::find_root_regula_falsi(0.0, TWO_PI, kepler_equation, &mut convergency)
-                .expect("Could not solve Kepler's equation for the eccentric anomaly")
+        while error > TOLERANCE && iteration_count < MAX_ITERATIONS {
+            let new_eccentric_anomaly = eccentric_anomaly
+                - kepler_equation(eccentric_anomaly) / kepler_equation_deriv(eccentric_anomaly);
+
+            error = (new_eccentric_anomaly - eccentric_anomaly).abs();
+            eccentric_anomaly = new_eccentric_anomaly;
+
+            iteration_count += 1;
         }
+
+        eccentric_anomaly
     }
 
     fn compute_cos_true_anomaly_and_true_anomaly_per_eccentric_anomaly(
