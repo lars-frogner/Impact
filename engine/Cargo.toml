@@ -186,6 +186,8 @@ criterion = [
 tracy = ["impact_profiling/tracy"]
 
 # Asset / file format support
+jpeg = ["impact_texture/jpeg", "impact_io/jpeg"]
+png = ["impact_light/png", "impact_texture/png", "impact_io/png"]
 obj = ["impact_mesh/obj"]
 ply = ["impact_mesh/ply"]
 
@@ -279,7 +281,6 @@ nohash-hasher = { workspace = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 pollster = "0.4"
-regex = "1.12"
 roc_integration = { path = "../roc_integration" }
 serde = { workspace = true }
 tinyvec = { workspace = true }

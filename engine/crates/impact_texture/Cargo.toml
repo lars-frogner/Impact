@@ -7,6 +7,8 @@ license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary", "impact_math/arbitrary"]
+jpeg = ["impact_io/jpeg"]
+png = ["impact_io/png"]
 postcard = ["dep:postcard", "serde"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = [
@@ -25,7 +27,7 @@ half = { version = "2.6", features = ["bytemuck"] }
 impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_gpu = { path = "../impact_gpu" }
-impact_io = { path = "../impact_io", features = ["png", "jpeg"] }
+impact_io = { path = "../impact_io" }
 impact_log = { path = "../impact_log" }
 impact_math = { path = "../impact_math" }
 impact_resource = { path = "../impact_resource" }

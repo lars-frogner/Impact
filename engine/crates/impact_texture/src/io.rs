@@ -1,12 +1,11 @@
 //! Input/output of texture data.
 
 use crate::processing::ImageProcessing;
-use anyhow::{Result, anyhow, bail};
-use impact_alloc::{AVec, arena::ArenaPool};
+use anyhow::Result;
+use impact_alloc::arena::ArenaPool;
 use impact_gpu::{
     device::GraphicsDevice,
     texture::{Texture, TextureConfig, mipmap::MipmapperGenerator},
-    wgpu,
 };
 use impact_io::image;
 use std::path::Path;
@@ -53,14 +52,19 @@ pub fn create_texture_from_image_path(
 /// - The format of the given texture is not supported.
 /// - The mip level is invalid.
 /// - The texture array index is invalid.
+#[cfg(feature = "png")]
 pub fn save_texture_as_png_file(
     graphics_device: &GraphicsDevice,
-    texture: &wgpu::Texture,
+    texture: &impact_gpu::wgpu::Texture,
     mip_level: u32,
     texture_array_idx: u32,
     already_gamma_corrected: bool,
     output_path: impl AsRef<Path>,
 ) -> Result<()> {
+    use anyhow::{anyhow, bail};
+    use impact_alloc::AVec;
+    use impact_gpu::wgpu;
+
     fn byte_to_float(byte: u8) -> f32 {
         f32::from(byte) / 255.0
     }
@@ -394,6 +398,7 @@ where
     Ok(())
 }
 
+#[allow(dead_code)]
 fn convert_bgra8_to_rgba8(bgra_bytes: &mut [u8]) {
     for bgra in bgra_bytes.chunks_exact_mut(4) {
         bgra.swap(0, 2);

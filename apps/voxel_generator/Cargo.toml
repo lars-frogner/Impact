@@ -112,7 +112,11 @@ x11 = ["impact/x11"]
 
 tracy = ["impact/tracy"]
 
+jpeg = ["impact/jpeg"]
+png = ["impact/png"]
+
 checked_lock_order = ["impact/checked_lock_order"]
+
 roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 
 [dependencies]
