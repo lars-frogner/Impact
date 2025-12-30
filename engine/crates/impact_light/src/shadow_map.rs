@@ -1,9 +1,7 @@
 //! Textures representing shadow maps.
 
-use anyhow::Result;
 use impact_geometry::projection::CubemapFace;
 use impact_gpu::{device::GraphicsDevice, wgpu};
-use std::path::Path;
 
 /// Configuration options for shadow mapping.
 #[cfg_attr(
@@ -35,6 +33,7 @@ pub const SHADOW_MAP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Float
 /// component is the outward normal of the cube face.
 #[derive(Debug)]
 pub struct ShadowCubemapTexture {
+    #[allow(dead_code)]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     face_views: [wgpu::TextureView; 6],
@@ -49,6 +48,7 @@ pub struct ShadowCubemapTexture {
 /// partition of the view frustum, referred to as a cascade).
 #[derive(Debug)]
 pub struct CascadedShadowMapTexture {
+    #[allow(dead_code)]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     cascade_views: Vec<wgpu::TextureView>,
@@ -145,12 +145,13 @@ impl ShadowCubemapTexture {
 
     /// Saves the specified face texture as a grayscale PNG image at the given
     /// output path.
+    #[cfg(feature = "png")]
     pub fn save_face_as_png_file(
         &self,
         graphics_device: &GraphicsDevice,
         face: CubemapFace,
-        output_path: impl AsRef<Path>,
-    ) -> Result<()> {
+        output_path: impl AsRef<std::path::Path>,
+    ) -> anyhow::Result<()> {
         impact_texture::io::save_texture_as_png_file(
             graphics_device,
             &self.texture,
@@ -334,12 +335,13 @@ impl CascadedShadowMapTexture {
 
     /// Saves the specified cascade texture as a grayscale PNG image at the
     /// given output path.
+    #[cfg(feature = "png")]
     pub fn save_cascade_as_png_file(
         &self,
         graphics_device: &GraphicsDevice,
         cascade_idx: u32,
-        output_path: impl AsRef<Path>,
-    ) -> Result<()> {
+        output_path: impl AsRef<std::path::Path>,
+    ) -> anyhow::Result<()> {
         impact_texture::io::save_texture_as_png_file(
             graphics_device,
             &self.texture,

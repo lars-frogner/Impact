@@ -5,7 +5,6 @@ use impact_alloc::{AVec, Allocator, Global};
 use memmap2::Mmap;
 use std::{
     fs::{self, File},
-    io::BufWriter,
     path::Path,
 };
 
@@ -151,6 +150,7 @@ pub fn read_image_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
 /// Loads an image from a byte buffer.
 ///
 /// Supports PNG and JPEG formats (when respective features are enabled).
+#[allow(unused_variables)]
 pub fn load_image_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>> {
     // Detect format based on magic bytes
     if bytes.starts_with(PNG_MAGIC_BYTES) {
@@ -340,7 +340,7 @@ pub fn save_rgba8_as_png(
     impact_log::debug!("Saving color image as PNG to {}", path.display());
 
     let file = crate::create_file_and_required_directories(path)?;
-    let writer = BufWriter::new(file);
+    let writer = std::io::BufWriter::new(file);
 
     let mut encoder = png::Encoder::new(writer, width, height);
     encoder.set_color(png::ColorType::Rgba);
@@ -369,7 +369,7 @@ pub fn save_luma8_as_png(
     impact_log::debug!("Saving grayscale image as PNG to {}", path.display());
 
     let file = crate::create_file_and_required_directories(path)?;
-    let writer = BufWriter::new(file);
+    let writer = std::io::BufWriter::new(file);
 
     let mut encoder = png::Encoder::new(writer, width, height);
     encoder.set_color(png::ColorType::Grayscale);
@@ -401,6 +401,7 @@ pub fn save_image_as_png(image: &Image, path: impl AsRef<Path>) -> Result<()> {
     }
 }
 
+#[allow(dead_code)]
 fn convert_luma_data_to_rgba<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A> {
     let mut rgba_data = AVec::with_capacity_in(data.len() * 4, alloc);
     for &luma in data {
@@ -409,6 +410,7 @@ fn convert_luma_data_to_rgba<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A>
     rgba_data
 }
 
+#[allow(dead_code)]
 fn convert_rgb_data_to_rgba<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A> {
     let (rgb_data, rem) = data.as_chunks::<3>();
     assert!(rem.is_empty());
@@ -421,6 +423,7 @@ fn convert_rgb_data_to_rgba<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A> 
     rgba_data
 }
 
+#[allow(dead_code)]
 fn convert_rgba_data_to_luma<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A> {
     let mut luma_data = AVec::with_capacity_in(data.len() / 4, alloc);
 
@@ -434,6 +437,7 @@ fn convert_rgba_data_to_luma<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A>
 }
 
 /// Ignores alpha.
+#[allow(dead_code)]
 fn convert_luma_alpha_data_to_luma<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A> {
     let (luma_alpha_data, rem) = data.as_chunks::<2>();
     assert!(rem.is_empty());
@@ -446,6 +450,7 @@ fn convert_luma_alpha_data_to_luma<A: Allocator>(alloc: A, data: &[u8]) -> AVec<
     luma_data
 }
 
+#[allow(dead_code)]
 fn convert_ycbcr_data_to_rgba<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A> {
     let (ycbcr_data, rem) = data.as_chunks::<3>();
     assert!(rem.is_empty());
@@ -459,10 +464,12 @@ fn convert_ycbcr_data_to_rgba<A: Allocator>(alloc: A, data: &[u8]) -> AVec<u8, A
     rgba_data
 }
 
+#[allow(dead_code)]
 fn rgb_to_luma(r: u8, g: u8, b: u8) -> u8 {
     (0.299 * f32::from(r) + 0.587 * f32::from(g) + 0.114 * f32::from(b)) as u8
 }
 
+#[allow(dead_code)]
 fn ycbcr_to_rgb(y: u8, cb: u8, cr: u8) -> (u8, u8, u8) {
     let y = f32::from(y);
     let cb = f32::from(cb) - 128.0;

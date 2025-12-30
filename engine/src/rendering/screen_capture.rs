@@ -77,6 +77,7 @@ impl ScreenCapturer {
     /// Checks if a screenshot capture was scheduled with
     /// [`Self::request_screenshot_save`], and if so, captures a screenshot and
     /// saves it as a PNG image at the configured output path.
+    #[allow(unused_variables)]
     pub fn save_screenshot_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -86,6 +87,13 @@ impl ScreenCapturer {
             .screenshot_save_requested
             .swap(false, Ordering::Acquire)
         {
+            if cfg!(not(feature = "png")) {
+                impact_log::error!(
+                    "Could not save screenshot because the `png` feature is not enabled"
+                );
+                return Ok(());
+            }
+
             impact_log::info!("Saving screenshot of frame {frame_number}");
 
             let renderer = renderer.oread();
@@ -108,6 +116,7 @@ impl ScreenCapturer {
                 .config
                 .build_output_path(|tag| format!("screenshot_{tag}.png"), frame_number);
 
+            #[cfg(feature = "png")]
             impact_texture::io::save_texture_as_png_file(
                 renderer.graphics_device(),
                 surface_texture,
@@ -125,6 +134,7 @@ impl ScreenCapturer {
     /// [`Self::request_omnidirectional_light_shadow_map_save`], and if so,
     /// captures the textures and saves them as timestamped PNG files at the
     /// configured output paths.
+    #[allow(unused_variables)]
     pub fn save_omnidirectional_light_shadow_maps_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -134,6 +144,13 @@ impl ScreenCapturer {
             .omnidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
+            if cfg!(not(feature = "png")) {
+                impact_log::error!(
+                    "Could not save shadow maps because the `png` feature is not enabled"
+                );
+                return Ok(());
+            }
+
             impact_log::info!("Saving omnidirectional light shadow maps for frame {frame_number}");
 
             let renderer = renderer.oread();
@@ -154,6 +171,7 @@ impl ScreenCapturer {
                             frame_number,
                         );
 
+                        #[cfg(feature = "png")]
                         texture.save_face_as_png_file(
                             renderer.graphics_device(),
                             face,
@@ -174,6 +192,7 @@ impl ScreenCapturer {
     /// [`Self::request_unidirectional_light_shadow_map_save`], and if so,
     /// captures the textures and saves them as timestamped PNG files at the
     /// configured output paths.
+    #[allow(unused_variables)]
     pub fn save_unidirectional_light_shadow_maps_if_requested(
         &self,
         renderer: &RwLock<RenderingSystem>,
@@ -183,6 +202,13 @@ impl ScreenCapturer {
             .unidirectional_light_shadow_map_save_requested
             .swap(false, Ordering::Acquire)
         {
+            if cfg!(not(feature = "png")) {
+                impact_log::error!(
+                    "Could not save shadow maps because the `png` feature is not enabled"
+                );
+                return Ok(());
+            }
+
             impact_log::info!("Saving unidirectional light shadow maps for frame {frame_number}");
 
             let renderer = renderer.oread();
@@ -203,6 +229,7 @@ impl ScreenCapturer {
                             frame_number,
                         );
 
+                        #[cfg(feature = "png")]
                         texture.save_cascade_as_png_file(
                             renderer.graphics_device(),
                             cascade_idx,

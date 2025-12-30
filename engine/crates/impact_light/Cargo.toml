@@ -7,6 +7,7 @@ license = { workspace = true }
 
 [features]
 ecs = ["dep:inventory", "dep:impact_ecs"]
+png = ["impact_texture/png"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde"]
 

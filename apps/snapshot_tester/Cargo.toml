@@ -114,7 +114,7 @@ env_logger = "0.11"
 ffi_helpers = { path = "../../utils/ffi_helpers" }
 image = { version = "0.25", default-features = false, features = ["png"] }
 image-compare = "0.5"
-impact = { path = "../../engine", default-features = false }
+impact = { path = "../../engine", default-features = false, features = ["png"] }
 impact_log = { path = "../../engine/crates/impact_log" }
 inventory = "0.3"
 libloading = "0.9"

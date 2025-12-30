@@ -1,6 +1,5 @@
 //! Utilities for input/output.
 
-#[cfg(any(feature = "png", feature = "jpeg"))]
 pub mod image;
 
 use std::{
