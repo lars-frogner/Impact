@@ -29,7 +29,6 @@ impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
-roots = "0.0.8"
 serde = { workspace = true, optional = true }
 tinyvec = { workspace = true }
 
