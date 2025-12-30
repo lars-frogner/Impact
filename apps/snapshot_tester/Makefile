@@ -77,6 +77,20 @@ clean-roc:
 clean:
 	rm -rf build_script lib/ dist/ roc_platform/build roc_platform/lib/
 
+# Cargo
+
+cargo-clean:
+	cargo clean
+	cargo clean --manifest-path cli/Cargo.toml
+	cargo clean --manifest-path roc_platform/Cargo.toml
+	cargo clean --manifest-path tools/generate_roc/Cargo.toml
+
+cargo-update:
+	cargo update
+	cargo update --manifest-path cli/Cargo.toml
+	cargo update --manifest-path roc_platform/Cargo.toml
+	cargo update --manifest-path tools/generate_roc/Cargo.toml
+
 # Help
 help:
 	@echo "Snapshot Tester Build System"
@@ -102,6 +116,10 @@ help:
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean            - Remove build artifacts"
+	@echo ""
+	@echo "Cargo:"
+	@echo "  cargo-clean      - Run `cargo clean` for all crates"
+	@echo "  cargo-update     - Run `cargo update` for all crates"
 	@echo ""
 	@echo "Variables:"
 	@echo "  LOG_LEVEL        - Set log level (default: info)"
