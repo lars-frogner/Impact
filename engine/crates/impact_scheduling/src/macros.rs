@@ -80,7 +80,7 @@ macro_rules! define_task {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const TASK_ID: ::impact_scheduling::TaskID = ::impact_scheduling::TaskID::from_str(stringify!($name));
+            $($pub)? const TASK_ID: ::impact_scheduling::TaskID = ::impact_scheduling::TaskID::new(stringify!($name));
 
             const N_DEPENDENCIES: usize = $crate::count_ident_args!($($dep),*);
             const DEPENDENCY_IDS: [::impact_scheduling::TaskID; Self::N_DEPENDENCIES] = [$($dep::TASK_ID),*];
@@ -122,7 +122,7 @@ macro_rules! define_execution_tag {
         $($pub)? struct $name;
 
         impl $name {
-            $($pub)? const EXECUTION_TAG: $crate::ExecutionTag = $crate::ExecutionTag::from_str(stringify!($name));
+            $($pub)? const EXECUTION_TAG: $crate::ExecutionTag = $crate::ExecutionTag::new(stringify!($name));
         }
     };
 }

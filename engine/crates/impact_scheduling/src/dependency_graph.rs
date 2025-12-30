@@ -38,7 +38,7 @@ impl<S> TaskDependencyGraph<S> {
             .insert(task_id, dependency_ids.into())
             .is_some()
         {
-            panic!("Task {task_id} added multiple times");
+            panic!("Task `{task_id}` added multiple times");
         }
 
         self.dependents.entry(task_id).or_default();
@@ -132,17 +132,17 @@ mod tests {
     }
 
     impl TestTask {
-        fn new(name: &str) -> Self {
+        fn new(name: &'static str) -> Self {
             Self {
-                id: TaskID::from_str(name),
+                id: TaskID::new(name),
                 dependencies: Vec::new(),
             }
         }
 
-        fn with_dependencies(name: &str, deps: &[&str]) -> Self {
+        fn with_dependencies(name: &'static str, deps: &[&'static str]) -> Self {
             Self {
-                id: TaskID::from_str(name),
-                dependencies: deps.iter().map(|&dep| TaskID::from_str(dep)).collect(),
+                id: TaskID::new(name),
+                dependencies: deps.iter().map(|&dep| TaskID::new(dep)).collect(),
             }
         }
     }
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn finding_dependent_task_ids_for_nonexistent_task_works() {
         let graph: TaskDependencyGraph<()> = TaskDependencyGraph::new();
-        let nonexistent_id = TaskID::from_str("nonexistent");
+        let nonexistent_id = TaskID::new("nonexistent");
 
         let dependents = graph.find_dependent_task_ids(nonexistent_id);
         assert_eq!(dependents.len(), 0);

@@ -8,8 +8,8 @@ pub mod macros;
 use anyhow::{Result, anyhow, bail};
 use dependency_graph::TaskDependencyGraph;
 use impact_alloc::arena::ArenaPool;
-use impact_containers::{HashMap, HashSet, NoHashMap};
-use impact_math::hash::Hash64;
+use impact_containers::{HashMap, NoHashMap, NoHashSet};
+use impact_math::hash::ConstStringHash64;
 use impact_thread::pool::{ThreadPool, ThreadPoolChannel, ThreadPoolError};
 use parking_lot::Mutex;
 use std::{
@@ -23,7 +23,7 @@ use std::{
 };
 
 /// Type of ID used for identifying tasks in a [`TaskScheduler`].
-pub type TaskID = Hash64;
+pub type TaskID = ConstStringHash64;
 
 /// Type of error produced by failed task executions in a [`TaskScheduler`].
 pub type TaskError = anyhow::Error;
@@ -63,10 +63,10 @@ pub struct TaskScheduler<S> {
 }
 
 /// A tag associated with an execution of a [`TaskScheduler`].
-pub type ExecutionTag = Hash64;
+pub type ExecutionTag = ConstStringHash64;
 
 /// A set of unique [`ExecutionTag`]s.
-pub type ExecutionTags = HashSet<ExecutionTag>;
+pub type ExecutionTags = NoHashSet<ExecutionTag>;
 
 /// [`Result`] returned by execution of a set of tasks in a [`TaskScheduler`].
 pub type TaskSchedulerResult = Result<(), TaskErrors>;
@@ -81,11 +81,7 @@ pub struct TaskErrors {
 type TaskPool<S> = HashMap<TaskID, Arc<dyn Task<S>>>;
 
 /// Type of message sent to worker threads in a [`TaskScheduler`].
-type TaskMessage<S> = (
-    Arc<TaskExecutionState<S>>,
-    Arc<HashSet<ExecutionTag>>,
-    usize,
-);
+type TaskMessage<S> = (Arc<TaskExecutionState<S>>, Arc<ExecutionTags>, usize);
 
 type TaskSchedulerThreadPool<S> = ThreadPool<TaskMessage<S>>;
 
@@ -180,7 +176,7 @@ where
     pub fn register_task(&mut self, task: impl Task<S> + 'static) -> Result<()> {
         let task_id = task.id();
         if self.tasks.contains_key(&task_id) {
-            bail!("Task {} already exists", task_id);
+            bail!("Task `{task_id}` already exists")
         }
 
         self.dependency_graph.add_task(&task);
@@ -337,7 +333,7 @@ impl TaskErrors {
 impl fmt::Display for TaskErrors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (task_id, err) in &self.errors {
-            writeln!(f, "Error for task {task_id}: {err}")?;
+            writeln!(f, "Error for task `{task_id}`: {err}")?;
         }
         Ok(())
     }
@@ -429,7 +425,7 @@ where
             // Execute the task only if it thinks it should be based on the
             // current execution tags
             if task.should_execute(execution_tags.as_ref()) {
-                impact_log::with_trace_logging!("Executing task {}", task.id();
+                impact_log::with_trace_logging!("Executing task `{}`", task.id();
                 {
                     if let Err(error) = task.execute(state.external_state()) {
                         // Register the error and return immediately if the task
@@ -439,7 +435,7 @@ where
                     }
                 });
             } else {
-                impact_log::trace!("Skipped execution of task {}", task.id());
+                impact_log::trace!("Skipped execution of task `{}`", task.id());
             }
 
             // Find each of the tasks that depend on this one, and increment its
@@ -470,7 +466,7 @@ where
                     .task(ready_dependent_task_idx)
                     .task()
                     .id();
-                impact_log::with_trace_logging!("Scheduling execution of task {}", task_id; {
+                impact_log::with_trace_logging!("Scheduling execution of task `{}`", task_id; {
                     if let Err(err) = channel.send_execute_instruction(Self::create_message(
                         &state,
                         &execution_tags,
@@ -585,7 +581,7 @@ impl<S> TaskOrdering<S> {
             .map(|task_id| {
                 let task = task_pool
                     .get(&task_id)
-                    .ok_or_else(|| anyhow!("Dependency task (ID {}) missing", task_id))?;
+                    .ok_or_else(|| anyhow!("Dependency task `{task_id}` missing"))?;
 
                 // Find index into `ordered_task_ids` of each task that depends
                 // on this task
@@ -687,7 +683,7 @@ impl TaskErrorRegistry {
 
     fn register_error(&self, task_id: TaskID, error: TaskError) {
         impact_log::error!(
-            "Task {task_id} failed: {error:#}{}",
+            "Task `{task_id}` failed: {error:#}{}",
             if error.backtrace().status() == BacktraceStatus::Captured {
                 format!("\nBacktrace:\n{}", error.backtrace())
             } else {
@@ -703,10 +699,11 @@ impl TaskErrorRegistry {
 mod tests {
     use super::*;
     use impact_alloc::Global;
+    use impact_containers::HashMap;
     use parking_lot::Mutex;
     use std::iter;
 
-    const EXEC_ALL: ExecutionTag = ExecutionTag::from_str("all");
+    const EXEC_ALL: ExecutionTag = ExecutionTag::new("all");
 
     #[derive(Debug)]
     struct TaskRecorder {
@@ -735,8 +732,8 @@ mod tests {
             struct $task;
 
             impl $task {
-                const ID: TaskID = TaskID::from_str(stringify!($task));
-                const EXEC_TAG: ExecutionTag = ExecutionTag::from_str(stringify!($task));
+                const ID: TaskID = TaskID::new(stringify!($task));
+                const EXEC_TAG: ExecutionTag = ExecutionTag::new(stringify!($task));
             }
 
             impl Task<Arc<TaskRecorder>> for $task
@@ -763,8 +760,8 @@ mod tests {
             struct $task;
 
             impl $task {
-                const ID: TaskID = TaskID::from_str(stringify!($task));
-                const EXEC_TAG: ExecutionTag = ExecutionTag::from_str(stringify!($task));
+                const ID: TaskID = TaskID::new(stringify!($task));
+                const EXEC_TAG: ExecutionTag = ExecutionTag::new(stringify!($task));
             }
 
             impl Task<Arc<TaskRecorder>> for $task
@@ -1010,51 +1007,31 @@ mod tests {
 
         let ordered_task_ids = dependency_graph.obtain_ordered_task_ids(Global).unwrap();
 
-        match ordered_task_ids[..] {
-            [
-                Task1::ID,
-                Task2::ID,
-                DepTask1::ID,
-                DepDepTask1Task2::ID,
-                DepTask1Task2::ID,
-            ]
-            | [
-                Task2::ID,
-                Task1::ID,
-                DepTask1::ID,
-                DepDepTask1Task2::ID,
-                DepTask1Task2::ID,
-            ]
-            | [
-                Task1::ID,
-                Task2::ID,
-                DepTask1::ID,
-                DepTask1Task2::ID,
-                DepDepTask1Task2::ID,
-            ]
-            | [
-                Task2::ID,
-                Task1::ID,
-                DepTask1::ID,
-                DepTask1Task2::ID,
-                DepDepTask1Task2::ID,
-            ]
-            | [
-                Task1::ID,
-                Task2::ID,
-                DepTask1Task2::ID,
-                DepTask1::ID,
-                DepDepTask1Task2::ID,
-            ]
-            | [
-                Task2::ID,
-                Task1::ID,
-                DepTask1Task2::ID,
-                DepTask1::ID,
-                DepDepTask1Task2::ID,
-            ] => {}
-            _ => panic!("Incorrect task order"),
+        // Verify that we have all expected tasks
+        assert_eq!(ordered_task_ids.len(), 5);
+        assert!(ordered_task_ids.contains(&Task1::ID));
+        assert!(ordered_task_ids.contains(&Task2::ID));
+        assert!(ordered_task_ids.contains(&DepTask1::ID));
+        assert!(ordered_task_ids.contains(&DepTask1Task2::ID));
+        assert!(ordered_task_ids.contains(&DepDepTask1Task2::ID));
+
+        // Create position lookup for efficient ordering checks
+        let mut task_positions = HashMap::<_, _, Global>::default();
+        for (pos, &task_id) in ordered_task_ids.iter().enumerate() {
+            task_positions.insert(task_id, pos);
         }
+
+        // Verify dependency constraints are respected in the ordering:
+        // DepTask1 must come after Task1
+        assert!(task_positions[&DepTask1::ID] > task_positions[&Task1::ID]);
+
+        // DepTask1Task2 must come after both Task1 and Task2
+        assert!(task_positions[&DepTask1Task2::ID] > task_positions[&Task1::ID]);
+        assert!(task_positions[&DepTask1Task2::ID] > task_positions[&Task2::ID]);
+
+        // DepDepTask1Task2 must come after DepTask1 and Task2
+        assert!(task_positions[&DepDepTask1Task2::ID] > task_positions[&DepTask1::ID]);
+        assert!(task_positions[&DepDepTask1Task2::ID] > task_positions[&Task2::ID]);
     }
 
     #[test]
