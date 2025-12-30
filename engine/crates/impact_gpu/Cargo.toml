@@ -24,7 +24,6 @@ impact_math = { path = "../impact_math" }
 impact_profiling = { path = "../impact_profiling" }
 naga = { version = "27.0", features = ["wgsl-out"] }
 parking_lot = { workspace = true }
-regex = "1.11"
 serde = { workspace = true, optional = true }
 tinyvec = { workspace = true }
 wgpu = { version = "27.0", default-features = false, features = [

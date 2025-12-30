@@ -4,8 +4,7 @@ use crate::shader::ShaderID;
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use anyhow::{Result, anyhow, bail};
 use impact_containers::HashSet;
-use regex::Regex;
-use std::{borrow::Cow, fmt, iter, sync::LazyLock};
+use std::{borrow::Cow, fmt, iter, ops::Range};
 use tinyvec::TinyVec;
 
 /// Specific shader template that can be resolved to generate a shader.
@@ -37,13 +36,33 @@ pub struct ShaderTemplate<'a> {
     flags: Vec<Flag<'a>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReplacementToken {
+    Open,
+    Close,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConditionalToken {
+    If,
+    ElseIf,
+    Else,
+    EndIf,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConditionToken {
+    Open,
+    Close,
+}
+
 #[derive(Clone, Debug)]
 struct Replacer<'a> {
     ac: AhoCorasick,
     patterns: ReplacementPatternSet<'a>,
 }
 
-type ReplacementPatternSet<'a> = TinyVec<[&'a str; 8]>;
+type ReplacementPatternSet<'a> = TinyVec<[&'a str; 16]>;
 
 #[derive(Clone, Debug)]
 struct ConditionalBlock<'a> {
@@ -53,6 +72,12 @@ struct ConditionalBlock<'a> {
     elseif_condition: Option<Condition<'a>>,
     elseif_body: Option<&'a str>,
     else_body: Option<&'a str>,
+}
+
+struct IfState<'a> {
+    if_start_offset: usize,
+    condition: &'a str,
+    body_start_offset: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -65,16 +90,12 @@ struct Flag<'a> {
     name: &'a str,
 }
 
-static REPLACEMENT_PATTERN_CAPTURE_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(\{\{.*?\}\})").unwrap());
-static CONDITIONAL_CAPTURE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"#if\s*\((.*?)\)\s([\s\S]*?)[^\S\r\n]*(?:#elseif\s*\((.*?)\)\s([\s\S]*?))?[^\S\r\n]*(?:#else\s([\s\S]*?))?[^\S\r\n]*#endif\b").unwrap()
-});
-
 impl<'a> ShaderTemplate<'a> {
     /// Creates a new template from the given template source code.
     pub fn new(source_code: &'a str) -> Result<Self> {
-        let replacer = Replacer::new(source_code)?;
+        let replacement_patterns = find_replacement_patterns(source_code)?;
+        let replacer = Replacer::new(replacement_patterns)?;
+
         let conditional_blocks = find_conditional_blocks(source_code)?;
         let flags = extract_flags(&conditional_blocks);
         Ok(Self {
@@ -145,10 +166,78 @@ impl<'a> ShaderTemplate<'a> {
     }
 }
 
-impl<'a> Replacer<'a> {
-    fn new(source_code: &'a str) -> Result<Self> {
-        let patterns = find_replacement_patterns(source_code)?;
+impl ReplacementToken {
+    const fn all() -> [Self; 2] {
+        [Self::Open, Self::Close]
+    }
 
+    const fn all_strings() -> [&'static str; 2] {
+        [Self::Open.string(), Self::Close.string()]
+    }
+
+    const fn from_index(idx: usize) -> Self {
+        Self::all()[idx]
+    }
+
+    const fn string(&self) -> &'static str {
+        match self {
+            Self::Open => "{{",
+            Self::Close => "}}",
+        }
+    }
+
+    const fn n_bytes(&self) -> usize {
+        self.string().len()
+    }
+}
+
+impl ConditionalToken {
+    const fn all() -> [Self; 4] {
+        [Self::If, Self::ElseIf, Self::Else, Self::EndIf]
+    }
+
+    const fn all_strings() -> [&'static str; 4] {
+        [
+            Self::If.string(),
+            Self::ElseIf.string(),
+            Self::Else.string(),
+            Self::EndIf.string(),
+        ]
+    }
+
+    const fn from_index(idx: usize) -> Self {
+        Self::all()[idx]
+    }
+
+    const fn string(&self) -> &'static str {
+        match self {
+            Self::If => "#if",
+            Self::ElseIf => "#elseif",
+            Self::Else => "#else",
+            Self::EndIf => "#endif",
+        }
+    }
+
+    const fn n_bytes(&self) -> usize {
+        self.string().len()
+    }
+}
+
+impl ConditionToken {
+    const fn string(&self) -> &'static str {
+        match self {
+            Self::Open => "(",
+            Self::Close => ")",
+        }
+    }
+
+    const fn n_bytes(&self) -> usize {
+        self.string().len()
+    }
+}
+
+impl<'a> Replacer<'a> {
+    fn new(patterns: ReplacementPatternSet<'a>) -> Result<Self> {
         let ac = AhoCorasickBuilder::new()
             .match_kind(MatchKind::LeftmostLongest)
             .build(&patterns)
@@ -323,49 +412,251 @@ fn create_flag_and_replacement_list_string<'b>(
         .join(", ")
 }
 
-fn find_replacement_patterns(source_code: &str) -> Result<ReplacementPatternSet<'_>> {
-    let mut patterns = ReplacementPatternSet::new();
-    for captures in REPLACEMENT_PATTERN_CAPTURE_REGEX.captures_iter(source_code) {
-        if let Some(pattern) = captures.get(1) {
-            let pattern = pattern.as_str();
-            let label = label_from_replacement_pattern(pattern);
-            if !is_valid_identifier(label) {
-                bail!(
-                    "Invalid label in template (only alphanumeric characters and underscores are allowed): {}",
-                    label
-                );
+fn find_replacement_patterns<'a>(source_code: &'a str) -> Result<ReplacementPatternSet<'a>> {
+    let ac = AhoCorasickBuilder::new()
+        .match_kind(MatchKind::LeftmostLongest)
+        .build(ReplacementToken::all_strings())
+        .unwrap();
+
+    let mut replacement_patterns = ReplacementPatternSet::new();
+
+    let mut current_pattern_byte_offset = None;
+
+    for m in ac.find_iter(source_code) {
+        let token = ReplacementToken::from_index(m.pattern().as_usize());
+
+        match (token, current_pattern_byte_offset) {
+            (ReplacementToken::Open, None) => {
+                current_pattern_byte_offset = Some(m.start());
             }
-            if !patterns.contains(&pattern) {
-                patterns.push(pattern);
+            (ReplacementToken::Close, Some(offset)) => {
+                let pattern = &source_code[offset..m.end()];
+
+                let label = label_from_replacement_pattern(pattern);
+
+                if !is_valid_identifier(label) {
+                    bail!(
+                        "Invalid label in template (only alphanumeric characters and underscores are allowed): {}",
+                        label
+                    );
+                }
+
+                if !replacement_patterns.contains(&pattern) {
+                    replacement_patterns.push(pattern);
+                }
+
+                current_pattern_byte_offset = None;
+            }
+            (ReplacementToken::Open, Some(_)) => {
+                bail!(
+                    "Unexpected opening brackets `{}` inside replacement pattern",
+                    ReplacementToken::Open.string()
+                )
+            }
+            (ReplacementToken::Close, None) => {
+                bail!(
+                    "Unexpected closing brackets `{}` outside of replacement pattern",
+                    ReplacementToken::Close.string()
+                )
             }
         }
     }
-    Ok(patterns)
+
+    if current_pattern_byte_offset.is_some() {
+        bail!(
+            "Expected replacement pattern to have closing symbol `{}` ",
+            ReplacementToken::Close.string()
+        );
+    }
+
+    Ok(replacement_patterns)
 }
 
 fn label_from_replacement_pattern(pattern: &str) -> &str {
-    &pattern[2..pattern.len() - 2]
+    &pattern[ReplacementToken::Open.n_bytes()..(pattern.len() - ReplacementToken::Close.n_bytes())]
 }
 
-fn find_conditional_blocks(source_code: &str) -> Result<Vec<ConditionalBlock<'_>>> {
-    let mut conditional_blocks = Vec::new();
-    for captures in CONDITIONAL_CAPTURE_REGEX.captures_iter(source_code) {
-        let full_text = captures.get(0).unwrap().as_str();
-        let if_condition = captures.get(1).unwrap().as_str();
-        let if_body = captures.get(2).map_or("", |m| m.as_str());
-        let elseif_condition = captures.get(3).map(|m| m.as_str());
-        let elseif_body = captures.get(4).map(|m| m.as_str());
-        let else_body = captures.get(5).map(|m| m.as_str());
-        conditional_blocks.push(ConditionalBlock::new(
-            full_text,
-            if_condition,
-            if_body,
-            elseif_condition,
-            elseif_body,
-            else_body,
-        )?);
+fn find_conditional_blocks<'a>(source_code: &'a str) -> Result<Vec<ConditionalBlock<'a>>> {
+    let ac = AhoCorasickBuilder::new()
+        .match_kind(MatchKind::LeftmostLongest)
+        .build(ConditionalToken::all_strings())
+        .unwrap();
+
+    let mut conditionals = Vec::new();
+
+    let mut current_if_state = None;
+    let mut current_else_if_state = None;
+    let mut current_else_start_offset = None;
+
+    for m in ac.find_iter(source_code) {
+        let token = ConditionalToken::from_index(m.pattern().as_usize());
+
+        match (
+            token,
+            &current_if_state,
+            &current_else_if_state,
+            current_else_start_offset,
+        ) {
+            (ConditionalToken::If, None, None, None) => {
+                let following_source_code = &source_code[m.end()..];
+                let condition_range =
+                    extract_condition_range(following_source_code, ConditionalToken::If)?;
+
+                let if_start_offset = m.start();
+
+                let body_start_offset =
+                    m.end() + condition_range.end + ConditionToken::Close.n_bytes();
+
+                let condition = &following_source_code[condition_range];
+
+                current_if_state = Some(IfState {
+                    if_start_offset,
+                    condition,
+                    body_start_offset,
+                });
+            }
+            (ConditionalToken::ElseIf, Some(_), None, None) => {
+                let following_source_code = &source_code[m.end()..];
+                let condition_range =
+                    extract_condition_range(following_source_code, ConditionalToken::ElseIf)?;
+
+                let if_start_offset = m.start();
+
+                let body_start_offset =
+                    m.end() + condition_range.end + ConditionToken::Close.n_bytes();
+
+                let condition = &following_source_code[condition_range];
+
+                current_else_if_state = Some(IfState {
+                    if_start_offset,
+                    condition,
+                    body_start_offset,
+                });
+            }
+            (ConditionalToken::Else, Some(_), _, None) => {
+                current_else_start_offset = Some(m.start());
+            }
+            (ConditionalToken::EndIf, Some(if_state), else_if_state, else_start_offset) => {
+                let full_text = &source_code[if_state.if_start_offset..m.end()];
+                let if_condition = if_state.condition;
+
+                let if_body_end = else_if_state
+                    .as_ref()
+                    .map(|s| s.if_start_offset)
+                    .or(else_start_offset)
+                    .unwrap_or(m.start());
+
+                let if_body = &source_code[if_state.body_start_offset..if_body_end];
+
+                let elseif_condition = else_if_state.as_ref().map(|s| s.condition);
+
+                let elseif_body = else_if_state.as_ref().map(|s| {
+                    &source_code[s.body_start_offset..else_start_offset.unwrap_or(m.start())]
+                });
+
+                let else_body = else_start_offset
+                    .map(|start| &source_code[start + ConditionalToken::Else.n_bytes()..m.start()]);
+
+                conditionals.push(ConditionalBlock::new(
+                    full_text,
+                    if_condition,
+                    if_body,
+                    elseif_condition,
+                    elseif_body,
+                    else_body,
+                )?);
+
+                current_if_state = None;
+                current_else_if_state = None;
+                current_else_start_offset = None;
+            }
+            (
+                ConditionalToken::ElseIf | ConditionalToken::Else | ConditionalToken::EndIf,
+                None,
+                _,
+                _,
+            ) => {
+                bail!(
+                    "Unexpected symbol `{}` outside a `{}` block",
+                    token.string(),
+                    ConditionalToken::If.string(),
+                )
+            }
+            (ConditionalToken::If, _, _, _) => {
+                bail!(
+                    "Unexpected symbol `{}` inside a `{}` block",
+                    token.string(),
+                    ConditionalToken::If.string(),
+                )
+            }
+            (ConditionalToken::ElseIf, Some(_), Some(_), _) => {
+                bail!(
+                    "Unexpected `{}` after another `{}` (only one is allowed)",
+                    token.string(),
+                    token.string(),
+                )
+            }
+            (ConditionalToken::ElseIf, Some(_), _, Some(_)) => {
+                bail!(
+                    "Unexpected `{}` after `{}`",
+                    token.string(),
+                    ConditionalToken::Else.string(),
+                )
+            }
+            (ConditionalToken::Else, Some(_), _, Some(_)) => {
+                bail!(
+                    "Unexpected `{}` after another `{}`",
+                    token.string(),
+                    token.string(),
+                )
+            }
+        }
     }
-    Ok(conditional_blocks)
+
+    if current_if_state.is_some() {
+        bail!(
+            "Expected `{}` block to have closing symbol `{}` ",
+            ConditionalToken::If.string(),
+            ConditionalToken::EndIf.string(),
+        );
+    }
+
+    Ok(conditionals)
+}
+
+fn extract_condition_range(
+    source_code: &str,
+    conditional_token: ConditionalToken,
+) -> Result<Range<usize>> {
+    let Some(condition_open_start) = source_code.find(ConditionToken::Open.string()) else {
+        bail!(
+            "Expected opening symbol `{}` for condition following `{}`",
+            ConditionToken::Open.string(),
+            conditional_token.string()
+        )
+    };
+
+    if !source_code[..condition_open_start].trim().is_empty() {
+        bail!(
+            "Expected only whitespace between `{}` and opening symbol `{}` for condition",
+            conditional_token.string(),
+            ConditionToken::Open.string(),
+        )
+    }
+
+    let condition_start = condition_open_start + ConditionToken::Open.n_bytes();
+
+    let Some(condition_end) = source_code.find(ConditionToken::Close.string()) else {
+        bail!(
+            "Expected closing symbol `{}` after condition following `{}`",
+            ConditionToken::Close.string(),
+            conditional_token.string()
+        )
+    };
+
+    assert!(condition_end >= condition_start);
+
+    Ok(condition_start..condition_end)
 }
 
 fn extract_flags<'a>(conditional_blocks: &[ConditionalBlock<'a>]) -> Vec<Flag<'a>> {
@@ -414,8 +705,6 @@ fn validate_module(module: &naga::Module) {
     }
 }
 
-// `regex` gets very slow under `miri`
-#[cfg(not(miri))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -436,7 +725,7 @@ mod tests {
 
     #[test]
     fn should_find_correct_if_flag_for_template_with_if_and_other_stuff() {
-        let template = ShaderTemplate::new("fi#if (flag) #endif#ifend").unwrap();
+        let template = ShaderTemplate::new("fi#if (flag) #endif#fiend").unwrap();
         let flags = template.obtain_flags();
         assert_eq!(flags.len(), 1);
         assert!(flags.contains("flag"));
@@ -469,7 +758,7 @@ mod tests {
     }
 
     #[test]
-    fn should_find_no_flags_for_invalid_conditional_blocks() {
+    fn should_return_error_for_invalid_conditional_blocks() {
         for templ in [
             "#if (flag)",
             "#if (flag) endif",
@@ -477,12 +766,7 @@ mod tests {
             "(flag) #endif",
             "#if #endif",
         ] {
-            assert!(
-                ShaderTemplate::new(templ)
-                    .unwrap()
-                    .obtain_flags()
-                    .is_empty()
-            );
+            assert!(ShaderTemplate::new(templ).is_err());
         }
     }
 
@@ -572,47 +856,47 @@ mod tests {
     #[test]
     fn should_resolve_template_with_empty_if_block() {
         let template = ShaderTemplate::new("#if (flag) #endif").unwrap();
-        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), " ");
         assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_else_block() {
         let template = ShaderTemplate::new("#if (flag) #else #endif").unwrap();
-        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "");
-        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), " ");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), " ");
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_elseif_block() {
         let template = ShaderTemplate::new("#if (flag1) #elseif (flag2) #endif").unwrap();
-        assert_eq!(template.resolve(&["flag1", "flag2"], &[]).unwrap(), "");
-        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "");
-        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag1", "flag2"], &[]).unwrap(), " ");
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), " ");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), " ");
         assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_empty_if_elseif_else_block() {
         let template = ShaderTemplate::new("#if (flag1) #elseif (flag2) #else #endif").unwrap();
-        assert_eq!(template.resolve(&["flag1", "flag2"], &[]).unwrap(), "");
-        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "");
-        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "");
-        assert_eq!(template.resolve(&[], &[]).unwrap(), "");
+        assert_eq!(template.resolve(&["flag1", "flag2"], &[]).unwrap(), " ");
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), " ");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), " ");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), " ");
     }
 
     #[test]
     fn should_resolve_template_with_simple_if_block() {
         let template = ShaderTemplate::new("#if (flag) content #endif").unwrap();
-        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "content");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), " content ");
         assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
     #[test]
     fn should_resolve_template_with_simple_if_else_block() {
         let template = ShaderTemplate::new("#if (flag) content #else othercontent #endif").unwrap();
-        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), "content");
-        assert_eq!(template.resolve(&[], &[]).unwrap(), "othercontent");
+        assert_eq!(template.resolve(&["flag"], &[]).unwrap(), " content ");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), " othercontent ");
     }
 
     #[test]
@@ -621,10 +905,10 @@ mod tests {
             ShaderTemplate::new("#if (flag1) content #elseif (flag2) othercontent #endif").unwrap();
         assert_eq!(
             template.resolve(&["flag1", "flag2"], &[]).unwrap(),
-            "content"
+            " content "
         );
-        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "content");
-        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "othercontent");
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), " content ");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), " othercontent ");
         assert_eq!(template.resolve(&[], &[]).unwrap(), "");
     }
 
@@ -636,11 +920,11 @@ mod tests {
         .unwrap();
         assert_eq!(
             template.resolve(&["flag1", "flag2"], &[]).unwrap(),
-            "content"
+            " content "
         );
-        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), "content");
-        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), "othercontent");
-        assert_eq!(template.resolve(&[], &[]).unwrap(), "yetothercontent");
+        assert_eq!(template.resolve(&["flag1"], &[]).unwrap(), " content ");
+        assert_eq!(template.resolve(&["flag2"], &[]).unwrap(), " othercontent ");
+        assert_eq!(template.resolve(&[], &[]).unwrap(), " yetothercontent ");
     }
 
     #[test]
@@ -664,32 +948,40 @@ mod tests {
         assert_eq!(
             template.resolve(&["flag1", "flag2"], &[]).unwrap(),
             "\
+            \n\
             content1\n\
             <other code>\n\
+            \n\
             content2\n\
             "
         );
         assert_eq!(
             template.resolve(&["flag1"], &[]).unwrap(),
             "\
+            \n\
             content1\n\
             <other code>\n\
+            \n\
             othercontent2\n\
             "
         );
         assert_eq!(
             template.resolve(&["flag2"], &[]).unwrap(),
             "\
+            \n\
             othercontent1\n\
             <other code>\n\
+            \n\
             content2\n\
             "
         );
         assert_eq!(
             template.resolve(&[], &[]).unwrap(),
             "\
+            \n\
             othercontent1\n\
             <other code>\n\
+            \n\
             othercontent2\n\
             "
         );
@@ -809,8 +1101,10 @@ mod tests {
                 .unwrap(),
             "\
             actual1\n\
+            \n\
             actual2\n\
             <other code>\n\
+            \n\
             actual3\n\
             "
         );
