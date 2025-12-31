@@ -1738,7 +1738,7 @@ impl_relative_eq!(Vector4P, |a, b, epsilon, max_relative| {
 });
 
 impl_roc_for_library_provided_primitives! {
-//  Type           Pkg   Parents  Module       Roc name     Postfix  Precision
+//  Type            Pkg   Parents  Module       Roc name     Postfix  Precision
     Vector2      => core, None,    Vector2,     Vector2,     None,    PrecisionIrrelevant,
     Vector3P     => core, None,    Vector3,     Vector3,     None,    PrecisionIrrelevant,
     UnitVector3P => core, None,    UnitVector3, UnitVector3, None,    PrecisionIrrelevant,
