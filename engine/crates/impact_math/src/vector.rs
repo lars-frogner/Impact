@@ -732,6 +732,69 @@ impl Vector3P {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
+    /// Computes the cross product of this vector with another.
+    #[inline]
+    pub fn cross(&self, other: &Self) -> Self {
+        Self::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
+    }
+
+    /// Returns a vector with the absolute value of each component.
+    #[inline]
+    pub fn component_abs(&self) -> Self {
+        Self::new(self.x.abs(), self.y.abs(), self.z.abs())
+    }
+
+    /// Multiplies each component by the corresponding component in another
+    /// vector.
+    #[inline]
+    pub fn component_mul(&self, other: &Self) -> Self {
+        Self::new(self.x * other.x, self.y * other.y, self.z * other.z)
+    }
+
+    /// Returns a vector where each component is the minimum of the
+    /// corresponding component in this and another vector.
+    #[inline]
+    pub fn component_min(&self, other: &Self) -> Self {
+        Self::new(
+            self.x.min(other.x),
+            self.y.min(other.y),
+            self.z.min(other.z),
+        )
+    }
+
+    /// Returns a vector where each component is the maximum of the
+    /// corresponding component in this and another vector.
+    #[inline]
+    pub fn component_max(&self, other: &Self) -> Self {
+        Self::new(
+            self.x.max(other.x),
+            self.y.max(other.y),
+            self.z.max(other.z),
+        )
+    }
+
+    /// Returns a vector with the given closure applied to each component.
+    #[inline]
+    pub fn mapped(&self, mut f: impl FnMut(f32) -> f32) -> Self {
+        Self::new(f(self.x()), f(self.y()), f(self.z()))
+    }
+
+    /// Returns the smallest component in the vector.
+    #[inline]
+    pub fn min_component(&self) -> f32 {
+        self.x.min(self.y).min(self.z)
+    }
+
+    /// Returns the largest component in the vector.
+    #[inline]
+    pub fn max_component(&self) -> f32 {
+        self.x.max(self.y).max(self.z)
+    }
+
     /// Converts the vector to the 16-byte aligned SIMD-friendly [`Vector3`].
     #[inline]
     pub fn unpack(&self) -> Vector3 {
@@ -1945,6 +2008,63 @@ mod tests {
         let v1 = Vector3P::new(1.0, 2.0, 3.0);
         let v2 = Vector3P::new(4.0, 5.0, 6.0);
         assert_abs_diff_eq!(v1.dot(&v2), 32.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3p_cross_product_works() {
+        let v1 = Vector3P::new(1.0, 0.0, 0.0);
+        let v2 = Vector3P::new(0.0, 1.0, 0.0);
+        let cross = v1.cross(&v2);
+        assert_abs_diff_eq!(cross, Vector3P::new(0.0, 0.0, 1.0), epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3p_cross_product_is_perpendicular() {
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(4.0, 5.0, 6.0);
+        let cross = v1.cross(&v2);
+
+        assert_abs_diff_eq!(cross.dot(&v1), 0.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(cross.dot(&v2), 0.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3p_cross_product_is_anticommutative() {
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(4.0, 5.0, 6.0);
+        let cross1 = v1.cross(&v2);
+        let cross2 = v2.cross(&v1);
+
+        assert_abs_diff_eq!(cross1, -&cross2, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3p_cross_product_of_parallel_vectors_is_zero() {
+        let v1 = Vector3P::new(1.0, 2.0, 3.0);
+        let v2 = Vector3P::new(2.0, 4.0, 6.0);
+        let cross = v1.cross(&v2);
+
+        assert_abs_diff_eq!(cross, Vector3P::zeros(), epsilon = EPSILON);
+    }
+
+    #[test]
+    fn vector3p_component_operations_work() {
+        let v1 = Vector3P::new(-1.0, 2.0, -3.0);
+        let v2 = Vector3P::new(4.0, -5.0, 6.0);
+
+        assert_eq!(v1.component_abs(), Vector3P::new(1.0, 2.0, 3.0));
+        assert_eq!(v1.component_mul(&v2), Vector3P::new(-4.0, -10.0, -18.0));
+        assert_eq!(v1.component_min(&v2), Vector3P::new(-1.0, -5.0, -3.0));
+        assert_eq!(v1.component_max(&v2), Vector3P::new(4.0, 2.0, 6.0));
+        assert_abs_diff_eq!(v1.min_component(), -3.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(v1.max_component(), 2.0, epsilon = EPSILON);
+    }
+
+    #[test]
+    fn mapping_vector3p_components_works() {
+        let v = Vector3P::new(1.0, -2.0, 3.0);
+        let mapped = v.mapped(|x| x * 2.0);
+        assert_eq!(mapped, Vector3P::new(2.0, -4.0, 6.0));
     }
 
     #[test]
