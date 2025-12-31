@@ -34,9 +34,9 @@ use meta::{
     },
     node_kind::{MetaNodeKind, MetaNodeKindGroup},
 };
-use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tinyfiledialogs;
 
 const SCROLL_SENSITIVITY: f32 = 4e-3;
 const MIN_ZOOM: f32 = 0.1;
@@ -177,11 +177,12 @@ impl Editor {
     }
 
     fn load_graph_from_file(&mut self, ui: &Ui) {
-        if let Some(path) = FileDialog::new()
-            .add_filter("Graph (*.graph.ron)", &["graph.ron"])
-            .set_title("Load graph")
-            .pick_file()
-        {
+        if let Some(path_str) = tinyfiledialogs::open_file_dialog(
+            "Load graph",
+            "",
+            Some((&["*.graph.ron"], "Graph (*.graph.ron)")),
+        ) {
+            let path = PathBuf::from(path_str);
             match self.meta_graph_canvas.load_graph(ui, &path) {
                 Ok(settings) => {
                     self.config.auto_generate = settings.auto_generate;
@@ -202,11 +203,12 @@ impl Editor {
     }
 
     fn load_subgraph_from_file(&mut self, ui: &Ui) {
-        if let Some(path) = FileDialog::new()
-            .add_filter("Subgraph (*.subgraph.ron)", &["subgraph.ron"])
-            .set_title("Load subgraph")
-            .pick_file()
-        {
+        if let Some(path_str) = tinyfiledialogs::open_file_dialog(
+            "Load subgraph",
+            "",
+            Some((&["*.subgraph.ron"], "Subgraph (*.subgraph.ron)")),
+        ) {
+            let path = PathBuf::from(path_str);
             if let Err(err) =
                 self.meta_graph_canvas
                     .load_subgraph(ui, &path, self.config.auto_layout)
@@ -219,11 +221,13 @@ impl Editor {
     }
 
     fn save_graph_to_file(&mut self) {
-        if let Some(path) = FileDialog::new()
-            .add_filter("Graph (*.graph.ron)", &["graph.ron"])
-            .set_title("Save graph as")
-            .save_file()
-        {
+        if let Some(path_str) = tinyfiledialogs::save_file_dialog_with_filter(
+            "Save graph as",
+            "",
+            &["*.graph.ron"],
+            "Graph (*.graph.ron)",
+        ) {
+            let path = PathBuf::from(path_str);
             if let Err(err) = self.meta_graph_canvas.save_graph(&self.config, &path) {
                 impact_log::error!("Failed to save graph to {}: {err:#}", path.display());
             } else {
@@ -252,12 +256,13 @@ impl Editor {
                 format!("{}.subgraph.ron", file_stem_from_name(&node.data.name))
             });
 
-        if let Some(path) = FileDialog::new()
-            .add_filter("Subgraph (*.subgraph.ron)", &["subgraph.ron"])
-            .set_title("Save subgraph as")
-            .set_file_name(file_name)
-            .save_file()
-        {
+        if let Some(path_str) = tinyfiledialogs::save_file_dialog_with_filter(
+            "Save subgraph as",
+            &file_name,
+            &["*.subgraph.ron"],
+            "Subgraph (*.subgraph.ron)",
+        ) {
+            let path = PathBuf::from(path_str);
             if let Err(err) = self.meta_graph_canvas.save_subgraph(root_node_id, &path) {
                 impact_log::error!("Failed to save subgraph to {}: {err:#}", path.display());
             } else {
@@ -267,11 +272,13 @@ impl Editor {
     }
 
     fn export_graph_as_resource(&mut self) {
-        if let Some(path) = FileDialog::new()
-            .add_filter("Voxel generator resource (*.vgen.ron)", &["vgen.ron"])
-            .set_title("Export as resource")
-            .save_file()
-        {
+        if let Some(path_str) = tinyfiledialogs::save_file_dialog_with_filter(
+            "Export as resource",
+            "",
+            &["*.vgen.ron"],
+            "Voxel generator resource (*.vgen.ron)",
+        ) {
+            let path = PathBuf::from(path_str);
             let arena = ArenaPool::get_arena();
             let sdf_graph = build::build_meta_graph(&arena, &self.meta_graph_canvas.nodes).unwrap();
             let generator = VoxelGeneratorRef {
