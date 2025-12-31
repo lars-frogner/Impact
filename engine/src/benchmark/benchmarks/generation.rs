@@ -182,7 +182,7 @@ pub fn update_signed_distances_for_block(benchmarker: impl Benchmarker) {
     const COUNT: usize = ChunkedVoxelObject::chunk_voxel_count();
 
     benchmarker.benchmark(&mut || {
-        impact_voxel::generation::sdf::atomic::update_signed_distances_for_block::<
+        impact_voxel::generation::sdf::atomic::update_signed_distances_for_block_packed::<
             CHUNK_SIZE,
             COUNT,
         >(
@@ -190,7 +190,7 @@ pub fn update_signed_distances_for_block(benchmarker: impl Benchmarker) {
             black_box(&transform),
             black_box(&origin),
             &|signed_distance, position| {
-                *signed_distance = sphere_sdf.compute_signed_distance(position);
+                *signed_distance = sphere_sdf.compute_signed_distance_packed(position);
             },
         );
     });

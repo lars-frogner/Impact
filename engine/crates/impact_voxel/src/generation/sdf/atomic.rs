@@ -13,7 +13,7 @@ use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::{
     consts::f32::FRAC_1_SQRT_3,
     matrix::Matrix4,
-    point::Point3,
+    point::{Point3, Point3P},
     quaternion::UnitQuaternion,
     transform::Similarity3,
     vector::{UnitVector3, Vector3},
@@ -673,13 +673,17 @@ impl<A: Allocator> SDFGenerator<A> {
                         // Fully inside: distances are assumed <= -margin
                         buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
-                        update_signed_distances_for_block::<SIZE, COUNT>(
+                        // The sphere SDF formula is simple enough that the compiler
+                        // is able to vectorize the update loop with vertical SIMD
+                        // when using packed vectors, which beats the horizontal
+                        // SIMD obtained by using unpacked vectors.
+                        update_signed_distances_for_block_packed::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
                             block_origin_in_root_space,
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = sphere_generator
-                                    .compute_signed_distance(position_in_node_space);
+                                    .compute_signed_distance_packed(position_in_node_space);
                             },
                         );
                     }
@@ -701,13 +705,15 @@ impl<A: Allocator> SDFGenerator<A> {
                     {
                         buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
                     } else {
-                        update_signed_distances_for_block::<SIZE, COUNT>(
+                        // Packed vectors are faster here for the same reason as for
+                        // the sphere SDF
+                        update_signed_distances_for_block_packed::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
                             block_origin_in_root_space,
                             &|signed_distance, position_in_node_space| {
                                 *signed_distance = capsule_generator
-                                    .compute_signed_distance(position_in_node_space);
+                                    .compute_signed_distance_packed(position_in_node_space);
                             },
                         );
                     }
@@ -886,26 +892,32 @@ impl<A: Allocator> SDFGenerator<A> {
         for node in &self.nodes {
             match &node.node {
                 SDFNode::Sphere(sphere_generator) => {
-                    update_signed_distances_for_block::<SIZE, COUNT>(
+                    // The sphere SDF formula is simple enough that the compiler
+                    // is able to vectorize the update loop with vertical SIMD
+                    // when using packed vectors, which beats the horizontal
+                    // SIMD obtained by using unpacked vectors.
+                    update_signed_distances_for_block_packed::<SIZE, COUNT>(
                         &mut buffers.signed_distance_stack[stack_top],
                         &node.transform_to_node_space,
                         block_origin_in_root_space,
                         &|signed_distance, position_in_node_space| {
-                            *signed_distance =
-                                sphere_generator.compute_signed_distance(position_in_node_space);
+                            *signed_distance = sphere_generator
+                                .compute_signed_distance_packed(position_in_node_space);
                         },
                     );
 
                     stack_top += 1;
                 }
                 SDFNode::Capsule(capsule_generator) => {
-                    update_signed_distances_for_block::<SIZE, COUNT>(
+                    // Packed vectors are faster here for the same reason as for
+                    // the sphere SDF
+                    update_signed_distances_for_block_packed::<SIZE, COUNT>(
                         &mut buffers.signed_distance_stack[stack_top],
                         &node.transform_to_node_space,
                         block_origin_in_root_space,
                         &|signed_distance, position_in_node_space| {
-                            *signed_distance =
-                                capsule_generator.compute_signed_distance(position_in_node_space);
+                            *signed_distance = capsule_generator
+                                .compute_signed_distance_packed(position_in_node_space);
                         },
                     );
 
@@ -1171,6 +1183,11 @@ impl SphereSDF {
     pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
         position_in_node_space.as_vector().norm() - self.radius
     }
+
+    #[inline]
+    pub fn compute_signed_distance_packed(&self, position_in_node_space: &Point3P) -> f32 {
+        position_in_node_space.as_vector().norm() - self.radius
+    }
 }
 
 impl CapsuleSDF {
@@ -1218,6 +1235,15 @@ impl CapsuleSDF {
 
     #[inline]
     pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
+        let mut position = *position_in_node_space;
+        *position.y_mut() -= position
+            .y()
+            .clamp(-self.half_segment_length, self.half_segment_length);
+        position.as_vector().norm() - self.radius
+    }
+
+    #[inline]
+    pub fn compute_signed_distance_packed(&self, position_in_node_space: &Point3P) -> f32 {
         let mut position = *position_in_node_space;
         *position.y_mut() -= position
             .y()
@@ -1611,6 +1637,37 @@ pub fn update_signed_distances_for_block<const SIZE: usize, const COUNT: usize>(
     let dx = transform_to_node_space.column_1().xyz();
     let dy = transform_to_node_space.column_2().xyz();
     let dz = transform_to_node_space.column_3().xyz();
+
+    let mut idx = 0;
+    for i in 0..SIZE {
+        let origin_plus_x = origin + (i as f32) * dx;
+        for j in 0..SIZE {
+            let mut position = origin_plus_x + (j as f32) * dy;
+            for _ in 0..SIZE {
+                let signed_distance = unsafe { signed_distances.get_unchecked_mut(idx) };
+                update_signed_distance(signed_distance, &position);
+                position += dz;
+                idx += 1;
+            }
+        }
+    }
+}
+
+#[inline]
+pub fn update_signed_distances_for_block_packed<const SIZE: usize, const COUNT: usize>(
+    signed_distances: &mut [f32; COUNT],
+    transform_to_node_space: &Matrix4,
+    block_origin_in_root_space: &Point3,
+    update_signed_distance: &impl Fn(&mut f32, &Point3P),
+) {
+    assert_eq!(COUNT, SIZE.pow(3));
+
+    let origin = transform_to_node_space
+        .transform_point(block_origin_in_root_space)
+        .pack();
+    let dx = transform_to_node_space.column_1().xyz().pack();
+    let dy = transform_to_node_space.column_2().xyz().pack();
+    let dz = transform_to_node_space.column_3().xyz().pack();
 
     let mut idx = 0;
     for i in 0..SIZE {
