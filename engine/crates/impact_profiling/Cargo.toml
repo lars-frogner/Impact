@@ -12,13 +12,13 @@ tracy = ["dep:tracy-client"]
 [dependencies]
 anyhow = { workspace = true }
 criterion = { version = "0.8", optional = true }
-tracy-client = { version = "0.18.2", optional = true, default-features = false, features = [
+tracy-client = { version = "=0.18.3", optional = true, default-features = false, features = [
     "enable",
     "system-tracing",
     "context-switch-tracing",
     "sampling",
     "only-localhost",
-] } # Compatible with Tracy v0.12.2
+] } # v0.18.3 is compatible with Tracy v0.13.0
 
 [lints]
 workspace = true
