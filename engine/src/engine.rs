@@ -202,7 +202,7 @@ impl Engine {
         &self.graphics_device
     }
 
-    /// Returns a reference to the [`GraphicsDevice`].
+    /// Returns a reference to the [`ComponentMetadataRegistry`].
     pub(crate) fn component_metadata_registry(&self) -> &ComponentMetadataRegistry {
         &self.component_metadata_registry
     }
