@@ -18,6 +18,7 @@ endef
 .PHONY: init-build build build-debug build-debug-cl build-debug-asan
 .PHONY: run run-debug run-roc-debug run-debug-asan run-debug-cl
 .PHONY: generate-roc clean-roc
+.PHONY: cargo-clean cargo-update
 
 # Default target
 all: build

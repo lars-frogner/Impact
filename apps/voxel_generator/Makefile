@@ -19,6 +19,8 @@ endef
 .PHONY: run run-debug run-roc-debug run-debug-asan run-debug-cl
 .PHONY: profile-perf profile-tracy profile-heaptrack profile-dhat
 .PHONY: generate-roc clean-roc
+.PHONY: clean-profiling
+.PHONY: cargo-clean cargo-update
 
 # Default target
 all: build
