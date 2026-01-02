@@ -28,7 +28,6 @@ impact_resource = { path = "../impact_resource" }
 impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
 parking_lot = { workspace = true }
-pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 

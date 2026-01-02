@@ -22,7 +22,7 @@ impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_math = { path = "../impact_math" }
-impact_texture = { path = "../impact_texture" }
+impact_texture = { path = "../impact_texture", optional = true }
 inventory = { workspace = true, optional = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
