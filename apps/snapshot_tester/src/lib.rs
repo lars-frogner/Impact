@@ -19,6 +19,7 @@ use impact::{
     runtime::{RuntimeConfig, headless::HeadlessConfig},
 };
 use parking_lot::RwLock;
+use scripting::ScriptLib;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -26,7 +27,6 @@ use std::{
     sync::Arc,
 };
 use testing::TestScene;
-use scripting::ScriptLib;
 
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 
