@@ -34,6 +34,14 @@ impl Skybox {
             max_luminance,
         }
     }
+
+    pub fn cubemap_texture_id(&self) -> &TextureID {
+        &self.cubemap_texture_id
+    }
+
+    pub fn max_luminance(&self) -> f64 {
+        self.max_luminance
+    }
 }
 
 impl PartialEq for Skybox {

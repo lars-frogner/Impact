@@ -20,7 +20,7 @@ pub enum SceneCommand {
 }
 
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {
-    impact_log::info!("Setting skybox to {skybox:?}");
+    impact_log::info!("Setting skybox to {}", skybox.cubemap_texture_id());
     engine.scene().oread().set_skybox(Some(skybox));
 }
 
