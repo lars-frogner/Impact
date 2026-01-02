@@ -10,10 +10,8 @@ fuzzing = []
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-ffi_helpers = { path = "../../../utils/ffi_helpers" }
+dynamic_lib = { path = "../../../utils/dynamic_lib" }
 impact_log = { path = "../../../engine/crates/impact_log" }
-libloading = "0.9"
-pastey = "0.2"
 
 [[bin]]
 name = "basic_app_cli"

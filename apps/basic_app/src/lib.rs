@@ -8,7 +8,7 @@ pub use impact;
 #[cfg(feature = "roc_codegen")]
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use impact::{
     application::Application,
     egui,
@@ -23,6 +23,7 @@ use impact::{
 };
 use impact_dev_ui::{UserInterface, UserInterfaceConfig};
 use parking_lot::RwLock;
+use scripting::ScriptLib;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -63,6 +64,9 @@ impl BasicApp {
 
 impl Application for BasicApp {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
+        impact_log::debug!("Loading script library");
+        ScriptLib::load().context("Failed to load script library")?;
+
         *ENGINE.write() = Some(engine.clone());
         impact_log::debug!("Engine initialized");
 
