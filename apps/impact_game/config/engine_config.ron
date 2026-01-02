@@ -1,0 +1,117 @@
+(
+    resources: (
+        resource_file_path: Some("resources.ron"),
+        lookup_table_dir: "../resources/lookup_tables",
+    ),
+    rendering: (
+        basic: (
+            enabled: true,
+            wireframe_mode_on: false,
+            timings_enabled: false,
+        ),
+        shadow_mapping: (
+            enabled: true,
+            omnidirectional_light_shadow_map_resolution: 1024,
+            unidirectional_light_shadow_map_resolution: 1024,
+        ),
+        ambient_occlusion: (
+            enabled: true,
+            sample_count: 4,
+            sample_radius: 1.0,
+            intensity: 2.0,
+            contrast: 0.75,
+        ),
+        temporal_anti_aliasing: (
+            enabled: true,
+            current_frame_weight: 0.1,
+            variance_clipping_threshold: 1.0,
+        ),
+        capturing_camera: (
+            settings: (
+                relative_aperture: 4.0,
+                shutter_duration: 0.005,
+                sensitivity: Auto(
+                    ev_compensation: 0.0,
+                ),
+                max_exposure: 0.01,
+            ),
+            average_luminance_computation: (
+                luminance_bounds: (
+                    lower: 100.0,
+                    upper: 10000000.0,
+                ),
+                current_frame_weight: 0.02,
+                fetch_histogram: false,
+            ),
+            bloom: (
+                enabled: true,
+                n_downsamplings: 4,
+                blur_filter_radius: 0.005,
+                blurred_luminance_weight: 0.04,
+            ),
+            dynamic_range_compression: (
+                tone_mapping_method: ACES,
+            ),
+        ),
+    ),
+    physics: (
+        simulator: (
+            enabled: true,
+            n_substeps: 1,
+            initial_time_step_duration: 0.001,
+            match_frame_duration: true,
+            max_auto_time_step_duration: Some(0.05),
+            simulation_speed_multiplier_increment_factor: 1.1,
+        ),
+        rigid_body_force: (
+            drag_load_map_config: (
+                n_direction_samples: 5000,
+                n_theta_coords: 64,
+                smoothness: 2.0,
+                save_generated_maps: true,
+                overwrite_existing_map_files: false,
+                use_saved_maps: true,
+                directory: "resources/drag_load_maps",
+            ),
+        ),
+        constraint_solver: (
+            enabled: true,
+            n_iterations: 8,
+            old_impulse_weight: 0.4,
+            n_positional_correction_iterations: 3,
+            positional_correction_factor: 0.2,
+        ),
+        medium: (
+            mass_density: 0.0,
+            velocity: (0.0, 0.0, 0.0),
+        ),
+    ),
+    light: (
+        max_omnidirectional_light_reach: 500.0,
+    ),
+    voxel: (
+        texture_resolution: 4096,
+        voxel_types_path: Some("voxel_types.ron"),
+    ),
+    controller: (
+        motion: SemiDirectional((
+            movement_speed: 8.0,
+            vertical_control: true,
+        )),
+        orientation: RollFreeCamera,
+    ),
+    game_loop: (
+        max_fps: None,
+        max_iterations: None,
+    ),
+    input: (
+        mouse_sensitivity: 1.0,
+    ),
+    screen_capture: (
+        output_dir: None,
+        tagging: Timestamp,
+    ),
+    user_interface: (
+        initially_interactive: true,
+    ),
+)
