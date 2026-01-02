@@ -20,6 +20,8 @@ endef
 .PHONY: profile-perf profile-tracy profile-heaptrack profile-dhat
 .PHONY: fuzz
 .PHONY: generate-roc clean-roc
+.PHONY: clean-profiling
+.PHONY: cargo-clean cargo-update
 
 # Default target
 all: build
