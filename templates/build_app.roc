@@ -18,55 +18,66 @@ main! = |_args|
             Ok(str) if !(Str.is_empty(str)) -> str
             _ -> "${app_dir}/roc_platform"
 
-    backend =
-        when Env.var!("CRANELIFT") is
-            Ok(str) if !(Str.is_empty(str)) -> Cranelift
-            _ -> LLVM
-
-    linker =
-        when Env.var!("MOLD") is
-            Ok(str) if !(Str.is_empty(str)) -> Mold
-            _ -> Ld
+    target =
+        when Env.var!("SCRIPT_ONLY") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Script
+            _ -> All
 
     roc_debug_mode =
         when Env.var!("ROC_DEBUG") is
-            Ok(str) if !(Str.is_empty(str)) -> Debug
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Debug
             _ -> Release
-
-    rust_debug_mode =
-        when Env.var!("RUST_DEBUG") is
-            Ok(str) if !(Str.is_empty(str)) -> Debug
-            _ -> Release
-
-    asan_mode =
-        when Env.var!("ASAN") is
-            Ok(str) if !(Str.is_empty(str)) -> AddressSanitizer
-            _ -> NoAddressSanitizer
-
-    profiling_mode =
-        when Env.var!("PROFILING") is
-            Ok(str) if !(Str.is_empty(str)) -> Profiling
-            _ -> NoProfiling
-
-    tracy_mode =
-        when Env.var!("TRACY") is
-            Ok(str) if !(Str.is_empty(str)) -> Tracy
-            _ -> NoTracy
-
-    valgrind_mode =
-        when Env.var!("VALGRIND") is
-            Ok(str) if !(Str.is_empty(str)) -> Valgrind
-            _ -> NoValgrind
-
-    fuzzing_mode =
-        when Env.var!("FUZZING") is
-            Ok(str) if !(Str.is_empty(str)) -> Fuzzing
-            _ -> NoFuzzing
 
     output_dir =
         when Env.var!("OUTPUT_DIR") is
             Ok(str) if !(Str.is_empty(str)) -> str
             _ -> "dist"
+
+    when target is
+        All -> build_all!(app_dir, platform_dir, output_dir, roc_debug_mode)
+        Script -> build_script_only!(app_dir, platform_dir, output_dir, roc_debug_mode)
+
+build_all! : Str, Str, Str, [Debug, Release] => Result {} _
+build_all! = |app_dir, platform_dir, output_dir, roc_debug_mode|
+    backend =
+        when Env.var!("CRANELIFT") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Cranelift
+            _ -> LLVM
+
+    linker =
+        when Env.var!("MOLD") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Mold
+            _ -> Ld
+
+    rust_debug_mode =
+        when Env.var!("RUST_DEBUG") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Debug
+            _ -> Release
+
+    asan_mode =
+        when Env.var!("ASAN") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> AddressSanitizer
+            _ -> NoAddressSanitizer
+
+    profiling_mode =
+        when Env.var!("PROFILING") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Profiling
+            _ -> NoProfiling
+
+    tracy_mode =
+        when Env.var!("TRACY") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Tracy
+            _ -> NoTracy
+
+    valgrind_mode =
+        when Env.var!("VALGRIND") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Valgrind
+            _ -> NoValgrind
+
+    fuzzing_mode =
+        when Env.var!("FUZZING") is
+            Ok(str) if !(Str.is_empty(str)) and str != "0" -> Fuzzing
+            _ -> NoFuzzing
 
     os_and_arch = get_os_and_arch!({})?
 
@@ -87,6 +98,18 @@ main! = |_args|
     create_distribution!(app_dir, output_dir, crate_name, rust_debug_mode, os_and_arch)?
 
     Stdout.line!("Build complete")?
+
+    Ok({})
+
+build_script_only! : Str, Str, Str, [Debug, Release] => Result {} _
+build_script_only! = |app_dir, platform_dir, output_dir, roc_debug_mode|
+    roc_build_script!(app_dir, roc_debug_mode)?
+
+    link_script_with_platform!(platform_dir, app_dir)?
+
+    distribute_script!(app_dir, output_dir)?
+
+    Stdout.line!("Script build complete")?
 
     Ok({})
 
@@ -350,24 +373,31 @@ cargo_build_cli! = |app_dir, debug_mode, valgrind_mode, fuzzing_mode, os_and_arc
 create_distribution! : Str, Str, Str, [Debug, Release], OSAndArch => Result {} _
 create_distribution! = |app_dir, output_dir, crate_name, debug_mode, os_and_arch|
     Stdout.line!("Creating distribution at ${output_dir}/")?
+    distribute_app!(app_dir, output_dir)?
+    distribute_script!(app_dir, output_dir)?
+    distribute_binary!(app_dir, output_dir, crate_name, debug_mode, os_and_arch)
 
+distribute_app! : Str, Str => Result {} _
+distribute_app! = |app_dir, output_dir|
     Cmd.exec!("mkdir", ["-p", "${output_dir}"])
     |> Result.map_err(ErrCreatingDistDirectory)?
 
     Cmd.exec!("cp", ["${app_dir}/lib/libapp", "${output_dir}/"])
-    |> Result.map_err(ErrCopyingToDistDirectory)?
+    |> Result.map_err(ErrCopyingToDistDirectory)
 
+distribute_script! : Str, Str => Result {} _
+distribute_script! = |app_dir, output_dir|
     Cmd.exec!("cp", ["${app_dir}/lib/libscript", "${output_dir}/"])
-    |> Result.map_err(ErrCopyingToDistDirectory)?
+    |> Result.map_err(ErrCopyingToDistDirectory)
 
+distribute_binary! : Str, Str, Str, [Debug, Release], OSAndArch => Result {} _
+distribute_binary! = |app_dir, output_dir, crate_name, debug_mode, os_and_arch|
     cli_target_dir = get_cli_target_dir!(app_dir, debug_mode, os_and_arch)
     cli_binary_name = get_cli_binary_name(crate_name, os_and_arch)
     cli_dest_name = get_cli_dest_name(crate_name, os_and_arch)
 
     Cmd.exec!("cp", ["${cli_target_dir}${cli_binary_name}", "${output_dir}/${cli_dest_name}"])
-    |> Result.map_err(ErrCopyingToDistDirectory)?
-
-    Ok({})
+    |> Result.map_err(ErrCopyingToDistDirectory)
 
 get_cli_target_dir! : Str, [Debug, Release], OSAndArch => Str
 get_cli_target_dir! = |app_dir, debug_mode, os_and_arch|
