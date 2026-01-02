@@ -1,13 +1,13 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
-use ffi_helpers::define_ffi;
 use std::path::PathBuf;
 
-define_ffi! {
-    name = AppFFI,
-    lib_path_env = "APP_LIB_PATH",
-    lib_path_default = "./libapp",
-    run_with_config_at_path => unsafe extern "C" fn(*const u8, usize) -> i32,
+dynamic_lib::define_lib! {
+    name = AppLib,
+    path_env = "APP_LIB_PATH",
+    path_default = "./libapp";
+
+    unsafe fn run_with_config_at_path(path_ptr: *const u8, path_len: usize) -> i32;
 }
 
 #[derive(Debug, Parser)]
@@ -31,15 +31,10 @@ fn run(config_path: PathBuf) -> Result<()> {
     let config_path = config_path.to_string_lossy();
     let config_path_bytes = config_path.as_bytes();
 
-    AppFFI::call(
-        |ffi| unsafe {
-            error_code_to_result((ffi.run_with_config_at_path)(
-                config_path_bytes.as_ptr(),
-                config_path_bytes.len(),
-            ))
-        },
-        |error| Err(anyhow!("{error:#}")),
-    )
+    error_code_to_result(unsafe {
+        AppLib::acquire()
+            .run_with_config_at_path(config_path_bytes.as_ptr(), config_path_bytes.len())
+    })
 }
 
 fn error_code_to_result(error_code: i32) -> Result<()> {
@@ -51,6 +46,8 @@ fn error_code_to_result(error_code: i32) -> Result<()> {
 }
 
 pub fn main() -> Result<()> {
+    AppLib::load().context("Failed to load app library")?;
+
     let cli = Cli::parse();
 
     match cli.command {

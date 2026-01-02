@@ -10,7 +10,7 @@ pub use impact::{self, roc_integration};
 pub use impact::component::gather_roc_type_ids_for_all_components;
 
 use crate::testing::ComparisonOutcome;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use impact::{
     application::Application,
     command::{AdminCommand, SystemCommand, capture::CaptureCommand},
@@ -26,6 +26,7 @@ use std::{
     sync::Arc,
 };
 use testing::TestScene;
+use scripting::ScriptLib;
 
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 
@@ -127,6 +128,9 @@ impl SnapshotTester {
 
 impl Application for SnapshotTester {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
+        impact_log::debug!("Loading script library");
+        ScriptLib::load().context("Failed to load script library")?;
+
         if self.test_scenes.is_empty() {
             impact_log::info!("No scenes to test, exiting");
             engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));

@@ -1,9 +1,15 @@
 [package]
-name = "ffi_helpers"
-description = "Foreign Function Interface helpers for cross-language integration"
+name = "dynamic_lib"
+description = "Loading of dynamic libraries"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
+
+[dependencies]
+libloading = "0.9"
+log = "0.4"
+parking_lot = "0.12"
+thiserror = "2.0"
 
 [lints.rust]
 future_incompatible = "warn"

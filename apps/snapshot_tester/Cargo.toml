@@ -110,16 +110,14 @@ roc_codegen = ["impact/roc_codegen"]
 
 [dependencies]
 anyhow = "1.0"
+dynamic_lib = { path = "../../utils/dynamic_lib" }
 env_logger = "0.11"
-ffi_helpers = { path = "../../utils/ffi_helpers" }
 image = { version = "0.25", default-features = false, features = ["png"] }
 image-compare = "0.5"
 impact = { path = "../../engine", default-features = false, features = ["png"] }
 impact_log = { path = "../../engine/crates/impact_log" }
 inventory = "0.3"
-libloading = "0.9"
 parking_lot = "0.12"
-pastey = "0.2"
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }
 
