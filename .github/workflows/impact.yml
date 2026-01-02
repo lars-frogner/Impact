@@ -82,6 +82,8 @@ jobs:
             roc_platform/core,
             apps/basic_app,
             apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
           ]
         os: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
@@ -90,6 +92,10 @@ jobs:
           - workspace: apps/basic_app
             os: windows-latest
           - workspace: apps/snapshot_tester
+            os: windows-latest
+          - workspace: apps/voxel_generator
+            os: windows-latest
+          - workspace: apps/impact_game
             os: windows-latest
     runs-on: ${{ matrix.os }}
 
@@ -129,7 +135,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [apps/basic_app, apps/snapshot_tester]
+        workspace:
+          [
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
@@ -355,6 +367,8 @@ jobs:
             tools/asset_fetcher,
             apps/basic_app,
             apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
           ]
         os: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
@@ -363,6 +377,10 @@ jobs:
           - workspace: apps/basic_app
             os: windows-latest
           - workspace: apps/snapshot_tester
+            os: windows-latest
+          - workspace: apps/voxel_generator
+            os: windows-latest
+          - workspace: apps/impact_game
             os: windows-latest
     runs-on: ${{ matrix.os }}
 
@@ -409,6 +427,8 @@ jobs:
             tools/asset_fetcher,
             apps/basic_app,
             apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
           ]
     runs-on: ubuntu-latest
 
@@ -447,6 +467,8 @@ jobs:
             tools/asset_fetcher,
             apps/basic_app,
             apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
           ]
     runs-on: ubuntu-latest
 
@@ -483,6 +505,8 @@ jobs:
             tools/asset_fetcher,
             apps/basic_app,
             apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
           ]
     runs-on: ubuntu-latest
 
@@ -525,6 +549,8 @@ jobs:
             tools/asset_fetcher,
             apps/basic_app,
             apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
           ]
     runs-on: ubuntu-latest
 

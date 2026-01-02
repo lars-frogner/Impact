@@ -1,0 +1,19 @@
+[package]
+name = "roc_platform"
+description = "Roc platform for the Impact game"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+dynamic_lib = { path = "../../../utils/dynamic_lib" }
+roc_platform_core = { path = "../../../roc_platform/core" }
+
+[profile.release]
+lto = true
+strip = "debuginfo"
+# You can comment this out if you hit a segmentation fault similar to the one in see issue github.com/roc-lang/roc/issues/6121
+# Setting this to 1 should improve execution speed by making things easier to optimize for LLVM.
+# codegen-units = 1
