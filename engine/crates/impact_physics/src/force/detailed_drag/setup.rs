@@ -118,9 +118,9 @@ fn generate_map<'a>(
     drag_load_map_id: DragLoadMapID,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
 ) -> Result<DragLoadMap> {
-    impact_log::info!("Generating drag load map: {drag_load_map_id}");
+    log::info!("Generating drag load map: {drag_load_map_id}");
 
-    let map = impact_log::with_timing_info_logging!(
+    let map = log::with_timing_info_logging!(
         "Generating drag load map with resolution {} and smoothness {} for {} using {} direction samples",
         config.n_theta_coords,
         drag_load_map_id,

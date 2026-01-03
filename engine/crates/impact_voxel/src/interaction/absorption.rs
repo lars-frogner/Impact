@@ -193,7 +193,7 @@ pub fn apply_absorption<C>(
         let Some(rigid_body) =
             rigid_body_manager.get_dynamic_rigid_body_mut(physics_context.rigid_body_id)
         else {
-            impact_log::warn!("Voxel object physics context points to missing dynamic rigid body");
+            log::warn!("Voxel object physics context points to missing dynamic rigid body");
             return;
         };
 

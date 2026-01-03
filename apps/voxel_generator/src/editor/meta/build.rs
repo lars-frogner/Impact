@@ -1,15 +1,15 @@
 use super::{
-    MetaNode, MetaNodeID,
     node_kind::{self},
+    MetaNode, MetaNodeID,
 };
 use anyhow::Result;
-use impact::impact_alloc::{AVec, Allocator, arena::ArenaPool};
+use impact::impact_alloc::{arena::ArenaPool, AVec, Allocator};
 use impact_containers::NoHashMap;
 use impact_voxel::{
     generation::{
-        SDFVoxelGenerator,
-        sdf::{SDFGenerator, SDFGraph, meta::MetaSDFGraph},
+        sdf::{meta::MetaSDFGraph, SDFGenerator, SDFGraph},
         voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
+        SDFVoxelGenerator,
     },
     voxel_types::VoxelType,
 };
@@ -122,7 +122,7 @@ pub fn build_sdf_graph<A: Allocator>(
                 graph,
             })
             .inspect_err(|err| {
-                impact_log::error!("Invalid meta graph: {err:#}");
+                log::error!("Invalid meta graph: {err:#}");
             }),
     )
 }

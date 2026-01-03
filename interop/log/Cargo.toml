@@ -1,19 +1,21 @@
-[workspace]
-exclude = ["cli", "tools", "roc_platform"]
-
-[workspace.package]
+[package]
+name = "log"
+description = "Logging for the Impact engine"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 
-[workspace.lints.rust]
+[dependencies]
+log = "0.4"
+
+[lints.rust]
 future_incompatible = "warn"
 missing_debug_implementations = "warn"
 nonstandard_style = "warn"
 rust_2018_idioms = "warn"
 unexpected_cfgs = "warn"
 
-[workspace.lints.clippy]
+[lints.clippy]
 too_many_arguments = "allow"
 let_and_return = "allow"
 multiple_bound_locations = "allow"
@@ -92,57 +94,3 @@ unused_self = "warn"
 useless_transmute = "warn"
 verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
-
-[package]
-name = "basic_app"
-description = "Basic application template for the Impact game engine"
-version = { workspace = true }
-edition = { workspace = true }
-license = { workspace = true }
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[features]
-
-default = ["x11", "jpeg", "png", "obj"]
-
-wayland = ["impact/wayland"]
-x11 = ["impact/x11"]
-
-tracy = ["impact/tracy"]
-
-jpeg = ["impact/jpeg"]
-png = ["impact/png"]
-obj = ["impact/obj"]
-ply = ["impact/ply"]
-
-fuzzing = [
-    "dep:arbitrary",
-    "impact/arbitrary",
-    "impact_dev_ui/arbitrary",
-]
-
-checked_lock_order = ["impact/checked_lock_order"]
-
-roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
-
-[dependencies]
-anyhow = "1.0"
-arbitrary = { version = "1.4", features = ["derive"], optional = true }
-dynamic_lib = { path = "../../interop/dynamic_lib" }
-env_logger = "0.11"
-impact = { path = "../../engine", features = ["egui"] }
-log = { path = "../../interop/log" }
-impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
-inventory = "0.3"
-parking_lot = "0.12"
-roc_platform_core = { path = "../../roc_platform/core" }
-serde = { version = "1.0", features = ["derive"] }
-
-[lints]
-workspace = true
-
-[profile.release]
-debug = "limited"
-# lto = true

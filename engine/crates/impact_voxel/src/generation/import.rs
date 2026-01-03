@@ -31,7 +31,7 @@ pub fn load_declared_voxel_generators(
     for declaration in declarations {
         if let Err(error) = load_declared_voxel_generator(registry, declaration) {
             // Failing to load a voxel generator is not fatal, since we might not need it
-            impact_log::error!(
+            log::error!(
                 "Failed to load voxel generator {}: {error:#}",
                 declaration.id
             );
@@ -57,7 +57,7 @@ pub fn load_declared_voxel_generator(
     let id = declaration.id;
     let path = &declaration.path;
 
-    impact_log::debug!("Loading voxel generator `{id}` from {}", path.display());
+    log::debug!("Loading voxel generator `{id}` from {}", path.display());
 
     if registry.contains(id) {
         anyhow::bail!("Tried to load voxel generator under already existing ID: {id}");

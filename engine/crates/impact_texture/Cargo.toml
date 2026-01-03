@@ -28,7 +28,7 @@ impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_gpu = { path = "../impact_gpu" }
 impact_io = { path = "../impact_io" }
-impact_log = { path = "../impact_log" }
+log = { path = "../../../interop/log" }
 impact_math = { path = "../impact_math" }
 impact_resource = { path = "../impact_resource" }
 inventory = { workspace = true, optional = true }

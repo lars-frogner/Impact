@@ -149,7 +149,7 @@ impl<'a> GPUResource<'a, TextureCreateInfo> for SamplingTexture {
         texture_info: &TextureCreateInfo,
     ) -> Result<Option<Self>> {
         let label = id.to_string();
-        impact_log::debug!("Creating texture `{label}`");
+        log::debug!("Creating texture `{label}`");
         crate::create_texture_from_info(graphics_device, mipmapper_generator, texture_info, &label)
             .with_context(|| format!("Failed creating texture: {label}"))
             .map(Some)

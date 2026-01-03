@@ -34,7 +34,7 @@ pub fn run_headless(runtime: HeadlessRuntime) -> Result<()> {
         runtime.perform_game_loop_iteration()?;
 
         if runtime.shutdown_requested() {
-            impact_log::info!("Shutting down after request");
+            log::info!("Shutting down after request");
             runtime.engine().app().on_shutdown()?;
             return Ok(());
         }

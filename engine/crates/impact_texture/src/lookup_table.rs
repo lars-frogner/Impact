@@ -225,7 +225,7 @@ pub fn load_declared_lookup_table(
 ) -> Result<()> {
     use anyhow::Context;
 
-    impact_log::debug!(
+    log::debug!(
         "Loading lookup table `{}` from {}",
         declaration.id,
         declaration.table_path.display(),

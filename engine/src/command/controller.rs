@@ -46,30 +46,30 @@ impl Eq for ControllerCommand {}
 pub fn set_motion(engine: &Engine, state: MotionState, direction: MotionDirection) {
     if engine.controls_enabled() {
         if let Some(motion_controller) = engine.motion_controller() {
-            impact_log::debug!("Setting motion in direction {direction:?} to {state:?}");
+            log::debug!("Setting motion in direction {direction:?} to {state:?}");
             motion_controller.olock().update_motion(state, direction);
         } else {
-            impact_log::info!("Not setting motion since there is no motion controller");
+            log::info!("Not setting motion since there is no motion controller");
         }
     } else {
-        impact_log::info!("Not setting motion since controls are disabled");
+        log::info!("Not setting motion since controls are disabled");
     }
 }
 
 pub fn stop_motion(engine: &Engine) {
     if let Some(motion_controller) = engine.motion_controller() {
-        impact_log::info!("Stopping controller motion");
+        log::info!("Stopping controller motion");
         motion_controller.olock().stop();
     } else {
-        impact_log::info!("Not stopping motion since there is no motion controller");
+        log::info!("Not stopping motion since there is no motion controller");
     }
 }
 
 pub fn set_movement_speed(engine: &Engine, speed: f32) {
     if let Some(motion_controller) = engine.motion_controller() {
-        impact_log::info!("Setting movement speed to {speed:?}");
+        log::info!("Setting movement speed to {speed:?}");
         motion_controller.olock().set_movement_speed(speed);
     } else {
-        impact_log::info!("Not setting movement speed since there is no motion controller");
+        log::info!("Not setting movement speed since there is no motion controller");
     }
 }

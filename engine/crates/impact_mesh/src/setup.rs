@@ -600,9 +600,7 @@ pub fn generate_missing_vertex_properties_for_mesh(
     }
 
     let Some(mut mesh) = registry.get_mut(mesh_id) else {
-        impact_log::warn!(
-            "Tried to generate missing vertex properties for missing mesh: {mesh_id}"
-        );
+        log::warn!("Tried to generate missing vertex properties for missing mesh: {mesh_id}");
         return;
     };
 
@@ -611,14 +609,14 @@ pub fn generate_missing_vertex_properties_for_mesh(
     if vertex_attribute_requirements.contains(VertexAttributeSet::NORMAL_VECTOR)
         && !mesh.has_normal_vectors()
     {
-        impact_log::info!("Generating normal vectors for mesh: {mesh_id}");
+        log::info!("Generating normal vectors for mesh: {mesh_id}");
         mesh.generate_smooth_normal_vectors(&mut dirty_mask);
     }
 
     if vertex_attribute_requirements.contains(VertexAttributeSet::TANGENT_SPACE_QUATERNION)
         && !mesh.has_tangent_space_quaternions()
     {
-        impact_log::info!("Generating tangent space quaternions for mesh: {mesh_id}");
+        log::info!("Generating tangent space quaternions for mesh: {mesh_id}");
         mesh.generate_smooth_tangent_space_quaternions(&mut dirty_mask);
     }
 

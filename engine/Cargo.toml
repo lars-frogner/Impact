@@ -11,7 +11,6 @@ members = [
     "crates/impact_gpu",
     "crates/impact_io",
     "crates/impact_light",
-    "crates/impact_log",
     "crates/impact_material",
     "crates/impact_math",
     "crates/impact_mesh",
@@ -251,7 +250,7 @@ impact_geometry = { path = "crates/impact_geometry", features = ["ecs"] }
 impact_gpu = { path = "crates/impact_gpu", features = ["serde"] }
 impact_io = { path = "crates/impact_io", features = ["ron"] }
 impact_light = { path = "crates/impact_light", features = ["ecs", "serde"] }
-impact_log = { path = "crates/impact_log" }
+log = { path = "../interop/log" }
 impact_material = { path = "crates/impact_material", features = [
     "ecs",
     "serde",

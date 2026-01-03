@@ -565,7 +565,7 @@ impl VoxelChunkCullingPass {
             compute_pass.dispatch_workgroups(x, y, z);
         }
 
-        impact_log::trace!(
+        log::trace!(
             "Recorded chunk culling pass for {} voxel objects",
             visible_voxel_object_ids.len()
         );
@@ -839,7 +839,7 @@ impl VoxelGeometryPipeline {
             render_pass.multi_draw_indirect(indirect_buffer, 0, chunk_count);
         }
 
-        impact_log::trace!(
+        log::trace!(
             "Recorded geometry pass for {} voxel objects",
             visible_voxel_object_ids.len()
         );

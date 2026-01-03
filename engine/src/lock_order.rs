@@ -237,7 +237,7 @@ mod inner {
                 if lock_order < held_lock.lock_order {
                     let backtrace = Backtrace::capture();
 
-                    impact_log::error!(
+                    log::error!(
                         "Lock ordering violation: attempting to acquire {resource_name} (order {lock_order}) while holding {} (order {}).\n\
                          Current locks held (in acquisition order): [{}]\n
                          {backtrace}",

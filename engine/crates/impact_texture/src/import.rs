@@ -127,7 +127,7 @@ pub fn load_declared_image_textures(
             load_declared_image_texture(texture_registry, sampler_registry, declaration.clone())
         {
             // Failing to load a texture is not fatal, since we might not need it
-            impact_log::error!("Failed to load texture {}: {error:#}", declaration.id);
+            log::error!("Failed to load texture {}: {error:#}", declaration.id);
         }
     }
     Ok(())
@@ -187,7 +187,7 @@ pub fn load_image_texture(
     let metadata = match &source {
         ImageTextureSource::Single(source) => match source {
             ImageSource::File(path) => {
-                impact_log::debug!(
+                log::debug!(
                     "Reading metadata for image texture `{texture_id}` from {}",
                     path.display(),
                 );
@@ -207,7 +207,7 @@ pub fn load_image_texture(
 
             match source {
                 ImageSource::File(path) => {
-                    impact_log::debug!(
+                    log::debug!(
                         "Reading metadata for image texture array `{texture_id}` from {}",
                         path.display()
                     );

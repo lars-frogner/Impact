@@ -126,13 +126,13 @@ where
                         self.runtime_and_window = Some((runtime, window));
                     }
                     Err(error) => {
-                        impact_log::error!("Runtime creation error: {error:?}");
+                        log::error!("Runtime creation error: {error:?}");
                         event_loop.exit();
                     }
                 }
             }
             Err(error) => {
-                impact_log::error!("Window creation error: {error:?}");
+                log::error!("Window creation error: {error:?}");
                 event_loop.exit();
             }
         }
@@ -163,7 +163,7 @@ where
                 let result = runtime.perform_game_loop_iteration();
 
                 if let Err(error) = result {
-                    impact_log::error!("Aborting due to fatal error: {error:#}");
+                    log::error!("Aborting due to fatal error: {error:#}");
                     event_loop.exit();
                 } else {
                     window.request_redraw();
@@ -171,13 +171,13 @@ where
             }
             // Exit if user requests close
             WindowEvent::CloseRequested => {
-                impact_log::info!("Window requested to close");
+                log::info!("Window requested to close");
                 runtime.engine().request_shutdown();
             }
             // Resize rendering surface when window is resized
             WindowEvent::Resized(new_size) => {
                 if new_size.width == 0 || new_size.height == 0 {
-                    impact_log::error!("Tried resizing window to zero size");
+                    log::error!("Tried resizing window to zero size");
                     event_loop.exit();
                 } else {
                     runtime.resize_rendering_surface(
@@ -195,9 +195,9 @@ where
         runtime.queue_winit_window_event(&event);
 
         if runtime.shutdown_requested() {
-            impact_log::info!("Shutting down after request");
+            log::info!("Shutting down after request");
             if let Err(error) = runtime.engine().app().on_shutdown() {
-                impact_log::error!("Shutdown error: {error:?}");
+                log::error!("Shutdown error: {error:?}");
             }
             event_loop.exit();
         }

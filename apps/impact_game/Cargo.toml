@@ -126,7 +126,7 @@ anyhow = "1.0"
 dynamic_lib = { path = "../../interop/dynamic_lib" }
 env_logger = "0.11"
 impact = { path = "../../engine", features = ["egui"] }
-impact_log = { path = "../../engine/crates/impact_log" }
+log = { path = "../../interop/log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 inventory = "0.3"
 parking_lot = "0.12"

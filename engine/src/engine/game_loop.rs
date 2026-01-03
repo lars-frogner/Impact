@@ -21,7 +21,7 @@ impl Engine {
         let game_loop_controller = self.game_loop_controller.oread();
 
         if game_loop_controller.reached_max_iterations() {
-            impact_log::info!("Reached max iterations, requesting shutdown");
+            log::info!("Reached max iterations, requesting shutdown");
             self.request_shutdown();
             return Ok(());
         }
@@ -59,7 +59,7 @@ impl Engine {
         self.gather_metrics_after_completed_frame(smooth_frame_duration);
         self.update_simulation_time_step_duration(smooth_frame_duration);
 
-        impact_log::debug!(
+        log::debug!(
             "Completed game loop iteration after {:.1} ms (~{} FPS, {:.1} s elapsed)",
             frame_duration.as_secs_f64() * 1e3,
             instrumentation::frame_duration_to_fps(smooth_frame_duration),

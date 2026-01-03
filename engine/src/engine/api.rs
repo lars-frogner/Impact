@@ -260,7 +260,7 @@ impl Engine {
     /// Resets the scene, ECS world and physics simulator to the initial empty
     /// state and sets the simulation time to zero.
     pub fn reset_world(&self) {
-        impact_log::info!("Resetting world");
+        log::info!("Resetting world");
         self.ecs_world.owrite().remove_all_entities();
         self.scene.oread().clear();
         self.simulator.owrite().reset();

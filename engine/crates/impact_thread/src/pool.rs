@@ -427,7 +427,7 @@ impl Worker {
     {
         let handle = thread::spawn(move || {
             let worker_id = communicator.channel().owning_worker_id();
-            impact_log::trace!("Worker {worker_id} spawned");
+            log::trace!("Worker {worker_id} spawned");
 
             instrumentation::set_thread_name(&format!("Worker {worker_id}"));
 
@@ -443,7 +443,7 @@ impl Worker {
                             execute_tasks(communicator.channel(), message);
                         })) {
                             communicator.execution_progress().register_panic();
-                            impact_log::error!("Task panicked: {cause:?}");
+                            log::error!("Task panicked: {cause:?}");
                         };
 
                         communicator
@@ -451,7 +451,7 @@ impl Worker {
                             .register_completed_tasks(1);
                     }
                     WorkerInstruction::Terminate => {
-                        impact_log::trace!("Worker {worker_id} terminating");
+                        log::trace!("Worker {worker_id} terminating");
                         break;
                     }
                 }
@@ -462,7 +462,7 @@ impl Worker {
 
     fn join(self) {
         if let Err(err) = self.handle.join() {
-            impact_log::error!("Worker thread failed to join: {err:?}");
+            log::error!("Worker thread failed to join: {err:?}");
         }
     }
 }
