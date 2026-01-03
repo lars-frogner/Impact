@@ -36,6 +36,8 @@ static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 #[derive(Debug)]
 pub struct Game {
     user_interface: RwLock<UserInterface>,
+    #[cfg(feature = "hot_reloading")]
+    script_reloader: dynamic_lib::hot_reloading::Reloader<ScriptLib>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -59,7 +61,21 @@ impl Game {
     pub fn new(user_interface: UserInterface) -> Self {
         Self {
             user_interface: RwLock::new(user_interface),
+            #[cfg(feature = "hot_reloading")]
+            script_reloader: dynamic_lib::hot_reloading::Reloader::new(),
         }
+    }
+
+    #[cfg(feature = "hot_reloading")]
+    fn activate_script_reloader(&self) -> Result<()> {
+        log::debug!("Activating script reloader");
+        self.script_reloader.begin_watch(Path::new("s"))?;
+        Ok(())
+    }
+
+    #[cfg(not(feature = "hot_reloading"))]
+    fn activate_script_reloader(&self) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -68,6 +84,8 @@ impl Application for Game {
         log::debug!("Loading script library");
         ScriptLib::load().context("Failed to load script library")?;
 
+        self.activate_script_reloader()?;
+
         *ENGINE.write() = Some(engine.clone());
         log::debug!("Engine initialized");
 
@@ -75,7 +93,9 @@ impl Application for Game {
         self.user_interface.read().setup(&engine);
 
         log::debug!("Setting up scene");
-        scripting::setup_scene()
+        scripting::setup_scene()?;
+
+        Ok(())
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {

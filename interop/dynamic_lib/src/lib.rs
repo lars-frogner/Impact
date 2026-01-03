@@ -3,6 +3,9 @@
 #[macro_use]
 pub mod macros;
 
+#[cfg(feature = "hot_reloading")]
+pub mod hot_reloading;
+
 use std::{
     env, io,
     path::{Path, PathBuf},
