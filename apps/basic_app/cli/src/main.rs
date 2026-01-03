@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
+use dynamic_lib::DynamicLibrary;
 use std::path::PathBuf;
 
 #[cfg(feature = "fuzzing")]
