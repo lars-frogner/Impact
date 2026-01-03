@@ -115,8 +115,8 @@ anyhow = "1.0"
 bitflags = { version = "2.6", optional = true }
 bytemuck = { version = "1.24", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"], optional = true }
-common_hashing = { path = '../interop/common_hashing' }
 hashbrown = "0.16"
+hashing = { path = '../interop/hashing' }
 inventory = { version = "0.3", optional = true }
 rustc-hash = { version = "2.1", optional = true }
 time = { version = "0.3", features = ["formatting"], optional = true }

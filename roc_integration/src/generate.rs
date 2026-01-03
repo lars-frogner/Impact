@@ -543,7 +543,7 @@ fn obtain_timestamp() -> String {
 }
 
 fn compute_module_code_hash(code: &str) -> String {
-    format!("{:016x}", common_hashing::hash_str_to_u64(code))
+    format!("{:016x}", hashing::hash_str_to_u64(code))
 }
 
 impl GeneratedTypeCategory {
