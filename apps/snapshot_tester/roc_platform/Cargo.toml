@@ -8,7 +8,7 @@ edition = "2024"
 crate-type = ["staticlib"]
 
 [dependencies]
-dynamic_lib = { path = "../../../utils/dynamic_lib" }
+dynamic_lib = { path = "../../../interop/dynamic_lib" }
 roc_platform_core = { path = "../../../roc_platform/core" }
 
 [profile.release]

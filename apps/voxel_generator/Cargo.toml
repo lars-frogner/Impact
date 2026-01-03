@@ -123,7 +123,7 @@ roc_codegen = ["impact/roc_codegen", "impact_dev_ui/roc_codegen"]
 anyhow = "1.0"
 bitflags = "2.9"
 env_logger = "0.11"
-dynamic_lib = { path = "../../utils/dynamic_lib" }
+dynamic_lib = { path = "../../interop/dynamic_lib" }
 impact = { path = "../../engine", features = ["egui"] }
 impact_containers = { path = "../../engine/crates/impact_containers", features = ["serde"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
