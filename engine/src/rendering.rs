@@ -473,9 +473,7 @@ impl RenderingSystem {
                 .graphics_device()
                 .supports_features(wgpu::Features::POLYGON_MODE_LINE)
         {
-            impact_log::warn!(
-                "Not enabling wireframe mode due to missing graphics device features"
-            );
+            log::warn!("Not enabling wireframe mode due to missing graphics device features");
             return;
         }
 
@@ -493,9 +491,7 @@ impl RenderingSystem {
                 .graphics_device()
                 .supports_features(wgpu::Features::TIMESTAMP_QUERY)
         {
-            impact_log::warn!(
-                "Not enabling timestamp queries due to missing graphics device features"
-            );
+            log::warn!("Not enabling timestamp queries due to missing graphics device features");
             return;
         }
 

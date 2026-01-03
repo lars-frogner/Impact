@@ -68,7 +68,7 @@ impl RenderAttachmentTextureCopyCommand {
             source_texture.size(),
         );
 
-        impact_log::trace!(
+        log::trace!(
             "Recorded texture copy command ({:?} to {:?})",
             self.source,
             self.destination

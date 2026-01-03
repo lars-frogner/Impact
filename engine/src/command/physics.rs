@@ -45,12 +45,12 @@ impl PartialEq for ToSimulationSpeedMultiplier {
 impl Eq for ToSimulationSpeedMultiplier {}
 
 pub fn set_simulation(simulator: &mut PhysicsSimulator, to: ToActiveState) -> ModifiedActiveState {
-    impact_log::info!("Setting simulation to {to:?}");
+    log::info!("Setting simulation to {to:?}");
     to.set(simulator.enabled_mut())
 }
 
 pub fn set_simulation_substep_count(simulator: &mut PhysicsSimulator, to: ToSubstepCount) -> u32 {
-    impact_log::info!("Setting simulation substep count to {to:?}");
+    log::info!("Setting simulation substep count to {to:?}");
     let n_substeps = simulator.n_substeps_mut();
     match to {
         ToSubstepCount::HigherBy(incr) => {
@@ -70,7 +70,7 @@ pub fn set_simulation_speed(
     simulator: &mut PhysicsSimulator,
     to: ToSimulationSpeedMultiplier,
 ) -> f32 {
-    impact_log::info!("Setting simulation speed to {to:?}");
+    log::info!("Setting simulation speed to {to:?}");
     const INCREMENT_FACTOR: f32 = 1.1;
     const MIN_ABS_MULTIPLIER: f32 = 1e-9;
 
@@ -115,7 +115,7 @@ pub fn set_simulation_speed_and_compensate_controller_movement_speed(
 }
 
 pub fn set_time_step_duration(simulator: &mut PhysicsSimulator, duration: f32) -> f32 {
-    impact_log::info!("Setting time step duration to {duration:?}");
+    log::info!("Setting time step duration to {duration:?}");
     *simulator.time_step_duration_mut() = duration;
     duration
 }
@@ -124,7 +124,7 @@ pub fn set_match_frame_duration(
     simulator: &mut PhysicsSimulator,
     to: ToActiveState,
 ) -> ModifiedActiveState {
-    impact_log::info!("Setting match frame duration to {to:?}");
+    log::info!("Setting match frame duration to {to:?}");
     to.set(simulator.matches_frame_duration_mut())
 }
 
@@ -132,7 +132,7 @@ pub fn set_constraint_solver_config(
     simulator: &mut PhysicsSimulator,
     config: ConstraintSolverConfig,
 ) {
-    impact_log::info!("Setting constraint solver config to {config:?}");
+    log::info!("Setting constraint solver config to {config:?}");
     let mut constraint_manager = simulator.constraint_manager().owrite();
     *constraint_manager.solver_mut().config_mut() = config;
 }

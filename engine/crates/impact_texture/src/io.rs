@@ -321,7 +321,7 @@ pub fn read_lookup_table_metadata_from_file(
 
     let file_path = file_path.as_ref();
 
-    impact_log::debug!(
+    log::debug!(
         "Reading metadata for lookup table at {}",
         file_path.display()
     );
@@ -360,7 +360,7 @@ where
 
     let file_path = file_path.as_ref();
 
-    impact_log::debug!("Reading lookup table at {}", file_path.display());
+    log::debug!("Reading lookup table at {}", file_path.display());
 
     let file = File::open(file_path).with_context(|| {
         format!(

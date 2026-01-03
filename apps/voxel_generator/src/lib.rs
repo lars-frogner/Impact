@@ -82,16 +82,16 @@ impl VoxelGeneratorApp {
 
 impl Application for VoxelGeneratorApp {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
-        impact_log::debug!("Loading script library");
+        log::debug!("Loading script library");
         ScriptLib::load().context("Failed to load script library")?;
 
         *ENGINE.write() = Some(engine.clone());
-        impact_log::debug!("Engine initialized");
+        log::debug!("Engine initialized");
 
-        impact_log::debug!("Setting up UI");
+        log::debug!("Setting up UI");
         self.user_interface.read().setup(&engine);
 
-        impact_log::debug!("Setting up scene");
+        log::debug!("Setting up scene");
 
         let (voxel_object, model_transform) = generate_next_voxel_object_or_default(
             &self.thread_pool,
@@ -129,22 +129,22 @@ impl Application for VoxelGeneratorApp {
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
-        impact_log::trace!("Handling keyboard event {event:?}");
+        log::trace!("Handling keyboard event {event:?}");
         scripting::handle_keyboard_event(event)
     }
 
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
-        impact_log::trace!("Handling mouse button event {event:?}");
+        log::trace!("Handling mouse button event {event:?}");
         scripting::handle_mouse_button_event(event)
     }
 
     fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
-        impact_log::trace!("Handling mouse drag event {event:?}");
+        log::trace!("Handling mouse drag event {event:?}");
         scripting::handle_mouse_drag_event(event)
     }
 
     fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
-        impact_log::trace!("Handling mouse scroll event {event:?}");
+        log::trace!("Handling mouse scroll event {event:?}");
         scripting::handle_mouse_scroll_event(event)
     }
 

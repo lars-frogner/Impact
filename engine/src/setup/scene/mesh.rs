@@ -190,7 +190,7 @@ pub fn generate_missing_vertex_properties_for_new_entity_meshes(
                             .get(material.template_id)
                     })
             else {
-                impact_log::warn!(
+                log::warn!(
                     "Tried to generate missing vertex properties for missing material {material_id}"
                 );
                 return;

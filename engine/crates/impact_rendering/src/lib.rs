@@ -32,14 +32,14 @@ impl BasicRenderingConfig {
         if self.wireframe_mode_on
             && !graphics_device.supports_features(wgpu::Features::POLYGON_MODE_LINE)
         {
-            impact_log::warn!("Disabling wireframe mode due to missing device features");
+            log::warn!("Disabling wireframe mode due to missing device features");
             self.wireframe_mode_on = false;
         }
 
         if self.timings_enabled
             && !graphics_device.supports_features(wgpu::Features::TIMESTAMP_QUERY)
         {
-            impact_log::warn!("Disabling timestamp queries due to missing device features");
+            log::warn!("Disabling timestamp queries due to missing device features");
             self.timings_enabled = false;
         }
     }

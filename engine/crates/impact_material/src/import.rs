@@ -44,7 +44,7 @@ pub fn load_declared_materials(
             declaration,
         ) {
             // Failing to load a material is not fatal, since we might not need it
-            impact_log::error!("Failed to load material {}: {error:#}", declaration.id);
+            log::error!("Failed to load material {}: {error:#}", declaration.id);
         }
     }
     Ok(())

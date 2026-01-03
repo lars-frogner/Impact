@@ -425,7 +425,7 @@ where
             // Execute the task only if it thinks it should be based on the
             // current execution tags
             if task.should_execute(execution_tags.as_ref()) {
-                impact_log::with_trace_logging!("Executing task `{}`", task.id();
+                log::with_trace_logging!("Executing task `{}`", task.id();
                 {
                     if let Err(error) = task.execute(state.external_state()) {
                         // Register the error and return immediately if the task
@@ -435,7 +435,7 @@ where
                     }
                 });
             } else {
-                impact_log::trace!("Skipped execution of task `{}`", task.id());
+                log::trace!("Skipped execution of task `{}`", task.id());
             }
 
             // Find each of the tasks that depend on this one, and increment its
@@ -466,7 +466,7 @@ where
                     .task(ready_dependent_task_idx)
                     .task()
                     .id();
-                impact_log::with_trace_logging!("Scheduling execution of task `{}`", task_id; {
+                log::with_trace_logging!("Scheduling execution of task `{}`", task_id; {
                     if let Err(err) = channel.send_execute_instruction(Self::create_message(
                         &state,
                         &execution_tags,
@@ -682,7 +682,7 @@ impl TaskErrorRegistry {
     }
 
     fn register_error(&self, task_id: TaskID, error: TaskError) {
-        impact_log::error!(
+        log::error!(
             "Task `{task_id}` failed: {error:#}{}",
             if error.backtrace().status() == BacktraceStatus::Captured {
                 format!("\nBacktrace:\n{}", error.backtrace())

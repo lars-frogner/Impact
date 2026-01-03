@@ -24,7 +24,7 @@ impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_io = { path = "../impact_io" }
-impact_log = { path = "../impact_log" }
+log = { path = "../../../interop/log" }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 roc_integration = { path = "../../../roc_integration" }

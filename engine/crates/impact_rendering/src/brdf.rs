@@ -24,7 +24,7 @@ pub fn create_specular_ggx_reflectance_lookup_tables(
     num_v_dot_n_samples: usize,
     num_roughness_samples: usize,
 ) -> LookupTable<f32> {
-    impact_log::info!("Computing lookup table for specular GGX reflectance");
+    log::info!("Computing lookup table for specular GGX reflectance");
 
     const MIN_ROUGHNESS: f32 = 0.05;
 

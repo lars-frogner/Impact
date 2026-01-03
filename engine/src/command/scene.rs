@@ -20,12 +20,12 @@ pub enum SceneCommand {
 }
 
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {
-    impact_log::info!("Setting skybox to {}", skybox.cubemap_texture_id());
+    log::info!("Setting skybox to {}", skybox.cubemap_texture_id());
     engine.scene().oread().set_skybox(Some(skybox));
 }
 
 pub fn set_medium(engine: &Engine, medium: UniformMedium) {
-    impact_log::info!("Setting medium to {medium:?}");
+    log::info!("Setting medium to {medium:?}");
     engine.simulator().owrite().set_medium(medium);
 }
 
@@ -34,7 +34,7 @@ pub fn set_scene_entity_active_state(
     entity_id: EntityID,
     state: ActiveState,
 ) -> Result<()> {
-    impact_log::info!("Setting state of scene entity with ID {entity_id} to {state:?}");
+    log::info!("Setting state of scene entity with ID {entity_id} to {state:?}");
     match state {
         ActiveState::Enabled => engine.enable_scene_entity(entity_id),
         ActiveState::Disabled => engine.disable_scene_entity(entity_id),

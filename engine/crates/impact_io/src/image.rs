@@ -91,7 +91,7 @@ impl PixelFormat {
 pub fn read_metadata_for_image_at_path(image_path: impl AsRef<Path>) -> Result<ImageMetadata> {
     let image_path = image_path.as_ref();
 
-    impact_log::debug!("Reading metadata for image at {}", image_path.display());
+    log::debug!("Reading metadata for image at {}", image_path.display());
 
     let file = File::open(image_path)
         .with_context(|| format!("Failed to open image at {}", image_path.display()))?;
@@ -116,7 +116,7 @@ pub fn load_image_from_path<A: Allocator>(
 ) -> Result<Image<A>> {
     let image_path = image_path.as_ref();
 
-    impact_log::debug!("Loading image from {}", image_path.display());
+    log::debug!("Loading image from {}", image_path.display());
 
     let buffer = fs::read(image_path)
         .with_context(|| format!("Failed to read image at {}", image_path.display()))?;
@@ -337,7 +337,7 @@ pub fn save_rgba8_as_png(
     path: impl AsRef<Path>,
 ) -> Result<()> {
     let path = path.as_ref();
-    impact_log::debug!("Saving color image as PNG to {}", path.display());
+    log::debug!("Saving color image as PNG to {}", path.display());
 
     let file = crate::create_file_and_required_directories(path)?;
     let writer = std::io::BufWriter::new(file);
@@ -366,7 +366,7 @@ pub fn save_luma8_as_png(
     path: impl AsRef<Path>,
 ) -> Result<()> {
     let path = path.as_ref();
-    impact_log::debug!("Saving grayscale image as PNG to {}", path.display());
+    log::debug!("Saving grayscale image as PNG to {}", path.display());
 
     let file = crate::create_file_and_required_directories(path)?;
     let writer = std::io::BufWriter::new(file);

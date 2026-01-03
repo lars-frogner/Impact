@@ -359,7 +359,7 @@ impl Engine {
             return;
         }
         if let Some(orientation_controller) = &self.orientation_controller {
-            impact_log::trace!(
+            log::trace!(
                 "Updating orientation controller by angular mouse deltas ({delta_x}, {delta_y})",
             );
             orientation_controller

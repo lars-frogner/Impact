@@ -8,7 +8,7 @@ license = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 crossbeam-channel = "0.5"
-impact_log = { path = "../impact_log" }
+log = { path = "../../../interop/log" }
 impact_profiling = { path = "../impact_profiling" }
 parking_lot = { workspace = true }
 

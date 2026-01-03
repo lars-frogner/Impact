@@ -39,7 +39,7 @@ where
     let (setup_component_ids, setup_component_names, standard_component_names) =
         engine.extract_component_metadata(components);
 
-    impact_log::info!(
+    log::info!(
         "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
         components.component_count(),
         if setup_component_names.is_empty() {

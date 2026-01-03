@@ -9,14 +9,14 @@ pub use impact::{self, roc_integration};
 #[cfg(feature = "roc_codegen")]
 pub use impact::component::gather_roc_type_ids_for_all_components;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use dynamic_lib::DynamicLibrary;
 use impact::{
     application::Application,
-    command::{AdminCommand, SystemCommand, capture::CaptureCommand},
+    command::{capture::CaptureCommand, AdminCommand, SystemCommand},
     engine::Engine,
     impact_io,
-    runtime::{RuntimeConfig, headless::HeadlessConfig},
+    runtime::{headless::HeadlessConfig, RuntimeConfig},
 };
 use parking_lot::RwLock;
 use scripting::ScriptLib;
@@ -96,7 +96,7 @@ impl SnapshotTester {
             fs::rename(&output_image_path, &renamed_output_image_path)?;
 
             if !reference_image_path.is_file() {
-                impact_log::info!(
+                log::info!(
                     "Skipping {scene} test due to missing reference image at {}",
                     reference_image_path.display()
                 );
@@ -128,11 +128,11 @@ impl SnapshotTester {
 
 impl Application for SnapshotTester {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
-        impact_log::debug!("Loading script library");
+        log::debug!("Loading script library");
         ScriptLib::load().context("Failed to load script library")?;
 
         if self.test_scenes.is_empty() {
-            impact_log::info!("No scenes to test, exiting");
+            log::info!("No scenes to test, exiting");
             engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));
             return Ok(());
         }

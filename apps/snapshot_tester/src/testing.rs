@@ -3,9 +3,9 @@
 use anyhow::{Context, Result};
 use impact::{
     command::{
-        AdminCommand,
-        rendering::{RenderingCommand, postprocessing::ToToneMappingMethod},
+        rendering::{postprocessing::ToToneMappingMethod, RenderingCommand},
         uils::ToActiveState,
+        AdminCommand,
     },
     engine::Engine,
     impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
@@ -159,7 +159,7 @@ pub fn run_comparison(
     let result = image_compare::rgb_hybrid_compare(&output_image, &reference_image)?;
 
     if result.score >= min_score_to_pass {
-        impact_log::info!(
+        log::info!(
             "Passed {scene} similarity test ({score} >= {min_score_to_pass})",
             score = result.score,
         );
@@ -167,7 +167,7 @@ pub fn run_comparison(
     } else {
         let diff_image_path = add_postfix_to_file_name(output_image_path, "_diff");
 
-        impact_log::error!(
+        log::error!(
             "Failed {scene} similarity test ({score} < {min_score_to_pass}), saving diff image at {diff_path}",
             score = result.score,
             diff_path = diff_image_path.display()

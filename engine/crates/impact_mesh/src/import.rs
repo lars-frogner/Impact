@@ -45,7 +45,7 @@ pub fn load_declared_meshes(
     for declaration in triangle_mesh_declarations {
         if let Err(error) = load_declared_triangle_mesh(registry, declaration) {
             // Failing to load a mesh is not fatal, since we might not need it
-            impact_log::error!("Failed to load triangle mesh {}: {error:#}", declaration.id);
+            log::error!("Failed to load triangle mesh {}: {error:#}", declaration.id);
         }
     }
     Ok(())
@@ -86,7 +86,7 @@ fn load_triangle_mesh_from_file(
     file_path: &Path,
     texture_projection: Option<&TextureProjectionDeclaration>,
 ) -> Result<TriangleMeshID> {
-    impact_log::debug!(
+    log::debug!(
         "Loading triangle mesh `{mesh_id}` from {}",
         file_path.display()
     );
@@ -142,7 +142,7 @@ fn load_triangle_mesh_from_template(
     template: &TriangleMeshTemplate,
     texture_projection: Option<&TextureProjectionDeclaration>,
 ) -> Result<TriangleMeshID> {
-    impact_log::debug!("Loading triangle mesh `{mesh_id}` from template");
+    log::debug!("Loading triangle mesh `{mesh_id}` from template");
 
     if registry.contains(mesh_id) {
         bail!("Tried to load triangle mesh under already existing name: {mesh_id}");

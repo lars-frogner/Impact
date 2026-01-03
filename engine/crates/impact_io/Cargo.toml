@@ -14,7 +14,7 @@ serde = ["dep:serde"]
 [dependencies]
 anyhow = { workspace = true }
 impact_alloc = { path = "../impact_alloc" }
-impact_log = { path = "../impact_log" }
+log = { path = "../../../interop/log" }
 png = { version = "0.18", optional = true }
 memmap2 = "0.9"
 ron = { version = "0.12", optional = true }

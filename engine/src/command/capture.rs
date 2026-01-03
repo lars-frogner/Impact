@@ -15,12 +15,12 @@ pub enum SaveShadowMapsFor {
 }
 
 pub fn request_screenshot_save(screen_capturer: &ScreenCapturer) {
-    impact_log::info!("Requesting screenshot save");
+    log::info!("Requesting screenshot save");
     screen_capturer.request_screenshot_save();
 }
 
 pub fn request_shadow_map_saves(screen_capturer: &ScreenCapturer, save_for: SaveShadowMapsFor) {
-    impact_log::info!("Requesting shadow map saves for {save_for:?}");
+    log::info!("Requesting shadow map saves for {save_for:?}");
     match save_for {
         SaveShadowMapsFor::OmnidirectionalLight => {
             screen_capturer.request_omnidirectional_light_shadow_map_save();

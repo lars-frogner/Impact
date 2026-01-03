@@ -192,11 +192,11 @@ impl Editor {
 
                     self.graph_needs_compilation = true;
                     self.rebuild_generator = true;
-                    impact_log::info!("Loaded graph from {}", path.display());
+                    log::info!("Loaded graph from {}", path.display());
                     self.last_graph_path = Some(GraphPath::new(path));
                 }
                 Err(err) => {
-                    impact_log::error!("Failed to load graph from {}: {err:#}", path.display());
+                    log::error!("Failed to load graph from {}: {err:#}", path.display());
                 }
             }
         }
@@ -213,9 +213,9 @@ impl Editor {
                 self.meta_graph_canvas
                     .load_subgraph(ui, &path, self.config.auto_layout)
             {
-                impact_log::error!("Failed to load subgraph from {}: {err:#}", path.display());
+                log::error!("Failed to load subgraph from {}: {err:#}", path.display());
             } else {
-                impact_log::info!("Loaded subgraph from {}", path.display());
+                log::info!("Loaded subgraph from {}", path.display());
             }
         }
     }
@@ -229,9 +229,9 @@ impl Editor {
         ) {
             let path = PathBuf::from(path_str);
             if let Err(err) = self.meta_graph_canvas.save_graph(&self.config, &path) {
-                impact_log::error!("Failed to save graph to {}: {err:#}", path.display());
+                log::error!("Failed to save graph to {}: {err:#}", path.display());
             } else {
-                impact_log::info!("Saved graph to {}", path.display());
+                log::info!("Saved graph to {}", path.display());
                 self.last_graph_path = Some(GraphPath::new(path));
             }
         }
@@ -240,9 +240,9 @@ impl Editor {
     fn save_graph_to_last_path(&mut self) {
         if let Some(path) = &self.last_graph_path {
             if let Err(err) = self.meta_graph_canvas.save_graph(&self.config, &path.path) {
-                impact_log::error!("Failed to save graph to {}: {err:#}", path.path_string);
+                log::error!("Failed to save graph to {}: {err:#}", path.path_string);
             } else {
-                impact_log::info!("Saved graph to {}", path.path_string);
+                log::info!("Saved graph to {}", path.path_string);
             }
         }
     }
@@ -264,9 +264,9 @@ impl Editor {
         ) {
             let path = PathBuf::from(path_str);
             if let Err(err) = self.meta_graph_canvas.save_subgraph(root_node_id, &path) {
-                impact_log::error!("Failed to save subgraph to {}: {err:#}", path.display());
+                log::error!("Failed to save subgraph to {}: {err:#}", path.display());
             } else {
-                impact_log::info!("Saved subgraph to {}", path.display());
+                log::info!("Saved subgraph to {}", path.display());
             }
         }
     }
@@ -286,12 +286,12 @@ impl Editor {
             };
 
             if let Err(err) = impact_io::write_ron_file(&generator, &path) {
-                impact_log::error!(
+                log::error!(
                     "Failed to save graph as voxel generator resource to {}: {err:#}",
                     path.display()
                 );
             } else {
-                impact_log::info!(
+                log::info!(
                     "Saved graph as voxel generator resource to {}",
                     path.display()
                 );

@@ -88,13 +88,11 @@ impl ScreenCapturer {
             .swap(false, Ordering::Acquire)
         {
             if cfg!(not(feature = "png")) {
-                impact_log::error!(
-                    "Could not save screenshot because the `png` feature is not enabled"
-                );
+                log::error!("Could not save screenshot because the `png` feature is not enabled");
                 return Ok(());
             }
 
-            impact_log::info!("Saving screenshot of frame {frame_number}");
+            log::info!("Saving screenshot of frame {frame_number}");
 
             let renderer = renderer.oread();
 
@@ -145,13 +143,11 @@ impl ScreenCapturer {
             .swap(false, Ordering::Acquire)
         {
             if cfg!(not(feature = "png")) {
-                impact_log::error!(
-                    "Could not save shadow maps because the `png` feature is not enabled"
-                );
+                log::error!("Could not save shadow maps because the `png` feature is not enabled");
                 return Ok(());
             }
 
-            impact_log::info!("Saving omnidirectional light shadow maps for frame {frame_number}");
+            log::info!("Saving omnidirectional light shadow maps for frame {frame_number}");
 
             let renderer = renderer.oread();
             let render_resource_manager = renderer.render_resource_manager().oread();
@@ -203,13 +199,11 @@ impl ScreenCapturer {
             .swap(false, Ordering::Acquire)
         {
             if cfg!(not(feature = "png")) {
-                impact_log::error!(
-                    "Could not save shadow maps because the `png` feature is not enabled"
-                );
+                log::error!("Could not save shadow maps because the `png` feature is not enabled");
                 return Ok(());
             }
 
-            impact_log::info!("Saving unidirectional light shadow maps for frame {frame_number}");
+            log::info!("Saving unidirectional light shadow maps for frame {frame_number}");
 
             let renderer = renderer.oread();
             let render_resource_manager = renderer.render_resource_manager().oread();

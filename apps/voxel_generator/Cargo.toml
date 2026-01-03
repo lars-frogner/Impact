@@ -128,7 +128,7 @@ impact = { path = "../../engine", features = ["egui"] }
 impact_containers = { path = "../../engine/crates/impact_containers", features = ["serde"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_io = { path = "../../engine/crates/impact_io", features = ["ron"] }
-impact_log = { path = "../../engine/crates/impact_log" }
+log = { path = "../../interop/log" }
 impact_voxel = { path = "../../engine/crates/impact_voxel" }
 inventory = "0.3"
 parking_lot = "0.12"

@@ -2,8 +2,8 @@
 
 pub mod ffi;
 
-use crate::{ENGINE, UserInterface, VoxelGeneratorApp, VoxelGeneratorConfig, editor::Editor};
-use anyhow::{Result, bail};
+use crate::{editor::Editor, UserInterface, VoxelGeneratorApp, VoxelGeneratorConfig, ENGINE};
+use anyhow::{bail, Result};
 use impact::{
     command::UserCommand,
     engine::Engine,
@@ -22,7 +22,7 @@ pub fn run_with_config_at_path(config_path: impl AsRef<Path>) -> Result<()> {
 
 pub fn run_with_config(config: VoxelGeneratorConfig) -> Result<()> {
     env_logger::init();
-    impact_log::debug!("Running application");
+    log::debug!("Running application");
 
     let (editor_config, window_config, runtime_config, engine_config, dev_ui_config) =
         config.load()?;
@@ -37,7 +37,7 @@ pub fn run_with_config(config: VoxelGeneratorConfig) -> Result<()> {
 }
 
 pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Executing engine command");
+    log::trace!("Executing engine command");
     let command = UserCommand::from_roc_bytes(command_bytes)?;
     with_engine(|engine| {
         engine.enqueue_user_command(command);
@@ -46,14 +46,14 @@ pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
 }
 
 pub fn execute_ui_command(command_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Executing UI command");
+    log::trace!("Executing UI command");
     let command = UICommand::from_roc_bytes(command_bytes)?;
     UI_COMMANDS.enqueue_command(command);
     Ok(())
 }
 
 pub fn stage_entity_for_creation_with_id(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Staging entity for creation with ID {entity_id}");
+    log::trace!("Staging entity for creation with ID {entity_id}");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     with_engine(|engine| {
         engine.stage_entity_for_creation_with_id(EntityID::from_u64(entity_id), components)
@@ -61,19 +61,19 @@ pub fn stage_entity_for_creation_with_id(entity_id: u64, component_bytes: &[u8])
 }
 
 pub fn stage_entity_for_creation(component_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Staging entity for creation");
+    log::trace!("Staging entity for creation");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     with_engine(|engine| engine.stage_entity_for_creation(components))
 }
 
 pub fn stage_entities_for_creation(component_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Staging entities for creation");
+    log::trace!("Staging entities for creation");
     let components = impact::ffi::deserialize_components_for_multiple_entities(component_bytes)?;
     with_engine(|engine| engine.stage_entities_for_creation(components))
 }
 
 pub fn stage_entity_for_update(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Staging entity with ID {entity_id} for update");
+    log::trace!("Staging entity with ID {entity_id} for update");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     with_engine(|engine| {
         engine.stage_entity_for_update(EntityID::from_u64(entity_id), components);
@@ -82,7 +82,7 @@ pub fn stage_entity_for_update(entity_id: u64, component_bytes: &[u8]) -> Result
 }
 
 pub fn stage_entity_for_removal(entity_id: u64) -> Result<()> {
-    impact_log::trace!("Staging entity with ID {entity_id} for removal");
+    log::trace!("Staging entity with ID {entity_id} for removal");
     with_engine(|engine| {
         engine.stage_entity_for_removal(EntityID::from_u64(entity_id));
         Ok(())
@@ -90,33 +90,33 @@ pub fn stage_entity_for_removal(entity_id: u64) -> Result<()> {
 }
 
 pub fn create_entity_with_id(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Creating entity with ID {entity_id}");
+    log::trace!("Creating entity with ID {entity_id}");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     with_engine(|engine| engine.create_entity_with_id(EntityID::from_u64(entity_id), components))
 }
 
 pub fn create_entity(component_bytes: &[u8]) -> Result<u64> {
-    impact_log::trace!("Creating entity");
+    log::trace!("Creating entity");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     let entity_id = with_engine(|engine| engine.create_entity(components))?;
     Ok(entity_id.as_u64())
 }
 
 pub fn create_entities(component_bytes: &[u8]) -> Result<impl Iterator<Item = u64>> {
-    impact_log::trace!("Creating multiple entities");
+    log::trace!("Creating multiple entities");
     let components = impact::ffi::deserialize_components_for_multiple_entities(component_bytes)?;
     let entity_ids = with_engine(|engine| engine.create_entities(components))?;
     Ok(entity_ids.into_iter().map(|entity_id| entity_id.as_u64()))
 }
 
 pub fn update_entity(entity_id: u64, component_bytes: &[u8]) -> Result<()> {
-    impact_log::trace!("Updating entity with ID {entity_id}");
+    log::trace!("Updating entity with ID {entity_id}");
     let components = impact::ffi::deserialize_components_for_single_entity(component_bytes)?;
     with_engine(|engine| engine.update_entity(EntityID::from_u64(entity_id), components))
 }
 
 pub fn remove_entity(entity_id: u64) -> Result<()> {
-    impact_log::trace!("Removing entity with ID {entity_id}");
+    log::trace!("Removing entity with ID {entity_id}");
     with_engine(|engine| engine.remove_entity(EntityID::from_u64(entity_id)))
 }
 
@@ -125,7 +125,7 @@ pub fn for_entity_components(
     only_component_ids: &[u64],
     f: &mut impl FnMut(&[u8]),
 ) -> Result<()> {
-    impact_log::trace!("Reading components of entity with ID {entity_id}");
+    log::trace!("Reading components of entity with ID {entity_id}");
 
     let entity_id = EntityID::from_u64(entity_id);
     let only_component_ids = only_component_ids
