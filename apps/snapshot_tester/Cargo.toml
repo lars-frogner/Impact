@@ -110,7 +110,7 @@ roc_codegen = ["impact/roc_codegen"]
 
 [dependencies]
 anyhow = "1.0"
-dynamic_lib = { path = "../../utils/dynamic_lib" }
+dynamic_lib = { path = "../../interop/dynamic_lib" }
 env_logger = "0.11"
 image = { version = "0.25", default-features = false, features = ["png"] }
 image-compare = "0.5"
