@@ -29,11 +29,8 @@ pub trait DynamicLibrary: Sized {
 
 #[derive(Error, Debug)]
 pub enum LoadingError {
-    #[error("Failed to obtain executable path for default library path {default_path}")]
-    ExecutablePathNotFound {
-        default_path: String,
-        source: io::Error,
-    },
+    #[error("Failed to obtain executable path for relative fallback library path")]
+    ExecutablePathNotFound { source: io::Error },
 
     #[error("Failed to resolve library path {path}")]
     LibraryPathResolution { path: String, source: io::Error },
@@ -84,8 +81,8 @@ pub fn __from_macro_unload<L>(lib: &RwLock<Option<L>>) -> Result<()> {
 }
 
 /// Only intended to be called from the `define_lib` macro.
-pub fn __from_macro_load_library(lib_path_env: &str, lib_path_default: &str) -> Result<Library> {
-    let path = get_library_path(lib_path_env, lib_path_default)?;
+pub fn __from_macro_load_library(lib_path_env: &str, fallback_lib_path: &str) -> Result<Library> {
+    let path = get_library_path(lib_path_env, fallback_lib_path)?;
     load_library(&path)
 }
 
@@ -149,17 +146,22 @@ pub fn __from_macro_load_and_acquire<L: LoadableLibrary>(
     }
 }
 
-fn get_library_path(lib_path_env: &str, lib_path_default: &str) -> Result<PathBuf> {
-    let library_path = match env::var(lib_path_env).map(PathBuf::from) {
-        Ok(lib_path) => lib_path,
-        Err(_) => env::current_exe()
-            .map_err(|source| LoadingError::ExecutablePathNotFound {
-                default_path: lib_path_default.to_string(),
-                source,
-            })?
-            .parent()
-            .unwrap()
-            .join(lib_path_default),
+fn get_library_path(lib_path_env: &str, fallback_lib_path_str: &str) -> Result<PathBuf> {
+    let library_path = if let Ok(lib_path) = env::var(lib_path_env).map(PathBuf::from) {
+        lib_path
+    } else {
+        let fallback_lib_path = Path::new(fallback_lib_path_str);
+
+        if fallback_lib_path.is_absolute() {
+            fallback_lib_path.to_path_buf()
+        } else {
+            let executable_path = env::current_exe()
+                .map_err(|source| LoadingError::ExecutablePathNotFound { source })?;
+
+            let executable_dir = executable_path.parent().unwrap();
+
+            executable_dir.join(fallback_lib_path)
+        }
     };
 
     library_path

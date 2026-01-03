@@ -5,10 +5,11 @@
 ///
 /// The macro will define a new type using the given `name` and provide
 /// associated functions to `load` and `unload` the library. When loading the
-/// library, the environment variable specified by `path_env` will be checked
-/// for the library path. If not set, the path specified by `path_default`,
-/// defined relative to the location of the executable, is checked instead. The
-/// loaded library is stored in a static variable.
+/// library, the environment variable specified by `path_env_var` will be
+/// checked for the library path. If not set, the path specified by
+/// `fallback_path`, which may be absolute or relative to the directory of the
+/// executable, is checked instead. The loaded library is stored in a static
+/// variable.
 ///
 /// Use the `acquire` function on the generated type to acquire a lock on the
 /// loaded library in the static variable. The returned guard will have methods
@@ -17,8 +18,8 @@
 macro_rules! define_lib {
     (
         name = $lib_obj:ident,
-        path_env = $path_env:expr,
-        path_default = $path_default:expr;
+        path_env_var = $path_env_var:expr,
+        fallback_path = $fallback_path:expr;
         $(
             $( #[$meta:meta] )*
             unsafe fn $symbol:ident($($argn:ident:$argt:ty),*) -> $ret:ty;
@@ -30,6 +31,7 @@ macro_rules! define_lib {
             use super::*;
 
             /// A dynamic library that can be loaded and unloaded.
+            #[derive(Debug)]
             pub struct $lib_obj {
                 // SAFETY: We pretend that the symbols have a static lifetime so
                 // that we can store them together with the library, but their
@@ -54,7 +56,7 @@ macro_rules! define_lib {
 
             impl ::dynamic_lib::LoadableLibrary for $lib_obj {
                 fn new_loaded() -> ::dynamic_lib::Result<Self> {
-                    let library = ::dynamic_lib::__from_macro_load_library($path_env, $path_default)?;
+                    let library = ::dynamic_lib::__from_macro_load_library($path_env_var, $fallback_path)?;
                     Ok(Self {
                         $(
                             $symbol: {
