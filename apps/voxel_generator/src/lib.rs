@@ -10,6 +10,7 @@ pub use impact;
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
 use anyhow::{Context, Result};
+use dynamic_lib::DynamicLibrary;
 use editor::{Editor, EditorConfig};
 use impact::{
     application::Application,

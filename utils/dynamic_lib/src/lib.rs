@@ -17,8 +17,14 @@ pub type MappedRwLockReadGuard<'a, T> = parking_lot::MappedRwLockReadGuard<'a, T
 
 pub type Result<T> = std::result::Result<T, LoadingError>;
 
-pub trait LoadableLib: Sized {
+pub trait LoadableLibrary: Sized {
     fn new_loaded() -> Result<Self>;
+}
+
+pub trait DynamicLibrary: Sized {
+    fn load() -> Result<()>;
+
+    fn unload() -> Result<()>;
 }
 
 #[derive(Error, Debug)]
@@ -52,7 +58,7 @@ pub enum LoadingError {
 }
 
 /// Only intended to be called from the `define_lib` macro.
-pub fn __from_macro_load<L: LoadableLib>(lib: &RwLock<Option<L>>) -> Result<()> {
+pub fn __from_macro_load<L: LoadableLibrary>(lib: &RwLock<Option<L>>) -> Result<()> {
     let mut lib_guard = lib.write();
 
     if lib_guard.is_some() {
@@ -110,7 +116,7 @@ pub fn __from_macro_acquire<L>(lib: &RwLock<Option<L>>) -> MappedRwLockReadGuard
 
 /// Only intended to be called from the `define_lib` macro.
 #[inline]
-pub fn __from_macro_load_and_acquire<L: LoadableLib>(
+pub fn __from_macro_load_and_acquire<L: LoadableLibrary>(
     lib: &RwLock<Option<L>>,
 ) -> Result<MappedRwLockReadGuard<'_, L>> {
     let lib_read_guard = lib.read();

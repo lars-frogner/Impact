@@ -9,8 +9,8 @@ pub use impact::{self, roc_integration};
 #[cfg(feature = "roc_codegen")]
 pub use impact::component::gather_roc_type_ids_for_all_components;
 
-use crate::testing::ComparisonOutcome;
 use anyhow::{Context, Result, bail};
+use dynamic_lib::DynamicLibrary;
 use impact::{
     application::Application,
     command::{AdminCommand, SystemCommand, capture::CaptureCommand},
@@ -26,7 +26,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use testing::TestScene;
+use testing::{ComparisonOutcome, TestScene};
 
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 

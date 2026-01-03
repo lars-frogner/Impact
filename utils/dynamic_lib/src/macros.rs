@@ -52,7 +52,7 @@ macro_rules! define_lib {
             // type to avoid requiring access to a `paste` macro.
             static $lib_obj: ::dynamic_lib::RwLock<Option<$lib_obj>> = ::dynamic_lib::RwLock::new(None);
 
-            impl ::dynamic_lib::LoadableLib for $lib_obj {
+            impl ::dynamic_lib::LoadableLibrary for $lib_obj {
                 fn new_loaded() -> ::dynamic_lib::Result<Self> {
                     let library = ::dynamic_lib::__from_macro_load_library($path_env, $path_default)?;
                     Ok(Self {
@@ -83,7 +83,7 @@ macro_rules! define_lib {
                 }
             }
 
-            impl $lib_obj {
+            impl ::dynamic_lib::DynamicLibrary for $lib_obj {
                 /// Loads the dynamic library and associated symbols and stores
                 /// them in a static variable. The library can then be accessed
                 /// by calling [`Self::acquire`].
@@ -93,7 +93,7 @@ macro_rules! define_lib {
                 ///  - The library is already loaded.
                 ///  - The library path can not be resolved.
                 ///  - The library can not be loaded.
-                pub fn load() -> ::dynamic_lib::Result<()> {
+                fn load() -> ::dynamic_lib::Result<()> {
                     ::dynamic_lib::__from_macro_load(&$lib_obj)
                 }
 
@@ -103,10 +103,12 @@ macro_rules! define_lib {
                 ///
                 /// # Errors
                 /// Returns an error if the library is not loaded.
-                pub fn unload() -> ::dynamic_lib::Result<()> {
+                fn unload() -> ::dynamic_lib::Result<()> {
                     ::dynamic_lib::__from_macro_unload(&$lib_obj)
                 }
+            }
 
+            impl $lib_obj {
                 /// Acquires a read lock on the static variable containing the
                 /// dynamic library and returns a guard that can be used to
                 /// access the library's symbols.
