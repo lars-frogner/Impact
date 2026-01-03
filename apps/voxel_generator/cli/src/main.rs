@@ -1,5 +1,6 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
+use dynamic_lib::DynamicLibrary;
 use std::path::PathBuf;
 
 dynamic_lib::define_lib! {
