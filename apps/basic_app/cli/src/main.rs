@@ -6,8 +6,8 @@ use std::path::PathBuf;
 #[cfg(feature = "fuzzing")]
 dynamic_lib::define_lib! {
     name = AppLib,
-    path_env = "APP_LIB_PATH",
-    path_default = "./libapp";
+    path_env_var = "APP_LIB_PATH",
+    fallback_path = "./libapp";
 
     unsafe fn run_with_config_at_path(path_ptr: *const u8, path_len: usize) -> i32;
     unsafe fn fuzz_test_command_roundtrip(iterations: usize, seed: u64, verbose: u8) -> i32;
@@ -15,8 +15,8 @@ dynamic_lib::define_lib! {
 #[cfg(not(feature = "fuzzing"))]
 dynamic_lib::define_lib! {
     name = AppLib,
-    path_env = "APP_LIB_PATH",
-    path_default = "./libapp";
+    path_env_var = "APP_LIB_PATH",
+    fallback_path = "./libapp";
 
     unsafe fn run_with_config_at_path(path_ptr: *const u8, path_len: usize) -> i32;
 }

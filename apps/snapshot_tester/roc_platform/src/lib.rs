@@ -2,8 +2,8 @@ use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 dynamic_lib::define_lib! {
     name = AppLib,
-    path_env = "APP_LIB_PATH",
-    path_default = "./libapp";
+    path_env_var = "APP_LIB_PATH",
+    fallback_path = "./libapp";
 
     unsafe fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_stage_entity_for_creation_with_id(entity_id: u64, component_bytes: &RocList<u8>) -> RocResult<(), RocStr>;

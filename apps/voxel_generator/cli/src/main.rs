@@ -1,12 +1,12 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand};
 use dynamic_lib::DynamicLibrary;
 use std::path::PathBuf;
 
 dynamic_lib::define_lib! {
     name = AppLib,
-    path_env = "APP_LIB_PATH",
-    path_default = "./libapp";
+    path_env_var = "APP_LIB_PATH",
+    fallback_path = "./libapp";
 
     unsafe fn run_with_config_at_path(path_ptr: *const u8, path_len: usize) -> i32;
 }

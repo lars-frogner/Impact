@@ -13,8 +13,8 @@ use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 dynamic_lib::define_lib! {
     name = ScriptLib,
-    path_env = "SCRIPT_LIB_PATH",
-    path_default = "./libscript";
+    path_env_var = "SCRIPT_LIB_PATH",
+    fallback_path = "./libscript";
 
     unsafe fn roc__setup_scene_extern_1_exposed(_unused: i32) -> RocResult<(), RocStr>;
     unsafe fn roc__handle_keyboard_event_extern_1_exposed(event_bytes: RocList<u8>) -> RocResult<(), RocStr>;
