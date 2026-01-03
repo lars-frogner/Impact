@@ -13,14 +13,17 @@ allow = [
     "ISC",
     "CC0-1.0",
     "Zlib",
-    "BSL-1.0",
     "UPL-1.0",
     "OFL-1.1",
     "Ubuntu-font-1.0",
+    "zlib-acknowledgement",
 ]
 
 [sources]
-allow-git = ["git+https://github.com/roc-lang/roc.git"]
+allow-git = [
+    "git+https://github.com/lars-frogner/rust-simd-noise",
+    "git+https://github.com/roc-lang/roc.git",
+]
 
 [bans]
-skip-tree = [{ name = "wgpu" }, { name = "winit" }, { name = "rand" }]
+skip-tree = [{ name = "wgpu" }, { name = "winit" }]

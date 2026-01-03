@@ -18,10 +18,10 @@ allow = [
     "Ubuntu-font-1.0",
 ]
 
-[bans]
-skip-tree = [{ name = "wgpu" }, { name = "winit" }, { name = "criterion" }]
-
 [sources]
 allow-git = [
     "git+https://github.com/lars-frogner/rust-simd-noise",
 ]
+
+[bans]
+skip-tree = [{ name = "wgpu" }, { name = "winit" }, { name = "criterion" }]
