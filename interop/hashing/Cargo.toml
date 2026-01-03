@@ -1,5 +1,5 @@
 [package]
-name = "common_hashing"
+name = "hashing"
 description = "A common place for hashing functions that multiple systems must agree upon"
 version = "0.1.0"
 edition = "2024"

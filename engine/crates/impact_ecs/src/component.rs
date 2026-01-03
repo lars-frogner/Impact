@@ -204,7 +204,7 @@ pub struct SingleInstance<T> {
 impl ComponentID {
     /// Hashes the given string into a component ID.
     pub const fn hashed_from_str(input: &str) -> Self {
-        let hash = common_hashing::hash_str_to_u64(input);
+        let hash = hashing::hash_str_to_u64(input);
         Self(if hash == 0 { 1 } else { hash })
     }
 
