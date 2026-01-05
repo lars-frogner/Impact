@@ -79,11 +79,28 @@ build_all! = |app_dir, platform_dir, output_dir, roc_debug_mode|
             Ok(str) if !(Str.is_empty(str)) and str != "0" -> Fuzzing
             _ -> NoFuzzing
 
+    features =
+        when Env.var!("FEATURES") is
+            Ok(str) -> Str.split_on(str, ",")
+            _ -> []
+
     os_and_arch = get_os_and_arch!({})?
 
     build_platform!(platform_dir)?
 
-    cargo_build_app!(app_dir, backend, linker, rust_debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, os_and_arch)?
+    cargo_build_app!(
+        app_dir,
+        backend,
+        linker,
+        rust_debug_mode,
+        asan_mode,
+        profiling_mode,
+        tracy_mode,
+        valgrind_mode,
+        fuzzing_mode,
+        features,
+        os_and_arch,
+    )?
 
     copy_app_lib!(app_dir, rust_debug_mode, os_and_arch)?
 
@@ -107,6 +124,7 @@ build_script_only! = |app_dir, platform_dir, output_dir, roc_debug_mode|
 
     link_script_with_platform!(platform_dir, app_dir)?
 
+    create_output_dir!(output_dir)?
     distribute_script!(app_dir, output_dir)?
 
     Stdout.line!("Script build complete")?
@@ -150,9 +168,9 @@ build_platform! = |platform_dir|
     Cmd.exec!("env", ["PLATFORM_DIR=${platform_dir}", "roc", "${platform_dir}/build.roc"])
     |> Result.map_err(ErrBuildingPlatformLibrary)
 
-cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Profiling, NoProfiling], [Tracy, NoTracy], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], OSAndArch => Result {} _
-cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, os_and_arch|
-    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(profiling_mode)}, ${Inspect.to_str(tracy_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}")?
+cargo_build_app! : Str, [LLVM, Cranelift], [Ld, Mold], [Debug, Release], [AddressSanitizer, NoAddressSanitizer], [Profiling, NoProfiling], [Tracy, NoTracy], [Valgrind, NoValgrind], [Fuzzing, NoFuzzing], List Str, OSAndArch => Result {} _
+cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, profiling_mode, tracy_mode, valgrind_mode, fuzzing_mode, features, os_and_arch|
+    Stdout.line!("Building application crate with options: ${Inspect.to_str(backend)}, ${Inspect.to_str(linker)}, ${Inspect.to_str(debug_mode)}, ${Inspect.to_str(asan_mode)}, ${Inspect.to_str(profiling_mode)}, ${Inspect.to_str(tracy_mode)}, ${Inspect.to_str(valgrind_mode)}, ${Inspect.to_str(fuzzing_mode)}, Features = [${Str.join_with(features, ", ")}]")?
 
     target_triple = get_target_triple(os_and_arch)
 
@@ -182,6 +200,12 @@ cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, profiling_m
         when fuzzing_mode is
             NoFuzzing -> []
             Fuzzing -> ["--features", "fuzzing"]
+
+    feature_args =
+        if List.len(features) > 0 then
+            List.concat(["--features"], List.intersperse(features, "--features"))
+        else
+            []
 
     backend_env_vars =
         when backend is
@@ -229,7 +253,8 @@ cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, profiling_m
         |> List.concat(backend_args)
         |> List.concat(debug_args)
         |> List.concat(tracy_args)
-        |> List.concat(fuzzing_args),
+        |> List.concat(fuzzing_args)
+        |> List.concat(feature_args),
     )
     |> Result.map_err(ErrBuildingAppLibrary)
 
@@ -373,15 +398,19 @@ cargo_build_cli! = |app_dir, debug_mode, valgrind_mode, fuzzing_mode, os_and_arc
 create_distribution! : Str, Str, Str, [Debug, Release], OSAndArch => Result {} _
 create_distribution! = |app_dir, output_dir, crate_name, debug_mode, os_and_arch|
     Stdout.line!("Creating distribution at ${output_dir}/")?
+
+    create_output_dir!(output_dir)?
     distribute_app!(app_dir, output_dir)?
     distribute_script!(app_dir, output_dir)?
     distribute_binary!(app_dir, output_dir, crate_name, debug_mode, os_and_arch)
 
+create_output_dir! : Str => Result {} _
+create_output_dir! = |output_dir|
+    Cmd.exec!("mkdir", ["-p", "${output_dir}"])
+    |> Result.map_err(ErrCreatingDistDirectory)
+
 distribute_app! : Str, Str => Result {} _
 distribute_app! = |app_dir, output_dir|
-    Cmd.exec!("mkdir", ["-p", "${output_dir}"])
-    |> Result.map_err(ErrCreatingDistDirectory)?
-
     Cmd.exec!("cp", ["${app_dir}/lib/libapp", "${output_dir}/"])
     |> Result.map_err(ErrCopyingToDistDirectory)
 

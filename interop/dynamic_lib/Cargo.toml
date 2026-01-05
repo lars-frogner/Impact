@@ -5,9 +5,14 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 
+[features]
+hot_reloading = ["dep:notify"]
+
 [dependencies]
+crossbeam-channel = "0.5"
 libloading = "0.9"
 log = "0.4"
+notify = { version = "8.2", optional = true, features = ["crossbeam-channel"] }
 parking_lot = "0.12"
 thiserror = "2.0"
 

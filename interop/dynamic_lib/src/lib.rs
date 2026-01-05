@@ -3,6 +3,9 @@
 #[macro_use]
 pub mod macros;
 
+#[cfg(feature = "hot_reloading")]
+pub mod hot_reloading;
+
 use std::{
     env, io,
     path::{Path, PathBuf},
@@ -15,36 +18,50 @@ pub type Symbol<'a, T> = libloading::Symbol<'a, T>;
 pub type RwLock<T> = parking_lot::RwLock<T>;
 pub type MappedRwLockReadGuard<'a, T> = parking_lot::MappedRwLockReadGuard<'a, T>;
 
-pub type Result<T> = std::result::Result<T, LoadingError>;
+pub type Result<T> = std::result::Result<T, LibraryError>;
+pub type PathResult<T> = std::result::Result<T, PathError>;
 
 pub trait LoadableLibrary: Sized {
-    fn new_loaded() -> Result<Self>;
+    fn resolved_path() -> PathResult<PathBuf>;
+
+    fn loaded_from_path(lib_path: &Path) -> Result<Self>;
+
+    fn loaded() -> Result<Self> {
+        let lib_path = Self::resolved_path()?;
+        Self::loaded_from_path(&lib_path)
+    }
 }
 
 pub trait DynamicLibrary: Sized {
     fn load() -> Result<()>;
 
     fn unload() -> Result<()>;
+
+    fn replace(source_path: &Path, dest_path: &Path) -> Result<()>;
 }
 
 #[derive(Error, Debug)]
-pub enum LoadingError {
-    #[error("Failed to obtain executable path for relative fallback library path")]
-    ExecutablePathNotFound { source: io::Error },
-
-    #[error("Failed to resolve library path {path}")]
-    LibraryPathResolution { path: String, source: io::Error },
+pub enum LibraryError {
+    #[error("Failed to obtain library path")]
+    PathError(#[from] PathError),
 
     #[error("Failed to load dynamic library at {path}")]
-    LibraryLoading {
-        path: String,
+    LoadingLibrary {
+        path: PathBuf,
         source: libloading::Error,
     },
 
     #[error("Failed to load symbol {symbol_name}")]
-    SymbolLoading {
+    LoadingSymbol {
         symbol_name: String,
         source: libloading::Error,
+    },
+
+    #[error("Failed to move library file from {source_path} to {dest_path}")]
+    MovingLibrary {
+        source_path: PathBuf,
+        dest_path: PathBuf,
+        source: io::Error,
     },
 
     #[error("Tried to load library when already loaded")]
@@ -54,36 +71,56 @@ pub enum LoadingError {
     NotLoaded,
 }
 
-/// Only intended to be called from the `define_lib` macro.
-pub fn __from_macro_load<L: LoadableLibrary>(lib: &RwLock<Option<L>>) -> Result<()> {
-    let mut lib_guard = lib.write();
+#[derive(Error, Debug)]
+pub enum PathError {
+    #[error("Failed to obtain executable path")]
+    ExecutablePathNotFound { source: io::Error },
 
-    if lib_guard.is_some() {
-        return Err(LoadingError::AlreadyLoaded);
+    #[error("Failed to resolve library path {path}")]
+    PathResolution { path: PathBuf, source: io::Error },
+}
+
+/// Returns the path stored in the specified environment variable if set. If not
+/// set, the given fallback path relative to the directory of the executable is
+/// returned instead. The returned path is canonicalized.
+///
+/// # Errors
+/// Returns an error if the path could not be canonicalized or the directory of
+/// the executable could not be obtained.
+pub fn resolve_path_from_env_with_fallback(
+    path_env_var: &str,
+    fallback_path: impl AsRef<Path>,
+) -> PathResult<PathBuf> {
+    let path = if let Ok(env_path) = env::var(path_env_var).map(PathBuf::from) {
+        env_path
+    } else {
+        let fallback_path = fallback_path.as_ref();
+
+        if fallback_path.is_absolute() {
+            fallback_path.to_path_buf()
+        } else {
+            let executable_path = env::current_exe()
+                .map_err(|source| PathError::ExecutablePathNotFound { source })?;
+
+            let executable_dir = executable_path.parent().unwrap();
+
+            executable_dir.join(fallback_path)
+        }
     };
 
-    *lib_guard = Some(L::new_loaded()?);
-
-    Ok(())
+    path.canonicalize()
+        .map_err(|source| PathError::PathResolution { path, source })
 }
 
 /// Only intended to be called from the `define_lib` macro.
-pub fn __from_macro_unload<L>(lib: &RwLock<Option<L>>) -> Result<()> {
-    let mut lib_guard = lib.write();
-
-    if lib_guard.is_none() {
-        return Err(LoadingError::NotLoaded);
+pub fn __from_macro_load_library(lib_path: &Path) -> Result<Library> {
+    log::debug!("Loading dynamic library at {}", lib_path.display());
+    unsafe {
+        Library::new(lib_path).map_err(|source| LibraryError::LoadingLibrary {
+            path: lib_path.to_path_buf(),
+            source,
+        })
     }
-
-    lib_guard.take();
-
-    Ok(())
-}
-
-/// Only intended to be called from the `define_lib` macro.
-pub fn __from_macro_load_library(lib_path_env: &str, fallback_lib_path: &str) -> Result<Library> {
-    let path = get_library_path(lib_path_env, fallback_lib_path)?;
-    load_library(&path)
 }
 
 /// Only intended to be called from the `define_lib` macro.
@@ -95,11 +132,63 @@ pub fn __from_macro_load_symbol<'a, T>(
     unsafe {
         library
             .get::<T>(symbol_name)
-            .map_err(|source| LoadingError::SymbolLoading {
+            .map_err(|source| LibraryError::LoadingSymbol {
                 symbol_name: symbol_name.to_string(),
                 source,
             })
     }
+}
+
+/// Only intended to be called from the `define_lib` macro.
+pub fn __from_macro_load<L: LoadableLibrary>(lib: &RwLock<Option<L>>) -> Result<()> {
+    let mut lib_guard = lib.write();
+
+    if lib_guard.is_some() {
+        return Err(LibraryError::AlreadyLoaded);
+    };
+
+    *lib_guard = Some(L::loaded()?);
+
+    Ok(())
+}
+
+/// Only intended to be called from the `define_lib` macro.
+pub fn __from_macro_unload<L>(lib: &RwLock<Option<L>>) -> Result<()> {
+    let mut lib_guard = lib.write();
+
+    if lib_guard.is_none() {
+        return Err(LibraryError::NotLoaded);
+    }
+
+    lib_guard.take();
+
+    Ok(())
+}
+
+/// Only intended to be called from the `define_lib` macro.
+pub fn __from_macro_replace<L: LoadableLibrary>(
+    lib: &RwLock<Option<L>>,
+    source_path: &Path,
+    dest_path: &Path,
+) -> Result<()> {
+    let mut lib_guard = lib.write();
+
+    if lib_guard.is_none() {
+        return Err(LibraryError::NotLoaded);
+    }
+
+    // Unload before potentially overwriting the loaded library
+    *lib_guard = None;
+
+    std::fs::rename(source_path, dest_path).map_err(|source| LibraryError::MovingLibrary {
+        source_path: source_path.to_path_buf(),
+        dest_path: dest_path.to_path_buf(),
+        source,
+    })?;
+
+    *lib_guard = Some(L::loaded_from_path(dest_path)?);
+
+    Ok(())
 }
 
 /// Only intended to be called from the `define_lib` macro.
@@ -129,7 +218,7 @@ pub fn __from_macro_load_and_acquire<L: LoadableLibrary>(
         // Since another thread could have loaded the library before we acquired
         // the write lock, we must check again whether it is loaded
         if lib_write_guard.is_none() {
-            *lib_write_guard = Some(L::new_loaded()?);
+            *lib_write_guard = Some(L::loaded()?);
         }
 
         let lib_read_guard = parking_lot::RwLockWriteGuard::downgrade(lib_write_guard);
@@ -143,41 +232,5 @@ pub fn __from_macro_load_and_acquire<L: LoadableLibrary>(
         Ok(parking_lot::RwLockReadGuard::map(lib_read_guard, |lib| {
             lib.as_ref().unwrap()
         }))
-    }
-}
-
-fn get_library_path(lib_path_env: &str, fallback_lib_path_str: &str) -> Result<PathBuf> {
-    let library_path = if let Ok(lib_path) = env::var(lib_path_env).map(PathBuf::from) {
-        lib_path
-    } else {
-        let fallback_lib_path = Path::new(fallback_lib_path_str);
-
-        if fallback_lib_path.is_absolute() {
-            fallback_lib_path.to_path_buf()
-        } else {
-            let executable_path = env::current_exe()
-                .map_err(|source| LoadingError::ExecutablePathNotFound { source })?;
-
-            let executable_dir = executable_path.parent().unwrap();
-
-            executable_dir.join(fallback_lib_path)
-        }
-    };
-
-    library_path
-        .canonicalize()
-        .map_err(|source| LoadingError::LibraryPathResolution {
-            path: library_path.display().to_string(),
-            source,
-        })
-}
-
-fn load_library(library_path: &Path) -> Result<Library> {
-    log::debug!("Loading dynamic library at {}", library_path.display());
-    unsafe {
-        Library::new(library_path).map_err(|source| LoadingError::LibraryLoading {
-            path: library_path.display().to_string(),
-            source,
-        })
     }
 }

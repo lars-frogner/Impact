@@ -40,7 +40,11 @@ The engine uses its own Entity-Component-System (ECS) implementation, which also
 
 ### Scripting
 
-There is currently limited scripting support using the [Roc](https://www.roc-lang.org/) language. Roc is a very young language, but it shows great promise both for standalone applications and, thanks to its [platform](https://www.roc-lang.org/platforms) concept, for being embedded into larger systems. Since it compiles to machine code, it has the potential to be a very performant scripting language. The [How applications work](#how-applications-work) section describes how Roc is embedded into the Impact engine. At the moment, Roc scripts are mainly responsible for scene setup and input handling.
+There is currently limited scripting support using the [Roc](https://www.roc-lang.org/) language.
+
+Roc is a very young language, but it shows great promise both for standalone applications and, thanks to its [platform](https://www.roc-lang.org/platforms) concept, for being embedded into larger systems. Since it compiles to machine code, it has the potential to be a very performant scripting language. It is also suitable for hot reloading due to the fact that it is functional (so the scripts are stateless) and quick to compile.
+
+The [How applications work](#how-applications-work) section describes how Roc is embedded into the Impact engine. At the moment, Roc scripts are mainly responsible for scene setup and input handling.
 
 ### GUI
 
@@ -105,7 +109,7 @@ The Roc platform consists of a small Rust crate and a Roc package.
 
 **The Roc script**
 
-This is a standard Roc application that imports the platform package. But rather than having a `main` function, it implements the callback functions required by the platform, and during the execution of these functions it uses the scripting API to modify the application and engine state. When compiled, the script is statically linked with the platform crate, producing a shared library that the application crate can load and interact with.
+This is a standard Roc application that imports the platform package. But rather than having a `main` function, it implements the callback functions required by the platform, and during the execution of these functions it uses the scripting API to modify the application and engine state. When compiled, the script is statically linked with the platform crate, producing a shared library that the application crate can load and interact with. This library can even be rebuilt and reloaded while the engine is running, which is how hot reloading of scripts works.
 
 ## Data transfer between Rust and Roc
 
