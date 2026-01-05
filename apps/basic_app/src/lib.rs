@@ -36,6 +36,8 @@ static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 #[derive(Debug)]
 pub struct BasicApp {
     user_interface: RwLock<UserInterface>,
+    #[cfg(feature = "hot_reloading")]
+    script_reloader: parking_lot::Mutex<Option<scripting::hot_reloading::ScriptReloader>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -59,7 +61,24 @@ impl BasicApp {
     pub fn new(user_interface: UserInterface) -> Self {
         Self {
             user_interface: RwLock::new(user_interface),
+            #[cfg(feature = "hot_reloading")]
+            script_reloader: Default::default(),
         }
+    }
+
+    #[cfg(feature = "hot_reloading")]
+    fn activate_script_reloader(&self) -> Result<()> {
+        log::debug!("Activating script reloader");
+
+        let script_reloader = scripting::hot_reloading::create_script_reloader()?;
+        *self.script_reloader.lock() = Some(script_reloader);
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "hot_reloading"))]
+    fn activate_script_reloader(&self) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -68,6 +87,8 @@ impl Application for BasicApp {
         log::debug!("Loading script library");
         ScriptLib::load().context("Failed to load script library")?;
 
+        self.activate_script_reloader()?;
+
         *ENGINE.write() = Some(engine.clone());
         log::debug!("Engine initialized");
 
@@ -75,7 +96,9 @@ impl Application for BasicApp {
         self.user_interface.read().setup(&engine);
 
         log::debug!("Setting up scene");
-        scripting::setup_scene()
+        scripting::setup_scene()?;
+
+        Ok(())
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {

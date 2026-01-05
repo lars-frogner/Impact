@@ -55,8 +55,22 @@ macro_rules! define_lib {
             static $lib_obj: ::dynamic_lib::RwLock<Option<$lib_obj>> = ::dynamic_lib::RwLock::new(None);
 
             impl ::dynamic_lib::LoadableLibrary for $lib_obj {
-                fn new_loaded() -> ::dynamic_lib::Result<Self> {
-                    let library = ::dynamic_lib::__from_macro_load_library($path_env_var, $fallback_path)?;
+                /// Returns the resolved path to the library.
+                ///
+                /// # Errors
+                /// Returns an error if the library path can not be resolved.
+                fn resolved_path() -> ::dynamic_lib::PathResult<::std::path::PathBuf> {
+                    ::dynamic_lib::resolve_path_from_env_with_fallback($path_env_var, $fallback_path)
+                }
+
+                /// Loads the library at the given path.
+                ///
+                /// # Errors
+                /// Returns an error if:
+                ///  - The library is already loaded.
+                ///  - The library can not be loaded.
+                fn loaded_from_path(lib_path: &::std::path::Path) -> ::dynamic_lib::Result<Self> {
+                    let library = ::dynamic_lib::__from_macro_load_library(lib_path)?;
                     Ok(Self {
                         $(
                             $symbol: {
@@ -107,6 +121,19 @@ macro_rules! define_lib {
                 /// Returns an error if the library is not loaded.
                 fn unload() -> ::dynamic_lib::Result<()> {
                     ::dynamic_lib::__from_macro_unload(&$lib_obj)
+                }
+
+                /// Unloads the dynamic library, moves a library file from the
+                /// source path to the destination path, then loads the library
+                /// from the destination path.
+                ///
+                /// # Errors
+                /// Returns an error if:
+                ///  - No library is loaded.
+                ///  - The move fails.
+                ///  - The moved library can not be loaded.
+                fn replace(source_path: &::std::path::Path, dest_path: &::std::path::Path) -> ::dynamic_lib::Result<()> {
+                    ::dynamic_lib::__from_macro_replace(&$lib_obj, source_path, dest_path)
                 }
             }
 

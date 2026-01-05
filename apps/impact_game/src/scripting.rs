@@ -1,5 +1,8 @@
 //! Calling functions in a Roc script.
 
+#[cfg(feature = "hot_reloading")]
+pub mod hot_reloading;
+
 use anyhow::{Context, Result, anyhow};
 use impact::{
     input::{

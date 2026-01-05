@@ -60,8 +60,6 @@
 
 ## Roc
 
-- Implement hot reloading of script.
-
 - Support state/context in Roc script.
 
 ## Misc
