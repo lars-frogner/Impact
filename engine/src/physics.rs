@@ -246,7 +246,7 @@ impl PhysicsSimulator {
         }
         self.do_advance_simulation(voxel_object_manager);
 
-        log::debug!("Simulation time: {:.1}", self.simulation_time);
+        log::trace!("Simulation time: {:.1}", self.simulation_time);
     }
 
     /// Resets the simulator to the initial empty state and sets the simulation

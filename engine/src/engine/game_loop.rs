@@ -59,7 +59,7 @@ impl Engine {
         self.gather_metrics_after_completed_frame(smooth_frame_duration);
         self.update_simulation_time_step_duration(smooth_frame_duration);
 
-        log::debug!(
+        log::trace!(
             "Completed game loop iteration after {:.1} ms (~{} FPS, {:.1} s elapsed)",
             frame_duration.as_secs_f64() * 1e3,
             instrumentation::frame_duration_to_fps(smooth_frame_duration),
