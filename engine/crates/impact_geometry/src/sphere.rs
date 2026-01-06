@@ -71,7 +71,7 @@ impl Sphere {
 
         let mean_center = Point3::center_of(sphere_1.center(), sphere_2.center());
 
-        let bounding_center = if abs_diff_eq!(distance_between_centra, 0.0) {
+        let bounding_center = if abs_diff_eq!(distance_between_centra, 0.0, epsilon = 1e-6) {
             mean_center
         } else {
             mean_center

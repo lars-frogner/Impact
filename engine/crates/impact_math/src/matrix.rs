@@ -207,6 +207,12 @@ impl Matrix3 {
         Vector3::new(m.x_axis.x, m.y_axis.y, m.z_axis.z)
     }
 
+    /// Returns the determinant of the matrix.
+    #[inline]
+    pub fn determinant(&self) -> f32 {
+        self.inner.determinant()
+    }
+
     /// Returns the smallest element in the matrix.
     #[inline]
     pub fn min_element(&self) -> f32 {
