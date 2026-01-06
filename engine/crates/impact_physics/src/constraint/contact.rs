@@ -510,10 +510,15 @@ fn compute_effective_mass(
     let disp_a_cross_dir = disp_a.cross(direction);
     let disp_b_cross_dir = disp_b.cross(direction);
 
-    1.0 / (body_a.inverse_mass
-        + body_b.inverse_mass
-        + disp_a_cross_dir.dot(&(body_a_inverse_inertia_tensor * disp_a_cross_dir))
-        + disp_b_cross_dir.dot(&(body_b_inverse_inertia_tensor * disp_b_cross_dir)))
+    let effective_mass = 1.0
+        / (body_a.inverse_mass
+            + body_b.inverse_mass
+            + disp_a_cross_dir.dot(&(body_a_inverse_inertia_tensor * disp_a_cross_dir))
+            + disp_b_cross_dir.dot(&(body_b_inverse_inertia_tensor * disp_b_cross_dir)));
+
+    debug_assert!(effective_mass.is_finite());
+
+    effective_mass
 }
 
 fn construct_tangent_vectors(surface_normal: &UnitVector3) -> (UnitVector3, UnitVector3) {

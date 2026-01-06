@@ -247,7 +247,9 @@ impl VoxelObjectInertialPropertyManager {
         moments_of_inertia: &Vector3,
         products_of_inertia: &Vector3,
     ) -> InertialProperties {
-        let center_of_mass = Point3::from(moments / mass);
+        let inverse_mass = mass.recip();
+
+        let center_of_mass = Point3::from(moments * inverse_mass);
 
         // This is the inertia tensor defined with respect to the origin
         #[rustfmt::skip]
@@ -261,7 +263,18 @@ impl VoxelObjectInertialPropertyManager {
         let com_inertia_tensor_matrix = inertia_tensor_matrix
             + InertiaTensor::compute_delta_to_com_inertia_matrix(mass, center_of_mass.as_vector());
 
-        let inertia_tensor = InertiaTensor::from_matrix(com_inertia_tensor_matrix);
+        // In case the mass is very small, we divide by mass before inverting
+        // the inertia matrix to improve numerical stability
+        let scaled_inertia_tensor_matrix = inverse_mass * com_inertia_tensor_matrix;
+        let inverse_scaled_inertia_tensor_matrix = scaled_inertia_tensor_matrix.inverse();
+        let inverse_com_inertia_tensor_matrix = mass * inverse_scaled_inertia_tensor_matrix;
+
+        debug_assert!(inverse_com_inertia_tensor_matrix.determinant().is_finite());
+
+        let inertia_tensor = InertiaTensor::from_matrix_and_inverse(
+            com_inertia_tensor_matrix,
+            inverse_com_inertia_tensor_matrix,
+        );
 
         InertialProperties::new(mass, center_of_mass, inertia_tensor)
     }

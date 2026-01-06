@@ -355,6 +355,8 @@ impl DynamicRigidBody {
         velocity: VelocityP,
         angular_velocity: AngularVelocityP,
     ) -> Self {
+        debug_assert!(mass > 0.0);
+
         let momentum = velocity * mass;
 
         let angular_momentum = quantities::compute_angular_momentum(
