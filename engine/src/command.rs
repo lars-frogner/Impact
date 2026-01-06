@@ -49,6 +49,7 @@ pub enum AdminCommand {
 
 #[derive(Clone, Debug)]
 pub enum SystemCommand {
+    ResetWorld,
     Shutdown,
 }
 
@@ -257,6 +258,7 @@ pub fn execute_gizmo_command(engine: &Engine, command: GizmoCommand) -> Result<(
 
 pub fn execute_system_command(engine: &Engine, command: SystemCommand) -> Result<()> {
     match command {
+        SystemCommand::ResetWorld => engine.reset_world(),
         SystemCommand::Shutdown => engine.request_shutdown(),
     }
     Ok(())
