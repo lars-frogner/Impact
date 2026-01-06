@@ -2,8 +2,8 @@
 
 pub mod ffi;
 
-use crate::{AppConfig, SnapshotTester, ENGINE};
-use anyhow::{bail, Result};
+use crate::{AppConfig, ENGINE, SnapshotTester};
+use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
     engine::{Engine, EngineConfig},

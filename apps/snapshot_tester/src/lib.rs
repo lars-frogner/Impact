@@ -9,14 +9,14 @@ pub use impact::{self, roc_integration};
 #[cfg(feature = "roc_codegen")]
 pub use impact::component::gather_roc_type_ids_for_all_components;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use dynamic_lib::DynamicLibrary;
 use impact::{
     application::Application,
-    command::{capture::CaptureCommand, AdminCommand, SystemCommand},
+    command::{AdminCommand, SystemCommand, capture::CaptureCommand},
     engine::Engine,
     impact_io,
-    runtime::{headless::HeadlessConfig, RuntimeConfig},
+    runtime::{RuntimeConfig, headless::HeadlessConfig},
 };
 use parking_lot::RwLock;
 use scripting::ScriptLib;

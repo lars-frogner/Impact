@@ -2,8 +2,8 @@
 
 pub mod ffi;
 
-use crate::{editor::Editor, UserInterface, VoxelGeneratorApp, VoxelGeneratorConfig, ENGINE};
-use anyhow::{bail, Result};
+use crate::{ENGINE, UserInterface, VoxelGeneratorApp, VoxelGeneratorConfig, editor::Editor};
+use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
     engine::Engine,
