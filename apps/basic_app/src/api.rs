@@ -2,7 +2,7 @@
 
 pub mod ffi;
 
-use crate::{BasicApp, BasicAppConfig, ENGINE, RunMode};
+use crate::{BasicApp, BasicAppConfig, ENGINE, RunMode, user_interface::UserInterface};
 use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
@@ -12,7 +12,7 @@ use impact::{
     run::{headless, window},
     runtime::headless::HeadlessConfig,
 };
-use impact_dev_ui::{UICommand, UICommandQueue, UserInterface};
+use impact_dev_ui::{UICommand, UICommandQueue, UserInterface as DevUserInterface};
 use std::{path::Path, sync::Arc};
 
 pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
@@ -25,10 +25,11 @@ pub fn run_with_config(config: BasicAppConfig) -> Result<()> {
     env_logger::init();
     log::debug!("Running application");
 
-    let (run_mode, window_config, runtime_config, engine_config, ui_config) = config.load()?;
+    let (app_options, run_mode, window_config, runtime_config, engine_config, ui_config) =
+        config.load()?;
 
-    let user_interface = UserInterface::new(ui_config);
-    let app = Arc::new(BasicApp::new(user_interface));
+    let user_interface = UserInterface::new(DevUserInterface::new(ui_config));
+    let app = Arc::new(BasicApp::new(app_options, user_interface));
 
     match run_mode {
         RunMode::Windowed => window::run(app, window_config, runtime_config, engine_config),

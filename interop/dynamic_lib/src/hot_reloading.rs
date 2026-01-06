@@ -17,6 +17,7 @@ use thiserror::Error;
 pub struct LibraryReloader<L> {
     watcher_command_sender: Sender<WatcherCommand>,
     reloader_command_sender: Sender<ReloaderCommand>,
+    reload_completed_receiver: Receiver<()>,
     watcher_join_handle: Option<JoinHandle<()>>,
     reloader_join_handle: Option<JoinHandle<()>>,
     _watcher: notify::RecommendedWatcher,
@@ -73,6 +74,8 @@ impl<L: DynamicLibrary> LibraryReloader<L> {
         let (reloader_command_sender, reloader_command_receiver) =
             crossbeam_channel::bounded(COMMAND_CHANNEL_CAPACITY);
 
+        let (reload_completed_sender, reload_completed_receiver) = crossbeam_channel::bounded(1);
+
         let (watcher, watcher_join_handle) = spawn_watcher(
             source_dir_path,
             watcher_command_receiver,
@@ -84,16 +87,24 @@ impl<L: DynamicLibrary> LibraryReloader<L> {
             build_output_lib_path,
             reloader_command_receiver,
             watcher_command_sender.clone(),
+            reload_completed_sender,
         );
 
         Ok(Self {
             watcher_command_sender,
             reloader_command_sender,
+            reload_completed_receiver,
             watcher_join_handle: Some(watcher_join_handle),
             reloader_join_handle: Some(reloader_join_handle),
             _watcher: watcher,
             _phantom: PhantomData,
         })
+    }
+
+    /// Whether the dynamic library has been reloaded since the last time this
+    /// method was called.
+    pub fn reloaded_since_last_check(&self) -> bool {
+        self.reload_completed_receiver.try_recv().is_ok()
     }
 }
 
@@ -209,6 +220,7 @@ fn spawn_reloader<L: DynamicLibrary>(
     build_output_lib_path: PathBuf,
     reloader_command_receiver: Receiver<ReloaderCommand>,
     watcher_command_sender: Sender<WatcherCommand>,
+    reload_completed_sender: Sender<()>,
 ) -> JoinHandle<()> {
     log::debug!(
         "Library reloader will use build program `{}` in {} outputting to {}",
@@ -243,6 +255,11 @@ fn spawn_reloader<L: DynamicLibrary>(
                                 match L::replace(&build_output_lib_path, &loaded_lib_path) {
                                     Ok(()) => {
                                         log::info!("Successfully replaced dynamic library");
+
+                                        // Notify about the completed reload by
+                                        // sending a unit value if the channel
+                                        // is empty
+                                        let _ = reload_completed_sender.try_send(());
                                     }
                                     Err(err) => {
                                         log::error!("Reloader failed to replace library: {err}");
