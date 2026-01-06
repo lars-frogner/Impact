@@ -77,6 +77,7 @@ impl BasicApp {
     }
 
     #[cfg(not(feature = "hot_reloading"))]
+    #[allow(clippy::unused_self)]
     fn activate_script_reloader(&self) -> Result<()> {
         Ok(())
     }
