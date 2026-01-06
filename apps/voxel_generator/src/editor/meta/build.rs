@@ -1,15 +1,15 @@
 use super::{
-    node_kind::{self},
     MetaNode, MetaNodeID,
+    node_kind::{self},
 };
 use anyhow::Result;
-use impact::impact_alloc::{arena::ArenaPool, AVec, Allocator};
+use impact::impact_alloc::{AVec, Allocator, arena::ArenaPool};
 use impact_containers::NoHashMap;
 use impact_voxel::{
     generation::{
-        sdf::{meta::MetaSDFGraph, SDFGenerator, SDFGraph},
-        voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
         SDFVoxelGenerator,
+        sdf::{SDFGenerator, SDFGraph, meta::MetaSDFGraph},
+        voxel_type::{SameVoxelTypeGenerator, VoxelTypeGenerator},
     },
     voxel_types::VoxelType,
 };

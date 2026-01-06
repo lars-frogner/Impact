@@ -3,9 +3,9 @@
 use anyhow::{Context, Result};
 use impact::{
     command::{
-        rendering::{postprocessing::ToToneMappingMethod, RenderingCommand},
-        uils::ToActiveState,
         AdminCommand,
+        rendering::{RenderingCommand, postprocessing::ToToneMappingMethod},
+        uils::ToActiveState,
     },
     engine::Engine,
     impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,

@@ -2,8 +2,8 @@
 
 pub mod ffi;
 
-use crate::{BasicApp, BasicAppConfig, RunMode, ENGINE};
-use anyhow::{bail, Result};
+use crate::{BasicApp, BasicAppConfig, ENGINE, RunMode};
+use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
     engine::Engine,
