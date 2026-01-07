@@ -1,0 +1,545 @@
+name: Impact CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_TARGET_DIR: ${{ forgejo.workspace }}/ci-target
+  MIRI_SYSROOT: ${{ forgejo.workspace }}/.miri-sysroot
+
+concurrency:
+  # A new push cancels any in-flight run
+  group: ${{ forgejo.workflow_ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ───────────────────────────────────────────────────────────────
+  # Build crates
+  # ───────────────────────────────────────────────────────────────
+  build:
+    name: Build – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            interop/dynamic_lib,
+            interop/hashing,
+            interop/log,
+            tools/asset_fetcher,
+          ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with: { toolchain: stable }
+
+      - name: Debug build (no default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo build --no-default-features
+
+      - name: Debug build (default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo build
+
+      - name: Debug build (all features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo build --all-features
+
+      - name: Release build
+        working-directory: ${{ matrix.workspace }}
+        run: cargo build --release
+
+  # ───────────────────────────────────────────────────────────────
+  # Check each feature
+  # ───────────────────────────────────────────────────────────────
+  check-features:
+    name: Features – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with: { toolchain: stable }
+
+      - uses: https://github.com/taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: cargo hack check --each-feature (engine)
+        if: matrix.workspace == 'engine'
+        working-directory: ${{ matrix.workspace }}
+        run: cargo hack check --each-feature --no-dev-deps --exclude-features window,egui
+
+      - name: cargo hack check --each-feature
+        if: matrix.workspace != 'engine'
+        working-directory: ${{ matrix.workspace }}
+        run: cargo hack check --each-feature --no-dev-deps
+
+  # ───────────────────────────────────────────────────────────────
+  # Build apps
+  # ───────────────────────────────────────────────────────────────
+  build-apps:
+    name: Apps – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with: { toolchain: stable }
+
+      - id: roc
+        uses: https://github.com/hasnep/setup-roc@v0.5.0
+        with:
+          roc-version: nightly
+
+      - name: Build (debug)
+        working-directory: ${{ matrix.workspace }}
+        env:
+          ROC_DEBUG: "1"
+          RUST_DEBUG: "1"
+        run: roc build.roc
+
+      - name: Build (release)
+        working-directory: ${{ matrix.workspace }}
+        run: roc build.roc
+
+  # ───────────────────────────────────────────────────────────────
+  # Regular tests
+  # ───────────────────────────────────────────────────────────────
+  test:
+    name: Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine, tools/asset_fetcher]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with: { toolchain: stable }
+
+      - name: cargo test --all-features
+        working-directory: ${{ matrix.workspace }}
+        run: cargo test --all-features --workspace
+
+  # ───────────────────────────────────────────────────────────────
+  # AddressSanitizer tests
+  # ───────────────────────────────────────────────────────────────
+  test-asan:
+    name: ASan tests
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          targets: x86_64-unknown-linux-gnu
+          components: rust-src
+
+      - name: Install ASan runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang libclang-rt-17-dev
+
+      - name: Test with AddressSanitizer
+        working-directory: ${{ matrix.workspace }}
+        env:
+          ASAN_RUST_FLAGS: "-C linker=clang -Zsanitizer=address"
+          RUSTFLAGS: ${{ env.ASAN_RUST_FLAGS }}
+          RUSTDOCFLAGS: ${{ env.ASAN_RUST_FLAGS }}
+        run: |
+          cargo test --all-features --workspace --target x86_64-unknown-linux-gnu
+
+  # ───────────────────────────────────────────────────────────────
+  # Miri tests
+  # ───────────────────────────────────────────────────────────────
+  test-miri:
+    name: Miri tests
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [engine]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - name: Cache MIRI sysroot
+        uses: https://data.forgejo.org/actions/cache@v4
+        with:
+          path: ${{ env.MIRI_SYSROOT }}
+          key: miri-sysroot-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            miri-sysroot-
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+
+      - name: cargo miri setup
+        run: cargo miri setup
+
+      - name: Test with Miri
+        working-directory: ${{ matrix.workspace }}
+        env:
+          PROPTEST_DISABLE_FAILURE_PERSISTENCE: 1
+          PROPTEST_CASES: 1
+          MIRIFLAGS: "-Zmiri-disable-isolation -Zmiri-deterministic-floats"
+        run: |
+          cargo miri test --features "checked_lock_order" --workspace
+
+  # ───────────────────────────────────────────────────────────────
+  # Snapshot tests
+  # ───────────────────────────────────────────────────────────────
+  test-snapshot:
+    name: Snapshot tests
+    runs-on: ubuntu-22.04
+    env:
+      WORKSPACE: apps/snapshot_tester
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ env.WORKSPACE }}
+
+      - name: Cache generated lookup tables
+        uses: https://data.forgejo.org/actions/cache@v4
+        with:
+          path: ${{ env.WORKSPACE }}/resources/lookup_tables
+          key: ${{ env.WORKSPACE }}-resources-${{ hashFiles('engine/crates/impact_rendering/src/brdf.rs') }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with: { toolchain: stable }
+
+      - id: roc
+        uses: https://github.com/hasnep/setup-roc@v0.5.0
+        with:
+          roc-version: nightly
+
+      - name: Install Mesa software drivers
+        uses: ./.forgejo/actions/install-mesa
+
+      - name: Run tests
+        working-directory: ${{ env.WORKSPACE }}
+        run: make run
+
+      - name: Upload output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-tester-output
+          path: ${{ env.WORKSPACE }}/snapshots/output
+
+  # ───────────────────────────────────────────────────────────────
+  # Clippy
+  # ───────────────────────────────────────────────────────────────
+  lint-clippy:
+    name: Clippy – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            interop/dynamic_lib,
+            interop/hashing,
+            interop/log,
+            tools/asset_fetcher,
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: Clippy (no default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+
+      - name: Clippy (default features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Clippy (all features)
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # ───────────────────────────────────────────────────────────────
+  # Rustfmt
+  # ───────────────────────────────────────────────────────────────
+  lint-fmt:
+    name: Rustfmt – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            interop/dynamic_lib,
+            interop/hashing,
+            interop/log,
+            tools/asset_fetcher,
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Rustfmt
+        working-directory: ${{ matrix.workspace }}
+        run: cargo fmt --all -- --check
+
+  # ───────────────────────────────────────────────────────────────
+  # Docs
+  # ───────────────────────────────────────────────────────────────
+  docs:
+    name: Docs – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            interop/dynamic_lib,
+            interop/hashing,
+            interop/log,
+            tools/asset_fetcher,
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with: { toolchain: stable }
+
+      - name: cargo doc
+        working-directory: ${{ matrix.workspace }}
+        run: cargo doc --workspace --no-deps --document-private-items
+
+  # ───────────────────────────────────────────────────────────────
+  # cargo-udeps
+  # ───────────────────────────────────────────────────────────────
+  cargo-udeps:
+    name: cargo-udeps – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            interop/dynamic_lib,
+            interop/hashing,
+            interop/log,
+            tools/asset_fetcher,
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: https://github.com/r7kamura/rust-problem-matchers@v1
+
+      - uses: https://github.com/swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ matrix.workspace }}
+
+      - uses: https://github.com/dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+
+      - uses: https://github.com/taiki-e/install-action@v2
+        with:
+          tool: cargo-udeps
+
+      - name: cargo-udeps
+        working-directory: ${{ matrix.workspace }}
+        run: cargo +nightly udeps --workspace --all-features --all-targets
+
+  # ───────────────────────────────────────────────────────────────
+  # cargo-deny
+  # ───────────────────────────────────────────────────────────────
+  cargo-deny:
+    name: cargo-deny – ${{ matrix.workspace }}
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          [
+            engine,
+            roc_integration,
+            roc_platform/core,
+            tools/asset_fetcher,
+            apps/basic_app,
+            apps/snapshot_tester,
+            apps/voxel_generator,
+            apps/impact_game,
+          ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - name: cargo-deny
+        uses: https://github.com/EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --workspace --all-features
+          manifest-path: ${{ matrix.workspace }}/Cargo.toml
