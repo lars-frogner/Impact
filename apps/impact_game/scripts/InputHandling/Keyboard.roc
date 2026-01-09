@@ -34,7 +34,7 @@ set_motion = |key_state, direction|
             Pressed -> Moving
             Released -> Still
 
-    Some(Engine(Controller(SetMotion { direction, state })))
+    Some(Engine(Control(SetMotion { direction, state })))
 
 on_released = |state, command|
     when state is
