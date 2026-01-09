@@ -1,5 +1,5 @@
-# Hash: 3f657ed7fbef595c
-# Generated: 2026-01-09T09:58:05.185264289
+# Hash: 5d572a43c9265557
+# Generated: 2026-01-09T10:04:34.201923954
 # Rust type: impact::command::UserCommand
 # Type category: Inline
 module [
@@ -13,7 +13,7 @@ import Command.SceneCommand
 
 EngineCommand : [
     Scene Command.SceneCommand.SceneCommand,
-    Controller Command.ControlCommand.ControlCommand,
+    Control Command.ControlCommand.ControlCommand,
 ]
 
 ## Serializes a value of [EngineCommand] into the binary representation
@@ -27,7 +27,7 @@ write_bytes = |bytes, value|
             |> List.append(0)
             |> Command.SceneCommand.write_bytes(val)
 
-        Controller(val) ->
+        Control(val) ->
             bytes
             |> List.reserve(18)
             |> List.append(1)
@@ -51,7 +51,7 @@ from_bytes = |bytes|
 
             [1, .. as data_bytes] ->
                 Ok(
-                    Controller(
+                    Control(
                         data_bytes |> List.sublist({ start: 0, len: 5 }) |> Command.ControlCommand.from_bytes?,
                     ),
                 )
