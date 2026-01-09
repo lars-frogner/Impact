@@ -91,14 +91,14 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 /// component instances, followed by a closure definition whose type signature
 /// specifies the set of `Component` types to look for in the set of existing
 /// components as well as the component types the closure will return instances
-/// of for inclusion in the `ArchetypeComponentStorage`. type of each closure
-/// argument must be annotated, and has to be an immutable reference to a type
-/// implementing the `Component` trait, optionally wrapped in an [`Option`]. If
-/// the closure returns anything, the return type has to be annotated in the
-/// closure signature. It can be a single value or a tuple of values
-/// implementing the `Component` trait, or the unit type `()`, and optionally be
-/// wrapped in a `Result`. If the closure returns a `Result<C, E>`, the `setup!`
-/// expression will evaluate to a `Result<(), E>`.
+/// of for inclusion in the `ArchetypeComponentStorage`. The type of each
+/// closure argument must be annotated, and has to be an immutable reference to
+/// a type implementing the `Component` trait, optionally wrapped in an
+/// [`Option`]. If the closure returns anything, the return type has to be
+/// annotated in the closure signature. It can be a single value or a tuple of
+/// values implementing the `Component` trait, or the unit type `()`, and
+/// optionally be wrapped in a `Result`. If the closure returns a `Result<C,
+/// E>`, the `setup!` expression will evaluate to a `Result<(), E>`.
 ///
 /// The body of the closure specifies what to do with each set of matching
 /// component instances present in the `ArchetypeComponentStorage`. The closure
