@@ -1,9 +1,12 @@
-# Hash: 2ec4adb1a378e1b0
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: 18a4e91861af1db3
+# Generated: 2026-01-07T21:08:46.008286011
 # Rust type: impact_physics::rigid_body::setup::DynamicRigidBodySubstance
 # Type category: Component
 module [
     DynamicRigidBodySubstance,
+    new,
+    add_new,
+    add_multiple_new,
     add,
     add_multiple,
     write_bytes,
@@ -18,6 +21,25 @@ import core.Builtin
 DynamicRigidBodySubstance : {
     mass_density : F32,
 }
+
+new : F32 -> DynamicRigidBodySubstance
+new = |mass_density|
+    { mass_density }
+
+add_new : Entity.ComponentData, F32 -> Entity.ComponentData
+add_new = |entity_data, mass_density|
+    add(entity_data, new(mass_density))
+
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new = |entity_data, mass_density|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map1(
+            mass_density,
+            Entity.multi_count(entity_data),
+            new
+        ))
+    )
 
 ## Adds a value of the [DynamicRigidBodySubstance] component to an entity's data.
 ## Note that an entity never should have more than a single value of
