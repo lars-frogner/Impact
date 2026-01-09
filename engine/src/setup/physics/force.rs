@@ -10,6 +10,7 @@ use impact_physics::{
     force::{
         constant_acceleration::ConstantAccelerationGeneratorID,
         detailed_drag::DetailedDragForceGeneratorID,
+        dynamic_gravity::DynamicGravity,
         local_force::LocalForceGeneratorID,
         setup::{self, ConstantAcceleration, DetailedDragProperties, LocalForce},
         spring_force::{
@@ -133,6 +134,18 @@ pub fn setup_forces_for_new_entities(
         }
     )?;
 
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        },
+        components,
+        |rigid_body_id: &DynamicRigidBodyID| {
+            setup::setup_dynamic_gravity(&mut force_generator_manager, *rigid_body_id);
+        },
+        [DynamicGravity]
+    );
+
     Ok(())
 }
 
@@ -175,5 +188,14 @@ pub fn remove_force_generators_for_entity(
             .detailed_drag_forces_mut()
             .generators_mut()
             .remove_generator(*generator_id.access());
+    }
+    if entity.has_component::<DynamicGravity>()
+        && let Some(rigid_body_id) = entity.get_component::<DynamicRigidBodyID>()
+    {
+        let simulator = simulator.oread();
+        let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        force_generator_manager
+            .dynamic_gravity_manager_mut()
+            .remove_body(*rigid_body_id.access());
     }
 }

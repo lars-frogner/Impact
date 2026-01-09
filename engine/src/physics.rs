@@ -263,7 +263,7 @@ impl PhysicsSimulator {
     fn do_advance_simulation(&mut self, voxel_object_manager: &VoxelObjectManager) {
         let mut rigid_body_manager = self.rigid_body_manager.owrite();
         let anchor_manager = self.anchor_manager.oread();
-        let force_generator_manager = self.force_generator_manager.oread();
+        let mut force_generator_manager = self.force_generator_manager.owrite();
         let motion_driver_manager = self.motion_driver_manager.oread();
         let mut constraint_manager = self.constraint_manager.owrite();
         let mut collision_world = self.collision_world.owrite();
@@ -273,7 +273,7 @@ impl PhysicsSimulator {
             impact_physics::perform_physics_step(
                 &mut rigid_body_manager,
                 &anchor_manager,
-                &force_generator_manager,
+                &mut force_generator_manager,
                 &motion_driver_manager,
                 &mut constraint_manager,
                 &mut collision_world,

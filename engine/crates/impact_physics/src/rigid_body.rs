@@ -493,6 +493,11 @@ impl DynamicRigidBody {
         self.total_force = total_force.pack();
     }
 
+    /// Applies the given force at the body's center of mass.
+    pub fn apply_force_at_center_of_mass_packed(&mut self, force: &ForceP) {
+        self.total_force += force;
+    }
+
     /// Applies the given torque around the body's center of mass.
     pub fn apply_torque(&mut self, torque: &Torque) {
         let mut total_torque = self.total_torque.unpack();

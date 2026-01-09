@@ -2,6 +2,7 @@
 
 pub mod constant_acceleration;
 pub mod detailed_drag;
+pub mod dynamic_gravity;
 pub mod local_force;
 pub mod setup;
 pub mod spring_force;
@@ -10,6 +11,7 @@ use crate::{UniformMedium, anchor::AnchorManager, rigid_body::RigidBodyManager};
 use anyhow::Result;
 use constant_acceleration::ConstantAccelerationRegistry;
 use detailed_drag::{DetailedDragForceRegistry, DragLoadMapConfig};
+use dynamic_gravity::{DynamicGravityConfig, DynamicGravityManager};
 use impact_containers::IndexMap;
 use local_force::LocalForceRegistry;
 use spring_force::{DynamicDynamicSpringForceRegistry, DynamicKinematicSpringForceRegistry};
@@ -23,6 +25,7 @@ pub struct ForceGeneratorManager {
     dynamic_dynamic_spring_forces: DynamicDynamicSpringForceRegistry,
     dynamic_kinematic_spring_forces: DynamicKinematicSpringForceRegistry,
     detailed_drag_forces: DetailedDragForceRegistry,
+    dynamic_gravity_manager: DynamicGravityManager,
 }
 
 /// Configuration parameters for rigid body force generation.
@@ -35,6 +38,8 @@ pub struct ForceGeneratorManager {
 pub struct ForceGenerationConfig {
     /// Configuration parameters for the generation of drag load maps.
     pub drag_load_map_config: DragLoadMapConfig,
+    /// Configuration parameters for computing dynamic gravity.
+    pub dynamic_gravity_config: DynamicGravityConfig,
 }
 
 /// Manages all instances of a specific type of force generator.
@@ -56,6 +61,7 @@ impl ForceGeneratorManager {
             dynamic_dynamic_spring_forces: ForceGeneratorRegistry::new(),
             dynamic_kinematic_spring_forces: ForceGeneratorRegistry::new(),
             detailed_drag_forces: DetailedDragForceRegistry::new(config.drag_load_map_config)?,
+            dynamic_gravity_manager: DynamicGravityManager::new(config.dynamic_gravity_config),
         })
     }
 
@@ -101,9 +107,17 @@ impl ForceGeneratorManager {
         &mut self.detailed_drag_forces
     }
 
+    pub fn dynamic_gravity_manager(&self) -> &DynamicGravityManager {
+        &self.dynamic_gravity_manager
+    }
+
+    pub fn dynamic_gravity_manager_mut(&mut self) -> &mut DynamicGravityManager {
+        &mut self.dynamic_gravity_manager
+    }
+
     /// Applies all forces of torques to the rigid bodies.
     pub fn apply_forces_and_torques(
-        &self,
+        &mut self,
         medium: &UniformMedium,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &AnchorManager,
@@ -122,7 +136,11 @@ impl ForceGeneratorManager {
         for generator in self.dynamic_kinematic_spring_forces.generators() {
             generator.apply(rigid_body_manager, anchor_manager);
         }
+
         self.detailed_drag_forces.apply(rigid_body_manager, medium);
+
+        self.dynamic_gravity_manager
+            .compute_and_apply(rigid_body_manager);
     }
 
     /// Removes all stored force generators.
