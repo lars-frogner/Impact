@@ -1,5 +1,5 @@
-# Hash: 5d572a43c9265557
-# Generated: 2026-01-09T10:04:23.631550721
+# Hash: 73cc22b8d0f3901b
+# Generated: 2026-01-09T10:50:08.30885944
 # Rust type: impact::command::UserCommand
 # Type category: Inline
 module [
@@ -9,11 +9,13 @@ module [
 ]
 
 import Command.ControlCommand
+import Command.PhysicsCommand
 import Command.SceneCommand
 
 EngineCommand : [
     Scene Command.SceneCommand.SceneCommand,
     Control Command.ControlCommand.ControlCommand,
+    Physics Command.PhysicsCommand.PhysicsCommand,
 ]
 
 ## Serializes a value of [EngineCommand] into the binary representation
@@ -23,22 +25,29 @@ write_bytes = |bytes, value|
     when value is
         Scene(val) ->
             bytes
-            |> List.reserve(18)
+            |> List.reserve(22)
             |> List.append(0)
             |> Command.SceneCommand.write_bytes(val)
+            |> List.concat(List.repeat(0, 4))
 
         Control(val) ->
             bytes
-            |> List.reserve(18)
+            |> List.reserve(22)
             |> List.append(1)
             |> Command.ControlCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 12))
+            |> List.concat(List.repeat(0, 16))
+
+        Physics(val) ->
+            bytes
+            |> List.reserve(22)
+            |> List.append(2)
+            |> Command.PhysicsCommand.write_bytes(val)
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result EngineCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 18 then
+    if List.len(bytes) != 22 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -53,6 +62,13 @@ from_bytes = |bytes|
                 Ok(
                     Control(
                         data_bytes |> List.sublist({ start: 0, len: 5 }) |> Command.ControlCommand.from_bytes?,
+                    ),
+                )
+
+            [2, .. as data_bytes] ->
+                Ok(
+                    Physics(
+                        data_bytes |> List.sublist({ start: 0, len: 21 }) |> Command.PhysicsCommand.from_bytes?,
                     ),
                 )
 

@@ -12,11 +12,11 @@ pub mod scene;
 pub mod uils;
 
 use crate::{
-    command::{controller::ControlAdminCommand, queue::CommandQueue},
+    command::{controller::ControlAdminCommand, physics::PhysicsCommand, queue::CommandQueue},
     engine::Engine,
     lock_order::OrderedRwLock,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use capture::CaptureAdminCommand;
 use controller::ControlCommand;
 use game_loop::GameLoopAdminCommand;
@@ -32,7 +32,8 @@ use scene::SceneCommand;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UserCommand {
     Scene(SceneCommand),
-    Controller(ControlCommand),
+    Control(ControlCommand),
+    Physics(PhysicsCommand),
 }
 
 #[derive(Clone, Debug)]
@@ -55,10 +56,19 @@ pub enum SystemAdminCommand {
 
 #[derive(Debug, Default)]
 pub struct EngineCommandQueues {
-    // User commands
+    pub user: UserCommandQueues,
+    pub admin: AdminCommandQueues,
+}
+
+#[derive(Debug, Default)]
+pub struct UserCommandQueues {
     pub scene: CommandQueue<SceneCommand>,
-    pub controller: CommandQueue<ControlCommand>,
-    // Admin commands
+    pub control: CommandQueue<ControlCommand>,
+    pub physics: CommandQueue<PhysicsCommand>,
+}
+
+#[derive(Debug, Default)]
+pub struct AdminCommandQueues {
     pub rendering: CommandQueue<RenderingAdminCommand>,
     pub physics: CommandQueue<PhysicsAdminCommand>,
     pub control: CommandQueue<ControlAdminCommand>,
@@ -72,7 +82,8 @@ pub struct EngineCommandQueues {
 pub fn execute_engine_command(engine: &Engine, command: UserCommand) -> Result<()> {
     match command {
         UserCommand::Scene(command) => execute_scene_command(engine, command),
-        UserCommand::Controller(command) => execute_control_command(engine, command),
+        UserCommand::Control(command) => execute_control_command(engine, command),
+        UserCommand::Physics(command) => execute_physics_command(engine, command),
     }
 }
 
@@ -95,15 +106,17 @@ pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<(
     match command {
         SceneCommand::SetSkybox(skybox) => {
             scene::set_skybox(engine, skybox);
+            Ok(())
         }
         SceneCommand::SetMedium(medium) => {
             scene::set_medium(engine, medium);
+            Ok(())
         }
         SceneCommand::SetSceneEntityActiveState { entity_id, state } => {
-            scene::set_scene_entity_active_state(engine, entity_id, state)?;
+            scene::set_scene_entity_active_state(engine, entity_id, state)
         }
     }
-    Ok(())
+    .context("Failed to execute scene command")
 }
 
 pub fn execute_control_command(engine: &Engine, command: ControlCommand) -> Result<()> {
@@ -121,6 +134,16 @@ pub fn execute_control_command(engine: &Engine, command: ControlCommand) -> Resu
     Ok(())
 }
 
+pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Result<()> {
+    match command {
+        PhysicsCommand::SetLocalForce {
+            generator_id,
+            force,
+        } => physics::set_local_force(&engine.simulator().oread(), generator_id, force),
+    }
+    .context("Failed to execute physics command")
+}
+
 pub fn execute_rendering_admin_command(
     engine: &Engine,
     command: RenderingAdminCommand,
@@ -128,54 +151,70 @@ pub fn execute_rendering_admin_command(
     match command {
         RenderingAdminCommand::SetAmbientOcclusion(to) => {
             rendering::set_ambient_occlusion(&engine.renderer().oread(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetTemporalAntiAliasing(to) => {
             rendering::set_temporal_anti_aliasing(engine.scene(), engine.renderer(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetBloom(to) => {
             rendering::set_bloom(&engine.renderer().oread(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetToneMappingMethod(to) => {
             rendering::set_tone_mapping_method(&engine.renderer().oread(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetExposure(to) => {
             rendering::set_exposure(&engine.renderer().oread(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetRenderAttachmentVisualization(to) => {
             rendering::set_render_attachment_visualization(&engine.renderer().oread(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetVisualizedRenderAttachmentQuantity(to) => {
-            rendering::set_visualized_render_attachment_quantity(&engine.renderer().oread(), to)?;
+            rendering::set_visualized_render_attachment_quantity(&engine.renderer().oread(), to)
+                .map(|_| ())
         }
         RenderingAdminCommand::SetShadowMapping(to) => {
             rendering::set_shadow_mapping(&mut engine.renderer().owrite(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetWireframeMode(to) => {
             rendering::set_wireframe_mode(&mut engine.renderer().owrite(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetRenderPassTimings(to) => {
             rendering::set_render_pass_timings(&mut engine.renderer().owrite(), to);
+            Ok(())
         }
         RenderingAdminCommand::SetAmbientOcclusionConfig(config) => {
             rendering::set_ambient_occlusion_config(&engine.renderer().oread(), config);
+            Ok(())
         }
         RenderingAdminCommand::SetTemporalAntiAliasingConfig(config) => {
             rendering::set_temporal_anti_aliasing_config(&engine.renderer().oread(), config);
+            Ok(())
         }
         RenderingAdminCommand::SetBloomConfig(config) => {
             rendering::set_bloom_config(&engine.renderer().oread(), config);
+            Ok(())
         }
         RenderingAdminCommand::SetCameraSettings(settings) => {
             rendering::set_camera_settings(&engine.renderer().oread(), settings);
+            Ok(())
         }
         RenderingAdminCommand::SetAverageLuminanceComputationConfig(config) => {
             rendering::set_average_luminance_computation_config(&engine.renderer().oread(), config);
+            Ok(())
         }
         RenderingAdminCommand::SetDynamicRangeCompressionConfig(config) => {
             rendering::set_dynamic_range_compression_config(&engine.renderer().oread(), config);
+            Ok(())
         }
     }
-    Ok(())
+    .context("Failed to execute rendering admin command")
 }
 
 pub fn execute_physics_admin_command(engine: &Engine, command: PhysicsAdminCommand) -> Result<()> {

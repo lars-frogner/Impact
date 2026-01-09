@@ -6,6 +6,7 @@ use roc_integration::roc;
 /// A physical medium with the same properties and state everywhere.
 #[roc(parents = "Physics")]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub struct UniformMedium {
     /// The mass density of the medium.
@@ -80,18 +81,3 @@ impl PartialEq for UniformMedium {
 }
 
 impl Eq for UniformMedium {}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for UniformMedium {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self {
-            mass_density: f32::arbitrary(u)?,
-            velocity: VelocityP::new(f32::arbitrary(u)?, f32::arbitrary(u)?, f32::arbitrary(u)?),
-        })
-    }
-
-    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
-        let size = 4 * std::mem::size_of::<f32>();
-        (size, Some(size))
-    }
-}

@@ -6,7 +6,22 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use impact_physics::constraint::solver::ConstraintSolverConfig;
+use anyhow::{Result, anyhow};
+use impact_physics::{
+    constraint::solver::ConstraintSolverConfig, force::local_force::LocalForceGeneratorID,
+    quantities::ForceP,
+};
+use roc_integration::roc;
+
+#[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Debug)]
+pub enum PhysicsCommand {
+    SetLocalForce {
+        generator_id: LocalForceGeneratorID,
+        force: ForceP,
+    },
+}
 
 #[derive(Clone, Debug)]
 pub enum PhysicsAdminCommand {
@@ -32,6 +47,28 @@ pub enum ToSimulationSpeedMultiplier {
     Specific(f32),
 }
 
+impl PartialEq for PhysicsCommand {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::SetLocalForce {
+                    generator_id: self_id,
+                    force: self_force,
+                },
+                Self::SetLocalForce {
+                    generator_id: other_id,
+                    force: other_force,
+                },
+            ) => {
+                self_id == other_id
+                    && bytemuck::bytes_of(self_force) == bytemuck::bytes_of(other_force)
+            }
+        }
+    }
+}
+
+impl Eq for PhysicsCommand {}
+
 impl PartialEq for ToSimulationSpeedMultiplier {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -43,6 +80,23 @@ impl PartialEq for ToSimulationSpeedMultiplier {
 }
 
 impl Eq for ToSimulationSpeedMultiplier {}
+
+pub fn set_local_force(
+    simulator: &PhysicsSimulator,
+    generator_id: LocalForceGeneratorID,
+    force: ForceP,
+) -> Result<()> {
+    let mut force_generator_manager = simulator.force_generator_manager().owrite();
+
+    let local_force = force_generator_manager
+        .local_forces_mut()
+        .get_generator_mut(&generator_id)
+        .ok_or_else(|| anyhow!("No local force with ID {}", u64::from(generator_id)))?;
+
+    local_force.force = force;
+
+    Ok(())
+}
 
 pub fn set_simulation(simulator: &mut PhysicsSimulator, to: ToActiveState) -> ModifiedActiveState {
     log::info!("Setting simulation to {to:?}");
