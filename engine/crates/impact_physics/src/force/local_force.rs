@@ -16,6 +16,7 @@ define_component_type! {
     /// Identifier for a [`LocalForceGenerator`].
     #[roc(parents = "Comp")]
     #[repr(transparent)]
+    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
     #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
     pub struct LocalForceGeneratorID(u64);
 }
@@ -48,6 +49,12 @@ define_setup_type! {
 impl From<u64> for LocalForceGeneratorID {
     fn from(value: u64) -> Self {
         Self(value)
+    }
+}
+
+impl From<LocalForceGeneratorID> for u64 {
+    fn from(id: LocalForceGeneratorID) -> Self {
+        id.0
     }
 }
 

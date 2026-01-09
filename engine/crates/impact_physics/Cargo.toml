@@ -6,7 +6,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
-arbitrary = ["dep:arbitrary"]
+arbitrary = ["dep:arbitrary", "impact_math/arbitrary"]
 postcard = ["dep:postcard", "serde"]
 ecs = ["dep:inventory", "dep:impact_ecs", "impact_geometry/ecs"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]

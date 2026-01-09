@@ -220,10 +220,13 @@ impl Engine {
     pub fn enqueue_user_command(&self, command: UserCommand) {
         match command {
             UserCommand::Scene(command) => {
-                self.command_queues.scene.enqueue_command(command);
+                self.command_queues.user.scene.enqueue_command(command);
             }
-            UserCommand::Controller(command) => {
-                self.command_queues.controller.enqueue_command(command);
+            UserCommand::Control(command) => {
+                self.command_queues.user.control.enqueue_command(command);
+            }
+            UserCommand::Physics(command) => {
+                self.command_queues.user.physics.enqueue_command(command);
             }
         }
     }
@@ -231,28 +234,31 @@ impl Engine {
     pub fn enqueue_admin_command(&self, command: AdminCommand) {
         match command {
             AdminCommand::Rendering(command) => {
-                self.command_queues.rendering.enqueue_command(command);
+                self.command_queues.admin.rendering.enqueue_command(command);
             }
             AdminCommand::Physics(command) => {
-                self.command_queues.physics.enqueue_command(command);
+                self.command_queues.admin.physics.enqueue_command(command);
             }
             AdminCommand::Control(command) => {
-                self.command_queues.control.enqueue_command(command);
+                self.command_queues.admin.control.enqueue_command(command);
             }
             AdminCommand::Capture(command) => {
-                self.command_queues.capture.enqueue_command(command);
+                self.command_queues.admin.capture.enqueue_command(command);
             }
             AdminCommand::Instrumentation(command) => {
-                self.command_queues.instrumentation.enqueue_command(command);
+                self.command_queues
+                    .admin
+                    .instrumentation
+                    .enqueue_command(command);
             }
             AdminCommand::GameLoop(command) => {
-                self.command_queues.game_loop.enqueue_command(command);
+                self.command_queues.admin.game_loop.enqueue_command(command);
             }
             AdminCommand::Gizmo(command) => {
-                self.command_queues.gizmo.enqueue_command(command);
+                self.command_queues.admin.gizmo.enqueue_command(command);
             }
             AdminCommand::System(command) => {
-                self.command_queues.system.enqueue_command(command);
+                self.command_queues.admin.system.enqueue_command(command);
             }
         }
     }

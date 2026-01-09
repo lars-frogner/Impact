@@ -215,13 +215,14 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Executing enqueued engine commands", engine, {
             engine.execute_enqueued_scene_commands()?;
-            engine.execute_enqueued_controller_commands()?;
-            engine.execute_enqueued_physics_commands()?;
             engine.execute_enqueued_control_commands()?;
-            engine.execute_enqueued_instrumentation_commands()?;
-            engine.execute_enqueued_game_loop_commands()?;
-            engine.execute_enqueued_gizmo_commands()?;
-            engine.execute_enqueued_system_commands()?;
+            engine.execute_enqueued_physics_commands()?;
+            engine.execute_enqueued_physics_admin_commands()?;
+            engine.execute_enqueued_control_admin_commands()?;
+            engine.execute_enqueued_instrumentation_admin_commands()?;
+            engine.execute_enqueued_game_loop_admin_commands()?;
+            engine.execute_enqueued_gizmo_admin_commands()?;
+            engine.execute_enqueued_system_admin_commands()?;
             Ok(())
         })
     }
@@ -242,8 +243,8 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Executing enqueued rendering commands", engine, {
-            engine.execute_enqueued_rendering_commands()?;
-            engine.execute_enqueued_capture_commands()
+            engine.execute_enqueued_rendering_admin_commands()?;
+            engine.execute_enqueued_capture_admin_commands()
         })
     }
 );

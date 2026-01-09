@@ -464,62 +464,79 @@ impl Engine {
 
     pub(crate) fn execute_enqueued_scene_commands(&self) -> Result<()> {
         self.command_queues
+            .user
             .scene
             .try_execute_commands(|command| command::execute_scene_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_controller_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_control_commands(&self) -> Result<()> {
         self.command_queues
-            .controller
+            .user
+            .control
             .try_execute_commands(|command| command::execute_control_command(self, command))
-    }
-
-    pub(crate) fn execute_enqueued_rendering_commands(&self) -> Result<()> {
-        self.command_queues
-            .rendering
-            .try_execute_commands(|command| command::execute_rendering_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_physics_commands(&self) -> Result<()> {
         self.command_queues
+            .user
+            .physics
+            .try_execute_commands(|command| command::execute_physics_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_rendering_admin_commands(&self) -> Result<()> {
+        self.command_queues
+            .admin
+            .rendering
+            .try_execute_commands(|command| command::execute_rendering_admin_command(self, command))
+    }
+
+    pub(crate) fn execute_enqueued_physics_admin_commands(&self) -> Result<()> {
+        self.command_queues
+            .admin
             .physics
             .try_execute_commands(|command| command::execute_physics_admin_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_control_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_control_admin_commands(&self) -> Result<()> {
         self.command_queues
+            .admin
             .control
             .try_execute_commands(|command| command::execute_control_admin_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_capture_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_capture_admin_commands(&self) -> Result<()> {
         self.command_queues
+            .admin
             .capture
             .try_execute_commands(|command| command::execute_capture_admin_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_instrumentation_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_instrumentation_admin_commands(&self) -> Result<()> {
         self.command_queues
+            .admin
             .instrumentation
             .try_execute_commands(|command| {
                 command::execute_instrumentation_admin_command(self, command)
             })
     }
 
-    pub(crate) fn execute_enqueued_game_loop_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_game_loop_admin_commands(&self) -> Result<()> {
         self.command_queues
+            .admin
             .game_loop
             .try_execute_commands(|command| command::execute_game_loop_admin_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_gizmo_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_gizmo_admin_commands(&self) -> Result<()> {
         self.command_queues
+            .admin
             .gizmo
             .try_execute_commands(|command| command::execute_gizmo_admin_command(self, command))
     }
 
-    pub(crate) fn execute_enqueued_system_commands(&self) -> Result<()> {
+    pub(crate) fn execute_enqueued_system_admin_commands(&self) -> Result<()> {
         self.command_queues
+            .admin
             .system
             .try_execute_commands(|command| command::execute_system_admin_command(self, command))
     }
