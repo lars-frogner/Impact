@@ -861,9 +861,12 @@ fn write_component_functions(
     if ty.is_standard_component() {
         optional_exports.add("component_id");
         optional_exports.add("add_component_id");
-        optional_exports.add("read");
-        optional_exports.add("get_for_entity!");
-        optional_exports.add("set_for_entity!");
+
+        if ty.serialized_size > 0 {
+            optional_exports.add("read");
+            optional_exports.add("get_for_entity!");
+            optional_exports.add("set_for_entity!");
+        }
     }
 
     optional_imports.add("pf", "Entity");
@@ -941,32 +944,40 @@ fn write_component_functions(
             add_component_id : Entity.ComponentIds -> Entity.ComponentIds\n\
             add_component_id = |component_ids|\n    \
                 component_ids |> Entity.append_component_id(component_id)\n\
-            \n\
-            ## Reads the component from the given entity data. \n\
-            read : Entity.ComponentData -> Result {name} Str\n\
-            read = |data|\n    \
-                Entity.read_component(data, component_id, from_bytes)\n    \
-                |> Result.map_err(\n        \
-                    |err|\n            \
-                        when err is\n                \
-                            ComponentMissing -> \"No {name} component in data\"\n                \
-                            Decode(decode_err) -> \"Failed to decode {name} component: ${{Inspect.to_str(decode_err)}}\",\n    \
-                )\n\
-            \n\
-            ## Fetches the value of this component for the given entity.\n\
-            get_for_entity! : Entity.Id => Result {name} Str\n\
-            get_for_entity! = |entity_id|\n    \
-                Entity.get_component!(entity_id, component_id)? |> read\n\
-            \n\
-            ## Sets the value of this component for the given entity to the\n\
-            ## specified value.\n\
-            set_for_entity! : {name}, Entity.Id => Result {{}} Str\n\
-            set_for_entity! = |value, entity_id|\n    \
-                Entity.new_component_data |> add(value) |> Entity.update!(entity_id)\n\
             ",
             type_id = ty.ty.id.as_u64(),
             name = ty.ty.name,
         )?;
+
+        if ty.serialized_size > 0 {
+            writeln!(
+                roc_code,
+                "\
+                ## Reads the component from the given entity data. \n\
+                read : Entity.ComponentData -> Result {name} Str\n\
+                read = |data|\n    \
+                    Entity.read_component(data, component_id, from_bytes)\n    \
+                    |> Result.map_err(\n        \
+                        |err|\n            \
+                            when err is\n                \
+                                ComponentMissing -> \"No {name} component in data\"\n                \
+                                Decode(decode_err) -> \"Failed to decode {name} component: ${{Inspect.to_str(decode_err)}}\",\n    \
+                    )\n\
+                \n\
+                ## Fetches the value of this component for the given entity.\n\
+                get_for_entity! : Entity.Id => Result {name} Str\n\
+                get_for_entity! = |entity_id|\n    \
+                    Entity.get_component!(entity_id, component_id)? |> read\n\
+                \n\
+                ## Sets the value of this component for the given entity to the\n\
+                ## specified value.\n\
+                set_for_entity! : {name}, Entity.Id => Result {{}} Str\n\
+                set_for_entity! = |value, entity_id|\n    \
+                    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)\n\
+                ",
+                name = ty.ty.name,
+            )?;
+        }
     }
 
     writeln!(
