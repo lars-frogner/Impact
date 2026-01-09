@@ -3,7 +3,7 @@
 use super::OrientationController;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{quaternion::UnitQuaternion, vector::UnitVector3};
-use impact_physics::quantities::{AngularVelocity, AngularVelocityP, Orientation};
+use impact_physics::quantities::{AngularVelocityP, Orientation};
 use roc_integration::roc;
 
 define_component_type! {
@@ -55,17 +55,8 @@ impl ControlledAngularVelocity {
         Self(AngularVelocityP::zero())
     }
 
-    /// Assigns a new controlled angular velocity and updates the given total
-    /// angular velocity to account for the change in controlled angular
-    /// velocity.
-    pub fn apply_new_controlled_angular_velocity(
-        &mut self,
-        new_control_angular_velocity: AngularVelocity,
-        total_angular_velocity: &mut AngularVelocity,
-    ) {
-        *total_angular_velocity =
-            &*total_angular_velocity - self.0.unpack() + &new_control_angular_velocity;
-        self.0 = new_control_angular_velocity.pack();
+    pub fn set_angular_velocity(&mut self, angular_velocity: AngularVelocityP) {
+        self.0 = angular_velocity;
     }
 }
 

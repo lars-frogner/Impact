@@ -81,15 +81,8 @@ impl ControlledVelocity {
         Self(VelocityP::zeros())
     }
 
-    /// Assigns a new controlled velocity and updates the given total velocity
-    /// to account for the change in controlled velocity.
-    pub fn apply_new_controlled_velocity(
-        &mut self,
-        new_controlled_velocity: Velocity,
-        total_velocity: &mut Velocity,
-    ) {
-        *total_velocity = *total_velocity - self.0.unpack() + new_controlled_velocity;
-        self.0 = new_controlled_velocity.pack();
+    pub fn set_velocity(&mut self, velocity: VelocityP) {
+        self.0 = velocity;
     }
 }
 
