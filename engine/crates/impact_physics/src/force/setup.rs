@@ -1,7 +1,5 @@
 //! Force setup and cleanup.
 
-use impact_geometry::ModelTransform;
-
 pub use crate::force::{
     constant_acceleration::ConstantAcceleration,
     detailed_drag::setup::{DetailedDragProperties, setup_detailed_drag_force},
@@ -22,6 +20,7 @@ use crate::{
     },
     rigid_body::DynamicRigidBodyID,
 };
+use impact_geometry::ModelTransform;
 
 pub fn setup_constant_acceleration(
     force_generator_manager: &mut ForceGeneratorManager,
@@ -131,4 +130,13 @@ pub fn setup_dynamic_kinematic_spring_force(
             anchor_2,
             spring: properties.spring,
         })
+}
+
+pub fn setup_dynamic_gravity(
+    force_generator_manager: &mut ForceGeneratorManager,
+    rigid_body_id: DynamicRigidBodyID,
+) {
+    force_generator_manager
+        .dynamic_gravity_manager_mut()
+        .include_body(rigid_body_id);
 }

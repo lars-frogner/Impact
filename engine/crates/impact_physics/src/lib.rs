@@ -29,7 +29,7 @@ use rigid_body::RigidBodyManager;
 pub fn perform_physics_step<C: Collidable>(
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &AnchorManager,
-    force_generator_manager: &ForceGeneratorManager,
+    force_generator_manager: &mut ForceGeneratorManager,
     motion_driver_manager: &MotionDriverManager,
     constraint_manager: &mut ConstraintManager,
     collision_world: &mut CollisionWorld<C>,
