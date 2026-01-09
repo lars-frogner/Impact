@@ -9,10 +9,11 @@ use impact_mesh::{
     setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_physics::{
-    inertia::InertialProperties,
+    inertia::{InertiaTensor, InertialProperties},
     quantities::Motion,
     rigid_body::{
-        self, DynamicRigidBodyID, KinematicRigidBodyID, setup::DynamicRigidBodySubstance,
+        self, DynamicRigidBodyID, KinematicRigidBodyID,
+        setup::{DynamicRigidBodyInertialProperties, DynamicRigidBodySubstance},
     },
 };
 use parking_lot::RwLock;
@@ -244,6 +245,49 @@ pub fn setup_rigid_bodies_for_new_entities(
             (rigid_body_id, model_transform, frame, motion)
         },
         [HemisphereMesh],
+        ![DynamicRigidBodyID]
+    );
+
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+        },
+        components,
+        |inertial_properties: &DynamicRigidBodyInertialProperties,
+         model_transform: Option<&ModelTransform>,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let mass = inertial_properties.mass;
+            let center_of_mass = inertial_properties.center_of_mass.unpack();
+            let inertia_tensor = inertial_properties.inertia_tensor.unpack();
+
+            let mut inertial_properties = InertialProperties::new(
+                mass,
+                center_of_mass,
+                InertiaTensor::from_matrix(inertia_tensor),
+            );
+            inertial_properties.scale(model_transform.scale);
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+                &mut rigid_body_manager,
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
+        },
         ![DynamicRigidBodyID]
     );
 
