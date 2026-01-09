@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub enum InstrumentationCommand {
+pub enum InstrumentationAdminCommand {
     SetTaskTimings(ToActiveState),
     SetRenderPassTimings(ToActiveState),
 }

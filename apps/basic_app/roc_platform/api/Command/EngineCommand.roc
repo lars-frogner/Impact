@@ -1,5 +1,5 @@
-# Hash: e936201debc34465
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: 3f657ed7fbef595c
+# Generated: 2026-01-09T09:56:19.828243274
 # Rust type: impact::command::UserCommand
 # Type category: Inline
 module [
@@ -8,12 +8,12 @@ module [
     from_bytes,
 ]
 
-import Command.ControllerCommand
+import Command.ControlCommand
 import Command.SceneCommand
 
 EngineCommand : [
     Scene Command.SceneCommand.SceneCommand,
-    Controller Command.ControllerCommand.ControllerCommand,
+    Controller Command.ControlCommand.ControlCommand,
 ]
 
 ## Serializes a value of [EngineCommand] into the binary representation
@@ -31,7 +31,7 @@ write_bytes = |bytes, value|
             bytes
             |> List.reserve(18)
             |> List.append(1)
-            |> Command.ControllerCommand.write_bytes(val)
+            |> Command.ControlCommand.write_bytes(val)
             |> List.concat(List.repeat(0, 12))
 
 ## Deserializes a value of [EngineCommand] from its bytes in the
@@ -52,7 +52,7 @@ from_bytes = |bytes|
             [1, .. as data_bytes] ->
                 Ok(
                     Controller(
-                        data_bytes |> List.sublist({ start: 0, len: 5 }) |> Command.ControllerCommand.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 5 }) |> Command.ControlCommand.from_bytes?,
                     ),
                 )
 

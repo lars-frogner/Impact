@@ -1,9 +1,9 @@
-# Hash: fe8e549ba3b5b953
-# Generated: 2026-01-01T09:41:16.584947407
-# Rust type: impact::command::controller::ControllerCommand
+# Hash: 8b2b754f73211f2b
+# Generated: 2026-01-09T09:58:26.965832911
+# Rust type: impact::command::controller::ControlCommand
 # Type category: Inline
 module [
-    ControllerCommand,
+    ControlCommand,
     write_bytes,
     from_bytes,
 ]
@@ -12,7 +12,7 @@ import Control.MotionDirection
 import Control.MotionState
 import core.Builtin
 
-ControllerCommand : [
+ControlCommand : [
     SetMotion {
             state : Control.MotionState.MotionState,
             direction : Control.MotionDirection.MotionDirection,
@@ -21,9 +21,9 @@ ControllerCommand : [
     SetMovementSpeed F32,
 ]
 
-## Serializes a value of [ControllerCommand] into the binary representation
+## Serializes a value of [ControlCommand] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, ControllerCommand -> List U8
+write_bytes : List U8, ControlCommand -> List U8
 write_bytes = |bytes, value|
     when value is
         SetMotion { state, direction } ->
@@ -46,9 +46,9 @@ write_bytes = |bytes, value|
             |> List.append(2)
             |> Builtin.write_bytes_f32(val)
 
-## Deserializes a value of [ControllerCommand] from its bytes in the
+## Deserializes a value of [ControlCommand] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result ControllerCommand _
+from_bytes : List U8 -> Result ControlCommand _
 from_bytes = |bytes|
     if List.len(bytes) != 5 then
         Err(InvalidNumberOfBytes)

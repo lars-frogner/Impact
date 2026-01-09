@@ -6,8 +6,8 @@ use crate::UserInterfaceConfig;
 use impact::{
     command::{
         AdminCommand,
-        capture::{CaptureCommand, SaveShadowMapsFor},
-        rendering::RenderingCommand,
+        capture::{CaptureAdminCommand, SaveShadowMapsFor},
+        rendering::RenderingAdminCommand,
         rendering::postprocessing::ToRenderAttachmentQuantity,
         uils::ToActiveState,
     },
@@ -321,9 +321,9 @@ impl RenderingOptionPanel {
 fn shadow_mapping_options(ui: &mut Ui, engine: &Engine) {
     let mut enabled = engine.shadow_mapping_enabled();
     if option_checkbox(ui, &mut enabled, shadow_mapping::docs::ENABLED).changed() {
-        engine.enqueue_admin_command(AdminCommand::Rendering(RenderingCommand::SetShadowMapping(
-            ToActiveState::from_enabled(enabled),
-        )));
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingAdminCommand::SetShadowMapping(ToActiveState::from_enabled(enabled)),
+        ));
     }
 }
 
@@ -383,7 +383,7 @@ fn ambient_occlusion_options(ui: &mut Ui, engine: &Engine) {
 
     if config_changed {
         engine.enqueue_admin_command(AdminCommand::Rendering(
-            RenderingCommand::SetAmbientOcclusionConfig(config),
+            RenderingAdminCommand::SetAmbientOcclusionConfig(config),
         ));
     }
 }
@@ -430,7 +430,7 @@ fn temporal_anti_aliasing_options(ui: &mut Ui, engine: &Engine) {
 
     if config_changed {
         engine.enqueue_admin_command(AdminCommand::Rendering(
-            RenderingCommand::SetTemporalAntiAliasingConfig(config),
+            RenderingAdminCommand::SetTemporalAntiAliasingConfig(config),
         ));
     }
 }
@@ -543,7 +543,9 @@ fn camera_options(ui: &mut Ui, engine: &Engine) {
                 );
 
                 engine.enqueue_admin_command(AdminCommand::Rendering(
-                    RenderingCommand::SetAverageLuminanceComputationConfig(avg_luminance_config),
+                    RenderingAdminCommand::SetAverageLuminanceComputationConfig(
+                        avg_luminance_config,
+                    ),
                 ));
             }
         }
@@ -597,7 +599,7 @@ fn camera_options(ui: &mut Ui, engine: &Engine) {
 
     if settings_changed {
         engine.enqueue_admin_command(AdminCommand::Rendering(
-            RenderingCommand::SetCameraSettings(settings),
+            RenderingAdminCommand::SetCameraSettings(settings),
         ));
     }
 }
@@ -648,9 +650,9 @@ fn bloom_options(ui: &mut Ui, engine: &Engine) {
     }
 
     if config_changed {
-        engine.enqueue_admin_command(AdminCommand::Rendering(RenderingCommand::SetBloomConfig(
-            config,
-        )));
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingAdminCommand::SetBloomConfig(config),
+        ));
     }
 }
 
@@ -701,7 +703,7 @@ fn dynamic_range_compression_options(ui: &mut Ui, engine: &Engine) {
 
     if config_changed {
         engine.enqueue_admin_command(AdminCommand::Rendering(
-            RenderingCommand::SetDynamicRangeCompressionConfig(config),
+            RenderingAdminCommand::SetDynamicRangeCompressionConfig(config),
         ));
     }
 }
@@ -709,9 +711,9 @@ fn dynamic_range_compression_options(ui: &mut Ui, engine: &Engine) {
 fn wireframe_options(ui: &mut Ui, engine: &Engine) {
     let mut enabled = engine.basic_rendering_config().wireframe_mode_on;
     if option_checkbox(ui, &mut enabled, wireframe::docs::ENABLED).changed() {
-        engine.enqueue_admin_command(AdminCommand::Rendering(RenderingCommand::SetWireframeMode(
-            ToActiveState::from_enabled(enabled),
-        )));
+        engine.enqueue_admin_command(AdminCommand::Rendering(
+            RenderingAdminCommand::SetWireframeMode(ToActiveState::from_enabled(enabled)),
+        ));
     }
 }
 
@@ -741,16 +743,16 @@ fn render_attachment_options(ui: &mut Ui, engine: &Engine) {
     if quantity != original_quantity {
         if let Some(q) = quantity {
             engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetRenderAttachmentVisualization(ToActiveState::Enabled),
+                RenderingAdminCommand::SetRenderAttachmentVisualization(ToActiveState::Enabled),
             ));
             engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetVisualizedRenderAttachmentQuantity(
+                RenderingAdminCommand::SetVisualizedRenderAttachmentQuantity(
                     ToRenderAttachmentQuantity::Specific(q),
                 ),
             ));
         } else {
             engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetRenderAttachmentVisualization(ToActiveState::Disabled),
+                RenderingAdminCommand::SetRenderAttachmentVisualization(ToActiveState::Disabled),
             ));
         }
     }
@@ -770,20 +772,20 @@ fn capture_options(
     ui.end_row();
 
     if ui.button(capture::docs::SCREENSHOT).clicked() {
-        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveScreenshot));
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveScreenshot));
         *screenshot_requested = true;
     }
     ui.end_row();
 
     if ui.button(capture::docs::SHADOW_CUBEMAP).clicked() {
-        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveShadowMaps(
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveShadowMaps(
             SaveShadowMapsFor::OmnidirectionalLight,
         )));
     }
     ui.end_row();
 
     if ui.button(capture::docs::CASCADED_SHADOW_MAP).clicked() {
-        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveShadowMaps(
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveShadowMaps(
             SaveShadowMapsFor::UnidirectionalLight,
         )));
     }

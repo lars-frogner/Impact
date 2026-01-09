@@ -471,55 +471,57 @@ impl Engine {
     pub(crate) fn execute_enqueued_controller_commands(&self) -> Result<()> {
         self.command_queues
             .controller
-            .try_execute_commands(|command| command::execute_controller_command(self, command))
+            .try_execute_commands(|command| command::execute_control_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_rendering_commands(&self) -> Result<()> {
         self.command_queues
             .rendering
-            .try_execute_commands(|command| command::execute_rendering_command(self, command))
+            .try_execute_commands(|command| command::execute_rendering_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_physics_commands(&self) -> Result<()> {
         self.command_queues
             .physics
-            .try_execute_commands(|command| command::execute_physics_command(self, command))
+            .try_execute_commands(|command| command::execute_physics_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_control_commands(&self) -> Result<()> {
         self.command_queues
             .control
-            .try_execute_commands(|command| command::execute_control_command(self, command))
+            .try_execute_commands(|command| command::execute_control_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_capture_commands(&self) -> Result<()> {
         self.command_queues
             .capture
-            .try_execute_commands(|command| command::execute_capture_command(self, command))
+            .try_execute_commands(|command| command::execute_capture_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_instrumentation_commands(&self) -> Result<()> {
         self.command_queues
             .instrumentation
-            .try_execute_commands(|command| command::execute_instrumentation_command(self, command))
+            .try_execute_commands(|command| {
+                command::execute_instrumentation_admin_command(self, command)
+            })
     }
 
     pub(crate) fn execute_enqueued_game_loop_commands(&self) -> Result<()> {
         self.command_queues
             .game_loop
-            .try_execute_commands(|command| command::execute_game_loop_command(self, command))
+            .try_execute_commands(|command| command::execute_game_loop_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_gizmo_commands(&self) -> Result<()> {
         self.command_queues
             .gizmo
-            .try_execute_commands(|command| command::execute_gizmo_command(self, command))
+            .try_execute_commands(|command| command::execute_gizmo_admin_command(self, command))
     }
 
     pub(crate) fn execute_enqueued_system_commands(&self) -> Result<()> {
         self.command_queues
             .system
-            .try_execute_commands(|command| command::execute_system_command(self, command))
+            .try_execute_commands(|command| command::execute_system_admin_command(self, command))
     }
 
     /// Identifies errors that need special handling in the given set of task

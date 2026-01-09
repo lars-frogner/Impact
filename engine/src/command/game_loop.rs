@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub enum GameLoopCommand {
+pub enum GameLoopAdminCommand {
     SetGameLoop(ToActiveState),
 }
 
