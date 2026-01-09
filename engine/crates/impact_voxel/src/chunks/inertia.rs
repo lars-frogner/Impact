@@ -267,7 +267,9 @@ impl VoxelObjectInertialPropertyManager {
         // the inertia matrix to improve numerical stability
         let scaled_inertia_tensor_matrix = inverse_mass * com_inertia_tensor_matrix;
         let inverse_scaled_inertia_tensor_matrix = scaled_inertia_tensor_matrix.inverse();
-        let inverse_com_inertia_tensor_matrix = mass * inverse_scaled_inertia_tensor_matrix;
+        // Since we divided by mass and then inverted, we must divide by mass
+        // again to remove the mass scaling
+        let inverse_com_inertia_tensor_matrix = inverse_mass * inverse_scaled_inertia_tensor_matrix;
 
         debug_assert!(inverse_com_inertia_tensor_matrix.determinant().is_finite());
 
