@@ -3,7 +3,7 @@ use crate::UserInterfaceConfig;
 use impact::{
     command::{
         AdminCommand,
-        physics::{PhysicsCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
+        physics::{PhysicsAdminCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
         uils::ToActiveState,
     },
     egui::{Context, Slider, Ui},
@@ -130,7 +130,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut 
     } else if option_checkbox(ui, &mut simulator_config.enabled, simulation::docs::ENABLED)
         .changed()
     {
-        engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
+        engine.enqueue_admin_command(AdminCommand::Physics(PhysicsAdminCommand::SetSimulation(
             ToActiveState::from_enabled(simulator_config.enabled),
         )));
     }
@@ -144,9 +144,9 @@ fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut 
 
         if ui.button("Step").clicked() {
             // Enable simulation and mark that we requested a single step
-            engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
-                ToActiveState::from_enabled(true),
-            )));
+            engine.enqueue_admin_command(AdminCommand::Physics(
+                PhysicsAdminCommand::SetSimulation(ToActiveState::from_enabled(true)),
+            ));
             *single_step_requested = true;
         }
         ui.end_row();
@@ -160,7 +160,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut 
     .changed()
     {
         engine.enqueue_admin_command(AdminCommand::Physics(
-            PhysicsCommand::SetMatchFrameDuration(ToActiveState::from_enabled(
+            PhysicsAdminCommand::SetMatchFrameDuration(ToActiveState::from_enabled(
                 simulator_config.match_frame_duration,
             )),
         ));
@@ -178,7 +178,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut 
         .changed()
         {
             engine.enqueue_admin_command(AdminCommand::Physics(
-                PhysicsCommand::SetSimulationSpeed(ToSimulationSpeedMultiplier::Specific(
+                PhysicsAdminCommand::SetSimulationSpeed(ToSimulationSpeedMultiplier::Specific(
                     speed_multiplier,
                 )),
             ));
@@ -199,7 +199,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut 
         .changed()
         {
             engine.enqueue_admin_command(AdminCommand::Physics(
-                PhysicsCommand::SetTimeStepDuration(time_step_duration),
+                PhysicsAdminCommand::SetTimeStepDuration(time_step_duration),
             ));
         }
     }
@@ -215,7 +215,7 @@ fn simulation_options(ui: &mut Ui, engine: &Engine, single_step_requested: &mut 
     .changed()
     {
         engine.enqueue_admin_command(AdminCommand::Physics(
-            PhysicsCommand::SetSimulationSubstepCount(ToSubstepCount::Specific(
+            PhysicsAdminCommand::SetSimulationSubstepCount(ToSubstepCount::Specific(
                 simulator_config.n_substeps,
             )),
         ));
@@ -291,7 +291,7 @@ fn constraint_solving_options(ui: &mut Ui, engine: &Engine) {
 
     if config_changed {
         engine.enqueue_admin_command(AdminCommand::Physics(
-            PhysicsCommand::SetConstraintSolverConfig(constraint_solver_config.clone()),
+            PhysicsAdminCommand::SetConstraintSolverConfig(constraint_solver_config.clone()),
         ));
     }
 }

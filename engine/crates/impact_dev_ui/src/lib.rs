@@ -13,8 +13,9 @@ pub use command::{UICommand, UICommandQueue};
 use anyhow::Result;
 use impact::{
     command::{
-        AdminCommand, controller::ControlCommand, instrumentation::InstrumentationCommand,
-        physics::PhysicsCommand, uils::ToActiveState,
+        AdminCommand, controller::ControlAdminCommand,
+        instrumentation::InstrumentationAdminCommand, physics::PhysicsAdminCommand,
+        uils::ToActiveState,
     },
     egui::{Context, FullOutput, RawInput, Ui},
     engine::Engine,
@@ -78,16 +79,16 @@ impl UserInterface {
     }
 
     pub fn setup(&self, engine: &Engine) {
-        engine.enqueue_admin_command(AdminCommand::Control(ControlCommand::SetControls(
+        engine.enqueue_admin_command(AdminCommand::Control(ControlAdminCommand::SetControls(
             ToActiveState::from_enabled(!self.config.interactive),
         )));
         engine.enqueue_admin_command(AdminCommand::Instrumentation(
-            InstrumentationCommand::SetTaskTimings(ToActiveState::from_enabled(
+            InstrumentationAdminCommand::SetTaskTimings(ToActiveState::from_enabled(
                 self.config.show_task_timings,
             )),
         ));
         engine.enqueue_admin_command(AdminCommand::Instrumentation(
-            InstrumentationCommand::SetRenderPassTimings(ToActiveState::from_enabled(
+            InstrumentationAdminCommand::SetRenderPassTimings(ToActiveState::from_enabled(
                 self.config.show_render_pass_timings,
             )),
         ));
@@ -161,9 +162,9 @@ impl UserInterface {
             // previous frame
             if single_step_was_requested {
                 self.single_step_requested = false;
-                engine.enqueue_admin_command(AdminCommand::Physics(PhysicsCommand::SetSimulation(
-                    ToActiveState::from_enabled(false),
-                )));
+                engine.enqueue_admin_command(AdminCommand::Physics(
+                    PhysicsAdminCommand::SetSimulation(ToActiveState::from_enabled(false)),
+                ));
             }
         });
 

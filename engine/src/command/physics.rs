@@ -9,7 +9,7 @@ use crate::{
 use impact_physics::constraint::solver::ConstraintSolverConfig;
 
 #[derive(Clone, Debug)]
-pub enum PhysicsCommand {
+pub enum PhysicsAdminCommand {
     SetSimulation(ToActiveState),
     SetSimulationSubstepCount(ToSubstepCount),
     SetSimulationSpeed(ToSimulationSpeedMultiplier),

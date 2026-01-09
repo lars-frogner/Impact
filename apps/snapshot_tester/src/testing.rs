@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use impact::{
     command::{
         AdminCommand,
-        rendering::{RenderingCommand, postprocessing::ToToneMappingMethod},
+        rendering::{RenderingAdminCommand, postprocessing::ToToneMappingMethod},
         uils::ToActiveState,
     },
     engine::Engine,
@@ -74,22 +74,24 @@ impl TestScene {
             Self::ShadowCubeMapping
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
-            | Self::SoftCascadedShadowMapping => engine.enqueue_admin_command(
-                AdminCommand::Rendering(RenderingCommand::SetShadowMapping(ToActiveState::Enabled)),
-            ),
+            | Self::SoftCascadedShadowMapping => {
+                engine.enqueue_admin_command(AdminCommand::Rendering(
+                    RenderingAdminCommand::SetShadowMapping(ToActiveState::Enabled),
+                ));
+            }
             Self::AmbientOcclusion => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetAmbientOcclusion(ToActiveState::Enabled),
+                RenderingAdminCommand::SetAmbientOcclusion(ToActiveState::Enabled),
             )),
             Self::Bloom => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetBloom(ToActiveState::Enabled),
+                RenderingAdminCommand::SetBloom(ToActiveState::Enabled),
             )),
             Self::ACESToneMapping => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
+                RenderingAdminCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                     ToneMappingMethod::ACES,
                 )),
             )),
             Self::KhronosPBRNeutralToneMapping => engine.enqueue_admin_command(
-                AdminCommand::Rendering(RenderingCommand::SetToneMappingMethod(
+                AdminCommand::Rendering(RenderingAdminCommand::SetToneMappingMethod(
                     ToToneMappingMethod::Specific(ToneMappingMethod::KhronosPBRNeutral),
                 )),
             ),
@@ -108,18 +110,18 @@ impl TestScene {
             | Self::CascadedShadowMapping
             | Self::SoftCascadedShadowMapping => {
                 engine.enqueue_admin_command(AdminCommand::Rendering(
-                    RenderingCommand::SetShadowMapping(ToActiveState::Disabled),
+                    RenderingAdminCommand::SetShadowMapping(ToActiveState::Disabled),
                 ));
             }
             Self::AmbientOcclusion => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetAmbientOcclusion(ToActiveState::Disabled),
+                RenderingAdminCommand::SetAmbientOcclusion(ToActiveState::Disabled),
             )),
             Self::Bloom => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingCommand::SetBloom(ToActiveState::Disabled),
+                RenderingAdminCommand::SetBloom(ToActiveState::Disabled),
             )),
             Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine
                 .enqueue_admin_command(AdminCommand::Rendering(
-                    RenderingCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
+                    RenderingAdminCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                         ToneMappingMethod::None,
                     )),
                 )),

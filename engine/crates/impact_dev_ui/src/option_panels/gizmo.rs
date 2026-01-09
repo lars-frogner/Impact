@@ -1,7 +1,7 @@
 use super::{LabelAndHoverText, option_checkbox, option_group, option_panel, option_slider};
 use crate::UserInterfaceConfig;
 use impact::{
-    command::{AdminCommand, gizmo::GizmoCommand},
+    command::{AdminCommand, gizmo::GizmoAdminCommand},
     egui::{Context, Response, Slider, Ui},
     engine::Engine,
     gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
@@ -133,7 +133,7 @@ fn gizmo_options(ui: &mut Ui, engine: &Engine) {
                 GizmoVisibility::Hidden
             };
 
-            engine.enqueue_admin_command(AdminCommand::Gizmo(GizmoCommand::SetVisibility {
+            engine.enqueue_admin_command(AdminCommand::Gizmo(GizmoAdminCommand::SetVisibility {
                 gizmo_type: gizmo,
                 visibility,
             }));
@@ -147,7 +147,7 @@ fn gizmo_options(ui: &mut Ui, engine: &Engine) {
     }
 
     if parameters_changed {
-        engine.enqueue_admin_command(AdminCommand::Gizmo(GizmoCommand::SetParameters(
+        engine.enqueue_admin_command(AdminCommand::Gizmo(GizmoAdminCommand::SetParameters(
             gizmo_parameters,
         )));
     }

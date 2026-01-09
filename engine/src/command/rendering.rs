@@ -26,7 +26,7 @@ use parking_lot::RwLock;
 use postprocessing::{ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod};
 
 #[derive(Clone, Debug)]
-pub enum RenderingCommand {
+pub enum RenderingAdminCommand {
     SetAmbientOcclusion(ToActiveState),
     SetAmbientOcclusionConfig(AmbientOcclusionConfig),
     SetTemporalAntiAliasing(ToActiveState),

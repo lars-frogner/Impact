@@ -2,7 +2,9 @@
 
 use super::UserInterface;
 use impact::{
-    command::{AdminCommand, controller::ControlCommand, queue::CommandQueue, uils::ToActiveState},
+    command::{
+        AdminCommand, controller::ControlAdminCommand, queue::CommandQueue, uils::ToActiveState,
+    },
     egui::FullOutput,
     engine::Engine,
     ui,
@@ -34,7 +36,7 @@ impl UserInterface {
                         ui::egui::confine_cursor(output);
                     }
                     engine.enqueue_admin_command(AdminCommand::Control(
-                        ControlCommand::SetControls(ToActiveState::from_enabled(
+                        ControlAdminCommand::SetControls(ToActiveState::from_enabled(
                             !self.config.interactive,
                         )),
                     ));

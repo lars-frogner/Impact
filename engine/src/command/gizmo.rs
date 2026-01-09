@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub enum GizmoCommand {
+pub enum GizmoAdminCommand {
     SetVisibility {
         gizmo_type: GizmoType,
         visibility: GizmoVisibility,

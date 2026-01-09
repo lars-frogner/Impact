@@ -7,7 +7,7 @@ use roc_integration::roc;
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
-pub enum ControllerCommand {
+pub enum ControlCommand {
     SetMotion {
         state: MotionState,
         direction: MotionDirection,
@@ -17,11 +17,11 @@ pub enum ControllerCommand {
 }
 
 #[derive(Clone, Debug)]
-pub enum ControlCommand {
+pub enum ControlAdminCommand {
     SetControls(ToActiveState),
 }
 
-impl PartialEq for ControllerCommand {
+impl PartialEq for ControlCommand {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
@@ -41,7 +41,7 @@ impl PartialEq for ControllerCommand {
     }
 }
 
-impl Eq for ControllerCommand {}
+impl Eq for ControlCommand {}
 
 pub fn set_motion(engine: &Engine, state: MotionState, direction: MotionDirection) {
     if engine.controls_enabled() {

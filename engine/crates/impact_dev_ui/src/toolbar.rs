@@ -1,6 +1,6 @@
 use crate::{CustomPanels, UserInterfaceConfig};
 use impact::{
-    command::{AdminCommand, instrumentation::InstrumentationCommand, uils::ToActiveState},
+    command::{AdminCommand, instrumentation::InstrumentationAdminCommand, uils::ToActiveState},
     egui::{Context, DragValue, Frame, TopBottomPanel},
     engine::Engine,
 };
@@ -40,9 +40,9 @@ impl Toolbar {
                         .changed()
                     {
                         engine.enqueue_admin_command(AdminCommand::Instrumentation(
-                            InstrumentationCommand::SetTaskTimings(ToActiveState::from_enabled(
-                                config.show_task_timings,
-                            )),
+                            InstrumentationAdminCommand::SetTaskTimings(
+                                ToActiveState::from_enabled(config.show_task_timings),
+                            ),
                         ));
                     }
 
@@ -51,7 +51,7 @@ impl Toolbar {
                         .changed()
                     {
                         engine.enqueue_admin_command(AdminCommand::Instrumentation(
-                            InstrumentationCommand::SetRenderPassTimings(
+                            InstrumentationAdminCommand::SetRenderPassTimings(
                                 ToActiveState::from_enabled(config.show_render_pass_timings),
                             ),
                         ));

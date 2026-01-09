@@ -3,7 +3,7 @@
 use crate::rendering::screen_capture::ScreenCapturer;
 
 #[derive(Clone, Debug)]
-pub enum CaptureCommand {
+pub enum CaptureAdminCommand {
     SaveScreenshot,
     SaveShadowMaps(SaveShadowMapsFor),
 }

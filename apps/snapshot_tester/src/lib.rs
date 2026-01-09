@@ -13,7 +13,7 @@ use anyhow::{Context, Result, bail};
 use dynamic_lib::DynamicLibrary;
 use impact::{
     application::Application,
-    command::{AdminCommand, SystemCommand, capture::CaptureCommand},
+    command::{AdminCommand, SystemAdminCommand, capture::CaptureAdminCommand},
     engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
@@ -133,7 +133,7 @@ impl Application for SnapshotTester {
 
         if self.test_scenes.is_empty() {
             log::info!("No scenes to test, exiting");
-            engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));
+            engine.enqueue_admin_command(AdminCommand::System(SystemAdminCommand::Shutdown));
             return Ok(());
         }
 
@@ -146,7 +146,7 @@ impl Application for SnapshotTester {
 
         if frame == self.test_scenes.len() {
             // All scenes have been rendered and captured
-            engine.enqueue_admin_command(AdminCommand::System(SystemCommand::Shutdown));
+            engine.enqueue_admin_command(AdminCommand::System(SystemAdminCommand::Shutdown));
             return Ok(());
         }
 
@@ -165,7 +165,7 @@ impl Application for SnapshotTester {
         scripting::setup_scene(scene)?;
 
         // Request a capture for this frame
-        engine.enqueue_admin_command(AdminCommand::Capture(CaptureCommand::SaveScreenshot));
+        engine.enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveScreenshot));
 
         Ok(())
     }
