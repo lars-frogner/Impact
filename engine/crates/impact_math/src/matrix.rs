@@ -21,6 +21,7 @@ use std::{fmt, ops::Mul};
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix3 {
     inner: glam::Mat3A,
@@ -37,6 +38,7 @@ pub struct Matrix3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 9]", from = "[f32; 9]")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix3P {
     column_1: Vector3P,
@@ -55,6 +57,7 @@ pub struct Matrix3P {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix4 {
     inner: glam::Mat4,
@@ -71,6 +74,7 @@ pub struct Matrix4 {
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 16]", from = "[f32; 16]")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Matrix4P {
     column_1: Vector4P,

@@ -21,6 +21,7 @@ use std::{fmt, ops::Mul};
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, PartialEq, Zeroable, Pod)]
 pub struct Quaternion {
     inner: glam::Quat,
@@ -37,6 +38,7 @@ pub struct Quaternion {
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 4]", from = "[f32; 4]")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
 pub struct QuaternionP {
     imag: Vector3P,

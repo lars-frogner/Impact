@@ -13,6 +13,7 @@ use std::ops::{Deref, Index, IndexMut, Mul, MulAssign};
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector2 {
     inner: glam::Vec2,
@@ -29,6 +30,7 @@ pub struct Vector2 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector3 {
     inner: glam::Vec3A,
@@ -45,6 +47,7 @@ pub struct Vector3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 3]", from = "[f32; 3]")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector3P {
     x: f32,
@@ -98,6 +101,7 @@ pub struct UnitVector3P {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector4 {
     inner: glam::Vec4,
@@ -114,6 +118,7 @@ pub struct Vector4 {
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 4]", from = "[f32; 4]")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Vector4P {
     x: f32,
