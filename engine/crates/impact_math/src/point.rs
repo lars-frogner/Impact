@@ -15,6 +15,7 @@ use std::{
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Point2 {
     inner: glam::Vec2,
@@ -31,6 +32,7 @@ pub struct Point2 {
     derive(serde::Serialize, serde::Deserialize),
     serde(transparent)
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Default, PartialEq, Zeroable, Pod)]
 pub struct Point3 {
     inner: glam::Vec3A,
@@ -47,6 +49,7 @@ pub struct Point3 {
     derive(serde::Serialize, serde::Deserialize),
     serde(into = "[f32; 3]", from = "[f32; 3]")
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
 pub struct Point3P {
     x: f32,
