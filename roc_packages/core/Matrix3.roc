@@ -1,5 +1,7 @@
 module [
     Matrix3,
+    identity,
+    diagonal,
     map,
     map2,
     add,
@@ -15,6 +17,12 @@ import Builtin
 import Vector3 exposing [Vector3]
 
 Matrix3 : (Vector3, Vector3, Vector3)
+
+identity = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+
+diagonal : Vector3 -> Matrix3
+diagonal = |diag|
+    ((diag.0, 0, 0), (0, diag.1, 0), (0, 0, diag.2))
 
 map : Matrix3, (F32 -> F32) -> Matrix3
 map = |mat, f|
