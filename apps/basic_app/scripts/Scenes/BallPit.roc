@@ -13,10 +13,11 @@ import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
 import core.Vector3
 import pf.Comp.AmbientEmission
 import pf.Setup.ConstantRotation
-import pf.Comp.ControlledVelocity
+import pf.Comp.VelocityControl
 import pf.Setup.NormalMap
 import pf.Comp.OmnidirectionalEmission
-import pf.Comp.ControlledAngularVelocity
+import pf.Comp.AngularVelocityControl
+import pf.Control.AngularVelocityControlDirections
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
@@ -78,8 +79,10 @@ player =
         UnitQuaternion.from_axis_angle(y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.ControlledVelocity.add_new
-    |> Comp.ControlledAngularVelocity.add_new
+    |> Comp.VelocityControl.add
+    |> Comp.AngularVelocityControl.add_new(
+        Control.AngularVelocityControlDirections.all,
+    )
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 sun_light =

@@ -3,15 +3,15 @@
 use super::{MotionChanged, MotionController};
 use approx::{abs_diff_eq, assert_abs_diff_ne};
 use bytemuck::{Pod, Zeroable};
-use impact_physics::quantities::{Orientation, Velocity, VelocityP};
+use impact_physics::quantities::{Orientation, Velocity};
 use roc_integration::roc;
 
 define_component_type! {
-    /// Velocity controller by a user.
+    /// User control of velocity.
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ControlledVelocity(VelocityP);
+    pub struct VelocityControl;
 }
 
 /// Motion controller allowing for motion at constant speed along the axes of an
@@ -71,25 +71,6 @@ struct SemiDirectionalMotionState {
     left: MotionState,
     up: MotionState,
     down: MotionState,
-}
-
-#[roc]
-impl ControlledVelocity {
-    /// Creates a new controlled velocity.
-    #[roc(body = "(Vector3.zero,)")]
-    pub fn new() -> Self {
-        Self(VelocityP::zeros())
-    }
-
-    pub fn set_velocity(&mut self, velocity: VelocityP) {
-        self.0 = velocity;
-    }
-}
-
-impl Default for ControlledVelocity {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl SemiDirectionalMotionController {

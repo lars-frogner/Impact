@@ -9,8 +9,9 @@ import core.UnitVector3
 import core.Vector3
 import pf.Entity
 import pf.Comp.AmbientEmission
-import pf.Comp.ControlledVelocity
-import pf.Comp.ControlledAngularVelocity
+import pf.Comp.VelocityControl
+import pf.Comp.AngularVelocityControl
+import pf.Control.AngularVelocityControlDirections
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
 import pf.Comp.ShadowableOmnidirectionalEmission
@@ -38,8 +39,10 @@ camera =
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, -0.4),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.ControlledVelocity.add_new
-    |> Comp.ControlledAngularVelocity.add_new
+    |> Comp.VelocityControl.add
+    |> Comp.AngularVelocityControl.add_new(
+        Control.AngularVelocityControlDirections.all,
+    )
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 ## Key light (directional) – strong, angled from above-right

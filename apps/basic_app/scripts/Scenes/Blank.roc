@@ -10,8 +10,9 @@ import core.UnitVector3
 import core.Vector3
 import pf.Entity
 import pf.Comp.AmbientEmission
-import pf.Comp.ControlledVelocity
-import pf.Comp.ControlledAngularVelocity
+import pf.Comp.VelocityControl
+import pf.Comp.AngularVelocityControl
+import pf.Control.AngularVelocityControlDirections
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
@@ -47,8 +48,10 @@ player =
         UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
     )
     |> Comp.Motion.add_stationary
-    |> Comp.ControlledVelocity.add_new
-    |> Comp.ControlledAngularVelocity.add_new
+    |> Comp.VelocityControl.add
+    |> Comp.AngularVelocityControl.add_new(
+        Control.AngularVelocityControlDirections.all,
+    )
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 ground =
