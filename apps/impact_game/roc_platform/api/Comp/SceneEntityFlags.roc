@@ -1,10 +1,11 @@
-# Hash: b7ee05742fe0b62a
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: f0d6da1485f7e86d
+# Generated: 2026-01-14T20:28:59.257020788
 # Rust type: impact_scene::SceneEntityFlags
 # Type category: Component
 module [
     SceneEntityFlags,
     empty,
+    all,
     is_disabled,
     casts_no_shadows,
     intersects,
@@ -32,6 +33,8 @@ import core.Builtin
 SceneEntityFlags := U8 implements [Eq]
 
 empty = @SceneEntityFlags(0)
+
+all = @SceneEntityFlags(3)
 
 is_disabled = @SceneEntityFlags(Num.shift_left_by(1, 0))
 
