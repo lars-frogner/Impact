@@ -1,10 +1,11 @@
-# Hash: 38ba72e7f5298303
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: 212d717a4164ecc5
+# Generated: 2026-01-14T20:28:59.257020788
 # Rust type: impact::input::mouse::MouseButtonSet
 # Type category: POD
 module [
     MouseButtonSet,
     empty,
+    all,
     left,
     right,
     middle,
@@ -23,6 +24,8 @@ import core.Builtin
 MouseButtonSet := U8 implements [Eq]
 
 empty = @MouseButtonSet(0)
+
+all = @MouseButtonSet(7)
 
 left = @MouseButtonSet(Num.shift_left_by(1, 0))
 

@@ -1045,6 +1045,14 @@ fn write_bitflags_type_declaration<const N: usize>(
     writeln!(roc_code, "empty = @{type_name}(0)\n")?;
     optional_exports.add("empty");
 
+    // Write all constant
+    writeln!(
+        roc_code,
+        "all = @{type_name}({})\n",
+        2_u32.pow(bitflags.0.len() as u32) - 1
+    )?;
+    optional_exports.add("all");
+
     // Write individual flag constants
     for flag in &bitflags.0 {
         let flag_name = flag.name.to_ascii_lowercase();
