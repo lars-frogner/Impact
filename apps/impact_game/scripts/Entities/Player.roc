@@ -21,7 +21,7 @@ import pf.Setup.CapsuleMesh
 import pf.Setup.DynamicRigidBodyInertialProperties
 import pf.Comp.AngularVelocityControl
 import pf.Control.AngularVelocityControlDirections
-import pf.Setup.Parent
+import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
@@ -149,7 +149,7 @@ player =
 
 player_body =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player)
+    |> Setup.SceneParent.add_new(entity_ids.player)
     |> Setup.CapsuleMesh.add_new(
         body_segment_length,
         body_radius,
@@ -160,7 +160,7 @@ player_body =
 
 player_head =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player)
+    |> Setup.SceneParent.add_new(entity_ids.player)
     |> Setup.SceneGraphGroup.add
     |> Comp.ReferenceFrame.add_new(
         (0.0, 0.5 * body_segment_length + body_radius, 1.2 * body_radius),
@@ -178,7 +178,7 @@ player_head =
 
 laser =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player_head)
+    |> Setup.SceneParent.add_new(entity_ids.player_head)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
@@ -201,7 +201,7 @@ laser =
 
 absorbing_sphere =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player_head)
+    |> Setup.SceneParent.add_new(entity_ids.player_head)
     |> Comp.ModelTransform.add_with_scale(2 * absorb_sphere_visual_radius)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, -3))
     |> Setup.SphereMesh.add_new(64)

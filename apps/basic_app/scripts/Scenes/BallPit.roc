@@ -18,7 +18,7 @@ import pf.Setup.NormalMap
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.AngularVelocityControl
 import pf.Control.AngularVelocityControlDirections
-import pf.Setup.Parent
+import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
 import pf.Setup.PlanarCollidable
@@ -243,7 +243,7 @@ create_room! = |extent, angular_speed, texture_ids|
 
     _ =
         Entity.new_multi_component_data(List.len(wall_ids_for_lights))
-        |> Setup.Parent.add_multiple_new(
+        |> Setup.SceneParent.add_multiple_new(
             All(wall_ids_for_lights),
         )?
         |> Comp.ModelTransform.add_multiple_with_scale(
