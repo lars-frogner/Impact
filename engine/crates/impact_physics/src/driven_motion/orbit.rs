@@ -392,11 +392,11 @@ mod tests {
 
     prop_compose! {
         fn orientation_strategy()(
-            rotation_roll in 0.0..TWO_PI,
-            rotation_pitch in -FRAC_PI_2..FRAC_PI_2,
-            rotation_yaw in 0.0..TWO_PI,
+            rotation_y in 0.0..TWO_PI,
+            rotation_x in -FRAC_PI_2..FRAC_PI_2,
+            rotation_z in 0.0..TWO_PI,
         ) -> OrientationP {
-            Orientation::from_euler_angles(rotation_roll, rotation_pitch, rotation_yaw).pack()
+            Orientation::from_euler_angles_extrinsic(rotation_y, rotation_x, rotation_z).pack()
         }
     }
 

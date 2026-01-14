@@ -311,16 +311,31 @@ impl UnitQuaternion {
         Self::wrap(glam::Quat::from_axis_angle(axis.unwrap().to_vec3(), angle))
     }
 
-    /// Creates a unit quaternion representing the rotation of the given Euler
-    /// angles (in radians) about the x- (`roll`), y- (`pitch`) and z-axis
-    /// (`yaw`), in that order.
+    /// Creates a unit quaternion representing a sequence of rotations about the
+    /// y-, x- and z-axis, in that order. Each rotation is with respect to the
+    /// rotated coordinate system (intrinsic). The given Euler angles must be in
+    /// radians.
     #[inline]
-    pub fn from_euler_angles(roll: f32, pitch: f32, yaw: f32) -> Self {
+    pub fn from_euler_angles_intrinsic(y_angle: f32, x_angle: f32, z_angle: f32) -> Self {
         Self::wrap(glam::Quat::from_euler(
-            glam::EulerRot::XYZ,
-            roll,
-            pitch,
-            yaw,
+            glam::EulerRot::YXZ,
+            y_angle,
+            x_angle,
+            z_angle,
+        ))
+    }
+
+    /// Creates a unit quaternion representing a sequence of rotations about the
+    /// y-, x- and z-axis, in that order. Each rotation is with respect to the
+    /// original fixed coordinate system (extrinsic). The given Euler angles
+    /// must be in radians.
+    #[inline]
+    pub fn from_euler_angles_extrinsic(y_angle: f32, x_angle: f32, z_angle: f32) -> Self {
+        Self::wrap(glam::Quat::from_euler(
+            glam::EulerRot::YXZEx,
+            y_angle,
+            x_angle,
+            z_angle,
         ))
     }
 
@@ -392,10 +407,21 @@ impl UnitQuaternion {
         self.axis_angle().1
     }
 
-    /// Computes the Euler angles of this rotation.
+    /// Decomposes the quaternion into a sequence of rotations about the y-, x-
+    /// and z-axis, in that order. Each rotation is with respect to the rotated
+    /// coordinate system (intrinsic). The returned Euler angles are in radians.
     #[inline]
-    pub fn euler_angles(&self) -> (f32, f32, f32) {
-        self.inner.to_euler(glam::EulerRot::XYZ)
+    pub fn euler_angles_intrinsic(&self) -> (f32, f32, f32) {
+        self.inner.to_euler(glam::EulerRot::YXZ)
+    }
+
+    /// Decomposes the quaternion into a sequence of rotations about the y-, x-
+    /// and z-axis, in that order. Each rotation is with respect to the original
+    /// fixed coordinate system (extrinsic). The returned Euler angles are in
+    /// radians.
+    #[inline]
+    pub fn euler_angles_extrinsic(&self) -> (f32, f32, f32) {
+        self.inner.to_euler(glam::EulerRot::YXZEx)
     }
 
     /// Converts the quaternion to a 3x3 rotation matrix.
@@ -737,16 +763,23 @@ mod tests {
 
     #[test]
     fn unit_quaternion_euler_angles_roundtrip_preserves_angles() {
-        let roll = 0.1;
-        let pitch = 0.2;
-        let yaw = 0.3;
+        let y = 0.1;
+        let x = 0.2;
+        let z = 0.3;
 
-        let quat = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
-        let (extracted_roll, extracted_pitch, extracted_yaw) = quat.euler_angles();
+        let quat = UnitQuaternion::from_euler_angles_intrinsic(y, x, z);
+        let (extracted_y, extracted_x, extracted_z) = quat.euler_angles_intrinsic();
 
-        assert_abs_diff_eq!(extracted_roll, roll, epsilon = EPSILON);
-        assert_abs_diff_eq!(extracted_pitch, pitch, epsilon = EPSILON);
-        assert_abs_diff_eq!(extracted_yaw, yaw, epsilon = EPSILON);
+        assert_abs_diff_eq!(extracted_y, y, epsilon = EPSILON);
+        assert_abs_diff_eq!(extracted_x, x, epsilon = EPSILON);
+        assert_abs_diff_eq!(extracted_z, z, epsilon = EPSILON);
+
+        let quat = UnitQuaternion::from_euler_angles_extrinsic(y, x, z);
+        let (extracted_y, extracted_x, extracted_z) = quat.euler_angles_extrinsic();
+
+        assert_abs_diff_eq!(extracted_y, y, epsilon = EPSILON);
+        assert_abs_diff_eq!(extracted_x, x, epsilon = EPSILON);
+        assert_abs_diff_eq!(extracted_z, z, epsilon = EPSILON);
     }
 
     #[test]

@@ -855,7 +855,7 @@ mod tests {
 
         let transformation = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            UnitQuaternion::from_euler_angles(0.1, 0.2, 180.0),
+            UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 180.0),
             7.0,
         );
 
@@ -880,7 +880,7 @@ mod tests {
 
         let transformation = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            UnitQuaternion::from_euler_angles(0.1, 0.2, 180.0),
+            UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 180.0),
             7.0,
         );
 
@@ -900,7 +900,7 @@ mod tests {
 
         let transformation = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+            UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3),
             7.0,
         );
 
