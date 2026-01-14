@@ -49,10 +49,10 @@ pub fn set_motion(engine: &Engine, state: MotionState, direction: MotionDirectio
             log::debug!("Setting motion in direction {direction:?} to {state:?}");
             motion_controller.olock().update_motion(state, direction);
         } else {
-            log::info!("Not setting motion since there is no motion controller");
+            log::trace!("Not setting motion since there is no motion controller");
         }
     } else {
-        log::info!("Not setting motion since controls are disabled");
+        log::trace!("Not setting motion since controls are disabled");
     }
 }
 
