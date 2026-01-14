@@ -17,10 +17,19 @@ use roc_integration::roc;
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum PhysicsCommand {
-    SetLocalForce {
+    UpdateLocalForce {
         generator_id: LocalForceGeneratorID,
+        mode: LocalForceUpdateMode,
         force: ForceP,
     },
+}
+
+#[roc(parents = "Command")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalForceUpdateMode {
+    Set,
+    Add,
 }
 
 #[derive(Clone, Debug)]
@@ -51,16 +60,19 @@ impl PartialEq for PhysicsCommand {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (
-                Self::SetLocalForce {
+                Self::UpdateLocalForce {
                     generator_id: self_id,
+                    mode: self_mode,
                     force: self_force,
                 },
-                Self::SetLocalForce {
+                Self::UpdateLocalForce {
                     generator_id: other_id,
+                    mode: other_mode,
                     force: other_force,
                 },
             ) => {
                 self_id == other_id
+                    && self_mode == other_mode
                     && bytemuck::bytes_of(self_force) == bytemuck::bytes_of(other_force)
             }
         }
@@ -81,9 +93,10 @@ impl PartialEq for ToSimulationSpeedMultiplier {
 
 impl Eq for ToSimulationSpeedMultiplier {}
 
-pub fn set_local_force(
+pub fn update_local_force(
     simulator: &PhysicsSimulator,
     generator_id: LocalForceGeneratorID,
+    mode: LocalForceUpdateMode,
     force: ForceP,
 ) -> Result<()> {
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
@@ -93,7 +106,14 @@ pub fn set_local_force(
         .get_generator_mut(&generator_id)
         .ok_or_else(|| anyhow!("No local force with ID {}", u64::from(generator_id)))?;
 
-    local_force.force = force;
+    match mode {
+        LocalForceUpdateMode::Set => {
+            local_force.force = force;
+        }
+        LocalForceUpdateMode::Add => {
+            local_force.force += force;
+        }
+    }
 
     Ok(())
 }
