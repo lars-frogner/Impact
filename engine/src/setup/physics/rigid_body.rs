@@ -6,7 +6,7 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_mesh::{
     TriangleMeshID,
-    setup::{BoxMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
+    setup::{BoxMesh, CapsuleMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
 };
 use impact_physics::{
     inertia::{InertiaTensor, InertialProperties},
@@ -245,6 +245,45 @@ pub fn setup_rigid_bodies_for_new_entities(
             (rigid_body_id, model_transform, frame, motion)
         },
         [HemisphereMesh],
+        ![DynamicRigidBodyID]
+    );
+
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+        },
+        components,
+        |mesh: &CapsuleMesh,
+         substance: &DynamicRigidBodySubstance,
+         model_transform: Option<&ModelTransform>,
+         frame: Option<&ReferenceFrame>,
+         motion: Option<&Motion>|
+         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+            let mut model_transform = model_transform.copied().unwrap_or_default();
+            let frame = frame.copied().unwrap_or_default();
+            let motion = motion.copied().unwrap_or_default();
+
+            let inertial_properties = InertialProperties::of_uniform_capsule(
+                mesh.segment_length * model_transform.scale,
+                mesh.radius * model_transform.scale,
+                substance.mass_density,
+            );
+
+            // Offset the model to put the center of mass at the origin of this
+            // entity's space
+            model_transform
+                .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
+
+            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+                &mut rigid_body_manager,
+                inertial_properties,
+                frame,
+                motion,
+            );
+
+            (rigid_body_id, model_transform, frame, motion)
+        },
         ![DynamicRigidBodyID]
     );
 

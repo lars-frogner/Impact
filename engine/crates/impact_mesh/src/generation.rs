@@ -680,6 +680,58 @@ impl TriangleMesh {
         )
     }
 
+    /// Creates a mesh representing a capsule with the given segment length
+    /// (distance between cap sphere centers) and radius, with the axis aligned
+    /// with the y-axis and centered on the origin. diameter 1.0, with the disk
+    /// lying in the xz-plane and centered at the origin.
+    /// `n_circumference_vertices` is the number of vertices to use for
+    /// representing a circular cross-section of the capsule's cylinder. The
+    /// number of horizontal circular cross-sections that vertices will be
+    /// generated around for the spherical caps increases in proportion to
+    /// `n_circumference_vertices` to maintain an approximately uniform
+    /// resolution.
+    ///
+    /// The generated mesh will contain positions and normal vectors.
+    ///
+    /// # Panics
+    /// - If the segment length or radius is negative.
+    /// - If `n_circumference_vertices` is smaller than 2.
+    pub fn create_capsule(
+        segment_length: f32,
+        radius: f32,
+        n_circumference_vertices: usize,
+    ) -> Self {
+        let diameter = 2.0 * radius;
+
+        let mut mesh = Self::create_cylinder(segment_length, diameter, n_circumference_vertices);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        mesh.translate(
+            &Vector3::new(0.0, -0.5 * segment_length, 0.0),
+            &mut dirty_mask,
+        );
+
+        let n_rings = ((n_circumference_vertices - 2) / 4).max(4);
+
+        let mut cap_mesh = Self::create_hemisphere(n_rings);
+        cap_mesh.scale(diameter, &mut dirty_mask);
+        cap_mesh.translate(
+            &Vector3::new(0.0, 0.5 * segment_length, 0.0),
+            &mut dirty_mask,
+        );
+
+        mesh.merge_with(&cap_mesh, &mut dirty_mask);
+
+        cap_mesh.rotate(
+            &UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI),
+            &mut dirty_mask,
+        );
+
+        mesh.merge_with(&cap_mesh, &mut dirty_mask);
+
+        mesh
+    }
+
     /// Creates a mesh representing a sphere with radius 1.0, centered at the
     /// origin, with triangle front faces pointing inward. `n_rings` is the
     /// number of horizontal circular cross-sections that vertices will be

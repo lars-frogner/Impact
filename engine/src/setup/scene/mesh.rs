@@ -7,8 +7,8 @@ use impact_material::MaterialID;
 use impact_mesh::{
     TriangleMeshID,
     setup::{
-        self, BoxMesh, CircularFrustumMesh, ConeMesh, CylinderMesh, HemisphereMesh, RectangleMesh,
-        SphereMesh, TriangleMeshTemplate,
+        self, BoxMesh, CapsuleMesh, CircularFrustumMesh, ConeMesh, CylinderMesh, HemisphereMesh,
+        RectangleMesh, SphereMesh, TriangleMeshTemplate,
     },
     texture_projection::PlanarTextureProjection,
 };
@@ -135,6 +135,23 @@ pub fn setup_meshes_for_new_entities(
             setup_triangle_mesh_for_new_entity(
                 &mut resource_manager,
                 TriangleMeshTemplate::Hemisphere(*hemisphere_mesh),
+                planar_projection,
+            )
+        },
+        ![TriangleMeshID]
+    );
+
+    setup!(
+        {
+            let mut resource_manager = resource_manager.owrite();
+        },
+        components,
+        |capsule_mesh: &CapsuleMesh,
+         planar_projection: Option<&setup::PlanarTextureProjection>|
+         -> TriangleMeshID {
+            setup_triangle_mesh_for_new_entity(
+                &mut resource_manager,
+                TriangleMeshTemplate::Capsule(*capsule_mesh),
                 planar_projection,
             )
         },
