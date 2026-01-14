@@ -14,7 +14,8 @@ use motion::{
     MotionControllerConfig, MotionDirection, MotionState, SemiDirectionalMotionController,
 };
 use orientation::{
-    CameraOrientationController, OrientationControllerConfig, RollFreeCameraOrientationController,
+    AngularVelocityControlDirections, CameraOrientationController, OrientationControllerConfig,
+    RollFreeCameraOrientationController,
 };
 
 /// Represents controllers that are used for controlling
@@ -57,7 +58,11 @@ pub trait MotionController: Send + Sync + std::fmt::Debug {
 pub trait OrientationController: Send + Sync + std::fmt::Debug {
     /// Modifies the given orientation of a controlled entity so that the
     /// current changes in orientation are applied to it.
-    fn update_orientation(&self, orientation: &mut Orientation);
+    fn update_orientation(
+        &self,
+        orientation: &mut Orientation,
+        directions: AngularVelocityControlDirections,
+    );
 
     /// Whether the orientation has changed since calling
     /// [`reset_orientation_change`](Self::reset_orientation_change).

@@ -13,9 +13,10 @@ import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
 import core.Vector3
 import pf.Comp.AmbientEmission
 import pf.Setup.ConstantRotation
-import pf.Comp.ControlledVelocity
+import pf.Comp.VelocityControl
 import pf.Comp.OmnidirectionalEmission
-import pf.Comp.ControlledAngularVelocity
+import pf.Comp.AngularVelocityControl
+import pf.Control.AngularVelocityControlDirections
 import pf.Setup.Parent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarCollidable
@@ -105,8 +106,10 @@ player =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 20))
     |> Comp.Motion.add_stationary
-    |> Comp.ControlledVelocity.add_new
-    |> Comp.ControlledAngularVelocity.add_new
+    |> Comp.VelocityControl.add
+    |> Comp.AngularVelocityControl.add_new(
+        Control.AngularVelocityControlDirections.all,
+    )
     |> Setup.SceneGraphGroup.add
 
 camera =

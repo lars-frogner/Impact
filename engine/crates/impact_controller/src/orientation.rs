@@ -1,6 +1,7 @@
 //! Orientation controller implementations.
 
 use super::OrientationController;
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Degrees},
@@ -8,15 +9,29 @@ use impact_math::{
     quaternion::UnitQuaternion,
     vector::UnitVector3,
 };
-use impact_physics::quantities::{AngularVelocityP, Orientation};
+use impact_physics::quantities::Orientation;
 use roc_integration::roc;
 
 define_component_type! {
-    /// Angular velocity controller by a user.
+    /// User control of angular velocity.
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct ControlledAngularVelocity(AngularVelocityP);
+    pub struct AngularVelocityControl {
+        /// Restrict control to these directions for applicable controllers.
+        pub directions: AngularVelocityControlDirections,
+    }
+}
+
+bitflags! {
+    /// Directions in which angular velocity can be controlled.
+    #[roc(parents="Control", category="bitflags", flags=[HORIZONTAL=0, VERTICAL=1])]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
+    pub struct AngularVelocityControlDirections: u8 {
+        const HORIZONTAL = 1 << 0;
+        const VERTICAL   = 1 << 1;
+    }
 }
 
 /// Orientation controller that updates the orientation in the way a
@@ -66,21 +81,18 @@ pub struct RollFreeCameraOrientationControllerConfig {
 }
 
 #[roc]
-impl ControlledAngularVelocity {
-    /// Creates a new controlled angular velocity.
-    #[roc(body = "(Physics.AngularVelocity.zero({}),)")]
-    pub fn new() -> Self {
-        Self(AngularVelocityP::zero())
-    }
-
-    pub fn set_angular_velocity(&mut self, angular_velocity: AngularVelocityP) {
-        self.0 = angular_velocity;
+impl AngularVelocityControl {
+    #[roc(body = "{ directions }")]
+    pub fn new(directions: AngularVelocityControlDirections) -> Self {
+        Self { directions }
     }
 }
 
-impl Default for ControlledAngularVelocity {
+impl Default for AngularVelocityControl {
     fn default() -> Self {
-        Self::new()
+        Self {
+            directions: AngularVelocityControlDirections::all(),
+        }
     }
 }
 
@@ -95,7 +107,11 @@ impl CameraOrientationController {
 }
 
 impl OrientationController for CameraOrientationController {
-    fn update_orientation(&self, orientation: &mut Orientation) {
+    fn update_orientation(
+        &self,
+        orientation: &mut Orientation,
+        _directions: AngularVelocityControlDirections,
+    ) {
         *orientation *= self.orientation_change;
     }
 
@@ -136,36 +152,47 @@ impl RollFreeCameraOrientationController {
 }
 
 impl OrientationController for RollFreeCameraOrientationController {
-    fn update_orientation(&self, orientation: &mut Orientation) {
-        let (mut horizontal_angle, mut vertical_angle, _) = orientation.euler_angles_intrinsic();
+    fn update_orientation(
+        &self,
+        orientation: &mut Orientation,
+        directions: AngularVelocityControlDirections,
+    ) {
+        let (mut horizontal_angle, mut vertical_angle, z_angle) =
+            orientation.euler_angles_intrinsic();
 
-        horizontal_angle += self.horizontal_angle_change;
-        vertical_angle += self.vertical_angle_change;
+        if directions.contains(AngularVelocityControlDirections::HORIZONTAL) {
+            horizontal_angle += self.horizontal_angle_change;
 
-        // The horizontal angle is in [-PI, PI], with zero being opposite the
-        // view direction
-        let max_neg_horizontal_angle = -PI + self.config.max_angle_left.radians();
-        let min_pos_horizontal_angle = PI - self.config.max_angle_right.radians();
+            // The horizontal angle is in [-PI, PI], with zero being opposite the
+            // view direction
+            let max_neg_horizontal_angle = -PI + self.config.max_angle_left.radians();
+            let min_pos_horizontal_angle = PI - self.config.max_angle_right.radians();
 
-        // The vertical angle is in [-PI/2, PI/2]
-        let min_neg_vertical_angle = -self.config.max_angle_down.radians();
-        let max_pos_vertical_angle = self.config.max_angle_up.radians();
-
-        if horizontal_angle.is_sign_negative() && horizontal_angle > max_neg_horizontal_angle {
-            horizontal_angle = max_neg_horizontal_angle;
+            if horizontal_angle.is_sign_negative() && horizontal_angle > max_neg_horizontal_angle {
+                horizontal_angle = max_neg_horizontal_angle;
+            }
+            if horizontal_angle.is_sign_positive() && horizontal_angle < min_pos_horizontal_angle {
+                horizontal_angle = min_pos_horizontal_angle;
+            }
         }
-        if horizontal_angle.is_sign_positive() && horizontal_angle < min_pos_horizontal_angle {
-            horizontal_angle = min_pos_horizontal_angle;
-        }
-        if vertical_angle.is_sign_negative() && vertical_angle < min_neg_vertical_angle {
-            vertical_angle = min_neg_vertical_angle;
-        }
-        if vertical_angle.is_sign_positive() && vertical_angle > max_pos_vertical_angle {
-            vertical_angle = max_pos_vertical_angle;
+
+        if directions.contains(AngularVelocityControlDirections::VERTICAL) {
+            vertical_angle += self.vertical_angle_change;
+
+            // The vertical angle is in [-PI/2, PI/2]
+            let min_neg_vertical_angle = -self.config.max_angle_down.radians();
+            let max_pos_vertical_angle = self.config.max_angle_up.radians();
+
+            if vertical_angle.is_sign_negative() && vertical_angle < min_neg_vertical_angle {
+                vertical_angle = min_neg_vertical_angle;
+            }
+            if vertical_angle.is_sign_positive() && vertical_angle > max_pos_vertical_angle {
+                vertical_angle = max_pos_vertical_angle;
+            }
         }
 
         *orientation =
-            Orientation::from_euler_angles_intrinsic(horizontal_angle, vertical_angle, 0.0);
+            Orientation::from_euler_angles_intrinsic(horizontal_angle, vertical_angle, z_angle);
     }
 
     fn orientation_has_changed(&self) -> bool {
