@@ -79,8 +79,8 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense box with the
-    /// given extents, centered at the origin and with the width, height and
-    /// depth axes aligned with the x-, y- and z-axis.
+    /// given extents, with the width, height and depth axes aligned with the
+    /// x-, y- and z-axis.
     ///
     /// The box corresponds to the one created by calling
     /// `impact_mesh::TriangleMesh::create_box` with the same dimensions.
@@ -99,8 +99,8 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense cylinder with
-    /// the given length and diameter, centered at the origin and with the
-    /// length axis aligned with the y-axis.
+    /// the given length and diameter, with the length axis aligned with the
+    /// y-axis.
     ///
     /// The cylinder corresponds to the one created by calling
     /// `impact_mesh::TriangleMesh::create_cylinder` with the same dimensions.
@@ -122,8 +122,8 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense cone with the
-    /// given length and maximum diameter, centered at the origin and pointing
-    /// along the positive y-direction.
+    /// given length and maximum diameter, pointing along the positive
+    /// y-direction.
     ///
     /// The cone corresponds to the one created by calling
     /// `impact_mesh::TriangleMesh::create_cone` with the same dimensions.
@@ -148,7 +148,7 @@ impl InertialProperties {
     }
 
     /// Computes the inertial properties of the uniformly dense sphere with
-    /// the given diameter, centered at the origin.
+    /// the given diameter.
     ///
     /// With `radius = 0.5`, the sphere corresponds to the one created by
     /// calling `impact_mesh::TriangleMesh::create_sphere`.
@@ -157,7 +157,7 @@ impl InertialProperties {
 
         let center_of_mass = Position::origin();
 
-        let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
+        let moment_of_inertia = (2.0 / 5.0) * mass * radius.powi(2);
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
             moment_of_inertia,
             moment_of_inertia,
@@ -167,9 +167,8 @@ impl InertialProperties {
         Self::new(mass, center_of_mass, inertia_tensor)
     }
 
-    /// Computes the inertial properties of the uniform hemisphere with the
-    /// given radius, with the disk lying in the xz-plane and centered at the
-    /// origin.
+    /// Computes the inertial properties of a uniform hemisphere with the
+    /// given radius, with the disk lying in the xz-plane.
     ///
     /// With `radius = 0.5`, the hemisphere corresponds to the one created by
     /// calling `impact_mesh::TriangleMesh::create_hemisphere`.
@@ -180,12 +179,49 @@ impl InertialProperties {
         // toward the top
         let center_of_mass = Point3::new(0.0, (3.0 / 8.0) * radius, 0.0);
 
-        let moment_of_inertia = (2.0 * 0.2) * mass * radius.powi(2);
+        let moment_of_inertia_y = (2.0 / 5.0) * mass * radius.powi(2);
+        let moment_of_inertia_xz = (83.0 / 320.0) * mass * radius.powi(2);
 
         let inertia_tensor = InertiaTensor::from_diagonal_elements(
-            moment_of_inertia - mass * center_of_mass.y().powi(2),
-            moment_of_inertia,
-            moment_of_inertia - mass * center_of_mass.y().powi(2),
+            moment_of_inertia_xz,
+            moment_of_inertia_y,
+            moment_of_inertia_xz,
+        );
+
+        Self::new(mass, center_of_mass, inertia_tensor)
+    }
+
+    /// Computes the inertial properties of a uniform vertical capsule with the
+    /// given segment length and radius.
+    pub fn of_uniform_capsule(segment_length: f32, radius: f32, mass_density: f32) -> Self {
+        let cylinder_mass = compute_cylinder_volume(radius, segment_length) * mass_density;
+        let hemisphere_mass = compute_hemisphere_volume(radius) * mass_density;
+
+        let cylinder_moment_of_inertia_y = 0.5 * cylinder_mass * radius.powi(2);
+        let cylinder_moment_of_inertia_xz =
+            (1.0 / 12.0) * cylinder_mass * (3.0 * radius.powi(2) + segment_length.powi(2));
+
+        let hemisphere_moment_of_inertia_y = (2.0 / 5.0) * hemisphere_mass * radius.powi(2);
+        let hemisphere_moment_of_inertia_xz_about_com =
+            (83.0 / 320.0) * hemisphere_mass * radius.powi(2);
+
+        let hemisphere_center_of_mass_y = 0.5 * segment_length + (3.0 / 8.0) * radius;
+        let hemisphere_moment_of_inertia_xz = hemisphere_moment_of_inertia_xz_about_com
+            + hemisphere_mass * hemisphere_center_of_mass_y.powi(2);
+
+        let moment_of_inertia_y =
+            cylinder_moment_of_inertia_y + 2.0 * hemisphere_moment_of_inertia_y;
+        let moment_of_inertia_xz =
+            cylinder_moment_of_inertia_xz + 2.0 * hemisphere_moment_of_inertia_xz;
+
+        let mass = cylinder_mass + 2.0 * hemisphere_mass;
+
+        let center_of_mass = Point3::origin();
+
+        let inertia_tensor = InertiaTensor::from_diagonal_elements(
+            moment_of_inertia_xz,
+            moment_of_inertia_y,
+            moment_of_inertia_xz,
         );
 
         Self::new(mass, center_of_mass, inertia_tensor)

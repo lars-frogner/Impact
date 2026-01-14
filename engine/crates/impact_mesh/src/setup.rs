@@ -20,6 +20,7 @@ pub enum TriangleMeshTemplate {
     CircularFrustum(CircularFrustumMesh),
     Sphere(SphereMesh),
     Hemisphere(HemisphereMesh),
+    Capsule(CapsuleMesh),
     ScreenFillingQuad,
     SphericalLightVolume(SphericalLightVolumeMesh),
 }
@@ -152,6 +153,24 @@ define_setup_type! {
 
 define_setup_type! {
     target = TriangleMeshID;
+    /// A mesh consisting of a vertical capsule centered on the origin.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct CapsuleMesh {
+        /// The distance between the centers of the cap spheres.
+        pub segment_length: f32,
+        /// The radius of the spherical caps.
+        pub radius: f32,
+        /// The number of vertices used for representing a circular cross-section of
+        /// the capsule cylinder.
+        pub n_circumference_vertices: u32,
+    }
+}
+
+define_setup_type! {
+    target = TriangleMeshID;
     /// A mesh consisting of two triangles that exactly fill the screen in clip space.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -228,6 +247,11 @@ impl TriangleMeshTemplate {
             Self::Hemisphere(hemisphere_mesh) => {
                 TriangleMesh::create_hemisphere(hemisphere_mesh.n_rings as usize)
             }
+            Self::Capsule(capsule_mesh) => TriangleMesh::create_capsule(
+                capsule_mesh.segment_length,
+                capsule_mesh.radius,
+                capsule_mesh.n_circumference_vertices as usize,
+            ),
             Self::ScreenFillingQuad => TriangleMesh::create_screen_filling_quad(),
             Self::SphericalLightVolume(spherical_light_volume_mesh) => {
                 TriangleMesh::create_spherical_light_volume(
@@ -241,19 +265,16 @@ impl TriangleMeshTemplate {
     /// label to describe the texture projection.
     pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
         match self {
-            Self::Rectangle(rectangle_mesh) => rectangle_mesh.generate_id(projection_label),
-            Self::Box(box_mesh) => box_mesh.generate_id(projection_label),
-            Self::Cylinder(cylinder_mesh) => cylinder_mesh.generate_id(projection_label),
-            Self::Cone(cone_mesh) => cone_mesh.generate_id(projection_label),
-            Self::CircularFrustum(circularfrustum_mesh) => {
-                circularfrustum_mesh.generate_id(projection_label)
-            }
-            Self::Sphere(sphere_mesh) => sphere_mesh.generate_id(projection_label),
-            Self::Hemisphere(hemisphere_mesh) => hemisphere_mesh.generate_id(projection_label),
+            Self::Rectangle(mesh) => mesh.generate_id(projection_label),
+            Self::Box(mesh) => mesh.generate_id(projection_label),
+            Self::Cylinder(mesh) => mesh.generate_id(projection_label),
+            Self::Cone(mesh) => mesh.generate_id(projection_label),
+            Self::CircularFrustum(mesh) => mesh.generate_id(projection_label),
+            Self::Sphere(mesh) => mesh.generate_id(projection_label),
+            Self::Hemisphere(mesh) => mesh.generate_id(projection_label),
+            Self::Capsule(mesh) => mesh.generate_id(projection_label),
             Self::ScreenFillingQuad => ScreenFillingQuadMesh.generate_id(projection_label),
-            Self::SphericalLightVolume(spherical_light_volume_mesh) => {
-                spherical_light_volume_mesh.generate_id(projection_label)
-            }
+            Self::SphericalLightVolume(mesh) => mesh.generate_id(projection_label),
         }
     }
 }
@@ -469,6 +490,29 @@ impl HemisphereMesh {
         TriangleMeshID(hash64!(format!(
             "Hemisphere mesh {{ n_rings = {}, projection = {} }}",
             self.n_rings, projection_label
+        )))
+    }
+}
+
+#[roc]
+impl CapsuleMesh {
+    /// Defines a capsule mesh with the given segment length, radius and number
+    /// of circumeference vertices.
+    #[roc(body = "{ segment_length, radius, n_circumference_vertices }")]
+    pub fn new(segment_length: f32, radius: f32, n_circumference_vertices: u32) -> Self {
+        Self {
+            segment_length,
+            radius,
+            n_circumference_vertices,
+        }
+    }
+
+    /// Generates a [`TriangleMeshID`] for this mesh, using the given label to describe
+    /// the texture projection.
+    pub fn generate_id(&self, projection_label: impl fmt::Display) -> TriangleMeshID {
+        TriangleMeshID(hash64!(format!(
+            "Capsule mesh {{ segment_length = {}, radius = {}, n_circumference_vertices = {}, projection = {} }}",
+            self.segment_length, self.radius, self.n_circumference_vertices, projection_label
         )))
     }
 }
