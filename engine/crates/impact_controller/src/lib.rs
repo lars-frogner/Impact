@@ -116,8 +116,8 @@ pub fn create_controllers(
     let orientation_controller: Option<Box<dyn OrientationController>> = match orientation_config {
         OrientationControllerConfig::None => None,
         OrientationControllerConfig::Camera => Some(Box::new(CameraOrientationController::new())),
-        OrientationControllerConfig::RollFreeCamera => {
-            Some(Box::new(RollFreeCameraOrientationController::new()))
+        OrientationControllerConfig::RollFreeCamera(config) => {
+            Some(Box::new(RollFreeCameraOrientationController::new(config)))
         }
     };
 
