@@ -18,7 +18,7 @@ import pf.Setup.GradientNoiseVoxelTypes
 import pf.Comp.VelocityControl
 import pf.Comp.AngularVelocityControl
 import pf.Control.AngularVelocityControlDirections
-import pf.Setup.Parent
+import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
@@ -108,12 +108,12 @@ player =
 
 camera =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player)
+    |> Setup.SceneParent.add_new(entity_ids.player)
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 laser =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player)
+    |> Setup.SceneParent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
@@ -131,7 +131,7 @@ laser =
 
 absorbing_sphere =
     Entity.new_component_data
-    |> Setup.Parent.add_new(entity_ids.player)
+    |> Setup.SceneParent.add_new(entity_ids.player)
     |> Comp.ModelTransform.add_with_scale(0.1)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, -3))
     |> Setup.SphereMesh.add_new(64)

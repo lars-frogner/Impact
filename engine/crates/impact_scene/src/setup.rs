@@ -24,7 +24,7 @@ use tinyvec::TinyVec;
 #[roc_integration::roc(parents = "Setup")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
-pub struct Parent {
+pub struct SceneParent {
     pub entity_id: impact_ecs::world::EntityID,
 }
 
@@ -52,7 +52,7 @@ pub struct Uncullable;
 
 #[cfg(feature = "ecs")]
 #[roc_integration::roc]
-impl Parent {
+impl SceneParent {
     #[roc_integration::roc(body = "{ entity_id: parent }")]
     pub fn new(parent: impact_ecs::world::EntityID) -> Self {
         Self { entity_id: parent }

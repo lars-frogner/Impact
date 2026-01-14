@@ -1,9 +1,9 @@
-# Hash: a3dd79a84c0dadc2
-# Generated: 2025-12-29T23:54:14.852607239
-# Rust type: impact_scene::setup::Parent
+# Hash: 642a274984354f26
+# Generated: 2026-01-14T23:05:36.591933354
+# Rust type: impact_scene::setup::SceneParent
 # Type category: Component
 module [
-    Parent,
+    SceneParent,
     new,
     add_new,
     add_multiple_new,
@@ -22,11 +22,11 @@ import core.Builtin
 ## This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
 ## purpose is to aid in constructing a `SceneGraphParentNodeHandle` component
 ## for an entity. It is therefore not kept after entity creation.
-Parent : {
+SceneParent : {
     entity_id : Entity.Id,
 }
 
-new : Entity.Id -> Parent
+new : Entity.Id -> SceneParent
 new = |parent|
     { entity_id: parent }
 
@@ -45,30 +45,30 @@ add_multiple_new = |entity_data, parent|
         ))
     )
 
-## Adds a value of the [Parent] component to an entity's data.
+## Adds a value of the [SceneParent] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.ComponentData, Parent -> Entity.ComponentData
+add : Entity.ComponentData, SceneParent -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [Parent] component to the data of
+## Adds multiple values of the [SceneParent] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (Parent) -> Result Entity.MultiComponentData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (SceneParent) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in Parent.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in SceneParent.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, Parent -> List U8
+write_packet : List U8, SceneParent -> List U8
 write_packet = |bytes, val|
-    type_id = 1586825014089495529
+    type_id = 11203890257788151559
     size = 8
     alignment = 8
     bytes
@@ -78,9 +78,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List Parent -> List U8
+write_multi_packet : List U8, List SceneParent -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 1586825014089495529
+    type_id = 11203890257788151559
     size = 8
     alignment = 8
     count = List.len(vals)
@@ -97,17 +97,17 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [Parent] into the binary representation
+## Serializes a value of [SceneParent] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, Parent -> List U8
+write_bytes : List U8, SceneParent -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(8)
     |> Entity.write_bytes_id(value.entity_id)
 
-## Deserializes a value of [Parent] from its bytes in the
+## Deserializes a value of [SceneParent] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result Parent _
+from_bytes : List U8 -> Result SceneParent _
 from_bytes = |bytes|
     Ok(
         {

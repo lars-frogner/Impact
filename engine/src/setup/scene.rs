@@ -21,7 +21,7 @@ use impact_mesh::TriangleMeshID;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
-    setup::{Parent, SceneGraphGroup, Uncullable},
+    setup::{SceneGraphGroup, SceneParent, Uncullable},
 };
 use parking_lot::RwLock;
 
@@ -90,7 +90,7 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
             let ecs_world = ecs_world.oread();
         },
         components,
-        |parent: &Parent| -> Result<SceneGraphParentNodeHandle> {
+        |parent: &SceneParent| -> Result<SceneGraphParentNodeHandle> {
             let parent_entity = ecs_world
                 .get_entity(parent.entity_id)
                 .ok_or_else(|| anyhow!("Missing parent entity with ID {}", parent.entity_id))?;
