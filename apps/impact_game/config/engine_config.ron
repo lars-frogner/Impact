@@ -98,7 +98,12 @@
             movement_speed: 8.0,
             vertical_control: true,
         )),
-        orientation: RollFreeCamera,
+        orientation: RollFreeCamera((
+            max_angle_left: Degrees(180.0),
+            max_angle_right: Degrees(180.0),
+            max_angle_down: Degrees(85.0),
+            max_angle_up: Degrees(85.0),
+        )),
     ),
     game_loop: (
         max_fps: None,

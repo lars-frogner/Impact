@@ -98,7 +98,7 @@
             movement_speed: 8.0,
             vertical_control: true,
         )),
-        orientation: RollFreeCamera,
+        orientation: RollFreeCamera(()),
     ),
     game_loop: (
         max_fps: None,
