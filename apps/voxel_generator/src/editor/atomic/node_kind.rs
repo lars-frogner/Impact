@@ -51,11 +51,11 @@ impl AtomicNode {
     }
 
     pub fn for_rotation(node: &SDFRotation) -> Self {
-        let (roll, pitch, yaw) = node.rotation.euler_angles();
+        let (y_angle, x_angle, z_angle) = node.rotation.euler_angles_extrinsic();
         let mut params = AtomicNodeParams::new();
-        params.push(AtomicFloatParam::new("Roll", roll).into());
-        params.push(AtomicFloatParam::new("Pitch", pitch).into());
-        params.push(AtomicFloatParam::new("Yaw", yaw).into());
+        params.push(AtomicFloatParam::new("Y-angle", y_angle).into());
+        params.push(AtomicFloatParam::new("X-angle", x_angle).into());
+        params.push(AtomicFloatParam::new("Z-angle", z_angle).into());
         Self::new_unary(AtomicNodeKind::Rotation, params, node.child_id)
     }
 
