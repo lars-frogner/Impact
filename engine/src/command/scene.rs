@@ -34,7 +34,7 @@ pub fn set_scene_entity_active_state(
     entity_id: EntityID,
     state: ActiveState,
 ) -> Result<()> {
-    log::info!("Setting state of scene entity with ID {entity_id} to {state:?}");
+    log::debug!("Setting state of scene entity with ID {entity_id} to {state:?}");
     match state {
         ActiveState::Enabled => engine.enable_scene_entity(entity_id),
         ActiveState::Disabled => engine.disable_scene_entity(entity_id),
