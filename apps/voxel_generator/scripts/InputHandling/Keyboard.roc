@@ -33,6 +33,8 @@ set_motion = |key_state, direction|
         when key_state is
             Pressed -> Moving
             Released -> Still
+            Held ->
+                return None
 
     Some(Engine(Control(SetMotion { direction, state })))
 
@@ -40,3 +42,4 @@ on_released = |state, command|
     when state is
         Released -> Some(command)
         Pressed -> None
+        Held -> None

@@ -1,5 +1,5 @@
-# Hash: 95e87ef66d5efc5e
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: 981797c11b59769a
+# Generated: 2026-01-14T16:43:10.464991133
 # Rust type: impact::input::key::KeyState
 # Type category: Inline
 module [
@@ -8,9 +8,13 @@ module [
     from_bytes,
 ]
 
-## Whether a key is pressed or released.
+## The state of a key following a key event.
 KeyState : [
+    ## The key was pressed.
     Pressed,
+    ## The key is being held down, emitting repeated events.
+    Held,
+    ## The key was released.
     Released,
 ]
 
@@ -24,10 +28,15 @@ write_bytes = |bytes, value|
             |> List.reserve(1)
             |> List.append(0)
 
-        Released ->
+        Held ->
             bytes
             |> List.reserve(1)
             |> List.append(1)
+
+        Released ->
+            bytes
+            |> List.reserve(1)
+            |> List.append(2)
 
 ## Deserializes a value of [KeyState] from its bytes in the
 ## representation used by the engine.
@@ -38,6 +47,7 @@ from_bytes = |bytes|
     else
         when bytes is
             [0, ..] -> Ok(Pressed)
-            [1, ..] -> Ok(Released)
+            [1, ..] -> Ok(Held)
+            [2, ..] -> Ok(Released)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

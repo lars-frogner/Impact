@@ -182,11 +182,15 @@ pub enum NavigationKey {
     PageDown,
 }
 
-/// Whether a key is pressed or released.
+/// The state of a key following a key event.
 #[roc(parents = "Input")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyState {
+    /// The key was pressed.
     Pressed,
+    /// The key is being held down, emitting repeated events.
+    Held,
+    /// The key was released.
     Released,
 }
 
@@ -200,7 +204,7 @@ impl KeyboardEvent {
             return None;
         };
         let key = KeyboardKey::from_winit(code)?;
-        let state = event.state.into();
+        let state = KeyState::from_winit(event.state, event.repeat);
         Some(Self { key, state })
     }
 }
@@ -332,11 +336,13 @@ impl KeyboardKey {
 }
 
 #[cfg(feature = "window")]
-impl From<winit::event::ElementState> for KeyState {
-    fn from(state: winit::event::ElementState) -> Self {
-        match state {
-            winit::event::ElementState::Pressed => Self::Pressed,
-            winit::event::ElementState::Released => Self::Released,
+impl KeyState {
+    #[cfg(feature = "window")]
+    pub fn from_winit(state: winit::event::ElementState, repeat: bool) -> Self {
+        match (state, repeat) {
+            (winit::event::ElementState::Pressed, false) => Self::Pressed,
+            (winit::event::ElementState::Pressed, true) => Self::Held,
+            (winit::event::ElementState::Released, _) => Self::Released,
         }
     }
 }
