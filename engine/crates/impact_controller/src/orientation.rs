@@ -38,8 +38,8 @@ pub struct CameraOrientationController {
 /// world's horizontal plane.
 #[derive(Clone, Debug)]
 pub struct RollFreeCameraOrientationController {
-    horizontal_change: Orientation,
-    vertical_change: Orientation,
+    horizontal_angle_change: f32,
+    vertical_angle_change: f32,
     orientation_has_changed: bool,
     config: RollFreeCameraOrientationControllerConfig,
 }
@@ -127,15 +127,20 @@ impl RollFreeCameraOrientationController {
     /// Creates a new roll-free first-person camera orientation controller.
     pub fn new(config: RollFreeCameraOrientationControllerConfig) -> Self {
         Self {
-            vertical_change: Orientation::identity(),
-            horizontal_change: Orientation::identity(),
+            vertical_angle_change: 0.0,
+            horizontal_angle_change: 0.0,
             orientation_has_changed: false,
             config,
         }
     }
+}
 
-    fn clamp_orientation(&self, orientation: &mut Orientation) {
+impl OrientationController for RollFreeCameraOrientationController {
+    fn update_orientation(&self, orientation: &mut Orientation) {
         let (mut horizontal_angle, mut vertical_angle, _) = orientation.euler_angles_intrinsic();
+
+        horizontal_angle += self.horizontal_angle_change;
+        vertical_angle += self.vertical_angle_change;
 
         // The horizontal angle is in [-PI, PI], with zero being opposite the
         // view direction
@@ -159,18 +164,8 @@ impl RollFreeCameraOrientationController {
             vertical_angle = max_pos_vertical_angle;
         }
 
-        // Remove any accumulated roll
-        let roll_angle = 0.0;
-
         *orientation =
-            Orientation::from_euler_angles_intrinsic(horizontal_angle, vertical_angle, roll_angle);
-    }
-}
-
-impl OrientationController for RollFreeCameraOrientationController {
-    fn update_orientation(&self, orientation: &mut Orientation) {
-        *orientation = self.horizontal_change * (*orientation) * self.vertical_change;
-        self.clamp_orientation(orientation);
+            Orientation::from_euler_angles_intrinsic(horizontal_angle, vertical_angle, 0.0);
     }
 
     fn orientation_has_changed(&self) -> bool {
@@ -178,14 +173,14 @@ impl OrientationController for RollFreeCameraOrientationController {
     }
 
     fn update_orientation_change(&mut self, delta_x: f32, delta_y: f32) {
-        self.horizontal_change = compute_horizontal_rotation(-delta_x) * self.horizontal_change;
-        self.vertical_change *= compute_vertical_rotation(delta_y);
+        self.horizontal_angle_change -= delta_x;
+        self.vertical_angle_change += delta_y;
         self.orientation_has_changed = true;
     }
 
     fn reset_orientation_change(&mut self) {
-        self.horizontal_change = Orientation::identity();
-        self.vertical_change = Orientation::identity();
+        self.horizontal_angle_change = 0.0;
+        self.vertical_angle_change = 0.0;
         self.orientation_has_changed = false;
     }
 }
