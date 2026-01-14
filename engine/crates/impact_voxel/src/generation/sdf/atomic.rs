@@ -1299,15 +1299,20 @@ impl SDFRotation {
     }
 
     #[inline]
-    pub fn from_euler_angles(child_id: SDFNodeID, roll: f32, pitch: f32, yaw: f32) -> Self {
-        let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
+    pub fn from_euler_angles(
+        child_id: SDFNodeID,
+        y_angle: f32,
+        x_angle: f32,
+        z_angle: f32,
+    ) -> Self {
+        let rotation = UnitQuaternion::from_euler_angles_extrinsic(y_angle, x_angle, z_angle);
         Self { child_id, rotation }
     }
 
-    /// Returns the Euler angles as `(roll, pitch, yaw)`.
+    /// Returns the Euler angles as `(y_angle, x_angle, z_angle)`.
     #[inline]
     pub fn euler_angles(&self) -> (f32, f32, f32) {
-        self.rotation.euler_angles()
+        self.rotation.euler_angles_extrinsic()
     }
 }
 

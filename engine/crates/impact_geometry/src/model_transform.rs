@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn updating_offset_while_preserving_position_works() {
         let position = Point3P::new(1.0, 2.0, 3.0);
-        let orientation = UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3).pack();
+        let orientation = UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3).pack();
         let scale = 1.5;
         let original_offset = Vector3P::new(4.0, 2.0, 3.0);
         let new_offset = Vector3::new(4.5, 1.5, 1.0);

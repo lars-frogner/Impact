@@ -1924,7 +1924,7 @@ mod tests {
     fn computing_root_to_camera_transform_with_only_camera_transforms_works() {
         let camera_to_root_transform = Isometry3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+            UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3),
         );
 
         let mut scene_graph = SceneGraph::new();
@@ -1959,7 +1959,7 @@ mod tests {
     #[test]
     fn computing_root_to_camera_transform_with_different_parent_to_model_transforms_works() {
         let translation = Vector3::new(2.1, -5.9, 0.01);
-        let rotation = UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3);
+        let rotation = UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3);
 
         let mut scene_graph = SceneGraph::new();
         let root = scene_graph.root_node_id();
@@ -1997,7 +1997,7 @@ mod tests {
     fn updating_bounding_spheres_with_one_transformed_instance_in_world_space_works() {
         let model_to_parent_transform = Similarity3::from_parts(
             Vector3::new(2.1, -5.9, 0.01),
-            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+            UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3),
             7.0,
         );
         let bounding_sphere = Sphere::new(Point3::new(3.9, 5.2, 0.0), 11.1);
@@ -2090,11 +2090,11 @@ mod tests {
             Isometry3::from_parts(Vector3::new(2.1, -5.9, 0.01), UnitQuaternion::identity());
         let group_2_to_parent_transform = Isometry3::from_parts(
             Vector3::new(0.01, 2.9, 10.1),
-            UnitQuaternion::from_euler_angles(1.1, 2.2, 3.3),
+            UnitQuaternion::from_euler_angles_extrinsic(1.1, 2.2, 3.3),
         );
         let model_instance_2_to_parent_transform = Similarity3::from_parts(
             Vector3::new(-2.1, 8.9, 1.01),
-            UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+            UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3),
             1.0,
         );
 
