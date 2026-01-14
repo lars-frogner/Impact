@@ -136,10 +136,11 @@ pub fn execute_control_command(engine: &Engine, command: ControlCommand) -> Resu
 
 pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Result<()> {
     match command {
-        PhysicsCommand::SetLocalForce {
+        PhysicsCommand::UpdateLocalForce {
             generator_id,
+            mode,
             force,
-        } => physics::set_local_force(&engine.simulator().oread(), generator_id, force),
+        } => physics::update_local_force(&engine.simulator().oread(), generator_id, mode, force),
     }
     .context("Failed to execute physics command")
 }
