@@ -102,7 +102,7 @@ impl DynamicGravityManager {
         assert!(n_bodies >= 2);
 
         for (i, body_i) in (0..n_bodies - 1).zip(&self.bodies[0..n_bodies - 1]) {
-            for (j, body_j) in (i..n_bodies).zip(&self.bodies[i..n_bodies]) {
+            for (j, body_j) in (i + 1..n_bodies).zip(&self.bodies[i + 1..n_bodies]) {
                 let displacement_i_to_j = body_j.position - body_i.position;
                 let distance_squared = displacement_i_to_j.norm_squared();
                 let distance = distance_squared.sqrt();
