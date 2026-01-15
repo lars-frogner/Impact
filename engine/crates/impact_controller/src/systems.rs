@@ -71,24 +71,32 @@ pub fn update_controlled_entity_angular_velocities(
 
     query!(
         ecs_world,
-        |control: &AngularVelocityControl,
+        |control: &mut AngularVelocityControl,
          frame: &ReferenceFrame,
          motion: &mut Motion,
          rigid_body_id: &KinematicRigidBodyID| {
-            let new_angular_velocity = if orientation_controller.orientation_has_changed() {
-                let old_orientation = frame.orientation.unpack();
-                let mut new_orientation = old_orientation;
+            let new_controlled_angular_velocity =
+                if orientation_controller.orientation_has_changed() {
+                    let old_orientation = frame.orientation.unpack();
+                    let mut new_orientation = old_orientation;
 
-                control.update_orientation(orientation_controller, &mut new_orientation);
+                    control.update_orientation(orientation_controller, &mut new_orientation);
 
-                AngularVelocity::from_consecutive_orientations(
-                    &old_orientation,
-                    &new_orientation,
-                    time_step_duration,
-                )
-            } else {
-                AngularVelocity::zero()
-            };
+                    AngularVelocity::from_consecutive_orientations(
+                        &old_orientation,
+                        &new_orientation,
+                        time_step_duration,
+                    )
+                } else {
+                    AngularVelocity::zero()
+                };
+
+            let mut new_angular_velocity = motion.angular_velocity.unpack();
+
+            control.apply_new_controlled_angular_velocity(
+                new_controlled_angular_velocity,
+                &mut new_angular_velocity,
+            );
 
             motion.angular_velocity = new_angular_velocity.pack();
 
@@ -102,24 +110,32 @@ pub fn update_controlled_entity_angular_velocities(
 
     query!(
         ecs_world,
-        |control: &AngularVelocityControl,
+        |control: &mut AngularVelocityControl,
          frame: &ReferenceFrame,
          motion: &mut Motion,
          rigid_body_id: &DynamicRigidBodyID| {
-            let new_angular_velocity = if orientation_controller.orientation_has_changed() {
-                let old_orientation = frame.orientation.unpack();
-                let mut new_orientation = old_orientation;
+            let new_controlled_angular_velocity =
+                if orientation_controller.orientation_has_changed() {
+                    let old_orientation = frame.orientation.unpack();
+                    let mut new_orientation = old_orientation;
 
-                control.update_orientation(orientation_controller, &mut new_orientation);
+                    control.update_orientation(orientation_controller, &mut new_orientation);
 
-                AngularVelocity::from_consecutive_orientations(
-                    &old_orientation,
-                    &new_orientation,
-                    time_step_duration,
-                )
-            } else {
-                AngularVelocity::zero()
-            };
+                    AngularVelocity::from_consecutive_orientations(
+                        &old_orientation,
+                        &new_orientation,
+                        time_step_duration,
+                    )
+                } else {
+                    AngularVelocity::zero()
+                };
+
+            let mut new_angular_velocity = motion.angular_velocity.unpack();
+
+            control.apply_new_controlled_angular_velocity(
+                new_controlled_angular_velocity,
+                &mut new_angular_velocity,
+            );
 
             motion.angular_velocity = new_angular_velocity.pack();
 

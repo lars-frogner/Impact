@@ -9,7 +9,7 @@ use impact_math::{
     quaternion::UnitQuaternion,
     vector::UnitVector3,
 };
-use impact_physics::quantities::{Orientation, OrientationP};
+use impact_physics::quantities::{AngularVelocity, AngularVelocityP, Orientation, OrientationP};
 use roc_integration::roc;
 
 define_component_type! {
@@ -24,6 +24,8 @@ define_component_type! {
         pub frame_orientation: OrientationP,
         /// Restrict control to these directions for applicable controllers.
         pub directions: AngularVelocityControlDirections,
+        /// The current angular velocity due to the controller.
+        controlled_angular_velocity: AngularVelocityP,
     }
 }
 
@@ -97,15 +99,26 @@ pub struct RollFreeCameraOrientationControllerConfig {
 
 #[roc]
 impl AngularVelocityControl {
-    #[roc(body = "{ frame_orientation: UnitQuaternion.identity, directions }")]
+    #[roc(body = r#"
+    {
+        frame_orientation: UnitQuaternion.identity,
+        directions,
+        controlled_angular_velocity: Physics.AngularVelocity.zero({}),
+    }"#)]
     pub fn new(directions: AngularVelocityControlDirections) -> Self {
         Self {
             frame_orientation: OrientationP::identity(),
             directions,
+            controlled_angular_velocity: AngularVelocityP::zero(),
         }
     }
 
-    #[roc(body = "{ frame_orientation, directions }")]
+    #[roc(body = r#"
+    {
+        frame_orientation,
+        directions,
+        controlled_angular_velocity: Physics.AngularVelocity.zero({}),
+    }"#)]
     pub fn new_local(
         frame_orientation: OrientationP,
         directions: AngularVelocityControlDirections,
@@ -113,6 +126,7 @@ impl AngularVelocityControl {
         Self {
             frame_orientation,
             directions,
+            controlled_angular_velocity: AngularVelocityP::zero(),
         }
     }
 
@@ -128,6 +142,21 @@ impl AngularVelocityControl {
         orientation_controller.update_orientation(&mut orientation_in_local_frame, self.directions);
 
         *orientation = frame_orientation * orientation_in_local_frame;
+    }
+
+    /// Assigns a new controlled angular velocity and updates the given total
+    /// angular velocity to account for the change in controlled angular
+    /// velocity.
+    pub fn apply_new_controlled_angular_velocity(
+        &mut self,
+        new_control_angular_velocity: AngularVelocity,
+        total_angular_velocity: &mut AngularVelocity,
+    ) {
+        *total_angular_velocity = &*total_angular_velocity
+            - self.controlled_angular_velocity.unpack()
+            + &new_control_angular_velocity;
+
+        self.controlled_angular_velocity = new_control_angular_velocity.pack();
     }
 }
 
