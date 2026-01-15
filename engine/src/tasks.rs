@@ -838,38 +838,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing texture GPU resources", engine, {
-            let resource_manager = engine.resource_manager().oread();
-            let renderer = engine.renderer().oread();
-            let mut render_resource_manager = renderer.render_resource_manager().owrite();
-            let render_resource_manager = &mut **render_resource_manager;
-
-            impact_resource::gpu::sync_immutable_gpu_resources(
-                &(
-                    engine.graphics_device(),
-                    renderer.mipmapper_generator().as_ref(),
-                ),
-                &resource_manager.textures,
-                &mut render_resource_manager.textures,
-            )?;
-
-            impact_resource::gpu::sync_immutable_gpu_resources(
-                engine.graphics_device(),
-                &resource_manager.samplers,
-                &mut render_resource_manager.samplers,
-            )?;
-
-            impact_resource::gpu::sync_immutable_gpu_resources(
-                &(
-                    engine.graphics_device(),
-                    renderer.bind_group_layout_registry(),
-                    &render_resource_manager.textures,
-                    &render_resource_manager.samplers,
-                ),
-                &resource_manager.lookup_tables,
-                &mut render_resource_manager.lookup_table_bind_groups,
-            )?;
-
-            Ok(())
+            engine.sync_texture_gpu_resources()
         })
     }
 );
@@ -888,23 +857,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing mesh GPU resources", engine, {
-            let resource_manager = engine.resource_manager().oread();
-            let renderer = engine.renderer().oread();
-            let mut render_resource_manager = renderer.render_resource_manager().owrite();
-
-            impact_resource::gpu::sync_mutable_gpu_resources(
-                engine.graphics_device(),
-                &resource_manager.triangle_meshes,
-                &mut render_resource_manager.triangle_meshes,
-            )?;
-
-            impact_resource::gpu::sync_mutable_gpu_resources(
-                engine.graphics_device(),
-                &resource_manager.line_segment_meshes,
-                &mut render_resource_manager.line_segment_meshes,
-            )?;
-
-            Ok(())
+            engine.sync_mesh_gpu_resources()
         })
     }
 );
@@ -925,35 +878,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing material GPU resources", engine, {
-            let resource_manager = engine.resource_manager().oread();
-            let renderer = engine.renderer().oread();
-            let mut render_resource_manager = renderer.render_resource_manager().owrite();
-            let render_resource_manager = &mut **render_resource_manager;
-
-            impact_resource::gpu::sync_immutable_gpu_resources(
-                &(),
-                &resource_manager.materials,
-                &mut render_resource_manager.materials,
-            )?;
-
-            impact_resource::gpu::sync_immutable_gpu_resources(
-                engine.graphics_device(),
-                &resource_manager.material_templates,
-                &mut render_resource_manager.material_templates,
-            )?;
-
-            impact_resource::gpu::sync_immutable_gpu_resources(
-                &(
-                    engine.graphics_device(),
-                    &render_resource_manager.textures,
-                    &render_resource_manager.samplers,
-                    &render_resource_manager.material_templates,
-                ),
-                &resource_manager.material_texture_groups,
-                &mut render_resource_manager.material_texture_groups,
-            )?;
-
-            Ok(())
+            engine.sync_material_gpu_resources()
         })
     }
 );
@@ -970,30 +895,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing miscellaneous GPU resources", engine, {
-            let resource_manager = engine.resource_manager().oread();
-            let scene = engine.scene().oread();
-            let skybox = scene.skybox().oread();
-            let renderer = engine.renderer().oread();
-            let mut render_resource_manager = renderer.render_resource_manager().owrite();
-            let render_resource_manager = &mut **render_resource_manager;
-
-            impact_scene::skybox::sync_gpu_resources_for_skybox(
-                skybox.as_ref(),
-                renderer.graphics_device(),
-                &render_resource_manager.textures,
-                &render_resource_manager.samplers,
-                &mut render_resource_manager.skybox,
-            )?;
-
-            resource_manager.voxel_types.sync_material_gpu_resources(
-                renderer.graphics_device(),
-                &render_resource_manager.textures,
-                &render_resource_manager.samplers,
-                renderer.bind_group_layout_registry(),
-                &mut render_resource_manager.voxel_materials,
-            )?;
-
-            Ok(())
+            engine.sync_misc_gpu_resources()
         })
     }
 );
@@ -1024,20 +926,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing dynamic GPU resources", engine, {
-            let scene = engine.scene().oread();
-            let camera_manager = scene.camera_manager().oread();
-            let light_manager = scene.light_manager().oread();
-            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
-            let mut model_instance_manager = scene.model_instance_manager().owrite();
-            let mut renderer = engine.renderer().owrite();
-
-            renderer.sync_dynamic_gpu_resources(
-                &camera_manager,
-                &light_manager,
-                &mut voxel_object_manager,
-                &mut model_instance_manager,
-            );
-            Ok(())
+            engine.sync_dynamic_gpu_resources()
         })
     }
 );

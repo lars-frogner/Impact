@@ -454,6 +454,8 @@ impl<MID: Copy + Eq + Hash> ModelInstanceManager<MID> {
         self.instance_buffers
             .retain(|model_id, _| state.model_ids.contains(model_id));
 
+        self.clear_buffer_contents();
+
         for storage in self.feature_storages.values_mut() {
             storage.remove_all_features();
         }

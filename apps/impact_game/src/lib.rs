@@ -135,7 +135,7 @@ impl Game {
 
     fn reset_scene(engine: &Engine) -> Result<()> {
         log::debug!("Resetting scene");
-        engine.reset_world();
+        engine.reset_world()?;
         scripting::setup_scene()
     }
 }
