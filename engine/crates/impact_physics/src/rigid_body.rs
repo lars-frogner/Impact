@@ -5,9 +5,9 @@ pub mod setup;
 use crate::{
     inertia::InertiaTensorP,
     quantities::{
-        self, AngularMomentumP, AngularVelocity, AngularVelocityP, Force, ForceP, MomentumP,
-        Motion, Orientation, OrientationP, Position, PositionP, Torque, TorqueP, Velocity,
-        VelocityP,
+        self, AngularMomentumP, AngularVelocity, AngularVelocityP, Direction, Force, ForceP,
+        MomentumP, Motion, Orientation, OrientationP, Position, PositionP, Torque, TorqueP,
+        Velocity, VelocityP,
     },
 };
 use approx::AbsDiffEq;
@@ -436,9 +436,19 @@ impl DynamicRigidBody {
         transform_vector_from_body_to_world_space(&self.orientation.unpack(), vector)
     }
 
+    /// Transforms a direction from the body-fixed frame to world space.
+    pub fn transform_direction_from_body_to_world_space(&self, vector: &Direction) -> Direction {
+        transform_direction_from_body_to_world_space(&self.orientation.unpack(), vector)
+    }
+
     /// Transforms a vector from world space to the body-fixed frame.
     pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_world_to_body_space(&self.orientation.unpack(), vector)
+    }
+
+    /// Transforms a direction from world space to the body-fixed frame.
+    pub fn transform_direction_from_world_to_body_space(&self, direction: &Direction) -> Direction {
+        transform_direction_from_world_to_body_space(&self.orientation.unpack(), direction)
     }
 
     /// Transforms a point from the body-fixed frame to world space.
@@ -767,12 +777,28 @@ pub fn transform_vector_from_body_to_world_space(
     body_orientation.rotate_vector(vector)
 }
 
+/// Transforms a direction from the body-fixed frame to world space.
+pub fn transform_direction_from_body_to_world_space(
+    body_orientation: &Orientation,
+    direction: &Direction,
+) -> Direction {
+    body_orientation.rotate_unit_vector(direction)
+}
+
 /// Transforms a vector from world space to the body-fixed frame.
 pub fn transform_vector_from_world_to_body_space(
     body_orientation: &Orientation,
     vector: &Vector3,
 ) -> Vector3 {
     body_orientation.inverse().rotate_vector(vector)
+}
+
+/// Transforms a direction from world space to the body-fixed frame.
+pub fn transform_direction_from_world_to_body_space(
+    body_orientation: &Orientation,
+    direction: &Direction,
+) -> Direction {
+    body_orientation.inverse().rotate_unit_vector(direction)
 }
 
 /// Transforms a point from the body-fixed frame to world space.
