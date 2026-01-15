@@ -1,12 +1,15 @@
-# Hash: 40648e83aee62476
-# Generated: 2026-01-14T20:12:13.549350085
+# Hash: 97336ab1c164e441
+# Generated: 2026-01-14T23:57:06.593775986
 # Rust type: impact_controller::orientation::AngularVelocityControl
 # Type category: Component
 module [
     AngularVelocityControl,
     new,
+    new_local,
     add_new,
     add_multiple_new,
+    add_new_local,
+    add_multiple_new_local,
     add,
     add_multiple,
     component_id,
@@ -22,16 +25,21 @@ import Control.AngularVelocityControlDirections
 import Entity
 import Entity.Arg
 import core.Builtin
+import core.UnitQuaternion
 
 ## User control of angular velocity.
 AngularVelocityControl : {
+    ## The orientation of the reference frame in which the controls should
+    ## be applied. This maps the local control directions to world-space
+    ## directions.
+    frame_orientation : UnitQuaternion.UnitQuaternion,
     ## Restrict control to these directions for applicable controllers.
     directions : Control.AngularVelocityControlDirections.AngularVelocityControlDirections,
 }
 
 new : Control.AngularVelocityControlDirections.AngularVelocityControlDirections -> AngularVelocityControl
 new = |directions|
-    { directions }
+    { frame_orientation: UnitQuaternion.identity, directions }
 
 add_new : Entity.ComponentData, Control.AngularVelocityControlDirections.AngularVelocityControlDirections -> Entity.ComponentData
 add_new = |entity_data, directions|
@@ -45,6 +53,25 @@ add_multiple_new = |entity_data, directions|
             directions,
             Entity.multi_count(entity_data),
             new
+        ))
+    )
+
+new_local : UnitQuaternion.UnitQuaternion, Control.AngularVelocityControlDirections.AngularVelocityControlDirections -> AngularVelocityControl
+new_local = |frame_orientation, directions|
+    { frame_orientation, directions }
+
+add_new_local : Entity.ComponentData, UnitQuaternion.UnitQuaternion, Control.AngularVelocityControlDirections.AngularVelocityControlDirections -> Entity.ComponentData
+add_new_local = |entity_data, frame_orientation, directions|
+    add(entity_data, new_local(frame_orientation, directions))
+
+add_multiple_new_local : Entity.MultiComponentData, Entity.Arg.Broadcasted (UnitQuaternion.UnitQuaternion), Entity.Arg.Broadcasted (Control.AngularVelocityControlDirections.AngularVelocityControlDirections) -> Result Entity.MultiComponentData Str
+add_multiple_new_local = |entity_data, frame_orientation, directions|
+    add_multiple(
+        entity_data,
+        All(Entity.Arg.broadcasted_map2(
+            frame_orientation, directions,
+            Entity.multi_count(entity_data),
+            new_local
         ))
     )
 
@@ -102,8 +129,8 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, AngularVelocityControl -> List U8
 write_packet = |bytes, val|
     type_id = 698327266232627508
-    size = 1
-    alignment = 1
+    size = 20
+    alignment = 4
     bytes
     |> List.reserve(24 + size)
     |> Builtin.write_bytes_u64(type_id)
@@ -114,8 +141,8 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List AngularVelocityControl -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 698327266232627508
-    size = 1
-    alignment = 1
+    size = 20
+    alignment = 4
     count = List.len(vals)
     bytes_with_header =
         bytes
@@ -135,7 +162,8 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, AngularVelocityControl -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(1)
+    |> List.reserve(20)
+    |> UnitQuaternion.write_bytes(value.frame_orientation)
     |> Control.AngularVelocityControlDirections.write_bytes(value.directions)
 
 ## Deserializes a value of [AngularVelocityControl] from its bytes in the
@@ -144,13 +172,14 @@ from_bytes : List U8 -> Result AngularVelocityControl _
 from_bytes = |bytes|
     Ok(
         {
-            directions: bytes |> List.sublist({ start: 0, len: 1 }) |> Control.AngularVelocityControlDirections.from_bytes?,
+            frame_orientation: bytes |> List.sublist({ start: 0, len: 16 }) |> UnitQuaternion.from_bytes?,
+            directions: bytes |> List.sublist({ start: 16, len: 4 }) |> Control.AngularVelocityControlDirections.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 1 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 20 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
