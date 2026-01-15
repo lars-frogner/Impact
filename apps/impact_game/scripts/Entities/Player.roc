@@ -20,6 +20,7 @@ import pf.Setup.SphereMesh
 import pf.Setup.CapsuleMesh
 import pf.Setup.DynamicRigidBodyInertialProperties
 import pf.Comp.AngularVelocityControl
+import pf.Comp.AngularVelocityControlParent
 import pf.Control.AngularVelocityControlDirections
 import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
@@ -127,11 +128,16 @@ handle_mouse_button_event! = |{ button, state }|
 player =
     Entity.new_component_data
     |> Setup.SceneGraphGroup.add
-    |> Comp.ReferenceFrame.add_unoriented((0.0, 0.0, -150.0))
+    # |> Comp.ReferenceFrame.add_unoriented((0.0, 0.0, -150.0))
+    |> Comp.ReferenceFrame.add_new(
+        (0.0, 0.0, -150.0),
+        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, 0 * (-Num.pi) / 2),
+    )
     |> Comp.Motion.add_stationary
     |> Comp.AngularVelocityControl.add_new(
         Control.AngularVelocityControlDirections.horizontal,
     )
+    |> Comp.AngularVelocityControlParent.add({ entity_id: entity_ids.player })
     |> Setup.DynamicRigidBodyInertialProperties.add_new(
         player_mass,
         Vector3.zero,

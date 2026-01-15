@@ -9,7 +9,7 @@ use impact_math::{
     quaternion::UnitQuaternion,
     vector::UnitVector3,
 };
-use impact_physics::quantities::Orientation;
+use impact_physics::quantities::{Orientation, OrientationP};
 use roc_integration::roc;
 
 define_component_type! {
@@ -18,8 +18,23 @@ define_component_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct AngularVelocityControl {
+        /// The orientation of the reference frame in which the controls should
+        /// be applied. This maps the local control directions to world-space
+        /// directions.
+        pub frame_orientation: OrientationP,
         /// Restrict control to these directions for applicable controllers.
         pub directions: AngularVelocityControlDirections,
+    }
+}
+
+define_component_type! {
+    /// A parent entity whose reference frame the angular velocity controls
+    /// should be applied in.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct AngularVelocityControlParent {
+        pub entity_id: impact_ecs::world::EntityID,
     }
 }
 
@@ -28,7 +43,7 @@ bitflags! {
     #[roc(parents="Control", category="bitflags", flags=[HORIZONTAL=0, VERTICAL=1])]
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
-    pub struct AngularVelocityControlDirections: u8 {
+    pub struct AngularVelocityControlDirections: u32 {
         const HORIZONTAL = 1 << 0;
         const VERTICAL   = 1 << 1;
     }
@@ -82,17 +97,37 @@ pub struct RollFreeCameraOrientationControllerConfig {
 
 #[roc]
 impl AngularVelocityControl {
-    #[roc(body = "{ directions }")]
+    #[roc(body = "{ frame_orientation: UnitQuaternion.identity, directions }")]
     pub fn new(directions: AngularVelocityControlDirections) -> Self {
-        Self { directions }
-    }
-}
-
-impl Default for AngularVelocityControl {
-    fn default() -> Self {
         Self {
-            directions: AngularVelocityControlDirections::all(),
+            frame_orientation: OrientationP::identity(),
+            directions,
         }
+    }
+
+    #[roc(body = "{ frame_orientation, directions }")]
+    pub fn new_local(
+        frame_orientation: OrientationP,
+        directions: AngularVelocityControlDirections,
+    ) -> Self {
+        Self {
+            frame_orientation,
+            directions,
+        }
+    }
+
+    pub fn update_orientation(
+        &self,
+        orientation_controller: &(impl OrientationController + ?Sized),
+        orientation: &mut Orientation,
+    ) {
+        let frame_orientation = self.frame_orientation.unpack();
+
+        let mut orientation_in_local_frame = frame_orientation.inverse() * *orientation;
+
+        orientation_controller.update_orientation(&mut orientation_in_local_frame, self.directions);
+
+        *orientation = frame_orientation * orientation_in_local_frame;
     }
 }
 
@@ -157,8 +192,7 @@ impl OrientationController for RollFreeCameraOrientationController {
         orientation: &mut Orientation,
         directions: AngularVelocityControlDirections,
     ) {
-        let (mut horizontal_angle, mut vertical_angle, z_angle) =
-            orientation.euler_angles_intrinsic();
+        let (mut horizontal_angle, mut vertical_angle, _) = orientation.euler_angles_intrinsic();
 
         if directions.contains(AngularVelocityControlDirections::HORIZONTAL) {
             horizontal_angle += self.horizontal_angle_change;
@@ -192,7 +226,7 @@ impl OrientationController for RollFreeCameraOrientationController {
         }
 
         *orientation =
-            Orientation::from_euler_angles_intrinsic(horizontal_angle, vertical_angle, z_angle);
+            Orientation::from_euler_angles_intrinsic(horizontal_angle, vertical_angle, 0.0);
     }
 
     fn orientation_has_changed(&self) -> bool {

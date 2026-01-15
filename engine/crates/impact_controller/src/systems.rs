@@ -1,10 +1,15 @@
 //! ECS systems related to motion and orientation control.
 
 use crate::{
-    MotionController, OrientationController, motion::VelocityControl,
-    orientation::AngularVelocityControl,
+    MotionController, OrientationController,
+    motion::VelocityControl,
+    orientation::{AngularVelocityControl, AngularVelocityControlParent},
 };
-use impact_ecs::{query, world::World as ECSWorld};
+use impact_alloc::{AVec, arena::ArenaPool};
+use impact_ecs::{
+    query,
+    world::{EntityID, World as ECSWorld},
+};
 use impact_geometry::ReferenceFrame;
 use impact_physics::{
     quantities::{AngularVelocity, Motion},
@@ -62,6 +67,8 @@ pub fn update_controlled_entity_angular_velocities(
     orientation_controller: &mut (impl OrientationController + ?Sized),
     time_step_duration: f32,
 ) {
+    update_control_frame_orientations_from_parents(ecs_world);
+
     query!(
         ecs_world,
         |control: &AngularVelocityControl,
@@ -72,7 +79,7 @@ pub fn update_controlled_entity_angular_velocities(
                 let old_orientation = frame.orientation.unpack();
                 let mut new_orientation = old_orientation;
 
-                orientation_controller.update_orientation(&mut new_orientation, control.directions);
+                control.update_orientation(orientation_controller, &mut new_orientation);
 
                 AngularVelocity::from_consecutive_orientations(
                     &old_orientation,
@@ -103,7 +110,7 @@ pub fn update_controlled_entity_angular_velocities(
                 let old_orientation = frame.orientation.unpack();
                 let mut new_orientation = old_orientation;
 
-                orientation_controller.update_orientation(&mut new_orientation, control.directions);
+                control.update_orientation(orientation_controller, &mut new_orientation);
 
                 AngularVelocity::from_consecutive_orientations(
                     &old_orientation,
@@ -124,4 +131,28 @@ pub fn update_controlled_entity_angular_velocities(
     );
 
     orientation_controller.reset_orientation_change();
+}
+
+fn update_control_frame_orientations_from_parents(ecs_world: &ECSWorld) {
+    let arena = ArenaPool::get_arena();
+    let mut parent_orientations = AVec::new_in(&arena);
+
+    query!(
+        ecs_world,
+        |entity_id: EntityID, parent: &AngularVelocityControlParent| {
+            if let Some(entity) = ecs_world.get_entity(parent.entity_id)
+                && let Some(frame) = entity.get_component::<ReferenceFrame>()
+            {
+                let parent_orientation = frame.access().orientation;
+                parent_orientations.push((entity_id, parent_orientation));
+            }
+        },
+        [AngularVelocityControl]
+    );
+
+    for (entity_id, parent_orientation) in parent_orientations {
+        let entity = ecs_world.entity(entity_id);
+        let mut control = entity.component_mut::<AngularVelocityControl>();
+        control.access().frame_orientation = parent_orientation;
+    }
 }

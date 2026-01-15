@@ -1,5 +1,5 @@
-# Hash: c562d9bd18cc5d75
-# Generated: 2026-01-14T20:28:34.682308962
+# Hash: b55825929269cef1
+# Generated: 2026-01-14T23:56:20.921854112
 # Rust type: impact_controller::orientation::AngularVelocityControlDirections
 # Type category: POD
 module [
@@ -20,7 +20,7 @@ module [
 import core.Builtin
 
 ## Directions in which angular velocity can be controlled.
-AngularVelocityControlDirections := U8 implements [Eq]
+AngularVelocityControlDirections := U32 implements [Eq]
 
 empty = @AngularVelocityControlDirections(0)
 
@@ -61,17 +61,17 @@ difference = |@AngularVelocityControlDirections(a), @AngularVelocityControlDirec
 ## expected by the engine and appends the bytes to the list.
 write_bytes : List U8, AngularVelocityControlDirections -> List U8
 write_bytes = |bytes, value|
-    Builtin.write_bytes_u8(bytes, bits(value))
+    Builtin.write_bytes_u32(bytes, bits(value))
 
 ## Deserializes a value of [AngularVelocityControlDirections] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result AngularVelocityControlDirections _
 from_bytes = |bytes|
-    Builtin.from_bytes_u8(bytes) |> Result.map_ok(@AngularVelocityControlDirections)
+    Builtin.from_bytes_u32(bytes) |> Result.map_ok(@AngularVelocityControlDirections)
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 1 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 4 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
