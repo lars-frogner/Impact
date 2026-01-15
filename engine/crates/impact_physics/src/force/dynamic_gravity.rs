@@ -1,9 +1,12 @@
 //! Gravitational forces in a collective gravitational field.
 
-use crate::rigid_body::{DynamicRigidBodyID, RigidBodyManager};
+use crate::{
+    quantities::ForceP,
+    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
-use impact_math::{point::Point3P, vector::Vector3P};
+use impact_math::point::Point3P;
 use roc_integration::roc;
 
 define_component_type! {
@@ -21,7 +24,7 @@ define_component_type! {
 pub struct DynamicGravityManager {
     body_ids: KeyIndexMapper<DynamicRigidBodyID>,
     bodies: Vec<GravitationalBody>,
-    forces: Vec<Vector3P>,
+    forces: Vec<ForceP>,
     config: DynamicGravityConfig,
 }
 
@@ -62,7 +65,7 @@ impl DynamicGravityManager {
     pub fn include_body(&mut self, rigid_body_id: DynamicRigidBodyID) {
         self.body_ids.push_key(rigid_body_id);
         self.bodies.push(GravitationalBody::default());
-        self.forces.push(Vector3P::zeros());
+        self.forces.push(ForceP::zeros());
     }
 
     /// Removes the given dynamic rigid body from the collective gravitational
@@ -73,11 +76,18 @@ impl DynamicGravityManager {
         self.forces.swap_remove(idx);
     }
 
+    /// Returns the current force of gravity on the given body, or [`None`] if
+    /// the body is not included in the field.
+    pub fn get_force_on_body(&self, rigid_body_id: DynamicRigidBodyID) -> Option<ForceP> {
+        let idx = self.body_ids.get(rigid_body_id)?;
+        Some(self.forces[idx])
+    }
+
     /// Computes and applies the gravitational forces to the appropriate dynamic
     /// rigid bodies.
     pub fn compute_and_apply(&mut self, rigid_body_manager: &mut RigidBodyManager) {
         self.synchronize_bodies(rigid_body_manager);
-        self.forces.fill(Vector3P::zeros());
+        self.forces.fill(ForceP::zeros());
 
         if self.bodies.len() < 2 {
             return;
@@ -85,6 +95,12 @@ impl DynamicGravityManager {
 
         self.compute_forces();
         self.apply_forces(rigid_body_manager);
+    }
+
+    pub fn clear(&mut self) {
+        self.body_ids.clear();
+        self.bodies.clear();
+        self.forces.clear();
     }
 
     fn synchronize_bodies(&mut self, rigid_body_manager: &RigidBodyManager) {

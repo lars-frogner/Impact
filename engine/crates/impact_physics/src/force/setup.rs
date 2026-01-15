@@ -1,6 +1,7 @@
 //! Force setup and cleanup.
 
 pub use crate::force::{
+    alignment_torque::{FixedDirectionAlignmentTorque, GravityAlignmentTorque},
     constant_acceleration::ConstantAcceleration,
     detailed_drag::setup::{DetailedDragProperties, setup_detailed_drag_force},
     local_force::LocalForce,
@@ -11,6 +12,7 @@ use crate::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor, KinematicRigidBodyAnchor},
     force::{
         ForceGeneratorManager,
+        alignment_torque::{AlignmentTorqueGenerator, AlignmentTorqueGeneratorID},
         constant_acceleration::{ConstantAccelerationGenerator, ConstantAccelerationGeneratorID},
         local_force::{LocalForceGenerator, LocalForceGeneratorID},
         spring_force::{
@@ -139,4 +141,30 @@ pub fn setup_dynamic_gravity(
     force_generator_manager
         .dynamic_gravity_manager_mut()
         .include_body(rigid_body_id);
+}
+
+pub fn setup_fixed_direction_alignment_torque(
+    force_generator_manager: &mut ForceGeneratorManager,
+    rigid_body_id: DynamicRigidBodyID,
+    torque: FixedDirectionAlignmentTorque,
+) -> AlignmentTorqueGeneratorID {
+    force_generator_manager
+        .alignment_torques_mut()
+        .insert_generator(AlignmentTorqueGenerator::for_fixed_direction(
+            rigid_body_id,
+            torque,
+        ))
+}
+
+pub fn setup_gravity_alignment_torque(
+    force_generator_manager: &mut ForceGeneratorManager,
+    rigid_body_id: DynamicRigidBodyID,
+    torque: GravityAlignmentTorque,
+) -> AlignmentTorqueGeneratorID {
+    force_generator_manager
+        .alignment_torques_mut()
+        .insert_generator(AlignmentTorqueGenerator::for_gravity_direction(
+            rigid_body_id,
+            torque,
+        ))
 }

@@ -1,5 +1,6 @@
 //! Calculation of forces and torques.
 
+pub mod alignment_torque;
 pub mod constant_acceleration;
 pub mod detailed_drag;
 pub mod dynamic_gravity;
@@ -8,6 +9,7 @@ pub mod setup;
 pub mod spring_force;
 
 use crate::{UniformMedium, anchor::AnchorManager, rigid_body::RigidBodyManager};
+use alignment_torque::AlignmentTorqueRegistry;
 use anyhow::Result;
 use constant_acceleration::ConstantAccelerationRegistry;
 use detailed_drag::{DetailedDragForceRegistry, DragLoadMapConfig};
@@ -26,6 +28,7 @@ pub struct ForceGeneratorManager {
     dynamic_kinematic_spring_forces: DynamicKinematicSpringForceRegistry,
     detailed_drag_forces: DetailedDragForceRegistry,
     dynamic_gravity_manager: DynamicGravityManager,
+    alignment_torques: AlignmentTorqueRegistry,
 }
 
 /// Configuration parameters for rigid body force generation.
@@ -56,12 +59,13 @@ impl ForceGeneratorManager {
     /// Returns an error if any of the configuration parameters are invalid.
     pub fn new(config: ForceGenerationConfig) -> Result<Self> {
         Ok(Self {
-            constant_accelerations: ForceGeneratorRegistry::new(),
-            local_forces: ForceGeneratorRegistry::new(),
-            dynamic_dynamic_spring_forces: ForceGeneratorRegistry::new(),
-            dynamic_kinematic_spring_forces: ForceGeneratorRegistry::new(),
+            constant_accelerations: ConstantAccelerationRegistry::new(),
+            local_forces: LocalForceRegistry::new(),
+            dynamic_dynamic_spring_forces: DynamicDynamicSpringForceRegistry::new(),
+            dynamic_kinematic_spring_forces: DynamicKinematicSpringForceRegistry::new(),
             detailed_drag_forces: DetailedDragForceRegistry::new(config.drag_load_map_config)?,
             dynamic_gravity_manager: DynamicGravityManager::new(config.dynamic_gravity_config),
+            alignment_torques: AlignmentTorqueRegistry::new(),
         })
     }
 
@@ -115,6 +119,14 @@ impl ForceGeneratorManager {
         &mut self.dynamic_gravity_manager
     }
 
+    pub fn alignment_torques(&self) -> &AlignmentTorqueRegistry {
+        &self.alignment_torques
+    }
+
+    pub fn alignment_torques_mut(&mut self) -> &mut AlignmentTorqueRegistry {
+        &mut self.alignment_torques
+    }
+
     /// Applies all forces of torques to the rigid bodies.
     pub fn apply_forces_and_torques(
         &mut self,
@@ -141,6 +153,10 @@ impl ForceGeneratorManager {
 
         self.dynamic_gravity_manager
             .compute_and_apply(rigid_body_manager);
+
+        for generator in self.alignment_torques.generators() {
+            generator.apply(rigid_body_manager, &self.dynamic_gravity_manager);
+        }
     }
 
     /// Removes all stored force generators.
@@ -150,6 +166,8 @@ impl ForceGeneratorManager {
         self.dynamic_dynamic_spring_forces.clear();
         self.dynamic_kinematic_spring_forces.clear();
         self.detailed_drag_forces.clear();
+        self.dynamic_gravity_manager.clear();
+        self.alignment_torques.clear();
     }
 }
 

@@ -998,6 +998,13 @@ impl UnitVector3 {
         })
     }
 
+    /// Creates a unit vector that is orthogonal to the given unit vector. The
+    /// choice of vector is left to the implementation.
+    #[inline]
+    pub fn orthogonal_to(unit_vector: &Self) -> Self {
+        Self::wrap(unit_vector.inner.any_orthonormal_vector())
+    }
+
     /// The x-component.
     #[inline]
     pub fn x(&self) -> f32 {

@@ -9,7 +9,7 @@ use impact_math::{
     point::{Point3, Point3P},
     quaternion::UnitQuaternion,
     transform::Similarity3,
-    vector::{Vector3, Vector3P},
+    vector::{UnitVector3, Vector3, Vector3P},
 };
 use roc_integration::roc;
 
@@ -386,6 +386,13 @@ impl InertiaTensor {
     #[inline]
     pub const fn inverse_matrix(&self) -> &Matrix3 {
         &self.inverse_matrix
+    }
+
+    /// Computes the moment of inertia about the given axis passing through the
+    /// same point this inertia tensor is defined with respect to.
+    #[inline]
+    pub fn moment_about_axis(&self, axis: &UnitVector3) -> f32 {
+        axis.dot(&(self.matrix * axis.as_vector()))
     }
 
     /// Computes the inertia tensor corresponding to rotating the body with the

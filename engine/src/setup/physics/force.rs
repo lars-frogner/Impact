@@ -12,7 +12,10 @@ use impact_physics::{
         detailed_drag::DetailedDragForceGeneratorID,
         dynamic_gravity::DynamicGravity,
         local_force::LocalForceGeneratorID,
-        setup::{self, ConstantAcceleration, DetailedDragProperties, LocalForce},
+        setup::{
+            self, ConstantAcceleration, DetailedDragProperties, FixedDirectionAlignmentTorque,
+            GravityAlignmentTorque, LocalForce,
+        },
         spring_force::{
             DynamicDynamicSpringForceGeneratorID, DynamicDynamicSpringForceProperties,
             DynamicKinematicSpringForceGeneratorID, DynamicKinematicSpringForceProperties,
@@ -144,6 +147,36 @@ pub fn setup_forces_for_new_entities(
             setup::setup_dynamic_gravity(&mut force_generator_manager, *rigid_body_id);
         },
         [DynamicGravity]
+    );
+
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        },
+        components,
+        |torque: &FixedDirectionAlignmentTorque, rigid_body_id: &DynamicRigidBodyID| {
+            setup::setup_fixed_direction_alignment_torque(
+                &mut force_generator_manager,
+                *rigid_body_id,
+                *torque,
+            );
+        }
+    );
+
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        },
+        components,
+        |torque: &GravityAlignmentTorque, rigid_body_id: &DynamicRigidBodyID| {
+            setup::setup_gravity_alignment_torque(
+                &mut force_generator_manager,
+                *rigid_body_id,
+                *torque,
+            );
+        }
     );
 
     Ok(())
