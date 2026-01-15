@@ -154,7 +154,7 @@ impl Application for SnapshotTester {
             let rendered_scene = self.test_scenes[frame - 1];
 
             // Prepare for this frame's scene
-            engine.reset_world();
+            engine.reset_world()?;
             rendered_scene.restore_settings(engine);
         }
 

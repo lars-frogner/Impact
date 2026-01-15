@@ -3,6 +3,7 @@
 pub mod api;
 pub mod entity;
 pub mod game_loop;
+pub mod gpu_resource;
 
 #[cfg(feature = "window")]
 pub mod window;

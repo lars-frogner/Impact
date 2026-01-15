@@ -308,7 +308,7 @@ pub fn execute_gizmo_admin_command(engine: &Engine, command: GizmoAdminCommand) 
 
 pub fn execute_system_admin_command(engine: &Engine, command: SystemAdminCommand) -> Result<()> {
     match command {
-        SystemAdminCommand::ResetWorld => engine.reset_world(),
+        SystemAdminCommand::ResetWorld => engine.reset_world()?,
         SystemAdminCommand::Shutdown => engine.request_shutdown(),
     }
     Ok(())
