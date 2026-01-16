@@ -22,6 +22,7 @@ import pf.Setup.DynamicRigidBodyInertialProperties
 import pf.Comp.AngularVelocityControl
 import pf.Comp.AngularVelocityControlParent
 import pf.Control.AngularVelocityControlDirections
+import pf.Control.AngularVelocityControlFlags
 import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
@@ -42,6 +43,8 @@ import pf.Physics.ContactResponseParameters
 import pf.Setup.LocalForce
 import pf.Setup.SphericalCollidable
 import pf.Comp.LocalForceGeneratorID
+import pf.Comp.DynamicGravity
+import pf.Setup.GravityAlignmentTorque
 
 entity_ids = {
     player: Entity.id("player"),
@@ -52,6 +55,7 @@ entity_ids = {
 }
 
 player_mass = 1.0
+player_moment_of_inertia = 10.0
 thruster_acceleration = 10.0
 thruster_force = player_mass * thruster_acceleration
 
@@ -131,17 +135,24 @@ player =
     # |> Comp.ReferenceFrame.add_unoriented((0.0, 0.0, -150.0))
     |> Comp.ReferenceFrame.add_new(
         (0.0, 0.0, -150.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, 0 * (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, -3 * Num.pi / 2),
     )
     |> Comp.Motion.add_stationary
     |> Comp.AngularVelocityControl.add_new(
         Control.AngularVelocityControlDirections.horizontal,
+        Control.AngularVelocityControlFlags.preserve_existing_for_horizontal,
     )
     |> Comp.AngularVelocityControlParent.add({ entity_id: entity_ids.player })
     |> Setup.DynamicRigidBodyInertialProperties.add_new(
         player_mass,
         Vector3.zero,
-        Matrix3.diagonal(Vector3.same(1.0)),
+        Matrix3.diagonal(
+            (
+                player_moment_of_inertia,
+                player_moment_of_inertia,
+                player_moment_of_inertia,
+            ),
+        ),
     )
     |> Setup.SphericalCollidable.add_new(
         Dynamic,
@@ -151,6 +162,13 @@ player =
     |> Setup.LocalForce.add_new(
         Vector3.zero,
         Point3.origin,
+    )
+    |> Comp.DynamicGravity.add
+    |> Setup.GravityAlignmentTorque.add_new(
+        UnitVector3.neg_y_axis,
+        2.0,
+        0.0,
+        2.0,
     )
 
 player_body =
@@ -175,6 +193,7 @@ player_head =
     |> Comp.Motion.add_stationary
     |> Comp.AngularVelocityControl.add_new(
         Control.AngularVelocityControlDirections.vertical,
+        Control.AngularVelocityControlFlags.empty,
     )
     |> Setup.PerspectiveCamera.add_new(
         Radians.from_degrees(70),

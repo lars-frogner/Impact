@@ -25,6 +25,7 @@ import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Texture.TextureID
 import pf.Setup.VoxelCollidable
 import pf.Physics.ContactResponseParameters
+import pf.Comp.DynamicGravity
 
 import Entities.Player as Player
 
@@ -97,8 +98,9 @@ sun =
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
         Dynamic,
-        Physics.ContactResponseParameters.new(0.1, 0.7, 0.5),
+        Physics.ContactResponseParameters.new(0.01, 0.7, 0.5),
     )
+    |> Comp.DynamicGravity.add
 
 asteroid =
     Entity.new_component_data
