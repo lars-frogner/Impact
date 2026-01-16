@@ -3,8 +3,8 @@
 use anyhow::{Result, bail};
 use approx::abs_diff_eq;
 use impact_math::{
-    point::{Point3, Point3P},
-    vector::{UnitVector3, Vector2, Vector3, Vector3P},
+    point::{Point3, Point3C},
+    vector::{UnitVector3, Vector2, Vector3, Vector3C},
 };
 
 /// Represents a projection of 3D positions into UV texture coordinates.
@@ -33,9 +33,9 @@ pub struct PlanarTextureProjection {
 #[derive(Clone, Debug)]
 pub enum TextureProjectionDeclaration {
     Planar {
-        origin: Point3P,
-        u_vector: Vector3P,
-        v_vector: Vector3P,
+        origin: Point3C,
+        u_vector: Vector3C,
+        v_vector: Vector3C,
     },
 }
 

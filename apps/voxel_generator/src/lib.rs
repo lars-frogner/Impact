@@ -266,7 +266,7 @@ fn generate_next_voxel_object_or_default(
 
 fn compute_model_transform<A: Allocator>(generator: &SDFVoxelGenerator<A>) -> ModelTransform {
     ModelTransform::with_offset(
-        generator.voxel_extent() * generator.grid_center().as_vector().pack(),
+        generator.voxel_extent() * generator.grid_center().as_vector().compact(),
     )
 }
 

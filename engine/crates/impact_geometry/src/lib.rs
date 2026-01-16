@@ -13,14 +13,14 @@ pub mod projection;
 pub mod reference_frame;
 pub mod sphere;
 
-pub use axis_aligned_box::{AxisAlignedBox, AxisAlignedBoxP};
-pub use capsule::{Capsule, CapsuleP};
-pub use frustum::{Frustum, FrustumP};
+pub use axis_aligned_box::{AxisAlignedBox, AxisAlignedBoxC};
+pub use capsule::{Capsule, CapsuleC};
+pub use frustum::{Frustum, FrustumC};
 pub use model_transform::ModelTransform;
-pub use oriented_box::{OrientedBox, OrientedBoxP};
-pub use plane::{Plane, PlaneP};
+pub use oriented_box::{OrientedBox, OrientedBoxC};
+pub use plane::{Plane, PlaneC};
 pub use reference_frame::ReferenceFrame;
-pub use sphere::{Sphere, SphereP};
+pub use sphere::{Sphere, SphereC};
 
 use impact_math::{
     angle::{Angle, Radians},

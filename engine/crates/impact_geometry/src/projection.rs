@@ -1,6 +1,6 @@
 //! Projection transformations.
 
-use crate::{AxisAlignedBoxP, Frustum};
+use crate::{AxisAlignedBoxC, Frustum};
 use approx::assert_abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
@@ -207,7 +207,7 @@ impl OrthographicTransform {
     /// Creates a new orthographic transformation with the given axis-aligned
     /// box as the view box.
     #[inline]
-    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBoxP) -> Self {
+    pub fn from_axis_aligned_box(axis_aligned_box: &AxisAlignedBoxC) -> Self {
         let lower = axis_aligned_box.lower_corner();
         let upper = axis_aligned_box.upper_corner();
         Self::new(
@@ -382,7 +382,7 @@ impl CubeMapper {
         // UnitQuaternion::identity()
         UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(0.0, 0.0, 0.0, 1.0))),
         // From negative z face:
-        // UnitQuaternionP::from_axis_angle(&UnitVector3P::unit_y(), PI)
+        // UnitQuaternionC::from_axis_angle(&UnitVector3C::unit_y(), PI)
         UnitQuaternion::unchecked_from(Quaternion::from_vector(Vector4::new(0.0, 1.0, 0.0, 0.0))),
     ];
 

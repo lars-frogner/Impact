@@ -2,8 +2,8 @@
 
 use crate::{
     point::Point3,
-    quaternion::{UnitQuaternion, UnitQuaternionP},
-    vector::{UnitVector3, Vector3, Vector3P},
+    quaternion::{UnitQuaternion, UnitQuaternionC},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -12,7 +12,7 @@ use bytemuck::{Pod, Zeroable};
 /// The rotation quaternion and translation vector are stored in 128-bit SIMD
 /// registers for efficient computation. That leads to an extra 4 bytes in size
 /// (due to the padded vector) and 16-byte alignment. For cache-friendly
-/// storage, prefer the packed 4-byte aligned [`Isometry3P`].
+/// storage, prefer the compact 4-byte aligned [`Isometry3C`].
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
@@ -22,7 +22,7 @@ pub struct Isometry3 {
 }
 
 /// A transform consisting of a rotation followed by a translation. This is the
-/// "packed" version.
+/// "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
@@ -30,9 +30,9 @@ pub struct Isometry3 {
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Isometry3P {
-    rotation: UnitQuaternionP,
-    translation: Vector3P,
+pub struct Isometry3C {
+    rotation: UnitQuaternionC,
+    translation: Vector3C,
 }
 
 impl Isometry3 {
@@ -181,10 +181,10 @@ impl Isometry3 {
     }
 
     /// Converts the transform to the 4-byte aligned cache-friendly
-    /// [`Isometry3P`].
+    /// [`Isometry3C`].
     #[inline]
-    pub fn pack(&self) -> Isometry3P {
-        Isometry3P::from_parts(self.translation().pack(), self.rotation().pack())
+    pub fn compact(&self) -> Isometry3C {
+        Isometry3C::from_parts(self.translation().compact(), self.rotation().compact())
     }
 }
 
@@ -206,20 +206,20 @@ impl_relative_eq!(Isometry3, |a, b, epsilon, max_relative| {
             .relative_eq(&b.translation, epsilon, max_relative)
 });
 
-impl Isometry3P {
+impl Isometry3C {
     /// Creates the identity transform.
     #[inline]
     pub const fn identity() -> Self {
         Self {
-            rotation: UnitQuaternionP::identity(),
-            translation: Vector3P::zeros(),
+            rotation: UnitQuaternionC::identity(),
+            translation: Vector3C::zeros(),
         }
     }
 
     /// Creates the isometry transform consisting of the given rotation and
     /// translation.
     #[inline]
-    pub const fn from_parts(translation: Vector3P, rotation: UnitQuaternionP) -> Self {
+    pub const fn from_parts(translation: Vector3C, rotation: UnitQuaternionC) -> Self {
         Self {
             rotation,
             translation,
@@ -229,43 +229,43 @@ impl Isometry3P {
     /// Creates the isometry transform consisting of the given translation and
     /// no rotation.
     #[inline]
-    pub const fn from_translation(translation: Vector3P) -> Self {
-        Self::from_parts(translation, UnitQuaternionP::identity())
+    pub const fn from_translation(translation: Vector3C) -> Self {
+        Self::from_parts(translation, UnitQuaternionC::identity())
     }
 
     /// Creates the isometry transform consisting of the given rotation and
     /// no translation.
     #[inline]
-    pub const fn from_rotation(rotation: UnitQuaternionP) -> Self {
-        Self::from_parts(Vector3P::zeros(), rotation)
+    pub const fn from_rotation(rotation: UnitQuaternionC) -> Self {
+        Self::from_parts(Vector3C::zeros(), rotation)
     }
 
     /// The translational part of the transform.
     #[inline]
-    pub const fn translation(&self) -> &Vector3P {
+    pub const fn translation(&self) -> &Vector3C {
         &self.translation
     }
 
     /// The rotational part of the transform.
     #[inline]
-    pub const fn rotation(&self) -> &UnitQuaternionP {
+    pub const fn rotation(&self) -> &UnitQuaternionC {
         &self.rotation
     }
 
     /// Converts the transform to the 16-byte aligned SIMD-friendly
     /// [`Isometry3`].
     #[inline]
-    pub fn unpack(&self) -> Isometry3 {
-        Isometry3::from_parts(self.translation().unpack(), self.rotation().unpack())
+    pub fn aligned(&self) -> Isometry3 {
+        Isometry3::from_parts(self.translation().aligned(), self.rotation().aligned())
     }
 }
 
-impl_abs_diff_eq!(Isometry3P, |a, b, epsilon| {
+impl_abs_diff_eq!(Isometry3C, |a, b, epsilon| {
     a.rotation.abs_diff_eq(&b.rotation, epsilon)
         && a.translation.abs_diff_eq(&b.translation, epsilon)
 });
 
-impl_relative_eq!(Isometry3P, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Isometry3C, |a, b, epsilon, max_relative| {
     a.rotation.relative_eq(&b.rotation, epsilon, max_relative)
         && a.translation
             .relative_eq(&b.translation, epsilon, max_relative)
@@ -275,13 +275,13 @@ impl_relative_eq!(Isometry3P, |a, b, epsilon, max_relative| {
 mod tests {
     use super::*;
     use crate::consts::f32::PI;
-    use Vector3P;
+    use Vector3C;
     use approx::assert_abs_diff_eq;
 
     const EPSILON: f32 = 1e-6;
     const TRANSLATION_1: Vector3 = Vector3::new(1.0, 2.0, 3.0);
     const TRANSLATION_2: Vector3 = Vector3::new(4.0, 5.0, 6.0);
-    const TRANSLATION_3: Vector3P = Vector3P::new(1.5, 2.5, 3.5);
+    const TRANSLATION_3: Vector3C = Vector3C::new(1.5, 2.5, 3.5);
 
     fn rotation_90_z() -> UnitQuaternion {
         UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0)
@@ -291,8 +291,8 @@ mod tests {
         UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI / 4.0)
     }
 
-    fn rotation_90_z_unaligned() -> UnitQuaternionP {
-        UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0).pack()
+    fn rotation_90_z_unaligned() -> UnitQuaternionC {
+        UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), PI / 2.0).compact()
     }
 
     // === Isometry3 Tests (SIMD-aligned) ===
@@ -506,14 +506,14 @@ mod tests {
         assert!(iso.rotation().angle() < 2.0 * PI);
     }
 
-    // === Isometry3P Tests (packed) ===
+    // === Isometry3C Tests (compact) ===
 
     #[test]
     fn converting_isometry3p_to_aligned_and_back_preserves_data() {
         let translation = TRANSLATION_3;
         let rotation = rotation_90_z_unaligned();
-        let iso = Isometry3P::from_parts(translation, rotation);
-        let roundtrip = iso.unpack().pack();
+        let iso = Isometry3C::from_parts(translation, rotation);
+        let roundtrip = iso.aligned().compact();
 
         assert_abs_diff_eq!(*roundtrip.translation(), translation, epsilon = EPSILON);
         assert_abs_diff_eq!(*roundtrip.rotation(), rotation, epsilon = EPSILON);

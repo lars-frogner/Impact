@@ -1,7 +1,7 @@
 //! Projective transforms.
 
 use crate::{
-    matrix::{Matrix4, Matrix4P},
+    matrix::{Matrix4, Matrix4C},
     point::Point3,
 };
 use bytemuck::{Pod, Zeroable};
@@ -11,7 +11,7 @@ use bytemuck::{Pod, Zeroable};
 /// The matrix columns are stored in 128-bit SIMD registers for efficient
 /// computation. That leads to an alignment of 16 bytes. For padding-free
 /// storage together with smaller types, prefer the 4-byte aligned
-/// [`Projective3P`].
+/// [`Projective3C`].
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
@@ -20,7 +20,7 @@ pub struct Projective3 {
 }
 
 /// A projective transform backed by a 4x4 homogeneous matrix. This is the
-/// "packed" version.
+/// "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
@@ -28,8 +28,8 @@ pub struct Projective3 {
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
-pub struct Projective3P {
-    matrix: Matrix4P,
+pub struct Projective3C {
+    matrix: Matrix4C,
 }
 
 impl Projective3 {
@@ -67,10 +67,10 @@ impl Projective3 {
     }
 
     /// Converts the transform to the 4-byte aligned cache-friendly
-    /// [`Projective3P`].
+    /// [`Projective3C`].
     #[inline]
-    pub fn pack(&self) -> Projective3P {
-        Projective3P::from_matrix_unchecked(self.matrix().pack())
+    pub fn compact(&self) -> Projective3C {
+        Projective3C::from_matrix_unchecked(self.matrix().compact())
     }
 }
 
@@ -88,44 +88,44 @@ impl Default for Projective3 {
     }
 }
 
-impl Projective3P {
+impl Projective3C {
     /// Creates the identity transform.
     #[inline]
     pub const fn identity() -> Self {
-        Self::from_matrix_unchecked(Matrix4P::identity())
+        Self::from_matrix_unchecked(Matrix4C::identity())
     }
 
     /// Creates a projective transform corresponding to the given 4x4
     /// homogeneous matrix. The matrix is assumed to represent a valid
     /// projective transform.
     #[inline]
-    pub const fn from_matrix_unchecked(matrix: Matrix4P) -> Self {
+    pub const fn from_matrix_unchecked(matrix: Matrix4C) -> Self {
         Self { matrix }
     }
 
     /// Returns the projection matrix.
     #[inline]
-    pub const fn matrix(&self) -> &Matrix4P {
+    pub const fn matrix(&self) -> &Matrix4C {
         &self.matrix
     }
 
     /// Converts the transform to the 16-byte aligned SIMD-friendly
     /// [`Projective3`].
     #[inline]
-    pub fn unpack(&self) -> Projective3 {
-        Projective3::from_matrix_unchecked(self.matrix().unpack())
+    pub fn aligned(&self) -> Projective3 {
+        Projective3::from_matrix_unchecked(self.matrix().aligned())
     }
 }
 
-impl_abs_diff_eq!(Projective3P, |a, b, epsilon| {
+impl_abs_diff_eq!(Projective3C, |a, b, epsilon| {
     a.matrix.abs_diff_eq(&b.matrix, epsilon)
 });
 
-impl_relative_eq!(Projective3P, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Projective3C, |a, b, epsilon, max_relative| {
     a.matrix.relative_eq(&b.matrix, epsilon, max_relative)
 });
 
-impl Default for Projective3P {
+impl Default for Projective3C {
     fn default() -> Self {
         Self::identity()
     }
@@ -136,9 +136,9 @@ mod tests {
     use super::*;
     use crate::{
         matrix::Matrix4,
-        matrix::Matrix4P,
+        matrix::Matrix4C,
         point::Point3,
-        vector::{Vector4, Vector4P},
+        vector::{Vector4, Vector4C},
     };
     use approx::assert_abs_diff_eq;
 
@@ -155,12 +155,12 @@ mod tests {
     }
 
     // Helper function to create a simple scaling matrix (unaligned)
-    fn test_scale_matrix_unaligned() -> Matrix4P {
-        Matrix4P::from_columns(
-            Vector4P::new(2.0, 0.0, 0.0, 0.0),
-            Vector4P::new(0.0, 3.0, 0.0, 0.0),
-            Vector4P::new(0.0, 0.0, 4.0, 0.0),
-            Vector4P::new(0.0, 0.0, 0.0, 1.0),
+    fn test_scale_matrix_unaligned() -> Matrix4C {
+        Matrix4C::from_columns(
+            Vector4C::new(2.0, 0.0, 0.0, 0.0),
+            Vector4C::new(0.0, 3.0, 0.0, 0.0),
+            Vector4C::new(0.0, 0.0, 4.0, 0.0),
+            Vector4C::new(0.0, 0.0, 0.0, 1.0),
         )
     }
 
@@ -236,13 +236,13 @@ mod tests {
         assert_abs_diff_eq!(projected, Point3::new(-1.0, -2.0, -3.0), epsilon = EPSILON);
     }
 
-    // === Projective3P Tests (packed) ===
+    // === Projective3C Tests (compact) ===
 
     #[test]
     fn converting_projective3p_to_aligned_and_back_preserves_data() {
         let matrix = test_scale_matrix_unaligned();
-        let proj = Projective3P::from_matrix_unchecked(matrix);
-        let roundtrip = proj.unpack().pack();
+        let proj = Projective3C::from_matrix_unchecked(matrix);
+        let roundtrip = proj.aligned().compact();
 
         assert_abs_diff_eq!(*roundtrip.matrix(), matrix, epsilon = EPSILON);
     }

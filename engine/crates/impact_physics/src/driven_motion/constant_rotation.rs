@@ -2,7 +2,7 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{AngularVelocityP, OrientationP},
+    quantities::{AngularVelocityC, OrientationC},
     rigid_body::advance_orientation,
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
@@ -43,9 +43,9 @@ define_setup_type! {
         /// orientation.
         pub initial_time: f32,
         /// The orientation of the body at the initial time.
-        pub initial_orientation: OrientationP,
+        pub initial_orientation: OrientationC,
         /// The angular velocity of the body.
-        pub angular_velocity: AngularVelocityP,
+        pub angular_velocity: AngularVelocityC,
     }
 }
 
@@ -92,8 +92,8 @@ impl ConstantRotation {
     "#)]
     pub fn new(
         initial_time: f32,
-        initial_orientation: OrientationP,
-        angular_velocity: AngularVelocityP,
+        initial_orientation: OrientationC,
+        angular_velocity: AngularVelocityC,
     ) -> Self {
         Self {
             initial_time,
@@ -103,27 +103,27 @@ impl ConstantRotation {
     }
 
     /// Computes the orientation at the given time.
-    pub fn compute_orientation(&self, time: f32) -> OrientationP {
-        let initial_orientation = self.initial_orientation.unpack();
-        let angular_velocity = self.angular_velocity.unpack();
+    pub fn compute_orientation(&self, time: f32) -> OrientationC {
+        let initial_orientation = self.initial_orientation.aligned();
+        let angular_velocity = self.angular_velocity.aligned();
 
         let time_offset = time - self.initial_time;
 
         let orientation = advance_orientation(&initial_orientation, &angular_velocity, time_offset);
 
-        orientation.pack()
+        orientation.compact()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::{AngularVelocityP, DirectionP, Orientation};
+    use crate::quantities::{AngularVelocityC, DirectionC, Orientation};
     use approx::{abs_diff_eq, assert_abs_diff_eq, assert_abs_diff_ne};
     use impact_math::{
         angle::Radians,
         consts::f32::{FRAC_PI_2, PI, TWO_PI},
-        vector::{UnitVector3P, Vector3P},
+        vector::{UnitVector3C, Vector3C},
     };
     use proptest::prelude::*;
 
@@ -131,8 +131,8 @@ mod tests {
         fn direction_strategy()(
             phi in 0.0..TWO_PI,
             theta in 0.0..PI,
-        ) -> DirectionP {
-            DirectionP::normalized_from(Vector3P::new(
+        ) -> DirectionC {
+            DirectionC::normalized_from(Vector3C::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -145,8 +145,8 @@ mod tests {
             rotation_y in 0.0..TWO_PI,
             rotation_x in -FRAC_PI_2..FRAC_PI_2,
             rotation_z in 0.0..TWO_PI,
-        ) -> OrientationP {
-            Orientation::from_euler_angles_extrinsic(rotation_y, rotation_x, rotation_z).pack()
+        ) -> OrientationC {
+            Orientation::from_euler_angles_extrinsic(rotation_y, rotation_x, rotation_z).compact()
         }
     }
 
@@ -154,15 +154,15 @@ mod tests {
         fn angular_velocity_strategy(max_angular_speed: f32)(
             angular_speed in -max_angular_speed..max_angular_speed,
             axis in direction_strategy(),
-        ) -> AngularVelocityP {
-            AngularVelocityP::new(axis, Radians(angular_speed))
+        ) -> AngularVelocityC {
+            AngularVelocityC::new(axis, Radians(angular_speed))
         }
     }
 
     #[test]
     fn should_get_initial_orientation_for_zero_angular_velocity() {
-        let orientation = OrientationP::identity();
-        let angular_velocity = AngularVelocityP::zero();
+        let orientation = OrientationC::identity();
+        let angular_velocity = AngularVelocityC::zero();
         let rotation = ConstantRotation::new(0.0, orientation, angular_velocity);
         let rotated_orientation = rotation.compute_orientation(1.0);
         assert_abs_diff_eq!(rotated_orientation, orientation, epsilon = 1e-6);
@@ -170,8 +170,8 @@ mod tests {
 
     #[test]
     fn should_get_different_orientation_for_nonzero_angular_velocity() {
-        let orientation = OrientationP::identity();
-        let angular_velocity = AngularVelocityP::new(UnitVector3P::unit_y(), Radians(1.0));
+        let orientation = OrientationC::identity();
+        let angular_velocity = AngularVelocityC::new(UnitVector3C::unit_y(), Radians(1.0));
         let rotation = ConstantRotation::new(0.0, orientation, angular_velocity);
         let rotated_orientation = rotation.compute_orientation(1.0);
         assert_abs_diff_ne!(rotated_orientation, orientation, epsilon = 1e-6);

@@ -19,7 +19,7 @@ use disconnection::{
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::point::{Point3, Point3P};
+use impact_math::point::{Point3, Point3C};
 use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
@@ -825,9 +825,9 @@ impl ChunkedVoxelObject {
     }
 
     #[inline]
-    fn compute_occupied_voxel_range_corner_centers(&self) -> [Point3P; 8] {
+    fn compute_occupied_voxel_range_corner_centers(&self) -> [Point3C; 8] {
         if self.contains_only_empty_voxels() {
-            return [Point3P::origin(); 8];
+            return [Point3C::origin(); 8];
         }
 
         let rx = &self.occupied_voxel_ranges[0];
@@ -846,7 +846,7 @@ impl ChunkedVoxelObject {
         ]
         .map(|[i, j, k]| {
             self.voxel_center_position_from_object_voxel_indices(i, j, k)
-                .pack()
+                .compact()
         })
     }
 

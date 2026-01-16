@@ -4,7 +4,7 @@ use crate::ModelInstanceManager;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::INSTANCE_START;
 use impact_gpu::wgpu;
-use impact_math::{quaternion::UnitQuaternionP, transform::Similarity3, vector::Vector3P};
+use impact_math::{quaternion::UnitQuaternionC, transform::Similarity3, vector::Vector3C};
 use std::hash::Hash;
 
 /// Trait for types that can be referenced as an [`InstanceModelViewTransform`].
@@ -20,8 +20,8 @@ pub trait AsInstanceModelViewTransform {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InstanceModelViewTransform {
-    pub rotation: UnitQuaternionP,
-    pub translation: Vector3P,
+    pub rotation: UnitQuaternionC,
+    pub translation: Vector3C,
     pub scaling: f32,
 }
 
@@ -61,8 +61,8 @@ impl InstanceModelViewTransform {
     /// Creates a new identity transform.
     pub fn identity() -> Self {
         Self {
-            rotation: UnitQuaternionP::identity(),
-            translation: Vector3P::zeros(),
+            rotation: UnitQuaternionC::identity(),
+            translation: Vector3C::zeros(),
             scaling: 1.0,
         }
     }
@@ -71,8 +71,8 @@ impl InstanceModelViewTransform {
 impl From<&Similarity3> for InstanceModelViewTransform {
     fn from(transform: &Similarity3) -> Self {
         InstanceModelViewTransform {
-            rotation: transform.rotation().pack(),
-            translation: transform.translation().pack(),
+            rotation: transform.rotation().compact(),
+            translation: transform.translation().compact(),
             scaling: transform.scaling(),
         }
     }
@@ -85,7 +85,7 @@ impl From<InstanceModelViewTransform> for Similarity3 {
             translation,
             scaling,
         } = transform;
-        Similarity3::from_parts(translation.unpack(), rotation.unpack(), scaling)
+        Similarity3::from_parts(translation.aligned(), rotation.aligned(), scaling)
     }
 }
 

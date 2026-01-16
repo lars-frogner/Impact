@@ -13,7 +13,7 @@ use impact_geometry::{AxisAlignedBox, OrientedBox};
 use impact_math::{
     consts::f32::FRAC_1_SQRT_3,
     matrix::Matrix4,
-    point::{Point3, Point3P},
+    point::{Point3, Point3C},
     quaternion::UnitQuaternion,
     transform::Similarity3,
     vector::{UnitVector3, Vector3},
@@ -676,7 +676,7 @@ impl<A: Allocator> SDFGenerator<A> {
                         // The sphere SDF formula is simple enough that the compiler
                         // is able to vectorize the update loop with vertical SIMD
                         // when using packed vectors, which beats the horizontal
-                        // SIMD obtained by using unpacked vectors.
+                        // SIMD obtained by using aligned vectors.
                         update_signed_distances_for_block_packed::<SIZE, COUNT>(
                             &mut buffers.signed_distance_stack[stack_top],
                             &node.transform_to_node_space,
@@ -895,7 +895,7 @@ impl<A: Allocator> SDFGenerator<A> {
                     // The sphere SDF formula is simple enough that the compiler
                     // is able to vectorize the update loop with vertical SIMD
                     // when using packed vectors, which beats the horizontal
-                    // SIMD obtained by using unpacked vectors.
+                    // SIMD obtained by using aligned vectors.
                     update_signed_distances_for_block_packed::<SIZE, COUNT>(
                         &mut buffers.signed_distance_stack[stack_top],
                         &node.transform_to_node_space,
@@ -1185,7 +1185,7 @@ impl SphereSDF {
     }
 
     #[inline]
-    pub fn compute_signed_distance_packed(&self, position_in_node_space: &Point3P) -> f32 {
+    pub fn compute_signed_distance_packed(&self, position_in_node_space: &Point3C) -> f32 {
         position_in_node_space.as_vector().norm() - self.radius
     }
 }
@@ -1243,7 +1243,7 @@ impl CapsuleSDF {
     }
 
     #[inline]
-    pub fn compute_signed_distance_packed(&self, position_in_node_space: &Point3P) -> f32 {
+    pub fn compute_signed_distance_packed(&self, position_in_node_space: &Point3C) -> f32 {
         let mut position = *position_in_node_space;
         *position.y_mut() -= position
             .y()
@@ -1663,16 +1663,16 @@ pub fn update_signed_distances_for_block_packed<const SIZE: usize, const COUNT: 
     signed_distances: &mut [f32; COUNT],
     transform_to_node_space: &Matrix4,
     block_origin_in_root_space: &Point3,
-    update_signed_distance: &impl Fn(&mut f32, &Point3P),
+    update_signed_distance: &impl Fn(&mut f32, &Point3C),
 ) {
     assert_eq!(COUNT, SIZE.pow(3));
 
     let origin = transform_to_node_space
         .transform_point(block_origin_in_root_space)
-        .pack();
-    let dx = transform_to_node_space.column_1().xyz().pack();
-    let dy = transform_to_node_space.column_2().xyz().pack();
-    let dz = transform_to_node_space.column_3().xyz().pack();
+        .compact();
+    let dx = transform_to_node_space.column_1().xyz().compact();
+    let dy = transform_to_node_space.column_2().xyz().compact();
+    let dz = transform_to_node_space.column_3().xyz().compact();
 
     let mut idx = 0;
     for i in 0..SIZE {

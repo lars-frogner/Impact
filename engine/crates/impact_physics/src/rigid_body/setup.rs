@@ -10,7 +10,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::ReferenceFrame;
-use impact_math::{matrix::Matrix3P, point::Point3P};
+use impact_math::{matrix::Matrix3C, point::Point3C};
 use roc_integration::roc;
 
 define_setup_type! {
@@ -35,10 +35,10 @@ define_setup_type! {
         // The mass of the rigid body.
         pub mass: f32,
         /// The center of mass of the rigid body.
-        pub center_of_mass: Point3P,
+        pub center_of_mass: Point3C,
         // The inertia tensor of the rigid body defined relative to the center
         // of mass.
-        pub inertia_tensor: Matrix3P,
+        pub inertia_tensor: Matrix3C,
     }
 }
 
@@ -53,7 +53,7 @@ impl DynamicRigidBodySubstance {
 #[roc]
 impl DynamicRigidBodyInertialProperties {
     #[roc(body = "{ mass, center_of_mass, inertia_tensor }")]
-    pub fn new(mass: f32, center_of_mass: Point3P, inertia_tensor: Matrix3P) -> Self {
+    pub fn new(mass: f32, center_of_mass: Point3C, inertia_tensor: Matrix3C) -> Self {
         Self {
             mass,
             center_of_mass,
@@ -85,7 +85,7 @@ pub fn setup_dynamic_rigid_body(
 ) -> DynamicRigidBodyID {
     let rigid_body = DynamicRigidBody::new(
         inertial_properties.mass(),
-        inertial_properties.inertia_tensor().pack(),
+        inertial_properties.inertia_tensor().compact(),
         frame.position,
         frame.orientation,
         motion.linear_velocity,

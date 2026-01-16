@@ -1,24 +1,24 @@
 //! Planar collidable geometry.
 
 use crate::material::ContactResponseParameters;
-use impact_geometry::PlaneP;
+use impact_geometry::PlaneC;
 use impact_math::transform::Isometry3;
 
 #[derive(Clone, Debug)]
 pub struct PlaneCollidable {
-    plane: PlaneP,
+    plane: PlaneC,
     response_params: ContactResponseParameters,
 }
 
 impl PlaneCollidable {
-    pub fn new(plane: PlaneP, response_params: ContactResponseParameters) -> Self {
+    pub fn new(plane: PlaneC, response_params: ContactResponseParameters) -> Self {
         Self {
             plane,
             response_params,
         }
     }
 
-    pub fn plane(&self) -> &PlaneP {
+    pub fn plane(&self) -> &PlaneC {
         &self.plane
     }
 
@@ -27,10 +27,10 @@ impl PlaneCollidable {
     }
 
     pub fn transformed(&self, transform: &Isometry3) -> Self {
-        let plane = self.plane.unpack();
+        let plane = self.plane.aligned();
         let transformed_plane = plane.iso_transformed(transform);
         Self {
-            plane: transformed_plane.pack(),
+            plane: transformed_plane.compact(),
             response_params: self.response_params,
         }
     }

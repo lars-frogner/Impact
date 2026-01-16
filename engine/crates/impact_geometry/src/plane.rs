@@ -7,7 +7,7 @@ use impact_math::{
     point::Point3,
     quaternion::UnitQuaternion,
     transform::{Isometry3, Similarity3},
-    vector::{UnitVector3, UnitVector3P},
+    vector::{UnitVector3, UnitVector3C},
 };
 
 /// A plane in 3D, represented by a unit normal and a displacement.
@@ -23,7 +23,7 @@ use impact_math::{
 /// The unit normal is stored in 128-bit SIMD registers for efficient
 /// computation. That leads to an extra 16 bytes in size (4 due to the padded
 /// normal and 12 due to padding after the displacement) and 16-byte alignment.
-/// For cache-friendly storage, prefer the packed 4-byte aligned [`PlaneP`].
+/// For cache-friendly storage, prefer the compact 4-byte aligned [`PlaneC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plane {
     unit_normal: UnitVector3,
@@ -31,7 +31,7 @@ pub struct Plane {
 }
 
 /// A plane in 3D, represented by a unit normal and a displacement. This is the
-/// "packed" version.
+/// "compact" version.
 ///
 /// The displacement `d` can be determined from the normal `n` and any point `p`
 /// lying on the plane as `d = -n.dot(p)`. By storing the displacement instead
@@ -46,8 +46,8 @@ pub struct Plane {
 /// the SIMD-friendly 16-byte aligned [`Plane`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct PlaneP {
-    unit_normal: UnitVector3P,
+pub struct PlaneC {
+    unit_normal: UnitVector3C,
     displacement: f32,
 }
 
@@ -208,10 +208,10 @@ impl Plane {
         (self.unit_normal, self.displacement)
     }
 
-    /// Converts the plane to the 4-byte aligned cache-friendly [`PlaneP`].
+    /// Converts the plane to the 4-byte aligned cache-friendly [`PlaneC`].
     #[inline]
-    pub fn pack(&self) -> PlaneP {
-        PlaneP::new(self.unit_normal.pack(), self.displacement)
+    pub fn compact(&self) -> PlaneC {
+        PlaneC::new(self.unit_normal.compact(), self.displacement)
     }
 
     #[inline]
@@ -233,23 +233,23 @@ impl AbsDiffEq for Plane {
     }
 }
 
-impl PlaneP {
+impl PlaneC {
     /// The xy-coordinate plane, with the positive halfspace being the space of
     /// positive z-coordinates.
-    pub const XY_PLANE: Self = Self::new(UnitVector3P::new_unchecked(0.0, 0.0, 1.0), 0.0);
+    pub const XY_PLANE: Self = Self::new(UnitVector3C::new_unchecked(0.0, 0.0, 1.0), 0.0);
 
     /// The yz-coordinate plane, with the positive halfspace being the space of
     /// positive x-coordinates.
-    pub const YZ_PLANE: Self = Self::new(UnitVector3P::new_unchecked(1.0, 0.0, 0.0), 0.0);
+    pub const YZ_PLANE: Self = Self::new(UnitVector3C::new_unchecked(1.0, 0.0, 0.0), 0.0);
 
     /// The xz-coordinate plane, with the positive halfspace being the space of
     /// positive y-coordinates.
-    pub const XZ_PLANE: Self = Self::new(UnitVector3P::new_unchecked(0.0, 1.0, 0.0), 0.0);
+    pub const XZ_PLANE: Self = Self::new(UnitVector3C::new_unchecked(0.0, 1.0, 0.0), 0.0);
 
     /// Creates a new plane defined by the given unit normal
     /// vector and displacement.
     #[inline]
-    pub const fn new(unit_normal: UnitVector3P, displacement: f32) -> Self {
+    pub const fn new(unit_normal: UnitVector3C, displacement: f32) -> Self {
         Self {
             unit_normal,
             displacement,
@@ -258,7 +258,7 @@ impl PlaneP {
 
     /// Returns the unit normal vector of the plane.
     #[inline]
-    pub const fn unit_normal(&self) -> &UnitVector3P {
+    pub const fn unit_normal(&self) -> &UnitVector3C {
         &self.unit_normal
     }
 
@@ -270,18 +270,18 @@ impl PlaneP {
 
     /// Deconstructs the plane into its unit normal and displacement.
     #[inline]
-    pub const fn into_normal_and_displacement(self) -> (UnitVector3P, f32) {
+    pub const fn into_normal_and_displacement(self) -> (UnitVector3C, f32) {
         (self.unit_normal, self.displacement)
     }
 
     /// Converts the plane to the 16-byte aligned SIMD-friendly [`Plane`].
     #[inline]
-    pub fn unpack(&self) -> Plane {
-        Plane::new(self.unit_normal.unpack(), self.displacement)
+    pub fn aligned(&self) -> Plane {
+        Plane::new(self.unit_normal.aligned(), self.displacement)
     }
 }
 
-impl AbsDiffEq for PlaneP {
+impl AbsDiffEq for PlaneC {
     type Epsilon = f32;
 
     fn default_epsilon() -> f32 {
@@ -296,7 +296,7 @@ impl AbsDiffEq for PlaneP {
 
 roc_integration::impl_roc_for_library_provided_primitives! {
 //  Type      Pkg   Parents  Module   Roc name  Postfix  Precision
-    PlaneP => core, None,    Plane,   Plane,    None,    PrecisionIrrelevant,
+    PlaneC => core, None,    Plane,   Plane,    None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]

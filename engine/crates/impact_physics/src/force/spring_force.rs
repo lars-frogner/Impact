@@ -3,7 +3,7 @@
 use crate::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID, KinematicRigidBodyAnchorID},
     force::ForceGeneratorRegistry,
-    quantities::PositionP,
+    quantities::PositionC,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_eq;
@@ -74,10 +74,10 @@ define_setup_type! {
         pub rigid_body_2: DynamicRigidBodyID,
         /// The point where the spring is attached to the first body, in that
         /// body's model space.
-        pub attachment_point_1: PositionP,
+        pub attachment_point_1: PositionC,
         /// The point where the spring is attached to the second body, in that
         /// body's model space.
-        pub attachment_point_2: PositionP,
+        pub attachment_point_2: PositionC,
         /// The spring connecting the bodies.
         pub spring: Spring,
     }
@@ -96,10 +96,10 @@ define_setup_type! {
         pub rigid_body_2: KinematicRigidBodyID,
         /// The point where the spring is attached to the first (dynamic) body,
         /// in that body's model space.
-        pub attachment_point_1: PositionP,
+        pub attachment_point_1: PositionC,
         /// The point where the spring is attached to the second (kinematic)
         /// body, in that body's model space.
-        pub attachment_point_2: PositionP,
+        pub attachment_point_2: PositionC,
         /// The spring connecting the bodies.
         pub spring: Spring,
     }
@@ -148,8 +148,8 @@ impl DynamicDynamicSpringForceGenerator {
             return;
         };
 
-        let anchor_point_1 = anchor_1.point.unpack();
-        let anchor_point_2 = anchor_2.point.unpack();
+        let anchor_point_1 = anchor_1.point.aligned();
+        let anchor_point_2 = anchor_2.point.aligned();
 
         let attachment_point_1 =
             rigid_body_1.transform_point_from_body_to_world_space(&anchor_point_1);
@@ -202,8 +202,8 @@ impl DynamicKinematicSpringForceGenerator {
             return;
         };
 
-        let anchor_point_1 = anchor_1.point.unpack();
-        let anchor_point_2 = anchor_2.point.unpack();
+        let anchor_point_1 = anchor_1.point.aligned();
+        let anchor_point_2 = anchor_2.point.aligned();
 
         let attachment_point_1 =
             rigid_body_1.transform_point_from_body_to_world_space(&anchor_point_1);
@@ -242,9 +242,9 @@ impl DynamicDynamicSpringForceProperties {
     #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
     pub fn new(
         rigid_body_1: DynamicRigidBodyID,
-        attachment_point_1: PositionP,
+        attachment_point_1: PositionC,
         rigid_body_2: DynamicRigidBodyID,
-        attachment_point_2: PositionP,
+        attachment_point_2: PositionC,
         spring: Spring,
     ) -> Self {
         Self {
@@ -262,9 +262,9 @@ impl DynamicKinematicSpringForceProperties {
     #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
     pub fn new(
         rigid_body_1: DynamicRigidBodyID,
-        attachment_point_1: PositionP,
+        attachment_point_1: PositionC,
         rigid_body_2: KinematicRigidBodyID,
-        attachment_point_2: PositionP,
+        attachment_point_2: PositionC,
         spring: Spring,
     ) -> Self {
         Self {

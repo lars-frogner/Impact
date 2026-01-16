@@ -71,8 +71,8 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id =
-                scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform.pack());
+            let node_id = scene_graph
+                .create_camera_node(parent_node_id, camera_to_parent_transform.compact());
 
             camera_manager.set_active_camera(camera, node_id);
 
@@ -128,8 +128,8 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id =
-                scene_graph.create_camera_node(parent_node_id, camera_to_parent_transform.pack());
+            let node_id = scene_graph
+                .create_camera_node(parent_node_id, camera_to_parent_transform.compact());
 
             camera_manager.set_active_camera(camera, node_id);
 

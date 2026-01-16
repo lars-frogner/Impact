@@ -13,8 +13,8 @@ use crate::{
 use impact_geometry::{Plane, Sphere};
 use impact_math::{
     point::Point3,
-    transform::{Isometry3, Isometry3P},
-    vector::{UnitVector3, Vector3, Vector3P},
+    transform::{Isometry3, Isometry3C},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 use impact_physics::{
     collision::{
@@ -52,14 +52,14 @@ pub enum LocalCollidable {
 pub struct LocalVoxelObjectCollidable {
     object_id: VoxelObjectID,
     response_params: ContactResponseParameters,
-    origin_offset: Vector3P,
+    origin_offset: Vector3C,
 }
 
 #[derive(Clone, Debug)]
 pub struct VoxelObjectCollidable {
     object_id: VoxelObjectID,
     response_params: ContactResponseParameters,
-    transform_to_object_space: Isometry3P,
+    transform_to_object_space: Isometry3C,
 }
 
 impl collision::Collidable for Collidable {
@@ -79,7 +79,7 @@ impl collision::Collidable for Collidable {
                 Self::VoxelObject(VoxelObjectCollidable::new(
                     voxel_object.object_id,
                     voxel_object.response_params,
-                    voxel_object.origin_offset.unpack(),
+                    voxel_object.origin_offset.aligned(),
                     transform_to_world_space,
                 ))
             }
@@ -209,7 +209,7 @@ impl VoxelObjectCollidable {
         Self {
             object_id,
             response_params,
-            transform_to_object_space: transform_to_object_space.pack(),
+            transform_to_object_space: transform_to_object_space.compact(),
         }
     }
 
@@ -217,7 +217,7 @@ impl VoxelObjectCollidable {
         self.object_id
     }
 
-    pub fn transform_to_object_space(&self) -> &Isometry3P {
+    pub fn transform_to_object_space(&self) -> &Isometry3C {
         &self.transform_to_object_space
     }
 }
@@ -249,8 +249,8 @@ fn generate_mutual_voxel_object_contact_manifold(
         return;
     };
 
-    let transform_from_world_to_a = transform_from_world_to_a.unpack();
-    let transform_from_world_to_b = transform_from_world_to_b.unpack();
+    let transform_from_world_to_a = transform_from_world_to_a.aligned();
+    let transform_from_world_to_b = transform_from_world_to_b.aligned();
 
     let response_params = ContactResponseParameters::combined(response_params_a, response_params_b);
 
@@ -501,8 +501,8 @@ fn generate_sphere_voxel_object_contact_manifold(
     let response_params =
         ContactResponseParameters::combined(response_params, sphere.response_params());
 
-    let transform_to_object_space = transform_to_object_space.unpack();
-    let sphere = sphere.sphere().unpack();
+    let transform_to_object_space = transform_to_object_space.aligned();
+    let sphere = sphere.sphere().aligned();
 
     for_each_sphere_voxel_object_contact(
         voxel_object.object(),
@@ -599,8 +599,8 @@ fn generate_voxel_object_plane_contact_manifold(
     let response_params =
         ContactResponseParameters::combined(response_params, plane.response_params());
 
-    let transform_to_object_space = transform_to_object_space.unpack();
-    let plane = plane.plane().unpack();
+    let transform_to_object_space = transform_to_object_space.aligned();
+    let plane = plane.plane().aligned();
 
     for_each_voxel_object_plane_contact(
         voxel_object.object(),

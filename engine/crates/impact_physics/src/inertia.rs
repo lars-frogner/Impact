@@ -5,11 +5,11 @@ use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     consts::f32::PI,
-    matrix::{Matrix3, Matrix3P},
-    point::{Point3, Point3P},
+    matrix::{Matrix3, Matrix3C},
+    point::{Point3, Point3C},
     quaternion::UnitQuaternion,
     transform::Similarity3,
-    vector::{UnitVector3, Vector3, Vector3P},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 use roc_integration::roc;
 
@@ -26,14 +26,14 @@ pub struct InertialProperties {
 /// The columns of the matrix and its inverse are stored in 128-bit SIMD
 /// registers for efficient computation. That leads to an extra 24 bytes in size
 /// (4 for each column) and 16-byte alignment. For cache-friendly storage,
-/// prefer the packed 4-byte aligned [`InertiaTensorP`].
+/// prefer the compact 4-byte aligned [`InertiaTensorP`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct InertiaTensor {
     matrix: Matrix3,
     inverse_matrix: Matrix3,
 }
 
-/// The inertia tensor of a physical body. This the "packed" version.
+/// The inertia tensor of a physical body. This the "compact" version.
 ///
 /// This type is primarily intended for compact storage inside other types and
 /// collections. For computations, prefer the SIMD-friendly 16-byte aligned
@@ -42,8 +42,8 @@ pub struct InertiaTensor {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct InertiaTensorP {
-    matrix: Matrix3P,
-    inverse_matrix: Matrix3P,
+    matrix: Matrix3C,
+    inverse_matrix: Matrix3C,
 }
 
 impl InertialProperties {
@@ -67,7 +67,7 @@ impl InertialProperties {
     /// surface is represented by the given triangles. The surface is assumed
     /// closed, but may contain disjoint parts.
     pub fn of_uniform_triangle_mesh<'a>(
-        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
         mass_density: f32,
     ) -> Self {
         let (mass, center_of_mass, inertia_tensor) =
@@ -589,8 +589,11 @@ impl InertiaTensor {
     /// Converts the tensor to the 4-byte aligned cache-friendly
     /// [`InertiaTensorP`].
     #[inline]
-    pub fn pack(&self) -> InertiaTensorP {
-        InertiaTensorP::from_matrix_and_inverse(self.matrix.pack(), self.inverse_matrix.pack())
+    pub fn compact(&self) -> InertiaTensorP {
+        InertiaTensorP::from_matrix_and_inverse(
+            self.matrix.compact(),
+            self.inverse_matrix.compact(),
+        )
     }
 
     #[cfg(test)]
@@ -630,13 +633,13 @@ impl InertiaTensorP {
     /// Creates a new identity inertia tensor.
     #[inline]
     pub const fn identity() -> Self {
-        Self::from_matrix_and_inverse(Matrix3P::identity(), Matrix3P::identity())
+        Self::from_matrix_and_inverse(Matrix3C::identity(), Matrix3C::identity())
     }
 
     /// Creates an inertia tensor corresponding to the given matrix and its
     /// inverse.
     #[inline]
-    pub const fn from_matrix_and_inverse(matrix: Matrix3P, inverse_matrix: Matrix3P) -> Self {
+    pub const fn from_matrix_and_inverse(matrix: Matrix3C, inverse_matrix: Matrix3C) -> Self {
         Self {
             matrix,
             inverse_matrix,
@@ -662,30 +665,30 @@ impl InertiaTensorP {
             "Tried creating inertia tensor with diagonal element not exceeding zero"
         );
 
-        let matrix = Matrix3P::from_diagonal(&Vector3P::new(j_xx, j_yy, j_zz));
+        let matrix = Matrix3C::from_diagonal(&Vector3C::new(j_xx, j_yy, j_zz));
         let inverse_matrix =
-            Matrix3P::from_diagonal(&Vector3P::new(1.0 / j_xx, 1.0 / j_yy, 1.0 / j_zz));
+            Matrix3C::from_diagonal(&Vector3C::new(1.0 / j_xx, 1.0 / j_yy, 1.0 / j_zz));
 
         Self::from_matrix_and_inverse(matrix, inverse_matrix)
     }
 
     /// Returns a reference to the inertia matrix.
     #[inline]
-    pub const fn matrix(&self) -> &Matrix3P {
+    pub const fn matrix(&self) -> &Matrix3C {
         &self.matrix
     }
 
     /// Returns a reference to the inverse of the inertia matrix.
     #[inline]
-    pub const fn inverse_matrix(&self) -> &Matrix3P {
+    pub const fn inverse_matrix(&self) -> &Matrix3C {
         &self.inverse_matrix
     }
 
     /// Converts the vector to the 16-byte aligned SIMD-friendly
     /// [`InertiaTensor`].
     #[inline]
-    pub fn unpack(&self) -> InertiaTensor {
-        InertiaTensor::from_matrix_and_inverse(self.matrix.unpack(), self.inverse_matrix.unpack())
+    pub fn aligned(&self) -> InertiaTensor {
+        InertiaTensor::from_matrix_and_inverse(self.matrix.aligned(), self.inverse_matrix.aligned())
     }
 }
 
@@ -697,7 +700,7 @@ impl AbsDiffEq for InertiaTensorP {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Matrix3P::abs_diff_eq(&self.matrix, &other.matrix, epsilon)
+        Matrix3C::abs_diff_eq(&self.matrix, &other.matrix, epsilon)
     }
 }
 
@@ -712,7 +715,7 @@ impl RelativeEq for InertiaTensorP {
         epsilon: Self::Epsilon,
         max_relative: Self::Epsilon,
     ) -> bool {
-        Matrix3P::relative_eq(&self.matrix, &other.matrix, epsilon, max_relative)
+        Matrix3C::relative_eq(&self.matrix, &other.matrix, epsilon, max_relative)
     }
 }
 
@@ -745,7 +748,7 @@ pub fn compute_hemisphere_volume(radius: f32) -> f32 {
 /// the method described in Eberly (2004). The surface is assumed closed, but
 /// may contain disjoint parts.
 pub fn compute_triangle_mesh_volume<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
 ) -> f32 {
     let mut volume = 0.0;
 
@@ -763,7 +766,7 @@ pub fn compute_triangle_mesh_volume<'a>(
 /// described in Eberly (2004). The inertia tensor is defined relative to the
 /// center of mass. The mesh is assumed closed, but may contain disjoint parts.
 pub fn compute_uniform_triangle_mesh_inertial_properties<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
     mass_density: f32,
 ) -> (f32, Position, InertiaTensor) {
     let mut mass = 0.0;
@@ -778,9 +781,9 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<'a>(
             diagonal_second_moment_contrib,
             mixed_second_moment_contrib,
         ) = compute_zeroth_first_and_second_moment_contributions_for_triangle(
-            &vertex_0.unpack(),
-            &vertex_1.unpack(),
-            &vertex_2.unpack(),
+            &vertex_0.aligned(),
+            &vertex_1.aligned(),
+            &vertex_2.aligned(),
         );
 
         mass += zeroth_moment_contrib;
@@ -819,7 +822,7 @@ pub fn compute_uniform_triangle_mesh_inertial_properties<'a>(
 /// assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_mass<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
     mass_density: f32,
 ) -> f32 {
     compute_triangle_mesh_volume(triangle_vertex_positions) * mass_density
@@ -830,7 +833,7 @@ pub fn compute_uniform_triangle_mesh_mass<'a>(
 /// (2004). The surface is assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_center_of_mass<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
 ) -> Position {
     compute_uniform_triangle_mesh_inertial_properties(triangle_vertex_positions, 1.0).1
 }
@@ -841,16 +844,16 @@ pub fn compute_uniform_triangle_mesh_center_of_mass<'a>(
 /// surface is assumed closed, but may contain disjoint parts.
 #[cfg(test)]
 pub fn compute_uniform_triangle_mesh_inertia_tensor<'a>(
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
     mass_density: f32,
 ) -> InertiaTensor {
     compute_uniform_triangle_mesh_inertial_properties(triangle_vertex_positions, mass_density).2
 }
 
 fn compute_volume_contribution_for_triangle(
-    vertex_0: &Point3P,
-    vertex_1: &Point3P,
-    vertex_2: &Point3P,
+    vertex_0: &Point3C,
+    vertex_1: &Point3C,
+    vertex_2: &Point3C,
 ) -> f32 {
     let edge_1_y = vertex_1.y() - vertex_0.y();
     let edge_1_z = vertex_1.z() - vertex_0.z();

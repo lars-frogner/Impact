@@ -19,7 +19,7 @@ use impact_gpu::{
     },
     wgpu,
 };
-use impact_math::{hash::ConstStringHash64, vector::Vector3P};
+use impact_math::{hash::ConstStringHash64, vector::Vector3C};
 use std::{fmt, hash::Hash};
 
 /// Contains all GPU resources for light sources, including uniform buffers and
@@ -103,7 +103,7 @@ pub struct ShadowableUnidirectionalLightMetadata {
 
 #[derive(Clone, Debug)]
 struct PackedOrthographicTranslationAndScaling {
-    translation: Vector3P,
+    translation: Vector3C,
     scaling: [f32; 3],
 }
 
@@ -1053,6 +1053,6 @@ impl LightMetadata for ShadowableUnidirectionalLightMetadata {
 
 impl PackedOrthographicTranslationAndScaling {
     fn compute_aabb(&self) -> AxisAlignedBox {
-        crate::compute_orthographic_transform_aabb(&self.translation.unpack(), &self.scaling)
+        crate::compute_orthographic_transform_aabb(&self.translation.aligned(), &self.scaling)
     }
 }

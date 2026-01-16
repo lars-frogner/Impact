@@ -1,10 +1,10 @@
 //! Calculation of forces and torques due to drag.
 
-use crate::quantities::{Direction, DirectionP, Force, Orientation, Position, PositionP, Torque};
+use crate::quantities::{Direction, DirectionC, Force, Orientation, Position, PositionC, Torque};
 use impact_alloc::{AVec, Allocator};
 use impact_math::{
-    point::Point3P,
-    vector::{UnitVector3, UnitVector3P, Vector3P},
+    point::Point3C,
+    vector::{UnitVector3, UnitVector3C, Vector3C},
 };
 use std::ops::{Add, AddAssign, Div, Mul};
 
@@ -13,9 +13,9 @@ use std::ops::{Add, AddAssign, Div, Mul};
 #[derive(Clone, Debug, Default)]
 pub struct DragLoad {
     /// The drag force on the center of mass.
-    pub force: Vector3P,
+    pub force: Vector3C,
     /// The drag torque around the center of mass.
-    pub torque: Vector3P,
+    pub torque: Vector3C,
 }
 
 /// Helper struct for accumulating drag loads and averaging them.
@@ -29,8 +29,8 @@ pub struct AveragingDragLoad {
 /// it.
 #[derive(Clone, Debug)]
 pub struct MeshTriangleDragProperties {
-    center: PositionP,
-    normal_vector: UnitVector3P,
+    center: PositionC,
+    normal_vector: UnitVector3C,
     area: f32,
 }
 
@@ -47,8 +47,8 @@ impl DragLoad {
         body_orientation: &Orientation,
         squared_body_speed_relative_to_medium: f32,
     ) -> (Force, Torque) {
-        let force = self.force.unpack();
-        let torque = self.torque.unpack();
+        let force = self.force.aligned();
+        let torque = self.torque.aligned();
 
         // The force is proportional to mesh area, medium mass density, drag
         // coefficient and squared speed
@@ -143,10 +143,10 @@ impl AveragingDragLoad {
 /// medium) and aggregate drag load.
 pub fn compute_aggregate_drag_loads_for_uniformly_distributed_directions<'a, A: Allocator>(
     alloc: A,
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
     center_of_mass: &Position,
     n_direction_samples: usize,
-) -> AVec<(DirectionP, DragLoad), A> {
+) -> AVec<(DirectionC, DragLoad), A> {
     let mesh_triangles = compute_mesh_triangle_drag_properties(alloc, triangle_vertex_positions);
 
     let mut drag_loads = AVec::with_capacity_in(n_direction_samples, alloc);
@@ -159,7 +159,7 @@ pub fn compute_aggregate_drag_loads_for_uniformly_distributed_directions<'a, A: 
                     center_of_mass,
                     &direction,
                 );
-                (direction.pack(), load)
+                (direction.compact(), load)
             },
         ),
     );
@@ -180,8 +180,8 @@ pub fn compute_aggregate_drag_load_for_direction(
     let mut total_torque = Torque::zeros();
 
     for triangle in mesh_triangles {
-        let center = triangle.center.unpack();
-        let normal_vector = triangle.normal_vector.unpack();
+        let center = triangle.center.aligned();
+        let normal_vector = triangle.normal_vector.aligned();
 
         let cos_impact_angle = direction_against_flow.dot(&normal_vector);
 
@@ -202,8 +202,8 @@ pub fn compute_aggregate_drag_load_for_direction(
     }
 
     DragLoad {
-        force: total_force.pack(),
-        torque: total_torque.pack(),
+        force: total_force.compact(),
+        torque: total_torque.compact(),
     }
 }
 
@@ -211,7 +211,7 @@ pub fn compute_aggregate_drag_load_for_direction(
 /// non-degenerate triangle in the given iterator and returns them in an array.
 pub fn compute_mesh_triangle_drag_properties<'a, A: Allocator>(
     alloc: A,
-    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+    triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
 ) -> AVec<MeshTriangleDragProperties, A> {
     let triangle_vertex_positions = triangle_vertex_positions.into_iter();
 
@@ -219,9 +219,9 @@ pub fn compute_mesh_triangle_drag_properties<'a, A: Allocator>(
 
     props.extend(triangle_vertex_positions.into_iter().filter_map(
         |[vertex_1, vertex_2, vertex_3]| {
-            let vertex_1 = vertex_1.unpack();
-            let vertex_2 = vertex_2.unpack();
-            let vertex_3 = vertex_3.unpack();
+            let vertex_1 = vertex_1.aligned();
+            let vertex_2 = vertex_2.aligned();
+            let vertex_3 = vertex_3.aligned();
 
             let edge_1 = vertex_2 - vertex_1;
             let edge_2 = vertex_3 - vertex_1;
@@ -232,8 +232,8 @@ pub fn compute_mesh_triangle_drag_properties<'a, A: Allocator>(
                         (1.0 / 3.0) * (vertex_1 + vertex_2.as_vector() + vertex_3.as_vector());
 
                     MeshTriangleDragProperties {
-                        center: center.pack(),
-                        normal_vector: normal_vector.pack(),
+                        center: center.compact(),
+                        normal_vector: normal_vector.compact(),
                         area: 0.5 * twice_area,
                     }
                 },
@@ -285,7 +285,7 @@ mod tests {
                 &direction,
             );
 
-            let (force_direction, force) = UnitVector3::normalized_from_and_norm(load.force.unpack());
+            let (force_direction, force) = UnitVector3::normalized_from_and_norm(load.force.aligned());
 
             // In the accumulation of forces on the individual triangles over
             // the front-facing hemisphere, the components perpendicular to the
@@ -298,7 +298,7 @@ mod tests {
 
             prop_assert!(abs_diff_eq!(force_direction, -direction, epsilon = 1e-3));
             prop_assert!(abs_diff_eq!(force, correct_force, epsilon = 1e-3));
-            prop_assert!(abs_diff_eq!(load.torque, Vector3P::zeros(), epsilon = 1e-3));
+            prop_assert!(abs_diff_eq!(load.torque, Vector3C::zeros(), epsilon = 1e-3));
         }
     }
 }

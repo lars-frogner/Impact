@@ -3,11 +3,11 @@
 use super::{ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint};
 use crate::{
     material::ContactResponseParameters,
-    quantities::{self, Orientation, Position, PositionP, Velocity},
+    quantities::{self, Orientation, Position, PositionC, Velocity},
 };
 use impact_math::{
     quaternion::UnitQuaternion,
-    vector::{UnitVector3, UnitVector3P, Vector3},
+    vector::{UnitVector3, UnitVector3C, Vector3},
 };
 use std::ops::{Add, Mul, Sub};
 use tinyvec::TinyVec;
@@ -62,20 +62,20 @@ pub struct PreparedContact {
     /// The point on body A that penetrates deepest into body B (along the
     /// surface normal from [`Self::local_position_on_b`]), expressed in the
     /// body frame of A.
-    local_position_on_a: PositionP,
+    local_position_on_a: PositionC,
     /// The point on body B that penetrates deepest into body A, expressed in
     /// the body frame of B.
-    local_position_on_b: PositionP,
+    local_position_on_b: PositionC,
     /// The world space surface normal of body B at
     /// [`Self::local_position_on_b`].
-    normal: UnitVector3P,
+    normal: UnitVector3C,
     /// A world space tangent direction of the surface of body B at
     /// [`Self::local_position_on_b`].
-    tangent: UnitVector3P,
+    tangent: UnitVector3C,
     /// The world space tangent direction completing the right-handed
     /// coordinate system defined by [`Self::normal`] and
     /// [`Self::tangent`].
-    bitangent: UnitVector3P,
+    bitangent: UnitVector3C,
     effective_mass_normal: f32,
     effective_mass_tangent: f32,
     effective_mass_bitangent: f32,
@@ -175,8 +175,8 @@ impl TwoBodyConstraint for Contact {
     type Prepared = PreparedContact;
 
     fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared {
-        let body_a_position = body_a.position.unpack();
-        let body_b_position = body_b.position.unpack();
+        let body_a_position = body_a.position.aligned();
+        let body_b_position = body_b.position.aligned();
 
         let local_position_on_a =
             body_a.transform_point_from_world_to_body_frame(&self.geometry.position_on_a());
@@ -225,11 +225,11 @@ impl TwoBodyConstraint for Contact {
         };
 
         PreparedContact {
-            local_position_on_a: local_position_on_a.pack(),
-            local_position_on_b: local_position_on_b.pack(),
-            normal: normal.pack(),
-            tangent: tangent_1.pack(),
-            bitangent: tangent_2.pack(),
+            local_position_on_a: local_position_on_a.compact(),
+            local_position_on_b: local_position_on_b.compact(),
+            normal: normal.compact(),
+            tangent: tangent_1.compact(),
+            bitangent: tangent_2.compact(),
             effective_mass_normal,
             effective_mass_tangent: effective_mass_tangent_1,
             effective_mass_bitangent: effective_mass_tangent_2,
@@ -260,12 +260,12 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_a: &ConstrainedBody,
         body_b: &ConstrainedBody,
     ) -> ContactImpulses {
-        let normal = self.normal.unpack();
-        let tangent = self.tangent.unpack();
-        let bitangent = self.bitangent.unpack();
-        let local_position_on_b = self.local_position_on_b.unpack();
-        let body_a_position = body_a.position.unpack();
-        let body_b_position = body_b.position.unpack();
+        let normal = self.normal.aligned();
+        let tangent = self.tangent.aligned();
+        let bitangent = self.bitangent.aligned();
+        let local_position_on_b = self.local_position_on_b.aligned();
+        let body_a_position = body_a.position.aligned();
+        let body_b_position = body_b.position.aligned();
 
         let position_on_b = body_b.transform_point_from_body_to_world_frame(&local_position_on_b);
 
@@ -332,14 +332,14 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b: &mut ConstrainedBody,
         impulses: ContactImpulses,
     ) {
-        let normal = self.normal.unpack();
-        let tangent = self.tangent.unpack();
-        let bitangent = self.bitangent.unpack();
-        let local_position_on_b = self.local_position_on_b.unpack();
-        let body_a_position = body_a.position.unpack();
-        let body_b_position = body_b.position.unpack();
-        let body_a_inverse_inertia_tensor = body_a.inverse_inertia_tensor.unpack();
-        let body_b_inverse_inertia_tensor = body_b.inverse_inertia_tensor.unpack();
+        let normal = self.normal.aligned();
+        let tangent = self.tangent.aligned();
+        let bitangent = self.bitangent.aligned();
+        let local_position_on_b = self.local_position_on_b.aligned();
+        let body_a_position = body_a.position.aligned();
+        let body_b_position = body_b.position.aligned();
+        let body_a_inverse_inertia_tensor = body_a.inverse_inertia_tensor.aligned();
+        let body_b_inverse_inertia_tensor = body_b.inverse_inertia_tensor.aligned();
 
         let momentum_change =
             impulses.normal * normal + impulses.tangent * tangent + impulses.bitangent * bitangent;
@@ -350,10 +350,10 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let disp_a = position_on_b - body_a_position;
         let disp_b = position_on_b - body_b_position;
 
-        let mut body_a_velocity = body_a.velocity.unpack();
-        let mut body_b_velocity = body_b.velocity.unpack();
-        let mut body_a_angular_velocity = body_a.angular_velocity.unpack();
-        let mut body_b_angular_velocity = body_b.angular_velocity.unpack();
+        let mut body_a_velocity = body_a.velocity.aligned();
+        let mut body_b_velocity = body_b.velocity.aligned();
+        let mut body_a_angular_velocity = body_a.angular_velocity.aligned();
+        let mut body_b_angular_velocity = body_b.angular_velocity.aligned();
 
         body_a_velocity += body_a.inverse_mass * momentum_change;
         body_b_velocity -= body_b.inverse_mass * momentum_change;
@@ -361,10 +361,10 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_a_angular_velocity += body_a_inverse_inertia_tensor * disp_a.cross(&momentum_change);
         body_b_angular_velocity -= body_b_inverse_inertia_tensor * disp_b.cross(&momentum_change);
 
-        body_a.velocity = body_a_velocity.pack();
-        body_b.velocity = body_b_velocity.pack();
-        body_a.angular_velocity = body_a_angular_velocity.pack();
-        body_b.angular_velocity = body_b_angular_velocity.pack();
+        body_a.velocity = body_a_velocity.compact();
+        body_b.velocity = body_b_velocity.compact();
+        body_a.angular_velocity = body_a_angular_velocity.compact();
+        body_b.angular_velocity = body_b_angular_velocity.compact();
     }
 
     fn apply_positional_correction_to_body_pair(
@@ -373,13 +373,13 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b: &mut ConstrainedBody,
         correction_factor: f32,
     ) {
-        let normal = self.normal.unpack();
-        let local_position_on_a = self.local_position_on_a.unpack();
-        let local_position_on_b = self.local_position_on_b.unpack();
-        let body_a_position = body_a.position.unpack();
-        let body_b_position = body_b.position.unpack();
-        let body_a_inverse_inertia_tensor = body_a.inverse_inertia_tensor.unpack();
-        let body_b_inverse_inertia_tensor = body_b.inverse_inertia_tensor.unpack();
+        let normal = self.normal.aligned();
+        let local_position_on_a = self.local_position_on_a.aligned();
+        let local_position_on_b = self.local_position_on_b.aligned();
+        let body_a_position = body_a.position.aligned();
+        let body_b_position = body_b.position.aligned();
+        let body_a_inverse_inertia_tensor = body_a.inverse_inertia_tensor.aligned();
+        let body_b_inverse_inertia_tensor = body_b.inverse_inertia_tensor.aligned();
 
         // We are now correcting body positions and orientations iteratively.
         // In principle, we should rerun collision detection to obtain the new
@@ -427,10 +427,10 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let pseudo_angular_velocity_b =
             -body_b_inverse_inertia_tensor * disp_b.cross(&pseudo_momentum_change);
 
-        let mut body_a_position = body_a.position.unpack();
-        let mut body_b_position = body_b.position.unpack();
-        let mut body_a_orientation = body_a.orientation.unpack();
-        let mut body_b_orientation = body_b.orientation.unpack();
+        let mut body_a_position = body_a.position.aligned();
+        let mut body_b_position = body_b.position.aligned();
+        let mut body_a_orientation = body_a.orientation.aligned();
+        let mut body_b_orientation = body_b.orientation.aligned();
 
         body_a_position += pseudo_velocity_a;
         body_b_position += pseudo_velocity_b;
@@ -440,10 +440,10 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         body_b_orientation =
             pseudo_advanced_orientation(&body_b_orientation, &pseudo_angular_velocity_b);
 
-        body_a.position = body_a_position.pack();
-        body_b.position = body_b_position.pack();
-        body_a.orientation = body_a_orientation.pack();
-        body_b.orientation = body_b_orientation.pack();
+        body_a.position = body_a_position.compact();
+        body_b.position = body_b_position.compact();
+        body_a.orientation = body_a_orientation.compact();
+        body_b.orientation = body_b_orientation.compact();
     }
 }
 
@@ -494,7 +494,7 @@ impl Mul<f32> for ContactImpulses {
 }
 
 fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3) -> Velocity {
-    body.velocity.unpack() + body.angular_velocity.unpack().cross(disp)
+    body.velocity.aligned() + body.angular_velocity.aligned().cross(disp)
 }
 
 fn compute_effective_mass(
@@ -504,8 +504,8 @@ fn compute_effective_mass(
     disp_b: &Vector3,
     direction: &UnitVector3,
 ) -> f32 {
-    let body_a_inverse_inertia_tensor = body_a.inverse_inertia_tensor.unpack();
-    let body_b_inverse_inertia_tensor = body_b.inverse_inertia_tensor.unpack();
+    let body_a_inverse_inertia_tensor = body_a.inverse_inertia_tensor.aligned();
+    let body_b_inverse_inertia_tensor = body_b.inverse_inertia_tensor.aligned();
 
     let disp_a_cross_dir = disp_a.cross(direction);
     let disp_b_cross_dir = disp_b.cross(direction);

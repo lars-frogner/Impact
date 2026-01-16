@@ -49,7 +49,7 @@ pub fn setup_voxel_objects_for_new_entities(
                     .inertial_property_manager
                     .derive_center_of_mass();
 
-                ModelTransform::with_offset(center_of_mass.pack())
+                ModelTransform::with_offset(center_of_mass.compact())
             } else {
                 model_transform.copied().unwrap_or_default()
             }

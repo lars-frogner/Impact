@@ -2,7 +2,7 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{DirectionP, PositionP, VelocityP},
+    quantities::{DirectionC, PositionC, VelocityC},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_ne;
@@ -45,9 +45,9 @@ define_setup_type! {
         /// oscillation.
         pub center_time: f32,
         /// The position of the center of oscillation.
-        pub center_position: PositionP,
+        pub center_position: PositionC,
         /// The direction in which the body is oscillating back and forth.
-        pub direction: DirectionP,
+        pub direction: DirectionC,
         /// The maximum distance of the body from the center position.
         pub amplitude: f32,
         /// The duration of one full oscillation.
@@ -80,8 +80,8 @@ impl HarmonicOscillatorTrajectoryDriver {
         else {
             return;
         };
-        rigid_body.set_position(PositionP::origin());
-        rigid_body.set_velocity(VelocityP::zeros());
+        rigid_body.set_position(PositionC::origin());
+        rigid_body.set_velocity(VelocityC::zeros());
     }
 
     /// Applies the driven properties for the given time to the appropriate
@@ -115,8 +115,8 @@ impl HarmonicOscillatorTrajectory {
     "#)]
     pub fn new(
         center_time: f32,
-        center_position: PositionP,
-        direction: DirectionP,
+        center_position: PositionC,
+        direction: DirectionC,
         amplitude: f32,
         period: f32,
     ) -> Self {
@@ -133,14 +133,14 @@ impl HarmonicOscillatorTrajectory {
     ///
     /// # Panics
     /// If the period is zero.
-    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionP, VelocityP) {
+    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionC, VelocityC) {
         assert!(
             abs_diff_ne!(self.period, 0.0),
             "Period of harmonically oscillating trajectory is zero"
         );
 
-        let center_position = self.center_position.unpack();
-        let direction = self.direction.unpack();
+        let center_position = self.center_position.aligned();
+        let direction = self.direction.aligned();
 
         let center_time_offset = time - self.center_time;
         let angular_frequency = TWO_PI / self.period;
@@ -152,18 +152,18 @@ impl HarmonicOscillatorTrajectory {
             * f32::cos(angular_frequency * center_time_offset))
             * direction;
 
-        (position.pack(), velocity.pack())
+        (position.compact(), velocity.compact())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::DirectionP;
+    use crate::quantities::DirectionC;
     use approx::abs_diff_eq;
     use impact_math::{
         consts::f32::{PI, TWO_PI},
-        vector::{UnitVector3P, Vector3P},
+        vector::{UnitVector3C, Vector3C},
     };
     use proptest::prelude::*;
 
@@ -172,8 +172,8 @@ mod tests {
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
-        ) -> PositionP {
-            PositionP::new(position_coord_x, position_coord_y, position_coord_z)
+        ) -> PositionC {
+            PositionC::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -181,8 +181,8 @@ mod tests {
         fn direction_strategy()(
             phi in 0.0..TWO_PI,
             theta in 0.0..PI,
-        ) -> DirectionP {
-            DirectionP::normalized_from(Vector3P::new(
+        ) -> DirectionC {
+            DirectionC::normalized_from(Vector3C::new(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -195,8 +195,8 @@ mod tests {
     fn should_panic_if_period_is_zero() {
         let trajectory = HarmonicOscillatorTrajectory::new(
             0.0,
-            PositionP::origin(),
-            UnitVector3P::unit_x(),
+            PositionC::origin(),
+            UnitVector3C::unit_x(),
             1.0,
             0.0,
         );
@@ -225,7 +225,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 trajectory_position,
                 center_position,
-                epsilon = 1e-3 * center_position.as_vector().unpack().component_abs().max_component()
+                epsilon = 1e-3 * center_position.as_vector().aligned().component_abs().max_component()
             ));
         }
     }
@@ -266,15 +266,15 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 positive_peak_trajectory_position,
                 positive_peak_position,
-                epsilon = 1e-3 * positive_peak_position.as_vector().unpack().component_abs().max_component()
+                epsilon = 1e-3 * positive_peak_position.as_vector().aligned().component_abs().max_component()
             ));
-            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, VelocityP::zeros(), epsilon = 5e-1));
+            prop_assert!(abs_diff_eq!(positive_peak_trajectory_velocity, VelocityC::zeros(), epsilon = 5e-1));
             prop_assert!(abs_diff_eq!(
                 negative_peak_trajectory_position,
                 negative_peak_position,
-                epsilon = 1e-3 * negative_peak_position.as_vector().unpack().component_abs().max_component()
+                epsilon = 1e-3 * negative_peak_position.as_vector().aligned().component_abs().max_component()
             ));
-            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, VelocityP::zeros(), epsilon = 5e-1));
+            prop_assert!(abs_diff_eq!(negative_peak_trajectory_velocity, VelocityC::zeros(), epsilon = 5e-1));
         }
     }
 }

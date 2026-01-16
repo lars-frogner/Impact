@@ -1,7 +1,7 @@
 //! Push constants for rendering.
 
 use impact_gpu::push_constant::{PushConstant, PushConstantGroup, PushConstantVariant};
-use impact_math::quaternion::UnitQuaternionP;
+use impact_math::quaternion::UnitQuaternionC;
 use std::mem;
 
 pub type BasicPushConstant = PushConstant<BasicPushConstantVariant>;
@@ -32,7 +32,7 @@ impl PushConstantVariant for BasicPushConstantVariant {
             | Self::InstanceIdx => mem::size_of::<u32>(),
             Self::InverseWindowDimensions => mem::size_of::<[f32; 2]>(),
             Self::Exposure | Self::InverseExposure => mem::size_of::<f32>(),
-            Self::CameraRotationQuaternion => mem::size_of::<UnitQuaternionP>(),
+            Self::CameraRotationQuaternion => mem::size_of::<UnitQuaternionC>(),
             Self::GenericVec3f32 => mem::size_of::<[f32; 3]>(),
         }) as u32
     }

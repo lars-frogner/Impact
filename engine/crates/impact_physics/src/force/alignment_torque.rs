@@ -2,11 +2,11 @@
 
 use crate::{
     force::{ForceGeneratorRegistry, dynamic_gravity::DynamicGravityManager},
-    quantities::{Direction, DirectionP},
+    quantities::{Direction, DirectionC},
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_math::vector::UnitVector3P;
+use impact_math::vector::UnitVector3C;
 use roc_integration::roc;
 
 /// Manages all [`AlignmentTorqueGenerator`]s.
@@ -29,7 +29,7 @@ pub struct AlignmentTorqueGenerator {
     /// The dynamic rigid body experiencing the torque.
     pub rigid_body_id: DynamicRigidBodyID,
     /// The local axis of the body to align.
-    pub axis_to_align: DirectionP,
+    pub axis_to_align: DirectionC,
     /// The external direction to align with.
     pub alignment_direction: AlignmentDirection,
     /// The approximate time the torque should take to achieve the alignment.
@@ -48,7 +48,7 @@ pub struct AlignmentTorqueGenerator {
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum AlignmentDirection {
-    Fixed(DirectionP),
+    Fixed(DirectionC),
     GravityForce,
 }
 
@@ -61,9 +61,9 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct FixedDirectionAlignmentTorque {
         /// The local axis of the body to align.
-        pub axis_to_align: DirectionP,
+        pub axis_to_align: DirectionC,
         /// The external direction to align with.
-        pub alignment_direction: DirectionP,
+        pub alignment_direction: DirectionC,
         /// The approximate time the torque should take to achieve the alignment.
         pub settling_time: f32,
         /// The strength with which to damp the component of angular velocity
@@ -84,7 +84,7 @@ define_setup_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct GravityAlignmentTorque {
         /// The local axis of the body to align.
-        pub axis_to_align: DirectionP,
+        pub axis_to_align: DirectionC,
         /// The approximate time the torque should take to achieve the alignment.
         pub settling_time: f32,
         /// The strength with which to damp the component of angular velocity
@@ -157,16 +157,16 @@ impl AlignmentTorqueGenerator {
                     return;
                 };
                 let Some(gravity_direction) =
-                    UnitVector3P::normalized_from_if_above(gravity_force, 1e-9)
+                    UnitVector3C::normalized_from_if_above(gravity_force, 1e-9)
                 else {
                     return;
                 };
                 gravity_direction
             }
         }
-        .unpack();
+        .aligned();
 
-        let local_axis_to_align = self.axis_to_align.unpack();
+        let local_axis_to_align = self.axis_to_align.aligned();
         let axis_to_align =
             rigid_body.transform_direction_from_body_to_world_space(&local_axis_to_align);
 
@@ -176,10 +176,10 @@ impl AlignmentTorqueGenerator {
             Direction::normalized_from_if_above(alignment_direction.cross(&axis_to_align), 1e-8)
                 .unwrap_or_else(|| Direction::orthogonal_to(&axis_to_align));
 
-        let orientation = rigid_body.orientation().unpack();
-        let inertia_tensor_body_space = rigid_body.inertia_tensor().unpack();
+        let orientation = rigid_body.orientation().aligned();
+        let inertia_tensor_body_space = rigid_body.inertia_tensor().aligned();
         let inertia_tensor = inertia_tensor_body_space.rotated_matrix(&orientation);
-        let angular_momentum = rigid_body.angular_momentum().unpack();
+        let angular_momentum = rigid_body.angular_momentum().aligned();
         let angular_velocity = rigid_body.compute_angular_velocity().as_vector();
 
         // Determine how fast we are rotating directly towards the alignment
@@ -251,8 +251,8 @@ impl FixedDirectionAlignmentTorque {
         body = "{ axis_to_align, alignment_direction, settling_time, spin_damping, precession_damping }"
     )]
     pub fn new(
-        axis_to_align: DirectionP,
-        alignment_direction: DirectionP,
+        axis_to_align: DirectionC,
+        alignment_direction: DirectionC,
         settling_time: f32,
         spin_damping: f32,
         precession_damping: f32,
@@ -271,7 +271,7 @@ impl FixedDirectionAlignmentTorque {
 impl GravityAlignmentTorque {
     #[roc(body = "{ axis_to_align, settling_time, spin_damping, precession_damping }")]
     pub fn new(
-        axis_to_align: DirectionP,
+        axis_to_align: DirectionC,
         settling_time: f32,
         spin_damping: f32,
         precession_damping: f32,

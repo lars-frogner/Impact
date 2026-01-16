@@ -6,7 +6,7 @@ use crate::{VertexColor, VertexPosition};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    hash::StringHash64, hash64, point::Point3P, quaternion::UnitQuaternion, transform::Similarity3,
+    hash::StringHash64, hash64, point::Point3C, quaternion::UnitQuaternion, transform::Similarity3,
     vector::Vector3,
 };
 use impact_resource::{
@@ -139,7 +139,7 @@ impl LineSegmentMesh {
 
     /// Returns an iterator over the mesh line segments, each item containing
     /// the two line segment vertex positions.
-    pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3P; 2]> {
+    pub fn line_segment_vertex_positions(&self) -> impl Iterator<Item = [&Point3C; 2]> {
         self.positions()
             .chunks_exact(2)
             .map(|pair| [&pair[0].0, &pair[1].0])
