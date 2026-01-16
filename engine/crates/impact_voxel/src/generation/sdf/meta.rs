@@ -738,7 +738,12 @@ impl<A: Allocator> MetaSDFGraph<A> {
         id
     }
 
-    pub fn build_in<AG: Allocator>(&self, alloc: AG, seed: u64) -> Result<SDFGraph<AG>> {
+    pub fn build_in<AG: Allocator>(
+        &self,
+        alloc: AG,
+        scale_factor: f32,
+        seed: u64,
+    ) -> Result<SDFGraph<AG>> {
         let mut graph = SDFGraph::new_in(alloc);
 
         if self.nodes.is_empty() {
@@ -871,7 +876,8 @@ impl<A: Allocator> MetaSDFGraph<A> {
 
                     let seed = splitmix::random_u64_from_two_states(seed, stable_seed);
 
-                    outputs[node_idx] = node.resolve(&arena, &mut graph, &outputs, seed)?;
+                    outputs[node_idx] =
+                        node.resolve(&arena, &mut graph, &outputs, scale_factor, seed)?;
                 }
             }
         }
@@ -1095,21 +1101,22 @@ impl MetaSDFNode {
         arena: AR,
         graph: &mut SDFGraph<AG>,
         outputs: &[MetaSDFNodeOutput<AR>],
+        scale_factor: f32,
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<AR>> {
         match self {
             Self::Points(node) => Ok(node.resolve(arena)),
             Self::Spheres(node) => node
-                .resolve(arena, seed)
+                .resolve(arena, scale_factor, seed)
                 .context("Failed to resolve Spheres node"),
             Self::Capsules(node) => node
-                .resolve(arena, seed)
+                .resolve(arena, scale_factor, seed)
                 .context("Failed to resolve Capsules node"),
             Self::Boxes(node) => node
-                .resolve(arena, seed)
+                .resolve(arena, scale_factor, seed)
                 .context("Failed to resolve Boxes node"),
             Self::Translation(node) => node
-                .resolve(arena, outputs, seed)
+                .resolve(arena, outputs, scale_factor, seed)
                 .context("Failed to resolve Translation node"),
             Self::Rotation(node) => node
                 .resolve(arena, outputs, seed)
@@ -1118,13 +1125,13 @@ impl MetaSDFNode {
                 .resolve(arena, outputs, seed)
                 .context("Failed to resolve Scaling node"),
             Self::Similarity(node) => node
-                .resolve(arena, outputs, seed)
+                .resolve(arena, outputs, scale_factor, seed)
                 .context("Failed to resolve Similarity node"),
             Self::StratifiedGridTransforms(node) => node
-                .resolve(arena, outputs, seed)
+                .resolve(arena, outputs, scale_factor, seed)
                 .context("Failed to resolve StratifiedGridTransforms node"),
             Self::SphereSurfaceTransforms(node) => node
-                .resolve(arena, outputs, seed)
+                .resolve(arena, outputs, scale_factor, seed)
                 .context("Failed to resolve SphereSurfaceTransforms node"),
             Self::ClosestTranslationToSurface(node) => node
                 .resolve(arena, graph, outputs)
@@ -1143,19 +1150,19 @@ impl MetaSDFNode {
                 .resolve(arena, graph, outputs)
                 .context("Failed to resolve TransformApplication node"),
             Self::MultifractalNoiseSDFModifier(node) => node
-                .resolve(arena, graph, outputs, seed)
+                .resolve(arena, graph, outputs, scale_factor, seed)
                 .context("Failed to resolve MultifractalNoiseSDFModifier node"),
             Self::SDFUnion(node) => node
-                .resolve(graph, outputs)
+                .resolve(graph, outputs, scale_factor)
                 .context("Failed to resolve SDFUnion node"),
             Self::SDFSubtraction(node) => node
-                .resolve(graph, outputs)
+                .resolve(graph, outputs, scale_factor)
                 .context("Failed to resolve SDFSubtraction node"),
             Self::SDFIntersection(node) => node
-                .resolve(graph, outputs)
+                .resolve(graph, outputs, scale_factor)
                 .context("Failed to resolve SDFIntersection node"),
             Self::SDFGroupUnion(node) => node
-                .resolve(arena, graph, outputs)
+                .resolve(arena, graph, outputs, scale_factor)
                 .context("Failed to resolve SDFGroupUnion node"),
         }
     }
@@ -1193,7 +1200,12 @@ impl MetaPoints {
 }
 
 impl MetaSpheres {
-    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> Result<MetaSDFNodeOutput<A>> {
+    fn resolve<A: Allocator>(
+        &self,
+        arena: A,
+        scale_factor: f32,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>> {
         let mut rng = create_param_rng(seed);
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
@@ -1203,10 +1215,10 @@ impl MetaSpheres {
         for idx in 0..self.count {
             instances.push(Instance {
                 shape: InstanceShape::Sphere(SphereShape {
-                    radius: params.radius,
-                    center_x: params.center_x,
-                    center_y: params.center_y,
-                    center_z: params.center_z,
+                    radius: params.radius * scale_factor,
+                    center_x: params.center_x * scale_factor,
+                    center_y: params.center_y * scale_factor,
+                    center_z: params.center_z * scale_factor,
                 }),
                 transform: Similarity3::identity(),
             });
@@ -1221,7 +1233,12 @@ impl MetaSpheres {
 }
 
 impl MetaCapsules {
-    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> Result<MetaSDFNodeOutput<A>> {
+    fn resolve<A: Allocator>(
+        &self,
+        arena: A,
+        scale_factor: f32,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>> {
         let mut rng = create_param_rng(seed);
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
@@ -1231,11 +1248,11 @@ impl MetaCapsules {
         for idx in 0..self.count {
             instances.push(Instance {
                 shape: InstanceShape::Capsule(CapsuleShape {
-                    segment_length: params.segment_length,
-                    radius: params.radius,
-                    center_x: params.center_x,
-                    center_y: params.center_y,
-                    center_z: params.center_z,
+                    segment_length: params.segment_length * scale_factor,
+                    radius: params.radius * scale_factor,
+                    center_x: params.center_x * scale_factor,
+                    center_y: params.center_y * scale_factor,
+                    center_z: params.center_z * scale_factor,
                 }),
                 transform: Similarity3::identity(),
             });
@@ -1250,7 +1267,12 @@ impl MetaCapsules {
 }
 
 impl MetaBoxes {
-    fn resolve<A: Allocator>(&self, arena: A, seed: u64) -> Result<MetaSDFNodeOutput<A>> {
+    fn resolve<A: Allocator>(
+        &self,
+        arena: A,
+        scale_factor: f32,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>> {
         let mut rng = create_param_rng(seed);
 
         let mut instances = AVec::with_capacity_in(self.count as usize, arena);
@@ -1260,12 +1282,12 @@ impl MetaBoxes {
         for idx in 0..self.count {
             instances.push(Instance {
                 shape: InstanceShape::Box(BoxShape {
-                    extent_x: params.extent_x,
-                    extent_y: params.extent_y,
-                    extent_z: params.extent_z,
-                    center_x: params.center_x,
-                    center_y: params.center_y,
-                    center_z: params.center_z,
+                    extent_x: params.extent_x * scale_factor,
+                    extent_y: params.extent_y * scale_factor,
+                    extent_z: params.extent_z * scale_factor,
+                    center_x: params.center_x * scale_factor,
+                    center_y: params.center_y * scale_factor,
+                    center_z: params.center_z * scale_factor,
                 }),
                 transform: Similarity3::identity(),
             });
@@ -1284,6 +1306,7 @@ impl MetaTranslation {
         &self,
         arena: A,
         outputs: &[MetaSDFNodeOutput<A>],
+        scale_factor: f32,
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_instance_op(
@@ -1295,9 +1318,9 @@ impl MetaTranslation {
             |rng| self.sample_params(rng),
             |params, input_instance| {
                 let translation = Vector3::new(
-                    params.translation_x,
-                    params.translation_y,
-                    params.translation_z,
+                    params.translation_x * scale_factor,
+                    params.translation_y * scale_factor,
+                    params.translation_z * scale_factor,
                 );
 
                 match self.composition {
@@ -1381,6 +1404,7 @@ impl MetaSimilarity {
         &self,
         arena: A,
         outputs: &[MetaSDFNodeOutput<A>],
+        scale_factor: f32,
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         resolve_unary_instance_op(
@@ -1400,9 +1424,9 @@ impl MetaSimilarity {
                 );
 
                 let translation = Vector3::new(
-                    params.translation_x,
-                    params.translation_y,
-                    params.translation_z,
+                    params.translation_x * scale_factor,
+                    params.translation_y * scale_factor,
+                    params.translation_z * scale_factor,
                 );
 
                 let transform = Similarity3::from_parts(translation, rotation, scaling);
@@ -1425,6 +1449,7 @@ impl MetaStratifiedGridTransforms {
         &self,
         arena: A,
         outputs: &[MetaSDFNodeOutput<A>],
+        scale_factor: f32,
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         let input_instances = match &outputs[self.child_id as usize] {
@@ -1457,9 +1482,9 @@ impl MetaStratifiedGridTransforms {
 
         let shape = [shape_x as usize, shape_y as usize, shape_z as usize];
         let cell_extents = [
-            cell_extent_x.max(0.0),
-            cell_extent_y.max(0.0),
-            cell_extent_z.max(0.0),
+            (cell_extent_x * scale_factor).max(0.0),
+            (cell_extent_y * scale_factor).max(0.0),
+            (cell_extent_z * scale_factor).max(0.0),
         ];
         let jitter_fraction = jitter_fraction.clamp(0.0, 1.0);
 
@@ -1516,6 +1541,7 @@ impl MetaSphereSurfaceTransforms {
         &self,
         arena: A,
         outputs: &[MetaSDFNodeOutput<A>],
+        scale_factor: f32,
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<A>> {
         let input_instances = match &outputs[self.child_id as usize] {
@@ -1541,7 +1567,7 @@ impl MetaSphereSurfaceTransforms {
             jitter_fraction,
         } = self.sample_params(&mut rng)?;
 
-        let radius = radius.max(0.0);
+        let radius = (radius * scale_factor).max(0.0);
         let jitter_fraction = jitter_fraction.clamp(0.0, 1.0);
 
         let max_jitter_angle = Self::compute_max_jitter_angle(count, jitter_fraction);
@@ -2057,6 +2083,7 @@ impl MetaMultifractalNoiseSDFModifier {
         arena: AR,
         graph: &mut SDFGraph<AG>,
         outputs: &[MetaSDFNodeOutput<AR>],
+        scale_factor: f32,
         seed: u64,
     ) -> Result<MetaSDFNodeOutput<AR>> {
         resolve_unary_sdf_op(
@@ -2071,10 +2098,10 @@ impl MetaMultifractalNoiseSDFModifier {
                 SDFNode::new_multifractal_noise(
                     input_node_id,
                     params.octaves,
-                    params.frequency,
+                    params.frequency / scale_factor,
                     params.lacunarity,
                     params.persistence,
-                    params.amplitude,
+                    params.amplitude * scale_factor,
                     *seed,
                 )
             },
@@ -2087,6 +2114,7 @@ impl MetaSDFUnion {
         &self,
         graph: &mut SDFGraph<AG>,
         outputs: &[MetaSDFNodeOutput<AR>],
+        scale_factor: f32,
     ) -> Result<MetaSDFNodeOutput<AR>> {
         let (input_node_1_id, input_node_2_id) = match (
             &outputs[self.child_1_id as usize],
@@ -2113,7 +2141,7 @@ impl MetaSDFUnion {
                 let output_node_id = graph.add_node(SDFNode::new_union(
                     input_node_1_id,
                     input_node_2_id,
-                    self.smoothness.max(0.0),
+                    (self.smoothness * scale_factor).max(0.0),
                 ));
                 Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
             }
@@ -2126,6 +2154,7 @@ impl MetaSDFSubtraction {
         &self,
         graph: &mut SDFGraph<AG>,
         outputs: &[MetaSDFNodeOutput<AR>],
+        scale_factor: f32,
     ) -> Result<MetaSDFNodeOutput<AR>> {
         let (input_node_1_id, input_node_2_id) = match (
             &outputs[self.child_1_id as usize],
@@ -2151,7 +2180,7 @@ impl MetaSDFSubtraction {
                 let output_node_id = graph.add_node(SDFNode::new_subtraction(
                     input_node_1_id,
                     input_node_2_id,
-                    self.smoothness.max(0.0),
+                    (self.smoothness * scale_factor).max(0.0),
                 ));
                 Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
             }
@@ -2164,6 +2193,7 @@ impl MetaSDFIntersection {
         &self,
         graph: &mut SDFGraph<AG>,
         outputs: &[MetaSDFNodeOutput<AR>],
+        scale_factor: f32,
     ) -> Result<MetaSDFNodeOutput<AR>> {
         let (input_node_1_id, input_node_2_id) = match (
             &outputs[self.child_1_id as usize],
@@ -2188,7 +2218,7 @@ impl MetaSDFIntersection {
                 let output_node_id = graph.add_node(SDFNode::new_intersection(
                     input_node_1_id,
                     input_node_2_id,
-                    self.smoothness.max(0.0),
+                    (self.smoothness * scale_factor).max(0.0),
                 ));
                 Ok(MetaSDFNodeOutput::SingleSDF(Some(output_node_id)))
             }
@@ -2202,6 +2232,7 @@ impl MetaSDFGroupUnion {
         arena: AR,
         graph: &mut SDFGraph<AG>,
         outputs: &[MetaSDFNodeOutput<AR>],
+        scale_factor: f32,
     ) -> Result<MetaSDFNodeOutput<AR>> {
         match &outputs[self.child_id as usize] {
             MetaSDFNodeOutput::SingleSDF(input_node_id) => {
@@ -2215,7 +2246,7 @@ impl MetaSDFGroupUnion {
                         graph.add_node(SDFNode::new_union(
                             child_node_1,
                             child_node_2,
-                            self.smoothness.max(0.0),
+                            (self.smoothness * scale_factor).max(0.0),
                         ))
                     },
                 );

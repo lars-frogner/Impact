@@ -124,7 +124,7 @@ pub fn compile_complex_meta_graph(benchmarker: impl Benchmarker) {
 
     benchmarker.benchmark(&mut || {
         let arena = ArenaPool::get_arena();
-        black_box(generator.sdf_graph.build_in(&arena, 0).unwrap());
+        black_box(generator.sdf_graph.build_in(&arena, 1.0, 0).unwrap());
     });
 }
 
@@ -132,7 +132,7 @@ pub fn build_complex_atomic_graph(benchmarker: impl Benchmarker) {
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
-    let atomic_graph = generator.sdf_graph.build_in(Global, 0).unwrap();
+    let atomic_graph = generator.sdf_graph.build_in(Global, 1.0, 0).unwrap();
 
     benchmarker.benchmark(&mut || {
         let arena = ArenaPool::get_arena();
@@ -144,7 +144,7 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
     let generator: VoxelGenerator =
         impact_io::parse_ron_file(benchmark_data_path("asteroid.vgen.ron")).unwrap();
 
-    let atomic_graph = generator.sdf_graph.build_in(Global, 0).unwrap();
+    let atomic_graph = generator.sdf_graph.build_in(Global, 1.0, 0).unwrap();
     let sdf_generator = atomic_graph.build_in(Global).unwrap();
 
     let generator = SDFVoxelGenerator::new(

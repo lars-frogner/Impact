@@ -17,6 +17,7 @@
             kind: Output,
             params: [
                 Float(0.25),
+                Float(1.0),
                 UInt(346),
             ],
             links_to_parents: [],

@@ -42,7 +42,8 @@ define_setup_type! {
     pub struct GeneratedVoxelObject {
         pub generator_id: VoxelGeneratorID,
         pub voxel_extent: f32,
-        pub seed: u32,
+        pub scale_factor: f32,
+        pub seed: u64,
     }
 }
 
@@ -155,17 +156,16 @@ define_setup_type! {
 
 #[roc(dependencies = [impact_math::hash::Hash64])]
 impl GeneratedVoxelObject {
-    #[roc(body = "{ generator_id: Hashing.hash_str_64(generator_name), voxel_extent, seed }")]
-    pub fn new(generator_name: &str, voxel_extent: f32, seed: u32) -> Self {
+    #[roc(
+        body = "{ generator_id: Hashing.hash_str_64(generator_name), voxel_extent, scale_factor, seed }"
+    )]
+    pub fn new(generator_name: &str, voxel_extent: f32, scale_factor: f32, seed: u64) -> Self {
         Self {
             generator_id: VoxelGeneratorID::from_name(generator_name),
             voxel_extent,
+            scale_factor,
             seed,
         }
-    }
-
-    pub fn seed(&self) -> u64 {
-        u64::from(self.seed)
     }
 }
 

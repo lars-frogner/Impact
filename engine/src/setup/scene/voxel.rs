@@ -79,7 +79,7 @@ pub fn setup_voxel_objects_for_new_entities(
 
             let graph = generator
                 .sdf_graph
-                .build_in(&arena, generated_voxel_object.seed())
+                .build_in(&arena, generated_voxel_object.scale_factor, generated_voxel_object.seed)
                 .with_context(|| {
                     format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
                 })?;
@@ -240,7 +240,7 @@ pub fn setup_voxel_objects_for_new_entities(
 
             let graph = generator
                 .sdf_graph
-                .build_in(&arena, generated_voxel_object.seed())
+                .build_in(&arena, generated_voxel_object.scale_factor, generated_voxel_object.seed)
                 .with_context(|| {
                     format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
                 })?;

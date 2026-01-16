@@ -100,6 +100,8 @@ type MetaChildPortKinds = [Option<MetaChildPortKind>; MAX_CHILD_PORTS];
 
 pub const DEFAULT_VOXEL_EXTENT: f32 = 0.25;
 pub const MIN_VOXEL_EXTENT: f32 = 0.005;
+pub const DEFAULT_SCALE_FACTOR: f32 = 0.25;
+pub const MIN_SCALE_FACTOR: f32 = 0.01;
 
 impl SpecificMetaNodeKind for MetaPoints {
     const LABEL: LabelAndHoverText = LabelAndHoverText {
@@ -1714,12 +1716,11 @@ const fn two_child_port_kinds(
     [Some(kind_1), Some(kind_2)]
 }
 
-pub fn get_voxel_extent_and_seed_from_output_node(
-    output_node_params: &[MetaNodeParam],
-) -> (f32, u32) {
+pub fn get_properties_from_output_node(output_node_params: &[MetaNodeParam]) -> (f32, f32, u32) {
     (
         (&output_node_params[0]).into(),
         (&output_node_params[1]).into(),
+        (&output_node_params[2]).into(),
     )
 }
 
@@ -1734,6 +1735,17 @@ fn output_node_params() -> MetaNodeParams {
             DEFAULT_VOXEL_EXTENT,
         )
         .with_min_value(MIN_VOXEL_EXTENT)
+        .with_speed(0.01),
+    );
+    params.push(
+        MetaFloatParam::new(
+            LabelAndHoverText {
+                label: "Scale factor",
+                hover_text: "Scale factor for the entire generated object.",
+            },
+            DEFAULT_SCALE_FACTOR,
+        )
+        .with_min_value(MIN_SCALE_FACTOR)
         .with_speed(0.01),
     );
     params.push(MetaUIntParam::new(
