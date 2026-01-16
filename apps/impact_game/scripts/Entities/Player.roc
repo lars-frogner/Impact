@@ -43,6 +43,7 @@ import pf.Physics.ContactResponseParameters
 import pf.Setup.LocalForce
 import pf.Setup.SphericalCollidable
 import pf.Comp.LocalForceGeneratorID
+import pf.Comp.AlignmentTorqueGeneratorID
 import pf.Comp.DynamicGravity
 import pf.Setup.GravityAlignmentTorque
 
@@ -83,34 +84,54 @@ setup! = |_|
 
 handle_keyboard_event! : KeyboardEvent => Result {} Str
 handle_keyboard_event! = |{ key, state }|
-    force =
-        when state is
-            Pressed -> thruster_force
-            Released -> -thruster_force
-            Held ->
-                return Ok({})
-
-    force_vector =
+    command =
         when key is
             Letter(letter_key) ->
                 when letter_key is
-                    KeyW -> Some((0, 0, force))
-                    KeyS -> Some((0, 0, -force))
-                    KeyD -> Some((-force, 0, 0))
-                    KeyA -> Some((force, 0, 0))
-                    KeyQ -> Some((0, -force, 0))
-                    KeyE -> Some((0, force, 0))
+                    KeyW -> add_thruster_force!(state, Forwards)?
+                    KeyS -> add_thruster_force!(state, Backwards)?
+                    KeyD -> add_thruster_force!(state, Left)?
+                    KeyA -> add_thruster_force!(state, Right)?
+                    KeyQ -> add_thruster_force!(state, Down)?
+                    KeyE -> add_thruster_force!(state, Up)?
+                    KeyY -> set_alignment_direction!(state, Fixed(UnitVector3.neg_y_axis))?
+                    KeyG -> set_alignment_direction!(state, GravityForce)?
                     _ -> None
 
             _ -> None
 
-    when force_vector is
-        Some(f) -> add_thruster_force_for_player!(f)
+    when command is
+        Some(comm) -> Command.execute!(comm)
         None -> Ok({})
 
-add_thruster_force_for_player! = |force|
+add_thruster_force! = |key_state, direction|
+    force =
+        when key_state is
+            Pressed -> thruster_force
+            Released -> -thruster_force
+            Held ->
+                return Ok(None)
+
+    force_vector =
+        when direction is
+            Forwards -> (0, 0, force)
+            Backwards -> (0, 0, -force)
+            Left -> (-force, 0, 0)
+            Right -> (force, 0, 0)
+            Down -> (0, -force, 0)
+            Up -> (0, force, 0)
+
     generator_id = Comp.LocalForceGeneratorID.get_for_entity!(entity_ids.player)?
-    Command.execute!(Engine(Physics(UpdateLocalForce { generator_id, mode: Add, force })))
+    Ok(Some(Engine(Physics(UpdateLocalForce { generator_id, mode: Add, force: force_vector }))))
+
+set_alignment_direction! = |key_state, direction|
+    when key_state is
+        Pressed -> {}
+        _ ->
+            return Ok(None)
+
+    generator_id = Comp.AlignmentTorqueGeneratorID.get_for_entity!(entity_ids.player)?
+    Ok(Some(Engine(Physics(SetAlignmentTorqueDirection { generator_id, direction }))))
 
 handle_mouse_button_event! : MouseButtonEvent => Result {} Str
 handle_mouse_button_event! = |{ button, state }|

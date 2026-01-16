@@ -8,7 +8,11 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_physics::{
-    constraint::solver::ConstraintSolverConfig, force::local_force::LocalForceGeneratorID,
+    constraint::solver::ConstraintSolverConfig,
+    force::{
+        alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
+        local_force::LocalForceGeneratorID,
+    },
     quantities::ForceP,
 };
 use roc_integration::roc;
@@ -21,6 +25,10 @@ pub enum PhysicsCommand {
         generator_id: LocalForceGeneratorID,
         mode: LocalForceUpdateMode,
         force: ForceP,
+    },
+    SetAlignmentTorqueDirection {
+        generator_id: AlignmentTorqueGeneratorID,
+        direction: AlignmentDirection,
     },
 }
 
@@ -75,6 +83,29 @@ impl PartialEq for PhysicsCommand {
                     && self_mode == other_mode
                     && bytemuck::bytes_of(self_force) == bytemuck::bytes_of(other_force)
             }
+            (
+                Self::SetAlignmentTorqueDirection {
+                    generator_id: self_id,
+                    direction: self_direction,
+                },
+                Self::SetAlignmentTorqueDirection {
+                    generator_id: other_id,
+                    direction: other_direction,
+                },
+            ) => {
+                if self_id != other_id {
+                    return false;
+                }
+                match (self_direction, other_direction) {
+                    (
+                        AlignmentDirection::Fixed(self_direction),
+                        AlignmentDirection::Fixed(other_direction),
+                    ) => bytemuck::bytes_of(self_direction) == bytemuck::bytes_of(other_direction),
+                    (AlignmentDirection::GravityForce, AlignmentDirection::GravityForce) => true,
+                    _ => false,
+                }
+            }
+            _ => false,
         }
     }
 }
@@ -114,6 +145,23 @@ pub fn update_local_force(
             local_force.force += force;
         }
     }
+
+    Ok(())
+}
+
+pub fn set_alignment_torque_direction(
+    simulator: &PhysicsSimulator,
+    generator_id: AlignmentTorqueGeneratorID,
+    direction: AlignmentDirection,
+) -> Result<()> {
+    let mut force_generator_manager = simulator.force_generator_manager().owrite();
+
+    let alignment_torque = force_generator_manager
+        .alignment_torques_mut()
+        .get_generator_mut(&generator_id)
+        .ok_or_else(|| anyhow!("No alignment torque with ID {}", u64::from(generator_id)))?;
+
+    alignment_torque.alignment_direction = direction;
 
     Ok(())
 }

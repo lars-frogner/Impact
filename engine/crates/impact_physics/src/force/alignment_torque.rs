@@ -44,6 +44,8 @@ pub struct AlignmentTorqueGenerator {
 }
 
 /// An external direction a body can be aligned with.
+#[roc(parents = "Physics")]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Debug)]
 pub enum AlignmentDirection {
     Fixed(DirectionP),
