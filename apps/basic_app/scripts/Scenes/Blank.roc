@@ -12,7 +12,6 @@ import pf.Entity
 import pf.Comp.AmbientEmission
 import pf.Comp.VelocityControl
 import pf.Comp.AngularVelocityControl
-import pf.Control.AngularVelocityControlDirections
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
@@ -49,9 +48,7 @@ player =
     )
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add
-    |> Comp.AngularVelocityControl.add_new(
-        Control.AngularVelocityControlDirections.all,
-    )
+    |> Comp.AngularVelocityControl.add_all_directions
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 ground =

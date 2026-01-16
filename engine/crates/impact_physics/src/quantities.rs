@@ -79,7 +79,7 @@ define_component_type! {
 /// to padding after the angular speed) and 16-byte alignment. For
 /// cache-friendly storage, prefer the packed 4-byte aligned
 /// [`AngularVelocityP`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AngularVelocity {
     axis_of_rotation: Direction,
     angular_speed: Radians,

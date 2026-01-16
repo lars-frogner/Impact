@@ -73,6 +73,9 @@
                 use_saved_maps: true,
                 directory: "resources/drag_load_maps",
             ),
+            dynamic_gravity_config: (
+                gravitational_constant: 2e-2,
+            ),
         ),
         constraint_solver: (
             enabled: true,

@@ -16,7 +16,6 @@ import pf.Setup.ConstantRotation
 import pf.Comp.VelocityControl
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.AngularVelocityControl
-import pf.Control.AngularVelocityControlDirections
 import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarCollidable
@@ -107,9 +106,7 @@ player =
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 20))
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add
-    |> Comp.AngularVelocityControl.add_new(
-        Control.AngularVelocityControlDirections.all,
-    )
+    |> Comp.AngularVelocityControl.add_all_directions
     |> Setup.SceneGraphGroup.add
 
 camera =

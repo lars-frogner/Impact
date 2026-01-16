@@ -9,7 +9,7 @@ use impact_math::{
     quaternion::UnitQuaternion,
     vector::UnitVector3,
 };
-use impact_physics::quantities::{AngularVelocity, AngularVelocityP, Orientation, OrientationP};
+use impact_physics::quantities::{AngularVelocity, Orientation, OrientationP};
 use roc_integration::roc;
 
 define_component_type! {
@@ -24,8 +24,8 @@ define_component_type! {
         pub frame_orientation: OrientationP,
         /// Restrict control to these directions for applicable controllers.
         pub directions: AngularVelocityControlDirections,
-        /// The current angular velocity due to the controller.
-        controlled_angular_velocity: AngularVelocityP,
+        /// Flags for how to control angular velocity.
+        pub flags: AngularVelocityControlFlags,
     }
 }
 
@@ -48,6 +48,19 @@ bitflags! {
     pub struct AngularVelocityControlDirections: u32 {
         const HORIZONTAL = 1 << 0;
         const VERTICAL   = 1 << 1;
+    }
+}
+
+bitflags! {
+    /// Flags for how to control angular velocity.
+    #[roc(parents="Control", category="bitflags", flags=[PRESERVE_EXISTING_FOR_HORIZONTAL=0])]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
+    pub struct AngularVelocityControlFlags: u32 {
+        /// When the control direction is purely horizontal, the component of
+        /// the total angular velocity perpendicular to the controlled angular
+        /// velocity can be preserved rather than zeroed out.
+        const PRESERVE_EXISTING_FOR_HORIZONTAL = 1 << 0;
     }
 }
 
@@ -102,31 +115,39 @@ impl AngularVelocityControl {
     #[roc(body = r#"
     {
         frame_orientation: UnitQuaternion.identity,
-        directions,
-        controlled_angular_velocity: Physics.AngularVelocity.zero({}),
+        directions: Control.AngularVelocityControlDirections.all,
+        flags: Control.AngularVelocityControlFlags.empty,
     }"#)]
-    pub fn new(directions: AngularVelocityControlDirections) -> Self {
+    pub fn all_directions() -> Self {
         Self {
             frame_orientation: OrientationP::identity(),
-            directions,
-            controlled_angular_velocity: AngularVelocityP::zero(),
+            directions: AngularVelocityControlDirections::all(),
+            flags: AngularVelocityControlFlags::empty(),
         }
     }
 
-    #[roc(body = r#"
-    {
-        frame_orientation,
-        directions,
-        controlled_angular_velocity: Physics.AngularVelocity.zero({}),
-    }"#)]
+    #[roc(body = "{ frame_orientation: UnitQuaternion.identity, directions, flags }")]
+    pub fn new(
+        directions: AngularVelocityControlDirections,
+        flags: AngularVelocityControlFlags,
+    ) -> Self {
+        Self {
+            frame_orientation: OrientationP::identity(),
+            directions,
+            flags,
+        }
+    }
+
+    #[roc(body = "{ frame_orientation, directions, flags }")]
     pub fn new_local(
         frame_orientation: OrientationP,
         directions: AngularVelocityControlDirections,
+        flags: AngularVelocityControlFlags,
     ) -> Self {
         Self {
             frame_orientation,
             directions,
-            controlled_angular_velocity: AngularVelocityP::zero(),
+            flags,
         }
     }
 
@@ -144,19 +165,62 @@ impl AngularVelocityControl {
         *orientation = frame_orientation * orientation_in_local_frame;
     }
 
-    /// Assigns a new controlled angular velocity and updates the given total
-    /// angular velocity to account for the change in controlled angular
-    /// velocity.
-    pub fn apply_new_controlled_angular_velocity(
-        &mut self,
-        new_control_angular_velocity: AngularVelocity,
+    pub fn update_total_angular_velocity(
+        &self,
+        control_angular_velocity: AngularVelocity,
         total_angular_velocity: &mut AngularVelocity,
     ) {
-        *total_angular_velocity = &*total_angular_velocity
-            - self.controlled_angular_velocity.unpack()
-            + &new_control_angular_velocity;
+        if self.directions == AngularVelocityControlDirections::HORIZONTAL
+            && self
+                .flags
+                .contains(AngularVelocityControlFlags::PRESERVE_EXISTING_FOR_HORIZONTAL)
+        {
+            let angular_velocity = total_angular_velocity.as_vector();
+            let control_axis = control_angular_velocity.axis_of_rotation();
 
-        self.controlled_angular_velocity = new_control_angular_velocity.pack();
+            let angular_velocity_about_control_axis =
+                angular_velocity.dot(control_axis) * control_axis;
+
+            let angular_velocity_not_about_control_axis =
+                angular_velocity - angular_velocity_about_control_axis;
+
+            *total_angular_velocity = control_angular_velocity
+                + AngularVelocity::from_vector(angular_velocity_not_about_control_axis);
+        } else {
+            *total_angular_velocity = control_angular_velocity;
+        }
+    }
+
+    pub fn update_total_angular_velocity_for_unchanged_control(
+        &self,
+        total_angular_velocity: &mut AngularVelocity,
+    ) {
+        if self.directions == AngularVelocityControlDirections::HORIZONTAL
+            && self
+                .flags
+                .contains(AngularVelocityControlFlags::PRESERVE_EXISTING_FOR_HORIZONTAL)
+        {
+            let frame_orientation = self.frame_orientation.unpack();
+
+            // For purely horizontal control, the local control axis of rotation
+            // is always the y-axis
+            let local_control_axis = UnitVector3::unit_y();
+
+            let control_axis = frame_orientation.rotate_unit_vector(&local_control_axis);
+
+            let angular_velocity = total_angular_velocity.as_vector();
+
+            let angular_velocity_about_control_axis =
+                angular_velocity.dot(&control_axis) * control_axis;
+
+            let angular_velocity_not_about_control_axis =
+                angular_velocity - angular_velocity_about_control_axis;
+
+            *total_angular_velocity =
+                AngularVelocity::from_vector(angular_velocity_not_about_control_axis);
+        } else {
+            *total_angular_velocity = AngularVelocity::zero();
+        }
     }
 }
 
