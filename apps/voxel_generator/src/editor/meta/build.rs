@@ -108,15 +108,15 @@ pub fn build_sdf_graph<A: Allocator>(
 ) -> Option<Result<SDFGraphBuildResult<A>>> {
     let output_node = nodes.get(&0)?;
 
-    let (voxel_extent, seed) =
-        node_kind::get_voxel_extent_and_seed_from_output_node(&output_node.data.params.params);
+    let (voxel_extent, scale_factor, seed) =
+        node_kind::get_properties_from_output_node(&output_node.data.params.params);
 
     let arena = ArenaPool::get_arena();
     let meta_graph = build_meta_graph(&arena, nodes)?;
 
     Some(
         meta_graph
-            .build_in(alloc, seed.into())
+            .build_in(alloc, scale_factor, seed.into())
             .map(|graph| SDFGraphBuildResult {
                 voxel_extent,
                 graph,
