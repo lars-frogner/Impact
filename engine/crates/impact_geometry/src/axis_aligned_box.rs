@@ -5,8 +5,8 @@ use Corner::{Lower, Upper};
 use approx::AbsDiffEq;
 use impact_math::{
     matrix::Matrix4,
-    point::{Point3, Point3P},
-    vector::{UnitVector3, Vector3, Vector3P},
+    point::{Point3, Point3C},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 
 /// A box with orientation aligned with the coordinate system axes. The width,
@@ -14,8 +14,8 @@ use impact_math::{
 ///
 /// The corners are stored in 128-bit SIMD registers for efficient computation.
 /// That leads to an 8 extra bytes in size (4 per corner) and 16-byte alignment.
-/// For cache-friendly storage, prefer the packed 4-byte aligned
-/// [`AxisAlignedBoxP`].
+/// For cache-friendly storage, prefer the compact 4-byte aligned
+/// [`AxisAlignedBoxC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct AxisAlignedBox {
     corners: [Point3; 2],
@@ -23,15 +23,15 @@ pub struct AxisAlignedBox {
 
 /// A box with orientation aligned with the coordinate system axes. The width,
 /// height and depth axes are aligned with the x-, y- and z-axis respectively.
-/// This is the "packed" version.
+/// This is the "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`AxisAlignedBox`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct AxisAlignedBoxP {
-    lower_corner: Point3P,
-    upper_corner: Point3P,
+pub struct AxisAlignedBoxC {
+    lower_corner: Point3C,
+    upper_corner: Point3C,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -67,26 +67,26 @@ impl AxisAlignedBox {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[Point3P]) -> Self {
+    pub fn aabb_for_points(points: &[Point3C]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create AABB for empty point slice"
         );
 
-        let first_point = points[0].unpack();
+        let first_point = points[0].aligned();
 
         let lower_corner = points
             .iter()
             .skip(1)
             .fold(first_point, |lower_corner, point| {
-                lower_corner.min_with(&point.unpack())
+                lower_corner.min_with(&point.aligned())
             });
 
         let upper_corner = points
             .iter()
             .skip(1)
             .fold(first_point, |upper_corner, point| {
-                upper_corner.max_with(&point.unpack())
+                upper_corner.max_with(&point.aligned())
             });
 
         Self::new(lower_corner, upper_corner)
@@ -438,10 +438,10 @@ impl AxisAlignedBox {
     }
 
     /// Converts the box to the 4-byte aligned cache-friendly
-    /// [`AxisAlignedBoxP`].
+    /// [`AxisAlignedBoxC`].
     #[inline]
-    pub fn pack(&self) -> AxisAlignedBoxP {
-        AxisAlignedBoxP::new(self.lower_corner().pack(), self.upper_corner().pack())
+    pub fn compact(&self) -> AxisAlignedBoxC {
+        AxisAlignedBoxC::new(self.lower_corner().compact(), self.upper_corner().compact())
     }
 }
 
@@ -458,10 +458,10 @@ impl AbsDiffEq for AxisAlignedBox {
     }
 }
 
-impl AxisAlignedBoxP {
+impl AxisAlignedBoxC {
     /// Creates a new box with the given lower and upper corner points.
     #[inline]
-    pub const fn new(lower_corner: Point3P, upper_corner: Point3P) -> Self {
+    pub const fn new(lower_corner: Point3C, upper_corner: Point3C) -> Self {
         Self {
             lower_corner,
             upper_corner,
@@ -470,37 +470,37 @@ impl AxisAlignedBoxP {
 
     /// Returns a reference to the lower corner of the box.
     #[inline]
-    pub const fn lower_corner(&self) -> &Point3P {
+    pub const fn lower_corner(&self) -> &Point3C {
         &self.lower_corner
     }
 
     /// Returns a reference to the upper corner of the box.
     #[inline]
-    pub const fn upper_corner(&self) -> &Point3P {
+    pub const fn upper_corner(&self) -> &Point3C {
         &self.upper_corner
     }
 
     /// Returns the extents of the box along the three axes.
     #[inline]
-    pub fn extents(&self) -> Vector3P {
+    pub fn extents(&self) -> Vector3C {
         self.upper_corner() - self.lower_corner()
     }
 
     /// Returns the half extents of the box along the three axes.
     #[inline]
-    pub fn half_extents(&self) -> Vector3P {
+    pub fn half_extents(&self) -> Vector3C {
         0.5 * self.extents()
     }
 
     /// Converts the box to the 16-byte aligned SIMD-friendly
     /// [`AxisAlignedBox`].
     #[inline]
-    pub fn unpack(&self) -> AxisAlignedBox {
-        AxisAlignedBox::new(self.lower_corner.unpack(), self.upper_corner.unpack())
+    pub fn aligned(&self) -> AxisAlignedBox {
+        AxisAlignedBox::new(self.lower_corner.aligned(), self.upper_corner.aligned())
     }
 }
 
-impl AbsDiffEq for AxisAlignedBoxP {
+impl AbsDiffEq for AxisAlignedBoxC {
     type Epsilon = f32;
 
     fn default_epsilon() -> Self::Epsilon {
@@ -508,8 +508,8 @@ impl AbsDiffEq for AxisAlignedBoxP {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Point3P::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
-            && Point3P::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
+        Point3C::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
+            && Point3C::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
     }
 }
 

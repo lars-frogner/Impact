@@ -5,24 +5,24 @@ use crate::{
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
     material::ContactResponseParameters,
 };
-use impact_geometry::{Plane, Sphere, SphereP};
+use impact_geometry::{Plane, Sphere, SphereC};
 use impact_math::{transform::Isometry3, vector::UnitVector3};
 
 #[derive(Clone, Debug)]
 pub struct SphereCollidable {
-    sphere: SphereP,
+    sphere: SphereC,
     response_params: ContactResponseParameters,
 }
 
 impl SphereCollidable {
-    pub fn new(sphere: SphereP, response_params: ContactResponseParameters) -> Self {
+    pub fn new(sphere: SphereC, response_params: ContactResponseParameters) -> Self {
         Self {
             sphere,
             response_params,
         }
     }
 
-    pub fn sphere(&self) -> &SphereP {
+    pub fn sphere(&self) -> &SphereC {
         &self.sphere
     }
 
@@ -31,10 +31,10 @@ impl SphereCollidable {
     }
 
     pub fn transformed(&self, transform: &Isometry3) -> Self {
-        let sphere = self.sphere.unpack();
+        let sphere = self.sphere.aligned();
         let transformed_sphere = sphere.iso_transformed(transform);
         Self {
-            sphere: transformed_sphere.pack(),
+            sphere: transformed_sphere.compact(),
             response_params: self.response_params,
         }
     }
@@ -55,8 +55,8 @@ pub fn generate_sphere_sphere_contact_manifold(
     contact_manifold: &mut ContactManifold,
 ) {
     if let Some(geometry) = determine_sphere_sphere_contact_geometry(
-        &sphere_a.sphere.unpack(),
-        &sphere_b.sphere.unpack(),
+        &sphere_a.sphere.aligned(),
+        &sphere_b.sphere.aligned(),
     ) {
         let id =
             super::contact_id_from_collidable_ids(sphere_a_collidable_id, sphere_b_collidable_id);
@@ -83,9 +83,10 @@ pub fn generate_sphere_plane_contact_manifold(
     plane_collidable_id: CollidableID,
     contact_manifold: &mut ContactManifold,
 ) {
-    if let Some(geometry) =
-        determine_sphere_plane_contact_geometry(&sphere.sphere().unpack(), &plane.plane().unpack())
-    {
+    if let Some(geometry) = determine_sphere_plane_contact_geometry(
+        &sphere.sphere().aligned(),
+        &plane.plane().aligned(),
+    ) {
         let id = super::contact_id_from_collidable_ids(sphere_collidable_id, plane_collidable_id);
 
         let response_params =

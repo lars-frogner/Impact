@@ -1,6 +1,6 @@
 //! Points.
 
-use crate::vector::{Vector2, Vector3, Vector3P};
+use crate::vector::{Vector2, Vector3, Vector3C};
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
 use std::{
@@ -25,7 +25,7 @@ pub struct Point2 {
 ///
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an extra 4 bytes in size and 16-byte alignment.
-/// For cache-friendly storage, prefer the packed 4-byte aligned [`Point3P`].
+/// For cache-friendly storage, prefer the compact 4-byte aligned [`Point3C`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -38,7 +38,7 @@ pub struct Point3 {
     inner: glam::Vec3A,
 }
 
-/// A 3-dimensional point. This is the "packed" version.
+/// A 3-dimensional point. This is the "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
@@ -51,7 +51,7 @@ pub struct Point3 {
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Point3P {
+pub struct Point3C {
     x: f32,
     y: f32,
     z: f32,
@@ -122,8 +122,8 @@ impl Point2 {
 
     /// Converts the point to 3D by appending the given z-component.
     #[inline]
-    pub const fn extended(&self, z: f32) -> Point3P {
-        Point3P::new(self.x(), self.y(), z)
+    pub const fn extended(&self, z: f32) -> Point3C {
+        Point3C::new(self.x(), self.y(), z)
     }
 
     /// Computes the distance between two points.
@@ -334,10 +334,10 @@ impl Point3 {
         bytemuck::cast_ref(self)
     }
 
-    /// Converts the point to the 4-byte aligned cache-friendly [`Point3P`].
+    /// Converts the point to the 4-byte aligned cache-friendly [`Point3C`].
     #[inline]
-    pub fn pack(&self) -> Point3P {
-        Point3P::new(self.x(), self.y(), self.z())
+    pub fn compact(&self) -> Point3C {
+        Point3C::new(self.x(), self.y(), self.z())
     }
 
     #[inline]
@@ -448,7 +448,7 @@ impl_relative_eq!(Point3, |a, b, epsilon, max_relative| {
     a.inner.relative_eq(&b.inner, epsilon, max_relative)
 });
 
-impl Point3P {
+impl Point3C {
     /// Creates a new point with the given components.
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
@@ -503,90 +503,90 @@ impl Point3P {
         Point2::new(self.x(), self.y())
     }
 
-    /// This point as a [`Vector3P`].
+    /// This point as a [`Vector3C`].
     #[inline]
-    pub fn as_vector(&self) -> &Vector3P {
+    pub fn as_vector(&self) -> &Vector3C {
         bytemuck::cast_ref(self)
     }
 
     /// Converts the point to the 16-byte aligned SIMD-friendly [`Point3`].
     #[inline]
-    pub fn unpack(&self) -> Point3 {
+    pub fn aligned(&self) -> Point3 {
         Point3::new(self.x(), self.y(), self.z())
     }
 }
 
-impl From<Vector3P> for Point3P {
+impl From<Vector3C> for Point3C {
     #[inline]
-    fn from(vector: Vector3P) -> Self {
+    fn from(vector: Vector3C) -> Self {
         Self::new(vector.x(), vector.y(), vector.z())
     }
 }
 
-impl From<Point3P> for Vector3P {
+impl From<Point3C> for Vector3C {
     #[inline]
-    fn from(point: Point3P) -> Self {
-        Vector3P::new(point.x(), point.y(), point.z())
+    fn from(point: Point3C) -> Self {
+        Vector3C::new(point.x(), point.y(), point.z())
     }
 }
 
-impl From<[f32; 3]> for Point3P {
+impl From<[f32; 3]> for Point3C {
     #[inline]
     fn from([x, y, z]: [f32; 3]) -> Self {
         Self::new(x, y, z)
     }
 }
 
-impl From<Point3P> for [f32; 3] {
+impl From<Point3C> for [f32; 3] {
     #[inline]
-    fn from(point: Point3P) -> Self {
+    fn from(point: Point3C) -> Self {
         [point.x(), point.y(), point.z()]
     }
 }
 
-impl_binop!(Add, add, Point3P, Vector3P, Point3P, |a, b| {
-    Point3P::new(a.x + b.x(), a.y + b.y(), a.z + b.z())
+impl_binop!(Add, add, Point3C, Vector3C, Point3C, |a, b| {
+    Point3C::new(a.x + b.x(), a.y + b.y(), a.z + b.z())
 });
 
-impl_binop!(Sub, sub, Point3P, Vector3P, Point3P, |a, b| {
-    Point3P::new(a.x - b.x(), a.y - b.y(), a.z - b.z())
+impl_binop!(Sub, sub, Point3C, Vector3C, Point3C, |a, b| {
+    Point3C::new(a.x - b.x(), a.y - b.y(), a.z - b.z())
 });
 
-impl_binop!(Sub, sub, Point3P, Point3P, Vector3P, |a, b| {
-    Vector3P::new(a.x - b.x, a.y - b.y, a.z - b.z)
+impl_binop!(Sub, sub, Point3C, Point3C, Vector3C, |a, b| {
+    Vector3C::new(a.x - b.x, a.y - b.y, a.z - b.z)
 });
 
-impl_binop!(Mul, mul, Point3P, f32, Point3P, |a, b| {
-    Point3P::new(a.x * b, a.y * b, a.z * b)
+impl_binop!(Mul, mul, Point3C, f32, Point3C, |a, b| {
+    Point3C::new(a.x * b, a.y * b, a.z * b)
 });
 
-impl_binop!(Mul, mul, f32, Point3P, Point3P, |a, b| { b.mul(*a) });
+impl_binop!(Mul, mul, f32, Point3C, Point3C, |a, b| { b.mul(*a) });
 
-impl_binop!(Div, div, Point3P, f32, Point3P, |a, b| { a.mul(b.recip()) });
+impl_binop!(Div, div, Point3C, f32, Point3C, |a, b| { a.mul(b.recip()) });
 
-impl_binop_assign!(AddAssign, add_assign, Point3P, Vector3P, |a, b| {
+impl_binop_assign!(AddAssign, add_assign, Point3C, Vector3C, |a, b| {
     a.x += b.x();
     a.y += b.y();
     a.z += b.z();
 });
 
-impl_binop_assign!(SubAssign, sub_assign, Point3P, Vector3P, |a, b| {
+impl_binop_assign!(SubAssign, sub_assign, Point3C, Vector3C, |a, b| {
     a.x -= b.x();
     a.y -= b.y();
     a.z -= b.z();
 });
 
-impl_binop_assign!(MulAssign, mul_assign, Point3P, f32, |a, b| {
+impl_binop_assign!(MulAssign, mul_assign, Point3C, f32, |a, b| {
     a.x *= b;
     a.y *= b;
     a.z *= b;
 });
 
-impl_binop_assign!(DivAssign, div_assign, Point3P, f32, |a, b| {
+impl_binop_assign!(DivAssign, div_assign, Point3C, f32, |a, b| {
     a.mul_assign(b.recip());
 });
 
-impl Index<usize> for Point3P {
+impl Index<usize> for Point3C {
     type Output = f32;
 
     #[inline]
@@ -600,7 +600,7 @@ impl Index<usize> for Point3P {
     }
 }
 
-impl IndexMut<usize> for Point3P {
+impl IndexMut<usize> for Point3C {
     #[inline]
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
         match idx {
@@ -612,13 +612,13 @@ impl IndexMut<usize> for Point3P {
     }
 }
 
-impl_abs_diff_eq!(Point3P, |a, b, epsilon| {
+impl_abs_diff_eq!(Point3C, |a, b, epsilon| {
     a.x.abs_diff_eq(&b.x, epsilon)
         && a.y.abs_diff_eq(&b.y, epsilon)
         && a.z.abs_diff_eq(&b.z, epsilon)
 });
 
-impl_relative_eq!(Point3P, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Point3C, |a, b, epsilon, max_relative| {
     a.x.relative_eq(&b.x, epsilon, max_relative)
         && a.y.relative_eq(&b.y, epsilon, max_relative)
         && a.z.relative_eq(&b.z, epsilon, max_relative)
@@ -627,7 +627,7 @@ impl_relative_eq!(Point3P, |a, b, epsilon, max_relative| {
 impl_roc_for_library_provided_primitives! {
 //  Type        Pkg    Parents  Module  Roc name  Postfix  Precision
     Point2   => core,  None,    Point2, Point2,   None,    PrecisionIrrelevant,
-    Point3P  => core,  None,    Point3, Point3,   None,    PrecisionIrrelevant,
+    Point3C  => core,  None,    Point3, Point3,   None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -719,7 +719,7 @@ mod tests {
     fn extending_point2_to_point3p_works() {
         let p2 = Point2::new(1.0, 2.0);
         let p3 = p2.extended(3.0);
-        assert_eq!(p3, Point3P::new(1.0, 2.0, 3.0));
+        assert_eq!(p3, Point3C::new(1.0, 2.0, 3.0));
     }
 
     #[test]
@@ -877,11 +877,11 @@ mod tests {
     }
 
     #[test]
-    fn point3_packing_and_unpacking_works() {
+    fn point3_compacting_and_alignment_works() {
         let p3 = Point3::new(1.0, 2.0, 3.0);
-        let packed = p3.pack();
-        assert_eq!(packed, Point3P::new(1.0, 2.0, 3.0));
-        assert_eq!(packed.unpack(), p3);
+        let compact = p3.compact();
+        assert_eq!(compact, Point3C::new(1.0, 2.0, 3.0));
+        assert_eq!(compact.aligned(), p3);
     }
 
     #[test]
@@ -950,26 +950,26 @@ mod tests {
         let _ = p[3];
     }
 
-    // === Point3P Tests (packed) ===
+    // === Point3C Tests (compact) ===
 
     #[test]
     fn extracting_xy_from_point3p_works() {
-        let p3 = Point3P::new(1.0, 2.0, 3.0);
+        let p3 = Point3C::new(1.0, 2.0, 3.0);
         let xy = p3.xy();
         assert_eq!(xy, Point2::new(1.0, 2.0));
     }
 
     #[test]
     fn converting_point3p_to_vector_and_back_preserves_data() {
-        let p = Point3P::new(3.0, 4.0, 5.0);
+        let p = Point3C::new(3.0, 4.0, 5.0);
         let v = p.as_vector();
-        let p_back = Point3P::from(*v);
+        let p_back = Point3C::from(*v);
         assert_eq!(p_back, p);
     }
 
     #[test]
     fn point3p_indexing_works() {
-        let mut p = Point3P::new(1.0, 2.0, 3.0);
+        let mut p = Point3C::new(1.0, 2.0, 3.0);
         assert_eq!(p[0], 1.0);
         assert_eq!(p[1], 2.0);
         assert_eq!(p[2], 3.0);
@@ -977,13 +977,13 @@ mod tests {
         p[0] = 10.0;
         p[1] = 20.0;
         p[2] = 30.0;
-        assert_eq!(p, Point3P::new(10.0, 20.0, 30.0));
+        assert_eq!(p, Point3C::new(10.0, 20.0, 30.0));
     }
 
     #[test]
     #[should_panic]
     fn indexing_point3p_out_of_bounds_panics() {
-        let p = Point3P::new(1.0, 2.0, 3.0);
+        let p = Point3C::new(1.0, 2.0, 3.0);
         let _ = p[3];
     }
 

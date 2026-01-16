@@ -119,7 +119,7 @@ fn setup_scene_graph_group_nodes_for_new_entities(
 
             impact_scene::setup::setup_scene_graph_group_node(
                 &mut scene_graph,
-                transform_to_parent_space.pack(),
+                transform_to_parent_space.compact(),
                 parent,
             )
         },
@@ -165,7 +165,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 &resource_manager.materials,
                 &mut model_instance_manager,
                 &mut scene_graph,
-                model_to_parent_transform.pack(),
+                model_to_parent_transform.compact(),
                 *mesh_id,
                 *material_id,
                 parent,

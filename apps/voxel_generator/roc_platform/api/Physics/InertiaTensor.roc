@@ -1,5 +1,5 @@
-# Hash: eebe0d249f002bc4
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: 151d5c597e19758f
+# Generated: 2026-01-16T09:36:44.178916505
 # Rust type: impact_physics::inertia::InertiaTensorP
 # Type category: POD
 module [
@@ -10,7 +10,7 @@ module [
 
 import core.Matrix3
 
-## The inertia tensor of a physical body. This the "packed" version.
+## The inertia tensor of a physical body. This the "compact" version.
 ##
 ## This type is primarily intended for compact storage inside other types and
 ## collections. For computations, prefer the SIMD-friendly 16-byte aligned

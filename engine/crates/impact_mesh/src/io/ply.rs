@@ -4,8 +4,8 @@ use crate::{TriangleMesh, VertexNormalVector, VertexPosition, VertexTextureCoord
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::Point3P,
-    vector::{UnitVector3P, Vector2, Vector3P},
+    point::Point3C,
+    vector::{UnitVector3C, Vector2, Vector3C},
 };
 use ply_rs::{
     parser::Parser,
@@ -88,7 +88,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_positions = vertex_list
             .iter()
             .map(|PlyVertex { property_values }| {
-                VertexPosition(Point3P::new(
+                VertexPosition(Point3C::new(
                     property_values[prop_idx],
                     property_values[prop_idx + 1],
                     property_values[prop_idx + 2],
@@ -120,7 +120,7 @@ fn convert_ply_vertices_and_faces_to_mesh(
         vertex_normal_vectors = vertex_list
             .iter()
             .map(|PlyVertex { property_values }| {
-                VertexNormalVector(UnitVector3P::normalized_from(Vector3P::new(
+                VertexNormalVector(UnitVector3C::normalized_from(Vector3C::new(
                     property_values[prop_idx],
                     property_values[prop_idx + 1],
                     property_values[prop_idx + 2],

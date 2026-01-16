@@ -96,7 +96,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
                 let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let group_to_root_transform = parent_node.group_to_root_transform().unpack();
+                let group_to_root_transform = parent_node.group_to_root_transform().aligned();
 
                 let sphere_to_world_transform =
                     group_to_root_transform * reference_frame.create_transform_to_parent_space();
@@ -144,7 +144,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
                 let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let group_to_root_transform = parent_node.group_to_root_transform().unpack();
+                let group_to_root_transform = parent_node.group_to_root_transform().aligned();
 
                 let capsule_to_world_transform =
                     group_to_root_transform * reference_frame.create_transform_to_parent_space();

@@ -1,10 +1,10 @@
 //! Representation of frustums.
 
-use crate::{AxisAlignedBox, Plane, PlaneP, Sphere};
+use crate::{AxisAlignedBox, Plane, PlaneC, Sphere};
 use approx::AbsDiffEq;
 use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
-    matrix::{Matrix4, Matrix4P},
+    matrix::{Matrix4, Matrix4C},
     point::Point3,
     quaternion::UnitQuaternion,
     transform::{Projective3, Similarity3},
@@ -20,7 +20,7 @@ use impact_math::{
 /// The planes and transform matrices are stored in 128-bit SIMD registers for
 /// efficient computation. That leads to an extra 102 bytes in size (16 for each
 /// plane and 6 due to additional padding) and 16-byte alignment. For
-/// cache-friendly storage, prefer the packed 4-byte aligned [`FrustumP`].
+/// cache-friendly storage, prefer the compact 4-byte aligned [`FrustumC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frustum {
     planes: [Plane; 6],
@@ -31,7 +31,7 @@ pub struct Frustum {
 
 /// A frustum, which in general is a pyramid truncated at the top. It is here
 /// represented by the six planes making up the faces of the truncated pyramid.
-/// This is the "packed" version.
+/// This is the "compact" version.
 ///
 /// The planes are created in such a way that their negative halfspaces
 /// correspond to the space outside the frustum.
@@ -40,11 +40,11 @@ pub struct Frustum {
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`Frustum`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct FrustumP {
-    planes: [PlaneP; 6],
+pub struct FrustumC {
+    planes: [PlaneC; 6],
     largest_signed_dist_aab_corner_indices_for_planes: [u8; 6],
-    transform_matrix: Matrix4P,
-    inverse_transform_matrix: Matrix4P,
+    transform_matrix: Matrix4C,
+    inverse_transform_matrix: Matrix4C,
 }
 
 impl Frustum {
@@ -423,15 +423,15 @@ impl Frustum {
         ]
     }
 
-    /// Converts the frustum to the 4-byte aligned cache-friendly [`FrustumP`].
+    /// Converts the frustum to the 4-byte aligned cache-friendly [`FrustumC`].
     #[inline]
-    pub fn pack(&self) -> FrustumP {
-        FrustumP {
-            planes: self.planes.clone().map(|plane| plane.pack()),
+    pub fn compact(&self) -> FrustumC {
+        FrustumC {
+            planes: self.planes.clone().map(|plane| plane.compact()),
             largest_signed_dist_aab_corner_indices_for_planes: self
                 .largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix: self.transform_matrix.pack(),
-            inverse_transform_matrix: self.inverse_transform_matrix.pack(),
+            transform_matrix: self.transform_matrix.compact(),
+            inverse_transform_matrix: self.inverse_transform_matrix.compact(),
         }
     }
 
@@ -567,53 +567,53 @@ impl AbsDiffEq for Frustum {
     }
 }
 
-impl FrustumP {
+impl FrustumC {
     /// Returns the planes defining the faces of the frustum.
     #[inline]
-    pub const fn planes(&self) -> &[PlaneP; 6] {
+    pub const fn planes(&self) -> &[PlaneC; 6] {
         &self.planes
     }
 
     /// Returns the plane defining the left face of the frustum.
     #[inline]
-    pub const fn left_plane(&self) -> &PlaneP {
+    pub const fn left_plane(&self) -> &PlaneC {
         &self.planes[0]
     }
 
     /// Returns the plane defining the right face of the frustum.
     #[inline]
-    pub const fn right_plane(&self) -> &PlaneP {
+    pub const fn right_plane(&self) -> &PlaneC {
         &self.planes[1]
     }
 
     /// Returns the plane defining the bottom face of the frustum.
     #[inline]
-    pub const fn bottom_plane(&self) -> &PlaneP {
+    pub const fn bottom_plane(&self) -> &PlaneC {
         &self.planes[2]
     }
 
     /// Returns the plane defining the top face of the frustum.
     #[inline]
-    pub const fn top_plane(&self) -> &PlaneP {
+    pub const fn top_plane(&self) -> &PlaneC {
         &self.planes[3]
     }
 
     /// Returns the near plane of the frustum.
     #[inline]
-    pub const fn near_plane(&self) -> &PlaneP {
+    pub const fn near_plane(&self) -> &PlaneC {
         &self.planes[4]
     }
 
     /// Returns the far plane of the frustum.
     #[inline]
-    pub const fn far_plane(&self) -> &PlaneP {
+    pub const fn far_plane(&self) -> &PlaneC {
         &self.planes[5]
     }
 
     /// Returns the matrix of the transform into the clip space
     /// that this frustum represents.
     #[inline]
-    pub const fn transform_matrix(&self) -> &Matrix4P {
+    pub const fn transform_matrix(&self) -> &Matrix4C {
         &self.transform_matrix
     }
 
@@ -631,18 +631,18 @@ impl FrustumP {
 
     /// Converts the frustum to the 16-byte aligned SIMD-friendly [`Frustum`].
     #[inline]
-    pub fn unpack(&self) -> Frustum {
+    pub fn aligned(&self) -> Frustum {
         Frustum {
-            planes: self.planes.map(|plane| plane.unpack()),
+            planes: self.planes.map(|plane| plane.aligned()),
             largest_signed_dist_aab_corner_indices_for_planes: self
                 .largest_signed_dist_aab_corner_indices_for_planes,
-            transform_matrix: self.transform_matrix.unpack(),
-            inverse_transform_matrix: self.inverse_transform_matrix.unpack(),
+            transform_matrix: self.transform_matrix.aligned(),
+            inverse_transform_matrix: self.inverse_transform_matrix.aligned(),
         }
     }
 }
 
-impl AbsDiffEq for FrustumP {
+impl AbsDiffEq for FrustumC {
     type Epsilon = f32;
 
     fn default_epsilon() -> f32 {

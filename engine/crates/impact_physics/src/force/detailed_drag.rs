@@ -11,7 +11,7 @@ use impact_alloc::arena::ArenaPool;
 use crate::{
     force::ForceGeneratorRegistry,
     medium::UniformMedium,
-    quantities::{Direction, DirectionP, Position},
+    quantities::{Direction, DirectionC, Position},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use anyhow::{Result, anyhow, bail};
@@ -22,7 +22,7 @@ use impact_containers::{HashMap, hash_map::Entry};
 use impact_math::{
     angle::{Angle, Radians},
     consts::f32::PI,
-    point::Point3P,
+    point::Point3C,
     stringhash32_newtype,
 };
 use roc_integration::roc;
@@ -199,9 +199,9 @@ impl DetailedDragForce {
         drag_load_map_repository: &DragLoadMapRepository,
         rigid_body: &mut DynamicRigidBody,
     ) {
-        let body_orientation = rigid_body.orientation().unpack();
+        let body_orientation = rigid_body.orientation().aligned();
         let body_velocity = rigid_body.compute_velocity();
-        let medium_velocity = medium.velocity.unpack();
+        let medium_velocity = medium.velocity.aligned();
 
         let velocity_relative_to_medium = body_velocity - medium_velocity;
         let squared_body_speed_relative_to_medium = velocity_relative_to_medium.norm_squared();
@@ -354,7 +354,7 @@ impl DragLoadMap {
     /// # Panics
     /// If the given number of direction samples or theta coordinates is zero.
     pub fn compute_from_mesh<'a>(
-        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3P; 3]>,
+        triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
         center_of_mass: &Position,
         n_direction_samples: usize,
         n_theta_coords: usize,
@@ -393,7 +393,7 @@ impl DragLoadMap {
 }
 
 fn generate_map_from_drag_loads(
-    drag_loads: &[(DirectionP, DragLoad)],
+    drag_loads: &[(DirectionC, DragLoad)],
     n_theta_coords: usize,
     angular_interpolation_distance: Radians,
 ) -> DragLoadMap {
@@ -403,7 +403,7 @@ fn generate_map_from_drag_loads(
     let mut averaging_map = EquirectangularMap::<AveragingDragLoad>::empty(n_theta_coords);
 
     for (direction, load) in drag_loads {
-        let direction = direction.unpack();
+        let direction = direction.aligned();
 
         let direction_phi = compute_phi(&direction);
         let direction_theta = compute_theta(&direction);

@@ -7,13 +7,13 @@ pub mod spherical_joint;
 use crate::{
     anchor::{AnchorManager, TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
     collision::{Collidable, Collision, CollisionWorld},
-    quantities::{OrientationP, Position, PositionP, VelocityP},
+    quantities::{OrientationC, Position, PositionC, VelocityC},
     rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager, TypedRigidBodyID},
 };
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_containers::HashMap;
-use impact_math::{matrix::Matrix3P, vector::Vector3P};
+use impact_math::{matrix::Matrix3C, vector::Vector3C};
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
 use std::{
@@ -126,15 +126,15 @@ struct ConstrainedBody {
     /// Inverse of the body's mass.
     pub inverse_mass: f32,
     /// Inverse of the body's inertia tensor (in world space).
-    pub inverse_inertia_tensor: Matrix3P,
+    pub inverse_inertia_tensor: Matrix3C,
     /// Position of the body's center of mass (in world space).
-    pub position: PositionP,
+    pub position: PositionC,
     /// Orientation of the body's reference frame (in world space).
-    pub orientation: OrientationP,
+    pub orientation: OrientationC,
     /// Linear velocity of the body' center of mass (in world space).
-    pub velocity: VelocityP,
+    pub velocity: VelocityC,
     /// Angular velocity of the body about its center of mass (in world space).
-    pub angular_velocity: Vector3P,
+    pub angular_velocity: Vector3C,
 }
 
 impl ConstraintManager {
@@ -271,16 +271,16 @@ impl ConstrainedBody {
     fn from_dynamic_rigid_body(body: &DynamicRigidBody) -> Self {
         let inverse_inertia_tensor = body
             .inertia_tensor()
-            .unpack()
-            .inverse_rotated_matrix(&body.orientation().unpack());
+            .aligned()
+            .inverse_rotated_matrix(&body.orientation().aligned());
 
         Self {
             inverse_mass: body.mass().recip(),
-            inverse_inertia_tensor: inverse_inertia_tensor.pack(),
+            inverse_inertia_tensor: inverse_inertia_tensor.compact(),
             position: *body.position(),
             orientation: *body.orientation(),
-            velocity: body.compute_velocity().pack(),
-            angular_velocity: body.compute_angular_velocity().as_vector().pack(),
+            velocity: body.compute_velocity().compact(),
+            angular_velocity: body.compute_angular_velocity().as_vector().compact(),
         }
     }
 
@@ -288,7 +288,7 @@ impl ConstrainedBody {
     fn from_kinematic_rigid_body(body: &KinematicRigidBody) -> Self {
         Self {
             inverse_mass: 0.0,
-            inverse_inertia_tensor: Matrix3P::zeros(),
+            inverse_inertia_tensor: Matrix3C::zeros(),
             position: *body.position(),
             orientation: *body.orientation(),
             velocity: *body.velocity(),
@@ -300,7 +300,7 @@ impl ConstrainedBody {
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
     fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
-        self.orientation.unpack().rotate_point(point) + self.position.unpack().as_vector()
+        self.orientation.aligned().rotate_point(point) + self.position.aligned().as_vector()
     }
 
     /// Transforms the given point from world space to the coordinate system
@@ -308,8 +308,8 @@ impl ConstrainedBody {
     /// body's center of mass.
     fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
         self.orientation
-            .unpack()
+            .aligned()
             .inverse()
-            .rotate_point(&(point - self.position.unpack().as_vector()))
+            .rotate_point(&(point - self.position.aligned().as_vector()))
     }
 }

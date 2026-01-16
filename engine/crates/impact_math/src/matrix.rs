@@ -3,7 +3,7 @@
 use crate::{
     point::Point3,
     quaternion::UnitQuaternion,
-    vector::{Vector3, Vector3P, Vector4, Vector4P},
+    vector::{Vector3, Vector3C, Vector4, Vector4C},
 };
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
@@ -13,8 +13,8 @@ use std::{fmt, ops::Mul};
 ///
 /// The columns are stored in 128-bit SIMD registers for efficient computation.
 /// That leads to an extra 12 bytes in size (4 per column) and 16-byte
-/// alignment. For cache-friendly storage, prefer the packed 4-byte aligned
-/// [`Matrix3P`].
+/// alignment. For cache-friendly storage, prefer the compact 4-byte aligned
+/// [`Matrix3C`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -27,7 +27,7 @@ pub struct Matrix3 {
     inner: glam::Mat3A,
 }
 
-/// A 3x3 matrix. This is the "packed" version.
+/// A 3x3 matrix. This is the "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
@@ -40,17 +40,17 @@ pub struct Matrix3 {
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Matrix3P {
-    column_1: Vector3P,
-    column_2: Vector3P,
-    column_3: Vector3P,
+pub struct Matrix3C {
+    column_1: Vector3C,
+    column_2: Vector3C,
+    column_3: Vector3C,
 }
 
 /// A 4x4 matrix.
 ///
 /// The columns are stored in 128-bit SIMD registers for efficient computation.
 /// That leads to an alignment of 16 bytes. For padding-free storage together
-/// with smaller types, prefer the 4-byte aligned [`Matrix4P`].
+/// with smaller types, prefer the 4-byte aligned [`Matrix4C`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -63,7 +63,7 @@ pub struct Matrix4 {
     inner: glam::Mat4,
 }
 
-/// A 4x4 vector. This is the "packed" version.
+/// A 4x4 vector. This is the "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// padding-free storage when combined with smaller types. For computations,
@@ -76,11 +76,11 @@ pub struct Matrix4 {
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Zeroable, Pod)]
-pub struct Matrix4P {
-    column_1: Vector4P,
-    column_2: Vector4P,
-    column_3: Vector4P,
-    column_4: Vector4P,
+pub struct Matrix4C {
+    column_1: Vector4C,
+    column_2: Vector4C,
+    column_3: Vector4C,
+    column_4: Vector4C,
 }
 
 impl Matrix3 {
@@ -237,13 +237,13 @@ impl Matrix3 {
             .max(m.z_axis.max_element())
     }
 
-    /// Converts the matrix to the 4-byte aligned cache-friendly [`Matrix3P`].
+    /// Converts the matrix to the 4-byte aligned cache-friendly [`Matrix3C`].
     #[inline]
-    pub fn pack(&self) -> Matrix3P {
-        Matrix3P::from_columns(
-            self.column_1().pack(),
-            self.column_2().pack(),
-            self.column_3().pack(),
+    pub fn compact(&self) -> Matrix3C {
+        Matrix3C::from_columns(
+            self.column_1().compact(),
+            self.column_2().compact(),
+            self.column_3().compact(),
         )
     }
 
@@ -322,22 +322,22 @@ impl fmt::Debug for Matrix3 {
     }
 }
 
-impl Matrix3P {
+impl Matrix3C {
     /// Creates the identity matrix.
     #[inline]
     pub const fn identity() -> Self {
-        Self::from_columns(Vector3P::unit_x(), Vector3P::unit_y(), Vector3P::unit_z())
+        Self::from_columns(Vector3C::unit_x(), Vector3C::unit_y(), Vector3C::unit_z())
     }
 
     /// Creates a matrix with all zeros.
     #[inline]
     pub const fn zeros() -> Self {
-        Self::from_columns(Vector3P::zeros(), Vector3P::zeros(), Vector3P::zeros())
+        Self::from_columns(Vector3C::zeros(), Vector3C::zeros(), Vector3C::zeros())
     }
 
     /// Creates a diagonal matrix with the given vector as the diagonal.
     #[inline]
-    pub const fn from_diagonal(diagonal: &Vector3P) -> Self {
+    pub const fn from_diagonal(diagonal: &Vector3C) -> Self {
         let mut m = Self::zeros();
         *m.column_1.x_mut() = diagonal.x();
         *m.column_2.y_mut() = diagonal.y();
@@ -347,7 +347,7 @@ impl Matrix3P {
 
     /// Creates a matrix with the given columns.
     #[inline]
-    pub const fn from_columns(column_1: Vector3P, column_2: Vector3P, column_3: Vector3P) -> Self {
+    pub const fn from_columns(column_1: Vector3C, column_2: Vector3C, column_3: Vector3C) -> Self {
         Self {
             column_1,
             column_2,
@@ -357,53 +357,53 @@ impl Matrix3P {
 
     /// The first column of the matrix.
     #[inline]
-    pub const fn column_1(&self) -> &Vector3P {
+    pub const fn column_1(&self) -> &Vector3C {
         &self.column_1
     }
 
     /// The second column of the matrix.
     #[inline]
-    pub const fn column_2(&self) -> &Vector3P {
+    pub const fn column_2(&self) -> &Vector3C {
         &self.column_2
     }
 
     /// The third column of the matrix.
     #[inline]
-    pub const fn column_3(&self) -> &Vector3P {
+    pub const fn column_3(&self) -> &Vector3C {
         &self.column_3
     }
 
     /// Sets the first column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_1(&mut self, column: Vector3P) {
+    pub const fn set_column_1(&mut self, column: Vector3C) {
         self.column_1 = column;
     }
 
     /// Sets the second column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_2(&mut self, column: Vector3P) {
+    pub const fn set_column_2(&mut self, column: Vector3C) {
         self.column_2 = column;
     }
 
     /// Sets the third column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_3(&mut self, column: Vector3P) {
+    pub const fn set_column_3(&mut self, column: Vector3C) {
         self.column_3 = column;
     }
 
     /// Converts the matrix to the 16-byte aligned SIMD-friendly [`Matrix3`].
     #[inline]
-    pub fn unpack(&self) -> Matrix3 {
+    pub fn aligned(&self) -> Matrix3 {
         Matrix3::from_columns(
-            self.column_1().unpack(),
-            self.column_2().unpack(),
-            self.column_3().unpack(),
+            self.column_1().aligned(),
+            self.column_2().aligned(),
+            self.column_3().aligned(),
         )
     }
 }
 
-impl From<Matrix3P> for [f32; 9] {
-    fn from(m: Matrix3P) -> [f32; 9] {
+impl From<Matrix3C> for [f32; 9] {
+    fn from(m: Matrix3C) -> [f32; 9] {
         [
             m.column_1.x(),
             m.column_1.y(),
@@ -418,23 +418,23 @@ impl From<Matrix3P> for [f32; 9] {
     }
 }
 
-impl From<[f32; 9]> for Matrix3P {
-    fn from(arr: [f32; 9]) -> Matrix3P {
-        Matrix3P::from_columns(
-            Vector3P::new(arr[0], arr[1], arr[2]),
-            Vector3P::new(arr[3], arr[4], arr[5]),
-            Vector3P::new(arr[6], arr[7], arr[8]),
+impl From<[f32; 9]> for Matrix3C {
+    fn from(arr: [f32; 9]) -> Matrix3C {
+        Matrix3C::from_columns(
+            Vector3C::new(arr[0], arr[1], arr[2]),
+            Vector3C::new(arr[3], arr[4], arr[5]),
+            Vector3C::new(arr[6], arr[7], arr[8]),
         )
     }
 }
 
-impl_abs_diff_eq!(Matrix3P, |a, b, epsilon| {
+impl_abs_diff_eq!(Matrix3C, |a, b, epsilon| {
     a.column_1.abs_diff_eq(&b.column_1, epsilon)
         && a.column_2.abs_diff_eq(&b.column_2, epsilon)
         && a.column_3.abs_diff_eq(&b.column_3, epsilon)
 });
 
-impl_relative_eq!(Matrix3P, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Matrix3C, |a, b, epsilon, max_relative| {
     a.column_1.relative_eq(&b.column_1, epsilon, max_relative)
         && a.column_2.relative_eq(&b.column_2, epsilon, max_relative)
         && a.column_3.relative_eq(&b.column_3, epsilon, max_relative)
@@ -672,14 +672,14 @@ impl Matrix4 {
         Point3::wrap(self.inner.project_point3a(point.unwrap()))
     }
 
-    /// Converts the matrix to the 4-byte aligned cache-friendly [`Matrix4P`].
+    /// Converts the matrix to the 4-byte aligned cache-friendly [`Matrix4C`].
     #[inline]
-    pub fn pack(&self) -> Matrix4P {
-        Matrix4P::from_columns(
-            self.column_1().pack(),
-            self.column_2().pack(),
-            self.column_3().pack(),
-            self.column_4().pack(),
+    pub fn compact(&self) -> Matrix4C {
+        Matrix4C::from_columns(
+            self.column_1().compact(),
+            self.column_2().compact(),
+            self.column_3().compact(),
+            self.column_4().compact(),
         )
     }
 
@@ -760,15 +760,15 @@ impl fmt::Debug for Matrix4 {
     }
 }
 
-impl Matrix4P {
+impl Matrix4C {
     /// Creates the identity matrix.
     #[inline]
     pub const fn identity() -> Self {
         Self::from_columns(
-            Vector4P::unit_x(),
-            Vector4P::unit_y(),
-            Vector4P::unit_z(),
-            Vector4P::unit_w(),
+            Vector4C::unit_x(),
+            Vector4C::unit_y(),
+            Vector4C::unit_z(),
+            Vector4C::unit_w(),
         )
     }
 
@@ -776,16 +776,16 @@ impl Matrix4P {
     #[inline]
     pub const fn zeros() -> Self {
         Self::from_columns(
-            Vector4P::zeros(),
-            Vector4P::zeros(),
-            Vector4P::zeros(),
-            Vector4P::zeros(),
+            Vector4C::zeros(),
+            Vector4C::zeros(),
+            Vector4C::zeros(),
+            Vector4C::zeros(),
         )
     }
 
     /// Creates a diagonal matrix with the given vector as the diagonal.
     #[inline]
-    pub const fn from_diagonal(diagonal: &Vector4P) -> Self {
+    pub const fn from_diagonal(diagonal: &Vector4C) -> Self {
         let mut m = Self::zeros();
         *m.column_1.x_mut() = diagonal.x();
         *m.column_2.y_mut() = diagonal.y();
@@ -797,10 +797,10 @@ impl Matrix4P {
     /// Creates a matrix with the given columns.
     #[inline]
     pub const fn from_columns(
-        column_1: Vector4P,
-        column_2: Vector4P,
-        column_3: Vector4P,
-        column_4: Vector4P,
+        column_1: Vector4C,
+        column_2: Vector4C,
+        column_3: Vector4C,
+        column_4: Vector4C,
     ) -> Self {
         Self {
             column_1,
@@ -812,66 +812,66 @@ impl Matrix4P {
 
     /// The first column of the matrix.
     #[inline]
-    pub const fn column_1(&self) -> &Vector4P {
+    pub const fn column_1(&self) -> &Vector4C {
         &self.column_1
     }
 
     /// The second column of the matrix.
     #[inline]
-    pub const fn column_2(&self) -> &Vector4P {
+    pub const fn column_2(&self) -> &Vector4C {
         &self.column_2
     }
 
     /// The third column of the matrix.
     #[inline]
-    pub const fn column_3(&self) -> &Vector4P {
+    pub const fn column_3(&self) -> &Vector4C {
         &self.column_3
     }
 
     /// The fourth column of the matrix.
     #[inline]
-    pub const fn column_4(&self) -> &Vector4P {
+    pub const fn column_4(&self) -> &Vector4C {
         &self.column_4
     }
 
     /// Sets the first column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_1(&mut self, column: Vector4P) {
+    pub const fn set_column_1(&mut self, column: Vector4C) {
         self.column_1 = column;
     }
 
     /// Sets the second column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_2(&mut self, column: Vector4P) {
+    pub const fn set_column_2(&mut self, column: Vector4C) {
         self.column_2 = column;
     }
 
     /// Sets the third column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_3(&mut self, column: Vector4P) {
+    pub const fn set_column_3(&mut self, column: Vector4C) {
         self.column_3 = column;
     }
 
     /// Sets the fourth column of the matrix to the given column.
     #[inline]
-    pub const fn set_column_4(&mut self, column: Vector4P) {
+    pub const fn set_column_4(&mut self, column: Vector4C) {
         self.column_4 = column;
     }
 
     /// Converts the matrix to the 16-byte aligned SIMD-friendly [`Matrix4`].
     #[inline]
-    pub fn unpack(&self) -> Matrix4 {
+    pub fn aligned(&self) -> Matrix4 {
         Matrix4::from_columns(
-            self.column_1().unpack(),
-            self.column_2().unpack(),
-            self.column_3().unpack(),
-            self.column_4().unpack(),
+            self.column_1().aligned(),
+            self.column_2().aligned(),
+            self.column_3().aligned(),
+            self.column_4().aligned(),
         )
     }
 }
 
-impl From<Matrix4P> for [f32; 16] {
-    fn from(m: Matrix4P) -> [f32; 16] {
+impl From<Matrix4C> for [f32; 16] {
+    fn from(m: Matrix4C) -> [f32; 16] {
         [
             m.column_1.x(),
             m.column_1.y(),
@@ -893,25 +893,25 @@ impl From<Matrix4P> for [f32; 16] {
     }
 }
 
-impl From<[f32; 16]> for Matrix4P {
-    fn from(arr: [f32; 16]) -> Matrix4P {
-        Matrix4P::from_columns(
-            Vector4P::new(arr[0], arr[1], arr[2], arr[3]),
-            Vector4P::new(arr[4], arr[5], arr[6], arr[7]),
-            Vector4P::new(arr[8], arr[9], arr[10], arr[11]),
-            Vector4P::new(arr[12], arr[13], arr[14], arr[15]),
+impl From<[f32; 16]> for Matrix4C {
+    fn from(arr: [f32; 16]) -> Matrix4C {
+        Matrix4C::from_columns(
+            Vector4C::new(arr[0], arr[1], arr[2], arr[3]),
+            Vector4C::new(arr[4], arr[5], arr[6], arr[7]),
+            Vector4C::new(arr[8], arr[9], arr[10], arr[11]),
+            Vector4C::new(arr[12], arr[13], arr[14], arr[15]),
         )
     }
 }
 
-impl_abs_diff_eq!(Matrix4P, |a, b, epsilon| {
+impl_abs_diff_eq!(Matrix4C, |a, b, epsilon| {
     a.column_1.abs_diff_eq(&b.column_1, epsilon)
         && a.column_2.abs_diff_eq(&b.column_2, epsilon)
         && a.column_3.abs_diff_eq(&b.column_3, epsilon)
         && a.column_4.abs_diff_eq(&b.column_4, epsilon)
 });
 
-impl_relative_eq!(Matrix4P, |a, b, epsilon, max_relative| {
+impl_relative_eq!(Matrix4C, |a, b, epsilon, max_relative| {
     a.column_1.relative_eq(&b.column_1, epsilon, max_relative)
         && a.column_2.relative_eq(&b.column_2, epsilon, max_relative)
         && a.column_3.relative_eq(&b.column_3, epsilon, max_relative)
@@ -920,8 +920,8 @@ impl_relative_eq!(Matrix4P, |a, b, epsilon, max_relative| {
 
 impl_roc_for_library_provided_primitives! {
 //  Type        Pkg   Parents  Module   Roc name  Postfix  Precision
-    Matrix3P => core, None,    Matrix3, Matrix3,  None,    PrecisionIrrelevant,
-    Matrix4P => core, None,    Matrix4, Matrix4,  None,    PrecisionIrrelevant,
+    Matrix3C => core, None,    Matrix3, Matrix3,  None,    PrecisionIrrelevant,
+    Matrix4C => core, None,    Matrix4, Matrix4,  None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -1164,10 +1164,10 @@ mod tests {
     }
 
     #[test]
-    fn converting_matrix3_to_packed_and_back_preserves_data() {
+    fn converting_matrix3_to_compact_and_back_preserves_data() {
         let matrix_a = Matrix3::from_diagonal(&Vector3::new(1.0, 2.0, 3.0));
-        let matrix = matrix_a.pack();
-        assert_eq!(matrix.unpack(), matrix_a);
+        let matrix = matrix_a.compact();
+        assert_eq!(matrix.aligned(), matrix_a);
     }
 
     #[test]
@@ -1177,14 +1177,14 @@ mod tests {
         let _ = matrix.element(3, 0);
     }
 
-    // === Matrix3P Tests (packed) ===
+    // === Matrix3C Tests (compact) ===
 
     #[test]
     fn matrix3p_column_accessors_work() {
-        let col1 = Vector3P::new(1.0, 2.0, 3.0);
-        let col2 = Vector3P::new(4.0, 5.0, 6.0);
-        let col3 = Vector3P::new(7.0, 8.0, 9.0);
-        let matrix = Matrix3P::from_columns(col1, col2, col3);
+        let col1 = Vector3C::new(1.0, 2.0, 3.0);
+        let col2 = Vector3C::new(4.0, 5.0, 6.0);
+        let col3 = Vector3C::new(7.0, 8.0, 9.0);
+        let matrix = Matrix3C::from_columns(col1, col2, col3);
 
         assert_eq!(*matrix.column_1(), col1);
         assert_eq!(*matrix.column_2(), col2);
@@ -1193,38 +1193,38 @@ mod tests {
 
     #[test]
     fn matrix3p_column_setters_work() {
-        let mut matrix = Matrix3P::zeros();
-        let col1 = Vector3P::new(1.0, 2.0, 3.0);
-        let col2 = Vector3P::new(4.0, 5.0, 6.0);
-        let col3 = Vector3P::new(7.0, 8.0, 9.0);
+        let mut matrix = Matrix3C::zeros();
+        let col1 = Vector3C::new(1.0, 2.0, 3.0);
+        let col2 = Vector3C::new(4.0, 5.0, 6.0);
+        let col3 = Vector3C::new(7.0, 8.0, 9.0);
 
         matrix.set_column_1(col1);
         matrix.set_column_2(col2);
         matrix.set_column_3(col3);
 
-        assert_eq!(matrix, Matrix3P::from_columns(col1, col2, col3));
+        assert_eq!(matrix, Matrix3C::from_columns(col1, col2, col3));
     }
 
     #[test]
     fn matrix3p_from_array_conversion_works() {
         let arr = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
-        let matrix = Matrix3P::from(arr);
+        let matrix = Matrix3C::from(arr);
         assert_eq!(
             matrix,
-            Matrix3P::from_columns(
-                Vector3P::new(1.0, 2.0, 3.0),
-                Vector3P::new(4.0, 5.0, 6.0),
-                Vector3P::new(7.0, 8.0, 9.0)
+            Matrix3C::from_columns(
+                Vector3C::new(1.0, 2.0, 3.0),
+                Vector3C::new(4.0, 5.0, 6.0),
+                Vector3C::new(7.0, 8.0, 9.0)
             )
         );
     }
 
     #[test]
     fn matrix3p_to_array_conversion_works() {
-        let matrix = Matrix3P::from_columns(
-            Vector3P::new(1.0, 2.0, 3.0),
-            Vector3P::new(4.0, 5.0, 6.0),
-            Vector3P::new(7.0, 8.0, 9.0),
+        let matrix = Matrix3C::from_columns(
+            Vector3C::new(1.0, 2.0, 3.0),
+            Vector3C::new(4.0, 5.0, 6.0),
+            Vector3C::new(7.0, 8.0, 9.0),
         );
         let arr: [f32; 9] = matrix.into();
         assert_eq!(arr, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]);
@@ -1232,9 +1232,9 @@ mod tests {
 
     #[test]
     fn converting_matrix3p_to_aligned_and_back_preserves_data() {
-        let matrix = Matrix3P::from_diagonal(&Vector3P::new(1.0, 2.0, 3.0));
-        let aligned = matrix.unpack();
-        assert_eq!(aligned.pack(), matrix);
+        let matrix = Matrix3C::from_diagonal(&Vector3C::new(1.0, 2.0, 3.0));
+        let aligned = matrix.aligned();
+        assert_eq!(aligned.compact(), matrix);
     }
 
     // === Matrix4 Tests (SIMD-aligned) ===
@@ -1326,10 +1326,10 @@ mod tests {
     }
 
     #[test]
-    fn converting_matrix4_to_packed_and_back_preserves_data() {
+    fn converting_matrix4_to_compact_and_back_preserves_data() {
         let matrix_a = Matrix4::from_diagonal(&Vector4::new(1.0, 2.0, 3.0, 4.0));
-        let matrix = matrix_a.pack();
-        assert_eq!(matrix.unpack(), matrix_a);
+        let matrix = matrix_a.compact();
+        assert_eq!(matrix.aligned(), matrix_a);
     }
 
     #[test]
@@ -1339,15 +1339,15 @@ mod tests {
         let _ = matrix.element(4, 0);
     }
 
-    // === Matrix4P Tests (packed) ===
+    // === Matrix4C Tests (compact) ===
 
     #[test]
     fn matrix4p_column_accessors_work() {
-        let col1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4P::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4P::new(13.0, 14.0, 15.0, 16.0);
-        let matrix = Matrix4P::from_columns(col1, col2, col3, col4);
+        let col1 = Vector4C::new(1.0, 2.0, 3.0, 4.0);
+        let col2 = Vector4C::new(5.0, 6.0, 7.0, 8.0);
+        let col3 = Vector4C::new(9.0, 10.0, 11.0, 12.0);
+        let col4 = Vector4C::new(13.0, 14.0, 15.0, 16.0);
+        let matrix = Matrix4C::from_columns(col1, col2, col3, col4);
 
         assert_eq!(*matrix.column_1(), col1);
         assert_eq!(*matrix.column_2(), col2);
@@ -1357,18 +1357,18 @@ mod tests {
 
     #[test]
     fn matrix4p_column_setters_work() {
-        let mut matrix = Matrix4P::zeros();
-        let col1 = Vector4P::new(1.0, 2.0, 3.0, 4.0);
-        let col2 = Vector4P::new(5.0, 6.0, 7.0, 8.0);
-        let col3 = Vector4P::new(9.0, 10.0, 11.0, 12.0);
-        let col4 = Vector4P::new(13.0, 14.0, 15.0, 16.0);
+        let mut matrix = Matrix4C::zeros();
+        let col1 = Vector4C::new(1.0, 2.0, 3.0, 4.0);
+        let col2 = Vector4C::new(5.0, 6.0, 7.0, 8.0);
+        let col3 = Vector4C::new(9.0, 10.0, 11.0, 12.0);
+        let col4 = Vector4C::new(13.0, 14.0, 15.0, 16.0);
 
         matrix.set_column_1(col1);
         matrix.set_column_2(col2);
         matrix.set_column_3(col3);
         matrix.set_column_4(col4);
 
-        assert_eq!(matrix, Matrix4P::from_columns(col1, col2, col3, col4));
+        assert_eq!(matrix, Matrix4C::from_columns(col1, col2, col3, col4));
     }
 
     #[test]
@@ -1376,25 +1376,25 @@ mod tests {
         let arr = [
             1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
         ];
-        let matrix = Matrix4P::from(arr);
+        let matrix = Matrix4C::from(arr);
         assert_eq!(
             matrix,
-            Matrix4P::from_columns(
-                Vector4P::new(1.0, 2.0, 3.0, 4.0),
-                Vector4P::new(5.0, 6.0, 7.0, 8.0),
-                Vector4P::new(9.0, 10.0, 11.0, 12.0),
-                Vector4P::new(13.0, 14.0, 15.0, 16.0)
+            Matrix4C::from_columns(
+                Vector4C::new(1.0, 2.0, 3.0, 4.0),
+                Vector4C::new(5.0, 6.0, 7.0, 8.0),
+                Vector4C::new(9.0, 10.0, 11.0, 12.0),
+                Vector4C::new(13.0, 14.0, 15.0, 16.0)
             )
         );
     }
 
     #[test]
     fn matrix4p_to_array_conversion_works() {
-        let matrix = Matrix4P::from_columns(
-            Vector4P::new(1.0, 2.0, 3.0, 4.0),
-            Vector4P::new(5.0, 6.0, 7.0, 8.0),
-            Vector4P::new(9.0, 10.0, 11.0, 12.0),
-            Vector4P::new(13.0, 14.0, 15.0, 16.0),
+        let matrix = Matrix4C::from_columns(
+            Vector4C::new(1.0, 2.0, 3.0, 4.0),
+            Vector4C::new(5.0, 6.0, 7.0, 8.0),
+            Vector4C::new(9.0, 10.0, 11.0, 12.0),
+            Vector4C::new(13.0, 14.0, 15.0, 16.0),
         );
         let arr: [f32; 16] = matrix.into();
         assert_eq!(
@@ -1408,8 +1408,8 @@ mod tests {
 
     #[test]
     fn converting_matrix4p_to_aligned_and_back_preserves_data() {
-        let matrix = Matrix4P::from_diagonal(&Vector4P::new(1.0, 2.0, 3.0, 4.0));
-        let aligned = matrix.unpack();
-        assert_eq!(aligned.pack(), matrix);
+        let matrix = Matrix4C::from_diagonal(&Vector4C::new(1.0, 2.0, 3.0, 4.0));
+        let aligned = matrix.aligned();
+        assert_eq!(aligned.compact(), matrix);
     }
 }

@@ -8,9 +8,9 @@ use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::{Frustum, OrientedBox, Plane};
 use impact_math::{
-    point::{Point3, Point3P},
+    point::{Point3, Point3C},
     transform::Similarity3,
-    vector::{UnitVector3P, Vector3},
+    vector::{UnitVector3C, Vector3},
 };
 use std::{array, collections::BTreeSet, ops::Range};
 
@@ -108,13 +108,13 @@ pub struct VoxelMeshModifications<'a> {
 pub struct CullingFrustum {
     pub planes: [FrustumPlane; 6],
     pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
-    pub apex_position: Point3P,
+    pub apex_position: Point3C,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct FrustumPlane {
-    pub unit_normal: UnitVector3P,
+    pub unit_normal: UnitVector3C,
     pub displacement: f32,
 }
 
@@ -498,14 +498,14 @@ impl ChunkSubmesh {
 impl CullingFrustum {
     /// Gathers the given frustum planes and apex position into a
     /// `CullingFrustum`.
-    pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3P) -> Self {
+    pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3C) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
             u32::from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
         });
         let planes = planes.map(|plane| {
             let (unit_normal, displacement) = plane.into_normal_and_displacement();
             FrustumPlane {
-                unit_normal: unit_normal.pack(),
+                unit_normal: unit_normal.compact(),
                 displacement,
             }
         });
@@ -525,7 +525,7 @@ impl CullingFrustum {
         let apex_position = Point3::from(*transformation.translation());
         Self::from_planes_and_apex_position(
             frustum.transformed_planes(transformation),
-            apex_position.pack(),
+            apex_position.compact(),
         )
     }
 
@@ -551,7 +551,7 @@ impl CullingFrustum {
             transformed_box.center() - apex_distance * transformed_view_diection;
         Self::from_planes_and_apex_position(
             transformed_box.compute_bounding_planes(),
-            transformed_apex_position.pack(),
+            transformed_apex_position.compact(),
         )
     }
 }

@@ -1,6 +1,6 @@
 //! Physical media objects can interact with.
 
-use crate::quantities::VelocityP;
+use crate::quantities::VelocityC;
 use roc_integration::roc;
 
 /// A physical medium with the same properties and state everywhere.
@@ -12,7 +12,7 @@ pub struct UniformMedium {
     /// The mass density of the medium.
     pub mass_density: f32,
     /// The velocity of the medium.
-    pub velocity: VelocityP,
+    pub velocity: VelocityC,
 }
 
 #[roc]
@@ -27,7 +27,7 @@ impl UniformMedium {
 
     /// Creates a new uniform medium with the given mass density and velocity.
     #[roc(body = "{ mass_density, velocity }")]
-    pub fn new(mass_density: f32, velocity: VelocityP) -> Self {
+    pub fn new(mass_density: f32, velocity: VelocityC) -> Self {
         Self {
             mass_density,
             velocity,
@@ -37,32 +37,32 @@ impl UniformMedium {
     /// Creates a new vacuum medium (zero mass density and velocity).
     #[roc(body = "new(0.0, Vector3.zero)")]
     pub fn vacuum() -> Self {
-        Self::new(0.0, VelocityP::zeros())
+        Self::new(0.0, VelocityC::zeros())
     }
 
     /// Creates a new medium of Earth air at sea level and room temperature with
     /// no wind.
     #[roc(body = "moving_air(Vector3.zero)")]
     pub fn still_air() -> Self {
-        Self::moving_air(VelocityP::zeros())
+        Self::moving_air(VelocityC::zeros())
     }
 
     /// Creates a new medium of Earth air at sea level and room temperature with
     /// the given wind velocity.
     #[roc(body = "new(sea_level_air_mass_density, velocity)")]
-    pub fn moving_air(velocity: VelocityP) -> Self {
+    pub fn moving_air(velocity: VelocityC) -> Self {
         Self::new(Self::SEA_LEVEL_AIR_MASS_DENSITY, velocity)
     }
 
     /// Creates a new medium of water with no flow.
     #[roc(body = "moving_water(Vector3.zero)")]
     pub fn still_water() -> Self {
-        Self::moving_water(VelocityP::zeros())
+        Self::moving_water(VelocityC::zeros())
     }
 
     /// Creates a new medium of water with the given flow velocity.
     #[roc(body = "new(water_mass_density, velocity)")]
-    pub fn moving_water(velocity: VelocityP) -> Self {
+    pub fn moving_water(velocity: VelocityC) -> Self {
         Self::new(Self::WATER_MASS_DENSITY, velocity)
     }
 }

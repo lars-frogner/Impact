@@ -3,7 +3,7 @@
 use crate::{
     matrix::{Matrix3, Matrix4},
     point::Point3,
-    vector::{UnitVector3, Vector3, Vector3P, Vector4, Vector4P},
+    vector::{UnitVector3, Vector3, Vector3C, Vector4, Vector4C},
 };
 use bytemuck::{Pod, Zeroable};
 use roc_integration::impl_roc_for_library_provided_primitives;
@@ -14,7 +14,7 @@ use std::{fmt, ops::Mul};
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an alignment of 16 bytes. For padding-free
 /// storage together with smaller types, prefer the 4-byte aligned
-/// [`QuaternionP`].
+/// [`QuaternionC`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -27,7 +27,7 @@ pub struct Quaternion {
     inner: glam::Quat,
 }
 
-/// A quaternion. This is the "packed" version.
+/// A quaternion. This is the "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// padding-free storage when combined with smaller types. For computations,
@@ -40,8 +40,8 @@ pub struct Quaternion {
 )]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
-pub struct QuaternionP {
-    imag: Vector3P,
+pub struct QuaternionC {
+    imag: Vector3C,
     real: f32,
 }
 
@@ -50,7 +50,7 @@ pub struct QuaternionP {
 /// The components are stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an alignment of 16 bytes. For padding-free
 /// storage together with smaller types, prefer the 4-byte aligned
-/// [`UnitQuaternionP`].
+/// [`UnitQuaternionC`].
 #[repr(transparent)]
 #[cfg_attr(
     feature = "serde",
@@ -62,7 +62,7 @@ pub struct UnitQuaternion {
     inner: glam::Quat,
 }
 
-/// A quaternion of unit length, representing a rotation. This is the "packed"
+/// A quaternion of unit length, representing a rotation. This is the "compact"
 /// version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
@@ -75,8 +75,8 @@ pub struct UnitQuaternion {
     serde(into = "[f32; 4]", from = "[f32; 4]")
 )]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
-pub struct UnitQuaternionP {
-    imag: Vector3P,
+pub struct UnitQuaternionC {
+    imag: Vector3C,
     real: f32,
 }
 
@@ -119,10 +119,10 @@ impl Quaternion {
     }
 
     /// Converts the quaternion to the 4-byte aligned cache-friendly
-    /// [`QuaternionP`].
+    /// [`QuaternionC`].
     #[inline]
-    pub fn pack(&self) -> QuaternionP {
-        QuaternionP::from_parts(self.imag().pack(), self.real())
+    pub fn compact(&self) -> QuaternionC {
+        QuaternionC::from_parts(self.imag().compact(), self.real())
     }
 
     #[inline]
@@ -207,17 +207,17 @@ impl fmt::Debug for Quaternion {
     }
 }
 
-impl QuaternionP {
+impl QuaternionC {
     /// Creates a quaternion with the given imaginary and real parts.
     #[inline]
-    pub const fn from_parts(imag: Vector3P, real: f32) -> Self {
+    pub const fn from_parts(imag: Vector3C, real: f32) -> Self {
         Self { imag, real }
     }
 
     /// Creates a quaternion from the given vector, with the last component
     /// representing the real part.
     #[inline]
-    pub const fn from_vector(vector: Vector4P) -> Self {
+    pub const fn from_vector(vector: Vector4C) -> Self {
         Self {
             imag: vector.xyz(),
             real: vector.w(),
@@ -226,19 +226,19 @@ impl QuaternionP {
 
     /// Creates a quaternion with the given imaginary part and zero real part.
     #[inline]
-    pub const fn from_imag(imag: Vector3P) -> Self {
+    pub const fn from_imag(imag: Vector3C) -> Self {
         Self::from_parts(imag, 0.0)
     }
 
     /// Creates a quaternion with the given real part and zero imaginary part.
     #[inline]
     pub const fn from_real(real: f32) -> Self {
-        Self::from_parts(Vector3P::zeros(), real)
+        Self::from_parts(Vector3C::zeros(), real)
     }
 
     /// The imaginary part of the quaternion.
     #[inline]
-    pub fn imag(&self) -> &Vector3P {
+    pub fn imag(&self) -> &Vector3C {
         &self.imag
     }
 
@@ -251,34 +251,34 @@ impl QuaternionP {
     /// Converts the quaternion to the 16-byte aligned SIMD-friendly
     /// [`Quaternion`].
     #[inline]
-    pub fn unpack(&self) -> Quaternion {
-        Quaternion::from_parts(self.imag().unpack(), self.real())
+    pub fn aligned(&self) -> Quaternion {
+        Quaternion::from_parts(self.imag().aligned(), self.real())
     }
 }
 
-impl Default for QuaternionP {
+impl Default for QuaternionC {
     fn default() -> Self {
         Self::from_real(1.0)
     }
 }
 
-impl From<QuaternionP> for [f32; 4] {
-    fn from(q: QuaternionP) -> [f32; 4] {
+impl From<QuaternionC> for [f32; 4] {
+    fn from(q: QuaternionC) -> [f32; 4] {
         [q.imag.x(), q.imag.y(), q.imag.z(), q.real]
     }
 }
 
-impl From<[f32; 4]> for QuaternionP {
-    fn from(arr: [f32; 4]) -> QuaternionP {
-        QuaternionP::from_parts(Vector3P::new(arr[0], arr[1], arr[2]), arr[3])
+impl From<[f32; 4]> for QuaternionC {
+    fn from(arr: [f32; 4]) -> QuaternionC {
+        QuaternionC::from_parts(Vector3C::new(arr[0], arr[1], arr[2]), arr[3])
     }
 }
 
-impl_abs_diff_eq!(QuaternionP, |a, b, epsilon| {
+impl_abs_diff_eq!(QuaternionC, |a, b, epsilon| {
     a.imag.abs_diff_eq(&b.imag, epsilon) && a.real.abs_diff_eq(&b.real, epsilon)
 });
 
-impl_relative_eq!(QuaternionP, |a, b, epsilon, max_relative| {
+impl_relative_eq!(QuaternionC, |a, b, epsilon, max_relative| {
     a.imag.relative_eq(&b.imag, epsilon, max_relative)
         && a.real.relative_eq(&b.real, epsilon, max_relative)
 });
@@ -461,11 +461,11 @@ impl UnitQuaternion {
     }
 
     /// Converts the quaternion to the 4-byte aligned cache-friendly
-    /// [`UnitQuaternionP`].
+    /// [`UnitQuaternionC`].
     #[inline]
-    pub fn pack(&self) -> UnitQuaternionP {
-        UnitQuaternionP::unchecked_from(QuaternionP::from_parts(
-            Vector3P::from_glam(self.inner.xyz()),
+    pub fn compact(&self) -> UnitQuaternionC {
+        UnitQuaternionC::unchecked_from(QuaternionC::from_parts(
+            Vector3C::from_glam(self.inner.xyz()),
             self.real(),
         ))
     }
@@ -536,12 +536,12 @@ impl fmt::Debug for UnitQuaternion {
     }
 }
 
-impl UnitQuaternionP {
+impl UnitQuaternionC {
     /// Creates a unit quaternion representing the identity rotation.
     #[inline]
     pub const fn identity() -> Self {
         Self {
-            imag: Vector3P::zeros(),
+            imag: Vector3C::zeros(),
             real: 1.0,
         }
     }
@@ -549,7 +549,7 @@ impl UnitQuaternionP {
     /// Converts the given quaternion to a unit quaternion, assuming it is
     /// already normalized.
     #[inline]
-    pub const fn unchecked_from(quaternion: QuaternionP) -> Self {
+    pub const fn unchecked_from(quaternion: QuaternionC) -> Self {
         Self {
             imag: quaternion.imag,
             real: quaternion.real,
@@ -558,7 +558,7 @@ impl UnitQuaternionP {
 
     /// The imaginary part of the quaternion.
     #[inline]
-    pub const fn imag(&self) -> &Vector3P {
+    pub const fn imag(&self) -> &Vector3C {
         &self.imag
     }
 
@@ -568,46 +568,46 @@ impl UnitQuaternionP {
         self.real
     }
 
-    /// This unit quaternion as a [`QuaternionP`].
+    /// This unit quaternion as a [`QuaternionC`].
     #[inline]
-    pub fn as_quaternion(&self) -> &QuaternionP {
+    pub fn as_quaternion(&self) -> &QuaternionC {
         bytemuck::cast_ref(self)
     }
 
     /// Converts the quaternion to the 16-byte aligned SIMD-friendly
     /// [`UnitQuaternion`].
     #[inline]
-    pub fn unpack(&self) -> UnitQuaternion {
-        UnitQuaternion::unchecked_from(Quaternion::from_parts(self.imag().unpack(), self.real()))
+    pub fn aligned(&self) -> UnitQuaternion {
+        UnitQuaternion::unchecked_from(Quaternion::from_parts(self.imag().aligned(), self.real()))
     }
 }
 
-impl Default for UnitQuaternionP {
+impl Default for UnitQuaternionC {
     fn default() -> Self {
         Self::identity()
     }
 }
 
-impl From<UnitQuaternionP> for [f32; 4] {
-    fn from(q: UnitQuaternionP) -> [f32; 4] {
+impl From<UnitQuaternionC> for [f32; 4] {
+    fn from(q: UnitQuaternionC) -> [f32; 4] {
         [q.imag.x(), q.imag.y(), q.imag.z(), q.real]
     }
 }
 
-impl From<[f32; 4]> for UnitQuaternionP {
-    fn from(arr: [f32; 4]) -> UnitQuaternionP {
-        UnitQuaternionP::unchecked_from(QuaternionP::from_parts(
-            Vector3P::new(arr[0], arr[1], arr[2]),
+impl From<[f32; 4]> for UnitQuaternionC {
+    fn from(arr: [f32; 4]) -> UnitQuaternionC {
+        UnitQuaternionC::unchecked_from(QuaternionC::from_parts(
+            Vector3C::new(arr[0], arr[1], arr[2]),
             arr[3],
         ))
     }
 }
 
-impl_abs_diff_eq!(UnitQuaternionP, |a, b, epsilon| {
+impl_abs_diff_eq!(UnitQuaternionC, |a, b, epsilon| {
     a.imag.abs_diff_eq(&b.imag, epsilon) && a.real.abs_diff_eq(&b.real, epsilon)
 });
 
-impl_relative_eq!(UnitQuaternionP, |a, b, epsilon, max_relative| {
+impl_relative_eq!(UnitQuaternionC, |a, b, epsilon, max_relative| {
     a.imag.relative_eq(&b.imag, epsilon, max_relative)
         && a.real.relative_eq(&b.real, epsilon, max_relative)
 });
@@ -616,7 +616,7 @@ impl_relative_eq!(UnitQuaternionP, |a, b, epsilon, max_relative| {
 // Roc library rather than generated.
 impl_roc_for_library_provided_primitives! {
 //  Type               Pkg   Parents  Module          Roc name        Postfix  Precision
-    UnitQuaternionP => core, None,    UnitQuaternion, UnitQuaternion, None,    PrecisionIrrelevant,
+    UnitQuaternionC => core, None,    UnitQuaternion, UnitQuaternion, None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -705,8 +705,8 @@ mod tests {
     #[test]
     fn converting_quaternion_to_aligned_and_back_preserves_data() {
         let quat = Quaternion::from_parts(Vector3::new(1.0, 2.0, 3.0), 4.0);
-        let packed = quat.pack();
-        assert_eq!(packed.unpack(), quat);
+        let compact = quat.compact();
+        assert_eq!(compact.aligned(), quat);
     }
 
     // === UnitQuaternion Tests (SIMD-aligned) ===
@@ -1060,25 +1060,25 @@ mod tests {
     #[test]
     fn converting_unit_quaternion_to_aligned_and_back_preserves_data() {
         let unit = UnitQuaternion::identity();
-        let packed = unit.pack();
-        assert_eq!(packed.unpack().real(), unit.real());
+        let compact = unit.compact();
+        assert_eq!(compact.aligned().real(), unit.real());
     }
 
-    // === QuaternionP Tests (packed) ===
+    // === QuaternionC Tests (compact) ===
 
     #[test]
     fn converting_quaternionp_to_aligned_and_back_preserves_data() {
-        let quat = QuaternionP::from_parts(Vector3P::new(1.0, 2.0, 3.0), 4.0);
-        let aligned = quat.unpack();
-        assert_eq!(aligned.pack(), quat);
+        let quat = QuaternionC::from_parts(Vector3C::new(1.0, 2.0, 3.0), 4.0);
+        let aligned = quat.aligned();
+        assert_eq!(aligned.compact(), quat);
     }
 
-    // === UnitQuaternionP Tests (packed) ===
+    // === UnitQuaternionC Tests (compact) ===
 
     #[test]
     fn converting_unit_quaternionp_to_aligned_and_back_preserves_data() {
-        let unit = UnitQuaternionP::identity();
-        let aligned = unit.unpack();
+        let unit = UnitQuaternionC::identity();
+        let aligned = unit.aligned();
         assert_eq!(aligned.real(), unit.real());
     }
 }

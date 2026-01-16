@@ -3,10 +3,10 @@
 use crate::{AxisAlignedBox, Plane};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::{Point3, Point3P},
-    quaternion::{UnitQuaternion, UnitQuaternionP},
+    point::{Point3, Point3C},
+    quaternion::{UnitQuaternion, UnitQuaternionC},
     transform::{Isometry3, Similarity3},
-    vector::{UnitVector3, Vector3, Vector3P},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 
 /// A box with arbitrary position, orientation and extents.
@@ -14,8 +14,8 @@ use impact_math::{
 /// The center, orientation and half extents are stored in 128-bit SIMD
 /// registers for efficient computation. That leads to an extra 8 bytes in size
 /// (4 each due to the padded center and half extents) and 16-byte alignment.
-/// For cache-friendly storage, prefer the packed 4-byte aligned
-/// [`OrientedBoxP`].
+/// For cache-friendly storage, prefer the compact 4-byte aligned
+/// [`OrientedBoxC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct OrientedBox {
     center: Point3,
@@ -23,7 +23,7 @@ pub struct OrientedBox {
     half_extents: Vector3,
 }
 
-/// A box with arbitrary position, orientation and extents. This is the "packed"
+/// A box with arbitrary position, orientation and extents. This is the "compact"
 /// version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
@@ -31,10 +31,10 @@ pub struct OrientedBox {
 /// the SIMD-friendly 16-byte aligned [`OrientedBox`].
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
-pub struct OrientedBoxP {
-    center: Point3P,
-    orientation: UnitQuaternionP,
-    half_extents: Vector3P,
+pub struct OrientedBoxC {
+    center: Point3C,
+    orientation: UnitQuaternionC,
+    half_extents: Vector3C,
 }
 
 impl OrientedBox {
@@ -206,25 +206,25 @@ impl OrientedBox {
         ]
     }
 
-    /// Converts the box to the 4-byte aligned cache-friendly [`OrientedBoxP`].
+    /// Converts the box to the 4-byte aligned cache-friendly [`OrientedBoxC`].
     #[inline]
-    pub fn pack(&self) -> OrientedBoxP {
-        OrientedBoxP::new(
-            self.center.pack(),
-            self.orientation.pack(),
-            self.half_extents.pack(),
+    pub fn compact(&self) -> OrientedBoxC {
+        OrientedBoxC::new(
+            self.center.compact(),
+            self.orientation.compact(),
+            self.half_extents.compact(),
         )
     }
 }
 
-impl OrientedBoxP {
+impl OrientedBoxC {
     /// Creates a new box with the given center position, orientation quaternion
     /// and half extents along each of its three axes.
     #[inline]
     pub const fn new(
-        center: Point3P,
-        orientation: UnitQuaternionP,
-        half_extents: Vector3P,
+        center: Point3C,
+        orientation: UnitQuaternionC,
+        half_extents: Vector3C,
     ) -> Self {
         Self {
             center,
@@ -237,35 +237,35 @@ impl OrientedBoxP {
     /// and with the width, height and depth axes aligned with the x-, y-
     /// and z-axis respectively.
     #[inline]
-    pub const fn aligned_at_origin(half_extents: Vector3P) -> Self {
-        Self::new(Point3P::origin(), UnitQuaternionP::identity(), half_extents)
+    pub const fn aligned_at_origin(half_extents: Vector3C) -> Self {
+        Self::new(Point3C::origin(), UnitQuaternionC::identity(), half_extents)
     }
 
     /// Returns the center of the box.
     #[inline]
-    pub const fn center(&self) -> &Point3P {
+    pub const fn center(&self) -> &Point3C {
         &self.center
     }
 
     /// Returns the orientation of the box.
     #[inline]
-    pub const fn orientation(&self) -> &UnitQuaternionP {
+    pub const fn orientation(&self) -> &UnitQuaternionC {
         &self.orientation
     }
 
     /// Returns half extents of the box.
     #[inline]
-    pub const fn half_extents(&self) -> &Vector3P {
+    pub const fn half_extents(&self) -> &Vector3C {
         &self.half_extents
     }
 
     /// Converts the box to the 16-byte aligned SIMD-friendly [`OrientedBox`].
     #[inline]
-    pub fn unpack(&self) -> OrientedBox {
+    pub fn aligned(&self) -> OrientedBox {
         OrientedBox::new(
-            self.center.unpack(),
-            self.orientation.unpack(),
-            self.half_extents.unpack(),
+            self.center.aligned(),
+            self.orientation.aligned(),
+            self.half_extents.aligned(),
         )
     }
 }

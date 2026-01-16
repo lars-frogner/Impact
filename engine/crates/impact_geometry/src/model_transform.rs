@@ -5,7 +5,7 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{
     point::Point3,
     transform::Similarity3,
-    vector::{Vector3, Vector3P},
+    vector::{Vector3, Vector3C},
 };
 use roc_integration::roc;
 
@@ -18,7 +18,7 @@ define_component_type! {
     pub struct ModelTransform {
         /// The offset subtracted from a model-space position before scaling to
         /// transform it to the parent entity's space.
-        pub offset: Vector3P,
+        pub offset: Vector3C,
         /// The scaling factor applied to a model-space position after the
         /// offset to transform it to the parent entity's space.
         pub scale: f32,
@@ -39,7 +39,7 @@ impl ModelTransform {
     /// from that of the model.
     #[roc(body = "with_offset_and_scale(offset, 1.0)")]
     #[inline]
-    pub const fn with_offset(offset: Vector3P) -> Self {
+    pub const fn with_offset(offset: Vector3C) -> Self {
         Self::with_offset_and_scale(offset, 1.0)
     }
 
@@ -48,14 +48,14 @@ impl ModelTransform {
     #[roc(body = "with_offset_and_scale(Vector3.zero, scale)")]
     #[inline]
     pub const fn with_scale(scale: f32) -> Self {
-        Self::with_offset_and_scale(Vector3P::zeros(), scale)
+        Self::with_offset_and_scale(Vector3C::zeros(), scale)
     }
 
     /// Creates a transform where the parent entity's space has the given offset
     /// and scale relative to that of the model.
     #[roc(body = "{ offset, scale }")]
     #[inline]
-    pub const fn with_offset_and_scale(offset: Vector3P, scale: f32) -> Self {
+    pub const fn with_offset_and_scale(offset: Vector3C, scale: f32) -> Self {
         Self { offset, scale }
     }
 
@@ -63,7 +63,7 @@ impl ModelTransform {
     /// space of the parent entity.
     #[inline]
     pub fn create_transform_to_entity_space(&self) -> Similarity3 {
-        let translation = -self.offset.unpack();
+        let translation = -self.offset.aligned();
         Similarity3::from_scaled_translation(translation, self.scale)
     }
 
@@ -71,13 +71,13 @@ impl ModelTransform {
     /// entity.
     #[inline]
     pub fn transform_point_from_model_space_to_entity_space(&self, point: &Point3) -> Point3 {
-        (point - self.offset.unpack()) * self.scale
+        (point - self.offset.aligned()) * self.scale
     }
 
     /// Updates the pre-scaling offset to yield the given offset after scaling.
     #[inline]
     pub fn set_offset_after_scaling(&mut self, offset_after_scaling: Vector3) {
-        self.offset = (offset_after_scaling / self.scale).pack();
+        self.offset = (offset_after_scaling / self.scale).compact();
     }
 
     /// Sets the pre-scaling offset to the given vector, adjusting the given
@@ -90,15 +90,15 @@ impl ModelTransform {
         entity_frame: &mut ReferenceFrame,
         offset: Vector3,
     ) {
-        let orientation = entity_frame.orientation.unpack();
+        let orientation = entity_frame.orientation.aligned();
 
-        let displacement_in_frame = offset - self.offset.unpack();
+        let displacement_in_frame = offset - self.offset.aligned();
 
         let displacement_in_parent_frame =
             orientation.rotate_vector(&(self.scale * displacement_in_frame));
 
-        self.offset = offset.pack();
-        entity_frame.position += displacement_in_parent_frame.pack();
+        self.offset = offset.compact();
+        entity_frame.position += displacement_in_parent_frame.compact();
     }
 }
 
@@ -113,14 +113,14 @@ impl Default for ModelTransform {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_math::{point::Point3P, quaternion::UnitQuaternion};
+    use impact_math::{point::Point3C, quaternion::UnitQuaternion};
 
     #[test]
     fn updating_offset_while_preserving_position_works() {
-        let position = Point3P::new(1.0, 2.0, 3.0);
-        let orientation = UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3).pack();
+        let position = Point3C::new(1.0, 2.0, 3.0);
+        let orientation = UnitQuaternion::from_euler_angles_extrinsic(0.1, 0.2, 0.3).compact();
         let scale = 1.5;
-        let original_offset = Vector3P::new(4.0, 2.0, 3.0);
+        let original_offset = Vector3C::new(4.0, 2.0, 3.0);
         let new_offset = Vector3::new(4.5, 1.5, 1.0);
 
         let mut model_transform = ModelTransform::with_offset_and_scale(original_offset, scale);
@@ -138,7 +138,7 @@ mod tests {
 
         assert_eq!(frame.orientation, orientation);
         assert_eq!(model_transform.scale, scale);
-        assert_eq!(model_transform.offset, new_offset.pack());
+        assert_eq!(model_transform.offset, new_offset.compact());
         assert_abs_diff_eq!(point_after, point_before, epsilon = 1e-6);
     }
 }

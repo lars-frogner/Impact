@@ -16,7 +16,7 @@ use impact_gpu::wgpu;
 use impact_math::{
     hash::{Hash64, StringHash64, compute_hash_64_of_two_hash_64},
     hash64,
-    vector::Vector3P,
+    vector::Vector3C,
 };
 use impact_mesh::VertexAttributeSet;
 use impact_model::InstanceFeatureTypeID;
@@ -36,7 +36,7 @@ use std::{
 use values::{MaterialPropertyFlags, MaterialPropertyValues};
 
 /// A color with RGB components.
-pub type RGBColor = Vector3P;
+pub type RGBColor = Vector3C;
 
 /// A registry of [`Material`]s.
 pub type MaterialRegistry = ImmutableResourceRegistry<Material>;

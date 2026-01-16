@@ -4,7 +4,7 @@ use crate::AxisAlignedBox;
 use approx::{AbsDiffEq, abs_diff_eq};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::{Point3, Point3P},
+    point::{Point3, Point3C},
     quaternion::UnitQuaternion,
     transform::{Isometry3, Similarity3},
     vector::Vector3,
@@ -15,7 +15,7 @@ use impact_math::{
 /// The center point is stored in a 128-bit SIMD register for efficient
 /// computation. That leads to an extra 16 bytes in size (4 due to the padded
 /// point and 12 due to padding after the radius) and 16-byte alignment. For
-/// cache-friendly storage, prefer the packed 4-byte aligned [`SphereP`].
+/// cache-friendly storage, prefer the compact 4-byte aligned [`SphereC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sphere {
     center: Point3,
@@ -23,15 +23,15 @@ pub struct Sphere {
 }
 
 /// A sphere represented by the center point and the radius. This is the
-/// "packed" version.
+/// "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`Sphere`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct SphereP {
-    center: Point3P,
+pub struct SphereC {
+    center: Point3C,
     radius: f32,
 }
 
@@ -98,7 +98,7 @@ impl Sphere {
     ///
     /// # Panics
     /// If the point slice is empty.
-    pub fn bounding_sphere_for_points(points: &[Point3P]) -> Self {
+    pub fn bounding_sphere_for_points(points: &[Point3C]) -> Self {
         assert!(
             !points.is_empty(),
             "Tried to create bounding sphere for empty point slice"
@@ -106,18 +106,18 @@ impl Sphere {
 
         let one_over_count = (points.len() as f32).recip();
 
-        let first_point = points[0].as_vector().unpack();
+        let first_point = points[0].as_vector().aligned();
 
         let centroid = Point3::from(
             one_over_count
                 * points
                     .iter()
                     .skip(1)
-                    .fold(first_point, |sum, point| sum + point.as_vector().unpack()),
+                    .fold(first_point, |sum, point| sum + point.as_vector().aligned()),
         );
 
         let max_squared_dist_from_centroid = points.iter().fold(0.0, |max_squared_dist, point| {
-            Point3::squared_distance_between(&point.unpack(), &centroid).max(max_squared_dist)
+            Point3::squared_distance_between(&point.aligned(), &centroid).max(max_squared_dist)
         });
 
         Self::new(centroid, max_squared_dist_from_centroid.sqrt())
@@ -247,10 +247,10 @@ impl Sphere {
         AxisAlignedBox::new(self.center - radius_vector, self.center + radius_vector)
     }
 
-    /// Converts the sphere to the 4-byte aligned cache-friendly [`SphereP`].
+    /// Converts the sphere to the 4-byte aligned cache-friendly [`SphereC`].
     #[inline]
-    pub fn pack(&self) -> SphereP {
-        SphereP::new(self.center.pack(), self.radius)
+    pub fn compact(&self) -> SphereC {
+        SphereC::new(self.center.compact(), self.radius)
     }
 
     #[inline]
@@ -276,20 +276,20 @@ impl AbsDiffEq for Sphere {
     }
 }
 
-impl SphereP {
+impl SphereC {
     /// Creates a new sphere with the given center and radius.
     ///
     /// # Panics
     /// If `radius` is negative.
     #[inline]
-    pub const fn new(center: Point3P, radius: f32) -> Self {
+    pub const fn new(center: Point3C, radius: f32) -> Self {
         assert!(radius >= 0.0);
         Self { center, radius }
     }
 
     /// Returns the center point of the sphere.
     #[inline]
-    pub const fn center(&self) -> &Point3P {
+    pub const fn center(&self) -> &Point3C {
         &self.center
     }
 
@@ -301,12 +301,12 @@ impl SphereP {
 
     /// Converts the sphere to the 16-byte aligned SIMD-friendly [`Sphere`].
     #[inline]
-    pub fn unpack(&self) -> Sphere {
-        Sphere::new(self.center.unpack(), self.radius)
+    pub fn aligned(&self) -> Sphere {
+        Sphere::new(self.center.aligned(), self.radius)
     }
 }
 
-impl AbsDiffEq for SphereP {
+impl AbsDiffEq for SphereC {
     type Epsilon = f32;
 
     fn default_epsilon() -> f32 {
@@ -321,7 +321,7 @@ impl AbsDiffEq for SphereP {
 
 roc_integration::impl_roc_for_library_provided_primitives! {
 //  Type        Pkg   Parents  Module   Roc name  Postfix  Precision
-    SphereP =>  core, None,    Sphere,  Sphere,   None,    PrecisionIrrelevant,
+    SphereC =>  core, None,    Sphere,  Sphere,   None,    PrecisionIrrelevant,
 }
 
 #[cfg(test)]
@@ -404,23 +404,23 @@ mod tests {
 
     #[test]
     fn bounding_sphere_for_single_point_is_correct() {
-        let point = Point3P::new(0.1, 0.2, 0.3);
+        let point = Point3C::new(0.1, 0.2, 0.3);
         let bounding_sphere = Sphere::bounding_sphere_for_points(&[point]);
-        assert_abs_diff_eq!(bounding_sphere.center(), &point.unpack());
+        assert_abs_diff_eq!(bounding_sphere.center(), &point.aligned());
         assert_abs_diff_eq!(bounding_sphere.radius(), 0.0);
     }
 
     #[test]
     fn bounding_sphere_for_two_points_is_correct() {
-        let points = [Point3P::new(0.1, 0.2, 0.3), Point3P::new(-0.3, 0.6, 0.7)];
+        let points = [Point3C::new(0.1, 0.2, 0.3), Point3C::new(-0.3, 0.6, 0.7)];
         let bounding_sphere = Sphere::bounding_sphere_for_points(&points);
         assert_abs_diff_eq!(
             bounding_sphere.center(),
-            &Point3::center_of(&points[0].unpack(), &points[1].unpack())
+            &Point3::center_of(&points[0].aligned(), &points[1].aligned())
         );
         assert_abs_diff_eq!(
             bounding_sphere.radius(),
-            0.5 * Point3::distance_between(&points[0].unpack(), &points[1].unpack())
+            0.5 * Point3::distance_between(&points[0].aligned(), &points[1].aligned())
         );
     }
 

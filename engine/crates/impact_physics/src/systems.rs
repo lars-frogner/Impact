@@ -25,8 +25,8 @@ pub fn synchronize_rigid_body_components(
 
             frame.position = *rigid_body.position();
             frame.orientation = *rigid_body.orientation();
-            motion.linear_velocity = linear_velocity.pack();
-            motion.angular_velocity = angular_velocity.pack();
+            motion.linear_velocity = linear_velocity.compact();
+            motion.angular_velocity = angular_velocity.compact();
         }
     );
 

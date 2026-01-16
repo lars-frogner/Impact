@@ -5,8 +5,8 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use impact_math::{
-    point::Point3P,
-    vector::{UnitVector3P, Vector2, Vector3P},
+    point::Point3C,
+    vector::{UnitVector3C, Vector2, Vector3C},
 };
 use std::path::Path;
 use tobj::{GPU_LOAD_OPTIONS, Mesh as ObjMesh};
@@ -57,11 +57,11 @@ fn create_mesh_from_tobj_mesh(mesh: ObjMesh) -> TriangleMesh {
     }
 
     let positions = aggregate_3(&mesh.positions, |x, y, z| {
-        VertexPosition(Point3P::new(x, y, z))
+        VertexPosition(Point3C::new(x, y, z))
     });
 
     let normal_vectors = aggregate_3(&mesh.normals, |nx, ny, nz| {
-        VertexNormalVector(UnitVector3P::normalized_from(Vector3P::new(nx, ny, nz)))
+        VertexNormalVector(UnitVector3C::normalized_from(Vector3C::new(nx, ny, nz)))
     });
 
     let texture_coords = aggregate_2(&mesh.texcoords, |u, v| {

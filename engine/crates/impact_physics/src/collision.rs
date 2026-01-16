@@ -152,7 +152,7 @@ impl<C: Collidable> CollisionWorld<C> {
             };
 
             let transform_to_world_space =
-                Isometry3::from_parts(position.as_vector().unpack(), orientation.unpack());
+                Isometry3::from_parts(position.as_vector().aligned(), orientation.aligned());
 
             let collidable = CollidableWithId::new(
                 collidable_id,

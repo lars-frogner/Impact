@@ -1,12 +1,12 @@
 //! Gravitational forces in a collective gravitational field.
 
 use crate::{
-    quantities::ForceP,
+    quantities::ForceC,
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
-use impact_math::point::Point3P;
+use impact_math::point::Point3C;
 use roc_integration::roc;
 
 define_component_type! {
@@ -24,7 +24,7 @@ define_component_type! {
 pub struct DynamicGravityManager {
     body_ids: KeyIndexMapper<DynamicRigidBodyID>,
     bodies: Vec<GravitationalBody>,
-    forces: Vec<ForceP>,
+    forces: Vec<ForceC>,
     config: DynamicGravityConfig,
 }
 
@@ -44,7 +44,7 @@ pub struct DynamicGravityConfig {
 pub struct GravitationalBody {
     pub mass: f32,
     /// Position of the center of mass in world space.
-    pub position: Point3P,
+    pub position: Point3C,
 }
 
 impl DynamicGravityManager {
@@ -65,7 +65,7 @@ impl DynamicGravityManager {
     pub fn include_body(&mut self, rigid_body_id: DynamicRigidBodyID) {
         self.body_ids.push_key(rigid_body_id);
         self.bodies.push(GravitationalBody::default());
-        self.forces.push(ForceP::zeros());
+        self.forces.push(ForceC::zeros());
     }
 
     /// Removes the given dynamic rigid body from the collective gravitational
@@ -78,7 +78,7 @@ impl DynamicGravityManager {
 
     /// Returns the current force of gravity on the given body, or [`None`] if
     /// the body is not included in the field.
-    pub fn get_force_on_body(&self, rigid_body_id: DynamicRigidBodyID) -> Option<ForceP> {
+    pub fn get_force_on_body(&self, rigid_body_id: DynamicRigidBodyID) -> Option<ForceC> {
         let idx = self.body_ids.get(rigid_body_id)?;
         Some(self.forces[idx])
     }
@@ -87,7 +87,7 @@ impl DynamicGravityManager {
     /// rigid bodies.
     pub fn compute_and_apply(&mut self, rigid_body_manager: &mut RigidBodyManager) {
         self.synchronize_bodies(rigid_body_manager);
-        self.forces.fill(ForceP::zeros());
+        self.forces.fill(ForceC::zeros());
 
         if self.bodies.len() < 2 {
             return;
@@ -137,7 +137,7 @@ impl DynamicGravityManager {
         for (body_id, force) in self.body_ids.key_at_each_idx().zip(&self.forces) {
             rigid_body_manager
                 .dynamic_rigid_body_mut(body_id)
-                .apply_force_at_center_of_mass_packed(force);
+                .apply_force_at_center_of_mass_compact(force);
         }
     }
 }

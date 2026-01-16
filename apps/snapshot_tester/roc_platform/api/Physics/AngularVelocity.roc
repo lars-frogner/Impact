@@ -1,6 +1,6 @@
-# Hash: 907dacf4e1e7f26a
-# Generated: 2025-12-29T23:55:22.755341756
-# Rust type: impact_physics::quantities::AngularVelocityP
+# Hash: f57d4f66f1f41373
+# Generated: 2026-01-16T09:36:43.980228511
+# Rust type: impact_physics::quantities::AngularVelocityC
 # Type category: POD
 module [
     AngularVelocity,
@@ -16,7 +16,7 @@ import core.UnitVector3
 import core.Vector3
 
 ## An angular velocity in 3D space, represented by an axis of rotation and an
-## angular speed. This is the "packed" version.
+## angular speed. This is the "compact" version.
 ##
 ## This type is primarily intended for compact storage inside other types and
 ## collections. For computations, prefer the SIMD-friendly 16-byte aligned

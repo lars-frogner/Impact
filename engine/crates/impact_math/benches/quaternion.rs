@@ -3,11 +3,17 @@ use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(quaternion, unpack_quaternion);
 define_criterion_target!(quaternion, pack_quaternion);
-define_criterion_target!(quaternion, mul_quaternion_unpacked);
-define_criterion_target!(quaternion, mul_quaternion_both_packed_as_unpacked);
-define_criterion_target!(quaternion, mul_quaternion_one_packed_as_unpacked);
-define_criterion_target!(quaternion, mul_quaternion_one_packed_as_unpacked_to_packed);
-define_criterion_target!(quaternion, mul_quaternion_both_packed_as_unpacked_to_packed);
+define_criterion_target!(quaternion, mul_quaternion_uncompact);
+define_criterion_target!(quaternion, mul_quaternion_both_compact_as_uncompact);
+define_criterion_target!(quaternion, mul_quaternion_one_compact_as_uncompact);
+define_criterion_target!(
+    quaternion,
+    mul_quaternion_one_compact_as_uncompact_to_compact
+);
+define_criterion_target!(
+    quaternion,
+    mul_quaternion_both_compact_as_uncompact_to_compact
+);
 
 criterion::criterion_group!(
     name = benches;
@@ -15,10 +21,10 @@ criterion::criterion_group!(
     targets =
         unpack_quaternion,
         pack_quaternion,
-        mul_quaternion_unpacked,
-        mul_quaternion_both_packed_as_unpacked,
-        mul_quaternion_one_packed_as_unpacked,
-        mul_quaternion_one_packed_as_unpacked_to_packed,
-        mul_quaternion_both_packed_as_unpacked_to_packed,
+        mul_quaternion_uncompact,
+        mul_quaternion_both_compact_as_uncompact,
+        mul_quaternion_one_compact_as_uncompact,
+        mul_quaternion_one_compact_as_uncompact_to_compact,
+        mul_quaternion_both_compact_as_uncompact_to_compact,
 );
 criterion::criterion_main!(benches);

@@ -11,7 +11,7 @@ use crate::{
         contact::{ContactID, PreparedContact},
         spherical_joint::{PreparedSphericalJoint, SphericalJoint},
     },
-    quantities::{AngularVelocity, AngularVelocityP},
+    quantities::{AngularVelocity, AngularVelocityC},
     rigid_body::{RigidBodyManager, TypedRigidBodyID},
 };
 use bitflags::bitflags;
@@ -559,8 +559,8 @@ fn synchronize_prepared_constrained_body_velocities(
             let velocity = rigid_body.compute_velocity();
             let angular_velocity = rigid_body.compute_angular_velocity().as_vector();
 
-            constrained_body.velocity = velocity.pack();
-            constrained_body.angular_velocity = angular_velocity.pack();
+            constrained_body.velocity = velocity.compact();
+            constrained_body.angular_velocity = angular_velocity.compact();
         }
         TypedRigidBodyID::Kinematic(id) => {
             let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body(id) else {
@@ -582,8 +582,8 @@ fn apply_constrained_body_velocities_and_configuration_to_rigid_body(
             let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(id) else {
                 return;
             };
-            let velocity = constrained_body.velocity.unpack();
-            let angular_velocity = constrained_body.angular_velocity.unpack();
+            let velocity = constrained_body.velocity.aligned();
+            let angular_velocity = constrained_body.angular_velocity.aligned();
 
             rigid_body.set_position(constrained_body.position);
             rigid_body.set_orientation(constrained_body.orientation);
@@ -598,7 +598,7 @@ fn apply_constrained_body_velocities_and_configuration_to_rigid_body(
             rigid_body.set_position(constrained_body.position);
             rigid_body.set_orientation(constrained_body.orientation);
             rigid_body.set_velocity(constrained_body.velocity);
-            rigid_body.set_angular_velocity(AngularVelocityP::from_vector(
+            rigid_body.set_angular_velocity(AngularVelocityC::from_vector(
                 constrained_body.angular_velocity,
             ));
         }

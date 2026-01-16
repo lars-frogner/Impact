@@ -2,7 +2,7 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{AccelerationP, PositionP, VelocityP},
+    quantities::{AccelerationC, PositionC, VelocityC},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
@@ -43,11 +43,11 @@ define_setup_type! {
         /// When (in simulation time) the body should be at the initial position.
         pub initial_time: f32,
         /// The position of the body at the initial time.
-        pub initial_position: PositionP,
+        pub initial_position: PositionC,
         /// The velocity of the body at the initial time.
-        pub initial_velocity: VelocityP,
+        pub initial_velocity: VelocityC,
         /// The constant acceleration of the body.
-        pub acceleration: AccelerationP,
+        pub acceleration: AccelerationC,
     }
 }
 
@@ -64,8 +64,8 @@ impl ConstantAccelerationTrajectoryDriver {
         let Some(body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id) else {
             return;
         };
-        body.set_position(PositionP::origin());
-        body.set_velocity(VelocityP::zeros());
+        body.set_position(PositionC::origin());
+        body.set_velocity(VelocityC::zeros());
     }
 
     /// Applies the driven properties for the given time to the appropriate
@@ -97,9 +97,9 @@ impl ConstantAccelerationTrajectory {
     "#)]
     pub fn new(
         initial_time: f32,
-        initial_position: PositionP,
-        initial_velocity: VelocityP,
-        acceleration: AccelerationP,
+        initial_position: PositionC,
+        initial_velocity: VelocityC,
+        acceleration: AccelerationC,
     ) -> Self {
         Self {
             initial_time,
@@ -121,22 +121,22 @@ impl ConstantAccelerationTrajectory {
     "#)]
     pub fn with_constant_velocity(
         initial_time: f32,
-        initial_position: PositionP,
-        velocity: VelocityP,
+        initial_position: PositionC,
+        velocity: VelocityC,
     ) -> Self {
         Self::new(
             initial_time,
             initial_position,
             velocity,
-            AccelerationP::zeros(),
+            AccelerationC::zeros(),
         )
     }
 
     /// Computes the position and velocity for the trajectory at the given time.
-    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionP, VelocityP) {
-        let initial_position = self.initial_position.unpack();
-        let initial_velocity = self.initial_velocity.unpack();
-        let acceleration = self.acceleration.unpack();
+    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionC, VelocityC) {
+        let initial_position = self.initial_position.aligned();
+        let initial_velocity = self.initial_velocity.aligned();
+        let acceleration = self.acceleration.aligned();
 
         let time_offset = time - self.initial_time;
 
@@ -146,7 +146,7 @@ impl ConstantAccelerationTrajectory {
 
         let velocity = initial_velocity + time_offset * acceleration;
 
-        (position.pack(), velocity.pack())
+        (position.compact(), velocity.compact())
     }
 }
 
@@ -161,8 +161,8 @@ mod tests {
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
-        ) -> PositionP {
-            PositionP::new(position_coord_x, position_coord_y, position_coord_z)
+        ) -> PositionC {
+            PositionC::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -171,8 +171,8 @@ mod tests {
             velocity_coord_x in -max_velocity_coord..max_velocity_coord,
             velocity_coord_y in -max_velocity_coord..max_velocity_coord,
             velocity_coord_z in -max_velocity_coord..max_velocity_coord,
-        ) -> VelocityP {
-            VelocityP::new(velocity_coord_x, velocity_coord_y, velocity_coord_z)
+        ) -> VelocityC {
+            VelocityC::new(velocity_coord_x, velocity_coord_y, velocity_coord_z)
         }
     }
 
@@ -181,15 +181,15 @@ mod tests {
             acceleration_coord_x in -max_acceleration_coord..max_acceleration_coord,
             acceleration_coord_y in -max_acceleration_coord..max_acceleration_coord,
             acceleration_coord_z in -max_acceleration_coord..max_acceleration_coord,
-        ) -> AccelerationP {
-            AccelerationP::new(acceleration_coord_x, acceleration_coord_y, acceleration_coord_z)
+        ) -> AccelerationC {
+            AccelerationC::new(acceleration_coord_x, acceleration_coord_y, acceleration_coord_z)
         }
     }
 
     #[test]
     fn should_get_initial_position_for_zero_velocty_and_acceleration() {
-        let position = PositionP::origin();
-        let velocity = VelocityP::zeros();
+        let position = PositionC::origin();
+        let velocity = VelocityC::zeros();
         let trajectory =
             ConstantAccelerationTrajectory::with_constant_velocity(0.0, position, velocity);
         let (trajectory_position, trajectory_velocity) =
@@ -200,9 +200,9 @@ mod tests {
 
     #[test]
     fn should_get_different_position_and_velocity_for_nonzero_velocty_and_acceleration() {
-        let initial_position = PositionP::origin();
-        let initial_velocity = VelocityP::unit_y();
-        let acceleration = AccelerationP::unit_z();
+        let initial_position = PositionC::origin();
+        let initial_velocity = VelocityC::unit_y();
+        let acceleration = AccelerationC::unit_z();
         let trajectory = ConstantAccelerationTrajectory::new(
             0.0,
             initial_position,

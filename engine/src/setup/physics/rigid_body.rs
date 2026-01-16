@@ -303,8 +303,8 @@ pub fn setup_rigid_bodies_for_new_entities(
             let motion = motion.copied().unwrap_or_default();
 
             let mass = inertial_properties.mass;
-            let center_of_mass = inertial_properties.center_of_mass.unpack();
-            let inertia_tensor = inertial_properties.inertia_tensor.unpack();
+            let center_of_mass = inertial_properties.center_of_mass.aligned();
+            let inertia_tensor = inertial_properties.inertia_tensor.aligned();
 
             let mut inertial_properties = InertialProperties::new(
                 mass,

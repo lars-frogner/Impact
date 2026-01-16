@@ -2,7 +2,7 @@
 
 use crate::{
     driven_motion::MotionDriverRegistry,
-    quantities::{OrientationP, Position, PositionP, Velocity, VelocityP},
+    quantities::{OrientationC, Position, PositionC, Velocity, VelocityC},
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use approx::abs_diff_ne;
@@ -48,9 +48,9 @@ define_setup_type! {
         /// of the body at the initial time, the second with the direction of the
         /// velocity at the initial time and the third with the normal of the
         /// circle's plane.
-        pub orientation: OrientationP,
+        pub orientation: OrientationC,
         /// The position of the center of the circle.
-        pub center_position: PositionP,
+        pub center_position: PositionC,
         /// The radius of the circle.
         pub radius: f32,
         /// The duration of one revolution.
@@ -72,8 +72,8 @@ impl CircularTrajectoryDriver {
         else {
             return;
         };
-        rigid_body.set_position(PositionP::origin());
-        rigid_body.set_velocity(VelocityP::zeros());
+        rigid_body.set_position(PositionC::origin());
+        rigid_body.set_velocity(VelocityC::zeros());
     }
 
     /// Applies the driven properties for the given time to the appropriate
@@ -106,8 +106,8 @@ impl CircularTrajectory {
     "#)]
     pub fn new(
         initial_time: f32,
-        orientation: OrientationP,
-        center_position: PositionP,
+        orientation: OrientationC,
+        center_position: PositionC,
         radius: f32,
         period: f32,
     ) -> Self {
@@ -125,7 +125,7 @@ impl CircularTrajectory {
     /// # Panics
     /// - If the radius does not exceed zero.
     /// - If the period is zero.
-    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionP, VelocityP) {
+    pub fn compute_position_and_velocity(&self, time: f32) -> (PositionC, VelocityC) {
         assert!(
             self.radius > 0.0,
             "Radius of circular trajectory does not exceed zero"
@@ -135,7 +135,7 @@ impl CircularTrajectory {
             "Period of circular trajectory is zero"
         );
 
-        let orientation = self.orientation.unpack();
+        let orientation = self.orientation.aligned();
 
         let angular_speed = Self::compute_angular_speed(self.period);
 
@@ -148,7 +148,7 @@ impl CircularTrajectory {
         let world_space_circular_displacement = orientation.rotate_point(&circular_displacement);
 
         let world_space_circular_position =
-            self.center_position.unpack() + world_space_circular_displacement.as_vector();
+            self.center_position.aligned() + world_space_circular_displacement.as_vector();
 
         let tangential_speed = self.radius * angular_speed;
 
@@ -158,8 +158,8 @@ impl CircularTrajectory {
         let world_space_circular_velocity = orientation.rotate_vector(&circular_velocity);
 
         (
-            world_space_circular_position.pack(),
-            world_space_circular_velocity.pack(),
+            world_space_circular_position.compact(),
+            world_space_circular_velocity.compact(),
         )
     }
 
@@ -191,11 +191,11 @@ impl CircularTrajectory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quantities::{DirectionP, Orientation, OrientationP};
+    use crate::quantities::{DirectionC, Orientation, OrientationC};
     use approx::abs_diff_eq;
     use impact_math::{
         consts::f32::{FRAC_PI_2, PI},
-        vector::UnitVector3P,
+        vector::UnitVector3C,
     };
     use proptest::prelude::*;
 
@@ -204,8 +204,8 @@ mod tests {
             position_coord_x in -max_position_coord..max_position_coord,
             position_coord_y in -max_position_coord..max_position_coord,
             position_coord_z in -max_position_coord..max_position_coord,
-        ) -> PositionP {
-            PositionP::new(position_coord_x, position_coord_y, position_coord_z)
+        ) -> PositionC {
+            PositionC::new(position_coord_x, position_coord_y, position_coord_z)
         }
     }
 
@@ -213,8 +213,8 @@ mod tests {
         fn direction_strategy()(
             phi in 0.0..TWO_PI,
             theta in 0.0..PI,
-        ) -> DirectionP {
-            DirectionP::new_unchecked(
+        ) -> DirectionC {
+            DirectionC::new_unchecked(
                 f32::cos(phi) * f32::sin(theta),
                 f32::sin(phi) * f32::sin(theta),
                 f32::cos(theta)
@@ -227,8 +227,8 @@ mod tests {
             rotation_y in 0.0..TWO_PI,
             rotation_x in -FRAC_PI_2..FRAC_PI_2,
             rotation_z in 0.0..TWO_PI,
-        ) -> OrientationP {
-            Orientation::from_euler_angles_extrinsic(rotation_y, rotation_x, rotation_z).pack()
+        ) -> OrientationC {
+            Orientation::from_euler_angles_extrinsic(rotation_y, rotation_x, rotation_z).compact()
         }
     }
 
@@ -236,7 +236,7 @@ mod tests {
     #[should_panic]
     fn should_panic_if_radius_is_zero() {
         let trajectory =
-            CircularTrajectory::new(0.0, OrientationP::identity(), PositionP::origin(), 0.0, 1.0);
+            CircularTrajectory::new(0.0, OrientationC::identity(), PositionC::origin(), 0.0, 1.0);
         trajectory.compute_position_and_velocity(1.0);
     }
 
@@ -245,8 +245,8 @@ mod tests {
     fn should_panic_if_radius_is_negative() {
         let trajectory = CircularTrajectory::new(
             0.0,
-            OrientationP::identity(),
-            PositionP::origin(),
+            OrientationC::identity(),
+            PositionC::origin(),
             -0.1,
             1.0,
         );
@@ -257,7 +257,7 @@ mod tests {
     #[should_panic]
     fn should_panic_if_period_is_zero() {
         let trajectory =
-            CircularTrajectory::new(0.0, OrientationP::identity(), PositionP::origin(), 1.0, 0.0);
+            CircularTrajectory::new(0.0, OrientationC::identity(), PositionC::origin(), 1.0, 0.0);
         trajectory.compute_position_and_velocity(1.0);
     }
 
@@ -325,7 +325,7 @@ mod tests {
                 epsilon = 1e-3 * radius / period
             ));
             prop_assert!(abs_diff_eq!(
-                UnitVector3P::normalized_from(velocity).dot(&UnitVector3P::normalized_from(displacement)),
+                UnitVector3C::normalized_from(velocity).dot(&UnitVector3C::normalized_from(displacement)),
                 0.0,
                 epsilon = 1e-3
             ));

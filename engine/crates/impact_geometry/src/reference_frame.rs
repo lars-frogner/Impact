@@ -1,7 +1,7 @@
 //! Reference frames.
 
 use bytemuck::{Pod, Zeroable};
-use impact_math::{point::Point3P, quaternion::UnitQuaternionP, transform::Isometry3};
+use impact_math::{point::Point3C, quaternion::UnitQuaternionC, transform::Isometry3};
 use roc_integration::roc;
 
 define_component_type! {
@@ -12,9 +12,9 @@ define_component_type! {
     pub struct ReferenceFrame {
         /// The coordinates of the origin of the entity's reference frame measured
         /// in the parent space.
-        pub position: Point3P,
+        pub position: Point3C,
         /// The 3D orientation of the entity's reference frame in the parent space.
-        pub orientation: UnitQuaternionP,
+        pub orientation: UnitQuaternionC,
     }
 }
 
@@ -23,7 +23,7 @@ impl ReferenceFrame {
     /// Creates a new reference frame with the given position and orientation.
     #[roc(body = "{ position, orientation }")]
     #[inline]
-    pub const fn new(position: Point3P, orientation: UnitQuaternionP) -> Self {
+    pub const fn new(position: Point3C, orientation: UnitQuaternionC) -> Self {
         Self {
             position,
             orientation,
@@ -34,24 +34,24 @@ impl ReferenceFrame {
     /// orientation.
     #[roc(body = "new(position, UnitQuaternion.identity)")]
     #[inline]
-    pub const fn unoriented(position: Point3P) -> Self {
-        Self::new(position, UnitQuaternionP::identity())
+    pub const fn unoriented(position: Point3C) -> Self {
+        Self::new(position, UnitQuaternionC::identity())
     }
 
     /// Creates a new reference frame with the given orientation, located at the
     /// origin.
     #[roc(body = "new(Point3.origin, orientation)")]
     #[inline]
-    pub const fn unlocated(orientation: UnitQuaternionP) -> Self {
-        Self::new(Point3P::origin(), orientation)
+    pub const fn unlocated(orientation: UnitQuaternionC) -> Self {
+        Self::new(Point3C::origin(), orientation)
     }
 
     /// Creates the [`Isometry3`] transform from the entity's reference frame
     /// to the parent space.
     #[inline]
     pub fn create_transform_to_parent_space(&self) -> Isometry3 {
-        let translation = self.position.as_vector().unpack();
-        let rotation = self.orientation.unpack();
+        let translation = self.position.as_vector().aligned();
+        let rotation = self.orientation.aligned();
         Isometry3::from_parts(translation, rotation)
     }
 }
@@ -60,8 +60,8 @@ impl Default for ReferenceFrame {
     #[inline]
     fn default() -> Self {
         Self {
-            position: Point3P::origin(),
-            orientation: UnitQuaternionP::identity(),
+            position: Point3C::origin(),
+            orientation: UnitQuaternionC::identity(),
         }
     }
 }

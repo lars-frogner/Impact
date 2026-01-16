@@ -11,7 +11,7 @@ use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     hash64,
-    vector::{Vector2, Vector3P},
+    vector::{Vector2, Vector3C},
 };
 use impact_mesh::VertexAttributeSet;
 use impact_texture::{SamplerRegistry, TextureID, TextureRegistry};
@@ -341,17 +341,17 @@ pub struct PhysicalMaterialParallaxMappingTextureBindings {
 #[roc]
 impl UniformColor {
     #[roc(expr = "(0.562, 0.565, 0.578)")]
-    pub const IRON: Self = Self(Vector3P::new(0.562, 0.565, 0.578));
+    pub const IRON: Self = Self(Vector3C::new(0.562, 0.565, 0.578));
     #[roc(expr = "(0.955, 0.638, 0.538)")]
-    pub const COPPER: Self = Self(Vector3P::new(0.955, 0.638, 0.538));
+    pub const COPPER: Self = Self(Vector3C::new(0.955, 0.638, 0.538));
     #[roc(expr = "(0.910, 0.778, 0.423)")]
-    pub const BRASS: Self = Self(Vector3P::new(0.910, 0.778, 0.423));
+    pub const BRASS: Self = Self(Vector3C::new(0.910, 0.778, 0.423));
     #[roc(expr = "(1.000, 0.782, 0.344)")]
-    pub const GOLD: Self = Self(Vector3P::new(1.000, 0.782, 0.344));
+    pub const GOLD: Self = Self(Vector3C::new(1.000, 0.782, 0.344));
     #[roc(expr = "(0.913, 0.922, 0.924)")]
-    pub const ALUMINUM: Self = Self(Vector3P::new(0.913, 0.922, 0.924));
+    pub const ALUMINUM: Self = Self(Vector3C::new(0.913, 0.922, 0.924));
     #[roc(expr = "(0.972, 0.960, 0.915)")]
-    pub const SILVER: Self = Self(Vector3P::new(0.972, 0.960, 0.915));
+    pub const SILVER: Self = Self(Vector3C::new(0.972, 0.960, 0.915));
 }
 
 #[roc]

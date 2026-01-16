@@ -1,7 +1,7 @@
 //! Benchmarks for constraint resolution.
 
-use impact_geometry::{ReferenceFrame, SphereP};
-use impact_math::point::Point3P;
+use impact_geometry::{ReferenceFrame, SphereC};
+use impact_math::point::Point3C;
 use impact_physics::{
     anchor::AnchorManager,
     collision::{
@@ -12,7 +12,7 @@ use impact_physics::{
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     inertia::InertialProperties,
     material::ContactResponseParameters,
-    quantities::{Motion, PositionP, VelocityP},
+    quantities::{Motion, PositionC, VelocityC},
     rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_profiling::benchmark::Benchmarker;
@@ -104,13 +104,13 @@ pub fn correct_contact_configurations(benchmarker: impl Benchmarker) {
 }
 
 struct SphereBody {
-    sphere: SphereP,
+    sphere: SphereC,
     mass_density: f32,
-    velocity: VelocityP,
+    velocity: VelocityC,
 }
 
 impl SphereBody {
-    fn new(sphere: SphereP, mass_density: f32, velocity: VelocityP) -> Self {
+    fn new(sphere: SphereC, mass_density: f32, velocity: VelocityC) -> Self {
         Self {
             sphere,
             mass_density,
@@ -118,8 +118,8 @@ impl SphereBody {
         }
     }
 
-    fn stationary(sphere: SphereP, mass_density: f32) -> Self {
-        Self::new(sphere, mass_density, VelocityP::zeros())
+    fn stationary(sphere: SphereC, mass_density: f32) -> Self {
+        Self::new(sphere, mass_density, VelocityC::zeros())
     }
 }
 
@@ -150,7 +150,7 @@ fn setup_sphere_bodies(
 
                 let collidable = SphericalCollidable::new(
                     CollidableKind::Dynamic,
-                    SphereP::new(PositionP::origin(), sphere.radius()),
+                    SphereC::new(PositionC::origin(), sphere.radius()),
                     ContactResponseParameters {
                         restitution_coef: 0.6,
                         ..Default::default()
@@ -179,7 +179,7 @@ fn setup_stationary_overlapping_spheres(
         collision_world,
         (0..500).map(|i| {
             SphereBody::stationary(
-                SphereP::new(Point3P::new(i as f32 - 0.05, 0.0, 0.0), 0.5),
+                SphereC::new(Point3C::new(i as f32 - 0.05, 0.0, 0.0), 0.5),
                 1.0,
             )
         }),

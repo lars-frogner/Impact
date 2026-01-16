@@ -13,7 +13,7 @@ use impact_physics::{
         alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
         local_force::LocalForceGeneratorID,
     },
-    quantities::ForceP,
+    quantities::ForceC,
 };
 use roc_integration::roc;
 
@@ -24,7 +24,7 @@ pub enum PhysicsCommand {
     UpdateLocalForce {
         generator_id: LocalForceGeneratorID,
         mode: LocalForceUpdateMode,
-        force: ForceP,
+        force: ForceC,
     },
     SetAlignmentTorqueDirection {
         generator_id: AlignmentTorqueGeneratorID,
@@ -128,7 +128,7 @@ pub fn update_local_force(
     simulator: &PhysicsSimulator,
     generator_id: LocalForceGeneratorID,
     mode: LocalForceUpdateMode,
-    force: ForceP,
+    force: ForceC,
 ) -> Result<()> {
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
 

@@ -12,10 +12,10 @@ use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::{
     hash::StringHash64,
     hash64,
-    point::Point3P,
+    point::Point3C,
     quaternion::UnitQuaternion,
     transform::Similarity3,
-    vector::{UnitVector3, UnitVector3P, Vector3, Vector3P},
+    vector::{UnitVector3, UnitVector3C, Vector3, Vector3C},
 };
 use impact_resource::{
     MutableResource, Resource, ResourceDirtyMask, ResourceID, registry::MutableResourceRegistry,
@@ -240,7 +240,7 @@ impl TriangleMesh {
 
     /// Returns an iterator over the mesh triangles, each item containing the
     /// three triangle vertex positions.
-    pub fn triangle_vertex_positions(&self) -> impl Iterator<Item = [&Point3P; 3]> {
+    pub fn triangle_vertex_positions(&self) -> impl Iterator<Item = [&Point3C; 3]> {
         self.triangle_indices().map(|[i, j, k]| {
             [
                 &self.positions[i].0,
@@ -284,27 +284,27 @@ impl TriangleMesh {
         assert!(self.has_positions());
 
         let arena =
-            ArenaPool::get_arena_for_capacity(self.n_vertices() * mem::size_of::<Vector3P>());
+            ArenaPool::get_arena_for_capacity(self.n_vertices() * mem::size_of::<Vector3C>());
 
-        let mut summed_normal_vectors = avec![in &arena; Vector3P::zeros(); self.n_vertices()];
+        let mut summed_normal_vectors = avec![in &arena; Vector3C::zeros(); self.n_vertices()];
 
         for [idx0, idx1, idx2] in self.triangle_indices() {
-            let p0 = self.positions[idx0].0.unpack();
-            let p1 = self.positions[idx1].0.unpack();
-            let p2 = self.positions[idx2].0.unpack();
+            let p0 = self.positions[idx0].0.aligned();
+            let p1 = self.positions[idx1].0.aligned();
+            let p2 = self.positions[idx2].0.aligned();
 
             let face_normal_vector = UnitVector3::normalized_from((p1 - p0).cross(&(p2 - p0)));
 
             for idx in [idx0, idx1, idx2] {
                 let summed_normal_vector = &mut summed_normal_vectors[idx];
-                let new_sum = summed_normal_vector.unpack() + face_normal_vector.as_vector();
-                *summed_normal_vector = new_sum.pack();
+                let new_sum = summed_normal_vector.aligned() + face_normal_vector.as_vector();
+                *summed_normal_vector = new_sum.compact();
             }
         }
 
         self.normal_vectors = summed_normal_vectors
             .into_iter()
-            .map(|vector| VertexNormalVector(UnitVector3P::normalized_from(vector)))
+            .map(|vector| VertexNormalVector(UnitVector3C::normalized_from(vector)))
             .collect();
 
         *dirty_mask |= TriangleMeshDirtyMask::NORMAL_VECTORS;
@@ -327,7 +327,7 @@ impl TriangleMesh {
 
         for position in &self.positions {
             self.texture_coords.push(VertexTextureCoords(
-                projection.project_position(&position.0.unpack()),
+                projection.project_position(&position.0.aligned()),
             ));
         }
 
@@ -358,10 +358,10 @@ impl TriangleMesh {
         }
 
         let arena =
-            ArenaPool::get_arena_for_capacity(self.n_vertices() * 2 * mem::size_of::<Vector3P>());
+            ArenaPool::get_arena_for_capacity(self.n_vertices() * 2 * mem::size_of::<Vector3C>());
 
         let mut summed_tangent_and_bitangent_vectors =
-            avec![in &arena; [Vector3P::zeros(); 2]; self.n_vertices()];
+            avec![in &arena; [Vector3C::zeros(); 2]; self.n_vertices()];
 
         for [idx0, idx1, idx2] in self.triangle_indices() {
             let p0 = &self.positions[idx0].0;
@@ -434,9 +434,9 @@ impl TriangleMesh {
             // Use Gram-Schmidt to make the summed tangent and bitangent
             // orthogonal to the normal vector and each other, then normalize
 
-            let summed_tangent = summed_tangent.unpack();
-            let summed_bitangent = summed_bitangent.unpack();
-            let normal = normal.0.unpack();
+            let summed_tangent = summed_tangent.aligned();
+            let summed_bitangent = summed_bitangent.aligned();
+            let normal = normal.0.aligned();
 
             let orthogonal_tangent = summed_tangent - normal * normal.dot(&summed_tangent);
 
@@ -501,7 +501,7 @@ impl TriangleMesh {
 
             self.tangent_space_quaternions
                 .push(VertexTangentSpaceQuaternion(
-                    tangent_space_quaternion.pack(),
+                    tangent_space_quaternion.compact(),
                 ));
         }
 

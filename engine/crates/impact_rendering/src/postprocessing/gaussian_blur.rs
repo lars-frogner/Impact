@@ -17,7 +17,7 @@ use impact_gpu::{
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
     wgpu,
 };
-use impact_math::{hash::ConstStringHash64, hash64, vector::Vector4P};
+use impact_math::{hash::ConstStringHash64, hash64, vector::Vector4C};
 use std::{borrow::Cow, fmt::Display};
 
 /// The maximum number of unique Gaussian weights that can be passed to the GPU
@@ -45,9 +45,9 @@ pub enum GaussianBlurDirection {
 pub struct GaussianBlurSamples {
     /// Each entry stores an offset as the first vector component and a weight
     /// as the second component. The remaining vector components are ignored.
-    /// The reason we need to use a `Vector4P` is that arrays in uniforms must
+    /// The reason we need to use a `Vector4C` is that arrays in uniforms must
     /// have elements aligned to 16 bytes.
-    sample_offsets_and_weights: [Vector4P; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
+    sample_offsets_and_weights: [Vector4C; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
     sample_count: u32,
     truncated_tail_samples: u32,
     _pad: [u8; 8],
@@ -103,7 +103,7 @@ impl GaussianBlurSamples {
         let coefficients_from_center =
             &truncated_binomial_coefficients[truncated_binomial_coefficients.len() / 2..];
 
-        let mut sample_offsets_and_weights = [Vector4P::zeroed(); MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS];
+        let mut sample_offsets_and_weights = [Vector4C::zeroed(); MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS];
 
         for (sample_idx, offset_and_weight) in sample_offsets_and_weights[..(sample_count as usize)]
             .iter_mut()

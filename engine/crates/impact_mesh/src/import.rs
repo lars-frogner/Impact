@@ -122,11 +122,14 @@ fn load_triangle_mesh_from_file(
             u_vector,
             v_vector,
         }) => {
-            let projection =
-                PlanarTextureProjection::new(origin.unpack(), u_vector.unpack(), v_vector.unpack())
-                    .with_context(|| {
-                        format!("Invalid planar texture projection for triangle mesh `{mesh_id}`")
-                    })?;
+            let projection = PlanarTextureProjection::new(
+                origin.aligned(),
+                u_vector.aligned(),
+                v_vector.aligned(),
+            )
+            .with_context(|| {
+                format!("Invalid planar texture projection for triangle mesh `{mesh_id}`")
+            })?;
             mesh.generate_texture_coords(&projection, &mut dirty_flags);
         }
     }
@@ -162,11 +165,14 @@ fn load_triangle_mesh_from_template(
             u_vector,
             v_vector,
         }) => {
-            let projection =
-                PlanarTextureProjection::new(origin.unpack(), u_vector.unpack(), v_vector.unpack())
-                    .with_context(|| {
-                        format!("Invalid planar texture projection for triangle mesh `{mesh_id}`")
-                    })?;
+            let projection = PlanarTextureProjection::new(
+                origin.aligned(),
+                u_vector.aligned(),
+                v_vector.aligned(),
+            )
+            .with_context(|| {
+                format!("Invalid planar texture projection for triangle mesh `{mesh_id}`")
+            })?;
 
             setup_triangle_mesh_from_template(registry, template, Some(mesh_id), Some(&projection));
         }

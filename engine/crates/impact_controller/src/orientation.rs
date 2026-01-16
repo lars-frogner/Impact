@@ -9,7 +9,7 @@ use impact_math::{
     quaternion::UnitQuaternion,
     vector::UnitVector3,
 };
-use impact_physics::quantities::{AngularVelocity, Orientation, OrientationP};
+use impact_physics::quantities::{AngularVelocity, Orientation, OrientationC};
 use roc_integration::roc;
 
 define_component_type! {
@@ -21,7 +21,7 @@ define_component_type! {
         /// The orientation of the reference frame in which the controls should
         /// be applied. This maps the local control directions to world-space
         /// directions.
-        pub frame_orientation: OrientationP,
+        pub frame_orientation: OrientationC,
         /// Restrict control to these directions for applicable controllers.
         pub directions: AngularVelocityControlDirections,
         /// Flags for how to control angular velocity.
@@ -120,7 +120,7 @@ impl AngularVelocityControl {
     }"#)]
     pub fn all_directions() -> Self {
         Self {
-            frame_orientation: OrientationP::identity(),
+            frame_orientation: OrientationC::identity(),
             directions: AngularVelocityControlDirections::all(),
             flags: AngularVelocityControlFlags::empty(),
         }
@@ -132,7 +132,7 @@ impl AngularVelocityControl {
         flags: AngularVelocityControlFlags,
     ) -> Self {
         Self {
-            frame_orientation: OrientationP::identity(),
+            frame_orientation: OrientationC::identity(),
             directions,
             flags,
         }
@@ -140,7 +140,7 @@ impl AngularVelocityControl {
 
     #[roc(body = "{ frame_orientation, directions, flags }")]
     pub fn new_local(
-        frame_orientation: OrientationP,
+        frame_orientation: OrientationC,
         directions: AngularVelocityControlDirections,
         flags: AngularVelocityControlFlags,
     ) -> Self {
@@ -156,7 +156,7 @@ impl AngularVelocityControl {
         orientation_controller: &(impl OrientationController + ?Sized),
         orientation: &mut Orientation,
     ) {
-        let frame_orientation = self.frame_orientation.unpack();
+        let frame_orientation = self.frame_orientation.aligned();
 
         let mut orientation_in_local_frame = frame_orientation.inverse() * *orientation;
 
@@ -200,7 +200,7 @@ impl AngularVelocityControl {
                 .flags
                 .contains(AngularVelocityControlFlags::PRESERVE_EXISTING_FOR_HORIZONTAL)
         {
-            let frame_orientation = self.frame_orientation.unpack();
+            let frame_orientation = self.frame_orientation.aligned();
 
             // For purely horizontal control, the local control axis of rotation
             // is always the y-axis

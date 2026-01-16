@@ -62,7 +62,7 @@ fn setup_omnidirectional_lights_for_new_entities(
          omnidirectional_emission: &OmnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
          -> (OmnidirectionalLightID, SceneEntityFlags) {
-            let position = frame.position.unpack();
+            let position = frame.position.aligned();
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_omnidirectional_light(
@@ -89,7 +89,7 @@ fn setup_omnidirectional_lights_for_new_entities(
          omnidirectional_emission: &ShadowableOmnidirectionalEmission,
          flags: Option<&SceneEntityFlags>|
          -> (ShadowableOmnidirectionalLightID, SceneEntityFlags) {
-            let position = frame.position.unpack();
+            let position = frame.position.aligned();
             let flags = flags.copied().unwrap_or_default();
             (
                 setup::setup_shadowable_omnidirectional_light(

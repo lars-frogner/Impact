@@ -12,8 +12,8 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
-use impact_geometry::{CapsuleP, SphereP};
-use impact_math::{point::Point3P, transform::Isometry3, vector::Vector3P};
+use impact_geometry::{CapsuleC, SphereC};
+use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3C};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
     rigid_body::RigidBodyManager,
@@ -33,7 +33,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
     pub struct VoxelAbsorbingSphere {
         /// The offset of the sphere in the reference frame of the entity.
-        offset: Vector3P,
+        offset: Vector3C,
         /// The radius of the sphere.
         radius: f32,
         /// The maximum rate of absorption (at the center of the sphere).
@@ -54,10 +54,10 @@ define_component_type! {
     pub struct VoxelAbsorbingCapsule {
         /// The offset of the starting point of the capsule's central line segment
         /// in the reference frame of the entity.
-        offset_to_segment_start: Vector3P,
+        offset_to_segment_start: Vector3C,
         /// The displacement vector from the start to the end of the capsule's
         /// central line segment in the reference frame of the entity.
-        segment_vector: Vector3P,
+        segment_vector: Vector3C,
         /// The radius of the capsule.
         radius: f32,
         /// The maximum rate of absorption (at the central line segment of the
@@ -80,7 +80,7 @@ impl VoxelAbsorbingSphere {
         radius,
         rate,
     }"#)]
-    pub fn new(offset: Vector3P, radius: f32, rate: f32) -> Self {
+    pub fn new(offset: Vector3C, radius: f32, rate: f32) -> Self {
         assert!(radius >= 0.0);
         assert!(rate >= 0.0);
         Self {
@@ -91,8 +91,8 @@ impl VoxelAbsorbingSphere {
     }
 
     /// Returns the sphere in the reference frame of the entity.
-    pub fn sphere(&self) -> SphereP {
-        SphereP::new(Point3P::from(self.offset), self.radius)
+    pub fn sphere(&self) -> SphereC {
+        SphereC::new(Point3C::from(self.offset), self.radius)
     }
 
     /// Returns the maximum absorption rate.
@@ -119,8 +119,8 @@ impl VoxelAbsorbingCapsule {
         rate,
     }"#)]
     pub fn new(
-        offset_to_segment_start: Vector3P,
-        segment_vector: Vector3P,
+        offset_to_segment_start: Vector3C,
+        segment_vector: Vector3C,
         radius: f32,
         rate: f32,
     ) -> Self {
@@ -135,9 +135,9 @@ impl VoxelAbsorbingCapsule {
     }
 
     /// Returns the capsule in the reference frame of the entity.
-    pub fn capsule(&self) -> CapsuleP {
-        CapsuleP::new(
-            Point3P::from(self.offset_to_segment_start),
+    pub fn capsule(&self) -> CapsuleC {
+        CapsuleC::new(
+            Point3C::from(self.offset_to_segment_start),
             self.segment_vector,
             self.radius,
         )
@@ -280,7 +280,7 @@ pub fn apply_absorption<C>(
                         anchor_id,
                         DynamicRigidBodyAnchor {
                             rigid_body_id,
-                            point: point.pack(),
+                            point: point.compact(),
                         },
                     );
                 }
@@ -305,7 +305,7 @@ fn apply_sphere_absorption(
     absorbing_sphere: &VoxelAbsorbingSphere,
     sphere_to_world_transform: &Isometry3,
 ) {
-    let sphere = absorbing_sphere.sphere().unpack();
+    let sphere = absorbing_sphere.sphere().aligned();
 
     let sphere_in_voxel_object_space = sphere
         .iso_transformed(sphere_to_world_transform)
@@ -340,7 +340,7 @@ fn apply_capsule_absorption(
     absorbing_capsule: &VoxelAbsorbingCapsule,
     capsule_to_world_transform: &Isometry3,
 ) {
-    let capsule = absorbing_capsule.capsule().unpack();
+    let capsule = absorbing_capsule.capsule().aligned();
 
     let capsule_in_voxel_object_space = capsule
         .iso_transformed(capsule_to_world_transform)

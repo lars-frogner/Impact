@@ -4,9 +4,9 @@ use crate::{AxisAlignedBox, Sphere};
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::{Point3, Point3P},
+    point::{Point3, Point3C},
     transform::{Isometry3, Similarity3},
-    vector::{Vector3, Vector3P},
+    vector::{Vector3, Vector3C},
 };
 
 /// A capsule represented by the starting point and displacement vector of the
@@ -16,8 +16,8 @@ use impact_math::{
 /// The segment start and segment vector are stored in 128-bit SIMD registers
 /// for efficient computation. That leads to an extra 20 bytes in size (4 each
 /// due to the padded point and vector and 12 due to padding after the radius)
-/// and 16-byte alignment. For cache-friendly storage, prefer the packed 4-byte
-/// aligned [`CapsuleP`].
+/// and 16-byte alignment. For cache-friendly storage, prefer the compact 4-byte
+/// aligned [`CapsuleC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Capsule {
     segment_start: Point3,
@@ -38,16 +38,16 @@ pub struct CapsulePointContainmentTester {
 
 /// A capsule represented by the starting point and displacement vector of the
 /// segment making up the central axis of the cylinder between the caps, as well
-/// as a radius. This is the "packed" version.
+/// as a radius. This is the "compact" version.
 ///
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`Capsule`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct CapsuleP {
-    segment_start: Point3P,
-    segment_vector: Vector3P,
+pub struct CapsuleC {
+    segment_start: Point3C,
+    segment_vector: Vector3C,
     radius: f32,
 }
 
@@ -163,12 +163,12 @@ impl Capsule {
         }
     }
 
-    /// Converts the capsule to the 4-byte aligned cache-friendly [`CapsuleP`].
+    /// Converts the capsule to the 4-byte aligned cache-friendly [`CapsuleC`].
     #[inline]
-    pub fn pack(&self) -> CapsuleP {
-        CapsuleP::new(
-            self.segment_start.pack(),
-            self.segment_vector.pack(),
+    pub fn compact(&self) -> CapsuleC {
+        CapsuleC::new(
+            self.segment_start.compact(),
+            self.segment_vector.compact(),
             self.radius,
         )
     }
@@ -233,14 +233,14 @@ impl CapsulePointContainmentTester {
     }
 }
 
-impl CapsuleP {
+impl CapsuleC {
     /// Creates a new capsule with the given segment starting point, segment
     /// vector and radius.
     ///
     /// # Panics
     /// If `radius` is negative.
     #[inline]
-    pub const fn new(segment_start: Point3P, segment_vector: Vector3P, radius: f32) -> Self {
+    pub const fn new(segment_start: Point3C, segment_vector: Vector3C, radius: f32) -> Self {
         assert!(radius >= 0.0);
         Self {
             segment_start,
@@ -252,21 +252,21 @@ impl CapsuleP {
     /// Returns the starting point of the line segment making up the central
     /// axis of the cylinder between the caps.
     #[inline]
-    pub const fn segment_start(&self) -> &Point3P {
+    pub const fn segment_start(&self) -> &Point3C {
         &self.segment_start
     }
 
     /// Returns the end point of the line segment making up the central axis of
     /// the cylinder between the caps.
     #[inline]
-    pub fn segment_end(&self) -> Point3P {
+    pub fn segment_end(&self) -> Point3C {
         self.segment_start + self.segment_vector
     }
 
     /// Returns the displacement vector between the end points of the line
     /// segment making up the central axis of the cylinder between the caps.
     #[inline]
-    pub const fn segment_vector(&self) -> &Vector3P {
+    pub const fn segment_vector(&self) -> &Vector3C {
         &self.segment_vector
     }
 
@@ -278,16 +278,16 @@ impl CapsuleP {
 
     /// Converts the capsule to the 16-byte aligned SIMD-friendly [`Capsule`].
     #[inline]
-    pub fn unpack(&self) -> Capsule {
+    pub fn aligned(&self) -> Capsule {
         Capsule::new(
-            self.segment_start.unpack(),
-            self.segment_vector.unpack(),
+            self.segment_start.aligned(),
+            self.segment_vector.aligned(),
             self.radius,
         )
     }
 }
 
-impl AbsDiffEq for CapsuleP {
+impl AbsDiffEq for CapsuleC {
     type Epsilon = f32;
 
     fn default_epsilon() -> f32 {

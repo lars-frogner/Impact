@@ -16,7 +16,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_math::{hash::Hash32, vector::Vector3P};
+use impact_math::{hash::Hash32, vector::Vector3C};
 use impact_model::{
     InstanceFeature,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -137,7 +137,7 @@ define_setup_type! {
         pub radius_2: f32,
         /// The offset in number of voxels in each dimension between the centers of
         /// the two spheres.
-        pub center_offsets: Vector3P,
+        pub center_offsets: Vector3C,
         /// The smoothness of the union operation.
         pub smoothness: f32,
     }
@@ -425,7 +425,7 @@ impl VoxelSphereUnion {
         voxel_extent: f32,
         radius_1: f32,
         radius_2: f32,
-        center_offsets: Vector3P,
+        center_offsets: Vector3C,
         smoothness: f32,
     ) -> Self {
         assert!(voxel_extent > 0.0);
@@ -453,7 +453,7 @@ impl VoxelSphereUnion {
     }
 
     pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
-        let center_offsets = self.center_offsets.unpack();
+        let center_offsets = self.center_offsets.aligned();
         let sphere_1_id = graph.add_node(SDFNode::new_sphere(self.radius_1_in_voxels()));
         let sphere_2_id = graph.add_node(SDFNode::new_sphere(self.radius_2_in_voxels()));
         let sphere_2_id = graph.add_node(SDFNode::new_translation(sphere_2_id, center_offsets));
@@ -607,9 +607,9 @@ pub fn create_model_instance_node_for_voxel_object(
     Ok((
         SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
             parent_node_id,
-            model_to_parent_transform.pack(),
+            model_to_parent_transform.compact(),
             model_id,
-            bounding_sphere.map(|sphere| sphere.pack()),
+            bounding_sphere.map(|sphere| sphere.compact()),
             FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
             FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
             flags.into(),

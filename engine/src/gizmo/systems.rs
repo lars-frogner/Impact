@@ -26,9 +26,9 @@ use impact_math::{
     angle::Angle,
     consts::f32::PI,
     point::Point3,
-    quaternion::{UnitQuaternion, UnitQuaternionP},
+    quaternion::{UnitQuaternion, UnitQuaternionC},
     transform::{Isometry3, Similarity3},
-    vector::{UnitVector3, Vector3, Vector3P},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
 use impact_physics::{
@@ -405,7 +405,7 @@ fn compute_transform_for_bounding_sphere_gizmo(
     node: &ModelInstanceNode,
     model_view_transform: InstanceModelViewTransform,
 ) -> Option<InstanceModelViewTransform> {
-    let bounding_sphere = node.get_model_bounding_sphere()?.unpack();
+    let bounding_sphere = node.get_model_bounding_sphere()?.aligned();
 
     let center = bounding_sphere.center();
     let radius = bounding_sphere.radius();
@@ -434,7 +434,7 @@ fn buffer_transform_for_light_sphere_gizmo(
     let light_sphere_from_unit_sphere = InstanceModelViewTransform {
         translation: *light.camera_space_position().as_vector(),
         scaling: light.max_reach(),
-        rotation: UnitQuaternionP::identity(),
+        rotation: UnitQuaternionC::identity(),
     };
 
     model_instance_manager.buffer_instance_feature(
@@ -455,7 +455,7 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
     let light_sphere_from_unit_sphere = InstanceModelViewTransform {
         translation: *light.camera_space_position().as_vector(),
         scaling: light.max_reach(),
-        rotation: UnitQuaternionP::identity(),
+        rotation: UnitQuaternionC::identity(),
     };
 
     model_instance_manager.buffer_instance_feature(
@@ -531,8 +531,8 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
         let scaling = plane_height * scene_camera.camera().aspect_ratio().max(1.0);
 
         let camera_cascade_from_vertical_square = InstanceModelViewTransform {
-            translation: Vector3P::new(0.0, 0.0, plane_z),
-            rotation: UnitQuaternionP::identity(),
+            translation: Vector3C::new(0.0, 0.0, plane_z),
+            rotation: UnitQuaternionC::identity(),
             scaling,
         };
 
@@ -566,7 +566,7 @@ fn buffer_transforms_for_anchor_gizmos(
     };
 
     for anchor_point in anchor_points {
-        let anchor_point = anchor_point.unpack();
+        let anchor_point = anchor_point.aligned();
 
         let world_sphere_from_unit_sphere_transform = frame.create_transform_to_parent_space()
             * Similarity3::from_parts(
@@ -595,7 +595,7 @@ fn buffer_transforms_for_kinematics_gizmos(
     visible_gizmos: GizmoSet,
 ) {
     if visible_gizmos.contains(GizmoType::LinearVelocity.as_set()) {
-        let linear_velocity = motion.linear_velocity.unpack();
+        let linear_velocity = motion.linear_velocity.aligned();
 
         let (direction, speed) = UnitVector3::normalized_from_and_norm(linear_velocity);
 
@@ -607,7 +607,7 @@ fn buffer_transforms_for_kinematics_gizmos(
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
                     camera_position,
-                    frame.position.unpack(),
+                    frame.position.aligned(),
                     direction,
                     length,
                 ),
@@ -620,14 +620,14 @@ fn buffer_transforms_for_kinematics_gizmos(
             parameters.angular_velocity_scale * motion.angular_velocity.angular_speed().radians();
 
         if abs_diff_ne!(length, 0.0) {
-            let axis_of_rotation = motion.angular_velocity.axis_of_rotation().unpack();
+            let axis_of_rotation = motion.angular_velocity.axis_of_rotation().aligned();
 
             model_instance_manager.buffer_instance_feature(
                 GizmoType::AngularVelocity.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
                     camera_position,
-                    frame.position.unpack(),
+                    frame.position.aligned(),
                     axis_of_rotation,
                     length,
                 ),
@@ -657,7 +657,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         );
 
         let world_sphere_from_unit_sphere_transform = Similarity3::from_parts(
-            frame.position.as_vector().unpack(),
+            frame.position.as_vector().aligned(),
             UnitQuaternion::identity(),
             radius,
         );
@@ -672,7 +672,7 @@ fn buffer_transforms_for_dynamics_gizmos(
     }
 
     if visible_gizmos.contains(GizmoType::AngularMomentum.as_set()) {
-        let angular_momentum = rigid_body.angular_momentum().unpack();
+        let angular_momentum = rigid_body.angular_momentum().aligned();
 
         let (axis, magnitude) = UnitVector3::normalized_from_and_norm(angular_momentum);
 
@@ -684,7 +684,7 @@ fn buffer_transforms_for_dynamics_gizmos(
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
                     camera_position,
-                    frame.position.unpack(),
+                    frame.position.aligned(),
                     axis,
                     length,
                 ),
@@ -693,7 +693,7 @@ fn buffer_transforms_for_dynamics_gizmos(
     }
 
     if visible_gizmos.contains(GizmoType::Force.as_set()) {
-        let total_force = rigid_body.total_force().unpack();
+        let total_force = rigid_body.total_force().aligned();
 
         let (direction, magnitude) = UnitVector3::normalized_from_and_norm(total_force);
 
@@ -705,7 +705,7 @@ fn buffer_transforms_for_dynamics_gizmos(
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
                     camera_position,
-                    frame.position.unpack(),
+                    frame.position.aligned(),
                     direction,
                     length,
                 ),
@@ -714,7 +714,7 @@ fn buffer_transforms_for_dynamics_gizmos(
     }
 
     if visible_gizmos.contains(GizmoType::Torque.as_set()) {
-        let total_torque = rigid_body.total_torque().unpack();
+        let total_torque = rigid_body.total_torque().aligned();
 
         let (axis, magnitude) = UnitVector3::normalized_from_and_norm(total_torque);
 
@@ -726,7 +726,7 @@ fn buffer_transforms_for_dynamics_gizmos(
                 &model_view_transform_for_vector_gizmo(
                     scene_camera,
                     camera_position,
-                    frame.position.unpack(),
+                    frame.position.aligned(),
                     axis,
                     length,
                 ),
@@ -832,7 +832,7 @@ fn buffer_transforms_for_collider_gizmos(
 
     match collidable.collidable() {
         Collidable::Sphere(sphere_collidable) => {
-            let sphere = sphere_collidable.sphere().unpack();
+            let sphere = sphere_collidable.sphere().aligned();
 
             let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
                 *sphere.center().as_vector(),
@@ -849,7 +849,7 @@ fn buffer_transforms_for_collider_gizmos(
             );
         }
         Collidable::Plane(plane_collidable) => {
-            let plane = plane_collidable.plane().unpack();
+            let plane = plane_collidable.plane().aligned();
 
             // Make the plane appear infinite by putting the center of the mesh
             // at the camera position (projected so as not to change the plane
@@ -881,8 +881,9 @@ fn buffer_transforms_for_collider_gizmos(
 
             let voxel_radius = 0.5 * voxel_object.voxel_extent();
 
-            let transform_to_object_space =
-                voxel_object_collidable.transform_to_object_space().unpack();
+            let transform_to_object_space = voxel_object_collidable
+                .transform_to_object_space()
+                .aligned();
 
             let transform_from_object_to_world_space = transform_to_object_space.inverted();
 
@@ -903,8 +904,8 @@ fn buffer_transforms_for_collider_gizmos(
                     .transform_point(&voxel_center_in_object_space);
 
                 let model_to_camera_transform = InstanceModelViewTransform {
-                    translation: voxel_center_in_camera_space.as_vector().pack(),
-                    rotation: rotation_from_object_to_camera_space.pack(),
+                    translation: voxel_center_in_camera_space.as_vector().compact(),
+                    rotation: rotation_from_object_to_camera_space.compact(),
                     scaling: scaling_from_object_to_camera_space,
                 };
 
@@ -1022,8 +1023,8 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
             ),
             _ => return,
         };
-    let transform_from_world_to_a = transform_from_world_to_a.unpack();
-    let transform_from_world_to_b = transform_from_world_to_b.unpack();
+    let transform_from_world_to_a = transform_from_world_to_a.aligned();
+    let transform_from_world_to_b = transform_from_world_to_b.aligned();
 
     let Some(object_a) = voxel_object_manager.get_voxel_object(object_a_id) else {
         return;
@@ -1067,8 +1068,8 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
             transform_from_object_to_camera_space.transform_point(&voxel_center_in_object_space);
 
         let model_to_camera_transform = InstanceModelViewTransform {
-            translation: voxel_center_in_camera_space.as_vector().pack(),
-            rotation: transform_from_object_to_camera_space.rotation().pack(),
+            translation: voxel_center_in_camera_space.as_vector().compact(),
+            rotation: transform_from_object_to_camera_space.rotation().compact(),
             scaling: 0.5 * voxel_object.voxel_extent(),
         };
 

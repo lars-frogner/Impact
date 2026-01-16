@@ -13,10 +13,10 @@ use impact_gpu::{
 };
 use impact_math::{
     hash::ConstStringHash64,
-    quaternion::UnitQuaternionP,
+    quaternion::UnitQuaternionC,
     random::halton::HaltonSequence,
-    transform::{Isometry3, Projective3P},
-    vector::Vector4P,
+    transform::{Isometry3, Projective3C},
+    vector::Vector4C,
 };
 use std::{borrow::Cow, sync::LazyLock};
 
@@ -60,7 +60,7 @@ pub struct CameraGPUResource {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct CameraProjectionUniform {
-    transform: Projective3P,
+    transform: Projective3C,
     /// The corners are listed in the order consistent with
     /// `TriangleMesh::create_screen_filling_quad`, which means it can be
     /// indexed into using the `vertex_index` built-in in the vertex shader when
@@ -72,12 +72,12 @@ pub struct CameraProjectionUniform {
     /// z-coordinate of the point on the object it covers divided by the
     /// far-plane z-coordinate), we can reconstruct the camera-space position of
     /// the fragment from the depth.
-    frustum_far_plane_corners: [Vector4P; 4],
-    inverse_far_plane_z: Vector4P,
-    jitter_offsets: [Vector4P; JITTER_COUNT],
+    frustum_far_plane_corners: [Vector4C; 4],
+    inverse_far_plane_z: Vector4C,
+    jitter_offsets: [Vector4C; JITTER_COUNT],
 }
 
-static JITTER_OFFSETS: LazyLock<[Vector4P; JITTER_COUNT]> =
+static JITTER_OFFSETS: LazyLock<[Vector4C; JITTER_COUNT]> =
     LazyLock::new(CameraProjectionUniform::generate_jitter_offsets);
 
 impl CameraGPUResource {
@@ -166,8 +166,8 @@ impl CameraGPUResource {
     }
 
     /// Returns the camera rotation quaternion push constant.
-    pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternionP {
-        self.view_transform.rotation().pack()
+    pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternionC {
+        self.view_transform.rotation().compact()
     }
 
     /// Creates the bind group layout entry for the camera projection uniform,
@@ -235,7 +235,7 @@ impl CameraProjectionUniform {
     }
 
     fn new(camera: &impl BufferableCamera) -> Self {
-        let transform = camera.camera().projection_transform().pack();
+        let transform = camera.camera().projection_transform().compact();
 
         let frustum_far_plane_corners =
             Self::compute_far_plane_corners(camera.camera().view_frustum());
@@ -244,12 +244,12 @@ impl CameraProjectionUniform {
         // positions will be off because the corners may not be exactly at the
         // far distance due to inaccuracies
         let inverse_far_plane_z =
-            Vector4P::new(frustum_far_plane_corners[0].z().recip(), 0.0, 0.0, 0.0);
+            Vector4C::new(frustum_far_plane_corners[0].z().recip(), 0.0, 0.0, 0.0);
 
         let jitter_offsets = if camera.jitter_enabled() {
             *JITTER_OFFSETS
         } else {
-            [Vector4P::zeros(); JITTER_COUNT]
+            [Vector4C::zeros(); JITTER_COUNT]
         };
 
         Self {
@@ -260,18 +260,18 @@ impl CameraProjectionUniform {
         }
     }
 
-    fn compute_far_plane_corners(view_frustum: &Frustum) -> [Vector4P; 4] {
+    fn compute_far_plane_corners(view_frustum: &Frustum) -> [Vector4C; 4] {
         let corners = view_frustum.compute_corners();
         [
-            Vector4P::new(corners[1].x(), corners[1].y(), corners[1].z(), 0.0), // lower left
-            Vector4P::new(corners[5].x(), corners[5].y(), corners[5].z(), 0.0), // lower right
-            Vector4P::new(corners[7].x(), corners[7].y(), corners[7].z(), 0.0), // upper right
-            Vector4P::new(corners[3].x(), corners[3].y(), corners[3].z(), 0.0), // upper left
+            Vector4C::new(corners[1].x(), corners[1].y(), corners[1].z(), 0.0), // lower left
+            Vector4C::new(corners[5].x(), corners[5].y(), corners[5].z(), 0.0), // lower right
+            Vector4C::new(corners[7].x(), corners[7].y(), corners[7].z(), 0.0), // upper right
+            Vector4C::new(corners[3].x(), corners[3].y(), corners[3].z(), 0.0), // upper left
         ]
     }
 
-    fn generate_jitter_offsets() -> [Vector4P; JITTER_COUNT] {
-        let mut offsets = [Vector4P::zeros(); JITTER_COUNT];
+    fn generate_jitter_offsets() -> [Vector4C; JITTER_COUNT] {
+        let mut offsets = [Vector4C::zeros(); JITTER_COUNT];
         let halton_x = HaltonSequence::new(JITTER_BASES.0);
         let halton_y = HaltonSequence::new(JITTER_BASES.1);
         for ((offset, x), y) in offsets.iter_mut().zip(halton_x).zip(halton_y) {
