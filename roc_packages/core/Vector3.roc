@@ -1,6 +1,6 @@
 module [
     Vector3,
-    zero,
+    zeros,
     same,
     map,
     map2,
@@ -9,11 +9,11 @@ module [
     sub,
     scale,
     unscale,
-    flip,
+    flipped,
     dot,
     norm_squared,
     norm,
-    normalize,
+    normalized,
     cross,
     is_approx_eq,
     write_bytes,
@@ -24,7 +24,7 @@ import Builtin
 
 Vector3 : (F32, F32, F32)
 
-zero = (0.0, 0.0, 0.0)
+zeros = (0.0, 0.0, 0.0)
 
 same : F32 -> Vector3
 same = |val|
@@ -48,14 +48,14 @@ sub = |a, b| map2(a, b, Num.sub)
 scale = |vec, s| map(vec, |elem| Num.mul(elem, s))
 unscale = |vec, s| scale(vec, 1.0 / s)
 
-flip = |vec| (-vec.0, -vec.1, -vec.2)
+flipped = |vec| (-vec.0, -vec.1, -vec.2)
 
 dot = |a, b| map2(a, b, Num.mul) |> reduce(Num.add)
 
 norm_squared = |vec| dot(vec, vec)
 norm = |vec| vec |> norm_squared |> Num.sqrt
 
-normalize = |vec| vec |> unscale(norm(vec))
+normalized = |vec| vec |> unscale(norm(vec))
 
 cross = |(ax, ay, az), (bx, by, bz)|
     (

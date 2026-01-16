@@ -1,5 +1,5 @@
-# Hash: c16f0421009f9148
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: 7bb801e13c4e7bb1
+# Generated: 2026-01-16T10:02:28.912373492
 # Rust type: impact_physics::medium::UniformMedium
 # Type category: Inline
 module [
@@ -43,13 +43,13 @@ new = |mass_density, velocity|
 ## Creates a new vacuum medium (zero mass density and velocity).
 vacuum : {} -> UniformMedium
 vacuum = |{}|
-    new(0.0, Vector3.zero)
+    new(0.0, Vector3.zeros)
 
 ## Creates a new medium of Earth air at sea level and room temperature with
 ## no wind.
 still_air : {} -> UniformMedium
 still_air = |{}|
-    moving_air(Vector3.zero)
+    moving_air(Vector3.zeros)
 
 ## Creates a new medium of Earth air at sea level and room temperature with
 ## the given wind velocity.
@@ -60,7 +60,7 @@ moving_air = |velocity|
 ## Creates a new medium of water with no flow.
 still_water : {} -> UniformMedium
 still_water = |{}|
-    moving_water(Vector3.zero)
+    moving_water(Vector3.zeros)
 
 ## Creates a new medium of water with the given flow velocity.
 moving_water : Vector3.Vector3 -> UniformMedium

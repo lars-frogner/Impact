@@ -44,7 +44,7 @@ player =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 2.0, 0.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add
@@ -57,7 +57,7 @@ ground =
     |> Comp.ModelTransform.add_with_scale(1000)
     |> Setup.PlanarCollidable.add_new(
         Static,
-        Plane.new(UnitVector3.y_axis, 0.0),
+        Plane.new(UnitVector3.unit_y, 0.0),
         Physics.ContactResponseParameters.new(0.0, 0.0, 0.0),
     )
     |> Setup.UniformColor.add((0.9, 0.9, 0.9))

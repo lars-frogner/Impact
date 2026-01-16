@@ -35,14 +35,14 @@ impl UniformMedium {
     }
 
     /// Creates a new vacuum medium (zero mass density and velocity).
-    #[roc(body = "new(0.0, Vector3.zero)")]
+    #[roc(body = "new(0.0, Vector3.zeros)")]
     pub fn vacuum() -> Self {
         Self::new(0.0, VelocityC::zeros())
     }
 
     /// Creates a new medium of Earth air at sea level and room temperature with
     /// no wind.
-    #[roc(body = "moving_air(Vector3.zero)")]
+    #[roc(body = "moving_air(Vector3.zeros)")]
     pub fn still_air() -> Self {
         Self::moving_air(VelocityC::zeros())
     }
@@ -55,7 +55,7 @@ impl UniformMedium {
     }
 
     /// Creates a new medium of water with no flow.
-    #[roc(body = "moving_water(Vector3.zero)")]
+    #[roc(body = "moving_water(Vector3.zeros)")]
     pub fn still_water() -> Self {
         Self::moving_water(VelocityC::zeros())
     }

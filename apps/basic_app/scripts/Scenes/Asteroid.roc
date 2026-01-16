@@ -7,7 +7,7 @@ module [
 import core.Radians
 import core.Plane
 import core.UnitQuaternion
-import core.UnitVector3 exposing [y_axis]
+import core.UnitVector3 exposing [unit_y]
 import core.Vector3
 import pf.Command
 import pf.Entity
@@ -96,7 +96,7 @@ player =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 0.0, 0.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add
@@ -113,7 +113,7 @@ laser =
     |> Setup.SceneParent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
     |> Setup.CylinderMesh.add_new(100, 0.02, 16)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
@@ -149,7 +149,7 @@ ground =
     |> Setup.UniformRoughness.add(0.5)
     |> Setup.PlanarCollidable.add_new(
         Static,
-        Plane.new(y_axis, 0),
+        Plane.new(unit_y, 0),
         Physics.ContactResponseParameters.new(0.2, 0.7, 0.5),
     )
 
@@ -162,7 +162,7 @@ asteroid =
     |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
     # |> Setup.SameVoxelType.add_new("Default")
     # |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
-    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(0)))
+    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(0)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
         Dynamic,

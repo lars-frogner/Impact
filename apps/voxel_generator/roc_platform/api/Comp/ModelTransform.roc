@@ -1,5 +1,5 @@
-# Hash: 23b1d83196ac544f
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: 8392694477884630
+# Generated: 2026-01-16T10:03:37.04536142
 # Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
 module [
@@ -102,7 +102,7 @@ add_multiple_with_offset = |entity_data, offset|
 ## relative to that of the model.
 with_scale : F32 -> ModelTransform
 with_scale = |scale|
-    with_offset_and_scale(Vector3.zero, scale)
+    with_offset_and_scale(Vector3.zeros, scale)
 
 ## Creates a transform where the parent entity's space has the given scale
 ## relative to that of the model.

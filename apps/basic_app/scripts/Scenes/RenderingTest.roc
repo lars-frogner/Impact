@@ -84,7 +84,7 @@ player =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 2.0, 0.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add
@@ -97,7 +97,7 @@ dragon =
     |> Comp.ModelTransform.add_with_scale(0.06)
     |> Comp.ReferenceFrame.add_new(
         (0.0, 3.5, 11.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
     |> Setup.UniformColor.add((0.1, 0.2, 0.6))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
@@ -123,8 +123,8 @@ abstract_object =
     |> Comp.Motion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0,
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, 0),
-        Physics.AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(50)),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, 0),
+        Physics.AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(50)),
     )
     |> Setup.UniformColor.add_copper
     |> Setup.UniformSpecularReflectance.add_metal
@@ -139,8 +139,8 @@ abstract_pyramid =
     |> Comp.Motion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0,
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, 0.4),
-        Physics.AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(-60)),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, 0.4),
+        Physics.AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(-60)),
     )
     |> Setup.UniformColor.add((0.7, 0.3, 0.2))
     |> Setup.UniformRoughness.add(0.95)
@@ -177,8 +177,8 @@ abstract_cube =
     |> Comp.Motion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0.0,
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, 0.7),
-        Physics.AngularVelocity.new(UnitVector3.x_axis, Radians.from_degrees(30)),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, 0.7),
+        Physics.AngularVelocity.new(UnitVector3.unit_x, Radians.from_degrees(30)),
     )
     |> Setup.UniformColor.add_gold
     |> Setup.UniformSpecularReflectance.add_metal
@@ -213,8 +213,8 @@ upper_x_wall =
     |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_new(
         (25, 5, 0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, Num.pi / 2)
-        |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.z_axis, Num.pi / 2)),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, Num.pi / 2)
+        |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.unit_z, Num.pi / 2)),
     )
 
 lower_x_wall =
@@ -222,8 +222,8 @@ lower_x_wall =
     |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_new(
         (-25, 5, 0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, Num.pi / 2)
-        |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.z_axis, (-Num.pi) / 2)),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, Num.pi / 2)
+        |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.unit_z, (-Num.pi) / 2)),
     )
 
 upper_z_wall =
@@ -231,7 +231,7 @@ upper_z_wall =
     |> Comp.ModelTransform.add_with_scale(50)
     |> Comp.ReferenceFrame.add_new(
         (0, 5, 25),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
 
 bulb_light =

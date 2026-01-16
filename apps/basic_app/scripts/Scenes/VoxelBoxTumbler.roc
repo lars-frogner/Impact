@@ -9,7 +9,7 @@ import core.Plane
 import core.Point3
 import core.Radians
 import core.UnitQuaternion
-import core.UnitVector3 exposing [x_axis, y_axis, z_axis]
+import core.UnitVector3 exposing [unit_x, unit_y, unit_z]
 import core.Vector3
 import pf.Comp.AmbientEmission
 import pf.Setup.ConstantRotation
@@ -119,7 +119,7 @@ laser =
     |> Setup.SceneParent.add_new(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
     |> Setup.CylinderMesh.add_new(100, 0.02, 16)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
@@ -200,16 +200,16 @@ create_room! = |extent, angular_speed|
     plane_y = (-offset) * extent
 
     angular_velocity =
-        AngularVelocity.new(z_axis, Radians.from_degrees(angular_speed))
+        AngularVelocity.new(unit_z, Radians.from_degrees(angular_speed))
 
     wall_orientations =
         [
-            (x_axis, 0),
-            (x_axis, Num.pi),
-            (z_axis, Num.pi / 2),
-            (z_axis, (-Num.pi) / 2),
-            (x_axis, Num.pi / 2),
-            (x_axis, (-Num.pi) / 2),
+            (unit_x, 0),
+            (unit_x, Num.pi),
+            (unit_z, Num.pi / 2),
+            (unit_z, (-Num.pi) / 2),
+            (unit_x, Num.pi / 2),
+            (unit_x, (-Num.pi) / 2),
         ]
         |> List.map(|(axis, angle)| UnitQuaternion.from_axis_angle(axis, angle))
 
@@ -234,7 +234,7 @@ create_room! = |extent, angular_speed|
         )?
         |> Setup.PlanarCollidable.add_multiple_new(
             Same(Static),
-            Same(Plane.new(y_axis, plane_y)),
+            Same(Plane.new(unit_y, plane_y)),
             Same(Physics.ContactResponseParameters.new(0.2, 0.7, 0.5)),
         )?
         |> Setup.UniformColor.add_multiple(

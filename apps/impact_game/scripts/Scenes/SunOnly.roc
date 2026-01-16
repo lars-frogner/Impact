@@ -94,7 +94,7 @@ sun =
     |> Setup.VoxelSphere.add_new(0.5, 200)
     |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 2.0, 0)
     |> Setup.SameVoxelType.add_new("Default")
-    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(0)))
+    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(0)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
         Dynamic,
@@ -107,7 +107,7 @@ asteroid =
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 30))
     |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 0)
     |> Setup.SameVoxelType.add_new("Default")
-    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.y_axis, Radians.from_degrees(0)))
+    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(0)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
         Dynamic,

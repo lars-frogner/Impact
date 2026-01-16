@@ -4,8 +4,8 @@ module [
     map,
     map2,
     translate,
-    distance,
-    distance_squared,
+    distance_between,
+    squared_distance_between,
     is_approx_eq,
     write_bytes,
     from_bytes,
@@ -21,12 +21,12 @@ translate : Point3, Vector3 -> Point3
 translate = |point, translation|
     Vector3.add(point, translation)
 
-distance_squared : Point3, Point3 -> F32
-distance_squared = |point_a, point_b|
+squared_distance_between : Point3, Point3 -> F32
+squared_distance_between = |point_a, point_b|
     Vector3.norm_squared(Vector3.sub(point_b, point_a))
 
-distance : Point3, Point3 -> F32
-distance = |point_a, point_b|
+distance_between : Point3, Point3 -> F32
+distance_between = |point_a, point_b|
     Vector3.norm(Vector3.sub(point_b, point_a))
 
 map = Vector3.map

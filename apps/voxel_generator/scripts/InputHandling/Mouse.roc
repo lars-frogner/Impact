@@ -58,7 +58,7 @@ rotate_object! = |ang_delta_x, ang_delta_y, ang_x, ang_y|
     dir = direction_from_cursor_angles(rel_ang_x, rel_ang_y)
     prev_dir = direction_from_cursor_angles(prev_rel_ang_x, prev_rel_ang_y)
 
-    camera_space_rotation_axis = Vector3.cross(prev_dir, dir) |> Vector3.normalize
+    camera_space_rotation_axis = Vector3.cross(prev_dir, dir) |> Vector3.normalized
     rotation_angle = Num.acos(NumUtil.clamp(Vector3.dot(prev_dir, dir), -1.0, 1.0))
 
     rotation_axis = camera_frame.orientation |> UnitQuaternion.rotate_vector(camera_space_rotation_axis)
@@ -73,7 +73,7 @@ angular_position_of_object_center = |camera_frame, object_frame|
     object_offset_world_space = Vector3.sub(object_frame.position, camera_frame.position)
 
     # Convert to camera space by rotating with the inverse camera orientation
-    inverse_camera_orientation = UnitQuaternion.invert(camera_frame.orientation)
+    inverse_camera_orientation = UnitQuaternion.inverse(camera_frame.orientation)
     object_offset_camera_space = UnitQuaternion.rotate_vector(inverse_camera_orientation, object_offset_world_space)
 
     (x, y, z) = object_offset_camera_space
@@ -85,7 +85,7 @@ angular_position_of_object_center = |camera_frame, object_frame|
     (object_ang_x, object_ang_y)
 
 direction_from_cursor_angles = |ang_x, ang_y|
-    Vector3.normalize((Num.tan(ang_x), Num.tan(ang_y), 1.0))
+    Vector3.normalized((Num.tan(ang_x), Num.tan(ang_y), 1.0))
 
 pan_object! = |ang_delta_x, ang_delta_y|
     camera_frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.camera)?
@@ -93,7 +93,7 @@ pan_object! = |ang_delta_x, ang_delta_y|
 
     (view_x, view_y, _) = UnitQuaternion.to_rotation_matrix(camera_frame.orientation)
 
-    dist = Point3.distance(camera_frame.position, object_frame.position)
+    dist = Point3.distance_between(camera_frame.position, object_frame.position)
 
     offset_x = view_x |> Vector3.scale(ang_delta_x * dist)
     offset_y = view_y |> Vector3.scale(ang_delta_y * dist)
@@ -111,7 +111,7 @@ zoom_object! = |delta_y|
 
     (_, _, view_z) = UnitQuaternion.to_rotation_matrix(camera_frame.orientation)
 
-    dist = Point3.distance(camera_frame.position, object_frame.position)
+    dist = Point3.distance_between(camera_frame.position, object_frame.position)
 
     offset_z = view_z |> Vector3.scale(delta_y * dist * zoom_sensitivity)
 
@@ -127,19 +127,19 @@ zoom_object! = |delta_y|
 
 #    (view_x, view_y, view_z) = UnitQuaternion.to_rotation_matrix(camera_frame.orientation)
 
-#    dist = Point3.distance(camera_frame.position, object_frame.position)
+#    dist = Point3.distance_between(camera_frame.position, object_frame.position)
 
 #    offset_x = view_x |> Vector3.scale(ang_delta_x * dist)
 #    offset_y = view_y |> Vector3.scale(ang_delta_y * dist)
 #    offset_z = view_z |> Vector3.scale(dist)
 
-#    start_direction = offset_z |> Vector3.normalize
-#    end_direction = offset_z |> Vector3.add(offset_x) |> Vector3.add(offset_y) |> Vector3.normalize
+#    start_direction = offset_z |> Vector3.normalized
+#    end_direction = offset_z |> Vector3.add(offset_x) |> Vector3.add(offset_y) |> Vector3.normalized
 
 #    direction_cross = Vector3.cross(start_direction, end_direction)
 #    direction_dot = Vector3.dot(start_direction, end_direction)
 
-#    rotation_axis = direction_cross |> Vector3.normalize
+#    rotation_axis = direction_cross |> Vector3.normalized
 #    rotation_angle = Num.acos(direction_dot)
 
 #    rotation = UnitQuaternion.from_axis_angle(rotation_axis, rotation_angle)

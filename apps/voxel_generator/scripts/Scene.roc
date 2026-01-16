@@ -35,7 +35,7 @@ camera =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0.0, 15.0, 30.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, -0.4),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, -0.4),
     )
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add

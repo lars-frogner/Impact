@@ -7,8 +7,8 @@ module [
     mul,
     norm_squared,
     norm,
-    normalize,
-    invert,
+    normalized,
+    inverse,
     rotate_vector,
     to_rotation_matrix,
     write_bytes,
@@ -23,7 +23,7 @@ import Matrix3 exposing [Matrix3]
 
 UnitQuaternion : (F32, F32, F32, F32)
 
-identity = from_parts(Vector3.zero, 1.0)
+identity = from_parts(Vector3.zeros, 1.0)
 
 from_axis_angle : UnitVector3, Radians -> UnitQuaternion
 from_axis_angle = |axis, angle|
@@ -62,16 +62,16 @@ norm : UnitQuaternion -> F32
 norm = |quat|
     Num.sqrt(norm_squared(quat))
 
-normalize : UnitQuaternion -> UnitQuaternion
-normalize = |quat|
+normalized : UnitQuaternion -> UnitQuaternion
+normalized = |quat|
     inv_norm = 1.0 / norm(quat)
     (imag, real) = parts(quat)
     from_parts(Vector3.scale(imag, inv_norm), real * inv_norm)
 
-invert : UnitQuaternion -> UnitQuaternion
-invert = |quat|
+inverse : UnitQuaternion -> UnitQuaternion
+inverse = |quat|
     (imag, real) = parts(quat)
-    from_parts(Vector3.flip(imag), real)
+    from_parts(Vector3.flipped(imag), real)
 
 rotate_vector : UnitQuaternion, Vector3 -> Vector3
 rotate_vector = |quat, vec|
