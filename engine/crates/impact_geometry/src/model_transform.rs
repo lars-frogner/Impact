@@ -45,7 +45,7 @@ impl ModelTransform {
 
     /// Creates a transform where the parent entity's space has the given scale
     /// relative to that of the model.
-    #[roc(body = "with_offset_and_scale(Vector3.zero, scale)")]
+    #[roc(body = "with_offset_and_scale(Vector3.zeros, scale)")]
     #[inline]
     pub const fn with_scale(scale: f32) -> Self {
         Self::with_offset_and_scale(Vector3C::zeros(), scale)

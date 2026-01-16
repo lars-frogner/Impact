@@ -1,5 +1,5 @@
-# Hash: 1ba656cadab2a98c
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: ee5b6fdbc21ce3ae
+# Generated: 2026-01-16T10:02:28.912373492
 # Rust type: impact_physics::quantities::Motion
 # Type category: Component
 module [
@@ -89,7 +89,7 @@ add_multiple_linear = |entity_data, velocity|
 ## Motion with with the given angular velocity and zero linear velocity.
 angular : Physics.AngularVelocity.AngularVelocity -> Motion
 angular = |velocity|
-    new(Vector3.zero, velocity)
+    new(Vector3.zeros, velocity)
 
 ## Motion with with the given angular velocity and zero linear velocity.
 ## Adds the component to the given entity's data.
@@ -114,7 +114,7 @@ add_multiple_angular = |entity_data, velocity|
 ## No linear or angular motion.
 stationary : {} -> Motion
 stationary = |{}|
-    linear(Vector3.zero)
+    linear(Vector3.zeros)
 
 ## No linear or angular motion.
 ## Adds the component to the given entity's data.

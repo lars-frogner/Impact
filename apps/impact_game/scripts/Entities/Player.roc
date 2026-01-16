@@ -94,7 +94,7 @@ handle_keyboard_event! = |{ key, state }|
                     KeyA -> add_thruster_force!(state, Right)?
                     KeyQ -> add_thruster_force!(state, Down)?
                     KeyE -> add_thruster_force!(state, Up)?
-                    KeyY -> set_alignment_direction!(state, Fixed(UnitVector3.neg_y_axis))?
+                    KeyY -> set_alignment_direction!(state, Fixed(UnitVector3.neg_unit_y))?
                     KeyG -> set_alignment_direction!(state, GravityForce)?
                     _ -> None
 
@@ -156,7 +156,7 @@ player =
     # |> Comp.ReferenceFrame.add_unoriented((0.0, 0.0, -150.0))
     |> Comp.ReferenceFrame.add_new(
         (0.0, 0.0, -150.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, -3 * Num.pi / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, -3 * Num.pi / 2),
     )
     |> Comp.Motion.add_stationary
     |> Comp.AngularVelocityControl.add_new(
@@ -166,7 +166,7 @@ player =
     |> Comp.AngularVelocityControlParent.add({ entity_id: entity_ids.player })
     |> Setup.DynamicRigidBodyInertialProperties.add_new(
         player_mass,
-        Vector3.zero,
+        Vector3.zeros,
         Matrix3.diagonal(
             (
                 player_moment_of_inertia,
@@ -181,12 +181,12 @@ player =
         Physics.ContactResponseParameters.new(0.0, 0, 0),
     )
     |> Setup.LocalForce.add_new(
-        Vector3.zero,
+        Vector3.zeros,
         Point3.origin,
     )
     |> Comp.DynamicGravity.add
     |> Setup.GravityAlignmentTorque.add_new(
-        UnitVector3.neg_y_axis,
+        UnitVector3.neg_unit_y,
         2.0,
         0.0,
         2.0,
@@ -209,7 +209,7 @@ player_head =
     |> Setup.SceneGraphGroup.add
     |> Comp.ReferenceFrame.add_new(
         (0.0, 0.5 * body_segment_length + body_radius, 1.2 * body_radius),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
     |> Comp.Motion.add_stationary
     |> Comp.AngularVelocityControl.add_new(
@@ -227,7 +227,7 @@ laser =
     |> Setup.SceneParent.add_new(entity_ids.player_head)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
     |> Setup.CylinderMesh.add_new(laser_range, 2 * laser_visual_radius, 16)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))

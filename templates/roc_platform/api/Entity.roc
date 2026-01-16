@@ -49,7 +49,7 @@ ReadComponentErr : [
 
 id : Str -> Id
 id = |string|
-    @Id(Hashing.hash_str_64(string) |> Hashing.unwrap_u64)
+    @Id(Hashing.hash_str_64(string) |> Hashing.to_u64)
 
 new_component_data = @ComponentData([])
 

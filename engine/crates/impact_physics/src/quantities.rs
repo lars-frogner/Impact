@@ -122,14 +122,14 @@ impl Motion {
     }
 
     /// Motion with with the given angular velocity and zero linear velocity.
-    #[roc(body = "new(Vector3.zero, velocity)")]
+    #[roc(body = "new(Vector3.zeros, velocity)")]
     #[inline]
     pub const fn angular(velocity: AngularVelocityC) -> Self {
         Self::new(VelocityC::zeros(), velocity)
     }
 
     /// No linear or angular motion.
-    #[roc(body = "linear(Vector3.zero)")]
+    #[roc(body = "linear(Vector3.zeros)")]
     #[inline]
     pub const fn stationary() -> Self {
         Self::linear(VelocityC::zeros())
@@ -301,7 +301,7 @@ impl AngularVelocityC {
     }
 
     /// Creates a new angular velocity with zero angular speed.
-    #[roc(body = "{ axis_of_rotation: UnitVector3.y_axis, angular_speed: 0.0 }")]
+    #[roc(body = "{ axis_of_rotation: UnitVector3.unit_y, angular_speed: 0.0 }")]
     #[inline]
     pub const fn zero() -> Self {
         Self {

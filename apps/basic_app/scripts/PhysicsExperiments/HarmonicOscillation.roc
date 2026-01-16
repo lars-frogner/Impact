@@ -70,7 +70,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         |> Setup.HarmonicOscillatorTrajectory.add_new(
             0.25 * period,
             reference_position,
-            UnitVector3.y_axis,
+            UnitVector3.unit_y,
             amplitude,
             period,
         )

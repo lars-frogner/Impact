@@ -3,8 +3,8 @@ module [
     Hash64,
     StringHash32,
     StringHash64,
-    unwrap_u32,
-    unwrap_u64,
+    to_u32,
+    to_u64,
     hash_str_32,
     hash_str_64,
     hash32,
@@ -26,8 +26,8 @@ Hash64 := U64 implements [Eq]
 StringHash32 : Hash32
 StringHash64 : Hash64
 
-unwrap_u32 = |@Hash32(val)| val
-unwrap_u64 = |@Hash64(val)| val
+to_u32 = |@Hash32(val)| val
+to_u64 = |@Hash64(val)| val
 
 ## Hashes the given string into a [Hash32] using the FNV-a1 algorithm.
 hash_str_32 : Str -> Hash32

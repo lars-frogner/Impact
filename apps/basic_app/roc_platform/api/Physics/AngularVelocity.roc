@@ -1,5 +1,5 @@
-# Hash: f57d4f66f1f41373
-# Generated: 2026-01-16T09:36:43.604863635
+# Hash: 4f7128830ec2f80a
+# Generated: 2026-01-16T10:02:28.912373492
 # Rust type: impact_physics::quantities::AngularVelocityC
 # Type category: POD
 module [
@@ -43,7 +43,7 @@ from_vector = |angular_velocity_vector|
 ## Creates a new angular velocity with zero angular speed.
 zero : {} -> AngularVelocity
 zero = |{}|
-    { axis_of_rotation: UnitVector3.y_axis, angular_speed: 0.0 }
+    { axis_of_rotation: UnitVector3.unit_y, angular_speed: 0.0 }
 
 ## Serializes a value of [AngularVelocity] into the binary representation
 ## expected by the engine and appends the bytes to the list.

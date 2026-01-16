@@ -60,7 +60,7 @@ camera =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 0),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(50), 0.01, 1000)
 
@@ -69,8 +69,8 @@ tilted_camera =
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 0),
         UnitQuaternion.mul(
-            UnitQuaternion.from_axis_angle(UnitVector3.x_axis, 0.5),
-            UnitQuaternion.from_axis_angle(UnitVector3.y_axis, Num.pi),
+            UnitQuaternion.from_axis_angle(UnitVector3.unit_x, 0.5),
+            UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
         ),
     )
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(50), 0.01, 1000)
@@ -193,7 +193,7 @@ emissive_square =
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 1.5),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformEmissiveLuminance.add(1e6)
@@ -204,7 +204,7 @@ obscuring_square =
     |> Comp.ModelTransform.add_with_scale(0.5)
     |> Comp.ReferenceFrame.add_new(
         (0, 0, 1.4),
-        UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
     |> Setup.UniformColor.add((0, 0, 0))
 
@@ -228,7 +228,7 @@ ambient_occlusion_box =
     |> Comp.ModelTransform.add_with_scale(ao_box_scale)
     |> Comp.ReferenceFrame.add_new(
         (ao_box_hshift, ao_ground_height + ao_box_scale / 2, 3),
-        UnitQuaternion.from_axis_angle(UnitVector3.y_axis, -0.1),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_y, -0.1),
     )
     |> add_diffuse
 

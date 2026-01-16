@@ -1,11 +1,11 @@
 module [
     UnitVector3,
-    x_axis,
-    y_axis,
-    z_axis,
-    neg_x_axis,
-    neg_y_axis,
-    neg_z_axis,
+    unit_x,
+    unit_y,
+    unit_z,
+    neg_unit_x,
+    neg_unit_y,
+    neg_unit_z,
     from,
     from_and_get,
     try_from_and_get,
@@ -17,12 +17,12 @@ import Vector3 exposing [Vector3]
 
 UnitVector3 : (F32, F32, F32)
 
-x_axis = (1.0, 0.0, 0.0)
-y_axis = (0.0, 1.0, 0.0)
-z_axis = (0.0, 0.0, 1.0)
-neg_x_axis = (-1.0, 0.0, 0.0)
-neg_y_axis = (0.0, -1.0, 0.0)
-neg_z_axis = (0.0, 0.0, -1.0)
+unit_x = (1.0, 0.0, 0.0)
+unit_y = (0.0, 1.0, 0.0)
+unit_z = (0.0, 0.0, 1.0)
+neg_unit_x = (-1.0, 0.0, 0.0)
+neg_unit_y = (0.0, -1.0, 0.0)
+neg_unit_z = (0.0, 0.0, -1.0)
 
 from : Vector3 -> UnitVector3
 from = |vec|

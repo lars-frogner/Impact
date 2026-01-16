@@ -50,7 +50,7 @@ create_entities! = |position|
         cone_base
         |> Comp.ReferenceFrame.add_new(
             position,
-            UnitQuaternion.from_axis_angle(UnitVector3.z_axis, 3.0),
+            UnitQuaternion.from_axis_angle(UnitVector3.unit_z, 3.0),
         )
         |> Setup.UniformColor.add((0.1, 0.1, 0.7))
         |> Setup.DetailedDragProperties.add_new(1.0)
@@ -59,7 +59,7 @@ create_entities! = |position|
         cone_base
         |> Comp.ReferenceFrame.add_new(
             Point3.translate(position, (-5, 0, 0)),
-            UnitQuaternion.from_axis_angle(UnitVector3.z_axis, 3.0),
+            UnitQuaternion.from_axis_angle(UnitVector3.unit_z, 3.0),
         )
         |> Setup.UniformColor.add((0.7, 0.1, 0.1))
 

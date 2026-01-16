@@ -116,7 +116,7 @@ impl ConstantAccelerationTrajectory {
         initial_time,
         initial_position,
         velocity,
-        Vector3.zero,
+        Vector3.zeros,
     )
     "#)]
     pub fn with_constant_velocity(

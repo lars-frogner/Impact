@@ -1,6 +1,6 @@
 module [
     Vector4,
-    zero,
+    zeros,
     same,
     map,
     map2,
@@ -21,7 +21,7 @@ import Builtin
 
 Vector4 : (F32, F32, F32, F32)
 
-zero = (0.0, 0.0, 0.0, 0.0)
+zeros = (0.0, 0.0, 0.0, 0.0)
 
 same : F32 -> Vector4
 same = |val|

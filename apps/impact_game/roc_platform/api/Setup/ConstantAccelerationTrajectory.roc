@@ -1,5 +1,5 @@
-# Hash: 3ef8ee44d6225ed0
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: 403e6c796fc5a183
+# Generated: 2026-01-16T10:02:50.675953324
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectory
 # Type category: Component
 module [
@@ -72,7 +72,7 @@ with_constant_velocity = |initial_time, initial_position, velocity|
         initial_time,
         initial_position,
         velocity,
-        Vector3.zero,
+        Vector3.zeros,
     )
 
 ## Creates a new constant velocity trajectory (no acceleration) with the
