@@ -141,6 +141,14 @@ pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Resu
             mode,
             force,
         } => physics::update_local_force(&engine.simulator().oread(), generator_id, mode, force),
+        PhysicsCommand::SetAlignmentTorqueDirection {
+            generator_id,
+            direction,
+        } => physics::set_alignment_torque_direction(
+            &engine.simulator().oread(),
+            generator_id,
+            direction,
+        ),
     }
     .context("Failed to execute physics command")
 }

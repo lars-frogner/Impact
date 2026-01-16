@@ -8,6 +8,7 @@ use impact_math::hash::StringHash32;
 use impact_mesh::TriangleMeshID;
 use impact_physics::{
     force::{
+        alignment_torque::AlignmentTorqueGeneratorID,
         constant_acceleration::ConstantAccelerationGeneratorID,
         detailed_drag::DetailedDragForceGeneratorID,
         dynamic_gravity::DynamicGravity,
@@ -155,12 +156,14 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
-        |torque: &FixedDirectionAlignmentTorque, rigid_body_id: &DynamicRigidBodyID| {
+        |torque: &FixedDirectionAlignmentTorque,
+         rigid_body_id: &DynamicRigidBodyID|
+         -> AlignmentTorqueGeneratorID {
             setup::setup_fixed_direction_alignment_torque(
                 &mut force_generator_manager,
                 *rigid_body_id,
                 *torque,
-            );
+            )
         }
     );
 
@@ -170,12 +173,14 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         components,
-        |torque: &GravityAlignmentTorque, rigid_body_id: &DynamicRigidBodyID| {
+        |torque: &GravityAlignmentTorque,
+         rigid_body_id: &DynamicRigidBodyID|
+         -> AlignmentTorqueGeneratorID {
             setup::setup_gravity_alignment_torque(
                 &mut force_generator_manager,
                 *rigid_body_id,
                 *torque,
-            );
+            )
         }
     );
 

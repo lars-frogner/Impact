@@ -1756,6 +1756,59 @@ impl_roc_for_library_provided_primitives! {
     UnitVector3P => core, None,    UnitVector3, UnitVector3, None,    PrecisionIrrelevant,
 }
 
+#[cfg(feature = "arbitrary")]
+impl arbitrary::Arbitrary<'_> for UnitVector3 {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+        let x = arbitrary_norm_f32(u)?;
+        let y = arbitrary_norm_f32(u)?;
+        let z = arbitrary_norm_f32(u)?;
+        Ok(
+            if approx::abs_diff_eq!(x, 0.0)
+                && approx::abs_diff_eq!(y, 0.0)
+                && approx::abs_diff_eq!(z, 0.0)
+            {
+                Self::unit_y()
+            } else {
+                Self::normalized_from(Vector3::new(x, y, z))
+            },
+        )
+    }
+
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        let size = 3 * std::mem::size_of::<i32>();
+        (size, Some(size))
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl arbitrary::Arbitrary<'_> for UnitVector3P {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+        let x = arbitrary_norm_f32(u)?;
+        let y = arbitrary_norm_f32(u)?;
+        let z = arbitrary_norm_f32(u)?;
+        Ok(
+            if approx::abs_diff_eq!(x, 0.0)
+                && approx::abs_diff_eq!(y, 0.0)
+                && approx::abs_diff_eq!(z, 0.0)
+            {
+                Self::unit_y()
+            } else {
+                Self::normalized_from(Vector3P::new(x, y, z))
+            },
+        )
+    }
+
+    fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+        let size = 3 * std::mem::size_of::<i32>();
+        (size, Some(size))
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+fn arbitrary_norm_f32(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<f32> {
+    Ok((f64::from(u.int_in_range(0..=1000000)?) / 1000000.0) as f32)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::op_ref)]

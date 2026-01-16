@@ -1,5 +1,5 @@
-# Hash: 445e905dcc872978
-# Generated: 2026-01-14T12:38:27.753362153
+# Hash: f6cb590ecc551871
+# Generated: 2026-01-16T08:39:26.799271369
 # Rust type: impact::command::physics::PhysicsCommand
 # Type category: Inline
 module [
@@ -9,7 +9,9 @@ module [
 ]
 
 import Command.LocalForceUpdateMode
+import Comp.AlignmentTorqueGeneratorID
 import Comp.LocalForceGeneratorID
+import Physics.AlignmentDirection
 import core.Vector3
 
 PhysicsCommand : [
@@ -17,6 +19,10 @@ PhysicsCommand : [
             generator_id : Comp.LocalForceGeneratorID.LocalForceGeneratorID,
             mode : Command.LocalForceUpdateMode.LocalForceUpdateMode,
             force : Vector3.Vector3,
+        },
+    SetAlignmentTorqueDirection {
+            generator_id : Comp.AlignmentTorqueGeneratorID.AlignmentTorqueGeneratorID,
+            direction : Physics.AlignmentDirection.AlignmentDirection,
         },
 ]
 
@@ -32,6 +38,13 @@ write_bytes = |bytes, value|
             |> Comp.LocalForceGeneratorID.write_bytes(generator_id)
             |> Command.LocalForceUpdateMode.write_bytes(mode)
             |> Vector3.write_bytes(force)
+
+        SetAlignmentTorqueDirection { generator_id, direction } ->
+            bytes
+            |> List.reserve(22)
+            |> List.append(1)
+            |> Comp.AlignmentTorqueGeneratorID.write_bytes(generator_id)
+            |> Physics.AlignmentDirection.write_bytes(direction)
 
 ## Deserializes a value of [PhysicsCommand] from its bytes in the
 ## representation used by the engine.
@@ -49,6 +62,15 @@ from_bytes = |bytes|
                         force: data_bytes |> List.sublist({ start: 9, len: 12 }) |> Vector3.from_bytes?,
                     },
                 )
+
+            [1, .. as data_bytes] ->
+                Ok(
+                    SetAlignmentTorqueDirection     {
+                        generator_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.AlignmentTorqueGeneratorID.from_bytes?,
+                        direction: data_bytes |> List.sublist({ start: 8, len: 13 }) |> Physics.AlignmentDirection.from_bytes?,
+                    },
+                )
+
 
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))
