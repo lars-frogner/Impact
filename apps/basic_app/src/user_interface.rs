@@ -41,7 +41,7 @@ impl CustomPanels for AppOptions {
         if !self.show_app_options {
             return;
         }
-        option_panel(ctx, config, "app_option_panel", |ui| {
+        option_panel(ctx, "app_option_panel", config.alpha, |ui| {
             option_group(ui, "app_options", |ui| {
                 self.run_app_options(ui);
             });
