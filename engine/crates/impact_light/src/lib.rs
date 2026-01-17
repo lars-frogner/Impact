@@ -11,7 +11,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::LightGPUResources;
 use impact_geometry::{
-    AxisAlignedBox, Frustum, OrientedBox, Sphere,
+    AxisAlignedBox, Frustum, Sphere,
     projection::{CubeMapper, CubemapFace, OrthographicTransform},
 };
 use impact_gpu::{
@@ -1337,12 +1337,6 @@ impl ShadowableOmnidirectionalLight {
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
 
-    /// Computes the frustum for the given positive z cubemap face in light
-    /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
-        CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
-    }
-
     /// Computes the frustum for the given cubemap face in camera space.
     pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum {
         CubeMapper::compute_transformed_frustum_for_face(
@@ -1526,18 +1520,6 @@ impl ShadowableUnidirectionalLight {
         cascade_idx: CascadeIdx,
     ) -> AxisAlignedBox {
         self.orthographic_transforms[cascade_idx as usize].compute_aabb()
-    }
-
-    /// Creates an oriented bounding box in the light's reference frame
-    /// containing all models that may cast visible shadows into the given
-    /// cascade.
-    pub fn create_light_space_orthographic_obb_for_cascade(
-        &self,
-        cascade_idx: CascadeIdx,
-    ) -> OrientedBox {
-        OrientedBox::from_axis_aligned_box(
-            &self.create_light_space_orthographic_aabb_for_cascade(cascade_idx),
-        )
     }
 
     /// Returns the array of linear depths (not the non-linear clip space
