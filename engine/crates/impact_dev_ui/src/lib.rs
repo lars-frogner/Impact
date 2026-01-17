@@ -23,6 +23,7 @@ use impact::{
 };
 use option_panels::{
     gizmo::GizmoOptionPanel, physics::PhysicsOptionPanel, rendering::RenderingOptionPanel,
+    ui::UIOptionPanel,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -34,6 +35,7 @@ use toolbar::Toolbar;
 #[derive(Clone, Debug, Default)]
 pub struct UserInterface {
     toolbar: Toolbar,
+    ui_option_panel: UIOptionPanel,
     rendering_option_panel: RenderingOptionPanel,
     physics_option_panel: PhysicsOptionPanel,
     gizmo_option_panel: GizmoOptionPanel,
@@ -51,6 +53,7 @@ pub struct UserInterface {
 pub struct UserInterfaceConfig {
     pub interactive: bool,
     pub alpha: f32,
+    pub show_ui_options: bool,
     pub show_rendering_options: bool,
     pub show_physics_options: bool,
     pub show_gizmo_options: bool,
@@ -126,6 +129,9 @@ impl UserInterface {
                 self.toolbar
                     .run(ctx, &mut self.config, engine, custom_panels);
 
+                if self.config.show_ui_options {
+                    self.ui_option_panel.run(ctx, &mut self.config);
+                }
                 if self.config.show_rendering_options {
                     self.rendering_option_panel.run(
                         ctx,
@@ -193,6 +199,7 @@ impl Default for UserInterfaceConfig {
         Self {
             interactive: true,
             alpha: 0.85,
+            show_ui_options: false,
             show_rendering_options: false,
             show_physics_options: false,
             show_gizmo_options: false,

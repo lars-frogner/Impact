@@ -41,7 +41,7 @@ impl CustomPanels for GameOptions {
         if !self.show_game_options {
             return;
         }
-        option_panel(ctx, config, "game_option_panel", |ui| {
+        option_panel(ctx, "game_option_panel", config.alpha, |ui| {
             option_group(ui, "game_options", |ui| {
                 self.run_game_options(ui);
             });

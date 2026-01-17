@@ -1,7 +1,7 @@
 use crate::{CustomPanels, UserInterfaceConfig};
 use impact::{
     command::{AdminCommand, instrumentation::InstrumentationAdminCommand, uils::ToActiveState},
-    egui::{Context, DragValue, Frame, TopBottomPanel},
+    egui::{Context, Frame, TopBottomPanel},
     engine::Engine,
 };
 
@@ -22,12 +22,7 @@ impl Toolbar {
             })
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add(
-                        DragValue::new(&mut config.alpha)
-                            .speed(0.01)
-                            .range(0.0..=1.0)
-                            .prefix("α "),
-                    );
+                    ui.toggle_value(&mut config.show_ui_options, "UI options");
 
                     ui.toggle_value(&mut config.show_rendering_options, "Rendering options");
 
@@ -56,8 +51,6 @@ impl Toolbar {
                             ),
                         ));
                     }
-
-                    ui.toggle_value(&mut config.show_time_overlay, "Time overlay");
 
                     custom_panels.run_toolbar_buttons(ui);
                 });

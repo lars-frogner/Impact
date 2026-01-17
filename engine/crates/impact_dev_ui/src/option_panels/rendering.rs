@@ -287,7 +287,7 @@ impl RenderingOptionPanel {
         screenshot_requested: &mut bool,
     ) {
         let mut hide_ui_during_screenshots = config.hide_ui_during_screenshots;
-        option_panel(ctx, config, "rendering_option_panel", |ui| {
+        option_panel(ctx, "rendering_option_panel", config.alpha, |ui| {
             option_group(ui, "shadow_mapping_options", |ui| {
                 shadow_mapping_options(ui, engine);
             });

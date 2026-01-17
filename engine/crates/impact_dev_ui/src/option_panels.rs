@@ -1,8 +1,8 @@
 pub mod gizmo;
 pub mod physics;
 pub mod rendering;
+pub mod ui;
 
-use crate::UserInterfaceConfig;
 use impact::egui::{
     Align, Color32, Context, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Response,
     RichText, ScrollArea, Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32,
@@ -31,12 +31,12 @@ impl LabelAndHoverText {
 
 pub fn option_panel(
     ctx: &Context,
-    config: &UserInterfaceConfig,
     name: impl Into<Id>,
+    alpha: f32,
     add_contents: impl FnOnce(&mut Ui),
 ) {
     let frame = Frame::side_top_panel(&ctx.style());
-    let fill = Color32::from_black_alpha(linear_u8_from_linear_f32(config.alpha).max(1));
+    let fill = Color32::from_black_alpha(linear_u8_from_linear_f32(alpha).max(1));
     let inner_margin = Margin::ZERO;
 
     SidePanel::left(name)

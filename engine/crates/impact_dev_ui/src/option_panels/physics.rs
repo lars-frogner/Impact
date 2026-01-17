@@ -109,7 +109,7 @@ impl PhysicsOptionPanel {
         engine: &Engine,
         single_step_requested: &mut bool,
     ) {
-        option_panel(ctx, config, "physics_option_panel", |ui| {
+        option_panel(ctx, "physics_option_panel", config.alpha, |ui| {
             option_group(ui, "simulation_options", |ui| {
                 simulation_options(ui, engine, single_step_requested);
             });

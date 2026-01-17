@@ -21,11 +21,7 @@ fn gizmo_parameter_options(
                     The density used to calculate the size of the center \
                     of mass sphere from the mass of the body.",
             },
-            Slider::new(
-                &mut parameters.center_of_mass_sphere_density,
-                1.0..=100000.0,
-            )
-            .logarithmic(true),
+            Slider::new(&mut parameters.center_of_mass_sphere_density, 1.0..=1e6).logarithmic(true),
         )),
         GizmoType::LinearVelocity => Some(option_slider(
             ui,
@@ -46,7 +42,7 @@ fn gizmo_parameter_options(
                     angular velocity arrow based on the entity's angular \
                     speed.",
             },
-            Slider::new(&mut parameters.angular_velocity_scale, 0.0..=10000.0).logarithmic(true),
+            Slider::new(&mut parameters.angular_velocity_scale, 0.0..=1e5).logarithmic(true),
         )),
         GizmoType::AngularMomentum => Some(option_slider(
             ui,
@@ -57,7 +53,7 @@ fn gizmo_parameter_options(
                     angular momentum arrow based on the magnitude of the \
                     body's angular momentum.",
             },
-            Slider::new(&mut parameters.angular_momentum_scale, 0.0..=10000.0).logarithmic(true),
+            Slider::new(&mut parameters.angular_momentum_scale, 0.0..=1e3).logarithmic(true),
         )),
         GizmoType::Force => Some(option_slider(
             ui,
@@ -68,7 +64,7 @@ fn gizmo_parameter_options(
                     force arrow based on the magnitude of the force on the \
                     body.",
             },
-            Slider::new(&mut parameters.force_scale, 0.0..=10000.0).logarithmic(true),
+            Slider::new(&mut parameters.force_scale, 0.0..=1e3).logarithmic(true),
         )),
         GizmoType::Torque => Some(option_slider(
             ui,
@@ -79,7 +75,7 @@ fn gizmo_parameter_options(
                     torque arrow based on the magnitude of the torque on \
                     the body.",
             },
-            Slider::new(&mut parameters.torque_scale, 0.0..=10000.0).logarithmic(true),
+            Slider::new(&mut parameters.torque_scale, 0.0..=1e3).logarithmic(true),
         )),
         GizmoType::VoxelChunks => Some(option_checkbox(
             ui,
@@ -100,7 +96,7 @@ pub struct GizmoOptionPanel;
 
 impl GizmoOptionPanel {
     pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        option_panel(ctx, config, "gizmo_option_panel", |ui| {
+        option_panel(ctx, "gizmo_option_panel", config.alpha, |ui| {
             option_group(ui, "gizmo_options", |ui| {
                 gizmo_options(ui, engine);
             });

@@ -322,7 +322,7 @@ impl CustomPanels for Editor {
             });
         }
 
-        option_panel(ctx, config, "Editor panel", |ui| {
+        option_panel(ctx, "Editor panel", config.alpha, |ui| {
             if let Some(path) = &self.last_graph_path {
                 option_group(ui, "file", |ui| {
                     ui.label(path.file_stem_string.trim_end_matches(".graph"))
