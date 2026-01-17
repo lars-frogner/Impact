@@ -5,42 +5,13 @@ module [
 ]
 
 import core.Radians
-import core.UnitQuaternion exposing [UnitQuaternion]
 import core.UnitVector3
-import core.Vector3
-import core.Matrix3
-import core.Point3 exposing [Point3]
-import core.Sphere
+import core.UnitQuaternion
 
 import pf.Entity
 
-import pf.Setup.LocalForce
-import pf.Setup.CylinderMesh
-import pf.Setup.SphereMesh
-import pf.Setup.CapsuleMesh
-import pf.Setup.DynamicRigidBodyInertialProperties
-import pf.Comp.AngularVelocityControl
-import pf.Comp.AngularVelocityControlParent
-import pf.Control.AngularVelocityControlDirections
-import pf.Control.AngularVelocityControlFlags
-import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
-import pf.Comp.ModelTransform
-import pf.Setup.SceneGraphGroup
-import pf.Setup.SphereMesh
-import pf.Comp.ShadowableOmnidirectionalEmission
-import pf.Setup.UniformColor
-import pf.Setup.UniformEmissiveLuminance
-import pf.Comp.Motion
-import pf.Comp.VoxelAbsorbingCapsule
-import pf.Comp.VoxelAbsorbingSphere
-import pf.Comp.SceneEntityFlags
-import pf.Physics.ContactResponseParameters
-import pf.Setup.LocalForce
-import pf.Setup.SphericalCollidable
-import pf.Comp.DynamicGravity
-import pf.Setup.GravityAlignmentTorque
 
 entity_ids = {
     camera: Entity.id("overview_camera"),
