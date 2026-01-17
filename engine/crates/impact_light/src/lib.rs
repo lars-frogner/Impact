@@ -940,6 +940,12 @@ impl LightManager {
             .valid_uniforms_with_ids_mut()
     }
 
+    pub fn set_max_omnidirectional_light_reach(&mut self, max_reach: f32) {
+        assert!(max_reach >= 0.0);
+        self.config.max_omnidirectional_light_reach = max_reach;
+        self.update_max_reach_for_omnidirectional_lights();
+    }
+
     /// Removes all lights from the storage.
     pub fn remove_all_lights(&mut self) {
         self.ambient_light_buffer.remove_all_uniforms();
@@ -1048,7 +1054,7 @@ impl LightManager {
 impl Default for LightConfig {
     fn default() -> Self {
         Self {
-            max_omnidirectional_light_reach: 500.0,
+            max_omnidirectional_light_reach: 1e4,
         }
     }
 }

@@ -7,7 +7,7 @@ use roc_integration::roc;
 #[roc(parents = "Physics")]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UniformMedium {
     /// The mass density of the medium.
     pub mass_density: f32,
@@ -72,12 +72,3 @@ impl Default for UniformMedium {
         Self::vacuum()
     }
 }
-
-impl PartialEq for UniformMedium {
-    fn eq(&self, other: &Self) -> bool {
-        self.mass_density.to_bits() == other.mass_density.to_bits()
-            && bytemuck::bytes_of(&self.velocity) == bytemuck::bytes_of(&other.velocity)
-    }
-}
-
-impl Eq for UniformMedium {}

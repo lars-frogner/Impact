@@ -97,6 +97,10 @@ impl DynamicGravityManager {
         self.apply_forces(rigid_body_manager);
     }
 
+    pub fn set_gravitational_constant(&mut self, gravitational_constant: f32) {
+        self.config.gravitational_constant = gravitational_constant;
+    }
+
     pub fn clear(&mut self) {
         self.body_ids.clear();
         self.bodies.clear();

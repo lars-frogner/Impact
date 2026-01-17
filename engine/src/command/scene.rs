@@ -9,7 +9,7 @@ use roc_integration::roc;
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SceneCommand {
     SetSkybox(Skybox),
     SetMedium(UniformMedium),
@@ -17,6 +17,7 @@ pub enum SceneCommand {
         entity_id: EntityID,
         state: ActiveState,
     },
+    SetMaxOmnidirectionalLightReach(f32),
 }
 
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {
@@ -39,4 +40,10 @@ pub fn set_scene_entity_active_state(
         ActiveState::Enabled => engine.enable_scene_entity(entity_id),
         ActiveState::Disabled => engine.disable_scene_entity(entity_id),
     }
+}
+
+pub fn set_max_omnidirectional_light_reach(engine: &Engine, to: f32) {
+    let scene = engine.scene().oread();
+    let mut light_manager = scene.light_manager().owrite();
+    light_manager.set_max_omnidirectional_light_reach(to);
 }

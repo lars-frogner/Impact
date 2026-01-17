@@ -17,7 +17,7 @@ use roc_integration::roc;
 #[roc]
 #[repr(C)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod)]
 pub struct Skybox {
     cubemap_texture_id: TextureID,
     max_luminance: f64,
@@ -43,15 +43,6 @@ impl Skybox {
         self.max_luminance
     }
 }
-
-impl PartialEq for Skybox {
-    fn eq(&self, other: &Self) -> bool {
-        self.cubemap_texture_id == other.cubemap_texture_id
-            && self.max_luminance.to_bits() == other.max_luminance.to_bits()
-    }
-}
-
-impl Eq for Skybox {}
 
 /// Performs any required updates for keeping the skybox GPU resources in sync
 /// with the given scene skybox.

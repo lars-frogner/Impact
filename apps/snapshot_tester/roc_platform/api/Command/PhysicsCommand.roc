@@ -1,5 +1,5 @@
-# Hash: f6cb590ecc551871
-# Generated: 2026-01-16T08:39:26.799271369
+# Hash: 5dae289f2a4516b2
+# Generated: 2026-01-17T13:07:21.870014101
 # Rust type: impact::command::physics::PhysicsCommand
 # Type category: Inline
 module [
@@ -12,9 +12,11 @@ import Command.LocalForceUpdateMode
 import Comp.AlignmentTorqueGeneratorID
 import Comp.LocalForceGeneratorID
 import Physics.AlignmentDirection
+import core.Builtin
 import core.Vector3
 
 PhysicsCommand : [
+    SetGravitationalConstant F32,
     UpdateLocalForce {
             generator_id : Comp.LocalForceGeneratorID.LocalForceGeneratorID,
             mode : Command.LocalForceUpdateMode.LocalForceUpdateMode,
@@ -31,10 +33,17 @@ PhysicsCommand : [
 write_bytes : List U8, PhysicsCommand -> List U8
 write_bytes = |bytes, value|
     when value is
-        UpdateLocalForce { generator_id, mode, force } ->
+        SetGravitationalConstant(val) ->
             bytes
             |> List.reserve(22)
             |> List.append(0)
+            |> Builtin.write_bytes_f32(val)
+            |> List.concat(List.repeat(0, 17))
+
+        UpdateLocalForce { generator_id, mode, force } ->
+            bytes
+            |> List.reserve(22)
+            |> List.append(1)
             |> Comp.LocalForceGeneratorID.write_bytes(generator_id)
             |> Command.LocalForceUpdateMode.write_bytes(mode)
             |> Vector3.write_bytes(force)
@@ -42,7 +51,7 @@ write_bytes = |bytes, value|
         SetAlignmentTorqueDirection { generator_id, direction } ->
             bytes
             |> List.reserve(22)
-            |> List.append(1)
+            |> List.append(2)
             |> Comp.AlignmentTorqueGeneratorID.write_bytes(generator_id)
             |> Physics.AlignmentDirection.write_bytes(direction)
 
@@ -56,6 +65,13 @@ from_bytes = |bytes|
         when bytes is
             [0, .. as data_bytes] ->
                 Ok(
+                    SetGravitationalConstant(
+                        data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+                    ),
+                )
+
+            [1, .. as data_bytes] ->
+                Ok(
                     UpdateLocalForce     {
                         generator_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.LocalForceGeneratorID.from_bytes?,
                         mode: data_bytes |> List.sublist({ start: 8, len: 1 }) |> Command.LocalForceUpdateMode.from_bytes?,
@@ -63,7 +79,8 @@ from_bytes = |bytes|
                     },
                 )
 
-            [1, .. as data_bytes] ->
+
+            [2, .. as data_bytes] ->
                 Ok(
                     SetAlignmentTorqueDirection     {
                         generator_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.AlignmentTorqueGeneratorID.from_bytes?,

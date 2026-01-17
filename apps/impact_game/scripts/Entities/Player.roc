@@ -78,7 +78,7 @@ player = {
 camera = {
     field_of_view: 70,
     near_distance: 0.01,
-    view_distance: 10000,
+    view_distance: 1e4,
 }
 
 spawn! : Point3, UnitQuaternion => Result {} Str
