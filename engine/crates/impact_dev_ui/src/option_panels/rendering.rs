@@ -121,6 +121,13 @@ mod camera {
                 Whether exposure is determined automatically based on incident \
                 luminance or manually from camera settings.",
         };
+        pub const MIN_EXPOSURE: LabelAndHoverText = LabelAndHoverText {
+            label: "Min exposure",
+            hover_text: "\
+                The maximum exposure of the camera sensor. This corresponds to the \
+                reciprocal of the maximum incident luminance in cd/m² that the sensor \
+                can quantify.",
+        };
         pub const MAX_EXPOSURE: LabelAndHoverText = LabelAndHoverText {
             label: "Max exposure",
             hover_text: "\
@@ -175,7 +182,8 @@ mod camera {
     pub mod ranges {
         use std::ops::RangeInclusive;
 
-        pub const MAX_EXPOSURE: RangeInclusive<f32> = 1e-6..=1e2;
+        pub const MIN_EXPOSURE: f32 = 1e-8;
+        pub const MAX_EXPOSURE: f32 = 1e2;
         pub const EV_COMPENSATION: RangeInclusive<f32> = -10.0..=10.0;
         pub const MIN_LUMINANCE: f32 = 1e-1;
         pub const MAX_LUMINANCE: f32 = 1e12;
@@ -456,17 +464,46 @@ fn camera_options(ui: &mut Ui, engine: &Engine) {
 
     let mut settings_changed = false;
 
+    let mut min_exposure = settings.exposure_bounds.lower();
+    let mut max_exposure = settings.exposure_bounds.upper();
+    let mut exposure_bounds_changed = false;
+
     if option_slider(
         ui,
-        camera::docs::MAX_EXPOSURE,
-        Slider::new(&mut settings.max_exposure, camera::ranges::MAX_EXPOSURE)
-            .logarithmic(true)
-            .suffix("/nit")
-            .custom_formatter(scientific_formatter),
+        camera::docs::MIN_EXPOSURE,
+        Slider::new(
+            &mut min_exposure,
+            camera::ranges::MIN_EXPOSURE..=max_exposure,
+        )
+        .logarithmic(true)
+        .suffix("/nit")
+        .custom_formatter(scientific_formatter),
     )
     .changed()
     {
+        exposure_bounds_changed = true;
+    }
+    if option_slider(
+        ui,
+        camera::docs::MAX_EXPOSURE,
+        Slider::new(
+            &mut max_exposure,
+            min_exposure..=camera::ranges::MAX_EXPOSURE,
+        )
+        .logarithmic(true)
+        .suffix("/nit")
+        .custom_formatter(scientific_formatter),
+    )
+    .changed()
+    {
+        exposure_bounds_changed = true;
+    }
+
+    if exposure_bounds_changed {
         settings_changed = true;
+
+        settings.exposure_bounds =
+            UpperExclusiveBounds::new(min_exposure, max_exposure.max(min_exposure.next_up()));
     }
 
     match exposure_mode {
