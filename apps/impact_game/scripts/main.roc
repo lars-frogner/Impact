@@ -3,34 +3,42 @@ app [callbacks] {
     core: "../../../roc_packages/core/main.roc",
 }
 
-import pf.Input.KeyboardEvent exposing [KeyboardEvent]
-import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
-import pf.Input.MouseDragEvent exposing [MouseDragEvent]
-import pf.Input.MouseScrollEvent exposing [MouseScrollEvent]
-import InputHandling.Keyboard as KeyboardInput
-import Scenes.SunOnly
+import Generation.SolarSystem
+import Scenes.SolarSystem
+import Control.Keyboard
+import Control.Mouse
 
 callbacks = {
-    setup_scene!: Scenes.SunOnly.setup!,
+    setup_scene!,
     handle_keyboard_event!,
     handle_mouse_button_event!,
     handle_mouse_drag_event!,
     handle_mouse_scroll_event!,
 }
 
-handle_keyboard_event! : KeyboardEvent => Result {} Str
+player_mode = Overview
+
+setup_scene! : {} => Result {} Str
+setup_scene! = |_|
+    system = Generation.SolarSystem.generate(
+        {
+            number_of_bodies: 1,
+            body_size_distr: { exponent: 0, min_value: 10.0, max_value: 3e2 },
+            body_distance_distr: { exponent: 0, min_value: 1e3, max_value: 5e3 },
+            star_radius: 5e2,
+            star_mass_density: 1e5,
+            max_orbital_period: 15 * 60.0,
+            min_body_illuminance: 1e4,
+        },
+        0,
+    )
+    Scenes.SolarSystem.setup!(system, player_mode)
+
 handle_keyboard_event! = |event|
-    KeyboardInput.handle_event!(event)?
-    Scenes.SunOnly.handle_keyboard_event!(event)
+    Control.Keyboard.handle_event!(player_mode, event)
 
-handle_mouse_button_event! : MouseButtonEvent => Result {} Str
 handle_mouse_button_event! = |event|
-    Scenes.SunOnly.handle_mouse_button_event!(event)
+    Control.Mouse.handle_button_event!(player_mode, event)
 
-handle_mouse_drag_event! : MouseDragEvent => Result {} Str
-handle_mouse_drag_event! = |_event|
-    Ok({})
-
-handle_mouse_scroll_event! : MouseScrollEvent => Result {} Str
-handle_mouse_scroll_event! = |_event|
-    Ok({})
+handle_mouse_drag_event! = Control.Mouse.handle_drag_event!
+handle_mouse_scroll_event! = Control.Mouse.handle_scroll_event!
