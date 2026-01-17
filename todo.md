@@ -20,6 +20,8 @@
 
 - Look into mesh shading (could be useful for voxel rendering).
 
+- Consider Texel Snapping for shadow map cascades.
+
 ## Physics
 
 - Support disabling rigid bodies.
