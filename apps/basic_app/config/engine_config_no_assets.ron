@@ -87,7 +87,7 @@
         ),
     ),
     light: (
-        max_omnidirectional_light_reach: 500.0,
+        max_omnidirectional_light_reach: 1e4,
     ),
     voxel: (
         texture_resolution: 256,

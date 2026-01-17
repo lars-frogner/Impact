@@ -19,8 +19,9 @@ use roc_integration::roc;
 
 #[roc(parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PhysicsCommand {
+    SetGravitationalConstant(f32),
     UpdateLocalForce {
         generator_id: LocalForceGeneratorID,
         mode: LocalForceUpdateMode,
@@ -64,65 +65,13 @@ pub enum ToSimulationSpeedMultiplier {
     Specific(f32),
 }
 
-impl PartialEq for PhysicsCommand {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                Self::UpdateLocalForce {
-                    generator_id: self_id,
-                    mode: self_mode,
-                    force: self_force,
-                },
-                Self::UpdateLocalForce {
-                    generator_id: other_id,
-                    mode: other_mode,
-                    force: other_force,
-                },
-            ) => {
-                self_id == other_id
-                    && self_mode == other_mode
-                    && bytemuck::bytes_of(self_force) == bytemuck::bytes_of(other_force)
-            }
-            (
-                Self::SetAlignmentTorqueDirection {
-                    generator_id: self_id,
-                    direction: self_direction,
-                },
-                Self::SetAlignmentTorqueDirection {
-                    generator_id: other_id,
-                    direction: other_direction,
-                },
-            ) => {
-                if self_id != other_id {
-                    return false;
-                }
-                match (self_direction, other_direction) {
-                    (
-                        AlignmentDirection::Fixed(self_direction),
-                        AlignmentDirection::Fixed(other_direction),
-                    ) => bytemuck::bytes_of(self_direction) == bytemuck::bytes_of(other_direction),
-                    (AlignmentDirection::GravityForce, AlignmentDirection::GravityForce) => true,
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    }
+pub fn set_gravitational_constant(simulator: &PhysicsSimulator, to: f32) {
+    let mut force_generator_manager = simulator.force_generator_manager().owrite();
+
+    force_generator_manager
+        .dynamic_gravity_manager_mut()
+        .set_gravitational_constant(to);
 }
-
-impl Eq for PhysicsCommand {}
-
-impl PartialEq for ToSimulationSpeedMultiplier {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Higher, Self::Higher) | (Self::Lower, Self::Lower) => true,
-            (Self::Specific(a), Self::Specific(b)) => a.to_bits() == b.to_bits(),
-            _ => false,
-        }
-    }
-}
-
-impl Eq for ToSimulationSpeedMultiplier {}
 
 pub fn update_local_force(
     simulator: &PhysicsSimulator,

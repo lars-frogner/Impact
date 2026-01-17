@@ -29,7 +29,7 @@ use scene::SceneCommand;
 
 #[roc(name = "EngineCommand", parents = "Command")]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UserCommand {
     Scene(SceneCommand),
     Control(ControlCommand),
@@ -115,6 +115,10 @@ pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<(
         SceneCommand::SetSceneEntityActiveState { entity_id, state } => {
             scene::set_scene_entity_active_state(engine, entity_id, state)
         }
+        SceneCommand::SetMaxOmnidirectionalLightReach(to) => {
+            scene::set_max_omnidirectional_light_reach(engine, to);
+            Ok(())
+        }
     }
     .context("Failed to execute scene command")
 }
@@ -136,6 +140,10 @@ pub fn execute_control_command(engine: &Engine, command: ControlCommand) -> Resu
 
 pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Result<()> {
     match command {
+        PhysicsCommand::SetGravitationalConstant(to) => {
+            physics::set_gravitational_constant(&engine.simulator().oread(), to);
+            Ok(())
+        }
         PhysicsCommand::UpdateLocalForce {
             generator_id,
             mode,

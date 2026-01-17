@@ -61,9 +61,14 @@ setup! = |system, player_mode|
     skybox_texture_id = Texture.TextureID.from_name(skybox.texture)
     Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox_texture_id, skybox.max_luminance)))))?
 
+    max_light_reach = 2.5 * Num.max(Player.camera.view_distance, system.properties.radius)
+    Command.execute!(Engine(Scene(SetMaxOmnidirectionalLightReach(max_light_reach))))?
+
+    Command.execute!(Engine(Physics(SetGravitationalConstant(system.properties.grav_const))))?
+
     Entity.create_with_id!(ambient_light_ent, entity_ids.ambient_light)?
-    Entity.create_with_id!(top_light_ent, entity_ids.top_light)?
-    Entity.create_with_id!(bottom_light_ent, entity_ids.bottom_light)?
+    # Entity.create_with_id!(top_light_ent, entity_ids.top_light)?
+    # Entity.create_with_id!(bottom_light_ent, entity_ids.bottom_light)?
 
     Star.spawn!(system.star)?
     SphericalBodies.spawn!(system.bodies)?

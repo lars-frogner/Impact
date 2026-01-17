@@ -3,6 +3,9 @@
         reset_scene_on_reload: true,
     ),
     run_mode: Windowed,
+    window: (
+        initial_size: (1800, 1600),
+    ),
     ui_config_path: "ui_config.ron",
     engine_config_path: "engine_config.ron",
 )
