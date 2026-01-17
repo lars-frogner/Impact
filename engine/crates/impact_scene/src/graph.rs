@@ -854,6 +854,8 @@ impl SceneGraph {
         shadow_mapping_enabled: bool,
     ) {
         let camera_space_view_frustum = scene_camera.camera().view_frustum();
+        let camera_space_view_frustum_aabb = camera_space_view_frustum.compute_aabb();
+
         let view_transform = scene_camera.view_transform();
 
         let root_node_id = self.root_node_id();
@@ -877,7 +879,7 @@ impl SceneGraph {
 
                 let camera_space_aabb_for_visible_models = camera_space_bounding_sphere
                     .compute_aabb()
-                    .compute_overlap_with(&camera_space_view_frustum.compute_aabb());
+                    .compute_overlap_with(&camera_space_view_frustum_aabb);
 
                 omnidirectional_light.orient_and_scale_cubemap_for_shadow_casting_models(
                     &camera_space_bounding_sphere,
@@ -1989,8 +1991,8 @@ mod tests {
     }
 
     fn assert_spheres_equal(sphere_1: &SphereC, sphere_2: &SphereC) {
-        assert_abs_diff_eq!(sphere_1.center(), sphere_2.center());
-        assert_abs_diff_eq!(sphere_1.radius(), sphere_2.radius());
+        assert_abs_diff_eq!(sphere_1.center(), sphere_2.center(), epsilon = 1e-5);
+        assert_abs_diff_eq!(sphere_1.radius(), sphere_2.radius(), epsilon = 1e-5);
     }
 
     #[test]

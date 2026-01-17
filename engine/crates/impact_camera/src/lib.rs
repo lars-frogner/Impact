@@ -34,6 +34,9 @@ pub trait Camera: Debug + Send + Sync + 'static {
     /// Returns the ratio of width to height of the camera's view plane.
     fn aspect_ratio(&self) -> f32;
 
+    /// Returns the height of the field of view at the given view distance.
+    fn view_height_at_distance(&self, distance: f32) -> f32;
+
     /// Sets the ratio of width to height of the camera's view plane.
     ///
     /// # Panics
@@ -143,6 +146,10 @@ impl Camera for PerspectiveCamera {
         self.perspective_transform.aspect_ratio()
     }
 
+    fn view_height_at_distance(&self, distance: f32) -> f32 {
+        2.0 * distance * f32::tan(0.5 * self.vertical_field_of_view().radians())
+    }
+
     fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.perspective_transform.set_aspect_ratio(aspect_ratio);
         self.update_frustum_and_notify_change();
@@ -240,6 +247,11 @@ impl Camera for OrthographicCamera {
 
     fn aspect_ratio(&self) -> f32 {
         self.aspect_ratio
+    }
+
+    fn view_height_at_distance(&self, _distance: f32) -> f32 {
+        2.0 * self.near_and_far_distance.upper()
+            * f32::tan(0.5 * self.vertical_field_of_view().radians())
     }
 
     fn set_aspect_ratio(&mut self, aspect_ratio: f32) {

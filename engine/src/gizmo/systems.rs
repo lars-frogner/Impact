@@ -527,7 +527,10 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
         // make the plane doesn't get clipped
         let plane_z = -plane_distance.max(view_frustum.near_distance() + 1e-6);
 
-        let plane_height = view_frustum.height_at_distance(plane_distance);
+        let plane_height = scene_camera
+            .camera()
+            .view_height_at_distance(plane_distance);
+
         let scaling = plane_height * scene_camera.camera().aspect_ratio().max(1.0);
 
         let camera_cascade_from_vertical_square = InstanceModelViewTransform {

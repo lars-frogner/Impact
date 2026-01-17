@@ -1649,9 +1649,14 @@ impl ShadowableUnidirectionalLight {
     ) {
         let camera_to_light_space_rotation = self.camera_to_light_space_rotation.aligned();
 
+        let camera_space_view_frustum_corners = camera_space_view_frustum.compute_corners();
+        let view_frustum_near_distance = camera_space_view_frustum.near_distance();
+        let view_frustum_far_distance = camera_space_view_frustum.far_distance();
+
         // Rotate to light space, where the light direction is -z
-        let light_space_view_frustum =
-            camera_space_view_frustum.rotated(&camera_to_light_space_rotation);
+        let light_space_view_frustum_corners = camera_space_view_frustum_corners
+            .map(|corner| camera_to_light_space_rotation.rotate_point(&corner));
+
         let light_space_bounding_sphere =
             camera_space_bounding_sphere.rotated(&camera_to_light_space_rotation);
 
@@ -1674,8 +1679,14 @@ impl ShadowableUnidirectionalLight {
         {
             // Use the bounds of the view frustum in light space along with the
             // bounding sphere to constrain limits for orthographic projection
+            let subfrustum_corners = Frustum::compute_corners_of_subfrustum(
+                &light_space_view_frustum_corners,
+                view_frustum_near_distance,
+                view_frustum_far_distance,
+                partition_depth_limits,
+            );
             let light_space_view_frustum_aabb =
-                light_space_view_frustum.compute_aabb_for_subfrustum(partition_depth_limits);
+                AxisAlignedBox::aabb_for_point_array(&subfrustum_corners);
 
             // Constrain limits using either the view frustum or the bounding
             // volume, depending on which gives the snuggest fit
