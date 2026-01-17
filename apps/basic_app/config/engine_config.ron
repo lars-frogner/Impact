@@ -33,7 +33,10 @@
                 sensitivity: Auto(
                     ev_compensation: 0.0,
                 ),
-                max_exposure: 0.01,
+                exposure_bounds: (
+                    lower: 1e-6,
+                    upper: 1e-2,
+                ),
             ),
             average_luminance_computation: (
                 luminance_bounds: (

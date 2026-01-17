@@ -19,7 +19,7 @@ use impact_gpu::{
     resource_group::GPUResourceGroupManager, shader::ShaderManager,
     storage::StorageGPUBufferManager, timestamp_query::TimestampQueryRegistry, wgpu,
 };
-use impact_math::bounds::Bounds;
+use impact_math::bounds::{Bounds, UpperExclusiveBounds};
 use roc_integration::roc;
 
 /// Configuration options for a capturing camera.
@@ -62,10 +62,11 @@ pub struct CameraSettings {
     pub shutter_duration: f32,
     /// The sensitivity of the camera sensor.
     pub sensitivity: SensorSensitivity,
-    /// The maximum exposure of the camera sensor. This corresponds to the
-    /// reciprocal of the minimum incident luminance in cd/m² that can saturate
-    /// the sensor.
-    pub max_exposure: f32,
+    /// The minimum and maximum exposure of the camera sensor. These correspond
+    /// to the reciprocal of the maximum incident luminance in cd/m² that the
+    /// sensor can quantify and the minimum incident luminance in cd/m² that can
+    /// saturate the sensor, respectively.
+    pub exposure_bounds: UpperExclusiveBounds<f32>,
 }
 
 /// The sensitivity of a camera sensor, which may be set manually as an ISO
@@ -97,7 +98,7 @@ impl Default for CameraSettings {
             sensitivity: SensorSensitivity::Auto {
                 ev_compensation: 0.0,
             },
-            max_exposure: 1e-2,
+            exposure_bounds: UpperExclusiveBounds::new(1e-6, 1e-2),
         }
     }
 }
@@ -114,13 +115,13 @@ impl CameraSettings {
         relative_aperture: f32,
         shutter_duration: f32,
         sensitivity: SensorSensitivity,
-        max_exposure: f32,
+        exposure_bounds: UpperExclusiveBounds<f32>,
     ) -> Self {
         Self {
             relative_aperture,
             shutter_duration,
             sensitivity,
-            max_exposure,
+            exposure_bounds,
         }
     }
 
@@ -150,7 +151,7 @@ impl CameraSettings {
 
         let exposure = max_luminance.recip();
 
-        Ok(f32::min(self.max_exposure, exposure))
+        Ok(exposure.clamp(self.exposure_bounds.lower(), self.exposure_bounds.upper()))
     }
 
     fn compute_exposure_value_at_100_iso(&self, iso: f32) -> f32 {
