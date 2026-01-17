@@ -40,5 +40,8 @@ handle_keyboard_event! = |event|
 handle_mouse_button_event! = |event|
     Control.Mouse.handle_button_event!(player_mode, event)
 
-handle_mouse_drag_event! = Control.Mouse.handle_drag_event!
-handle_mouse_scroll_event! = Control.Mouse.handle_scroll_event!
+handle_mouse_drag_event! = |event|
+    Control.Mouse.handle_drag_event!(player_mode, event)
+
+handle_mouse_scroll_event! = |event|
+    Control.Mouse.handle_scroll_event!(player_mode, event)
