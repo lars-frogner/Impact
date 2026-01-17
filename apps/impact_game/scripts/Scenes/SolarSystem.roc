@@ -2,13 +2,10 @@ module [
     entity_ids,
     skybox,
     ambient_light,
-    top_light,
-    bottom_light,
     setup!,
 ]
 
 import core.Vector3
-import core.UnitVector3
 import core.UnitQuaternion
 
 import pf.Command
@@ -17,7 +14,6 @@ import pf.Entity
 import pf.Skybox
 import pf.Texture.TextureID
 import pf.Comp.AmbientEmission
-import pf.Comp.ShadowableUnidirectionalEmission
 
 import Generation.SolarSystem
 
@@ -29,8 +25,6 @@ import Entities.OverviewCamera as OverviewCamera
 
 entity_ids = {
     ambient_light: Entity.id("ambient_light"),
-    top_light: Entity.id("top_light"),
-    bottom_light: Entity.id("bottom_light"),
 }
 
 skybox = {
@@ -40,20 +34,6 @@ skybox = {
 
 ambient_light = {
     illuminance: 1e3,
-}
-
-top_light = {
-    color: (1.0, 1.0, 1.0),
-    perpendicular_illuminance: 2e4,
-    direction: UnitVector3.neg_unit_y,
-    angular_extent: 2.0,
-}
-
-bottom_light = {
-    color: (1.0, 1.0, 1.0),
-    perpendicular_illuminance: 5e3,
-    direction: UnitVector3.unit_y,
-    angular_extent: 2.0,
 }
 
 setup! : Generation.SolarSystem.System, Player.PlayerMode => Result {} Str
@@ -67,8 +47,6 @@ setup! = |system, player_mode|
     Command.execute!(Engine(Physics(SetGravitationalConstant(system.properties.grav_const))))?
 
     Entity.create_with_id!(ambient_light_ent, entity_ids.ambient_light)?
-    # Entity.create_with_id!(top_light_ent, entity_ids.top_light)?
-    # Entity.create_with_id!(bottom_light_ent, entity_ids.bottom_light)?
 
     Star.spawn!(system.star)?
     SphericalBodies.spawn!(system.bodies)?
@@ -90,19 +68,3 @@ setup! = |system, player_mode|
 ambient_light_ent =
     Entity.new_component_data
     |> Comp.AmbientEmission.add_new(Vector3.same(ambient_light.illuminance))
-
-top_light_ent =
-    Entity.new_component_data
-    |> Comp.ShadowableUnidirectionalEmission.add_new(
-        Vector3.scale(top_light.color, top_light.perpendicular_illuminance),
-        top_light.direction,
-        top_light.angular_extent,
-    )
-
-bottom_light_ent =
-    Entity.new_component_data
-    |> Comp.ShadowableUnidirectionalEmission.add_new(
-        Vector3.scale(bottom_light.color, bottom_light.perpendicular_illuminance),
-        bottom_light.direction,
-        bottom_light.angular_extent,
-    )
