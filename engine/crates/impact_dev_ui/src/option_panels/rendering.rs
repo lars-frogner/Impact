@@ -510,8 +510,15 @@ fn camera_options(ui: &mut Ui, engine: &Engine) {
         ExposureMode::Automatic => {
             let mut ev_compensation = match settings.sensitivity {
                 SensorSensitivity::Auto { ev_compensation } => ev_compensation,
-                SensorSensitivity::Manual { .. } => camera::DEFAULT_EV_COMPENSATION,
+                SensorSensitivity::Manual { .. } => {
+                    settings_changed = true;
+                    camera::DEFAULT_EV_COMPENSATION
+                }
             };
+            if settings_changed && matches!(settings.sensitivity, SensorSensitivity::Manual { .. })
+            {
+                settings.sensitivity = SensorSensitivity::Auto { ev_compensation };
+            }
 
             if option_slider(
                 ui,
@@ -589,8 +596,14 @@ fn camera_options(ui: &mut Ui, engine: &Engine) {
         ExposureMode::Manual => {
             let mut iso = match settings.sensitivity {
                 SensorSensitivity::Manual { iso } => iso,
-                SensorSensitivity::Auto { .. } => camera::DEFAULT_ISO,
+                SensorSensitivity::Auto { .. } => {
+                    settings_changed = true;
+                    camera::DEFAULT_ISO
+                }
             };
+            if settings_changed && matches!(settings.sensitivity, SensorSensitivity::Auto { .. }) {
+                settings.sensitivity = SensorSensitivity::Manual { iso };
+            }
 
             if option_slider(
                 ui,
