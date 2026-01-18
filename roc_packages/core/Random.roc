@@ -1,5 +1,7 @@
 module [
     Rng,
+    Gaussian,
+    PowerLaw,
     new_rng,
     new_rng_stream,
     gen_u32,
@@ -7,9 +9,25 @@ module [
     gen_u32_in_range,
     gen_f32,
     gen_f32_in_range,
+    gen_two_f32_normal,
+    gen_f32_normal,
+    gen_two_f32_gaussian,
+    gen_f32_gaussian,
+    gen_f32_power_law,
 ]
 
 Rng := Pcg32
+
+Gaussian : {
+    mean : F32,
+    std_dev : F32,
+}
+
+PowerLaw : {
+    exponent : F32,
+    min_value : F32,
+    max_value : F32,
+}
 
 new_rng : U64 -> Rng
 new_rng = |seed|
@@ -27,7 +45,7 @@ gen_u32 = |@Rng(rng)|
     (next_rng, out) = gen_pcg32(rng)
     (@Rng(next_rng), out)
 
-## Generates a random U32 bekiw the given limit.
+## Generates a random U32 below the given limit.
 gen_u32_bounded : Rng, U32 -> (Rng, U32)
 gen_u32_bounded = |rng, limit|
     # Reject generated values below the size of the biased zone
@@ -68,6 +86,60 @@ gen_f32_in_range : Rng, F32, F32 -> (Rng, F32)
 gen_f32_in_range = |rng, min, max|
     (next_rng, random_frac) = gen_f32(rng)
     (next_rng, min + random_frac * (max - min))
+
+## Generates two random F32 values sampled from the standard normal distribution
+## using the Marsaglia polar method.
+gen_two_f32_normal : Rng -> (Rng, F32, F32)
+gen_two_f32_normal = |rng|
+    try_gen = |r|
+        (r2, x) = gen_f32_in_range(r, -1.0, 1.0)
+        (r3, y) = gen_f32_in_range(r2, -1.0, 1.0)
+        s = x * x + y * y
+        if s < 1.0 then
+            scale = Num.sqrt(-2 * Num.log(s) / s)
+            (r3, x * scale, y * scale)
+        else
+            try_gen(r3)
+
+    try_gen(rng)
+
+## Generates a random F32 value sampled from the standard normal distribution
+## using the Marsaglia polar method.
+gen_f32_normal : Rng -> (Rng, F32)
+gen_f32_normal = |rng|
+    (next_rng, x, _ignored) = gen_two_f32_normal(rng)
+    (next_rng, x)
+
+## Generates two random F32 values sampled from the given Gaussian distribution
+## using the Marsaglia polar method.
+gen_two_f32_gaussian : Rng, Gaussian -> (Rng, F32, F32)
+gen_two_f32_gaussian = |rng, { mean, std_dev }|
+    (next_rng, x, y) = gen_two_f32_normal(rng)
+    (next_rng, mean + std_dev * x, mean + std_dev * y)
+
+## Generates a random F32 value sampled from the given Gaussian distribution,
+## using the Marsaglia polar method.
+gen_f32_gaussian : Rng, Gaussian -> (Rng, F32)
+gen_f32_gaussian = |rng, { mean, std_dev }|
+    (next_rng, x) = gen_f32_normal(rng)
+    (next_rng, mean + std_dev * x)
+
+## Generates a random F32 value sampled from the given power-law distribution.
+gen_f32_power_law : Rng, PowerLaw -> (Rng, F32)
+gen_f32_power_law = |rng, power_law|
+    (next_rng, prob) = gen_f32(rng)
+    out = eval_inverse_cumulative_power_law(power_law, prob)
+    (next_rng, out)
+
+eval_inverse_cumulative_power_law : PowerLaw, F32 -> F32
+eval_inverse_cumulative_power_law = |{ exponent, min_value, max_value }, cumul_prob|
+    exponent_p1 = exponent + 1
+    if Num.abs(exponent_p1) > 1e-3 then
+        min_value_pow = Num.pow(min_value, exponent_p1)
+        max_value_pow = Num.pow(max_value, exponent_p1)
+        Num.pow((max_value_pow - min_value_pow) * cumul_prob + min_value_pow, 1 / exponent_p1)
+    else
+        min_value * Num.pow(max_value / min_value, cumul_prob) # exponent = -1
 
 # PCG-XSH-RR
 

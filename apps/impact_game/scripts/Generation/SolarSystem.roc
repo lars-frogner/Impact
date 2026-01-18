@@ -1,25 +1,36 @@
 module [
     Spec,
+    BodyDistributions,
     System,
     Properties,
     Star,
     Body,
-    PowerLaw,
     generate,
 ]
 
 import core.Vector3 exposing [Vector3]
 import core.Point3 exposing [Point3]
+import core.UnitVector3
+import core.UnitQuaternion
 import core.Random
+import core.Radians
+
+import Generation.Orbit as Orbit
 
 Spec : {
     number_of_bodies : U64,
-    body_size_distr : PowerLaw,
-    body_distance_distr : PowerLaw,
+    body_distributions : BodyDistributions,
     star_radius : F32,
     star_mass_density : F32,
     max_orbital_period : F32,
     min_body_illuminance : F32,
+}
+
+BodyDistributions : {
+    size : Random.PowerLaw,
+    semi_major_axis : Random.PowerLaw,
+    eccentricity : Random.Gaussian,
+    inclination_angle : Random.Gaussian,
 }
 
 System : {
@@ -48,7 +59,7 @@ Body : {
 
 generate : Spec, U64 -> System
 generate = |spec, seed|
-    system_radius = spec.body_distance_distr.max_value
+    system_radius = spec.body_distributions.semi_major_axis.max_value
 
     star_mass = compute_sphere_mass(spec.star_radius, spec.star_mass_density)
 
@@ -73,11 +84,10 @@ generate = |spec, seed|
         List.range({ start: At 0, end: Length spec.number_of_bodies })
         |> List.walk(
             (init_rng, List.with_capacity(spec.number_of_bodies)),
-            |(rng, body_list), idx|
+            |(rng, body_list), _idx|
                 (next_rng, body) = generate_body(
                     rng,
-                    spec.body_size_distr,
-                    spec.body_distance_distr,
+                    spec.body_distributions,
                     grav_const,
                     star_mass,
                 )
@@ -98,42 +108,44 @@ generate = |spec, seed|
 
     { properties, star, bodies }
 
-generate_body : Random.Rng, PowerLaw, PowerLaw, F32, F32 -> (Random.Rng, Body)
-generate_body = |rng, size_distr, distance_distr, grav_const, star_mass|
-    (rng2, size_prob) = Random.gen_f32(rng)
-    size = eval_inverse_cumulative_power_law(size_distr, size_prob)
+generate_body : Random.Rng, BodyDistributions, F32, F32 -> (Random.Rng, Body)
+generate_body = |rng, distributions, grav_const, star_mass|
+    (rng2, size) = Random.gen_f32_power_law(rng, distributions.size)
 
-    (rng3, azimuthal_angle) = Random.gen_f32_in_range(rng2, 0, 2 * Num.pi)
-    (rng4, distance_prob) = Random.gen_f32(rng3)
-    distance = eval_inverse_cumulative_power_law(distance_distr, distance_prob)
+    (rng3, semi_major_axis) = Random.gen_f32_power_law(rng2, distributions.semi_major_axis)
 
-    orbital_speed = compute_stable_orbital_speed(grav_const, star_mass, distance)
+    (rng4, eccentricity_signed) = Random.gen_f32_gaussian(rng3, distributions.eccentricity)
+    eccentricity = Num.min(1.0, Num.abs(eccentricity_signed))
 
-    cos_azimuthal_angle = Num.cos(azimuthal_angle)
-    sin_azimuthal_angle = Num.sin(azimuthal_angle)
+    (rng5, azimuthal_angle) = Random.gen_f32_in_range(rng4, 0, 2 * Num.pi)
 
-    position = (
-        distance * cos_azimuthal_angle,
-        0.0,
-        distance * sin_azimuthal_angle,
-    )
+    (rng6, inclination_angle_deg) = Random.gen_f32_gaussian(rng5, distributions.inclination_angle)
+    inclination_angle = Radians.from_degrees(inclination_angle_deg)
 
-    velocity = (
-        (-orbital_speed) * sin_azimuthal_angle,
-        0.0,
-        orbital_speed * cos_azimuthal_angle,
-    )
+    orientation =
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2)
+        |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.unit_z, azimuthal_angle))
+        |> UnitQuaternion.mul(UnitQuaternion.from_axis_angle(UnitVector3.unit_x, inclination_angle))
 
-    (rng4, { position, velocity, size })
+    period = Orbit.compute_orbital_period(grav_const, star_mass, semi_major_axis)
+
+    (rng7, time) = Random.gen_f32_in_range(rng6, 0, period)
+
+    orbit = {
+        periapsis_time: 0.0,
+        orientation,
+        focal_position: Point3.origin,
+        semi_major_axis,
+        eccentricity,
+        period,
+    }
+
+    (position, velocity) = Orbit.compute_position_and_velocity(orbit, time)
+
+    (rng7, { position, velocity, size })
 
 compute_sphere_mass = |radius, mass_density|
     (4.0 / 3.0) * Num.pi * Num.pow(radius, 3) * mass_density
-
-compute_stable_orbital_speed = |grav_const, star_mass, distance|
-    Num.sqrt(grav_const * star_mass / distance)
-
-compute_stable_orbital_period = |distance, orbital_speed|
-    2 * Num.pi * distance / orbital_speed
 
 compute_grav_const = |star_mass, distance, orbital_period|
     Num.pow(2 * Num.pi, 2) * Num.pow(distance, 3) / (star_mass * Num.pow(orbital_period, 2))
@@ -143,29 +155,3 @@ compute_sphere_emissive_luminance = |luminous_intensity, radius|
 
 compute_luminous_intensity = |illuminance, distance|
     illuminance * Num.pow(distance, 2)
-
-PowerLaw : {
-    exponent : F32,
-    min_value : F32,
-    max_value : F32,
-}
-
-eval_power_law_prob : PowerLaw, F32 -> F32
-eval_power_law_prob = |{ exponent, min_value, max_value }, value|
-    exponent_p1 = exponent + 1
-    if Num.abs(exponent_p1) > 1e-3 then
-        min_value_pow = Num.pow(min_value, exponent_p1)
-        max_value_pow = Num.pow(max_value, exponent_p1)
-        (exponent_p1 / (max_value_pow - min_value_pow)) * Num.pow(value, exponent)
-    else
-        value / Num.log(max_value / min_value) # exponent = -1
-
-eval_inverse_cumulative_power_law : PowerLaw, _ -> _
-eval_inverse_cumulative_power_law = |{ exponent, min_value, max_value }, cumul_prob|
-    exponent_p1 = exponent + 1
-    if Num.abs(exponent_p1) > 1e-3 then
-        min_value_pow = Num.pow(min_value, exponent_p1)
-        max_value_pow = Num.pow(max_value, exponent_p1)
-        Num.pow((max_value_pow - min_value_pow) * cumul_prob + min_value_pow, 1 / exponent_p1)
-    else
-        min_value * Num.pow(max_value / min_value, cumul_prob) # exponent = -1
