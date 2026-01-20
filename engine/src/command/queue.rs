@@ -52,6 +52,11 @@ impl<C> CommandQueue<C> {
         }
         Ok(())
     }
+
+    /// Removes all commands in the queue.
+    pub fn clear(&self) {
+        self.commands.write().clear();
+    }
 }
 
 impl<C> Default for CommandQueue<C> {

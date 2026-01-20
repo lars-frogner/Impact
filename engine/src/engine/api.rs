@@ -271,6 +271,8 @@ impl Engine {
         self.scene.oread().clear();
         self.simulator.owrite().reset();
 
+        self.command_queues.clear();
+
         self.renderer.owrite().synchronize_render_commands()?;
         self.sync_all_gpu_resources()?;
 
