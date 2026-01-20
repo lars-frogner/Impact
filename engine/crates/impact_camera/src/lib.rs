@@ -7,7 +7,6 @@ pub mod gpu_resource;
 pub mod setup;
 
 use approx::assert_abs_diff_ne;
-use impact_containers::tracking::EntityChangeTracker;
 use impact_geometry::{
     Frustum,
     projection::{OrthographicTransform, PerspectiveTransform},
@@ -43,12 +42,9 @@ pub trait Camera: Debug + Send + Sync + 'static {
     /// If `aspect_ratio` is zero.
     fn set_aspect_ratio(&mut self, aspect_ratio: f32);
 
-    /// Whether the projection transform has changed since the
-    /// last reset of change tracing.
-    fn projection_transform_changed(&self) -> bool;
-
-    /// Forgets any recorded changes to the projection transform.
-    fn reset_projection_change_tracking(&self);
+    /// Version number to allow callers to know whether the projection transform
+    /// changed since they last checked it.
+    fn projection_transform_version(&self) -> u64;
 }
 
 /// 3D camera using a perspective transformation.
@@ -56,8 +52,7 @@ pub trait Camera: Debug + Send + Sync + 'static {
 pub struct PerspectiveCamera {
     perspective_transform: PerspectiveTransform,
     view_frustum: Frustum,
-    /// Tracker for whether the projection transform has changed.
-    projection_transform_change_tracker: EntityChangeTracker,
+    transform_version: u64,
 }
 
 /// 3D camera using an orthographic transformation.
@@ -68,8 +63,7 @@ pub struct OrthographicCamera {
     near_and_far_distance: UpperExclusiveBounds<f32>,
     orthographic_transform: OrthographicTransform,
     view_frustum: Frustum,
-    /// Tracker for whether the projection transform has changed.
-    projection_transform_change_tracker: EntityChangeTracker,
+    transform_version: u64,
 }
 
 impl PerspectiveCamera {
@@ -94,7 +88,7 @@ impl PerspectiveCamera {
         Self {
             perspective_transform,
             view_frustum,
-            projection_transform_change_tracker: EntityChangeTracker::default(),
+            transform_version: 0,
         }
     }
 
@@ -114,18 +108,18 @@ impl PerspectiveCamera {
     /// If `fov` is zero.
     pub fn set_vertical_field_of_view<A: Angle>(&mut self, fov: A) {
         self.perspective_transform.set_vertical_field_of_view(fov);
-        self.update_frustum_and_notify_change();
+        self.update_frustum_and_increment_version();
     }
 
     pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<f32>) {
         self.perspective_transform
             .set_near_and_far_distance(near_and_far_distance);
-        self.update_frustum_and_notify_change();
+        self.update_frustum_and_increment_version();
     }
 
-    fn update_frustum_and_notify_change(&mut self) {
+    fn update_frustum_and_increment_version(&mut self) {
         self.view_frustum = Frustum::from_transform(self.perspective_transform.as_projective());
-        self.projection_transform_change_tracker.notify_change();
+        self.transform_version = self.transform_version.wrapping_add(1);
     }
 }
 
@@ -152,15 +146,11 @@ impl Camera for PerspectiveCamera {
 
     fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.perspective_transform.set_aspect_ratio(aspect_ratio);
-        self.update_frustum_and_notify_change();
+        self.update_frustum_and_increment_version();
     }
 
-    fn projection_transform_changed(&self) -> bool {
-        self.projection_transform_change_tracker.changed()
-    }
-
-    fn reset_projection_change_tracking(&self) {
-        self.projection_transform_change_tracker.reset();
+    fn projection_transform_version(&self) -> u64 {
+        self.transform_version
     }
 }
 
@@ -191,7 +181,7 @@ impl OrthographicCamera {
             near_and_far_distance,
             orthographic_transform,
             view_frustum,
-            projection_transform_change_tracker: EntityChangeTracker::default(),
+            transform_version: 0,
         }
     }
 
@@ -228,7 +218,7 @@ impl OrthographicCamera {
             self.near_and_far_distance.clone(),
         );
         self.view_frustum = Frustum::from_transform(self.orthographic_transform.as_projective());
-        self.projection_transform_change_tracker.notify_change();
+        self.transform_version = self.transform_version.wrapping_add(1);
     }
 }
 
@@ -260,12 +250,8 @@ impl Camera for OrthographicCamera {
         self.update_projection_transform_and_frustum();
     }
 
-    fn projection_transform_changed(&self) -> bool {
-        self.projection_transform_change_tracker.changed()
-    }
-
-    fn reset_projection_change_tracking(&self) {
-        self.projection_transform_change_tracker.reset();
+    fn projection_transform_version(&self) -> u64 {
+        self.transform_version
     }
 }
 
@@ -292,9 +278,11 @@ mod tests {
         let mut camera =
             PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.aspect_ratio(), 1.0);
+        assert_eq!(camera.projection_transform_version(), 0);
+
         camera.set_aspect_ratio(0.5);
         assert_abs_diff_eq!(camera.aspect_ratio(), 0.5);
-        assert!(camera.projection_transform_changed());
+        assert_eq!(camera.projection_transform_version(), 1);
     }
 
     #[test]
@@ -302,9 +290,11 @@ mod tests {
         let mut camera =
             PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(45.0));
+        assert_eq!(camera.projection_transform_version(), 0);
+
         camera.set_vertical_field_of_view(Degrees(90.0));
         assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(90.0));
-        assert!(camera.projection_transform_changed());
+        assert_eq!(camera.projection_transform_version(), 1);
     }
 
     #[test]
@@ -313,32 +303,12 @@ mod tests {
             PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.near_distance(), 0.1);
         assert_abs_diff_eq!(camera.far_distance(), 100.0, epsilon = 1e-4);
+        assert_eq!(camera.projection_transform_version(), 0);
+
         camera.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
         assert_abs_diff_eq!(camera.near_distance(), 42.0);
         assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-4);
-        assert!(camera.projection_transform_changed());
-    }
-
-    #[test]
-    fn resetting_projection_change_tracking_for_perspective_camera_works() {
-        let mut camera =
-            PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert!(
-            !camera.projection_transform_changed(),
-            "Projection transform change reported after construction"
-        );
-
-        camera.set_aspect_ratio(0.5);
-        assert!(
-            camera.projection_transform_changed(),
-            "No projection transform change reported after making change"
-        );
-
-        camera.reset_projection_change_tracking();
-        assert!(
-            !camera.projection_transform_changed(),
-            "Projection transform change reported after reset"
-        );
+        assert_eq!(camera.projection_transform_version(), 1);
     }
 
     #[test]
@@ -358,9 +328,11 @@ mod tests {
         let mut camera =
             OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.aspect_ratio(), 1.0);
+        assert_eq!(camera.projection_transform_version(), 0);
+
         camera.set_aspect_ratio(0.5);
         assert_abs_diff_eq!(camera.aspect_ratio(), 0.5);
-        assert!(camera.projection_transform_changed());
+        assert_eq!(camera.projection_transform_version(), 1);
     }
 
     #[test]
@@ -368,9 +340,11 @@ mod tests {
         let mut camera =
             OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(45.0));
+        assert_eq!(camera.projection_transform_version(), 0);
+
         camera.set_vertical_field_of_view(Degrees(90.0));
         assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(90.0));
-        assert!(camera.projection_transform_changed());
+        assert_eq!(camera.projection_transform_version(), 1);
     }
 
     #[test]
@@ -379,31 +353,11 @@ mod tests {
             OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
         assert_abs_diff_eq!(camera.near_distance(), 0.1);
         assert_abs_diff_eq!(camera.far_distance(), 100.0, epsilon = 1e-7);
+        assert_eq!(camera.projection_transform_version(), 0);
+
         camera.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
         assert_abs_diff_eq!(camera.near_distance(), 42.0);
         assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-7);
-        assert!(camera.projection_transform_changed());
-    }
-
-    #[test]
-    fn resetting_projection_change_tracking_for_orthographic_camera_works() {
-        let mut camera =
-            OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert!(
-            !camera.projection_transform_changed(),
-            "Projection transform change reported after construction"
-        );
-
-        camera.set_aspect_ratio(0.5);
-        assert!(
-            camera.projection_transform_changed(),
-            "No projection transform change reported after making change"
-        );
-
-        camera.reset_projection_change_tracking();
-        assert!(
-            !camera.projection_transform_changed(),
-            "Projection transform change reported after reset"
-        );
+        assert_eq!(camera.projection_transform_version(), 1);
     }
 }

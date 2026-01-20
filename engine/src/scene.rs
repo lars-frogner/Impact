@@ -89,7 +89,7 @@ impl Scene {
     pub fn clear(&self) {
         self.skybox.owrite().take();
 
-        self.camera_manager.owrite().clear_active_camera();
+        self.camera_manager.owrite().remove_all_cameras();
 
         self.light_manager.owrite().remove_all_lights();
 

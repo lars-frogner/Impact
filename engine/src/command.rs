@@ -132,6 +132,7 @@ pub fn execute_admin_command(engine: &Engine, command: AdminCommand) -> Result<(
 
 pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<()> {
     match command {
+        SceneCommand::SetActiveCamera { entity_id } => scene::set_active_camera(engine, entity_id),
         SceneCommand::SetSkybox(skybox) => {
             scene::set_skybox(engine, skybox);
             Ok(())
