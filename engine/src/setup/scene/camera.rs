@@ -1,7 +1,7 @@
 //! Setup and cleanup of cameras for new and removed entities.
 
 use crate::{lock_order::OrderedRwLock, scene::Scene};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ReferenceFrame;
@@ -42,12 +42,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
     setup!(
         {
             let scene = scene.oread();
-
             let mut camera_manager = scene.camera_manager().owrite();
-            if camera_manager.has_active_camera() {
-                bail!("Tried to add camera for entity while another entity still has one")
-            }
-
             let mut scene_graph = scene.scene_graph().owrite();
         },
         components,
@@ -74,7 +69,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let node_id = scene_graph
                 .create_camera_node(parent_node_id, camera_to_parent_transform.compact());
 
-            camera_manager.set_active_camera(camera, node_id);
+            camera_manager.add_active_camera(camera, node_id);
 
             SceneGraphCameraNodeHandle::new(node_id)
         },
@@ -99,12 +94,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
     setup!(
         {
             let scene = scene.oread();
-
             let mut camera_manager = scene.camera_manager().owrite();
-            if camera_manager.has_active_camera() {
-                bail!("Tried to add camera for entity while another entity still has one")
-            }
-
             let mut scene_graph = scene.scene_graph().owrite();
         },
         components,
@@ -131,7 +121,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let node_id = scene_graph
                 .create_camera_node(parent_node_id, camera_to_parent_transform.compact());
 
-            camera_manager.set_active_camera(camera, node_id);
+            camera_manager.add_active_camera(camera, node_id);
 
             SceneGraphCameraNodeHandle::new(node_id)
         },

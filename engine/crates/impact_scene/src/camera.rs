@@ -1,18 +1,22 @@
 //! Cameras in a scene.
 
 use crate::graph::CameraNodeID;
+use anyhow::{Result, anyhow};
 use impact_camera::{
     Camera,
     gpu_resource::{BufferableCamera, CameraGPUResource},
 };
+use impact_containers::HashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use impact_math::{point::Point3, transform::Isometry3};
 
 /// Manager for the cameras in a scene.
 #[derive(Debug)]
 pub struct CameraManager {
+    inactive_cameras: HashMap<CameraNodeID, SceneCamera>,
     active_camera: Option<SceneCamera>,
     context: CameraContext,
+    active_camera_version: u64,
 }
 
 /// Camera-external context required for creating a camera.
@@ -36,8 +40,10 @@ impl CameraManager {
     /// Creates a new camera manager with no active camera.
     pub fn new(context: CameraContext) -> Self {
         Self {
+            inactive_cameras: HashMap::default(),
             active_camera: None,
             context,
+            active_camera_version: 0,
         }
     }
 
@@ -74,19 +80,51 @@ impl CameraManager {
             .is_some_and(|camera| camera.scene_graph_node_id() == scene_graph_node_id)
     }
 
-    /// Creates a [`SceneCamera`] for the given camera and camera node and sets
-    /// it as the active camera.
-    pub fn set_active_camera(&mut self, camera: impl Camera, scene_graph_node_id: CameraNodeID) {
+    /// Adds the given camera to the manager and sets it as active.
+    pub fn add_active_camera(&mut self, camera: impl Camera, scene_graph_node_id: CameraNodeID) {
+        self.clear_active_camera();
+
         self.active_camera = Some(SceneCamera::new(
             camera,
             scene_graph_node_id,
             self.context.jitter_enabled,
         ));
+        self.active_camera_version = self.active_camera_version.wrapping_add(1);
+    }
+
+    /// Sets the given camera as active.
+    ///
+    /// # Errors
+    /// Returns an error if the camera is not present.
+    pub fn set_active_camera(&mut self, scene_graph_node_id: CameraNodeID) -> Result<()> {
+        self.clear_active_camera();
+
+        self.active_camera = Some(
+            self.inactive_cameras
+                .remove(&scene_graph_node_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Tried to set missing camera with node ID {:?} as active",
+                        scene_graph_node_id
+                    )
+                })?,
+        );
+        self.active_camera_version = self.active_camera_version.wrapping_add(1);
+        Ok(())
     }
 
     /// Makes no camera active.
     pub fn clear_active_camera(&mut self) {
-        self.active_camera.take();
+        if let Some(camera) = self.active_camera.take() {
+            self.inactive_cameras
+                .insert(camera.scene_graph_node_id(), camera);
+        }
+    }
+
+    /// Removes all cameras.
+    pub fn remove_all_cameras(&mut self) {
+        self.clear_active_camera();
+        self.inactive_cameras.clear();
     }
 
     /// Sets the ratio of width to height of the camera's view plane.
@@ -97,12 +135,18 @@ impl CameraManager {
         if let Some(camera) = &mut self.active_camera {
             camera.set_aspect_ratio(aspect_ratio);
         }
+        for camera in self.inactive_cameras.values_mut() {
+            camera.set_aspect_ratio(aspect_ratio);
+        }
         self.context.aspect_ratio = aspect_ratio;
     }
 
     /// Sets whether jittering is enabled for the cameras.
     pub fn set_jitter_enabled(&mut self, jitter_enabled: bool) {
         if let Some(camera) = &mut self.active_camera {
+            camera.set_jitter_enabled(jitter_enabled);
+        }
+        for camera in self.inactive_cameras.values_mut() {
             camera.set_jitter_enabled(jitter_enabled);
         }
         self.context.jitter_enabled = jitter_enabled;
@@ -120,17 +164,19 @@ impl CameraManager {
     ) {
         if let Some(scene_camera) = self.active_camera() {
             if let Some(camera_gpu_resources) = camera_gpu_resources {
-                camera_gpu_resources.sync_with_camera(
+                camera_gpu_resources.sync_with_camera_manager(
                     graphics_device,
                     staging_belt,
                     command_encoder,
                     scene_camera,
+                    self.active_camera_version,
                 );
             } else {
                 *camera_gpu_resources = Some(CameraGPUResource::for_camera(
                     graphics_device,
                     bind_group_layout_registry,
                     scene_camera,
+                    self.active_camera_version,
                 ));
             }
         } else {

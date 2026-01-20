@@ -48,6 +48,12 @@ pub struct CameraGPUResource {
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
     jitter_enabled: bool,
+    /// Version number to know when the active camera in the camera manager has
+    /// changed.
+    camera_version: u64,
+    /// Version number to know when the projection transform of the active
+    /// camera has changed.
+    projection_version: u64,
 }
 
 /// Uniform holding the projection transformation of a camera, the corners of
@@ -90,6 +96,7 @@ impl CameraGPUResource {
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         camera: &impl BufferableCamera,
+        camera_version: u64,
     ) -> Self {
         let view_transform = *camera.view_transform();
         let view_frustum = camera.camera().view_frustum().clone();
@@ -117,6 +124,8 @@ impl CameraGPUResource {
             projection_uniform_gpu_buffer,
             bind_group,
             jitter_enabled: camera.jitter_enabled(),
+            camera_version,
+            projection_version: camera.camera().projection_transform_version(),
         }
     }
 
@@ -145,23 +154,27 @@ impl CameraGPUResource {
         &self.bind_group
     }
 
-    /// Ensures that the GPU buffer is in sync with the given camera.
-    pub fn sync_with_camera(
+    /// Ensures that the GPU buffer is in sync with the camera manager.
+    pub fn sync_with_camera_manager(
         &mut self,
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         camera: &impl BufferableCamera,
+        camera_version: u64,
     ) {
         self.view_transform = *camera.view_transform();
 
-        if camera.camera().projection_transform_changed()
+        if self.camera_version != camera_version
+            || self.projection_version != camera.camera().projection_transform_version()
             || camera.jitter_enabled() != self.jitter_enabled
         {
             self.view_frustum = camera.camera().view_frustum().clone();
             self.sync_gpu_buffer(graphics_device, staging_belt, command_encoder, camera);
-            camera.camera().reset_projection_change_tracking();
             self.jitter_enabled = camera.jitter_enabled();
+
+            self.camera_version = camera_version;
+            self.projection_version = camera.camera().projection_transform_version();
         }
     }
 

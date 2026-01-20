@@ -1,5 +1,5 @@
-# Hash: 37e532f8bd970041
-# Generated: 2026-01-17T13:07:09.47712748
+# Hash: 32754e930aee36d4
+# Generated: 2026-01-18T09:03:02.251581089
 # Rust type: impact::command::scene::SceneCommand
 # Type category: Inline
 module [
@@ -15,6 +15,9 @@ import Skybox
 import core.Builtin
 
 SceneCommand : [
+    SetActiveCamera {
+            entity_id : Entity.Id,
+        },
     SetSkybox Skybox.Skybox,
     SetMedium Physics.UniformMedium.UniformMedium,
     SetSceneEntityActiveState {
@@ -29,22 +32,29 @@ SceneCommand : [
 write_bytes : List U8, SceneCommand -> List U8
 write_bytes = |bytes, value|
     when value is
-        SetSkybox(val) ->
+        SetActiveCamera { entity_id } ->
             bytes
             |> List.reserve(17)
             |> List.append(0)
+            |> Entity.write_bytes_id(entity_id)
+            |> List.concat(List.repeat(0, 8))
+
+        SetSkybox(val) ->
+            bytes
+            |> List.reserve(17)
+            |> List.append(1)
             |> Skybox.write_bytes(val)
 
         SetMedium(val) ->
             bytes
             |> List.reserve(17)
-            |> List.append(1)
+            |> List.append(2)
             |> Physics.UniformMedium.write_bytes(val)
 
         SetSceneEntityActiveState { entity_id, state } ->
             bytes
             |> List.reserve(17)
-            |> List.append(2)
+            |> List.append(3)
             |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
             |> List.concat(List.repeat(0, 7))
@@ -52,7 +62,7 @@ write_bytes = |bytes, value|
         SetMaxOmnidirectionalLightReach(val) ->
             bytes
             |> List.reserve(17)
-            |> List.append(3)
+            |> List.append(4)
             |> Builtin.write_bytes_f32(val)
             |> List.concat(List.repeat(0, 12))
 
@@ -66,19 +76,26 @@ from_bytes = |bytes|
         when bytes is
             [0, .. as data_bytes] ->
                 Ok(
+                    SetActiveCamera     {
+                        entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+                    },
+                )
+
+            [1, .. as data_bytes] ->
+                Ok(
                     SetSkybox(
                         data_bytes |> List.sublist({ start: 0, len: 16 }) |> Skybox.from_bytes?,
                     ),
                 )
 
-            [1, .. as data_bytes] ->
+            [2, .. as data_bytes] ->
                 Ok(
                     SetMedium(
                         data_bytes |> List.sublist({ start: 0, len: 16 }) |> Physics.UniformMedium.from_bytes?,
                     ),
                 )
 
-            [2, .. as data_bytes] ->
+            [3, .. as data_bytes] ->
                 Ok(
                     SetSceneEntityActiveState     {
                         entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
@@ -87,7 +104,7 @@ from_bytes = |bytes|
                 )
 
 
-            [3, .. as data_bytes] ->
+            [4, .. as data_bytes] ->
                 Ok(
                     SetMaxOmnidirectionalLightReach(
                         data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
