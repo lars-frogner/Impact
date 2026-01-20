@@ -1,13 +1,34 @@
-use crate::GameOptions;
+//! User interface.
+
+use crate::{Game, GameOptions};
 use impact::{egui, engine::Engine};
 use impact_dev_ui::{
     CustomPanels, UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig,
     option_panels::{option_group, option_panel},
 };
 
+pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
+
 #[derive(Debug)]
 pub struct UserInterface {
     dev_ui: DevUserInterface,
+}
+
+impl Game {
+    pub fn run_ui(
+        &self,
+        ctx: &egui::Context,
+        input: egui::RawInput,
+        engine: &Engine,
+    ) -> egui::FullOutput {
+        self.user_interface.write().run(
+            ctx,
+            input,
+            engine,
+            &UI_COMMANDS,
+            &mut self.game_options.write(),
+        )
+    }
 }
 
 impl UserInterface {

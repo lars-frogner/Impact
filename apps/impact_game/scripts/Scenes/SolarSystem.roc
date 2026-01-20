@@ -11,6 +11,8 @@ import core.UnitQuaternion
 import pf.Command
 import pf.Entity
 
+import pf.Game.SetupContext exposing [SetupContext]
+
 import pf.Skybox
 import pf.Texture.TextureID
 import pf.Comp.AmbientEmission
@@ -36,8 +38,8 @@ ambient_light = {
     illuminance: 1e3,
 }
 
-setup! : Generation.SolarSystem.System, Player.PlayerMode => Result {} Str
-setup! = |system, player_mode|
+setup! : SetupContext, Generation.SolarSystem.System => Result {} Str
+setup! = |ctx, system|
     skybox_texture_id = Texture.TextureID.from_name(skybox.texture)
     Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox_texture_id, skybox.max_luminance)))))?
 
@@ -51,17 +53,24 @@ setup! = |system, player_mode|
     Star.spawn!(system.star)?
     SphericalBodies.spawn!(system.bodies)?
 
-    when player_mode is
+    radius_to_cover = 1.1 * system.properties.radius
+    OverviewCamera.spawn!(radius_to_cover)?
+
+    Player.spawn!(
+        (0.0, 0.0, 5e3),
+        UnitQuaternion.identity,
+    )?
+
+    Tools.spawn!({})?
+
+    when ctx.player_mode is
         Active ->
-            Player.spawn!(
-                (0.0, 0.0, 1e3),
-                UnitQuaternion.identity,
-            )?
-            Tools.spawn!({})?
+            Command.execute!(UI(SetInteractivity(Disabled)))?
+            Command.execute!(Engine(Scene(SetActiveCamera { entity_id: Player.entity_ids.player_head })))?
 
         Overview ->
-            radius_to_cover = 1.1 * system.properties.radius
-            OverviewCamera.spawn!(radius_to_cover)?
+            Command.execute!(UI(SetInteractivity(Enabled)))?
+            Command.execute!(Engine(Scene(SetActiveCamera { entity_id: OverviewCamera.entity_ids.camera })))?
 
     Ok({})
 

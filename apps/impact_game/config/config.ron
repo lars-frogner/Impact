@@ -1,10 +1,11 @@
 (
     game_options: (
         reset_scene_on_reload: true,
+        player_mode: Active,
     ),
     run_mode: Windowed,
     window: (
-        initial_size: (1800, 1600),
+        initial_size: (1600, 1200),
     ),
     ui_config_path: "ui_config.ron",
     engine_config_path: "engine_config.ron",

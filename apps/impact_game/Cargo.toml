@@ -131,6 +131,7 @@ log = { path = "../../interop/log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 inventory = "0.3"
 parking_lot = "0.12"
+roc_integration = { path = "../../roc_integration" }
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }
 

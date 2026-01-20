@@ -1,7 +1,10 @@
 //! The Impact game.
 
 pub mod api;
+pub mod command;
+pub mod input;
 pub mod scripting;
+pub mod setup;
 pub mod user_interface;
 
 pub use impact;
@@ -25,6 +28,7 @@ use impact::{
 };
 use impact_dev_ui::UserInterfaceConfig;
 use parking_lot::RwLock;
+use roc_integration::roc;
 use scripting::ScriptLib;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -55,12 +59,14 @@ pub struct GameConfig {
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct GameOptions {
     reset_scene_on_reload: bool,
     #[serde(skip)]
     scene_reset_requested: bool,
     #[serde(skip)]
     show_game_options: bool,
+    player_mode: PlayerMode,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +74,14 @@ pub enum RunMode {
     #[default]
     Windowed,
     Headless,
+}
+
+#[roc(parents = "Game")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlayerMode {
+    #[default]
+    Active,
+    Overview,
 }
 
 impl Game {
@@ -108,7 +122,7 @@ impl Game {
         let options = self.game_options.read();
 
         if was_reloaded && options.reset_scene_on_reload && !options.scene_reset_requested {
-            Self::reset_scene(engine)?;
+            self.reset_scene(engine)?;
         }
 
         Ok(())
@@ -127,16 +141,10 @@ impl Game {
             options.with_upgraded(|opts| {
                 opts.scene_reset_requested = false;
             });
-            Self::reset_scene(engine)?;
+            self.reset_scene(engine)?;
         }
 
         Ok(())
-    }
-
-    fn reset_scene(engine: &Engine) -> Result<()> {
-        log::debug!("Resetting scene");
-        engine.reset_world()?;
-        scripting::setup_scene()
     }
 }
 
@@ -154,7 +162,9 @@ impl Application for Game {
         self.user_interface.read().setup(&engine);
 
         log::debug!("Setting up scene");
-        scripting::setup_scene()?;
+        self.setup_scene()?;
+
+        self.execute_game_commands();
 
         Ok(())
     }
@@ -162,27 +172,26 @@ impl Application for Game {
     fn on_new_frame(&self, engine: &Engine, _frame_number: u64) -> Result<()> {
         self.respond_to_script_reload(engine)?;
         self.perform_requested_option_actions(engine)?;
+
+        self.execute_game_commands();
+
         Ok(())
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
-        log::trace!("Handling keyboard event {event:?}");
-        scripting::handle_keyboard_event(event)
+        self.handle_keyboard_event(event)
     }
 
     fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
-        log::trace!("Handling mouse button event {event:?}");
-        scripting::handle_mouse_button_event(event)
+        self.handle_mouse_button_event(event)
     }
 
     fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
-        log::trace!("Handling mouse drag event {event:?}");
-        scripting::handle_mouse_drag_event(event)
+        self.handle_mouse_drag_event(event)
     }
 
     fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
-        log::trace!("Handling mouse scroll event {event:?}");
-        scripting::handle_mouse_scroll_event(event)
+        self.handle_mouse_scroll_event(event)
     }
 
     fn run_egui_ui(
@@ -191,13 +200,7 @@ impl Application for Game {
         input: egui::RawInput,
         engine: &Engine,
     ) -> egui::FullOutput {
-        self.user_interface.write().run(
-            ctx,
-            input,
-            engine,
-            &api::UI_COMMANDS,
-            &mut self.game_options.write(),
-        )
+        self.run_ui(ctx, input, engine)
     }
 }
 
