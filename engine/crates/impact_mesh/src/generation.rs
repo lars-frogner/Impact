@@ -820,6 +820,39 @@ impl TriangleMesh {
         sphere
     }
 
+    /// Creates a mesh representing a sphere with radius 1.0, centered at the
+    /// origin, with triangles facing both inwards and outwards and with
+    /// separate colors.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    ///
+    /// See [`Self::create_sphere`] for an explanation of the `n_rings`
+    /// argument.
+    ///
+    /// # Panics
+    /// - If `n_rings` is zero.
+    pub fn create_dual_sided_unit_sphere_with_colors(
+        n_rings: usize,
+        inside_color: VertexColor,
+        outside_color: VertexColor,
+    ) -> Self {
+        let mut sphere = Self::create_sphere(n_rings);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        sphere.remove_normal_vectors(&mut dirty_mask);
+        sphere.scale(2.0, &mut dirty_mask);
+
+        let mut inside_sphere = sphere.clone();
+        inside_sphere.flip_triangle_winding_order(&mut dirty_mask);
+
+        inside_sphere.set_same_color(inside_color, &mut dirty_mask);
+        sphere.set_same_color(outside_color, &mut dirty_mask);
+
+        sphere.merge_with(&inside_sphere, &mut dirty_mask);
+
+        sphere
+    }
+
     /// Creates a mesh representing the boundary of a cubic voxel chunk with the
     /// given extent. The lower corner of the cube is at the origin, and the
     /// width, height and depth axes are aligned with the x-, y- and z-axis.
