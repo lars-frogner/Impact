@@ -1,1 +1,1 @@
-../../../../templates/roc_platform/api/Scene.roc
+module []

@@ -1,5 +1,4 @@
 module [
-    PlayerMode,
     entity_ids,
     player,
     camera,
@@ -17,8 +16,6 @@ import core.Sphere
 import pf.Entity
 
 import pf.Setup.LocalForce
-import pf.Setup.CylinderMesh
-import pf.Setup.SphereMesh
 import pf.Setup.CapsuleMesh
 import pf.Setup.DynamicRigidBodyInertialProperties
 import pf.Comp.AngularVelocityControl
@@ -28,23 +25,14 @@ import pf.Control.AngularVelocityControlFlags
 import pf.Setup.SceneParent
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
-import pf.Comp.ModelTransform
 import pf.Setup.SceneGraphGroup
-import pf.Setup.SphereMesh
-import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Setup.UniformColor
-import pf.Setup.UniformEmissiveLuminance
 import pf.Comp.Motion
-import pf.Comp.VoxelAbsorbingCapsule
-import pf.Comp.VoxelAbsorbingSphere
-import pf.Comp.SceneEntityFlags
 import pf.Physics.ContactResponseParameters
 import pf.Setup.LocalForce
 import pf.Setup.SphericalCollidable
 import pf.Comp.DynamicGravity
-import pf.Setup.GravityAlignmentTorque
-
-PlayerMode : [Active, Overview]
+import pf.Setup.FixedDirectionAlignmentTorque
 
 PlayerEntities : {
     player : Entity.ComponentData,
@@ -131,8 +119,9 @@ construct_entities = |position, orientation|
             Point3.origin,
         )
         |> Comp.DynamicGravity.add
-        |> Setup.GravityAlignmentTorque.add_new(
-            UnitVector3.neg_unit_y,
+        |> Setup.FixedDirectionAlignmentTorque.add_new(
+            UnitVector3.unit_y,
+            UnitVector3.unit_y,
             player.alignment_settling_time,
             0.0,
             player.alignment_precession_damping,

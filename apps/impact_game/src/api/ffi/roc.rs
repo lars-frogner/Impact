@@ -5,10 +5,10 @@ use anyhow::{Context, anyhow};
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
 
 #[unsafe(no_mangle)]
-pub extern "C" fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
+pub extern "C" fn roc_execute_game_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
     to_roc_result(
-        api::execute_engine_command(command_bytes.as_slice())
-            .context("Failed executing engine command"),
+        api::execute_game_command(command_bytes.as_slice())
+            .context("Failed executing game command"),
     )
 }
 
@@ -16,6 +16,14 @@ pub extern "C" fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> Roc
 pub extern "C" fn roc_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
     to_roc_result(
         api::execute_ui_command(command_bytes.as_slice()).context("Failed executing UI command"),
+    )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
+    to_roc_result(
+        api::execute_engine_command(command_bytes.as_slice())
+            .context("Failed executing engine command"),
     )
 }
 

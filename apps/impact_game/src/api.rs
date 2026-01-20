@@ -2,7 +2,11 @@
 
 pub mod ffi;
 
-use crate::{ENGINE, Game, GameConfig, RunMode, user_interface::UserInterface};
+use crate::{
+    ENGINE, Game, GameConfig, RunMode,
+    command::{GAME_COMMANDS, GameCommand},
+    user_interface::{UI_COMMANDS, UserInterface},
+};
 use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
@@ -12,10 +16,8 @@ use impact::{
     run::{headless, window},
     runtime::headless::HeadlessConfig,
 };
-use impact_dev_ui::{UICommand, UICommandQueue, UserInterface as DevUserInterface};
+use impact_dev_ui::{UICommand, UserInterface as DevUserInterface};
 use std::{path::Path, sync::Arc};
-
-pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
 
 pub fn run_with_config_at_path(config_path: impl AsRef<Path>) -> Result<()> {
     run_with_config(GameConfig::from_ron_file(config_path)?)
@@ -42,13 +44,11 @@ pub fn run_with_config(config: GameConfig) -> Result<()> {
     }
 }
 
-pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
-    log::trace!("Executing engine command");
-    let command = UserCommand::from_roc_bytes(command_bytes)?;
-    with_engine(|engine| {
-        engine.enqueue_user_command(command);
-        Ok(())
-    })
+pub fn execute_game_command(command_bytes: &[u8]) -> Result<()> {
+    log::trace!("Executing game command");
+    let command = GameCommand::from_roc_bytes(command_bytes)?;
+    GAME_COMMANDS.enqueue_command(command);
+    Ok(())
 }
 
 pub fn execute_ui_command(command_bytes: &[u8]) -> Result<()> {
@@ -56,6 +56,15 @@ pub fn execute_ui_command(command_bytes: &[u8]) -> Result<()> {
     let command = UICommand::from_roc_bytes(command_bytes)?;
     UI_COMMANDS.enqueue_command(command);
     Ok(())
+}
+
+pub fn execute_engine_command(command_bytes: &[u8]) -> Result<()> {
+    log::trace!("Executing engine command");
+    let command = UserCommand::from_roc_bytes(command_bytes)?;
+    with_engine(|engine| {
+        engine.enqueue_user_command(command);
+        Ok(())
+    })
 }
 
 pub fn stage_entity_for_creation_with_id(entity_id: u64, component_bytes: &[u8]) -> Result<()> {

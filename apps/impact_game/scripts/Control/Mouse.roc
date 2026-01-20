@@ -6,6 +6,7 @@ module [
 
 import pf.Command
 import pf.Entity
+import pf.Game.InputContext exposing [InputContext]
 import pf.Input.MouseButtonEvent exposing [MouseButtonEvent]
 import pf.Input.MouseDragEvent exposing [MouseDragEvent]
 import pf.Input.MouseScrollEvent exposing [MouseScrollEvent]
@@ -17,21 +18,21 @@ import Entities.Player as Player
 import Entities.Star as Star
 import Entities.OverviewCamera as OverviewCamera
 
-handle_button_event! : Player.PlayerMode, MouseButtonEvent => Result {} Str
-handle_button_event! = |player_mode, event|
-    when player_mode is
+handle_button_event! : InputContext, MouseButtonEvent => Result {} Str
+handle_button_event! = |ctx, event|
+    when ctx.player_mode is
         Active -> handle_button_event_active_mode!(event)
         Overview -> handle_button_event_overview_mode!(event)
 
-handle_drag_event! : Player.PlayerMode, MouseDragEvent => Result {} Str
-handle_drag_event! = |player_mode, event|
-    when player_mode is
+handle_drag_event! : InputContext, MouseDragEvent => Result {} Str
+handle_drag_event! = |ctx, event|
+    when ctx.player_mode is
         Active -> handle_drag_event_active_mode!(event)
         Overview -> handle_drag_event_overview_mode!(event)
 
-handle_scroll_event! : Player.PlayerMode, MouseScrollEvent => Result {} Str
-handle_scroll_event! = |player_mode, event|
-    when player_mode is
+handle_scroll_event! : InputContext, MouseScrollEvent => Result {} Str
+handle_scroll_event! = |ctx, event|
+    when ctx.player_mode is
         Active -> handle_scroll_event_active_mode!(event)
         Overview -> handle_scroll_event_overview_mode!(event)
 

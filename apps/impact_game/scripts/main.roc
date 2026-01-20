@@ -3,6 +3,8 @@ app [callbacks] {
     core: "../../../roc_packages/core/main.roc",
 }
 
+import pf.Game.SetupContext exposing [SetupContext]
+
 import Generation.SolarSystem
 import Scenes.SolarSystem
 import Control.Keyboard
@@ -16,10 +18,8 @@ callbacks = {
     handle_mouse_scroll_event!,
 }
 
-player_mode = Overview
-
-setup_scene! : {} => Result {} Str
-setup_scene! = |_|
+setup_scene! : SetupContext => Result {} Str
+setup_scene! = |ctx|
     system = Generation.SolarSystem.generate(
         {
             number_of_bodies: 1000,
@@ -36,16 +36,9 @@ setup_scene! = |_|
         },
         0,
     )
-    Scenes.SolarSystem.setup!(system, player_mode)
+    Scenes.SolarSystem.setup!(ctx, system)
 
-handle_keyboard_event! = |event|
-    Control.Keyboard.handle_event!(player_mode, event)
-
-handle_mouse_button_event! = |event|
-    Control.Mouse.handle_button_event!(player_mode, event)
-
-handle_mouse_drag_event! = |event|
-    Control.Mouse.handle_drag_event!(player_mode, event)
-
-handle_mouse_scroll_event! = |event|
-    Control.Mouse.handle_scroll_event!(player_mode, event)
+handle_keyboard_event! = Control.Keyboard.handle_event!
+handle_mouse_button_event! = Control.Mouse.handle_button_event!
+handle_mouse_drag_event! = Control.Mouse.handle_drag_event!
+handle_mouse_scroll_event! = Control.Mouse.handle_scroll_event!

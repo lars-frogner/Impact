@@ -3,6 +3,7 @@ module [handle_event!]
 import core.UnitVector3
 
 import pf.Command
+import pf.Game.InputContext exposing [InputContext]
 import pf.Input.KeyboardEvent exposing [KeyboardEvent]
 
 import pf.Comp.LocalForceGeneratorID
@@ -10,21 +11,22 @@ import pf.Comp.AlignmentTorqueGeneratorID
 
 import Entities.Player as Player
 import Entities.Tools as Tools
+import Entities.OverviewCamera as OverviewCamera
 
-handle_event! : Player.PlayerMode, KeyboardEvent => Result {} Str
-handle_event! = |player_mode, event|
-    when player_mode is
+handle_event! : InputContext, KeyboardEvent => Result {} Str
+handle_event! = |ctx, event|
+    when ctx.player_mode is
         Active -> handle_event_active_mode!(event)
         Overview -> handle_event_overview_mode!(event)
 
 handle_event_active_mode! : KeyboardEvent => Result {} Str
 handle_event_active_mode! = |{ key, state }|
-    command =
+    commands =
         when key is
             Control(control_key) ->
                 when control_key is
-                    Escape -> toggle_interactivity(state)
-                    _ -> None
+                    Escape -> set_ui_interactivity(state, Opposite)
+                    _ -> []
 
             Letter(letter_key) ->
                 when letter_key is
@@ -36,25 +38,33 @@ handle_event_active_mode! = |{ key, state }|
                     KeyE -> add_thruster_force!(state, Up)?
                     KeyY -> set_alignment_direction!(state, Fixed(UnitVector3.neg_unit_y))?
                     KeyG -> set_alignment_direction!(state, GravityForce)?
-                    _ -> None
+                    KeyO -> switch_to_overview_mode(state)
+                    _ -> []
 
-            _ -> None
+            _ -> []
 
-    when command is
-        Some(comm) -> Command.execute!(comm)
-        None -> Ok({})
+    commands |> List.for_each_try!(Command.execute!)
 
 handle_event_overview_mode! : KeyboardEvent => Result {} Str
-handle_event_overview_mode! = |_event|
-    Ok({})
+handle_event_overview_mode! = |{ key, state }|
+    commands =
+        when key is
+            Letter(letter_key) ->
+                when letter_key is
+                    KeyO -> switch_to_active_mode(state)
+                    _ -> []
 
-toggle_interactivity = |key_state|
+            _ -> []
+
+    commands |> List.for_each_try!(Command.execute!)
+
+set_ui_interactivity = |key_state, to|
     when key_state is
         Released -> {}
         _ ->
-            return None
+            return []
 
-    Some(UI(SetInteractivity(Opposite)))
+    [UI(SetInteractivity(to))]
 
 add_thruster_force! = |key_state, direction|
     force_magnitude = Tools.thruster.acceleration * Player.player.mass
@@ -63,7 +73,7 @@ add_thruster_force! = |key_state, direction|
             Pressed -> force_magnitude
             Released -> -force_magnitude
             Held ->
-                return Ok(None)
+                return Ok([])
 
     force_vector =
         when direction is
@@ -75,13 +85,36 @@ add_thruster_force! = |key_state, direction|
             Up -> (0, force, 0)
 
     generator_id = Comp.LocalForceGeneratorID.get_for_entity!(Player.entity_ids.player)?
-    Ok(Some(Engine(Physics(UpdateLocalForce { generator_id, mode: Add, force: force_vector }))))
+    Ok([Engine(Physics(UpdateLocalForce { generator_id, mode: Add, force: force_vector }))])
 
 set_alignment_direction! = |key_state, direction|
     when key_state is
-        Pressed -> {}
+        Released -> {}
         _ ->
-            return Ok(None)
+            return Ok([])
 
     generator_id = Comp.AlignmentTorqueGeneratorID.get_for_entity!(Player.entity_ids.player)?
-    Ok(Some(Engine(Physics(SetAlignmentTorqueDirection { generator_id, direction }))))
+    Ok([Engine(Physics(SetAlignmentTorqueDirection { generator_id, direction }))])
+
+switch_to_overview_mode = |key_state|
+    when key_state is
+        Released -> {}
+        _ ->
+            return []
+
+    [
+        Game(SetPlayerMode(Overview)),
+        UI(SetInteractivity(Enabled)),
+        Engine(Scene(SetActiveCamera { entity_id: OverviewCamera.entity_ids.camera })),
+    ]
+
+switch_to_active_mode = |key_state|
+    when key_state is
+        Released -> {}
+        _ ->
+            return []
+
+    [
+        Game(SetPlayerMode(Active)),
+        Engine(Scene(SetActiveCamera { entity_id: Player.entity_ids.player_head })),
+    ]
