@@ -33,6 +33,8 @@ use std::{
 };
 use user_interface::UserInterface;
 
+use crate::user_interface::UI_COMMANDS;
+
 static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
 
 #[derive(Debug)]
@@ -136,6 +138,9 @@ impl BasicApp {
     fn reset_scene(engine: &Engine) -> Result<()> {
         log::debug!("Resetting scene");
         engine.reset_world()?;
+
+        UI_COMMANDS.clear();
+
         scripting::setup_scene()
     }
 }
@@ -191,13 +196,7 @@ impl Application for BasicApp {
         input: egui::RawInput,
         engine: &Engine,
     ) -> egui::FullOutput {
-        self.user_interface.write().run(
-            ctx,
-            input,
-            engine,
-            &api::UI_COMMANDS,
-            &mut self.app_options.write(),
-        )
+        self.run_ui(ctx, input, engine)
     }
 }
 

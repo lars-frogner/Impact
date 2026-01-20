@@ -79,6 +79,34 @@ pub struct AdminCommandQueues {
     pub system: CommandQueue<SystemAdminCommand>,
 }
 
+impl EngineCommandQueues {
+    pub(crate) fn clear(&self) {
+        self.user.clear();
+        self.admin.clear();
+    }
+}
+
+impl UserCommandQueues {
+    pub(crate) fn clear(&self) {
+        self.scene.clear();
+        self.control.clear();
+        self.physics.clear();
+    }
+}
+
+impl AdminCommandQueues {
+    pub(crate) fn clear(&self) {
+        self.rendering.clear();
+        self.physics.clear();
+        self.control.clear();
+        self.capture.clear();
+        self.instrumentation.clear();
+        self.game_loop.clear();
+        self.gizmo.clear();
+        self.system.clear();
+    }
+}
+
 pub fn execute_engine_command(engine: &Engine, command: UserCommand) -> Result<()> {
     match command {
         UserCommand::Scene(command) => execute_scene_command(engine, command),

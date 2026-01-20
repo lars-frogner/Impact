@@ -2,7 +2,10 @@
 
 pub mod ffi;
 
-use crate::{BasicApp, BasicAppConfig, ENGINE, RunMode, user_interface::UserInterface};
+use crate::{
+    BasicApp, BasicAppConfig, ENGINE, RunMode,
+    user_interface::{UI_COMMANDS, UserInterface},
+};
 use anyhow::{Result, bail};
 use impact::{
     command::UserCommand,
@@ -12,10 +15,8 @@ use impact::{
     run::{headless, window},
     runtime::headless::HeadlessConfig,
 };
-use impact_dev_ui::{UICommand, UICommandQueue, UserInterface as DevUserInterface};
+use impact_dev_ui::{UICommand, UserInterface as DevUserInterface};
 use std::{path::Path, sync::Arc};
-
-pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
 
 pub fn run_with_config_at_path(config_path: impl AsRef<Path>) -> Result<()> {
     run_with_config(BasicAppConfig::from_ron_file(config_path)?)
