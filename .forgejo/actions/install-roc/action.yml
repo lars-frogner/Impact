@@ -1,0 +1,68 @@
+name: "Install Roc"
+description: "Downloads and installs Roc from GitHub"
+inputs:
+  roc-version:
+    description: "The release tag to install (e.g., nightly, alpha4-rolling)"
+    required: false
+    default: "nightly"
+  token:
+    description: "GitHub Personal Access Token (PAT)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore Roc Cache
+      id: cache-roc
+      uses: https://actions.go-gitea.com/actions/cache/restore@v3
+      with:
+        path: roc_dist
+        key: ${{ runner.os }}-roc-${{ inputs.roc-version }}
+
+    - name: Download and Install Roc
+      if: steps.cache-roc.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        ROC_TAG: ${{ inputs.roc-version }}
+      run: |
+        echo "Downloading and installing Roc version: $ROC_TAG..."
+
+        # Install required utilities
+        apt-get update -qq
+        apt-get install -y curl jq
+
+        # Obtain download URL
+        DOWNLOAD_URL=$(curl -s -H "Authorization: token $GH_TOKEN" \
+          "https://api.github.com/repos/roc-lang/roc/releases/tags/$ROC_TAG" \
+          | jq -r '.assets[] | select(.name | contains("linux_x86_64")) | select(.name | endswith(".tar.gz")) | .browser_download_url' \
+          | head -n 1)
+
+        if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" == "null" ]; then
+          echo "::error::Could not find a linux_x86_64.tar.gz asset for tag '$ROC_TAG'."
+          exit 1
+        fi
+
+        # Download
+        echo "Downloading from: $DOWNLOAD_URL"
+        curl -sL -o roc_archive.tar.gz "$DOWNLOAD_URL"
+
+        # Extract
+        mkdir -p roc_dist
+        tar -xzf roc_archive.tar.gz -C roc_dist --strip-components=1
+        rm roc_archive.tar.gz
+
+    - name: Add Roc to Path
+      shell: bash
+      run: echo "$(pwd)/roc_dist" >> $GITHUB_PATH
+
+    - name: Save Roc Cache
+      if: steps.cache-roc.outputs.cache-hit != 'true'
+      uses: https://actions.go-gitea.com/actions/cache/save@v3
+      with:
+        path: roc_dist
+        key: ${{ runner.os }}-roc-${{ inputs.roc-version }}
+
+    - name: Verify Installation
+      shell: bash
+      run: roc version
