@@ -97,7 +97,4 @@
     screen_capture: (
         tagging: FrameNumber,
     ),
-    light: (
-        max_omnidirectional_light_reach: 1e4,
-    ),
 )

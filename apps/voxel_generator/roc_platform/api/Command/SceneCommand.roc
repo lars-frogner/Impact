@@ -1,5 +1,5 @@
-# Hash: 32754e930aee36d4
-# Generated: 2026-01-18T09:04:11.7117219
+# Hash: ec736be43d48522d
+# Generated: 2026-01-21T20:16:42.986729253
 # Rust type: impact::command::scene::SceneCommand
 # Type category: Inline
 module [
@@ -12,7 +12,6 @@ import Command.ActiveState
 import Entity
 import Physics.UniformMedium
 import Skybox
-import core.Builtin
 
 SceneCommand : [
     SetActiveCamera {
@@ -24,7 +23,6 @@ SceneCommand : [
             entity_id : Entity.Id,
             state : Command.ActiveState.ActiveState,
         },
-    SetMaxOmnidirectionalLightReach F32,
 ]
 
 ## Serializes a value of [SceneCommand] into the binary representation
@@ -58,13 +56,6 @@ write_bytes = |bytes, value|
             |> Entity.write_bytes_id(entity_id)
             |> Command.ActiveState.write_bytes(state)
             |> List.concat(List.repeat(0, 7))
-
-        SetMaxOmnidirectionalLightReach(val) ->
-            bytes
-            |> List.reserve(17)
-            |> List.append(4)
-            |> Builtin.write_bytes_f32(val)
-            |> List.concat(List.repeat(0, 12))
 
 ## Deserializes a value of [SceneCommand] from its bytes in the
 ## representation used by the engine.
@@ -103,13 +94,6 @@ from_bytes = |bytes|
                     },
                 )
 
-
-            [4, .. as data_bytes] ->
-                Ok(
-                    SetMaxOmnidirectionalLightReach(
-                        data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
-                    ),
-                )
 
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

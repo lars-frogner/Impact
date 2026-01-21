@@ -864,8 +864,12 @@ impl SceneGraph {
         if let Some(world_space_bounding_sphere) = root_node.get_bounding_sphere() {
             let world_space_bounding_sphere = world_space_bounding_sphere.aligned();
 
-            let camera_space_bounding_sphere =
+            let mut camera_space_bounding_sphere =
                 world_space_bounding_sphere.iso_transformed(view_transform);
+
+            // Anything beyound the far distance will not be visible, so there
+            // is no need to have the bounding sphere radius exceed it
+            camera_space_bounding_sphere.bound_radius(scene_camera.camera().far_distance());
 
             for (light_id, omnidirectional_light) in
                 light_manager.shadowable_omnidirectional_lights_with_ids_mut()

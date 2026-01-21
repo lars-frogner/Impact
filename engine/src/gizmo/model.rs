@@ -1,6 +1,6 @@
 //! Gizmo models.
 
-use crate::gizmo::{GizmoObscurability, GizmoType};
+use crate::gizmo::{GizmoDepthClipping, GizmoObscurability, GizmoType};
 use impact_math::hash64;
 use impact_mesh::{LineSegmentMeshID, MeshID, MeshPrimitive, TriangleMeshID};
 use impact_scene::model::ModelID;
@@ -20,6 +20,9 @@ pub struct GizmoModel {
     pub mesh_primitive: MeshPrimitive,
     /// Whether this gizmo mode can be obscured by geometry in front of it.
     pub obscurability: GizmoObscurability,
+    /// Whether this gizmo should be clipped against the camera's near and far
+    /// plane.
+    pub depth_clipping: GizmoDepthClipping,
 }
 
 impl GizmoModel {
@@ -56,13 +59,16 @@ pub fn gizmo_models() -> &'static [Vec<GizmoModel>; GizmoType::count()] {
 }
 
 /// Returns each gizmo model whose mesh is of the given type and that has the
-/// given obscurability.
-pub fn gizmo_models_for_mesh_primitive_and_obscurability(
+/// given obscurability and depth clipping.
+pub fn select_gizmo_models(
     primitive: MeshPrimitive,
     obscurability: GizmoObscurability,
+    depth_clipping: GizmoDepthClipping,
 ) -> impl IntoIterator<Item = &'static GizmoModel> {
     gizmo_models().iter().flatten().filter(move |model| {
-        model.mesh_primitive == primitive && model.obscurability == obscurability
+        model.mesh_primitive == primitive
+            && model.obscurability == obscurability
+            && model.depth_clipping == depth_clipping
     })
 }
 
@@ -79,8 +85,13 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
         | GizmoType::Torque => {
             vec![define_non_obscurable_line_segment_model(gizmo.label())]
         }
-        GizmoType::BoundingSphere | GizmoType::LightSphere => {
+        GizmoType::BoundingSphere => {
             vec![define_obscurable_triangle_model(gizmo.label())]
+        }
+        GizmoType::LightSphere => {
+            vec![define_obscurable_triangle_model_with_unclipped_depth(
+                gizmo.label(),
+            )]
         }
         GizmoType::CenterOfMass | GizmoType::Anchors | GizmoType::VoxelIntersections => {
             vec![define_non_obscurable_triangle_model(gizmo.label())]
@@ -119,16 +130,34 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
         }
         GizmoType::ShadowCubemapFaces => {
             vec![
-                define_non_obscurable_triangle_model(format!("{} planes", gizmo.label())),
-                define_non_obscurable_line_segment_model(format!("{} outlines", gizmo.label())),
+                define_obscurable_triangle_model_with_unclipped_depth(format!(
+                    "{} planes",
+                    gizmo.label()
+                )),
+                define_non_obscurable_line_segment_model_with_unclipped_depth(format!(
+                    "{} outlines",
+                    gizmo.label()
+                )),
             ]
         }
         GizmoType::ShadowMapCascades => {
             vec![
-                define_obscurable_triangle_model(format!("{} plane 0", gizmo.label())),
-                define_obscurable_triangle_model(format!("{} plane 1", gizmo.label())),
-                define_obscurable_triangle_model(format!("{} plane 2", gizmo.label())),
-                define_obscurable_triangle_model(format!("{} plane 3", gizmo.label())),
+                define_obscurable_triangle_model_with_unclipped_depth(format!(
+                    "{} plane 0",
+                    gizmo.label()
+                )),
+                define_obscurable_triangle_model_with_unclipped_depth(format!(
+                    "{} plane 1",
+                    gizmo.label()
+                )),
+                define_obscurable_triangle_model_with_unclipped_depth(format!(
+                    "{} plane 2",
+                    gizmo.label()
+                )),
+                define_obscurable_triangle_model_with_unclipped_depth(format!(
+                    "{} plane 3",
+                    gizmo.label()
+                )),
             ]
         }
     }
@@ -155,6 +184,18 @@ fn define_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
         model_id,
         mesh_primitive: MeshPrimitive::Triangle,
         obscurability: GizmoObscurability::Obscurable,
+        depth_clipping: GizmoDepthClipping::Enabled,
+    }
+}
+
+fn define_obscurable_triangle_model_with_unclipped_depth(label: impl AsRef<str>) -> GizmoModel {
+    let (mesh_id, model_id) = create_triangle_mesh_and_model_id(label);
+    GizmoModel {
+        mesh_id,
+        model_id,
+        mesh_primitive: MeshPrimitive::Triangle,
+        obscurability: GizmoObscurability::Obscurable,
+        depth_clipping: GizmoDepthClipping::Disabled,
     }
 }
 
@@ -165,6 +206,7 @@ fn define_non_obscurable_triangle_model(label: impl AsRef<str>) -> GizmoModel {
         model_id,
         mesh_primitive: MeshPrimitive::Triangle,
         obscurability: GizmoObscurability::NonObscurable,
+        depth_clipping: GizmoDepthClipping::Enabled,
     }
 }
 
@@ -175,6 +217,20 @@ fn define_non_obscurable_line_segment_model(label: impl AsRef<str>) -> GizmoMode
         model_id,
         mesh_primitive: MeshPrimitive::LineSegment,
         obscurability: GizmoObscurability::NonObscurable,
+        depth_clipping: GizmoDepthClipping::Enabled,
+    }
+}
+
+fn define_non_obscurable_line_segment_model_with_unclipped_depth(
+    label: impl AsRef<str>,
+) -> GizmoModel {
+    let (mesh_id, model_id) = create_line_segment_mesh_and_model_id(label);
+    GizmoModel {
+        mesh_id,
+        model_id,
+        mesh_primitive: MeshPrimitive::LineSegment,
+        obscurability: GizmoObscurability::NonObscurable,
+        depth_clipping: GizmoDepthClipping::Disabled,
     }
 }
 

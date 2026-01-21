@@ -99,6 +99,7 @@ impl DepthPrepass {
             } else {
                 wgpu::PolygonMode::Fill
             },
+            false,
             Some(render_command::depth_stencil_state_for_depth_stencil_write()),
             "Depth prepass render pipeline",
         )

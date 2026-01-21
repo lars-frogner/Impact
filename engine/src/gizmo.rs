@@ -265,6 +265,13 @@ pub enum GizmoObscurability {
     NonObscurable,
 }
 
+/// Whether a gizmo should be clipped against the camera's near and far plane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GizmoDepthClipping {
+    Enabled,
+    Disabled,
+}
+
 /// Manager controlling the display of gizmos.
 ///
 /// Gizmos are simple visual elements drawn over the scene to provide technical

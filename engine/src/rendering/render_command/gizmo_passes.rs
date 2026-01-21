@@ -1,6 +1,6 @@
 //! Passes for rendering gizmos.
 
-use crate::gizmo::{self, GizmoObscurability, model::GizmoModel};
+use crate::gizmo::{self, GizmoDepthClipping, GizmoObscurability, model::GizmoModel};
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
@@ -34,12 +34,15 @@ pub struct GizmoPasses {
 struct GizmoPass {
     obscurability: GizmoObscurability,
     triangle_pipeline: GizmoPassPipeline,
+    triangle_pipeline_with_unclipped_depth: GizmoPassPipeline,
     line_pipeline: GizmoPassPipeline,
+    line_pipeline_with_unclipped_depth: GizmoPassPipeline,
 }
 
 #[derive(Debug)]
 struct GizmoPassPipeline {
     obscurability: GizmoObscurability,
+    depth_clipping: GizmoDepthClipping,
     mesh_primitive: MeshPrimitive,
     pipeline: wgpu::RenderPipeline,
 }
@@ -159,6 +162,18 @@ impl GizmoPass {
             vertex_buffer_layouts,
             color_target_states,
             obscurability,
+            GizmoDepthClipping::Enabled,
+            MeshPrimitive::Triangle,
+        );
+
+        let triangle_pipeline_with_unclipped_depth = GizmoPassPipeline::new(
+            graphics_device,
+            pipeline_layout,
+            shader,
+            vertex_buffer_layouts,
+            color_target_states,
+            obscurability,
+            GizmoDepthClipping::Disabled,
             MeshPrimitive::Triangle,
         );
 
@@ -169,13 +184,27 @@ impl GizmoPass {
             vertex_buffer_layouts,
             color_target_states,
             obscurability,
+            GizmoDepthClipping::Enabled,
+            MeshPrimitive::LineSegment,
+        );
+
+        let line_pipeline_with_unclipped_depth = GizmoPassPipeline::new(
+            graphics_device,
+            pipeline_layout,
+            shader,
+            vertex_buffer_layouts,
+            color_target_states,
+            obscurability,
+            GizmoDepthClipping::Disabled,
             MeshPrimitive::LineSegment,
         );
 
         Self {
             obscurability,
             triangle_pipeline,
+            triangle_pipeline_with_unclipped_depth,
             line_pipeline,
+            line_pipeline_with_unclipped_depth,
         }
     }
 
@@ -243,8 +272,20 @@ impl GizmoPass {
         self.triangle_pipeline
             .record(gpu_resources, camera_gpu_resources, &mut render_pass)?;
 
+        self.triangle_pipeline_with_unclipped_depth.record(
+            gpu_resources,
+            camera_gpu_resources,
+            &mut render_pass,
+        )?;
+
         self.line_pipeline
             .record(gpu_resources, camera_gpu_resources, &mut render_pass)?;
+
+        self.line_pipeline_with_unclipped_depth.record(
+            gpu_resources,
+            camera_gpu_resources,
+            &mut render_pass,
+        )?;
 
         Ok(())
     }
@@ -258,17 +299,26 @@ impl GizmoPassPipeline {
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
         color_target_states: &[Option<wgpu::ColorTargetState>],
         obscurability: GizmoObscurability,
+        depth_clipping: GizmoDepthClipping,
         mesh_primitive: MeshPrimitive,
     ) -> Self {
         let depth_stencil_state = match obscurability {
-            GizmoObscurability::Obscurable => {
-                Some(render_command::depth_stencil_state_for_depth_test_without_write())
-            }
+            GizmoObscurability::Obscurable => Some(wgpu::DepthStencilState {
+                format: RenderAttachmentQuantity::depth_texture_format(),
+                depth_write_enabled: false,
+                // Allow equality to avoid discarding geometry flattened onto
+                // the far plane due to `GizmoDepthClipping::Disabled`
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             GizmoObscurability::NonObscurable => None,
         };
 
+        let unclipped_depth = depth_clipping == GizmoDepthClipping::Disabled;
+
         let label = format!(
-            "Gizmo pass render pipeline {{ mesh_primitive: {mesh_primitive:?}, obscurability: {obscurability:?} }}"
+            "Gizmo pass render pipeline {{ mesh_primitive: {mesh_primitive:?}, obscurability: {obscurability:?}, depth_clipping: {depth_clipping:?} }}"
         );
 
         let pipeline = match mesh_primitive {
@@ -281,6 +331,7 @@ impl GizmoPassPipeline {
                 STANDARD_FRONT_FACE,
                 None,
                 wgpu::PolygonMode::Fill,
+                unclipped_depth,
                 depth_stencil_state,
                 &label,
             ),
@@ -291,12 +342,14 @@ impl GizmoPassPipeline {
                 vertex_buffer_layouts,
                 color_target_states,
                 depth_stencil_state,
+                unclipped_depth,
                 &label,
             ),
         };
 
         Self {
             obscurability,
+            depth_clipping,
             mesh_primitive,
             pipeline,
         }
@@ -308,9 +361,10 @@ impl GizmoPassPipeline {
         camera_gpu_resources: &CameraGPUResource,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()> {
-        let models = gizmo::model::gizmo_models_for_mesh_primitive_and_obscurability(
+        let models = gizmo::model::select_gizmo_models(
             self.mesh_primitive,
             self.obscurability,
+            self.depth_clipping,
         );
 
         match self.mesh_primitive {

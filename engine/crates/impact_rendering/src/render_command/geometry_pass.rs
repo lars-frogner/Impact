@@ -279,6 +279,7 @@ impl GeometryPass {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             polygon_mode,
+            false,
             Some(depth_stencil_state),
             &format!("Geometry pass render pipeline for shader: {shader_template:?}"),
         )

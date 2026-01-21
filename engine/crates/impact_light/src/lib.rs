@@ -213,8 +213,8 @@ pub struct AmbientLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct OmnidirectionalLight {
-    // Camera space position and far distance are treated as a single
-    // 4-component vector in the shader
+    // Camera space position and max reach are treated as a single 4-component
+    // vector in the shader
     camera_space_position: Point3C,
     max_reach: f32,
     // Luminous intensity and emissive radius are treated as a single
@@ -253,11 +253,10 @@ pub struct ShadowableOmnidirectionalLight {
     // 4-component vector in the shader
     luminous_intensity: LuminousIntensity,
     emissive_radius: f32,
-    // The `near_distance` and `inverse_distance_span` fields are accessed as a
-    // struct in a single field in the shader
+    // The `near_distance`, `inverse_distance_span` and `far_distance` fields
+    // are accessed as a struct in a single field in the shader
     near_distance: f32,
     inverse_distance_span: f32,
-    // Padding to make size multiple of 16-bytes
     far_distance: f32,
     max_reach: f32,
 }
@@ -374,15 +373,6 @@ pub struct LightManager {
     shadowable_unidirectional_light_buffer: ShadowableUnidirectionalLightUniformBuffer,
     total_ambient_luminance: Luminance,
     light_id_counter: u32,
-    config: LightConfig,
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug)]
-pub struct LightConfig {
-    /// The maximum light sphere radius for omnidirectional lights. Decrease if
-    /// light spheres are getting clipped against the far plane of the camera.
-    pub max_omnidirectional_light_reach: f32,
 }
 
 #[roc]
@@ -524,8 +514,8 @@ impl LightManager {
     /// avoid excessive buffer reallocation when the first few lights are added.
     pub const INITIAL_LIGHT_CAPACITY: usize = 5;
 
-    /// Creates a new light manager with the given configuration and no lights.
-    pub fn new(config: LightConfig) -> Self {
+    /// Creates a new light manager with no lights.
+    pub fn new() -> Self {
         Self {
             ambient_light_buffer: AmbientLightUniformBuffer::with_capacity(1),
             omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer::with_capacity(
@@ -544,7 +534,6 @@ impl LightManager {
                 ),
             total_ambient_luminance: Luminance::zeros(),
             light_id_counter: 0,
-            config,
         }
     }
 
@@ -940,12 +929,6 @@ impl LightManager {
             .valid_uniforms_with_ids_mut()
     }
 
-    pub fn set_max_omnidirectional_light_reach(&mut self, max_reach: f32) {
-        assert!(max_reach >= 0.0);
-        self.config.max_omnidirectional_light_reach = max_reach;
-        self.update_max_reach_for_omnidirectional_lights();
-    }
-
     /// Removes all lights from the storage.
     pub fn remove_all_lights(&mut self) {
         self.ambient_light_buffer.remove_all_uniforms();
@@ -996,20 +979,14 @@ impl LightManager {
         let min_incident_luminance = self.min_incident_luminance();
 
         for light in self.omnidirectional_light_buffer.valid_uniforms_mut() {
-            light.update_max_reach_based_on_min_incident_luminance(
-                min_incident_luminance,
-                self.config.max_omnidirectional_light_reach,
-            );
+            light.update_max_reach_based_on_min_incident_luminance(min_incident_luminance);
         }
 
         for light in self
             .shadowable_omnidirectional_light_buffer
             .valid_uniforms_mut()
         {
-            light.update_max_reach_based_on_min_incident_luminance(
-                min_incident_luminance,
-                self.config.max_omnidirectional_light_reach,
-            );
+            light.update_max_reach_based_on_min_incident_luminance(min_incident_luminance);
         }
     }
 
@@ -1017,20 +994,16 @@ impl LightManager {
         &self,
         omnidirectional_light: &mut OmnidirectionalLight,
     ) {
-        omnidirectional_light.update_max_reach_based_on_min_incident_luminance(
-            self.min_incident_luminance(),
-            self.config.max_omnidirectional_light_reach,
-        );
+        omnidirectional_light
+            .update_max_reach_based_on_min_incident_luminance(self.min_incident_luminance());
     }
 
     fn update_max_reach_for_shadowable_omnidirectional_light(
         &self,
         omnidirectional_light: &mut ShadowableOmnidirectionalLight,
     ) {
-        omnidirectional_light.update_max_reach_based_on_min_incident_luminance(
-            self.min_incident_luminance(),
-            self.config.max_omnidirectional_light_reach,
-        );
+        omnidirectional_light
+            .update_max_reach_based_on_min_incident_luminance(self.min_incident_luminance());
     }
 
     fn min_incident_luminance(&self) -> f32 {
@@ -1051,11 +1024,9 @@ impl LightManager {
     }
 }
 
-impl Default for LightConfig {
+impl Default for LightManager {
     fn default() -> Self {
-        Self {
-            max_omnidirectional_light_reach: 1e4,
-        }
+        Self::new()
     }
 }
 
@@ -1139,16 +1110,11 @@ impl OmnidirectionalLight {
     /// Sets `self.max_reach` to the distance at which the incident luminance
     /// from the light equals `min_incident_luminance`, or to `max_reach_limit`
     /// if the distance exceeds this limit.
-    fn update_max_reach_based_on_min_incident_luminance(
-        &mut self,
-        min_incident_luminance: f32,
-        max_reach_limit: f32,
-    ) {
+    fn update_max_reach_based_on_min_incident_luminance(&mut self, min_incident_luminance: f32) {
         self.max_reach = Self::compute_max_reach_from_min_incident_luminance(
             &self.luminous_intensity,
             min_incident_luminance,
-        )
-        .min(max_reach_limit);
+        );
     }
 
     /// Computes the multiplicative factor by which the max reach of a light
@@ -1381,16 +1347,11 @@ impl ShadowableOmnidirectionalLight {
     /// Sets `self.max_reach` to the distance at which the incident luminance
     /// from the light equals `min_incident_luminance`, or to `max_reach_limit`
     /// if the distance exceeds this limit.
-    fn update_max_reach_based_on_min_incident_luminance(
-        &mut self,
-        min_incident_luminance: f32,
-        max_reach_limit: f32,
-    ) {
+    fn update_max_reach_based_on_min_incident_luminance(&mut self, min_incident_luminance: f32) {
         self.max_reach = OmnidirectionalLight::compute_max_reach_from_min_incident_luminance(
             &self.luminous_intensity,
             min_incident_luminance,
-        )
-        .min(max_reach_limit);
+        );
     }
 
     fn compute_camera_to_light_space_rotation(

@@ -144,10 +144,6 @@ pub fn execute_scene_command(engine: &Engine, command: SceneCommand) -> Result<(
         SceneCommand::SetSceneEntityActiveState { entity_id, state } => {
             scene::set_scene_entity_active_state(engine, entity_id, state)
         }
-        SceneCommand::SetMaxOmnidirectionalLightReach(to) => {
-            scene::set_max_omnidirectional_light_reach(engine, to);
-            Ok(())
-        }
     }
     .context("Failed to execute scene command")
 }

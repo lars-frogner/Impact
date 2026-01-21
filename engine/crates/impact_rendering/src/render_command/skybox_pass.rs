@@ -98,6 +98,7 @@ impl SkyboxPass {
                     STANDARD_FRONT_FACE,
                     Some(wgpu::Face::Back),
                     wgpu::PolygonMode::Fill,
+                    false,
                     Some(self.depth_stencil_state.clone()),
                     "Skybox pass render pipeline",
                 ));

@@ -31,9 +31,8 @@ impl GizmoType {
                     .insert(self.only_line_segment_mesh_id(), mesh);
             }
             Self::BoundingSphere => {
-                let mesh = TriangleMesh::create_dual_sided_unit_sphere_with_colors(
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
                     64,
-                    VertexColor::CYAN.with_alpha(0.1),
                     VertexColor::CYAN.with_alpha(0.15),
                 );
                 resource_manager
@@ -41,9 +40,8 @@ impl GizmoType {
                     .insert(self.only_triangle_mesh_id(), mesh);
             }
             Self::LightSphere => {
-                let mesh = TriangleMesh::create_dual_sided_unit_sphere_with_colors(
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
                     64,
-                    VertexColor::YELLOW.with_alpha(0.05),
                     VertexColor::YELLOW.with_alpha(0.1),
                 );
                 resource_manager

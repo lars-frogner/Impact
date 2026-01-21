@@ -454,7 +454,7 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
 
     let light_sphere_from_unit_sphere = InstanceModelViewTransform {
         translation: *light.camera_space_position().as_vector(),
-        scaling: light.max_reach(),
+        scaling: light.far_distance(), // The shader uses the far distance as the light sphere radius
         rotation: UnitQuaternionC::identity(),
     };
 

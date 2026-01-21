@@ -679,6 +679,7 @@ impl VoxelGeometryPipeline {
             } else {
                 wgpu::PolygonMode::Fill
             },
+            false,
             depth_stencil_state,
             "Voxel geometry pass render pipeline",
         )

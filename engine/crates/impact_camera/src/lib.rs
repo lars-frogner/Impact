@@ -26,6 +26,12 @@ pub trait Camera: Debug + Send + Sync + 'static {
     /// Returns the vertical field of view angle in radians.
     fn vertical_field_of_view(&self) -> Radians;
 
+    /// Returns the near distance of the camera.
+    fn near_distance(&self) -> f32;
+
+    /// Returns the far distance of the camera.
+    fn far_distance(&self) -> f32;
+
     /// Returns the frustum representing the view volume of the
     /// camera.
     fn view_frustum(&self) -> &Frustum;
@@ -92,16 +98,6 @@ impl PerspectiveCamera {
         }
     }
 
-    /// Returns the near distance of the camera.
-    pub fn near_distance(&self) -> f32 {
-        self.perspective_transform.near_distance()
-    }
-
-    /// Returns the far distance of the camera.
-    pub fn far_distance(&self) -> f32 {
-        self.perspective_transform.far_distance()
-    }
-
     /// Sets the vertical field of view angle.
     ///
     /// # Panics
@@ -130,6 +126,14 @@ impl Camera for PerspectiveCamera {
 
     fn vertical_field_of_view(&self) -> Radians {
         self.perspective_transform.vertical_field_of_view()
+    }
+
+    fn near_distance(&self) -> f32 {
+        self.perspective_transform.near_distance()
+    }
+
+    fn far_distance(&self) -> f32 {
+        self.perspective_transform.far_distance()
     }
 
     fn view_frustum(&self) -> &Frustum {
@@ -185,16 +189,6 @@ impl OrthographicCamera {
         }
     }
 
-    /// Returns the near distance of the camera.
-    pub fn near_distance(&self) -> f32 {
-        self.near_and_far_distance.lower()
-    }
-
-    /// Returns the far distance of the camera.
-    pub fn far_distance(&self) -> f32 {
-        self.near_and_far_distance.upper()
-    }
-
     /// Sets the vertical field of view angle.
     ///
     /// # Panics
@@ -229,6 +223,14 @@ impl Camera for OrthographicCamera {
 
     fn vertical_field_of_view(&self) -> Radians {
         self.vertical_field_of_view
+    }
+
+    fn near_distance(&self) -> f32 {
+        self.near_and_far_distance.lower()
+    }
+
+    fn far_distance(&self) -> f32 {
+        self.near_and_far_distance.upper()
     }
 
     fn view_frustum(&self) -> &Frustum {
