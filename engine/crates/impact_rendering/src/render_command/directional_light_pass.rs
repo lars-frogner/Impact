@@ -701,6 +701,7 @@ impl OmnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            true, // Prevent far clipping of light sphere
             depth_stencil_state,
             "Omnidirectional light pass render pipeline",
         );
@@ -733,6 +734,7 @@ impl OmnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            true,
             depth_stencil_state,
             "Omnidirectional light pass render pipeline",
         );
@@ -787,6 +789,7 @@ impl ShadowableOmnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            true, // Prevent far clipping of light sphere
             depth_stencil_state,
             "Shadowable omnidirectional light pass render pipeline",
         );
@@ -820,6 +823,7 @@ impl ShadowableOmnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            true,
             depth_stencil_state,
             "Shadowable omnidirectional light pass render pipeline",
         );
@@ -867,6 +871,7 @@ impl UnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             depth_stencil_state,
             "Unidirectional light pass render pipeline",
         );
@@ -899,6 +904,7 @@ impl UnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             depth_stencil_state,
             "Unidirectional light pass render pipeline",
         );
@@ -953,6 +959,7 @@ impl ShadowableUnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             depth_stencil_state,
             "Shadowable unidirectional light pass render pipeline",
         );
@@ -985,6 +992,7 @@ impl ShadowableUnidirectionalLightPipeline {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             depth_stencil_state,
             "Shadowable unidirectional light pass render pipeline",
         );

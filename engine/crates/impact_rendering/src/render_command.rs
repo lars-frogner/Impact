@@ -53,6 +53,7 @@ pub fn create_render_pipeline(
     front_face: wgpu::FrontFace,
     cull_mode: Option<wgpu::Face>,
     polygon_mode: wgpu::PolygonMode,
+    unclipped_depth: bool,
     depth_stencil_state: Option<wgpu::DepthStencilState>,
     label: &str,
 ) -> wgpu::RenderPipeline {
@@ -78,7 +79,7 @@ pub fn create_render_pipeline(
             front_face,
             cull_mode,
             polygon_mode,
-            unclipped_depth: false,
+            unclipped_depth,
             conservative: false,
         },
         depth_stencil: depth_stencil_state,
@@ -100,6 +101,7 @@ pub fn create_line_list_render_pipeline(
     vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
     color_target_states: &[Option<wgpu::ColorTargetState>],
     depth_stencil_state: Option<wgpu::DepthStencilState>,
+    unclipped_depth: bool,
     label: &str,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -124,7 +126,7 @@ pub fn create_line_list_render_pipeline(
             front_face: wgpu::FrontFace::default(),
             cull_mode: None,
             polygon_mode: wgpu::PolygonMode::default(),
-            unclipped_depth: false,
+            unclipped_depth,
             conservative: false,
         },
         depth_stencil: depth_stencil_state,

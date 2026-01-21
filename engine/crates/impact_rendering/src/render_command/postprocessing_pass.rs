@@ -124,6 +124,7 @@ impl PostprocessingRenderPass {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             depth_stencil_state.clone(),
             &format!("Postprocessing pass render pipeline ({label})"),
         );
@@ -436,6 +437,7 @@ pub fn create_postprocessing_render_pipeline(
         STANDARD_FRONT_FACE,
         Some(wgpu::Face::Back),
         wgpu::PolygonMode::Fill,
+        false,
         depth_stencil_state,
         &format!("Postprocessing pass render pipeline ({label})"),
     )

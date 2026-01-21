@@ -198,6 +198,14 @@ impl Sphere {
         max_squared_distance_from_center <= self.radius_squared()
     }
 
+    /// Clamps the radius to the given upper limit.
+    #[inline]
+    pub fn bound_radius(&mut self, max_radius: f32) {
+        if self.radius > max_radius {
+            self.radius = max_radius;
+        }
+    }
+
     /// Computes the sphere resulting from scaling this sphere with the given
     /// uniform scale factor.
     #[inline]

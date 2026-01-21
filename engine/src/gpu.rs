@@ -80,7 +80,8 @@ pub fn connect_to_graphics_device_for_rendering(
             | wgpu::Features::DEPTH32FLOAT_STENCIL8
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::FLOAT32_FILTERABLE
-            | wgpu::Features::INDIRECT_FIRST_INSTANCE,
+            | wgpu::Features::INDIRECT_FIRST_INSTANCE
+            | wgpu::Features::DEPTH_CLIP_CONTROL,
         wgpu::Features::POLYGON_MODE_LINE
             | wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,

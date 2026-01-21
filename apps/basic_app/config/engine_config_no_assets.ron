@@ -86,9 +86,6 @@
             velocity: (0.0, 0.0, 0.0),
         ),
     ),
-    light: (
-        max_omnidirectional_light_reach: 1e4,
-    ),
     voxel: (
         texture_resolution: 256,
         voxel_types_path: None,

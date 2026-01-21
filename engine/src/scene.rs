@@ -1,7 +1,7 @@
 //! Scene containing data to render.
 
 use crate::lock_order::OrderedRwLock;
-use impact_light::{LightConfig, LightManager};
+use impact_light::LightManager;
 use impact_scene::{
     camera::{CameraContext, CameraManager},
     graph::SceneGraph,
@@ -27,14 +27,13 @@ impl Scene {
     /// Creates a new scene data container.
     pub fn new(
         camera_context: CameraContext,
-        light_config: LightConfig,
         model_instance_manager: ModelInstanceManager,
     ) -> Self {
         let initial_model_instance_manager_state = model_instance_manager.record_state();
         Self {
             skybox: RwLock::new(None),
             camera_manager: RwLock::new(CameraManager::new(camera_context)),
-            light_manager: RwLock::new(LightManager::new(light_config)),
+            light_manager: RwLock::new(LightManager::new()),
             voxel_object_manager: RwLock::new(VoxelObjectManager::new()),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,

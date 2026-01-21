@@ -43,9 +43,6 @@ setup! = |ctx, system|
     skybox_texture_id = Texture.TextureID.from_name(skybox.texture)
     Command.execute!(Engine(Scene(SetSkybox(Skybox.new(skybox_texture_id, skybox.max_luminance)))))?
 
-    max_light_reach = 2.5 * Num.max(Player.camera.view_distance, system.properties.radius)
-    Command.execute!(Engine(Scene(SetMaxOmnidirectionalLightReach(max_light_reach))))?
-
     Command.execute!(Engine(Physics(SetGravitationalConstant(system.properties.grav_const))))?
 
     Entity.create_with_id!(ambient_light_ent, entity_ids.ambient_light)?
@@ -65,7 +62,6 @@ setup! = |ctx, system|
 
     when ctx.player_mode is
         Active ->
-            Command.execute!(UI(SetInteractivity(Disabled)))?
             Command.execute!(Engine(Scene(SetActiveCamera { entity_id: Player.entity_ids.player_head })))?
 
         Overview ->

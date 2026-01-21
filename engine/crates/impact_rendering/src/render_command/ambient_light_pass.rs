@@ -107,6 +107,7 @@ impl AmbientLightPass {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             Some(depth_stencil_state.clone()),
             "Ambient light pass render pipeline",
         );
@@ -149,6 +150,7 @@ impl AmbientLightPass {
                 STANDARD_FRONT_FACE,
                 Some(wgpu::Face::Back),
                 wgpu::PolygonMode::Fill,
+                false,
                 Some(self.depth_stencil_state.clone()),
                 "Ambient light pass render pipeline",
             );

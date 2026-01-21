@@ -96,6 +96,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             INVERTED_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             None,
             "Omnidirectional light shadow map update render pipeline",
         );
@@ -187,6 +188,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 INVERTED_FRONT_FACE,
                 Some(wgpu::Face::Back),
                 wgpu::PolygonMode::Fill,
+                false,
                 None,
                 "Omnidirectional light shadow map update render pipeline",
             );
@@ -452,6 +454,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
+            false,
             None,
             "Unidirectional light shadow map update render pipeline",
         );
@@ -543,6 +546,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 STANDARD_FRONT_FACE,
                 Some(wgpu::Face::Back),
                 wgpu::PolygonMode::Fill,
+                false,
                 None,
                 "Unidirectional light shadow map update render pipeline",
             );
