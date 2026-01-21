@@ -39,7 +39,7 @@ jobs:
             interop/log,
             tools/asset_fetcher,
           ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -134,7 +134,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -150,10 +150,11 @@ jobs:
       - uses: https://github.com/dtolnay/rust-toolchain@v1
         with: { toolchain: stable }
 
-      - id: roc
-        uses: https://github.com/hasnep/setup-roc@v0.5.0
+      - name: Install Roc
+        uses: ./.forgejo/actions/install-roc
         with:
-          roc-version: nightly
+          roc-version: alpha4-rolling
+          token: ${{ secrets.GH_PAT }}
 
       - name: Build (debug)
         working-directory: ${{ matrix.workspace }}
@@ -175,7 +176,7 @@ jobs:
       fail-fast: false
       matrix:
         workspace: [engine, tools/asset_fetcher]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -203,7 +204,7 @@ jobs:
       fail-fast: false
       matrix:
         workspace: [engine]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -223,8 +224,8 @@ jobs:
 
       - name: Install ASan runtime
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y clang libclang-rt-17-dev
+          apt-get update -qq
+          apt-get install -y --no-install-recommends clang libclang-rt-dev
 
       - name: Test with AddressSanitizer
         working-directory: ${{ matrix.workspace }}
@@ -244,7 +245,7 @@ jobs:
       fail-fast: false
       matrix:
         workspace: [engine]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -287,7 +288,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────
   test-snapshot:
     name: Snapshot tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       WORKSPACE: apps/snapshot_tester
 
@@ -311,10 +312,11 @@ jobs:
       - uses: https://github.com/dtolnay/rust-toolchain@v1
         with: { toolchain: stable }
 
-      - id: roc
-        uses: https://github.com/hasnep/setup-roc@v0.5.0
+      - name: Install Roc
+        uses: ./.forgejo/actions/install-roc
         with:
-          roc-version: nightly
+          roc-version: alpha4-rolling
+          token: ${{ secrets.GH_PAT }}
 
       - name: Install Mesa software drivers
         uses: ./.forgejo/actions/install-mesa
@@ -352,7 +354,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -403,7 +405,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -446,7 +448,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -487,7 +489,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
@@ -531,7 +533,7 @@ jobs:
             apps/voxel_generator,
             apps/impact_game,
           ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: https://data.forgejo.org/actions/checkout@v4
