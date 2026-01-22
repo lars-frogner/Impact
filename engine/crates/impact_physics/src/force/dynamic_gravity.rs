@@ -18,6 +18,11 @@ define_component_type! {
     pub struct DynamicGravity;
 }
 
+#[cfg(feature = "ecs")]
+impact_ecs::declare_component_flags! {
+    DynamicGravity => impact_ecs::component::ComponentFlags::INHERITABLE,
+}
+
 /// Manages dynamic rigid bodies that contribute to and are affected by a
 /// collective gravitational field.
 #[derive(Clone, Debug)]
