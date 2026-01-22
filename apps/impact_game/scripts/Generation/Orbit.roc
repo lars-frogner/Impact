@@ -2,6 +2,7 @@ module [
     Orbit,
     compute_position_and_velocity,
     compute_orbital_period,
+    compute_mean_orbital_speed,
 ]
 
 import core.Vector3 exposing [Vector3]

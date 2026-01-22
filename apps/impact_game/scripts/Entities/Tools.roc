@@ -38,7 +38,7 @@ entity_ids = {
 }
 
 thruster = {
-    acceleration: 100.0,
+    acceleration: 10.0,
 }
 
 laser = {

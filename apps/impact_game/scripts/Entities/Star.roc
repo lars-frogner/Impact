@@ -80,7 +80,7 @@ construct_entities = |{ radius, mass_density, luminous_intensity, emissive_lumin
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.ShadowableOmnidirectionalEmission.add_new(
             Vector3.scale(star.color, luminous_intensity),
-            0 * 2 * radius,
+            2 * radius,
         )
 
     { star: star_ent, star_light: star_light_ent }

@@ -47,6 +47,7 @@ Properties : {
 Star : {
     radius : F32,
     mass_density : F32,
+    mass : F32,
     luminous_intensity : F32,
     emissive_luminance : F32,
 }
@@ -102,6 +103,7 @@ generate = |spec, seed|
     star = {
         radius: spec.star_radius,
         mass_density: spec.star_mass_density,
+        mass: star_mass,
         luminous_intensity: star_luminous_intensity,
         emissive_luminance: star_emissive_luminance,
     }
