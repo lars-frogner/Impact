@@ -32,6 +32,12 @@
 
 - Implement N-body gravity simulation using multipole expansion for the gravitational field of extended objects and a Barnes-Hut tree as acceleration structure.
 
+- Improve physics stability (avoid crash when small pieces explode with NaN).
+
+- Adjust voxel collider sphere radius based on signed distance.
+
+- Voxel absorption - limit signed distance based on distance from absorber.
+
 ## Generation
 
 - Implement graph based system for generating voxel types (probably integrated with SDF graph).
@@ -73,3 +79,5 @@
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
 - Fix sporadic `assertion failed: radius >= 0.0` from `sphere.rs` (probably when absorbing voxels with sphere).
+
+- Investigate "floating" non-empty chunks (separated from main body with empty chunks but not disconnected). Is separation by whole empty chunks handled?
