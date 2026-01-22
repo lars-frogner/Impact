@@ -17,6 +17,7 @@ import pf.Skybox
 import pf.Texture.TextureID
 import pf.Comp.AmbientEmission
 
+import Generation.Orbit
 import Generation.SolarSystem
 
 import Entities.Player as Player
@@ -53,9 +54,12 @@ setup! = |ctx, system|
     radius_to_cover = 1.1 * system.properties.radius
     OverviewCamera.spawn!(radius_to_cover)?
 
+    player_distance = 5e3
+    player_speed = Generation.Orbit.compute_mean_orbital_speed(system.properties.grav_const, system.star.mass, player_distance)
     Player.spawn!(
-        (0.0, 0.0, 5e3),
+        (0.0, 0.0, -player_distance),
         UnitQuaternion.identity,
+        (-player_speed, 0.0, 0.0),
     )?
 
     Tools.spawn!({})?

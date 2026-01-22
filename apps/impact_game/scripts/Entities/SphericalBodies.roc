@@ -29,8 +29,8 @@ body = {
     roughness: 0.6,
     mass_density: 1e3,
     restitution_coef: 0.0,
-    static_friction_coef: 8.0,
-    dynamic_friction_coef: 8.0,
+    static_friction_coef: 0.8,
+    dynamic_friction_coef: 0.8,
 }
 
 spawn! : List SolarSystem.Body => Result {} Str

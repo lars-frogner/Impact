@@ -156,7 +156,7 @@ ground =
 asteroid =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 30))
-    |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 0)
+    |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 1.0, 0)
     # |> Setup.VoxelSphereUnion.add_new(0.25, 10, 10, (20, 0, 0), 5.0)
     # |> Setup.VoxelBox.add_new(0.25, 31, 15, 15)
     |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)

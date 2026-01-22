@@ -7,6 +7,7 @@ import pf.Game.SetupContext exposing [SetupContext]
 
 import Generation.SolarSystem
 import Scenes.SolarSystem
+import Scenes.Asteroid
 import Control.Keyboard
 import Control.Mouse
 
@@ -20,23 +21,24 @@ callbacks = {
 
 setup_scene! : SetupContext => Result {} Str
 setup_scene! = |ctx|
-    system = Generation.SolarSystem.generate(
-        {
-            number_of_bodies: 1000,
-            body_distributions: {
-                size: { exponent: -2, min_value: 10.0, max_value: 3e2 },
-                semi_major_axis: { exponent: -0.5, min_value: 1e3, max_value: 1e4 },
-                eccentricity: { mean: 0.0, std_dev: 0.1 },
-                inclination_angle: { mean: 0.0, std_dev: 5.0 },
-            },
-            star_radius: 3e2,
-            star_mass_density: 5e4,
-            max_orbital_period: 5 * 60.0,
-            min_body_illuminance: 5e3,
-        },
-        0,
-    )
-    Scenes.SolarSystem.setup!(ctx, system)
+    # system = Generation.SolarSystem.generate(
+    #    {
+    #        number_of_bodies: 1000,
+    #        body_distributions: {
+    #            size: { exponent: -2, min_value: 10.0, max_value: 3e2 },
+    #            semi_major_axis: { exponent: -0.5, min_value: 1e3, max_value: 1e4 },
+    #            eccentricity: { mean: 0.0, std_dev: 0.1 },
+    #            inclination_angle: { mean: 0.0, std_dev: 5.0 },
+    #        },
+    #        star_radius: 3e2,
+    #        star_mass_density: 1e4,
+    #        max_orbital_period: 10 * 60.0,
+    #        min_body_illuminance: 5e3,
+    #    },
+    #    0,
+    # )
+    # Scenes.SolarSystem.setup!(ctx, system)
+    Scenes.Asteroid.setup!(ctx)
 
 handle_keyboard_event! = Control.Keyboard.handle_event!
 handle_mouse_button_event! = Control.Mouse.handle_button_event!

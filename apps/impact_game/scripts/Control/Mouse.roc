@@ -15,7 +15,6 @@ import pf.Input.MouseButtonSet as Buttons
 
 import Control.Overview
 import Entities.Player as Player
-import Entities.Star as Star
 import Entities.OverviewCamera as OverviewCamera
 
 handle_button_event! : InputContext, MouseButtonEvent => Result {} Str
@@ -70,7 +69,7 @@ handle_drag_event_overview_mode! = |event|
     if Buttons.contains(event.pressed, Buttons.left) then
         Control.Overview.rotate_camera!(
             OverviewCamera.entity_ids.camera,
-            Star.entity_ids.star,
+            OverviewCamera.camera.focus_position,
             Num.to_f32(event.ang_delta_x),
             Num.to_f32(event.ang_delta_y),
             Num.to_f32(event.cursor.ang_x),
@@ -79,7 +78,7 @@ handle_drag_event_overview_mode! = |event|
     else if Buttons.contains(event.pressed, Buttons.right) then
         Control.Overview.pan_camera!(
             OverviewCamera.entity_ids.camera,
-            Star.entity_ids.star,
+            OverviewCamera.camera.focus_position,
             Num.to_f32(event.ang_delta_x),
             Num.to_f32(event.ang_delta_y),
         )
@@ -90,7 +89,7 @@ handle_scroll_event_overview_mode! : MouseScrollEvent => Result {} Str
 handle_scroll_event_overview_mode! = |event|
     Control.Overview.zoom_camera!(
         OverviewCamera.entity_ids.camera,
-        Star.entity_ids.star,
+        OverviewCamera.camera.focus_position,
         Num.to_f32(event.delta_y),
     )
 

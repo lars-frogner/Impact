@@ -8,7 +8,7 @@ module [
 import core.Radians
 import core.UnitQuaternion exposing [UnitQuaternion]
 import core.UnitVector3
-import core.Vector3
+import core.Vector3 exposing [Vector3]
 import core.Matrix3
 import core.Point3 exposing [Point3]
 import core.Sphere
@@ -69,9 +69,9 @@ camera = {
     view_distance: 1e4,
 }
 
-spawn! : Point3, UnitQuaternion => Result {} Str
-spawn! = |position, orientation|
-    ents = construct_entities(position, orientation)
+spawn! : Point3, UnitQuaternion, Vector3 => Result {} Str
+spawn! = |position, orientation, velocity|
+    ents = construct_entities(position, orientation, velocity)
 
     Entity.create_with_id!(ents.player, entity_ids.player)?
     Entity.create_with_id!(ents.player_body, entity_ids.player_body)?
@@ -79,8 +79,8 @@ spawn! = |position, orientation|
 
     Ok({})
 
-construct_entities : Point3, UnitQuaternion -> PlayerEntities
-construct_entities = |position, orientation|
+construct_entities : Point3, UnitQuaternion, Vector3 -> PlayerEntities
+construct_entities = |position, orientation, velocity|
     player_ent =
         Entity.new_component_data
         |> Setup.SceneGraphGroup.add
@@ -88,7 +88,7 @@ construct_entities = |position, orientation|
             position,
             orientation,
         )
-        |> Comp.Motion.add_stationary
+        |> Comp.Motion.add_linear(velocity)
         |> Comp.AngularVelocityControl.add_new(
             Control.AngularVelocityControlDirections.horizontal,
             Control.AngularVelocityControlFlags.preserve_existing_for_horizontal,
@@ -120,8 +120,8 @@ construct_entities = |position, orientation|
         )
         |> Comp.DynamicGravity.add
         |> Setup.FixedDirectionAlignmentTorque.add_new(
-            UnitVector3.unit_y,
-            UnitVector3.unit_y,
+            UnitVector3.neg_unit_y,
+            UnitVector3.neg_unit_y,
             player.alignment_settling_time,
             0.0,
             player.alignment_precession_damping,

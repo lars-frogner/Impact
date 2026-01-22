@@ -1,7 +1,7 @@
 [
     (
         name: "Default",
-        mass_density: 1.0,
+        mass_density: 1e3,
         color: Uniform((0.9, 0.9, 0.9)),
         specular_reflectance: 0.02,
         roughness: Uniform(0.5),
