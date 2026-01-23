@@ -136,17 +136,29 @@ impl Capsule {
         )
     }
 
-    /// Computes the capsule obtained by clamping this capsule's segment to the
-    /// bounds of the given axis-aligned box. Returns [`None`] if the segment
-    /// lies completely outside the box.
-    pub fn with_segment_clamped_to_aab(&self, aab: &AxisAlignedBox) -> Option<Self> {
+    /// Trims off most of this capsule's segment for the parts of the capsule
+    /// that do not touch the given axis-aligned box. If the capsule does not
+    /// intersect the box, returns [`None`]. Otherwise, the returned capsule is
+    /// guaranteed to cover all parts of the box that the un-trimmed capsule
+    /// covers, but parts of the trimmed capsule may still be outside the box.
+    pub fn trim_segment_outside_aab(&self, aab: &AxisAlignedBox) -> Option<Self> {
+        // If we expand the box by the capsule radius on all sides, we can trim
+        // away the parts of the segment outside the expanded box. If the
+        // segment does not intersect the expanded box, the capsule does not
+        // touch the un-expanded box. Otherwise, we retain all the parts of the
+        // capsule touching the box, but we may retain a bit more than necessary
+        // at the ends due to the expansion.
+        let expanded_aab = aab.expanded_about_center(self.radius);
+
         let (t_min, t_max) =
-            aab.find_contained_subsegment(&self.segment_start, &self.segment_vector)?;
-        let clamped_segment_start = self.segment_start + self.segment_vector * t_min;
-        let clamped_segment_vector = self.segment_vector * (t_max - t_min);
+            expanded_aab.find_contained_subsegment(&self.segment_start, &self.segment_vector)?;
+
+        let trimmed_segment_start = self.segment_start + self.segment_vector * t_min;
+        let trimmed_segment_vector = self.segment_vector * (t_max - t_min);
+
         Some(Self::new(
-            clamped_segment_start,
-            clamped_segment_vector,
+            trimmed_segment_start,
+            trimmed_segment_vector,
             self.radius,
         ))
     }

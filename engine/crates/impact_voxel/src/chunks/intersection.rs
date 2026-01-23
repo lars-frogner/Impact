@@ -322,8 +322,8 @@ impl ChunkedVoxelObject {
                     let object_voxel_ranges_in_chunk =
                         chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
 
-                    let Some(normalized_chunk_subcapsule) = normalized_capsule
-                        .with_segment_clamped_to_aab(&normalized_chunk_aabb_from_chunk_indices(
+                    let Some(trimmed_normalized_capsule) = normalized_capsule
+                        .trim_segment_outside_aab(&normalized_chunk_aabb_from_chunk_indices(
                             chunk_i, chunk_j, chunk_k,
                         ))
                     else {
@@ -332,7 +332,7 @@ impl ChunkedVoxelObject {
 
                     let touched_voxel_ranges_in_chunk = voxel_ranges_touching_aab(
                         object_voxel_ranges_in_chunk.clone(),
-                        &normalized_chunk_subcapsule.compute_aabb(),
+                        &trimmed_normalized_capsule.compute_aabb(),
                     );
 
                     if touched_voxel_ranges_in_chunk.iter().any(Range::is_empty) {
@@ -800,6 +800,7 @@ pub mod fuzzing {
     use super::*;
     use crate::{
         chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
+        mesh::ChunkedVoxelObjectMesh,
     };
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
@@ -1032,7 +1033,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_absorbing_voxels_within_capsule(
-        (generator, capsule): (SDFVoxelGenerator<Global>, ArbitraryCapsule),
+        (generator, capsules): (SDFVoxelGenerator<Global>, Vec<ArbitraryCapsule>),
     ) {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
@@ -1043,21 +1044,25 @@ pub mod fuzzing {
         let mut inertial_property_updater =
             inertial_property_manager.begin_update(object.voxel_extent(), &voxel_type_densities);
 
-        object.modify_voxels_within_capsule(
-            &capsule.0,
-            &mut |object_voxel_indices, squared_distance, voxel| {
-                let was_empty = voxel.is_empty();
+        let mut mesh = ChunkedVoxelObjectMesh::create(&object);
 
-                let signed_distance_delta =
-                    3.0 * (1.0 - squared_distance * capsule.0.radius().powi(2).recip());
+        for capsule in capsules {
+            object.modify_voxels_within_capsule(
+                &capsule.0,
+                &mut |object_voxel_indices, squared_distance, voxel| {
+                    let was_empty = voxel.is_empty();
 
-                voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
-                    if !was_empty {
-                        inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
-                    }
-                });
-            },
-        );
+                    let signed_distance_delta =
+                        3.0 * (1.0 - squared_distance * capsule.0.radius().powi(2).recip());
+
+                    voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
+                        if !was_empty {
+                            inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                        }
+                    });
+                },
+            );
+        }
 
         if !object.is_effectively_empty() {
             object.resolve_connected_regions_between_all_chunks();
@@ -1068,6 +1073,21 @@ pub mod fuzzing {
             object.validate_region_count();
 
             inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
+
+            mesh.sync_with_voxel_object(&mut object);
+            let mesh_from_scratch = ChunkedVoxelObjectMesh::create(&object);
+
+            assert_eq!(
+                mesh.chunk_submeshes()
+                    .iter()
+                    .map(|submesh| *submesh.chunk_indices())
+                    .collect::<HashSet<_>>(),
+                mesh_from_scratch
+                    .chunk_submeshes()
+                    .iter()
+                    .map(|submesh| *submesh.chunk_indices())
+                    .collect::<HashSet<_>>()
+            );
         }
     }
 
@@ -1252,24 +1272,80 @@ mod tests {
             capsule_radius,
         );
 
-        let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
+        let mut found = HashSet::<[_; 3]>::default();
+        let mut present = HashSet::<[_; 3]>::default();
 
         object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
-                let was_absent = indices_of_inside_voxels.insert(indices);
+                let was_absent = found.insert(indices);
                 assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
             }
         });
 
         object.for_each_non_empty_voxel_in_capsule_brute_force(&capsule, &mut |indices, _| {
-            let was_present = indices_of_inside_voxels.remove(&indices);
-            assert!(was_present, "Voxel in capsule was not found: {indices:?}");
+            present.insert(indices);
         });
 
+        let wrong = HashSet::<[_; 3]>::from_iter(found.difference(&present).copied());
+        let missed = HashSet::<[_; 3]>::from_iter(present.difference(&found).copied());
+
         assert!(
-            indices_of_inside_voxels.is_empty(),
+            wrong.is_empty(),
             "Found voxels not inside capsule: {:?}",
-            &indices_of_inside_voxels
+            wrong
+        );
+        assert!(
+            missed.is_empty(),
+            "Missed voxels inside capsule: {:?}",
+            missed
+        );
+    }
+
+    #[test]
+    fn modifying_voxels_within_capsule_finds_correct_voxels_across_chunks() {
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_box([30.0, 14.0, 14.0]));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
+        let generator = SDFVoxelGenerator::new(
+            0.25,
+            sdf_generator,
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+        );
+        let mut object = ChunkedVoxelObject::generate(&generator);
+
+        let capsule = Capsule::new(
+            Point3::new(3.8, 3.0, -50.0),
+            Vector3::new(0.0, 0.0, 500.0),
+            1.0,
+        );
+
+        let mut found = HashSet::<[_; 3]>::default();
+        let mut present = HashSet::<[_; 3]>::default();
+
+        object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
+            if !voxel.is_empty() {
+                let was_absent = found.insert(indices);
+                assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
+            }
+        });
+
+        object.for_each_non_empty_voxel_in_capsule_brute_force(&capsule, &mut |indices, _| {
+            present.insert(indices);
+        });
+
+        let wrong = HashSet::<[_; 3]>::from_iter(found.difference(&present).copied());
+        let missed = HashSet::<[_; 3]>::from_iter(present.difference(&found).copied());
+
+        assert!(
+            wrong.is_empty(),
+            "Found voxels not inside capsule: {:?}",
+            wrong
+        );
+        assert!(
+            missed.is_empty(),
+            "Missed voxels inside capsule: {:?}",
+            missed
         );
     }
 }

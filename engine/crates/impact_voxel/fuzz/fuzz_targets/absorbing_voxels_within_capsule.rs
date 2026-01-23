@@ -6,6 +6,6 @@ use impact_voxel::{
 };
 use libfuzzer_sys::fuzz_target;
 
-fuzz_target!(|input: (SDFVoxelGenerator, ArbitraryCapsule)| {
+fuzz_target!(|input: (SDFVoxelGenerator, Vec<ArbitraryCapsule>)| {
     fuzz_test_absorbing_voxels_within_capsule(input);
 });
