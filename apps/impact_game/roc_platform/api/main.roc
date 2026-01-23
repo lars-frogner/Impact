@@ -21,8 +21,10 @@ platform "impact"
         Physics,
         Rendering,
         Scene,
-        Stdout,
+        Setup,
         Skybox,
+        Stdout,
+        Texture,
         Voxel,
     ]
     packages {
