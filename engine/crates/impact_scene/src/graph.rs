@@ -56,7 +56,13 @@ pub struct NodeStorage<N> {
 
 #[derive(Debug)]
 struct ModelMetadata {
-    feature_type_ids_for_shadow_mapping: HashMap<ModelID, Vec<InstanceFeatureTypeID>>,
+    feature_type_ids_for_shadow_mapping: HashMap<ModelID, FeatureTypeIDsForShadowMappingEntry>,
+}
+
+#[derive(Debug)]
+struct FeatureTypeIDsForShadowMappingEntry {
+    instance_count: usize,
+    feature_type_ids: Vec<InstanceFeatureTypeID>,
 }
 
 /// Represents a type of node in a [`SceneGraph`].
@@ -365,11 +371,16 @@ impl SceneGraph {
         let model_instance_node = self.model_instance_nodes.node(model_instance_node_id);
         let model_id = *model_instance_node.model_id();
         let parent_node_id = model_instance_node.parent_node_id();
+
         self.model_instance_nodes
             .remove_node(model_instance_node_id);
+
         self.group_nodes
             .node_mut(parent_node_id)
             .remove_child_model_instance_node(model_instance_node_id);
+
+        self.model_metadata.unregister_instance(&model_id);
+
         model_id
     }
 
@@ -1335,23 +1346,46 @@ impl ModelMetadata {
             .entry(*model_instance_node.model_id())
         {
             Entry::Vacant(entry) => {
-                entry.insert(
-                    model_instance_node
-                        .feature_ids_for_shadow_mapping()
-                        .iter()
-                        .map(InstanceFeatureID::feature_type_id)
-                        .collect(),
-                );
+                let feature_type_ids = model_instance_node
+                    .feature_ids_for_shadow_mapping()
+                    .iter()
+                    .map(InstanceFeatureID::feature_type_id)
+                    .collect();
+
+                entry.insert(FeatureTypeIDsForShadowMappingEntry {
+                    instance_count: 1,
+                    feature_type_ids,
+                });
             }
-            Entry::Occupied(entry) => {
+            Entry::Occupied(mut entry) => {
                 assert!(
-                    entry.get().iter().copied().eq(model_instance_node
-                        .feature_ids_for_shadow_mapping()
+                    entry
+                        .get()
+                        .feature_type_ids
                         .iter()
-                        .map(InstanceFeatureID::feature_type_id)),
+                        .copied()
+                        .eq(model_instance_node
+                            .feature_ids_for_shadow_mapping()
+                            .iter()
+                            .map(InstanceFeatureID::feature_type_id)),
                     "Got inconsistent list of feature types for shadow mapping between instances of the same model"
                 );
+                entry.get_mut().instance_count += 1;
             }
+        }
+    }
+
+    fn unregister_instance(&mut self, model_id: &ModelID) {
+        let entry = self
+            .feature_type_ids_for_shadow_mapping
+            .get_mut(model_id)
+            .expect("Tried to unregister model metadata for missing model");
+
+        assert!(entry.instance_count > 0);
+        entry.instance_count -= 1;
+
+        if entry.instance_count == 0 {
+            self.feature_type_ids_for_shadow_mapping.remove(model_id);
         }
     }
 
@@ -1360,7 +1394,7 @@ impl ModelMetadata {
     ) -> impl Iterator<Item = (&ModelID, &[InstanceFeatureTypeID])> {
         self.feature_type_ids_for_shadow_mapping
             .iter()
-            .map(|(model_id, feature_type_ids)| (model_id, feature_type_ids.as_slice()))
+            .map(|(model_id, entry)| (model_id, entry.feature_type_ids.as_slice()))
     }
 }
 
