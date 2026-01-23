@@ -986,7 +986,6 @@ define_task!(
                 &mut anchor_manager,
                 &force_generator_manager,
                 &collision_world,
-                simulator.time_step_duration(),
             );
 
             Ok(())

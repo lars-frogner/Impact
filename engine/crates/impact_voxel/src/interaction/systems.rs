@@ -290,7 +290,6 @@ pub fn apply_absorption(
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &ForceGeneratorManager,
     collision_world: &CollisionWorld,
-    time_step_duration: f32,
 ) {
     let mut interaction_context = ECSVoxelObjectInteractionContext {
         component_metadata_registry,
@@ -307,6 +306,5 @@ pub fn apply_absorption(
         voxel_type_registry,
         rigid_body_manager,
         anchor_manager,
-        time_step_duration,
     );
 }

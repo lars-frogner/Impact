@@ -660,5 +660,5 @@ pub fn for_each_voxel_object_plane_contact(
 }
 
 fn compute_voxel_radius(voxel: &Voxel, voxel_extent: f32) -> f32 {
-    f32::min(-voxel.signed_distance().to_f32(), 0.5) * voxel_extent
+    -voxel.signed_distance().to_f32() * voxel_extent
 }
