@@ -305,21 +305,16 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
         .map(|r| r.len())
         .product::<usize>();
 
-    let voxel_a_radius = 0.5 * voxel_object_a.voxel_extent();
-    let voxel_b_radius = 0.5 * voxel_object_b.voxel_extent();
-
-    let max_center_distance = voxel_a_radius + voxel_b_radius;
-    let max_squared_center_distance = max_center_distance.powi(2);
-
     if voxel_object_b_intersection_size < voxel_object_a_intersection_size {
         voxel_object_b.for_each_surface_voxel_in_voxel_ranges(
             intersection_voxel_ranges_in_b,
-            &mut |[i_b, j_b, k_b], _, placement_b| {
+            &mut |[i_b, j_b, k_b], voxel_b, placement_b| {
                 let voxel_b_center_in_b =
                     voxel_object_b.voxel_center_position_from_object_voxel_indices(i_b, j_b, k_b);
 
                 let voxel_b_center =
                     transform_from_world_to_b.inverse_transform_point(&voxel_b_center_in_b);
+                let voxel_b_radius = compute_voxel_radius(voxel_b, voxel_object_b.voxel_extent());
 
                 let voxel_b_sphere = Sphere::new(voxel_b_center, voxel_b_radius);
 
@@ -334,9 +329,11 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 for i_a in touched_ranges_in_a[0].clone() {
                     for j_a in touched_ranges_in_a[1].clone() {
                         for k_a in touched_ranges_in_a[2].clone() {
-                            let Some(VoxelPlacement::Surface(placement_a)) = voxel_object_a
-                                .get_voxel_inside(i_a, j_a, k_a)
-                                .and_then(Voxel::placement)
+                            let Some(voxel_a) = voxel_object_a.get_voxel_inside(i_a, j_a, k_a)
+                            else {
+                                continue;
+                            };
+                            let Some(VoxelPlacement::Surface(placement_a)) = voxel_a.placement()
                             else {
                                 continue;
                             };
@@ -349,13 +346,14 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                             let voxel_a_center = transform_from_world_to_a
                                 .inverse_transform_point(&voxel_a_center_in_a);
+                            let voxel_a_radius =
+                                compute_voxel_radius(voxel_a, voxel_object_a.voxel_extent());
 
                             let Some(contact_geometry) = compute_mutual_voxel_contact_geometry(
                                 &voxel_a_center,
+                                voxel_a_radius,
                                 &voxel_b_center,
                                 voxel_b_radius,
-                                max_center_distance,
-                                max_squared_center_distance,
                             ) else {
                                 continue;
                             };
@@ -369,12 +367,13 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
     } else {
         voxel_object_a.for_each_surface_voxel_in_voxel_ranges(
             intersection_voxel_ranges_in_a,
-            &mut |[i_a, j_a, k_a], _, placement_a| {
+            &mut |[i_a, j_a, k_a], voxel_a, placement_a| {
                 let voxel_a_center_in_a =
                     voxel_object_a.voxel_center_position_from_object_voxel_indices(i_a, j_a, k_a);
 
                 let voxel_a_center =
                     transform_from_world_to_a.inverse_transform_point(&voxel_a_center_in_a);
+                let voxel_a_radius = compute_voxel_radius(voxel_a, voxel_object_a.voxel_extent());
 
                 let voxel_a_sphere = Sphere::new(voxel_a_center, voxel_a_radius);
 
@@ -389,9 +388,11 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 for i_b in touched_ranges_in_b[0].clone() {
                     for j_b in touched_ranges_in_b[1].clone() {
                         for k_b in touched_ranges_in_b[2].clone() {
-                            let Some(VoxelPlacement::Surface(placement_b)) = voxel_object_b
-                                .get_voxel_inside(i_b, j_b, k_b)
-                                .and_then(Voxel::placement)
+                            let Some(voxel_b) = voxel_object_b.get_voxel_inside(i_b, j_b, k_b)
+                            else {
+                                continue;
+                            };
+                            let Some(VoxelPlacement::Surface(placement_b)) = voxel_b.placement()
                             else {
                                 continue;
                             };
@@ -404,13 +405,14 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                             let voxel_b_center = transform_from_world_to_b
                                 .inverse_transform_point(&voxel_b_center_in_b);
+                            let voxel_b_radius =
+                                compute_voxel_radius(voxel_b, voxel_object_b.voxel_extent());
 
                             let Some(contact_geometry) = compute_mutual_voxel_contact_geometry(
                                 &voxel_a_center,
+                                voxel_a_radius,
                                 &voxel_b_center,
                                 voxel_b_radius,
-                                max_center_distance,
-                                max_squared_center_distance,
                             ) else {
                                 continue;
                             };
@@ -449,15 +451,16 @@ fn surface_placements_allow_contact(
 
 fn compute_mutual_voxel_contact_geometry(
     voxel_a_center: &Point3,
+    voxel_a_radius: f32,
     voxel_b_center: &Point3,
     voxel_b_radius: f32,
-    max_center_distance: f32,
-    max_squared_center_distance: f32,
 ) -> Option<ContactGeometry> {
+    let max_center_distance = voxel_a_radius + voxel_b_radius;
+
     let center_displacement = voxel_a_center - voxel_b_center;
     let squared_center_distance = center_displacement.norm_squared();
 
-    if squared_center_distance > max_squared_center_distance {
+    if squared_center_distance > max_center_distance.powi(2) {
         return None;
     }
 
@@ -532,26 +535,24 @@ pub fn for_each_sphere_voxel_object_contact(
     sphere: &Sphere,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
-    let voxel_radius = 0.5 * voxel_object.voxel_extent();
-
     let sphere_in_object_space = sphere.iso_transformed(transform_to_object_space);
-
-    let max_center_distance = sphere.radius() + voxel_radius;
-    let max_squared_center_distance = max_center_distance.powi(2);
 
     voxel_object.for_each_surface_voxel_maybe_intersecting_sphere(
         &sphere_in_object_space,
-        &mut |[i, j, k], _, _| {
+        &mut |[i, j, k], voxel, _| {
             let voxel_center_in_object_space =
                 voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
 
             let voxel_center =
                 transform_to_object_space.inverse_transform_point(&voxel_center_in_object_space);
+            let voxel_radius = compute_voxel_radius(voxel, voxel_object.voxel_extent());
+
+            let max_center_distance = sphere.radius() + voxel_radius;
 
             let center_displacement = sphere.center() - voxel_center;
             let squared_center_distance = center_displacement.norm_squared();
 
-            if squared_center_distance > max_squared_center_distance {
+            if squared_center_distance > max_center_distance.powi(2) {
                 return;
             }
 
@@ -630,13 +631,11 @@ pub fn for_each_voxel_object_plane_contact(
     plane: &Plane,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
 ) {
-    let voxel_radius = 0.5 * voxel_object.voxel_extent();
-
     let plane_in_object_space = plane.iso_transformed(transform_to_object_space);
 
     voxel_object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
         &plane_in_object_space,
-        &mut |[i, j, k], _, placement| {
+        &mut |[i, j, k], voxel, placement| {
             // In the case of a plane, we only need contacts for the corner
             // voxels
             if placement != VoxelSurfacePlacement::Corner {
@@ -648,6 +647,7 @@ pub fn for_each_voxel_object_plane_contact(
 
             let voxel_center =
                 transform_to_object_space.inverse_transform_point(&voxel_center_in_object_space);
+            let voxel_radius = compute_voxel_radius(voxel, voxel_object.voxel_extent());
 
             if let Some(contact_geometry) = determine_sphere_plane_contact_geometry(
                 &Sphere::new(voxel_center, voxel_radius),
@@ -657,4 +657,8 @@ pub fn for_each_voxel_object_plane_contact(
             }
         },
     );
+}
+
+fn compute_voxel_radius(voxel: &Voxel, voxel_extent: f32) -> f32 {
+    f32::min(-voxel.signed_distance().to_f32(), 0.5) * voxel_extent
 }
