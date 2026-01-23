@@ -12,9 +12,9 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Restore Roc Cache
+    - name: Cache Roc
       id: cache-roc
-      uses: https://actions.go-gitea.com/actions/cache/restore@v3
+      uses: https://data.forgejo.org/actions/cache@v4
       with:
         path: roc_dist
         key: ${{ runner.os }}-roc-${{ inputs.roc-version }}
@@ -27,10 +27,6 @@ runs:
         ROC_TAG: ${{ inputs.roc-version }}
       run: |
         echo "Downloading and installing Roc version: $ROC_TAG..."
-
-        # Install required utilities
-        apt-get update -qq
-        apt-get install -y curl jq
 
         # Obtain download URL
         DOWNLOAD_URL=$(curl -s -H "Authorization: token $GH_TOKEN" \
@@ -55,13 +51,6 @@ runs:
     - name: Add Roc to Path
       shell: bash
       run: echo "$(pwd)/roc_dist" >> $GITHUB_PATH
-
-    - name: Save Roc Cache
-      if: steps.cache-roc.outputs.cache-hit != 'true'
-      uses: https://actions.go-gitea.com/actions/cache/save@v3
-      with:
-        path: roc_dist
-        key: ${{ runner.os }}-roc-${{ inputs.roc-version }}
 
     - name: Verify Installation
       shell: bash
