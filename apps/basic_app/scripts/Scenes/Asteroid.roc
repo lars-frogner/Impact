@@ -135,7 +135,7 @@ absorbing_sphere =
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 1e5), 0.2)
-    |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 1, 15)
+    |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 1)
     |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
 ground =
