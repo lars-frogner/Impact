@@ -16,6 +16,7 @@ use impact_physics::{
         setup::{DynamicRigidBodyInertialProperties, DynamicRigidBodySubstance},
     },
 };
+use impact_scene::SceneEntityFlags;
 use parking_lot::RwLock;
 
 /// Checks if the entities-to-be with the given components have the components
@@ -60,8 +61,17 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -85,7 +95,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         ![DynamicRigidBodyID]
     );
@@ -100,8 +110,17 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -124,7 +143,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         ![DynamicRigidBodyID]
     );
@@ -139,8 +158,17 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -163,7 +191,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         ![DynamicRigidBodyID]
     );
@@ -177,8 +205,17 @@ pub fn setup_rigid_bodies_for_new_entities(
         |substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -202,7 +239,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         [SphereMesh],
         ![DynamicRigidBodyID]
@@ -217,8 +254,17 @@ pub fn setup_rigid_bodies_for_new_entities(
         |substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -242,7 +288,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         [HemisphereMesh],
         ![DynamicRigidBodyID]
@@ -258,8 +304,17 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -282,7 +337,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         ![DynamicRigidBodyID]
     );
@@ -296,8 +351,17 @@ pub fn setup_rigid_bodies_for_new_entities(
         |inertial_properties: &DynamicRigidBodyInertialProperties,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> (
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        ) {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -325,7 +389,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            (rigid_body_id, model_transform, frame, motion)
+            (rigid_body_id, model_transform, frame, motion, flags)
         },
         ![DynamicRigidBodyID]
     );
@@ -341,8 +405,17 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+         motion: Option<&Motion>,
+         flags: Option<&SceneEntityFlags>|
+         -> Result<(
+            DynamicRigidBodyID,
+            ModelTransform,
+            ReferenceFrame,
+            Motion,
+            SceneEntityFlags
+        )> {
+            let flags = flags.copied().unwrap_or_default();
+
             let mut model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
@@ -370,7 +443,7 @@ pub fn setup_rigid_bodies_for_new_entities(
                 motion,
             );
 
-            Ok((rigid_body_id, model_transform, frame, motion))
+            Ok((rigid_body_id, model_transform, frame, motion, flags))
         },
         ![DynamicRigidBodyID]
     )?;
@@ -381,12 +454,19 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         components,
-        |frame: Option<&ReferenceFrame>, motion: &Motion| -> KinematicRigidBodyID {
-            rigid_body::setup::setup_kinematic_rigid_body(
+        |frame: Option<&ReferenceFrame>,
+         motion: &Motion,
+         flags: Option<&SceneEntityFlags>|
+         -> (KinematicRigidBodyID, SceneEntityFlags) {
+            let flags = flags.copied().unwrap_or_default();
+
+            let rigid_body_id = rigid_body::setup::setup_kinematic_rigid_body(
                 &mut rigid_body_manager,
                 frame.copied().unwrap_or_default(),
                 *motion,
-            )
+            );
+
+            (rigid_body_id, flags)
         },
         ![DynamicRigidBodyID, KinematicRigidBodyID]
     );
