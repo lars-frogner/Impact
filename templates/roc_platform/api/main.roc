@@ -15,15 +15,15 @@ platform "impact"
         Control,
         Entity,
         Input,
-        Light,
-        Material,
         Mesh,
         Model,
         Physics,
         Rendering,
         Scene,
-        Stdout,
+        Setup,
         Skybox,
+        Stdout,
+        Texture,
         Voxel,
     ]
     packages {
