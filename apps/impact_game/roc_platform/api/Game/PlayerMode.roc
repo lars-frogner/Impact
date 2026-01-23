@@ -1,5 +1,5 @@
-# Hash: 6976f9646a268681
-# Generated: 2026-01-18T10:23:28.079823297
+# Hash: 7df0787e8fe292a5
+# Generated: 2026-01-23T22:12:11.221480608
 # Rust type: impact_game::PlayerMode
 # Type category: Inline
 module [
@@ -9,8 +9,9 @@ module [
 ]
 
 PlayerMode : [
-    Active,
-    Overview,
+    Dynamic,
+    FreeCamera,
+    OverviewCamera,
 ]
 
 ## Serializes a value of [PlayerMode] into the binary representation
@@ -18,15 +19,20 @@ PlayerMode : [
 write_bytes : List U8, PlayerMode -> List U8
 write_bytes = |bytes, value|
     when value is
-        Active ->
+        Dynamic ->
             bytes
             |> List.reserve(1)
             |> List.append(0)
 
-        Overview ->
+        FreeCamera ->
             bytes
             |> List.reserve(1)
             |> List.append(1)
+
+        OverviewCamera ->
+            bytes
+            |> List.reserve(1)
+            |> List.append(2)
 
 ## Deserializes a value of [PlayerMode] from its bytes in the
 ## representation used by the engine.
@@ -36,7 +42,8 @@ from_bytes = |bytes|
         Err(InvalidNumberOfBytes)
     else
         when bytes is
-            [0, ..] -> Ok(Active)
-            [1, ..] -> Ok(Overview)
+            [0, ..] -> Ok(Dynamic)
+            [1, ..] -> Ok(FreeCamera)
+            [2, ..] -> Ok(OverviewCamera)
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

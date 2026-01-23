@@ -80,8 +80,9 @@ pub enum RunMode {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayerMode {
     #[default]
-    Active,
-    Overview,
+    Dynamic,
+    FreeCamera,
+    OverviewCamera,
 }
 
 impl Game {

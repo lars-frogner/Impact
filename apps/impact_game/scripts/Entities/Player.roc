@@ -34,6 +34,8 @@ import pf.Setup.SphericalCollidable
 import pf.Comp.DynamicGravity
 import pf.Setup.FixedDirectionAlignmentTorque
 
+import Entities.Tools as Tools
+
 PlayerEntities : {
     player : Entity.ComponentData,
     player_body : Entity.ComponentData,
@@ -44,8 +46,10 @@ entity_ids = {
     player: Entity.id("player"),
     player_body: Entity.id("player_body"),
     player_head: Entity.id("player_head"),
-    laser: Entity.id("laser"),
-    absorbing_sphere: Entity.id("absorbing_sphere"),
+    tools: {
+        laser: Entity.id("player_laser"),
+        absorbing_sphere: Entity.id("player_absorbing_sphere"),
+    },
 }
 
 player = {
@@ -76,6 +80,8 @@ spawn! = |position, orientation, velocity|
     Entity.create_with_id!(ents.player, entity_ids.player)?
     Entity.create_with_id!(ents.player_body, entity_ids.player_body)?
     Entity.create_with_id!(ents.player_head, entity_ids.player_head)?
+
+    Tools.spawn!(entity_ids.tools, entity_ids.player_head)?
 
     Ok({})
 

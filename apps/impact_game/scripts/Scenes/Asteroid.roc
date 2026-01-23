@@ -30,7 +30,7 @@ import pf.Comp.AmbientEmission
 import pf.Comp.ShadowableUnidirectionalEmission
 
 import Entities.Player as Player
-import Entities.Tools as Tools
+import Entities.FreeCamera as FreeCamera
 import Entities.OverviewCamera as OverviewCamera
 
 entity_ids = {
@@ -65,21 +65,24 @@ setup! = |ctx|
 
     Entity.create_with_id!(asteroid_ent, entity_ids.asteroid)?
 
+    player_position = (0.0, 0.0, -50)
+    player_orientation = UnitQuaternion.identity
+    player_velocity = Vector3.zeros
+
+    Player.spawn!(player_position, player_orientation, player_velocity)?
+
+    FreeCamera.spawn!(player_position, player_orientation)?
+
     OverviewCamera.spawn!(3e2)?
 
-    Player.spawn!(
-        (0.0, 0.0, -1e2),
-        UnitQuaternion.identity,
-        (0.0, 0.0, 0.0),
-    )?
-
-    Tools.spawn!({})?
-
     when ctx.player_mode is
-        Active ->
+        Dynamic ->
             Command.execute!(Engine(Scene(SetActiveCamera { entity_id: Player.entity_ids.player_head })))?
 
-        Overview ->
+        FreeCamera ->
+            Command.execute!(Engine(Scene(SetActiveCamera { entity_id: FreeCamera.entity_ids.camera })))?
+
+        OverviewCamera ->
             Command.execute!(UI(SetInteractivity(Enabled)))?
             Command.execute!(Engine(Scene(SetActiveCamera { entity_id: OverviewCamera.entity_ids.camera })))?
 
