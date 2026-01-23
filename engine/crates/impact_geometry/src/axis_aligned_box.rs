@@ -344,7 +344,7 @@ impl AxisAlignedBox {
         let mut t_max: f32 = 1.0;
 
         for dim in 0..3 {
-            if offset_from_segment_start_to_end[dim] != 0.0 {
+            if offset_from_segment_start_to_end[dim].abs() > 1e-8 {
                 let recip = offset_from_segment_start_to_end[dim].recip();
                 let t1 = (self.lower_corner()[dim] - segment_start[dim]) * recip;
                 let t2 = (self.upper_corner()[dim] - segment_start[dim]) * recip;
@@ -515,9 +515,8 @@ impl AbsDiffEq for AxisAlignedBoxC {
 
 #[cfg(test)]
 mod tests {
-    use crate::Plane;
-
     use super::*;
+    use crate::Plane;
     use approx::assert_abs_diff_eq;
 
     #[test]
@@ -880,5 +879,131 @@ mod tests {
 
         let result = aabb.find_ray_intersection(&ray_origin, &ray_direction);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_segment_fully_inside_box_returns_full_range() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let start = Point3::new(0.5, 0.5, 0.5);
+        let offset = Vector3::new(1.0, 0.0, 0.0); // end at (1.5, 0.5, 0.5)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Entire segment from t=0 to t=1 lies inside the box
+        assert_abs_diff_eq!(t_min, 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 1.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_partial_overlap_returns_entry_and_exit_t() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        // Segment goes from x = -1 to x = 3 (offset 4), crossing the box [0,2]
+        let start = Point3::new(-1.0, 1.0, 1.0);
+        let offset = Vector3::new(4.0, 0.0, 0.0); // end at (3,1,1)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Entry at x=0 -> t = (0 - (-1)) / 4 = 0.25
+        // Exit at x=2  -> t = (2 - (-1)) / 4 = 0.75
+        assert_abs_diff_eq!(t_min, 0.25, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 0.75, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_zero_offset_component_inside_bounds_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        // y and z components are zero but start.y and start.z are inside bounds -> valid intersection along x
+        let start = Point3::new(-1.0, 1.0, 1.0);
+        let offset = Vector3::new(3.0, 0.0, 0.0); // end at (2,1,1)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Entry at x=0 -> t = (0 - (-1)) / 3 = 1.0/3.0
+        // Exit at x=2  -> t = (2 - (-1)) / 3 = 1.0
+        assert_abs_diff_eq!(t_min, 1.0 / 3.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 1.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_segment_starting_outside_ending_inside_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let start = Point3::new(-1.0, 1.0, 1.0);
+        let offset = Vector3::new(1.5, 0.0, 0.0); // end at (0.5, 1.0, 1.0)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Entry at x=0 -> t = (0 - (-1)) / 1.5 = 2.0/3.0
+        // Exit is at end of segment -> t = 1.0
+        assert_abs_diff_eq!(t_min, 2.0 / 3.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 1.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_negative_offset_components_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        // Moving in negative x direction from outside to inside to outside
+        let start = Point3::new(3.0, 1.0, 1.0);
+        let offset = Vector3::new(-4.0, 0.0, 0.0); // end at (-1, 1, 1)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Entry at x=2 -> t = (2 - 3) / -4 = 0.25
+        // Exit at x=0  -> t = (0 - 3) / -4 = 0.75
+        assert_abs_diff_eq!(t_min, 0.25, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 0.75, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_segment_completely_missing_returns_none() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        // Segment passes above the box
+        let start = Point3::new(-1.0, 2.0, 0.5);
+        let offset = Vector3::new(3.0, 0.0, 0.0); // end at (2, 2, 0.5)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_segment_starting_inside_ending_outside_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let start = Point3::new(1.0, 1.0, 1.0);
+        let offset = Vector3::new(3.0, 0.0, 0.0); // end at (4.0, 1.0, 1.0)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Start is inside -> t_min = 0.0
+        // Exit at x=2 -> t = (2 - 1) / 3 = 1.0/3.0
+        assert_abs_diff_eq!(t_min, 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 1.0 / 3.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_all_zero_offset_components_inside_gives_point() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        // Point segment (zero offset) inside the box
+        let start = Point3::new(1.0, 1.0, 1.0);
+        let offset = Vector3::new(0.0, 0.0, 0.0);
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Point is inside, valid for entire [0, 1] range (even though it's
+        // a point)
+        assert_abs_diff_eq!(t_min, 0.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 1.0, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn find_contained_subsegment_with_box_at_non_origin_position_works() {
+        // Box centered around (10, 20, 30)
+        let aabb = AxisAlignedBox::new(Point3::new(9.0, 19.0, 29.0), Point3::new(11.0, 21.0, 31.0));
+        let start = Point3::new(8.0, 20.0, 30.0);
+        let offset = Vector3::new(4.0, 0.0, 0.0); // end at (12, 20, 30)
+        let result = aabb.find_contained_subsegment(&start, &offset);
+        assert!(result.is_some());
+        let (t_min, t_max) = result.unwrap();
+        // Entry at x=9 -> t = (9 - 8) / 4 = 0.25
+        // Exit at x=11 -> t = (11 - 8) / 4 = 0.75
+        assert_abs_diff_eq!(t_min, 0.25, epsilon = 1e-6);
+        assert_abs_diff_eq!(t_max, 0.75, epsilon = 1e-6);
     }
 }

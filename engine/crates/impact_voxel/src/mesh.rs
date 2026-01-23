@@ -39,12 +39,12 @@ pub struct ChunkedVoxelObjectMesh {
 
 /// A vertex position in a [`ChunkedVoxelObjectMesh`].
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VoxelMeshVertexPosition(pub [f32; 3]);
 
 /// A vertex normal vector in a [`ChunkedVoxelObjectMesh`].
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VoxelMeshVertexNormalVector(pub [f32; 3]);
 
 /// A set of four material indices and corresponding weights for a vertex index
@@ -63,7 +63,7 @@ pub struct VoxelMeshIndexMaterials {
 
 /// A vertex index a [`ChunkedVoxelObjectMesh`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelMeshIndex(pub u32);
 
 /// Metadata associating a chunk in a [`ChunkedVoxelObject`] with the segment of
@@ -462,6 +462,10 @@ impl ChunkSubmesh {
             index_count,
             is_obscured_from_direction,
         }
+    }
+
+    pub fn chunk_indices(&self) -> &[u32; 3] {
+        &self.chunk_indices
     }
 
     fn compute_directional_obscuredness_table(flags: VoxelChunkFlags) -> [[[u32; 2]; 2]; 2] {
