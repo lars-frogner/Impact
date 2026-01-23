@@ -373,6 +373,22 @@ impl Voxel {
         self.signed_distance
     }
 
+    /// Sets the signed distance to the given value, and marks the voxel as
+    /// empty and calls the given closure if the signed distance becomes
+    /// positive.
+    #[inline]
+    pub fn set_signed_distance(
+        &mut self,
+        new_signed_distance: f32,
+        on_empty: &mut impl FnMut(&Self),
+    ) {
+        self.signed_distance = VoxelSignedDistance::from_f32(new_signed_distance);
+        if !self.signed_distance.is_negative() {
+            self.add_flags(VoxelFlags::IS_EMPTY);
+            on_empty(self);
+        }
+    }
+
     /// Increases the signed distance by the given amount, and marks the voxel
     /// as empty and calls the given closure if the signed distance becomes
     /// positive.
@@ -383,11 +399,7 @@ impl Voxel {
         on_empty: &mut impl FnMut(&Self),
     ) {
         let new_signed_distance = self.signed_distance.to_f32() + signed_distance_delta;
-        self.signed_distance = VoxelSignedDistance::from_f32(new_signed_distance);
-        if !self.signed_distance.is_negative() {
-            self.add_flags(VoxelFlags::IS_EMPTY);
-            on_empty(self);
-        }
+        self.set_signed_distance(new_signed_distance, on_empty);
     }
 
     /// Updates the voxel's state flags to the given set of flags.

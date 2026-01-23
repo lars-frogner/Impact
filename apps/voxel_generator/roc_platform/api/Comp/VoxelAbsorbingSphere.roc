@@ -1,5 +1,5 @@
-# Hash: a821834740085b41
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: 341e07cfea51d821
+# Generated: 2026-01-23T14:20:59.328504116
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
 module [
@@ -23,9 +23,7 @@ import Entity.Arg
 import core.Builtin
 import core.Vector3
 
-## A sphere that absorbs voxels it comes in contact with. The rate of
-## absorption is highest at the center of the sphere and decreases
-## quadratically to zero at the full radius.
+## A sphere that instantly absorbs voxels it comes in contact with.
 ##
 ## Does nothing if the entity does not have a
 ## [`impact_geometry::ReferenceFrame`].
@@ -34,43 +32,36 @@ VoxelAbsorbingSphere : {
     offset : Vector3.Vector3,
     ## The radius of the sphere.
     radius : F32,
-    ## The maximum rate of absorption (at the center of the sphere).
-    rate : F32,
 }
 
 ## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
-## in the reference frame of the entity and the given maximum absorption
-## rate (at the center of the sphere).
-new : Vector3.Vector3, F32, F32 -> VoxelAbsorbingSphere
-new = |offset, radius, rate|
+## in the reference frame of the entity.
+new : Vector3.Vector3, F32 -> VoxelAbsorbingSphere
+new = |offset, radius|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
-    # expect rate >= 0.0
     {
         offset,
         radius,
-        rate,
     }
 
 ## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
-## in the reference frame of the entity and the given maximum absorption
-## rate (at the center of the sphere).
+## in the reference frame of the entity.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3, F32, F32 -> Entity.ComponentData
-add_new = |entity_data, offset, radius, rate|
-    add(entity_data, new(offset, radius, rate))
+add_new : Entity.ComponentData, Vector3.Vector3, F32 -> Entity.ComponentData
+add_new = |entity_data, offset, radius|
+    add(entity_data, new(offset, radius))
 
 ## Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
-## in the reference frame of the entity and the given maximum absorption
-## rate (at the center of the sphere).
+## in the reference frame of the entity.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
-add_multiple_new = |entity_data, offset, radius, rate|
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new = |entity_data, offset, radius|
     add_multiple(
         entity_data,
-        All(Entity.Arg.broadcasted_map3(
-            offset, radius, rate,
+        All(Entity.Arg.broadcasted_map2(
+            offset, radius,
             Entity.multi_count(entity_data),
             new
         ))
@@ -130,7 +121,7 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, VoxelAbsorbingSphere -> List U8
 write_packet = |bytes, val|
     type_id = 13800759532896143647
-    size = 20
+    size = 16
     alignment = 4
     bytes
     |> List.reserve(24 + size)
@@ -142,7 +133,7 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelAbsorbingSphere -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 13800759532896143647
-    size = 20
+    size = 16
     alignment = 4
     count = List.len(vals)
     bytes_with_header =
@@ -163,10 +154,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelAbsorbingSphere -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(20)
+    |> List.reserve(16)
     |> Vector3.write_bytes(value.offset)
     |> Builtin.write_bytes_f32(value.radius)
-    |> Builtin.write_bytes_f32(value.rate)
 
 ## Deserializes a value of [VoxelAbsorbingSphere] from its bytes in the
 ## representation used by the engine.
@@ -176,13 +166,12 @@ from_bytes = |bytes|
         {
             offset: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             radius: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
-            rate: bytes |> List.sublist({ start: 16, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 20 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

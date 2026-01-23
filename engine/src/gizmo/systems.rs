@@ -903,8 +903,7 @@ fn buffer_transforms_for_collider_gizmos(
                 let voxel_center_in_camera_space = transform_from_object_to_camera_space
                     .transform_point(&voxel_center_in_object_space);
 
-                let voxel_radius =
-                    f32::min(-voxel.signed_distance().to_f32(), 0.5) * voxel_object.voxel_extent();
+                let voxel_radius = -voxel.signed_distance().to_f32() * voxel_object.voxel_extent();
 
                 let model_to_camera_transform = InstanceModelViewTransform {
                     translation: voxel_center_in_camera_space.as_vector().compact(),

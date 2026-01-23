@@ -124,7 +124,7 @@ laser =
     |> Setup.CylinderMesh.add_new(100, 0.02, 16)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(5e7)
-    |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3, 200)
+    |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3)
     |> Comp.SceneEntityFlags.add(
         Comp.SceneEntityFlags.union(
             Comp.SceneEntityFlags.is_disabled,

@@ -1,5 +1,5 @@
-# Hash: 41c584dbd3e65ba2
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: e6ce1ae566cb6e36
+# Generated: 2026-01-23T14:20:59.328504116
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingCapsule
 # Type category: Component
 module [
@@ -23,9 +23,7 @@ import Entity.Arg
 import core.Builtin
 import core.Vector3
 
-## A capsule that absorbs voxels it comes in contact with. The rate of
-## absorption is highest at the central line segment of the capsule and
-## decreases quadratically to zero at the capsule boundary.
+## A capsule that instantly absorbs voxels it comes in contact with.
 ##
 ## Does nothing if the entity does not have a
 ## [`impact_geometry::ReferenceFrame`].
@@ -38,51 +36,43 @@ VoxelAbsorbingCapsule : {
     segment_vector : Vector3.Vector3,
     ## The radius of the capsule.
     radius : F32,
-    ## The maximum rate of absorption (at the central line segment of the
-    ## capsule).
-    rate : F32,
 }
 
 ## Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
 ## start of the capsule's central line segment, displacement from the start
 ## to the end of the line segment and radius, all in the reference frame of
-## the entity, as well as the given maximum absorption rate (at the central
-## line segment).
-new : Vector3.Vector3, Vector3.Vector3, F32, F32 -> VoxelAbsorbingCapsule
-new = |offset_to_segment_start, segment_vector, radius, rate|
+## the entity.
+new : Vector3.Vector3, Vector3.Vector3, F32 -> VoxelAbsorbingCapsule
+new = |offset_to_segment_start, segment_vector, radius|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
-    # expect rate >= 0.0
     {
         offset_to_segment_start,
         segment_vector,
         radius,
-        rate,
     }
 
 ## Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
 ## start of the capsule's central line segment, displacement from the start
 ## to the end of the line segment and radius, all in the reference frame of
-## the entity, as well as the given maximum absorption rate (at the central
-## line segment).
+## the entity.
 ## Adds the component to the given entity's data.
-add_new : Entity.ComponentData, Vector3.Vector3, Vector3.Vector3, F32, F32 -> Entity.ComponentData
-add_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
-    add(entity_data, new(offset_to_segment_start, segment_vector, radius, rate))
+add_new : Entity.ComponentData, Vector3.Vector3, Vector3.Vector3, F32 -> Entity.ComponentData
+add_new = |entity_data, offset_to_segment_start, segment_vector, radius|
+    add(entity_data, new(offset_to_segment_start, segment_vector, radius))
 
 ## Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
 ## start of the capsule's central line segment, displacement from the start
 ## to the end of the line segment and radius, all in the reference frame of
-## the entity, as well as the given maximum absorption rate (at the central
-## line segment).
+## the entity.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
-add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
-add_multiple_new = |entity_data, offset_to_segment_start, segment_vector, radius, rate|
+add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (Vector3.Vector3), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
+add_multiple_new = |entity_data, offset_to_segment_start, segment_vector, radius|
     add_multiple(
         entity_data,
-        All(Entity.Arg.broadcasted_map4(
-            offset_to_segment_start, segment_vector, radius, rate,
+        All(Entity.Arg.broadcasted_map3(
+            offset_to_segment_start, segment_vector, radius,
             Entity.multi_count(entity_data),
             new
         ))
@@ -142,7 +132,7 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, VoxelAbsorbingCapsule -> List U8
 write_packet = |bytes, val|
     type_id = 3676247617419631421
-    size = 32
+    size = 28
     alignment = 4
     bytes
     |> List.reserve(24 + size)
@@ -154,7 +144,7 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List VoxelAbsorbingCapsule -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 3676247617419631421
-    size = 32
+    size = 28
     alignment = 4
     count = List.len(vals)
     bytes_with_header =
@@ -175,11 +165,10 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, VoxelAbsorbingCapsule -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(32)
+    |> List.reserve(28)
     |> Vector3.write_bytes(value.offset_to_segment_start)
     |> Vector3.write_bytes(value.segment_vector)
     |> Builtin.write_bytes_f32(value.radius)
-    |> Builtin.write_bytes_f32(value.rate)
 
 ## Deserializes a value of [VoxelAbsorbingCapsule] from its bytes in the
 ## representation used by the engine.
@@ -190,13 +179,12 @@ from_bytes = |bytes|
             offset_to_segment_start: bytes |> List.sublist({ start: 0, len: 12 }) |> Vector3.from_bytes?,
             segment_vector: bytes |> List.sublist({ start: 12, len: 12 }) |> Vector3.from_bytes?,
             radius: bytes |> List.sublist({ start: 24, len: 4 }) |> Builtin.from_bytes_f32?,
-            rate: bytes |> List.sublist({ start: 28, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 32 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 28 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

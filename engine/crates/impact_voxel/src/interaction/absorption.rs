@@ -1,7 +1,7 @@
 //! Voxel absorption.
 
 use crate::{
-    VoxelObjectManager, VoxelObjectPhysicsContext,
+    Voxel, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{
         self, DynamicDisconnectedVoxelObject, NewVoxelObjectEntity, VoxelObjectEntity,
@@ -22,9 +22,7 @@ use roc_integration::roc;
 use std::mem;
 
 define_component_type! {
-    /// A sphere that absorbs voxels it comes in contact with. The rate of
-    /// absorption is highest at the center of the sphere and decreases
-    /// quadratically to zero at the full radius.
+    /// A sphere that instantly absorbs voxels it comes in contact with.
     ///
     /// Does nothing if the entity does not have a
     /// [`impact_geometry::ReferenceFrame`].
@@ -36,15 +34,11 @@ define_component_type! {
         offset: Vector3C,
         /// The radius of the sphere.
         radius: f32,
-        /// The maximum rate of absorption (at the center of the sphere).
-        rate: f32,
     }
 }
 
 define_component_type! {
-    /// A capsule that absorbs voxels it comes in contact with. The rate of
-    /// absorption is highest at the central line segment of the capsule and
-    /// decreases quadratically to zero at the capsule boundary.
+    /// A capsule that instantly absorbs voxels it comes in contact with.
     ///
     /// Does nothing if the entity does not have a
     /// [`impact_geometry::ReferenceFrame`].
@@ -60,44 +54,45 @@ define_component_type! {
         segment_vector: Vector3C,
         /// The radius of the capsule.
         radius: f32,
-        /// The maximum rate of absorption (at the central line segment of the
-        /// capsule).
-        rate: f32,
     }
 }
 
 #[roc]
 impl VoxelAbsorbingSphere {
     /// Creates a new [`VoxelAbsorbingSphere`] with the given offset and radius
-    /// in the reference frame of the entity and the given maximum absorption
-    /// rate (at the center of the sphere).
+    /// in the reference frame of the entity.
     #[roc(body = r#"
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
-    # expect rate >= 0.0
     {
         offset,
         radius,
-        rate,
     }"#)]
-    pub fn new(offset: Vector3C, radius: f32, rate: f32) -> Self {
+    pub fn new(offset: Vector3C, radius: f32) -> Self {
         assert!(radius >= 0.0);
-        assert!(rate >= 0.0);
-        Self {
-            offset,
-            radius,
-            rate,
-        }
+        Self { offset, radius }
     }
 
-    /// Returns the sphere in the reference frame of the entity.
-    pub fn sphere(&self) -> SphereC {
-        SphereC::new(Point3C::from(self.offset), self.radius)
+    /// Returns the sphere of influence in the reference frame of the entity.
+    ///
+    /// The sphere of influence is slightly larger than the absorbing sphere in
+    /// order to keep the SDF well-behaved near the boundary of the absorbed
+    /// volume.
+    pub fn influence_sphere(&self, voxel_extent: f32) -> SphereC {
+        SphereC::new(Point3C::from(self.offset), self.radius + 2.0 * voxel_extent)
     }
 
-    /// Returns the maximum absorption rate.
-    pub fn rate(&self) -> f32 {
-        self.rate
+    /// Computes the new signed distance for the given voxel inside the sphere
+    /// of influence.
+    pub fn compute_new_signed_distance(
+        &self,
+        voxel: &Voxel,
+        squared_distance_from_center: f32,
+    ) -> f32 {
+        let sphere_signed_distance = squared_distance_from_center.sqrt() - self.radius;
+
+        // SDF subtraction
+        f32::max(voxel.signed_distance().to_f32(), -sphere_signed_distance)
     }
 }
 
@@ -106,46 +101,48 @@ impl VoxelAbsorbingCapsule {
     /// Creates a new [`VoxelAbsorbingCapsule`] with the given offset to the
     /// start of the capsule's central line segment, displacement from the start
     /// to the end of the line segment and radius, all in the reference frame of
-    /// the entity, as well as the given maximum absorption rate (at the central
-    /// line segment).
+    /// the entity.
     #[roc(body = r#"
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect radius >= 0.0
-    # expect rate >= 0.0
     {
         offset_to_segment_start,
         segment_vector,
         radius,
-        rate,
     }"#)]
-    pub fn new(
-        offset_to_segment_start: Vector3C,
-        segment_vector: Vector3C,
-        radius: f32,
-        rate: f32,
-    ) -> Self {
+    pub fn new(offset_to_segment_start: Vector3C, segment_vector: Vector3C, radius: f32) -> Self {
         assert!(radius >= 0.0);
-        assert!(rate >= 0.0);
         Self {
             offset_to_segment_start,
             segment_vector,
             radius,
-            rate,
         }
     }
 
-    /// Returns the capsule in the reference frame of the entity.
-    pub fn capsule(&self) -> CapsuleC {
+    /// Returns the capsule of influence in the reference frame of the entity.
+    ///
+    /// The capsule of influence is slightly larger than the absorbing capsule
+    /// in order to keep the SDF well-behaved near the boundary of the absorbed
+    /// volume.
+    pub fn influence_capsule(&self, voxel_extent: f32) -> CapsuleC {
         CapsuleC::new(
             Point3C::from(self.offset_to_segment_start),
             self.segment_vector,
-            self.radius,
+            self.radius + 2.0 * voxel_extent,
         )
     }
 
-    /// Returns the maximum absorption rate.
-    pub fn rate(&self) -> f32 {
-        self.rate
+    /// Computes the new signed distance for the given voxel inside the capsule
+    /// of influence.
+    pub fn compute_new_signed_distance(
+        &self,
+        voxel: &Voxel,
+        squared_distance_from_segment: f32,
+    ) -> f32 {
+        let capsule_signed_distance = squared_distance_from_segment.sqrt() - self.radius;
+
+        // SDF subtraction
+        f32::max(voxel.signed_distance().to_f32(), -capsule_signed_distance)
     }
 }
 
@@ -157,7 +154,6 @@ pub fn apply_absorption<C>(
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
-    time_step_duration: f32,
 ) where
     C: VoxelObjectInteractionContext,
     <C as VoxelObjectInteractionContext>::EntityID: Clone,
@@ -215,7 +211,6 @@ pub fn apply_absorption<C>(
 
         for absorbing_sphere in &absorbing_spheres {
             apply_sphere_absorption(
-                time_step_duration,
                 &mut inertial_property_updater,
                 voxel_object,
                 &world_to_voxel_object_transform,
@@ -226,7 +221,6 @@ pub fn apply_absorption<C>(
 
         for absorbing_capsule in &absorbing_capsules {
             apply_capsule_absorption(
-                time_step_duration,
                 &mut inertial_property_updater,
                 voxel_object,
                 &world_to_voxel_object_transform,
@@ -298,32 +292,29 @@ pub fn apply_absorption<C>(
 }
 
 fn apply_sphere_absorption(
-    time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
     world_to_voxel_object_transform: &Isometry3,
     absorbing_sphere: &VoxelAbsorbingSphere,
     sphere_to_world_transform: &Isometry3,
 ) {
-    let sphere = absorbing_sphere.sphere().aligned();
+    let influence_sphere = absorbing_sphere
+        .influence_sphere(voxel_object.voxel_extent())
+        .aligned();
 
-    let sphere_in_voxel_object_space = sphere
+    let influence_sphere_in_voxel_object_space = influence_sphere
         .iso_transformed(sphere_to_world_transform)
         .iso_transformed(world_to_voxel_object_transform);
 
-    let inverse_radius_squared = sphere_in_voxel_object_space.radius_squared().recip();
-
-    let absorption_rate_per_frame = absorbing_sphere.rate() * time_step_duration;
-
     voxel_object.modify_voxels_within_sphere(
-        &sphere_in_voxel_object_space,
-        &mut |object_voxel_indices, squared_distance, voxel| {
+        &influence_sphere_in_voxel_object_space,
+        &mut |object_voxel_indices, squared_distance_from_center, voxel| {
             let was_empty = voxel.is_empty();
 
-            let signed_distance_delta =
-                absorption_rate_per_frame * (1.0 - squared_distance * inverse_radius_squared);
+            let new_signed_distance =
+                absorbing_sphere.compute_new_signed_distance(voxel, squared_distance_from_center);
 
-            voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
+            voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
                     inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
                 }
@@ -333,32 +324,29 @@ fn apply_sphere_absorption(
 }
 
 fn apply_capsule_absorption(
-    time_step_duration: f32,
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
     world_to_voxel_object_transform: &Isometry3,
     absorbing_capsule: &VoxelAbsorbingCapsule,
     capsule_to_world_transform: &Isometry3,
 ) {
-    let capsule = absorbing_capsule.capsule().aligned();
+    let influence_capsule = absorbing_capsule
+        .influence_capsule(voxel_object.voxel_extent())
+        .aligned();
 
-    let capsule_in_voxel_object_space = capsule
+    let influence_capsule_in_voxel_object_space = influence_capsule
         .iso_transformed(capsule_to_world_transform)
         .iso_transformed(world_to_voxel_object_transform);
 
-    let inverse_radius_squared = capsule_in_voxel_object_space.radius().powi(2).recip();
-
-    let absorption_rate_per_frame = absorbing_capsule.rate() * time_step_duration;
-
     voxel_object.modify_voxels_within_capsule(
-        &capsule_in_voxel_object_space,
-        &mut |object_voxel_indices, squared_distance, voxel| {
+        &influence_capsule_in_voxel_object_space,
+        &mut |object_voxel_indices, squared_distance_from_segment, voxel| {
             let was_empty = voxel.is_empty();
 
-            let signed_distance_delta =
-                absorption_rate_per_frame * (1.0 - squared_distance * inverse_radius_squared);
+            let new_signed_distance =
+                absorbing_capsule.compute_new_signed_distance(voxel, squared_distance_from_segment);
 
-            voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
+            voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
                     inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
                 }

@@ -48,8 +48,7 @@ laser = {
     emissive_luminance: 1e6,
     right_shift: 0.15,
     down_shift: 0.3,
-    absorb_radius: 1.0,
-    absorb_rate: 2000.0,
+    absorb_radius: 0.5,
 }
 
 absorbing_sphere = {
@@ -59,8 +58,7 @@ absorbing_sphere = {
     light_color: (1.0, 0.2, 0.2),
     luminous_intensity: 1e5,
     forward_shift: 3.0,
-    absorb_radius: 1.0,
-    absorb_rate: 30.0,
+    absorb_radius: 1.5,
 }
 
 spawn! : {} => Result {} Str
@@ -88,7 +86,6 @@ construct_entities = |_|
             Vector3.same(0),
             (0, laser.range, 0),
             laser.absorb_radius,
-            laser.absorb_rate,
         )
         |> Comp.SceneEntityFlags.add(
             Comp.SceneEntityFlags.union(
@@ -112,7 +109,6 @@ construct_entities = |_|
         |> Comp.VoxelAbsorbingSphere.add_new(
             Vector3.same(0),
             absorbing_sphere.absorb_radius,
-            absorbing_sphere.absorb_rate,
         )
         |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
