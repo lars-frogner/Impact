@@ -1,40 +1,47 @@
 module [
-    entity_ids,
+    ToolEntities,
     thruster,
     laser,
     absorbing_sphere,
     spawn!,
+    spawn_projectile!,
 ]
 
 import core.UnitQuaternion
-import core.UnitVector3
-import core.Vector3
+import core.Point3 exposing [Point3]
+import core.Vector3 exposing [Vector3]
+import core.UnitVector3 exposing [UnitVector3]
+import core.Sphere
 
 import pf.Entity
 
+import pf.Setup.SceneParent
 import pf.Setup.CylinderMesh
 import pf.Setup.SphereMesh
-import pf.Setup.SceneParent
-import pf.Comp.ReferenceFrame
-import pf.Comp.ModelTransform
-import pf.Setup.SphereMesh
-import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Setup.UniformColor
+import pf.Setup.UniformRoughness
+import pf.Setup.UniformSpecularReflectance
 import pf.Setup.UniformEmissiveLuminance
+import pf.Comp.ModelTransform
+import pf.Comp.Motion
+import pf.Comp.ReferenceFrame
+import pf.Setup.DynamicRigidBodySubstance
+import pf.Setup.SphericalCollidable
+import pf.Physics.ContactResponseParameters
+import pf.Comp.DynamicGravity
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
+import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
-
-import Entities.Player as Player
 
 ToolEntities : {
     laser : Entity.ComponentData,
     absorbing_sphere : Entity.ComponentData,
 }
 
-entity_ids = {
-    laser: Entity.id("laser"),
-    absorbing_sphere: Entity.id("absorbing_sphere"),
+ToolEntityIds : {
+    laser : Entity.Id,
+    absorbing_sphere : Entity.Id,
 }
 
 thruster = {
@@ -61,20 +68,65 @@ absorbing_sphere = {
     absorb_radius: 1.5,
 }
 
-spawn! : {} => Result {} Str
-spawn! = |_|
-    ents = construct_entities({})
+projectile = {
+    radius: 0.5,
+    color: (0.1, 0.1, 0.9),
+    specular_reflectance_percent: 50.0,
+    roughness: 0.6,
+    speed: 10.0,
+    mass_density: 1e3,
+    restitution_coef: 0.4,
+    static_friction_coef: 0.6,
+    dynamic_friction_coef: 0.6,
+    forward_shift: 2.0,
+}
+
+spawn! : ToolEntityIds, Entity.Id => Result {} Str
+spawn! = |entity_ids, parent|
+    ents = construct_entities(parent)
 
     Entity.create_with_id!(ents.laser, entity_ids.laser)?
     Entity.create_with_id!(ents.absorbing_sphere, entity_ids.absorbing_sphere)?
 
     Ok({})
 
-construct_entities : {} -> ToolEntities
-construct_entities = |_|
+spawn_projectile! : Point3, Vector3, UnitVector3 => Result {} Str
+spawn_projectile! = |position, start_velocity, direction|
+    projectile_ent =
+        Entity.new_component_data
+        |> Setup.SphereMesh.add_new(64)
+        |> Setup.UniformColor.add(projectile.color)
+        |> Setup.UniformSpecularReflectance.add_in_range_of(
+            Setup.UniformSpecularReflectance.stone,
+            projectile.specular_reflectance_percent,
+        )
+        |> Setup.UniformRoughness.add(projectile.roughness)
+        |> Comp.ModelTransform.add_with_scale(2 * projectile.radius)
+        |> Comp.ReferenceFrame.add_unoriented(
+            Vector3.add(position, Vector3.scale(direction, projectile.forward_shift)),
+        )
+        |> Comp.Motion.add_linear(
+            Vector3.add(start_velocity, Vector3.scale(direction, projectile.speed)),
+        )
+        |> Setup.DynamicRigidBodySubstance.add_new(projectile.mass_density)
+        |> Setup.SphericalCollidable.add_new(
+            Dynamic,
+            Sphere.new(Point3.origin, projectile.radius),
+            Physics.ContactResponseParameters.new(
+                projectile.restitution_coef,
+                projectile.static_friction_coef,
+                projectile.dynamic_friction_coef,
+            ),
+        )
+        |> Comp.DynamicGravity.add
+
+    Entity.stage_for_creation!(projectile_ent)
+
+construct_entities : Entity.Id -> ToolEntities
+construct_entities = |parent|
     laser_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(Player.entity_ids.player_head)
+        |> Setup.SceneParent.add_new(parent)
         |> Comp.ReferenceFrame.add_new(
             (laser.right_shift, -laser.down_shift, 0.0),
             UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
@@ -96,7 +148,7 @@ construct_entities = |_|
 
     absorbing_sphere_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(Player.entity_ids.player_head)
+        |> Setup.SceneParent.add_new(parent)
         |> Comp.ModelTransform.add_with_scale(2 * absorbing_sphere.visual_radius)
         |> Comp.ReferenceFrame.add_unoriented((0, 0, -absorbing_sphere.forward_shift))
         |> Setup.SphereMesh.add_new(64)

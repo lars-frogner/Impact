@@ -1,5 +1,5 @@
 # Hash: 6ec674ec42064cfa
-# Generated: 2026-01-18T10:23:28.079823297
+# Generated: 2026-01-23T21:17:57.478883102
 # Rust type: impact_game::command::GameCommand
 # Type category: Inline
 module [

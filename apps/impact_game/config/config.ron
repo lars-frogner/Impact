@@ -1,7 +1,7 @@
 (
     game_options: (
         reset_scene_on_reload: true,
-        player_mode: Active,
+        player_mode: Dynamic,
     ),
     run_mode: Windowed,
     window: (
