@@ -882,8 +882,6 @@ fn buffer_transforms_for_collider_gizmos(
             };
             let voxel_object = voxel_object.object();
 
-            let voxel_radius = 0.5 * voxel_object.voxel_extent();
-
             let transform_to_object_space = voxel_object_collidable
                 .transform_to_object_space()
                 .aligned();
@@ -895,21 +893,23 @@ fn buffer_transforms_for_collider_gizmos(
 
             let rotation_from_object_to_camera_space =
                 transform_from_object_to_camera_space.rotation();
-            let scaling_from_object_to_camera_space = voxel_radius;
 
             let mut transforms = Vec::with_capacity(voxel_object.surface_voxel_count_heuristic());
 
-            voxel_object.for_each_surface_voxel(&mut |[i, j, k], _, _| {
+            voxel_object.for_each_surface_voxel(&mut |[i, j, k], voxel, _| {
                 let voxel_center_in_object_space =
                     voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
 
                 let voxel_center_in_camera_space = transform_from_object_to_camera_space
                     .transform_point(&voxel_center_in_object_space);
 
+                let voxel_radius =
+                    f32::min(-voxel.signed_distance().to_f32(), 0.5) * voxel_object.voxel_extent();
+
                 let model_to_camera_transform = InstanceModelViewTransform {
                     translation: voxel_center_in_camera_space.as_vector().compact(),
                     rotation: rotation_from_object_to_camera_space.compact(),
-                    scaling: scaling_from_object_to_camera_space,
+                    scaling: voxel_radius,
                 };
 
                 transforms.push(model_to_camera_transform);
