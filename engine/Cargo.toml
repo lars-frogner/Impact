@@ -62,6 +62,7 @@ multiple_bound_locations = "allow"
 too_long_first_doc_paragraph = "allow"
 derivable_impls = "allow"
 from_iter_instead_of_collect = "allow"
+new_without_default = "allow"
 
 cargo = { level = "warn", priority = -1 }
 multiple_crate_versions = "allow"
