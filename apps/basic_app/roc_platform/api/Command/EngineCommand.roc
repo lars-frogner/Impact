@@ -1,5 +1,5 @@
-# Hash: 7b10bd467a9e59c4
-# Generated: 2026-01-14T12:38:01.850741356
+# Hash: dd0bd2e84f938b4a
+# Generated: 2026-01-24T10:14:14.530639275
 # Rust type: impact::command::UserCommand
 # Type category: Inline
 module [
@@ -25,21 +25,21 @@ write_bytes = |bytes, value|
     when value is
         Scene(val) ->
             bytes
-            |> List.reserve(23)
+            |> List.reserve(34)
             |> List.append(0)
             |> Command.SceneCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 5))
+            |> List.concat(List.repeat(0, 16))
 
         Control(val) ->
             bytes
-            |> List.reserve(23)
+            |> List.reserve(34)
             |> List.append(1)
             |> Command.ControlCommand.write_bytes(val)
-            |> List.concat(List.repeat(0, 17))
+            |> List.concat(List.repeat(0, 28))
 
         Physics(val) ->
             bytes
-            |> List.reserve(23)
+            |> List.reserve(34)
             |> List.append(2)
             |> Command.PhysicsCommand.write_bytes(val)
 
@@ -47,7 +47,7 @@ write_bytes = |bytes, value|
 ## representation used by the engine.
 from_bytes : List U8 -> Result EngineCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 23 then
+    if List.len(bytes) != 34 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
@@ -68,7 +68,7 @@ from_bytes = |bytes|
             [2, .. as data_bytes] ->
                 Ok(
                     Physics(
-                        data_bytes |> List.sublist({ start: 0, len: 22 }) |> Command.PhysicsCommand.from_bytes?,
+                        data_bytes |> List.sublist({ start: 0, len: 33 }) |> Command.PhysicsCommand.from_bytes?,
                     ),
                 )
 

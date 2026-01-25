@@ -32,7 +32,10 @@ import pf.Comp.DynamicGravity
 import pf.Comp.VoxelAbsorbingCapsule
 import pf.Comp.VoxelAbsorbingSphere
 import pf.Comp.ShadowableOmnidirectionalEmission
+import pf.Comp.OmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
+
+import Util
 
 ToolEntities : {
     laser : Entity.ComponentData,
@@ -69,12 +72,13 @@ absorbing_sphere = {
 }
 
 projectile = {
-    radius: 0.5,
-    color: (0.1, 0.1, 0.9),
+    radius: 0.3,
+    color: (1.0, 0.78, 0.043),
     specular_reflectance_percent: 50.0,
-    roughness: 0.6,
+    roughness: 0.3,
+    luminous_intensity: 1e4,
     speed: 10.0,
-    mass_density: 1e3,
+    mass_density: 1e2,
     restitution_coef: 0.4,
     static_friction_coef: 0.6,
     dynamic_friction_coef: 0.6,
@@ -90,8 +94,11 @@ spawn! = |entity_ids, parent|
 
     Ok({})
 
-spawn_projectile! : Point3, Vector3, UnitVector3 => Result {} Str
+spawn_projectile! : Point3, Vector3, UnitVector3 => Result Vector3 Str
 spawn_projectile! = |position, start_velocity, direction|
+    launch_position = Vector3.add(position, Vector3.scale(direction, projectile.forward_shift))
+    launch_velocity = Vector3.add(start_velocity, Vector3.scale(direction, projectile.speed))
+
     projectile_ent =
         Entity.new_component_data
         |> Setup.SphereMesh.add_new(64)
@@ -101,13 +108,16 @@ spawn_projectile! = |position, start_velocity, direction|
             projectile.specular_reflectance_percent,
         )
         |> Setup.UniformRoughness.add(projectile.roughness)
+        |> Setup.UniformEmissiveLuminance.add(
+            Util.compute_sphere_emissive_luminance(projectile.luminous_intensity, projectile.radius),
+        )
+        |> Comp.OmnidirectionalEmission.add_new(
+            Vector3.scale(projectile.color, projectile.luminous_intensity),
+            2 * projectile.radius,
+        )
         |> Comp.ModelTransform.add_with_scale(2 * projectile.radius)
-        |> Comp.ReferenceFrame.add_unoriented(
-            Vector3.add(position, Vector3.scale(direction, projectile.forward_shift)),
-        )
-        |> Comp.Motion.add_linear(
-            Vector3.add(start_velocity, Vector3.scale(direction, projectile.speed)),
-        )
+        |> Comp.ReferenceFrame.add_unoriented(launch_position)
+        |> Comp.Motion.add_linear(launch_velocity)
         |> Setup.DynamicRigidBodySubstance.add_new(projectile.mass_density)
         |> Setup.SphericalCollidable.add_new(
             Dynamic,
@@ -120,20 +130,25 @@ spawn_projectile! = |position, start_velocity, direction|
         )
         |> Comp.DynamicGravity.add
 
-    Entity.stage_for_creation!(projectile_ent)
+    Entity.stage_for_creation!(projectile_ent)?
+
+    mass = Util.compute_sphere_mass(projectile.radius, projectile.mass_density)
+    reaction_impulse = Vector3.scale(launch_velocity, -mass)
+
+    Ok(reaction_impulse)
 
 construct_entities : Entity.Id -> ToolEntities
 construct_entities = |parent|
     laser_ent =
         Entity.new_component_data
         |> Setup.SceneParent.add_new(parent)
+        |> Setup.CylinderMesh.add_new(laser.range, 2 * laser.visual_radius, 16)
+        |> Setup.UniformColor.add(laser.color)
+        |> Setup.UniformEmissiveLuminance.add(laser.emissive_luminance)
         |> Comp.ReferenceFrame.add_new(
             (laser.right_shift, -laser.down_shift, 0.0),
             UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
         )
-        |> Setup.CylinderMesh.add_new(laser.range, 2 * laser.visual_radius, 16)
-        |> Setup.UniformColor.add(laser.color)
-        |> Setup.UniformEmissiveLuminance.add(laser.emissive_luminance)
         |> Comp.VoxelAbsorbingCapsule.add_new(
             Vector3.same(0),
             (0, laser.range, 0),
@@ -149,8 +164,6 @@ construct_entities = |parent|
     absorbing_sphere_ent =
         Entity.new_component_data
         |> Setup.SceneParent.add_new(parent)
-        |> Comp.ModelTransform.add_with_scale(2 * absorbing_sphere.visual_radius)
-        |> Comp.ReferenceFrame.add_unoriented((0, 0, -absorbing_sphere.forward_shift))
         |> Setup.SphereMesh.add_new(64)
         |> Setup.UniformColor.add(absorbing_sphere.color)
         |> Setup.UniformEmissiveLuminance.add(absorbing_sphere.emissive_luminance)
@@ -158,6 +171,8 @@ construct_entities = |parent|
             Vector3.scale(absorbing_sphere.light_color, absorbing_sphere.luminous_intensity),
             2 * absorbing_sphere.visual_radius,
         )
+        |> Comp.ModelTransform.add_with_scale(2 * absorbing_sphere.visual_radius)
+        |> Comp.ReferenceFrame.add_unoriented((0, 0, -absorbing_sphere.forward_shift))
         |> Comp.VoxelAbsorbingSphere.add_new(
             Vector3.same(0),
             absorbing_sphere.absorb_radius,

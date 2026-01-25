@@ -15,6 +15,7 @@ import core.UnitQuaternion
 import core.Random
 import core.Radians
 
+import Util
 import Generation.Orbit as Orbit
 
 Spec : {
@@ -62,7 +63,7 @@ generate : Spec, U64 -> System
 generate = |spec, seed|
     system_radius = spec.body_distributions.semi_major_axis.max_value
 
-    star_mass = compute_sphere_mass(spec.star_radius, spec.star_mass_density)
+    star_mass = Util.compute_sphere_mass(spec.star_radius, spec.star_mass_density)
 
     grav_const = compute_grav_const(
         star_mass,
@@ -74,7 +75,7 @@ generate = |spec, seed|
         spec.min_body_illuminance,
         system_radius,
     )
-    star_emissive_luminance = compute_sphere_emissive_luminance(
+    star_emissive_luminance = Util.compute_sphere_emissive_luminance(
         star_luminous_intensity,
         spec.star_radius,
     )
@@ -146,14 +147,8 @@ generate_body = |rng, distributions, grav_const, star_mass|
 
     (rng7, { position, velocity, size })
 
-compute_sphere_mass = |radius, mass_density|
-    (4.0 / 3.0) * Num.pi * Num.pow(radius, 3) * mass_density
-
 compute_grav_const = |star_mass, distance, orbital_period|
     Num.pow(2 * Num.pi, 2) * Num.pow(distance, 3) / (star_mass * Num.pow(orbital_period, 2))
-
-compute_sphere_emissive_luminance = |luminous_intensity, radius|
-    luminous_intensity / (Num.pi * Num.pow(radius, 2))
 
 compute_luminous_intensity = |illuminance, distance|
     illuminance * Num.pow(distance, 2)

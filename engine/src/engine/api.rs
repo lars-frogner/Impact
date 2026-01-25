@@ -594,4 +594,8 @@ impl Engine {
 
         f(component)
     }
+
+    pub fn get_component_copy<C: Component>(&self, entity_id: EntityID) -> Result<C> {
+        self.with_component(entity_id, |component| Ok(*component))
+    }
 }

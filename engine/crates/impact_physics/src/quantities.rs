@@ -60,6 +60,16 @@ pub type Torque = Vector3;
 /// A 3D torque (compact).
 pub type TorqueC = Vector3C;
 
+/// A 3D impulse (momentum change).
+pub type Impulse = Vector3;
+/// A 3D impulse (momentum change) (compact).
+pub type ImpulseC = Vector3C;
+
+/// A 3D angular impulse (angular momentum change).
+pub type AngularImpulse = Vector3;
+/// A 3D angular impulse (angular momentum change) (compact).
+pub type AngularImpulseC = Vector3C;
+
 define_component_type! {
     /// A linear and angular velocity.
     #[roc(parents = "Comp")]
@@ -323,6 +333,7 @@ impl AngularVelocityC {
     }
 
     /// Computes the corresponding angular velocity vector.
+    #[roc(body = "Vector3.scale(self.axis_of_rotation, self.angular_speed)")]
     #[inline]
     pub fn as_vector(&self) -> Vector3C {
         self.angular_speed.radians() * self.axis_of_rotation
