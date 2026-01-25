@@ -5,9 +5,9 @@ pub mod setup;
 use crate::{
     inertia::InertiaTensorP,
     quantities::{
-        self, AngularMomentumC, AngularVelocity, AngularVelocityC, Direction, Force, ForceC,
-        MomentumC, Motion, Orientation, OrientationC, Position, PositionC, Torque, TorqueC,
-        Velocity, VelocityC,
+        self, AngularImpulse, AngularMomentumC, AngularVelocity, AngularVelocityC, Direction,
+        Force, ForceC, Impulse, MomentumC, Motion, Orientation, OrientationC, Position, PositionC,
+        Torque, TorqueC, Velocity, VelocityC,
     },
 };
 use approx::AbsDiffEq;
@@ -88,6 +88,18 @@ pub struct KinematicRigidBody {
     orientation: OrientationC,
     velocity: VelocityC,
     angular_velocity: AngularVelocityC,
+}
+
+impl From<DynamicRigidBodyID> for u64 {
+    fn from(id: DynamicRigidBodyID) -> Self {
+        id.0
+    }
+}
+
+impl From<KinematicRigidBodyID> for u64 {
+    fn from(id: KinematicRigidBodyID) -> Self {
+        id.0
+    }
 }
 
 impl From<DynamicRigidBodyID> for TypedRigidBodyID {
@@ -508,13 +520,6 @@ impl DynamicRigidBody {
         self.total_force += force;
     }
 
-    /// Applies the given torque around the body's center of mass.
-    pub fn apply_torque(&mut self, torque: &Torque) {
-        let mut total_torque = self.total_torque.aligned();
-        total_torque += torque;
-        self.total_torque = total_torque.compact();
-    }
-
     /// Applies the given force at the given position. This may result in a
     /// torque around the center of mass.
     pub fn apply_force(&mut self, force: &Force, force_position: &Position) {
@@ -522,6 +527,36 @@ impl DynamicRigidBody {
 
         self.apply_force_at_center_of_mass(force);
         self.apply_torque(&(force_position - position).cross(force));
+    }
+
+    /// Applies the given torque around the body's center of mass.
+    pub fn apply_torque(&mut self, torque: &Torque) {
+        let mut total_torque = self.total_torque.aligned();
+        total_torque += torque;
+        self.total_torque = total_torque.compact();
+    }
+
+    /// Applies the given impulse at the body's center of mass.
+    pub fn apply_impulse_at_center_of_mass(&mut self, impulse: &Impulse) {
+        let mut momentum = self.momentum.aligned();
+        momentum += impulse;
+        self.momentum = momentum.compact();
+    }
+
+    /// Applies the given impulse at the given position. This may result in an
+    /// angular impulse around the center of mass.
+    pub fn apply_impulse(&mut self, impulse: &Impulse, impulse_position: &Position) {
+        let position = self.position.aligned();
+
+        self.apply_impulse_at_center_of_mass(impulse);
+        self.apply_angular_impulse(&(impulse_position - position).cross(impulse));
+    }
+
+    /// Applies the given angular impulse around the body's center of mass.
+    pub fn apply_angular_impulse(&mut self, angular_impulse: &AngularImpulse) {
+        let mut angular_momentum = self.angular_momentum.aligned();
+        angular_momentum += angular_impulse;
+        self.angular_momentum = angular_momentum.compact();
     }
 
     /// Sets the given inertial properties for the body.

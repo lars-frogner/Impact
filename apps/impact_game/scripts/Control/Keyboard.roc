@@ -10,8 +10,6 @@ import pf.Input.KeyboardEvent exposing [KeyboardEvent]
 
 import pf.Comp.ReferenceFrame
 import pf.Comp.Motion
-import pf.Comp.LocalForceGeneratorID
-import pf.Comp.AlignmentTorqueGeneratorID
 
 import Entities.Player as Player
 import Entities.Tools as Tools
@@ -36,14 +34,14 @@ handle_event_dynamic_mode! = |{ key, state }|
 
             Letter(letter_key) ->
                 when letter_key is
-                    KeyW -> add_thruster_force!(state, Forwards)?
-                    KeyS -> add_thruster_force!(state, Backwards)?
-                    KeyD -> add_thruster_force!(state, Left)?
-                    KeyA -> add_thruster_force!(state, Right)?
-                    KeyQ -> add_thruster_force!(state, Down)?
-                    KeyE -> add_thruster_force!(state, Up)?
-                    KeyY -> set_alignment_direction!(state, Fixed(UnitVector3.neg_unit_y))?
-                    KeyG -> set_alignment_direction!(state, GravityForce)?
+                    KeyW -> add_thruster_force(state, Forwards)
+                    KeyS -> add_thruster_force(state, Backwards)
+                    KeyD -> add_thruster_force(state, Left)
+                    KeyA -> add_thruster_force(state, Right)
+                    KeyQ -> add_thruster_force(state, Down)
+                    KeyE -> add_thruster_force(state, Up)
+                    KeyY -> set_alignment_direction(state, Fixed(UnitVector3.neg_unit_y))
+                    KeyG -> set_alignment_direction(state, GravityForce)
                     KeyM -> switch_to_free_camera_mode(state)
                     _ -> []
 
@@ -106,14 +104,14 @@ set_ui_interactivity = |key_state, to|
 
     [UI(SetInteractivity(to))]
 
-add_thruster_force! = |key_state, direction|
+add_thruster_force = |key_state, direction|
     force_magnitude = Tools.thruster.acceleration * Player.player.mass
     force =
         when key_state is
             Pressed -> force_magnitude
             Released -> -force_magnitude
             Held ->
-                return Ok([])
+                return []
 
     force_vector =
         when direction is
@@ -124,8 +122,7 @@ add_thruster_force! = |key_state, direction|
             Down -> (0, -force, 0)
             Up -> (0, force, 0)
 
-    generator_id = Comp.LocalForceGeneratorID.get_for_entity!(Player.entity_ids.player)?
-    Ok([Engine(Physics(UpdateLocalForce { generator_id, mode: Add, force: force_vector }))])
+    [Engine(Physics(UpdateLocalForce { entity_id: Player.entity_ids.player, mode: Add, force: force_vector }))]
 
 launch_projectile_dynamic_mode! = |key_state|
     when key_state is
@@ -140,13 +137,19 @@ launch_projectile_dynamic_mode! = |key_state|
     position = Vector3.add(player_frame.position, UnitQuaternion.rotate_vector(player_frame.orientation, player_head_frame.position))
     orientation = UnitQuaternion.mul(player_frame.orientation, player_head_frame.orientation)
 
-    Tools.spawn_projectile!(
+    reaction_impulse = Tools.spawn_projectile!(
         position,
         player_motion.linear_velocity,
         UnitQuaternion.rotate_vector(orientation, UnitVector3.neg_unit_z),
     )?
 
-    Ok([])
+    apply_impulse = ApplyImpulse {
+        entity_id: Player.entity_ids.player,
+        impulse: reaction_impulse,
+        relative_position: position,
+    }
+
+    Ok([Engine(Physics(apply_impulse))])
 
 launch_projectile_free_camera_mode! = |key_state|
     when key_state is
@@ -157,7 +160,7 @@ launch_projectile_free_camera_mode! = |key_state|
     frame = Comp.ReferenceFrame.get_for_entity!(FreeCamera.entity_ids.camera)?
     motion = Comp.Motion.get_for_entity!(FreeCamera.entity_ids.camera)?
 
-    Tools.spawn_projectile!(
+    _ = Tools.spawn_projectile!(
         frame.position,
         motion.linear_velocity,
         UnitQuaternion.rotate_vector(frame.orientation, UnitVector3.neg_unit_z),
@@ -175,14 +178,13 @@ set_motion = |key_state, direction|
 
     Ok([Engine(Control(SetMotion { direction, state }))])
 
-set_alignment_direction! = |key_state, direction|
+set_alignment_direction = |key_state, direction|
     when key_state is
         Released -> {}
         _ ->
-            return Ok([])
+            return []
 
-    generator_id = Comp.AlignmentTorqueGeneratorID.get_for_entity!(Player.entity_ids.player)?
-    Ok([Engine(Physics(SetAlignmentTorqueDirection { generator_id, direction }))])
+    [Engine(Physics(SetAlignmentTorqueDirection { entity_id: Player.entity_ids.player, direction }))]
 
 switch_to_dynamic_mode = |key_state|
     when key_state is

@@ -170,18 +170,19 @@ pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Resu
             Ok(())
         }
         PhysicsCommand::UpdateLocalForce {
-            generator_id,
+            entity_id,
             mode,
             force,
-        } => physics::update_local_force(&engine.simulator().oread(), generator_id, mode, force),
+        } => physics::update_local_force(engine, entity_id, mode, force),
         PhysicsCommand::SetAlignmentTorqueDirection {
-            generator_id,
+            entity_id,
             direction,
-        } => physics::set_alignment_torque_direction(
-            &engine.simulator().oread(),
-            generator_id,
-            direction,
-        ),
+        } => physics::set_alignment_torque_direction(engine, entity_id, direction),
+        PhysicsCommand::ApplyImpulse {
+            entity_id,
+            impulse,
+            relative_position,
+        } => physics::apply_impulse(engine, entity_id, impulse, relative_position),
     }
     .context("Failed to execute physics command")
 }

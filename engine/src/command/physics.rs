@@ -6,14 +6,12 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
+use impact_ecs::world::EntityID;
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
-    force::{
-        alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
-        local_force::LocalForceGeneratorID,
-    },
-    quantities::ForceC,
+    force::alignment_torque::AlignmentDirection,
+    quantities::{ForceC, ImpulseC, Motion, PositionC},
 };
 use roc_integration::roc;
 
@@ -23,13 +21,18 @@ use roc_integration::roc;
 pub enum PhysicsCommand {
     SetGravitationalConstant(f32),
     UpdateLocalForce {
-        generator_id: LocalForceGeneratorID,
+        entity_id: EntityID,
         mode: LocalForceUpdateMode,
         force: ForceC,
     },
     SetAlignmentTorqueDirection {
-        generator_id: AlignmentTorqueGeneratorID,
+        entity_id: EntityID,
         direction: AlignmentDirection,
+    },
+    ApplyImpulse {
+        entity_id: EntityID,
+        impulse: ImpulseC,
+        relative_position: PositionC,
     },
 }
 
@@ -74,11 +77,16 @@ pub fn set_gravitational_constant(simulator: &PhysicsSimulator, to: f32) {
 }
 
 pub fn update_local_force(
-    simulator: &PhysicsSimulator,
-    generator_id: LocalForceGeneratorID,
+    engine: &Engine,
+    entity_id: EntityID,
     mode: LocalForceUpdateMode,
     force: ForceC,
 ) -> Result<()> {
+    let generator_id = engine
+        .get_component_copy(entity_id)
+        .context("Failed to get `LocalForceGeneratorID` component for local force update")?;
+
+    let simulator = engine.simulator().oread();
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
 
     let local_force = force_generator_manager
@@ -99,10 +107,15 @@ pub fn update_local_force(
 }
 
 pub fn set_alignment_torque_direction(
-    simulator: &PhysicsSimulator,
-    generator_id: AlignmentTorqueGeneratorID,
+    engine: &Engine,
+    entity_id: EntityID,
     direction: AlignmentDirection,
 ) -> Result<()> {
+    let generator_id = engine
+        .get_component_copy(entity_id)
+        .context("Failed to get `AlignmentTorqueGeneratorID` component for setting alignement torque direction")?;
+
+    let simulator = engine.simulator().oread();
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
 
     let alignment_torque = force_generator_manager
@@ -113,6 +126,42 @@ pub fn set_alignment_torque_direction(
     alignment_torque.alignment_direction = direction;
 
     Ok(())
+}
+
+pub fn apply_impulse(
+    engine: &Engine,
+    entity_id: EntityID,
+    impulse: ImpulseC,
+    relative_position: PositionC,
+) -> Result<()> {
+    let rigid_body_id = engine
+        .get_component_copy(entity_id)
+        .context("Failed to get `DynamicRigidBodyID` component for applying impulse")?;
+
+    let (new_velocity, new_angular_velocity) = {
+        let simulator = engine.simulator().oread();
+        let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+
+        let rigid_body = rigid_body_manager
+            .get_dynamic_rigid_body_mut(rigid_body_id)
+            .ok_or_else(|| anyhow!("No rigid body with ID {}", u64::from(rigid_body_id)))?;
+
+        let impulse = impulse.aligned();
+        let relative_position = relative_position.aligned();
+
+        rigid_body.apply_impulse(&impulse, &relative_position);
+
+        (
+            rigid_body.compute_velocity(),
+            rigid_body.compute_angular_velocity(),
+        )
+    };
+
+    engine.with_component_mut(entity_id, |motion: &mut Motion| {
+        motion.linear_velocity = new_velocity.compact();
+        motion.angular_velocity = new_angular_velocity.compact();
+        Ok(())
+    })
 }
 
 pub fn set_simulation(simulator: &mut PhysicsSimulator, to: ToActiveState) -> ModifiedActiveState {
