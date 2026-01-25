@@ -37,7 +37,7 @@ macro_rules! impl_roc_for_existing_primitive {
         impl $crate::RocPod for $t {}
 
         #[cfg(feature = "roc_codegen")]
-        inventory::submit! {
+        ::inventory::submit! {
             $crate::RegisteredType {
                 rust_type_path: None,
                 package_name: Some(stringify!($package)),

@@ -62,7 +62,7 @@ fn generate_component_descriptor_submit(
 ) -> TokenStream {
     let name = type_name.to_string();
     quote! {
-        inventory::submit! {
+        ::inventory::submit! {
             #crate_root::component::ComponentDescriptor {
                 id: <#type_name as #crate_root::component::Component>::COMPONENT_ID,
                 name: #name,

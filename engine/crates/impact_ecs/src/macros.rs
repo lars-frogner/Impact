@@ -7,7 +7,7 @@
 macro_rules! declare_component_flags {
     ($($component:ty => $flags:expr),+ $(,)?) => {
         $(
-            inventory::submit! {
+            ::inventory::submit! {
                 $crate::component::ComponentFlagDeclaration {
                     id: <$component as $crate::component::Component>::COMPONENT_ID,
                     flags: $flags,

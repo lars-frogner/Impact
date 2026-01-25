@@ -762,7 +762,7 @@ fn generate_registered_type_submit(
     )?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
-        inventory::submit! {
+        ::inventory::submit! {
             #crate_root::RegisteredType {
                 rust_type_path: Some(#rust_type_path),
                 package_name: #package_name,
@@ -802,7 +802,7 @@ fn generate_associated_dependencies_submit(
     let dependencies = generate_type_id_list(dependency_types, crate_root, MAX_DEPENDENCIES);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
-        inventory::submit! {
+        ::inventory::submit! {
             #crate_root::ir::AssociatedDependencies {
                 for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
                 dependencies: #dependencies,
@@ -828,7 +828,7 @@ fn generate_associated_constant_submit(
     )?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
-        inventory::submit! {
+        ::inventory::submit! {
             #crate_root::ir::AssociatedConstant {
                 for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
                 sequence_number: #sequence_number,
@@ -855,7 +855,7 @@ fn generate_associated_function_submit(
     let return_type = generate_function_return_type(&function.sig.output, crate_root)?;
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
-        inventory::submit! {
+        ::inventory::submit! {
             #crate_root::ir::AssociatedFunction {
                 for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
                 sequence_number: #sequence_number,
