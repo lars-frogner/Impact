@@ -68,7 +68,7 @@ mod inner {
                 const LOCK_ORDER: $crate::lock_order::LockOrder = $order;
             }
 
-            inventory::submit! {
+            ::inventory::submit! {
                 $crate::lock_order::LockOrderDescriptor {
                     order: $order,
                     name: stringify!($type),
