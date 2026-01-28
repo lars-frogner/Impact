@@ -3,6 +3,7 @@ module [
     thruster,
     laser,
     absorbing_sphere,
+    projectile,
     spawn!,
     spawn_projectile!,
     update!,
@@ -49,7 +50,7 @@ ToolEntityIds : {
 }
 
 thruster = {
-    acceleration: 10.0,
+    force: 1e3,
 }
 
 laser = {
@@ -79,7 +80,7 @@ projectile = {
     roughness: 0.3,
     luminous_intensity: 1e4,
     speed: 10.0,
-    mass_density: 1e2,
+    mass: 10.0,
     restitution_coef: 0.4,
     static_friction_coef: 0.6,
     dynamic_friction_coef: 0.6,
@@ -119,7 +120,9 @@ spawn_projectile! = |position, start_velocity, direction|
         |> Comp.ModelTransform.add_with_scale(2 * projectile.radius)
         |> Comp.ReferenceFrame.add_unoriented(launch_position)
         |> Comp.Motion.add_linear(launch_velocity)
-        |> Setup.DynamicRigidBodySubstance.add_new(projectile.mass_density)
+        |> Setup.DynamicRigidBodySubstance.add_new(
+            Util.compute_sphere_mass_density(projectile.radius, projectile.mass),
+        )
         |> Setup.SphericalCollidable.add_new(
             Dynamic,
             Sphere.new(Point3.origin, projectile.radius),
@@ -133,8 +136,7 @@ spawn_projectile! = |position, start_velocity, direction|
 
     Entity.stage_for_creation!(projectile_ent)?
 
-    mass = Util.compute_sphere_mass(projectile.radius, projectile.mass_density)
-    reaction_impulse = Vector3.scale(launch_velocity, -mass)
+    reaction_impulse = Vector3.scale(launch_velocity, -projectile.mass)
 
     Ok(reaction_impulse)
 
