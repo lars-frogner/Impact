@@ -4,8 +4,8 @@ mod rendering;
 mod window;
 
 use crate::{
-    application::Application, engine::Engine, lock_order::OrderedRwLock, ui::UserInterface,
-    window::Window,
+    application::ApplicationInterface, engine::Engine, lock_order::OrderedRwLock,
+    ui::UserInterface, window::Window,
 };
 use anyhow::Result;
 use impact_gpu::{device::GraphicsDevice, timestamp_query::TimestampQueryRegistry, wgpu};
@@ -20,7 +20,7 @@ use window::EguiWindowIntegration;
 /// [`Application`] and the engine's window and rendering systems.
 #[derive(Debug)]
 pub struct EguiUserInterface {
-    app: Arc<dyn Application>,
+    app: Arc<dyn ApplicationInterface>,
     egui_ctx: egui::Context,
     window: Window,
     window_integration: Mutex<EguiWindowIntegration>,
@@ -37,7 +37,7 @@ pub struct EguiUserInterfaceConfig {
 impl EguiUserInterface {
     pub fn new(
         config: EguiUserInterfaceConfig,
-        app: Arc<dyn Application>,
+        app: Arc<dyn ApplicationInterface>,
         engine: &Engine,
         window: Window,
     ) -> Self {
@@ -76,13 +76,13 @@ impl EguiUserInterface {
 }
 
 impl UserInterface for EguiUserInterface {
-    fn process(&self, engine: &Engine) -> Result<()> {
+    fn process(&self) -> Result<()> {
         let input = self
             .window_integration
             .lock()
             .take_raw_input(&self.egui_ctx, &self.window);
 
-        let mut output = self.app.run_egui_ui(&self.egui_ctx, input, engine);
+        let mut output = self.app.run_egui_ui(&self.egui_ctx, input);
 
         output =
             self.window_integration

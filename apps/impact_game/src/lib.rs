@@ -1,9 +1,8 @@
 //! The Impact game.
 
-pub mod api;
 pub mod command;
 pub mod input;
-pub mod scripting;
+pub mod interface;
 pub mod setup;
 pub mod user_interface;
 
@@ -12,24 +11,16 @@ pub use impact;
 #[cfg(feature = "roc_codegen")]
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
-use anyhow::{Context, Result};
-use dynamic_lib::DynamicLibrary;
+use anyhow::Result;
 use impact::{
-    application::Application,
-    egui,
     engine::{Engine, EngineConfig},
     impact_io,
-    input::{
-        key::KeyboardEvent,
-        mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
-    },
     runtime::RuntimeConfig,
     window::WindowConfig,
 };
 use impact_dev_ui::UserInterfaceConfig;
-use parking_lot::RwLock;
+use interface::scripting::hot_reloading::ScriptReloader;
 use roc_integration::roc;
-use scripting::ScriptLib;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -37,14 +28,12 @@ use std::{
 };
 use user_interface::UserInterface;
 
-static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
-
 #[derive(Debug)]
 pub struct Game {
-    game_options: RwLock<GameOptions>,
-    user_interface: RwLock<UserInterface>,
-    #[cfg(feature = "hot_reloading")]
-    script_reloader: RwLock<Option<scripting::hot_reloading::ScriptReloader>>,
+    game_options: GameOptions,
+    user_interface: UserInterface,
+    script_reloader: Option<ScriptReloader>,
+    engine: Option<Arc<Engine>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -86,122 +75,19 @@ pub enum PlayerMode {
 }
 
 impl Game {
-    pub fn new(game_options: GameOptions, user_interface: UserInterface) -> Self {
+    pub(crate) fn new(game_options: GameOptions, user_interface: UserInterface) -> Self {
         Self {
-            game_options: RwLock::new(game_options),
-            user_interface: RwLock::new(user_interface),
-            #[cfg(feature = "hot_reloading")]
-            script_reloader: Default::default(),
+            game_options,
+            user_interface,
+            script_reloader: None,
+            engine: None,
         }
     }
 
-    #[cfg(feature = "hot_reloading")]
-    fn activate_script_reloader(&self) -> Result<()> {
-        log::debug!("Activating script reloader");
-
-        let script_reloader = scripting::hot_reloading::create_script_reloader()?;
-        *self.script_reloader.write() = Some(script_reloader);
-
-        Ok(())
-    }
-
-    #[cfg(not(feature = "hot_reloading"))]
-    #[allow(clippy::unused_self)]
-    fn activate_script_reloader(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[cfg(feature = "hot_reloading")]
-    fn respond_to_script_reload(&self, engine: &Engine) -> Result<()> {
-        let script_reloader = self.script_reloader.read();
-
-        let was_reloaded = script_reloader
+    pub(crate) fn engine(&self) -> &Engine {
+        self.engine
             .as_ref()
-            .unwrap()
-            .reloaded_since_last_check();
-
-        let options = self.game_options.read();
-
-        if was_reloaded && options.reset_scene_on_reload && !options.scene_reset_requested {
-            self.reset_scene(engine)?;
-        }
-
-        Ok(())
-    }
-
-    #[cfg(not(feature = "hot_reloading"))]
-    #[allow(clippy::unused_self)]
-    fn respond_to_script_reload(&self, _engine: &Engine) -> Result<()> {
-        Ok(())
-    }
-
-    fn perform_requested_option_actions(&self, engine: &Engine) -> Result<()> {
-        let mut options = self.game_options.upgradable_read();
-
-        if options.scene_reset_requested {
-            options.with_upgraded(|opts| {
-                opts.scene_reset_requested = false;
-            });
-            self.reset_scene(engine)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Application for Game {
-    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
-        log::debug!("Loading script library");
-        ScriptLib::load().context("Failed to load script library")?;
-
-        self.activate_script_reloader()?;
-
-        *ENGINE.write() = Some(engine.clone());
-        log::debug!("Engine initialized");
-
-        log::debug!("Setting up UI");
-        self.user_interface.read().setup(&engine);
-
-        log::debug!("Setting up scene");
-        self.setup_scene()?;
-
-        self.execute_game_commands();
-
-        Ok(())
-    }
-
-    fn on_new_frame(&self, engine: &Engine, _frame_number: u64) -> Result<()> {
-        self.respond_to_script_reload(engine)?;
-        self.perform_requested_option_actions(engine)?;
-
-        self.execute_game_commands();
-
-        Ok(())
-    }
-
-    fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
-        self.handle_keyboard_event(event)
-    }
-
-    fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
-        self.handle_mouse_button_event(event)
-    }
-
-    fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
-        self.handle_mouse_drag_event(event)
-    }
-
-    fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
-        self.handle_mouse_scroll_event(event)
-    }
-
-    fn run_egui_ui(
-        &self,
-        ctx: &egui::Context,
-        input: egui::RawInput,
-        engine: &Engine,
-    ) -> egui::FullOutput {
-        self.run_ui(ctx, input, engine)
+            .expect("Tried to use engine before initialization")
     }
 }
 

@@ -9,7 +9,7 @@ pub mod gpu_resource;
 pub mod window;
 
 use crate::{
-    application::Application,
+    application::ApplicationInterface,
     command::{self, EngineCommandQueues},
     game_loop::{GameLoopConfig, GameLoopController},
     gizmo::{self, GizmoConfig, GizmoManager},
@@ -55,7 +55,7 @@ use std::{
 /// Manager for all systems and data in the engine.
 #[derive(Debug)]
 pub struct Engine {
-    app: Arc<dyn Application>,
+    app: Arc<dyn ApplicationInterface>,
     graphics_device: Arc<GraphicsDevice>,
     component_metadata_registry: ComponentMetadataRegistry,
     game_loop_controller: RwLock<GameLoopController>,
@@ -103,7 +103,7 @@ impl Engine {
     /// Creates a new instance of the engine.
     pub(crate) fn new(
         config: EngineConfig,
-        app: Arc<dyn Application>,
+        app: Arc<dyn ApplicationInterface>,
         graphics: GraphicsContext,
     ) -> Result<Self> {
         let mut component_metadata_registry = ComponentMetadataRegistry::new();
@@ -192,7 +192,7 @@ impl Engine {
     }
 
     /// Returns a reference to the [`Application`].
-    pub(crate) fn app(&self) -> &dyn Application {
+    pub(crate) fn app(&self) -> &dyn ApplicationInterface {
         self.app.as_ref()
     }
 

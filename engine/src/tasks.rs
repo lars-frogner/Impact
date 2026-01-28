@@ -40,7 +40,7 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Calling app", engine, {
             let frame_number = engine.game_loop_controller().oread().iteration();
-            engine.app().on_new_frame(engine, frame_number)
+            engine.app().on_new_frame(frame_number)
         })
     }
 );
@@ -263,7 +263,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Processing user interface", engine, {
-            ctx.user_interface().process(engine)
+            ctx.user_interface().process()
         })
     }
 );

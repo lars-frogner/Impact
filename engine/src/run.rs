@@ -2,7 +2,7 @@
 
 pub mod headless {
     use crate::{
-        application::Application,
+        application::ApplicationInterface,
         engine::{Engine, EngineConfig},
         gpu,
         runtime::{
@@ -14,7 +14,7 @@ pub mod headless {
     use std::sync::Arc;
 
     pub fn run(
-        app: Arc<dyn Application>,
+        app: Arc<dyn ApplicationInterface>,
         headless_config: HeadlessConfig,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
@@ -24,7 +24,7 @@ pub mod headless {
     }
 
     fn create_runtime(
-        app: Arc<dyn Application>,
+        app: Arc<dyn ApplicationInterface>,
         headless_config: HeadlessConfig,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
@@ -48,7 +48,7 @@ pub mod headless {
 #[cfg(feature = "egui")]
 pub mod window {
     use crate::{
-        application::Application,
+        application::ApplicationInterface,
         engine::{Engine, EngineConfig},
         gpu,
         runtime::{Runtime, RuntimeConfig, window::WindowRuntimeHandler},
@@ -59,7 +59,7 @@ pub mod window {
     use std::sync::Arc;
 
     pub fn run(
-        app: Arc<dyn Application>,
+        app: Arc<dyn ApplicationInterface>,
         window_config: WindowConfig,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
@@ -72,7 +72,7 @@ pub mod window {
     }
 
     fn create_runtime(
-        app: Arc<dyn Application>,
+        app: Arc<dyn ApplicationInterface>,
         window: Window,
         runtime_config: RuntimeConfig,
         engine_config: EngineConfig,
