@@ -4,6 +4,7 @@ pub mod command;
 pub mod input;
 pub mod interface;
 pub mod setup;
+pub mod update;
 pub mod user_interface;
 
 pub use impact;

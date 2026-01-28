@@ -2,7 +2,10 @@
 
 pub mod hot_reloading;
 
-use crate::{input::InputContext, interface::assert_game_not_accessed, setup::SetupContext};
+use crate::{
+    input::InputContext, interface::assert_game_not_accessed, setup::SetupContext,
+    update::UpdateContext,
+};
 use anyhow::{Context, Result, anyhow};
 use impact::{
     input::{
@@ -19,6 +22,7 @@ dynamic_lib::define_lib! {
     fallback_path = "./libscript";
 
     unsafe fn roc__setup_scene_extern_1_exposed(ctx_bytes: RocList<u8>) -> RocResult<(), RocStr>;
+    unsafe fn roc__update_world_extern_1_exposed(ctx_bytes: RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc__handle_keyboard_event_extern_1_exposed(ctx_bytes: RocList<u8>, event_bytes: RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc__handle_mouse_button_event_extern_1_exposed(ctx_bytes: RocList<u8>, event_bytes: RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc__handle_mouse_drag_event_extern_1_exposed(ctx_bytes: RocList<u8>, event_bytes: RocList<u8>) -> RocResult<(), RocStr>;
@@ -34,6 +38,15 @@ pub(crate) fn setup_scene(ctx: SetupContext) -> Result<()> {
     ctx.write_roc_bytes(ctx_bytes.as_mut_slice())?;
 
     from_roc_result(unsafe { ScriptLib::acquire().roc__setup_scene_extern_1_exposed(ctx_bytes) })
+}
+
+pub(crate) fn update_world(ctx: UpdateContext) -> Result<()> {
+    assert_game_not_accessed();
+
+    let mut ctx_bytes = RocList::from_slice(&[0; UpdateContext::SERIALIZED_SIZE]);
+    ctx.write_roc_bytes(ctx_bytes.as_mut_slice())?;
+
+    from_roc_result(unsafe { ScriptLib::acquire().roc__update_world_extern_1_exposed(ctx_bytes) })
 }
 
 pub(crate) fn handle_keyboard_event(ctx: InputContext, event: KeyboardEvent) -> Result<()> {

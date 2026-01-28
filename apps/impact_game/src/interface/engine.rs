@@ -63,6 +63,9 @@ impl ApplicationInterface for GameInterfaceForEngine {
             game = with_dropped_write_guard(game, || scripting::setup_scene(ctx))?;
         }
 
+        let ctx = game.create_update_context();
+        game = with_dropped_write_guard(game, || scripting::update_world(ctx))?;
+
         game.execute_game_commands();
 
         Ok(())

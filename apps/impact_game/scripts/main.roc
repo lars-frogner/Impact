@@ -8,11 +8,13 @@ import pf.Game.SetupContext exposing [SetupContext]
 import Generation.SolarSystem
 import Scenes.SolarSystem
 import Scenes.Asteroid
+import Update
 import Control.Keyboard
 import Control.Mouse
 
 callbacks = {
     setup_scene!,
+    update_world!,
     handle_keyboard_event!,
     handle_mouse_button_event!,
     handle_mouse_drag_event!,
@@ -39,6 +41,8 @@ setup_scene! = |ctx|
     # )
     # Scenes.SolarSystem.setup!(ctx, system)
     Scenes.Asteroid.setup!(ctx)
+
+update_world! = Update.update_world!
 
 handle_keyboard_event! = Control.Keyboard.handle_event!
 handle_mouse_button_event! = Control.Mouse.handle_button_event!
