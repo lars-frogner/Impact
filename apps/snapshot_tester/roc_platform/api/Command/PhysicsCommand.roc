@@ -1,5 +1,5 @@
-# Hash: b20b7ca92e826e82
-# Generated: 2026-01-24T10:14:33.781108983
+# Hash: c8429850c2632cfe
+# Generated: 2026-01-25T15:17:35.09324114
 # Rust type: impact::command::physics::PhysicsCommand
 # Type category: Inline
 module [
@@ -30,6 +30,10 @@ PhysicsCommand : [
             entity_id : Entity.Id,
             impulse : Vector3.Vector3,
             relative_position : Point3.Point3,
+        },
+    AddMassRetainingMotion {
+            entity_id : Entity.Id,
+            additional_mass : F32,
         },
 ]
 
@@ -69,6 +73,14 @@ write_bytes = |bytes, value|
             |> Entity.write_bytes_id(entity_id)
             |> Vector3.write_bytes(impulse)
             |> Point3.write_bytes(relative_position)
+
+        AddMassRetainingMotion { entity_id, additional_mass } ->
+            bytes
+            |> List.reserve(33)
+            |> List.append(4)
+            |> Entity.write_bytes_id(entity_id)
+            |> Builtin.write_bytes_f32(additional_mass)
+            |> List.concat(List.repeat(0, 20))
 
 ## Deserializes a value of [PhysicsCommand] from its bytes in the
 ## representation used by the engine.
@@ -110,6 +122,15 @@ from_bytes = |bytes|
                         entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
                         impulse: data_bytes |> List.sublist({ start: 8, len: 12 }) |> Vector3.from_bytes?,
                         relative_position: data_bytes |> List.sublist({ start: 20, len: 12 }) |> Point3.from_bytes?,
+                    },
+                )
+
+
+            [4, .. as data_bytes] ->
+                Ok(
+                    AddMassRetainingMotion     {
+                        entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+                        additional_mass: data_bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
                     },
                 )
 

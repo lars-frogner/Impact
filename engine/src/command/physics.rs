@@ -34,6 +34,10 @@ pub enum PhysicsCommand {
         impulse: ImpulseC,
         relative_position: PositionC,
     },
+    AddMassRetainingMotion {
+        entity_id: EntityID,
+        additional_mass: f32,
+    },
 }
 
 #[roc(parents = "Command")]
@@ -162,6 +166,28 @@ pub fn apply_impulse(
         motion.angular_velocity = new_angular_velocity.compact();
         Ok(())
     })
+}
+
+pub fn add_mass_retaining_motion(
+    engine: &Engine,
+    entity_id: EntityID,
+    additional_mass: f32,
+) -> Result<()> {
+    let rigid_body_id = engine
+        .get_component_copy(entity_id)
+        .context("Failed to get `DynamicRigidBodyID` component for adding mass")?;
+
+    let simulator = engine.simulator().oread();
+    let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+
+    let rigid_body = rigid_body_manager
+        .get_dynamic_rigid_body_mut(rigid_body_id)
+        .ok_or_else(|| anyhow!("No rigid body with ID {}", u64::from(rigid_body_id)))?;
+
+    let new_mass = rigid_body.mass() + additional_mass;
+    rigid_body.set_mass_retaining_motion(new_mass);
+
+    Ok(())
 }
 
 pub fn set_simulation(simulator: &mut PhysicsSimulator, to: ToActiveState) -> ModifiedActiveState {
