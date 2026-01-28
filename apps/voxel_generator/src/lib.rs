@@ -1,61 +1,52 @@
 //! An editor for generated voxel objects.
 
-pub mod api;
 pub mod editor;
-pub mod scripting;
+pub mod interface;
+pub mod user_interface;
 
 pub use impact;
 
 #[cfg(feature = "roc_codegen")]
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
-use anyhow::{Context, Result};
-use dynamic_lib::DynamicLibrary;
+use anyhow::Result;
 use editor::{Editor, EditorConfig};
 use impact::{
-    application::Application,
-    egui,
     engine::{Engine, EngineConfig},
     impact_alloc::{Allocator, Global},
     impact_ecs::world::EntityID,
     impact_geometry::{ModelTransform, ReferenceFrame},
     impact_io,
     impact_thread::pool::{DynamicThreadPool, ThreadPool},
-    input::{
-        key::KeyboardEvent,
-        mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
-    },
     runtime::RuntimeConfig,
     window::WindowConfig,
 };
-use impact_dev_ui::{UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig};
+use impact_dev_ui::UserInterfaceConfig;
 use impact_voxel::{
     chunks::ChunkedVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
     mesh::MeshedChunkedVoxelObject,
 };
-use parking_lot::RwLock;
-use scripting::ScriptLib;
 use serde::{Deserialize, Serialize};
 use std::{
     num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
 };
-
-static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
+use user_interface::UserInterface;
 
 const OBJECT_ENTITY_ID: EntityID = EntityID::hashed_from_str("object");
 
 #[derive(Debug)]
-pub struct VoxelGeneratorApp {
-    user_interface: RwLock<UserInterface>,
+pub struct App {
+    user_interface: UserInterface,
     thread_pool: DynamicThreadPool,
+    engine: Option<Arc<Engine>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
-pub struct VoxelGeneratorConfig {
+pub struct AppConfig {
     pub editor: EditorConfig,
     pub window: WindowConfig,
     pub runtime: RuntimeConfig,
@@ -63,59 +54,47 @@ pub struct VoxelGeneratorConfig {
     pub ui_config_path: PathBuf,
 }
 
-#[derive(Debug)]
-pub struct UserInterface {
-    editor: Editor,
-    dev_ui: DevUserInterface,
-}
-
-impl VoxelGeneratorApp {
-    pub fn new(user_interface: UserInterface) -> Self {
+impl App {
+    pub(crate) fn new(user_interface: UserInterface) -> Self {
         let n_workers = num_threads();
         let queue_capacity = NonZeroUsize::new(n_workers.get() * 64).unwrap();
         Self {
-            user_interface: RwLock::new(user_interface),
+            user_interface,
             thread_pool: ThreadPool::new_dynamic(n_workers, queue_capacity),
+            engine: None,
         }
     }
-}
 
-impl Application for VoxelGeneratorApp {
-    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
-        log::debug!("Loading script library");
-        ScriptLib::load().context("Failed to load script library")?;
+    pub(crate) fn engine(&self) -> &Engine {
+        self.engine
+            .as_ref()
+            .expect("Tried to use engine before initialization")
+    }
 
-        *ENGINE.write() = Some(engine.clone());
-        log::debug!("Engine initialized");
-
-        log::debug!("Setting up UI");
-        self.user_interface.read().setup(&engine);
-
-        log::debug!("Setting up scene");
-
+    fn initialize_voxel_object(&mut self) -> Result<()> {
         let (voxel_object, model_transform) = generate_next_voxel_object_or_default(
             &self.thread_pool,
-            &mut self.user_interface.write().editor,
+            self.user_interface.editor_mut(),
         );
 
-        let voxel_object_id = engine.add_voxel_object(voxel_object);
+        let voxel_object_id = self.engine().add_voxel_object(voxel_object);
 
-        engine.create_entity_with_id(
+        self.engine().create_entity_with_id(
             OBJECT_ENTITY_ID,
             (
                 &voxel_object_id,
                 &model_transform,
                 &ReferenceFrame::unoriented([0.0; 3].into()),
             ),
-        )?;
-
-        scripting::setup_scene()
+        )
     }
 
-    fn on_new_frame(&self, engine: &Engine, _frame_number: u64) -> Result<()> {
+    fn update_voxel_object(&mut self) -> Result<()> {
         if let Some((voxel_object, new_model_transform)) =
-            generate_next_voxel_object(&self.thread_pool, &mut self.user_interface.write().editor)
+            generate_next_voxel_object(&self.thread_pool, self.user_interface.editor_mut())
         {
+            let engine = self.engine();
+
             engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
                 *model_transform = new_model_transform;
                 Ok(())
@@ -127,40 +106,9 @@ impl Application for VoxelGeneratorApp {
         }
         Ok(())
     }
-
-    fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {
-        log::trace!("Handling keyboard event {event:?}");
-        scripting::handle_keyboard_event(event)
-    }
-
-    fn handle_mouse_button_event(&self, event: MouseButtonEvent) -> Result<()> {
-        log::trace!("Handling mouse button event {event:?}");
-        scripting::handle_mouse_button_event(event)
-    }
-
-    fn handle_mouse_drag_event(&self, event: MouseDragEvent) -> Result<()> {
-        log::trace!("Handling mouse drag event {event:?}");
-        scripting::handle_mouse_drag_event(event)
-    }
-
-    fn handle_mouse_scroll_event(&self, event: MouseScrollEvent) -> Result<()> {
-        log::trace!("Handling mouse scroll event {event:?}");
-        scripting::handle_mouse_scroll_event(event)
-    }
-
-    fn run_egui_ui(
-        &self,
-        ctx: &egui::Context,
-        input: egui::RawInput,
-        engine: &Engine,
-    ) -> egui::FullOutput {
-        self.user_interface
-            .write()
-            .run(ctx, input, engine, &api::UI_COMMANDS)
-    }
 }
 
-impl VoxelGeneratorConfig {
+impl AppConfig {
     /// Parses the configuration from the RON file at the given path and
     /// resolves any specified paths.
     pub fn from_ron_file(file_path: impl AsRef<Path>) -> Result<Self> {
@@ -203,7 +151,7 @@ impl VoxelGeneratorConfig {
     }
 }
 
-impl Default for VoxelGeneratorConfig {
+impl Default for AppConfig {
     fn default() -> Self {
         Self {
             editor: EditorConfig::default(),
@@ -212,27 +160,6 @@ impl Default for VoxelGeneratorConfig {
             engine_config_path: PathBuf::from("engine_config.roc"),
             ui_config_path: PathBuf::from("ui_config.roc"),
         }
-    }
-}
-
-impl UserInterface {
-    pub fn new(editor: Editor, dev_ui: DevUserInterface) -> Self {
-        Self { editor, dev_ui }
-    }
-
-    pub fn setup(&self, engine: &Engine) {
-        self.dev_ui.setup(engine);
-    }
-
-    pub fn run(
-        &mut self,
-        ctx: &egui::Context,
-        input: egui::RawInput,
-        engine: &Engine,
-        command_queue: &UICommandQueue,
-    ) -> egui::FullOutput {
-        self.dev_ui
-            .run_with_custom_panels(ctx, input, engine, command_queue, &mut self.editor)
     }
 }
 

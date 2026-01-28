@@ -10,10 +10,10 @@ use crate::{
 use anyhow::Result;
 use std::sync::Arc;
 
-pub trait Application: Send + Sync + std::fmt::Debug {
+pub trait ApplicationInterface: Send + Sync + std::fmt::Debug {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()>;
 
-    fn on_new_frame(&self, _engine: &Engine, _frame_number: u64) -> Result<()> {
+    fn on_new_frame(&self, _frame_number: u64) -> Result<()> {
         Ok(())
     }
 
@@ -38,10 +38,5 @@ pub trait Application: Send + Sync + std::fmt::Debug {
     }
 
     #[cfg(feature = "egui")]
-    fn run_egui_ui(
-        &self,
-        ctx: &egui::Context,
-        input: egui::RawInput,
-        engine: &Engine,
-    ) -> egui::FullOutput;
+    fn run_egui_ui(&self, ctx: &egui::Context, input: egui::RawInput) -> egui::FullOutput;
 }

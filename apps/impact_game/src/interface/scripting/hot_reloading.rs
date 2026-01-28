@@ -1,0 +1,113 @@
+//! Hot reloading of the script library.
+
+#![allow(unused_imports)]
+
+use super::ScriptLib;
+use crate::Game;
+use anyhow::Result;
+use dynamic_lib::LoadableLibrary;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+#[cfg(feature = "hot_reloading")]
+pub type ScriptReloader = dynamic_lib::hot_reloading::LibraryReloader<ScriptLib>;
+#[cfg(not(feature = "hot_reloading"))]
+pub type ScriptReloader = ();
+
+impl Game {
+    #[cfg(feature = "hot_reloading")]
+    pub(crate) fn activate_script_reloader(&mut self) -> Result<()> {
+        log::debug!("Activating script reloader");
+
+        let script_reloader = create_script_reloader()?;
+        self.script_reloader = Some(script_reloader);
+
+        Ok(())
+    }
+
+    #[cfg(not(feature = "hot_reloading"))]
+    #[allow(clippy::unused_self)]
+    pub(crate) fn activate_script_reloader(&self) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(feature = "hot_reloading")]
+    pub(crate) fn should_reset_scene_after_script_reload(&self) -> bool {
+        let was_reloaded = self
+            .script_reloader
+            .as_ref()
+            .unwrap()
+            .reloaded_since_last_check();
+
+        was_reloaded
+            && self.game_options.reset_scene_on_reload
+            && !self.game_options.scene_reset_requested
+    }
+
+    #[cfg(not(feature = "hot_reloading"))]
+    pub(crate) fn should_reset_scene_after_script_reload(&self) -> bool {
+        let _ = self.script_reloader;
+        false
+    }
+}
+
+#[cfg(feature = "hot_reloading")]
+fn create_script_reloader() -> Result<ScriptReloader> {
+    let source_dir_path = obtain_script_source_dir_path()?;
+
+    let build_output_lib_path = obtain_build_output_lib_path_for_reloader()?;
+
+    let build_command =
+        create_build_command_for_reloader(&source_dir_path, &build_output_lib_path)?;
+
+    let script_reloader =
+        ScriptReloader::new(source_dir_path, build_command, build_output_lib_path)?;
+
+    Ok(script_reloader)
+}
+
+#[cfg(feature = "hot_reloading")]
+fn obtain_script_source_dir_path() -> Result<PathBuf> {
+    dynamic_lib::resolve_path_from_env_with_fallback("SCRIPT_SOURCE_DIR_PATH", "../../scripts")
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "hot_reloading")]
+fn obtain_build_output_lib_path_for_reloader() -> Result<PathBuf> {
+    let script_lib_path = ScriptLib::resolved_path()?;
+
+    let output_dir_path = script_lib_path
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("hot_reload");
+
+    let output_lib_path = output_dir_path.join("libscript");
+
+    Ok(output_lib_path)
+}
+
+#[cfg(feature = "hot_reloading")]
+fn create_build_command_for_reloader(
+    source_dir_path: &Path,
+    build_output_lib_path: &Path,
+) -> Result<Command> {
+    let builder_dir_path = dynamic_lib::resolve_path_from_env_with_fallback(
+        "SCRIPT_BUILDER_DIR_PATH",
+        source_dir_path.parent().unwrap(),
+    )?;
+
+    let mut command = Command::new("./build_script");
+
+    command.current_dir(builder_dir_path);
+
+    command.env("OUTPUT_DIR", build_output_lib_path.parent().unwrap());
+
+    command.env("SCRIPT_ONLY", "1");
+    command.env("ROC_DEBUG", "1");
+
+    Ok(command)
+}

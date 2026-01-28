@@ -5,8 +5,8 @@ dynamic_lib::define_lib! {
     path_env_var = "APP_LIB_PATH",
     fallback_path = "./libapp";
 
-    unsafe fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
+    unsafe fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_stage_entity_for_creation_with_id(entity_id: u64, component_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_stage_entity_for_creation(component_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_stage_entities_for_creation(component_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
@@ -21,15 +21,15 @@ dynamic_lib::define_lib! {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
+    load_and_then(|lib| unsafe { lib.roc_execute_ui_command(command_bytes) })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn roc_fx_execute_engine_command(
     command_bytes: &RocList<u8>,
 ) -> RocResult<(), RocStr> {
     load_and_then(|lib| unsafe { lib.roc_execute_engine_command(command_bytes) })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn roc_fx_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
-    load_and_then(|lib| unsafe { lib.roc_execute_ui_command(command_bytes) })
 }
 
 #[unsafe(no_mangle)]

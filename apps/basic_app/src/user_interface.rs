@@ -1,4 +1,6 @@
-use crate::{AppOptions, BasicApp};
+//! User interface.
+
+use crate::{App, AppOptions};
 use impact::{egui, engine::Engine};
 use impact_dev_ui::{
     CustomPanels, UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig,
@@ -8,37 +10,40 @@ use impact_dev_ui::{
 pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
 
 #[derive(Debug)]
-pub struct UserInterface {
+pub(crate) struct UserInterface {
     dev_ui: DevUserInterface,
 }
 
-impl BasicApp {
-    pub fn run_ui(
-        &self,
+impl App {
+    pub(crate) fn run_ui(
+        &mut self,
         ctx: &egui::Context,
         input: egui::RawInput,
-        engine: &Engine,
     ) -> egui::FullOutput {
-        self.user_interface.write().run(
+        self.user_interface.run(
             ctx,
             input,
-            engine,
+            self.engine.as_ref().unwrap(),
             &UI_COMMANDS,
-            &mut self.app_options.write(),
+            &mut self.app_options,
         )
+    }
+
+    pub(crate) fn setup_ui(&self) {
+        self.user_interface.setup(self.engine());
     }
 }
 
 impl UserInterface {
-    pub fn new(dev_ui: DevUserInterface) -> Self {
+    pub(crate) fn new(dev_ui: DevUserInterface) -> Self {
         Self { dev_ui }
     }
 
-    pub fn setup(&self, engine: &Engine) {
+    fn setup(&self, engine: &Engine) {
         self.dev_ui.setup(engine);
     }
 
-    pub fn run(
+    fn run(
         &mut self,
         ctx: &egui::Context,
         input: egui::RawInput,

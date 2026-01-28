@@ -1,7 +1,6 @@
 //! Snapshot tester for the Impact game engine.
 
-pub mod api;
-pub mod scripting;
+pub mod interface;
 pub mod testing;
 
 pub use impact::{self, roc_integration};
@@ -9,17 +8,12 @@ pub use impact::{self, roc_integration};
 #[cfg(feature = "roc_codegen")]
 pub use impact::component::gather_roc_type_ids_for_all_components;
 
-use anyhow::{Context, Result, bail};
-use dynamic_lib::DynamicLibrary;
+use anyhow::{Result, bail};
 use impact::{
-    application::Application,
-    command::{AdminCommand, SystemAdminCommand, capture::CaptureAdminCommand},
     engine::Engine,
     impact_io,
     runtime::{RuntimeConfig, headless::HeadlessConfig},
 };
-use parking_lot::RwLock;
-use scripting::ScriptLib;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -28,12 +22,11 @@ use std::{
 };
 use testing::{ComparisonOutcome, TestScene};
 
-static ENGINE: RwLock<Option<Arc<Engine>>> = RwLock::new(None);
-
 #[derive(Clone, Debug)]
-pub struct SnapshotTester {
+pub struct App {
     test_scenes: Vec<TestScene>,
     config: TestingConfig,
+    engine: Option<Arc<Engine>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -55,8 +48,8 @@ pub struct TestingConfig {
     pub min_score_to_pass: f64,
 }
 
-impl SnapshotTester {
-    pub fn new(config: TestingConfig) -> Result<Self> {
+impl App {
+    pub(crate) fn new(config: TestingConfig) -> Result<Self> {
         if !config.reference_dir.is_dir() {
             bail!(
                 "Missing reference directory: {}",
@@ -82,7 +75,14 @@ impl SnapshotTester {
         Ok(Self {
             test_scenes,
             config,
+            engine: None,
         })
+    }
+
+    pub(crate) fn engine(&self) -> &Engine {
+        self.engine
+            .as_ref()
+            .expect("Tried to use engine before initialization")
     }
 
     fn run_comparisons(&self) -> Result<()> {
@@ -123,55 +123,6 @@ impl SnapshotTester {
                 failing_scenes.join(", ")
             )
         }
-    }
-}
-
-impl Application for SnapshotTester {
-    fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()> {
-        log::debug!("Loading script library");
-        ScriptLib::load().context("Failed to load script library")?;
-
-        if self.test_scenes.is_empty() {
-            log::info!("No scenes to test, exiting");
-            engine.enqueue_admin_command(AdminCommand::System(SystemAdminCommand::Shutdown));
-            return Ok(());
-        }
-
-        *ENGINE.write() = Some(engine.clone());
-        Ok(())
-    }
-
-    fn on_new_frame(&self, engine: &Engine, frame: u64) -> Result<()> {
-        let frame = frame as usize;
-
-        if frame == self.test_scenes.len() {
-            // All scenes have been rendered and captured
-            engine.enqueue_admin_command(AdminCommand::System(SystemAdminCommand::Shutdown));
-            return Ok(());
-        }
-
-        if frame > 0 {
-            let rendered_scene = self.test_scenes[frame - 1];
-
-            // Prepare for this frame's scene
-            engine.reset_world()?;
-            rendered_scene.restore_settings(engine);
-        }
-
-        let scene = self.test_scenes[frame];
-
-        // Setup the scene for this frame
-        scene.prepare_settings(engine);
-        scripting::setup_scene(scene)?;
-
-        // Request a capture for this frame
-        engine.enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveScreenshot));
-
-        Ok(())
-    }
-
-    fn on_shutdown(&self) -> Result<()> {
-        self.run_comparisons()
     }
 }
 
