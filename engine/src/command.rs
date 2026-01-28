@@ -183,6 +183,10 @@ pub fn execute_physics_command(engine: &Engine, command: PhysicsCommand) -> Resu
             impulse,
             relative_position,
         } => physics::apply_impulse(engine, entity_id, impulse, relative_position),
+        PhysicsCommand::AddMassRetainingMotion {
+            entity_id,
+            additional_mass,
+        } => physics::add_mass_retaining_motion(engine, entity_id, additional_mass),
     }
     .context("Failed to execute physics command")
 }

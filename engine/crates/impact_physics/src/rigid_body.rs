@@ -559,6 +559,25 @@ impl DynamicRigidBody {
         self.angular_momentum = angular_momentum.compact();
     }
 
+    /// Assigns a new mass to the body but leaves the linear and angular
+    /// velocity unchanged.
+    pub fn set_mass_retaining_motion(&mut self, mass: f32) {
+        debug_assert!(mass > 0.0);
+
+        let velocity = self.compute_velocity();
+        let angular_velocity = self.compute_angular_velocity();
+
+        let factor = mass / self.mass;
+
+        self.mass *= factor;
+
+        let inertia_tensor = self.inertia_tensor.aligned();
+        self.inertia_tensor = inertia_tensor.with_multiplied_mass(factor).compact();
+
+        self.synchronize_momentum(&velocity);
+        self.synchronize_angular_momentum(&angular_velocity);
+    }
+
     /// Sets the given inertial properties for the body.
     pub fn set_inertial_properties(&mut self, mass: f32, inertia_tensor: InertiaTensorP) {
         self.mass = mass;
