@@ -1,5 +1,5 @@
-# Hash: 71151b54f15cacba
-# Generated: 2026-01-18T21:54:45.842209333
+# Hash: dc3b3ce3bfc64476
+# Generated: 2026-01-25T13:02:32.838920337
 # Rust type: impact_game::setup::SetupContext
 # Type category: Inline
 module [
@@ -8,10 +8,10 @@ module [
     from_bytes,
 ]
 
-import Game.PlayerMode
+import Game.InteractionMode
 
 SetupContext : {
-    player_mode : Game.PlayerMode.PlayerMode,
+    interaction_mode : Game.InteractionMode.InteractionMode,
 }
 
 ## Serializes a value of [SetupContext] into the binary representation
@@ -20,7 +20,7 @@ write_bytes : List U8, SetupContext -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(1)
-    |> Game.PlayerMode.write_bytes(value.player_mode)
+    |> Game.InteractionMode.write_bytes(value.interaction_mode)
 
 ## Deserializes a value of [SetupContext] from its bytes in the
 ## representation used by the engine.
@@ -28,7 +28,7 @@ from_bytes : List U8 -> Result SetupContext _
 from_bytes = |bytes|
     Ok(
         {
-            player_mode: bytes |> List.sublist({ start: 0, len: 1 }) |> Game.PlayerMode.from_bytes?,
+            interaction_mode: bytes |> List.sublist({ start: 0, len: 1 }) |> Game.InteractionMode.from_bytes?,
         },
     )
 

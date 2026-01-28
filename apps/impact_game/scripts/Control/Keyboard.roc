@@ -18,13 +18,13 @@ import Entities.OverviewCamera as OverviewCamera
 
 handle_event! : InputContext, KeyboardEvent => Result {} Str
 handle_event! = |ctx, event|
-    when ctx.player_mode is
-        Dynamic -> handle_event_dynamic_mode!(event)
+    when ctx.interaction_mode is
+        Player -> handle_event_player_mode!(event)
         FreeCamera -> handle_event_free_camera_mode!(event)
         OverviewCamera -> handle_event_overview_camera_mode!(event)
 
-handle_event_dynamic_mode! : KeyboardEvent => Result {} Str
-handle_event_dynamic_mode! = |{ key, state }|
+handle_event_player_mode! : KeyboardEvent => Result {} Str
+handle_event_player_mode! = |{ key, state }|
     commands =
         when key is
             Control(control_key) ->
@@ -47,7 +47,7 @@ handle_event_dynamic_mode! = |{ key, state }|
 
             Whitespace(whitespace_key) ->
                 when whitespace_key is
-                    Space -> launch_projectile_dynamic_mode!(state)?
+                    Space -> launch_projectile_player_mode!(state)?
                     _ -> []
 
             _ -> []
@@ -89,7 +89,7 @@ handle_event_overview_camera_mode! = |{ key, state }|
         when key is
             Letter(letter_key) ->
                 when letter_key is
-                    KeyM -> switch_to_dynamic_mode(state)
+                    KeyM -> switch_to_player_mode(state)
                     _ -> []
 
             _ -> []
@@ -124,7 +124,7 @@ add_thruster_force = |key_state, direction|
 
     [Engine(Physics(UpdateLocalForce { entity_id: Player.entity_ids.player, mode: Add, force: force_vector }))]
 
-launch_projectile_dynamic_mode! = |key_state|
+launch_projectile_player_mode! = |key_state|
     when key_state is
         Released -> {}
         _ ->
@@ -186,14 +186,14 @@ set_alignment_direction = |key_state, direction|
 
     [Engine(Physics(SetAlignmentTorqueDirection { entity_id: Player.entity_ids.player, direction }))]
 
-switch_to_dynamic_mode = |key_state|
+switch_to_player_mode = |key_state|
     when key_state is
         Released -> {}
         _ ->
             return []
 
     [
-        Game(SetPlayerMode(Dynamic)),
+        Game(SetInteractionMode(Player)),
         Engine(Scene(SetActiveCamera { entity_id: Player.entity_ids.player_head })),
     ]
 
@@ -204,7 +204,7 @@ switch_to_free_camera_mode = |key_state|
             return []
 
     [
-        Game(SetPlayerMode(FreeCamera)),
+        Game(SetInteractionMode(FreeCamera)),
         Engine(Scene(SetActiveCamera { entity_id: FreeCamera.entity_ids.camera })),
     ]
 
@@ -215,7 +215,7 @@ switch_to_overview_camera_mode = |key_state|
             return []
 
     [
-        Game(SetPlayerMode(OverviewCamera)),
+        Game(SetInteractionMode(OverviewCamera)),
         UI(SetInteractivity(Enabled)),
         Engine(Scene(SetActiveCamera { entity_id: OverviewCamera.entity_ids.camera })),
     ]

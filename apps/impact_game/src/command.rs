@@ -1,6 +1,6 @@
 //! Command buffering and execution.
 
-use crate::{Game, PlayerMode};
+use crate::{Game, InteractionMode};
 use impact::command::queue::CommandQueue;
 use roc_integration::roc;
 
@@ -9,17 +9,17 @@ pub static GAME_COMMANDS: GameCommandQueue = GameCommandQueue::new();
 pub type GameCommandQueue = CommandQueue<GameCommand>;
 
 #[roc(parents = "Command")]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum GameCommand {
-    SetPlayerMode(PlayerMode),
+    SetInteractionMode(InteractionMode),
 }
 
 impl Game {
-    pub fn execute_game_commands(&self) {
+    pub(crate) fn execute_game_commands(&mut self) {
         GAME_COMMANDS.execute_commands(|command| match command {
-            GameCommand::SetPlayerMode(to) => {
-                log::info!("Setting player mode to {to:?}");
-                self.game_options.write().player_mode = to;
+            GameCommand::SetInteractionMode(to) => {
+                log::debug!("Setting interaction mode to {to:?}");
+                self.game_options.interaction_mode = to;
             }
         });
     }

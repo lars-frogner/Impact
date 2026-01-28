@@ -1,23 +1,18 @@
 //! Input response.
 
-use crate::{Game, PlayerMode, scripting};
-use anyhow::Result;
-use impact::input::{
-    key::KeyboardEvent,
-    mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
-};
+use crate::{Game, InteractionMode};
 use roc_integration::roc;
 
 #[roc(parents = "Game")]
 #[derive(Clone, Debug)]
 pub struct InputContext {
-    pub player_mode: PlayerMode,
+    pub interaction_mode: InteractionMode,
 }
 
 impl Game {
     pub(crate) fn create_input_context(&self) -> InputContext {
         InputContext {
-            player_mode: self.game_options.read().player_mode,
+            interaction_mode: self.game_options.interaction_mode,
         }
     }
 }

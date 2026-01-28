@@ -18,24 +18,24 @@ import Entities.OverviewCamera as OverviewCamera
 
 handle_button_event! : InputContext, MouseButtonEvent => Result {} Str
 handle_button_event! = |ctx, event|
-    when ctx.player_mode is
-        Dynamic -> handle_button_event_dynamic_mode!(event)
+    when ctx.interaction_mode is
+        Player -> handle_button_event_player_mode!(event)
         FreeCamera -> handle_button_event_free_camera_mode!(event)
         OverviewCamera -> Ok({})
 
 handle_drag_event! : InputContext, MouseDragEvent => Result {} Str
 handle_drag_event! = |ctx, event|
-    when ctx.player_mode is
-        Dynamic | FreeCamera -> Ok({})
+    when ctx.interaction_mode is
+        Player | FreeCamera -> Ok({})
         OverviewCamera -> handle_drag_event_overview_camera_mode!(event)
 
 handle_scroll_event! : InputContext, MouseScrollEvent => Result {} Str
 handle_scroll_event! = |ctx, event|
-    when ctx.player_mode is
-        Dynamic | FreeCamera -> Ok({})
+    when ctx.interaction_mode is
+        Player | FreeCamera -> Ok({})
         OverviewCamera -> handle_scroll_event_overview_camera_mode!(event)
 
-handle_button_event_dynamic_mode! = |{ button, state }|
+handle_button_event_player_mode! = |{ button, state }|
     when button is
         Left ->
             toggle_scene_entity_active_state!(

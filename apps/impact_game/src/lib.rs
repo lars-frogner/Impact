@@ -55,7 +55,7 @@ pub struct GameOptions {
     scene_reset_requested: bool,
     #[serde(skip)]
     show_game_options: bool,
-    player_mode: PlayerMode,
+    interaction_mode: InteractionMode,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,9 +67,9 @@ pub enum RunMode {
 
 #[roc(parents = "Game")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PlayerMode {
+pub enum InteractionMode {
     #[default]
-    Dynamic,
+    Player,
     FreeCamera,
     OverviewCamera,
 }

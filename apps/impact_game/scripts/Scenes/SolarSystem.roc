@@ -64,8 +64,8 @@ setup! = |ctx, system|
     radius_to_cover = 1.1 * system.properties.radius
     OverviewCamera.spawn!(radius_to_cover)?
 
-    when ctx.player_mode is
-        Dynamic ->
+    when ctx.interaction_mode is
+        Player ->
             Command.execute!(Engine(Scene(SetActiveCamera { entity_id: Player.entity_ids.player_head })))?
 
         FreeCamera ->
