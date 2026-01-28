@@ -5,6 +5,7 @@ module [
     absorbing_sphere,
     spawn!,
     spawn_projectile!,
+    update!,
 ]
 
 import core.UnitQuaternion
@@ -136,6 +137,10 @@ spawn_projectile! = |position, start_velocity, direction|
     reaction_impulse = Vector3.scale(launch_velocity, -mass)
 
     Ok(reaction_impulse)
+
+update! : ToolEntityIds => Result {} Str
+update! = |entity_ids|
+    Ok({})
 
 construct_entities : Entity.Id -> ToolEntities
 construct_entities = |parent|

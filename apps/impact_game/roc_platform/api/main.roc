@@ -2,6 +2,7 @@ platform "impact"
     requires {} {
         callbacks : {
             setup_scene! : SetupContext => Result {} Str,
+            update_world! : UpdateContext => Result {} Str,
             handle_keyboard_event! : InputContext, KeyboardEvent => Result {} Str,
             handle_mouse_button_event! : InputContext, MouseButtonEvent => Result {} Str,
             handle_mouse_drag_event! : InputContext, MouseDragEvent => Result {} Str,
@@ -33,6 +34,7 @@ platform "impact"
     imports []
     provides [
         setup_scene_extern!,
+        update_world_extern!,
         handle_keyboard_event_extern!,
         handle_mouse_button_event_extern!,
         handle_mouse_drag_event_extern!,
@@ -41,6 +43,7 @@ platform "impact"
 
 import Command.EngineCommand as EngineCommand
 import Game.SetupContext as SetupContext exposing [SetupContext]
+import Game.UpdateContext as UpdateContext exposing [UpdateContext]
 import Game.InputContext as InputContext exposing [InputContext]
 import Input.KeyboardEvent as KeyboardEvent exposing [KeyboardEvent]
 import Input.MouseButtonEvent as MouseButtonEvent exposing [MouseButtonEvent]
@@ -51,6 +54,11 @@ setup_scene_extern! : List U8 => Result {} Str
 setup_scene_extern! = |ctx_bytes|
     ctx = SetupContext.from_bytes(ctx_bytes) |> map_err_to_str?
     callbacks.setup_scene!(ctx)
+
+update_world_extern! : List U8 => Result {} Str
+update_world_extern! = |ctx_bytes|
+    ctx = UpdateContext.from_bytes(ctx_bytes) |> map_err_to_str?
+    callbacks.update_world!(ctx)
 
 handle_keyboard_event_extern! : List U8, List U8 => Result {} Str
 handle_keyboard_event_extern! = |ctx_bytes, event_bytes|
