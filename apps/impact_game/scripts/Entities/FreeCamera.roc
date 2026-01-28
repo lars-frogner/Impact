@@ -2,6 +2,7 @@ module [
     entity_ids,
     camera,
     spawn!,
+    launch_projectile!,
 ]
 
 import core.Radians
@@ -45,6 +46,18 @@ spawn! = |position, orientation|
     Entity.create_with_id!(ents.camera, entity_ids.camera)?
 
     Tools.spawn!(entity_ids.tools, entity_ids.camera)?
+
+    Ok({})
+
+launch_projectile! = |_|
+    frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.camera)?
+    motion = Comp.Motion.get_for_entity!(entity_ids.camera)?
+
+    _ = Tools.spawn_projectile!(
+        frame.position,
+        motion.linear_velocity,
+        UnitQuaternion.rotate_vector(frame.orientation, UnitVector3.neg_unit_z),
+    )?
 
     Ok({})
 

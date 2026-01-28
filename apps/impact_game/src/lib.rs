@@ -3,6 +3,7 @@
 pub mod command;
 pub mod input;
 pub mod interface;
+pub mod player;
 pub mod setup;
 pub mod update;
 pub mod user_interface;
@@ -21,6 +22,7 @@ use impact::{
 };
 use impact_dev_ui::UserInterfaceConfig;
 use interface::scripting::hot_reloading::ScriptReloader;
+use player::Player;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -31,6 +33,7 @@ use user_interface::UserInterface;
 
 #[derive(Debug)]
 pub struct Game {
+    player: Player,
     game_options: GameOptions,
     user_interface: UserInterface,
     script_reloader: Option<ScriptReloader>,
@@ -78,6 +81,7 @@ pub enum InteractionMode {
 impl Game {
     pub(crate) fn new(game_options: GameOptions, user_interface: UserInterface) -> Self {
         Self {
+            player: Player::new(),
             game_options,
             user_interface,
             script_reloader: None,

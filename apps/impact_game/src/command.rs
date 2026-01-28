@@ -12,6 +12,7 @@ pub type GameCommandQueue = CommandQueue<GameCommand>;
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameCommand {
     SetInteractionMode(InteractionMode),
+    AddMassToInventory(f32),
 }
 
 impl Game {
@@ -20,6 +21,10 @@ impl Game {
             GameCommand::SetInteractionMode(to) => {
                 log::debug!("Setting interaction mode to {to:?}");
                 self.game_options.interaction_mode = to;
+            }
+            GameCommand::AddMassToInventory(additional_mass) => {
+                log::debug!("Adding mass {additional_mass} to inventory");
+                self.player.inventory.add_mass(additional_mass);
             }
         });
     }

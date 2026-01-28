@@ -1,15 +1,10 @@
 module [handle_event!]
 
-import core.Vector3
 import core.UnitVector3
-import core.UnitQuaternion
 
 import pf.Command
 import pf.Game.InputContext exposing [InputContext]
 import pf.Input.KeyboardEvent exposing [KeyboardEvent]
-
-import pf.Comp.ReferenceFrame
-import pf.Comp.Motion
 
 import Entities.Player as Player
 import Entities.Tools as Tools
@@ -105,7 +100,7 @@ set_ui_interactivity = |key_state, to|
     [UI(SetInteractivity(to))]
 
 add_thruster_force = |key_state, direction|
-    force_magnitude = Tools.thruster.acceleration * Player.player.mass
+    force_magnitude = Tools.thruster.force
     force =
         when key_state is
             Pressed -> force_magnitude
@@ -130,26 +125,7 @@ launch_projectile_player_mode! = |key_state|
         _ ->
             return Ok([])
 
-    player_frame = Comp.ReferenceFrame.get_for_entity!(Player.entity_ids.player)?
-    player_head_frame = Comp.ReferenceFrame.get_for_entity!(Player.entity_ids.player_head)?
-    player_motion = Comp.Motion.get_for_entity!(Player.entity_ids.player)?
-
-    position = Vector3.add(player_frame.position, UnitQuaternion.rotate_vector(player_frame.orientation, player_head_frame.position))
-    orientation = UnitQuaternion.mul(player_frame.orientation, player_head_frame.orientation)
-
-    reaction_impulse = Tools.spawn_projectile!(
-        position,
-        player_motion.linear_velocity,
-        UnitQuaternion.rotate_vector(orientation, UnitVector3.neg_unit_z),
-    )?
-
-    apply_impulse = ApplyImpulse {
-        entity_id: Player.entity_ids.player,
-        impulse: reaction_impulse,
-        relative_position: position,
-    }
-
-    Ok([Engine(Physics(apply_impulse))])
+    Player.launch_projectile!({})
 
 launch_projectile_free_camera_mode! = |key_state|
     when key_state is
@@ -157,14 +133,7 @@ launch_projectile_free_camera_mode! = |key_state|
         _ ->
             return Ok([])
 
-    frame = Comp.ReferenceFrame.get_for_entity!(FreeCamera.entity_ids.camera)?
-    motion = Comp.Motion.get_for_entity!(FreeCamera.entity_ids.camera)?
-
-    _ = Tools.spawn_projectile!(
-        frame.position,
-        motion.linear_velocity,
-        UnitQuaternion.rotate_vector(frame.orientation, UnitVector3.neg_unit_z),
-    )?
+    FreeCamera.launch_projectile!({})?
 
     Ok([])
 

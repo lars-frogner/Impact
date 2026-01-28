@@ -1,5 +1,5 @@
-# Hash: 6ec674ec42064cfa
-# Generated: 2026-01-23T21:17:57.478883102
+# Hash: c1a47b5a6eadea0c
+# Generated: 2026-01-25T13:07:28.75818708
 # Rust type: impact_game::command::GameCommand
 # Type category: Inline
 module [
@@ -8,10 +8,12 @@ module [
     from_bytes,
 ]
 
-import Game.PlayerMode
+import Game.InteractionMode
+import core.Builtin
 
 GameCommand : [
-    SetPlayerMode Game.PlayerMode.PlayerMode,
+    SetInteractionMode Game.InteractionMode.InteractionMode,
+    AddMassToInventory F32,
 ]
 
 ## Serializes a value of [GameCommand] into the binary representation
@@ -19,24 +21,38 @@ GameCommand : [
 write_bytes : List U8, GameCommand -> List U8
 write_bytes = |bytes, value|
     when value is
-        SetPlayerMode(val) ->
+        SetInteractionMode(val) ->
             bytes
-            |> List.reserve(2)
+            |> List.reserve(5)
             |> List.append(0)
-            |> Game.PlayerMode.write_bytes(val)
+            |> Game.InteractionMode.write_bytes(val)
+            |> List.concat(List.repeat(0, 3))
+
+        AddMassToInventory(val) ->
+            bytes
+            |> List.reserve(5)
+            |> List.append(1)
+            |> Builtin.write_bytes_f32(val)
 
 ## Deserializes a value of [GameCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result GameCommand _
 from_bytes = |bytes|
-    if List.len(bytes) != 2 then
+    if List.len(bytes) != 5 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
             [0, .. as data_bytes] ->
                 Ok(
-                    SetPlayerMode(
-                        data_bytes |> List.sublist({ start: 0, len: 1 }) |> Game.PlayerMode.from_bytes?,
+                    SetInteractionMode(
+                        data_bytes |> List.sublist({ start: 0, len: 1 }) |> Game.InteractionMode.from_bytes?,
+                    ),
+                )
+
+            [1, .. as data_bytes] ->
+                Ok(
+                    AddMassToInventory(
+                        data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
                     ),
                 )
 
