@@ -6,7 +6,6 @@ use crate::{
     Game, GameConfig, RunMode,
     command::{GAME_COMMANDS, GameCommand},
     interface::{GAME, access_game, engine::GameInterfaceForEngine},
-    lookup::GameLookupTarget,
     user_interface::{UI_COMMANDS, UserInterface},
 };
 use anyhow::Result;

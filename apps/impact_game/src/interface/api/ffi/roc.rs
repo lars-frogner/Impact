@@ -1,8 +1,37 @@
 //! FFI for the game API specifically for calling from Roc.
 
-use crate::interface::api;
+use crate::{
+    interface::{access_game, api},
+    lookup::GameLookupTarget,
+};
 use anyhow::{Context, anyhow};
+use roc_integration::Roc;
 use roc_platform_core::roc_std::{RocList, RocResult, RocStr};
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_lookup_game_target(
+    target_bytes: &RocList<u8>,
+) -> RocResult<RocList<u8>, RocStr> {
+    log::trace!("Looking up game target");
+
+    to_roc_result(
+        GameLookupTarget::from_roc_bytes(target_bytes.as_slice()).and_then(|target| {
+            let size = target.roc_serialized_size();
+
+            let mut target_bytes = RocList::with_capacity(size);
+            for _ in 0..size {
+                target_bytes.push(0);
+            }
+
+            let game = access_game();
+            target
+                .lookup_and_write_roc_bytes(&game, target_bytes.as_mut_slice())
+                .with_context(|| format!("Failed looking up game target {target:?}"))?;
+
+            Ok(target_bytes)
+        }),
+    )
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn roc_execute_game_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
