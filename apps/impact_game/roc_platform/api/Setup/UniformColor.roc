@@ -1,25 +1,25 @@
-# Hash: d9e169e57f3c341b
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: ce7ec3b475bb54f7
+# Generated: 2026-01-29T18:41:43.623026933
 # Rust type: impact_material::setup::physical::UniformColor
 # Type category: Component
 module [
     UniformColor,
     iron,
-    copper,
-    brass,
-    gold,
-    aluminum,
-    silver,
     add_iron,
     add_multiple_iron,
+    copper,
     add_copper,
     add_multiple_copper,
+    brass,
     add_brass,
     add_multiple_brass,
+    gold,
     add_gold,
     add_multiple_gold,
+    aluminum,
     add_aluminum,
     add_multiple_aluminum,
+    silver,
     add_silver,
     add_multiple_silver,
     add,

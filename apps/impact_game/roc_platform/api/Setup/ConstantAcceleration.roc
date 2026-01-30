@@ -1,17 +1,17 @@
-# Hash: 07c86b25db726bc8
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: ca70e83a75c8d82c
+# Generated: 2026-01-29T18:41:43.623026933
 # Rust type: impact_physics::force::constant_acceleration::ConstantAcceleration
 # Type category: Component
 module [
     ConstantAcceleration,
     earth_downward_acceleration,
     new,
-    downward,
-    earth,
     add_new,
     add_multiple_new,
+    downward,
     add_downward,
     add_multiple_downward,
+    earth,
     add_earth,
     add_multiple_earth,
     add,

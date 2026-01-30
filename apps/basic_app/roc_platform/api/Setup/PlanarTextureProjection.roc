@@ -1,13 +1,13 @@
-# Hash: 07971e15f3c70953
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: b26e6c84101b39df
+# Generated: 2026-01-30T21:52:52.962466753
 # Rust type: impact_mesh::setup::PlanarTextureProjection
 # Type category: Component
 module [
     PlanarTextureProjection,
     new,
-    for_rectangle,
     add_new,
     add_multiple_new,
+    for_rectangle,
     add_for_rectangle,
     add_multiple_for_rectangle,
     add,

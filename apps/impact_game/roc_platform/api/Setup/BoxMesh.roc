@@ -1,16 +1,16 @@
-# Hash: 39234502bd27aa49
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: 8c98228098d21355
+# Generated: 2026-01-29T18:41:43.623026933
 # Rust type: impact_mesh::setup::BoxMesh
 # Type category: Component
 module [
     BoxMesh,
     unit_cube,
-    skybox,
-    new,
     add_unit_cube,
     add_multiple_unit_cube,
+    skybox,
     add_skybox,
     add_multiple_skybox,
+    new,
     add_new,
     add_multiple_new,
     add,

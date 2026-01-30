@@ -1,13 +1,13 @@
-# Hash: b771e9766d9bc8db
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: 00558460c7576a99
+# Generated: 2026-01-30T21:53:21.240540966
 # Rust type: impact_mesh::setup::RectangleMesh
 # Type category: Component
 module [
     RectangleMesh,
     unit_square,
-    new,
     add_unit_square,
     add_multiple_unit_square,
+    new,
     add_new,
     add_multiple_new,
     add,

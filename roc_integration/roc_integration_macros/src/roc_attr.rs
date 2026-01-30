@@ -3,7 +3,7 @@
 use crate::{
     AssociatedConstantAttributeArgs, AssociatedFunctionAttributeArgs, Bitflag, Bitflags,
     ImplAttributeArgs, MAX_BITFLAGS, MAX_DEPENDENCIES, MAX_ENUM_VARIANT_FIELDS, MAX_ENUM_VARIANTS,
-    MAX_FUNCTION_ARGS, MAX_STRUCT_FIELDS, TypeAttributeArgs, TypeCategory,
+    MAX_FUNCTION_ARGS, MAX_LITERAL_IMPORTS, MAX_STRUCT_FIELDS, TypeAttributeArgs, TypeCategory,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
@@ -79,11 +79,17 @@ pub(super) fn apply_impl_attribute(
 
     let for_type = &block.self_ty;
 
-    let associated_dependencies_submit = if !args.dependency_types.is_empty() {
-        generate_associated_dependencies_submit(for_type, &args.dependency_types, crate_root)?
-    } else {
-        quote! {}
-    };
+    let associated_dependencies_submit =
+        if !args.dependency_types.is_empty() || !args.literal_imports.is_empty() {
+            generate_associated_dependencies_submit(
+                for_type,
+                &args.dependency_types,
+                &args.literal_imports,
+                crate_root,
+            )?
+        } else {
+            quote! {}
+        };
 
     let mut associated_constant_submits = Vec::with_capacity(block.items.len());
     let mut associated_function_submits = Vec::with_capacity(block.items.len());
@@ -109,8 +115,12 @@ pub(super) fn apply_impl_attribute(
         } else if let syn::ImplItem::Fn(function) = item {
             let sequence_number = associated_function_submits.len();
 
-            let Some(AssociatedFunctionAttributeArgs { body, name }) =
-                extract_associated_function_attribute_args(function)
+            let Some(AssociatedFunctionAttributeArgs {
+                body,
+                name,
+                effectful,
+                ignore_types,
+            }) = extract_associated_function_attribute_args(function)
             else {
                 continue;
             };
@@ -121,6 +131,8 @@ pub(super) fn apply_impl_attribute(
                 name,
                 function,
                 body,
+                effectful,
+                ignore_types,
                 crate_root,
             )?);
         }
@@ -797,15 +809,18 @@ fn generate_registered_type_submit(
 fn generate_associated_dependencies_submit(
     for_type: &syn::Type,
     dependency_types: &[syn::Type],
+    literal_imports: &[String],
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
-    let dependencies = generate_type_id_list(dependency_types, crate_root, MAX_DEPENDENCIES);
+    let type_dependencies = generate_type_id_list(dependency_types, crate_root, MAX_DEPENDENCIES);
+    let literal_imports = generate_string_list(literal_imports, crate_root, MAX_LITERAL_IMPORTS);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         ::inventory::submit! {
             #crate_root::ir::AssociatedDependencies {
                 for_type_id: <#for_type as #crate_root::Roc>::ROC_TYPE_ID,
-                dependencies: #dependencies,
+                type_dependencies: #type_dependencies,
+                literal_imports: #literal_imports,
             }
         }
     })
@@ -847,12 +862,18 @@ fn generate_associated_function_submit(
     specified_name: Option<String>,
     function: &syn::ImplItemFn,
     body: String,
+    effectful: Option<bool>,
+    ignore_types: Option<bool>,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
+    let ignore_types = ignore_types.unwrap_or(false);
     let docstring = extract_and_process_docstring(&function.attrs);
     let name = specified_name.unwrap_or_else(|| function.sig.ident.to_string());
-    let arguments = generate_function_arguments::<MAX_FUNCTION_ARGS>(&function.sig, crate_root)?;
-    let return_type = generate_function_return_type(&function.sig.output, crate_root)?;
+    let arguments =
+        generate_function_arguments::<MAX_FUNCTION_ARGS>(&function.sig, ignore_types, crate_root)?;
+    let return_type =
+        generate_function_return_type(&function.sig.output, ignore_types, crate_root)?;
+    let is_effectful = effectful.unwrap_or(false);
     Ok(quote! {
         #[cfg(feature = "roc_codegen")]
         ::inventory::submit! {
@@ -864,6 +885,7 @@ fn generate_associated_function_submit(
                 arguments: #arguments,
                 body: #body,
                 return_type: #return_type,
+                is_effectful: #is_effectful,
             }
         }
     })
@@ -1183,6 +1205,7 @@ fn generate_variants(
 
 fn generate_function_arguments<const MAX_ARGS: usize>(
     sig: &syn::Signature,
+    ignore_types: bool,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
     if !sig.generics.params.is_empty() {
@@ -1243,13 +1266,22 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
                         ));
                     }
                 };
-                let ty = generate_containable_type(
-                    |ty, crate_root| {
-                        generate_inferrable_type(generate_translatable_type, ty, crate_root)
-                    },
-                    arg.ty.clone(),
-                    crate_root,
-                )?;
+                let ty = if ignore_types {
+                    quote! {
+                        #crate_root::ir::FunctionArgumentType::Ignored
+                    }
+                } else {
+                    let containable_type = generate_containable_type(
+                        |ty, crate_root| {
+                            generate_inferrable_type(generate_translatable_type, ty, crate_root)
+                        },
+                        arg.ty.clone(),
+                        crate_root,
+                    )?;
+                    quote! {
+                        #crate_root::ir::FunctionArgumentType::Explicit(#containable_type)
+                    }
+                };
                 Ok(quote! {
                     Some(#crate_root::ir::FunctionArgument::Typed(
                         #crate_root::ir::TypedFunctionArgument {
@@ -1273,18 +1305,32 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
 
 fn generate_function_return_type(
     return_type: &syn::ReturnType,
+    ignore_types: bool,
     crate_root: &TokenStream,
 ) -> syn::Result<TokenStream> {
-    match return_type {
-        syn::ReturnType::Type(_, ty) => generate_containable_type(
-            |ty, crate_root| generate_inferrable_type(generate_translatable_type, ty, crate_root),
-            ty.clone(),
-            crate_root,
-        ),
-        syn::ReturnType::Default => Err(syn::Error::new_spanned(
-            return_type,
-            "the `roc` attribute does not support functions returning nothing",
-        )),
+    if ignore_types {
+        Ok(quote! {
+            #crate_root::ir::AssociatedFunctionReturnType::Ignored
+        })
+    } else {
+        match return_type {
+            syn::ReturnType::Type(_, ty) => {
+                let containable_type = generate_containable_type(
+                    |ty, crate_root| {
+                        generate_inferrable_type(generate_translatable_type, ty, crate_root)
+                    },
+                    ty.clone(),
+                    crate_root,
+                )?;
+                Ok(quote! {
+                    #crate_root::ir::AssociatedFunctionReturnType::Explicit(#containable_type)
+                })
+            }
+            syn::ReturnType::Default => Err(syn::Error::new_spanned(
+                return_type,
+                "the `roc` attribute does not support functions returning nothing",
+            )),
+        }
     }
 }
 
@@ -1448,6 +1494,27 @@ fn generate_type_id_list(
 
     quote! {
         #crate_root::utils::StaticList([#(#ids)*])
+    }
+}
+
+fn generate_string_list(
+    strings: &[String],
+    crate_root: &TokenStream,
+    max_strings: usize,
+) -> TokenStream {
+    assert!(max_strings >= strings.len());
+
+    let items = strings
+        .iter()
+        .map(|string| {
+            quote! {
+                Some(#string),
+            }
+        })
+        .chain(iter::repeat_n(quote! {None,}, max_strings - strings.len()));
+
+    quote! {
+        #crate_root::utils::StaticList([#(#items)*])
     }
 }
 

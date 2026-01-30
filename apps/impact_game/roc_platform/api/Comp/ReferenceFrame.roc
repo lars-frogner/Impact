@@ -1,16 +1,16 @@
-# Hash: ea189b568582e40e
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: cf84237e2ffea898
+# Generated: 2026-01-29T18:41:43.623026933
 # Rust type: impact_geometry::reference_frame::ReferenceFrame
 # Type category: Component
 module [
     ReferenceFrame,
     new,
-    unoriented,
-    unlocated,
     add_new,
     add_multiple_new,
+    unoriented,
     add_unoriented,
     add_multiple_unoriented,
+    unlocated,
     add_unlocated,
     add_multiple_unlocated,
     add,

@@ -1,24 +1,24 @@
-# Hash: bb5707acf123d21a
-# Generated: 2025-12-29T23:55:22.755341756
+# Hash: 3a8377fccdaa2460
+# Generated: 2026-01-30T21:53:07.503687359
 # Rust type: impact_material::setup::physical::UniformSpecularReflectance
 # Type category: Component
 module [
     UniformSpecularReflectance,
     metal,
+    add_metal,
+    add_multiple_metal,
     water,
+    add_water,
+    add_multiple_water,
     skin,
+    add_skin,
+    add_multiple_skin,
     living_tissue,
     fabric,
     stone,
     plastic,
     glass,
     in_range_of,
-    add_metal,
-    add_multiple_metal,
-    add_water,
-    add_multiple_water,
-    add_skin,
-    add_multiple_skin,
     add_in_range_of,
     add_multiple_in_range_of,
     add,

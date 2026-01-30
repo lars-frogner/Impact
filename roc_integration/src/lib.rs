@@ -72,30 +72,32 @@
 ///   32- and 64-bit versions of the type).
 ///
 /// When applied to an `impl` block, this macro accepts the following optional
-/// argument:
+/// arguments:
 ///
 /// - `dependencies=[<type1>, <type2>, ..]`: A list of Rust types whose Roc
 ///   modules should be imported into the module for the present type. The
 ///   modules for the types comprising the present type will always be
 ///   imported, so this is only needed when some of the generated methods
 ///   make use of additional modules.
-///
-/// When applied to an associated constant in a `roc`-annotated `impl` block,
-/// the macro requires the Roc expression for the constant to be specified in
-/// an argument like this: `expr = "<Roc code>"`. The macro also accepts the
-/// following optional argument:
-///
-/// - `name = "<constant name>"`: The name used for the constant in Roc.
-///   Defaults to the Rust name.
+/// - `imports=[<Module1>, "<Module2.Submodule>", ..]`: A list of identifiers
+///   and/or strings representing literal Roc items to import in addition to
+///   the other imports.
 ///
 /// When applied to an associated function in a `roc`-annotated `impl` block,
 /// the macro requires the Roc source code for the body of the function to be
-/// specified in an argument like this: `body = "<Roc code>"`. The argument
-/// names will be the same in Roc as in Rust. The macro also accepts the
-/// following optional argument:
+/// specified in an argument like this: `body = "<Roc code>"`, or like this:
+/// `body = ["strings", "to", "concatenate"]`. The argument names will be the
+/// same in Roc as in Rust. The macro also accepts the following optional
+/// arguments:
 ///
 /// - `name = "<function name>"`: The name used for the function in Roc.
 ///   Defaults to the Rust name.
+/// - `effectful = true/false`: Whether the function should be defined as
+///   effectful, meaning a "!" will be appended to the name and a thick
+///   return arrow (`=>`) will be used in the type signature.
+/// - `ignore_types = true/false`: Whether to ignore the types in the Rust
+///   function signature and use a "_" placeholder for the corresponding type
+///   in Roc.
 ///
 /// Not all associated functions can be translated to Roc. The following
 /// requirements have to hold for the function signature:
@@ -103,10 +105,10 @@
 /// - Each type in the function signature must be either a primitive or
 ///   generated Roc type (by reference or value), a string (as `&str` or
 ///   `String`) or an array, slice, 2- or 3-element tuple or `Result` of such
-///   types.
+///   types (unless types are ignored).
 /// - No generic parameters or `impl <Trait>`.
 /// - No mutable references.
-/// - There must be a return type.
+/// - There must be a return type (unless types are ignored).
 pub use roc_integration_macros::roc;
 
 #[cfg(feature = "roc_codegen")]
