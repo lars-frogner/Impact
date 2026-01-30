@@ -34,9 +34,11 @@
 
 - Improve physics stability (avoid crash when small pieces explode with NaN).
 
-- Adjust voxel collider sphere radius based on signed distance.
+## Voxels
 
-- Voxel absorption - limit signed distance based on distance from absorber.
+- Add smoothing pass after Surface Nets.
+
+- Per surface voxel state (e.g. temperature).
 
 ## Generation
 
@@ -60,11 +62,17 @@
 
 - Add custom allocator support for `AlignedByteVec`.
 
+- Make relevant `impact_ecs` types accept allocator.
+
 ## ECS
 
 - Support querying only entities where certain components have changed.
 
 - Consider reducing usage of `RwLock` in `impact_ecs`. Investigate scheduler as an alternative to locks.
+
+## Scene
+
+- Ray intersection queries.
 
 ## Roc
 
@@ -77,7 +85,3 @@
 - Fix intermittent black triangles for voxel objects.
 
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
-
-- Fix sporadic `assertion failed: radius >= 0.0` from `sphere.rs` (probably when absorbing voxels with sphere).
-
-- Investigate "floating" non-empty chunks (separated from main body with empty chunks but not disconnected). Is separation by whole empty chunks handled?
