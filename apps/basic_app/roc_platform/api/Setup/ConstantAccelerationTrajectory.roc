@@ -1,13 +1,13 @@
-# Hash: 403e6c796fc5a183
-# Generated: 2026-01-16T10:02:28.912373492
+# Hash: f0d20b29929ca34d
+# Generated: 2026-01-30T21:52:52.962466753
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectory
 # Type category: Component
 module [
     ConstantAccelerationTrajectory,
     new,
-    with_constant_velocity,
     add_new,
     add_multiple_new,
+    with_constant_velocity,
     add_with_constant_velocity,
     add_multiple_with_constant_velocity,
     add,

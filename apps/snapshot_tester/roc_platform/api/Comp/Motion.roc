@@ -1,19 +1,19 @@
-# Hash: ee5b6fdbc21ce3ae
-# Generated: 2026-01-16T10:03:11.629764484
+# Hash: 3e38520ce9aec6ec
+# Generated: 2026-01-30T21:53:07.503687359
 # Rust type: impact_physics::quantities::Motion
 # Type category: Component
 module [
     Motion,
     new,
-    linear,
-    angular,
-    stationary,
     add_new,
     add_multiple_new,
+    linear,
     add_linear,
     add_multiple_linear,
+    angular,
     add_angular,
     add_multiple_angular,
+    stationary,
     add_stationary,
     add_multiple_stationary,
     add,

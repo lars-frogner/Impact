@@ -82,13 +82,16 @@ use std::{collections::HashSet, str::FromStr};
 ///   32- and 64-bit versions of the type).
 ///
 /// When applied to an `impl` block, this macro accepts the following optional
-/// argument:
+/// arguments:
 ///
 /// - `dependencies=[<type1>, <type2>, ..]`: A list of Rust types whose Roc
 ///   modules should be imported into the module for the present type. The
 ///   modules for the types comprising the present type will always be
 ///   imported, so this is only needed when some of the generated methods
 ///   make use of additional modules.
+/// - `imports=[<Module1>, "<Module2.Submodule>", ..]`: A list of identifiers
+///   and/or strings representing literal Roc items to import in addition to
+///   the other imports.
 ///
 /// When applied to an associated constant in a `roc`-annotated `impl` block,
 /// the macro requires the Roc expression for the constant to be specified in
@@ -100,12 +103,19 @@ use std::{collections::HashSet, str::FromStr};
 ///
 /// When applied to an associated function in a `roc`-annotated `impl` block,
 /// the macro requires the Roc source code for the body of the function to be
-/// specified in an argument like this: `body = "<Roc code>"`. The argument
-/// names will be the same in Roc as in Rust. The macro also accepts the
-/// following optional argument:
+/// specified in an argument like this: `body = "<Roc code>"`, or like this:
+/// `body = ["strings", "to", "concatenate"]`. The argument names will be the
+/// same in Roc as in Rust. The macro also accepts the following optional
+/// arguments:
 ///
 /// - `name = "<function name>"`: The name used for the function in Roc.
 ///   Defaults to the Rust name.
+/// - `effectful = true/false`: Whether the function should be defined as
+///   effectful, meaning a "!" will be appended to the name and a thick
+///   return arrow (`=>`) will be used in the type signature.
+/// - `ignore_types = true/false`: Whether to ignore the types in the Rust
+///   function signature and use a "_" placeholder for the corresponding type
+///   in Roc.
 ///
 /// Not all associated functions can be translated to Roc. The following
 /// requirements have to hold for the function signature:
@@ -113,10 +123,10 @@ use std::{collections::HashSet, str::FromStr};
 /// - Each type in the function signature must be either a primitive or
 ///   generated Roc type (by reference or value), a string (as `&str` or
 ///   `String`) or an array, slice, 2- or 3-element tuple or `Result` of such
-///   types.
+///   types (unless types are ignored).
 /// - No generic parameters or `impl <Trait>`.
 /// - No mutable references.
-/// - There must be a return type.
+/// - There must be a return type (unless types are ignored).
 #[proc_macro_attribute]
 pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
@@ -165,6 +175,7 @@ const MAX_BITFLAGS: usize = 64;
 const MAX_FUNCTION_ARGS: usize = 16;
 
 const MAX_DEPENDENCIES: usize = 16;
+const MAX_LITERAL_IMPORTS: usize = 4;
 
 #[derive(Clone, Debug, Default)]
 struct TypeAttributeArgs {
@@ -207,6 +218,13 @@ struct Bitflag {
 #[derive(Clone, Default)]
 struct ImplAttributeArgs {
     dependency_types: Vec<syn::Type>,
+    literal_imports: Vec<String>,
+}
+
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
+enum ImplAttributeArg {
+    TypeList(KeyTypeListValueArg),
+    StringOrIdentList(KeyStringOrIdentListValueArg),
 }
 
 #[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
@@ -221,6 +239,15 @@ struct AssociatedConstantAttributeArgs {
 struct AssociatedFunctionAttributeArgs {
     body: String,
     name: Option<String>,
+    effectful: Option<bool>,
+    ignore_types: Option<bool>,
+}
+
+#[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
+enum AssociatedFunctionAttributeArg {
+    String(KeyStringValueArg),
+    StringOrIdentList(KeyStringOrIdentListValueArg),
+    Bool(KeyBoolValueArg),
 }
 
 struct KeyStringValueArg {
@@ -235,6 +262,12 @@ struct KeyIntValueArg {
     value: syn::LitInt,
 }
 
+struct KeyBoolValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    value: syn::LitBool,
+}
+
 struct KeyTypeListValueArg {
     key: syn::Ident,
     _eq_token: syn::Token![=],
@@ -247,6 +280,18 @@ struct KeyKeyedIntListValueArg {
     _eq_token: syn::Token![=],
     _bracket_token: syn::token::Bracket,
     values: syn::punctuated::Punctuated<KeyIntValueArg, syn::Token![,]>,
+}
+
+struct KeyStringOrIdentListValueArg {
+    key: syn::Ident,
+    _eq_token: syn::Token![=],
+    _bracket_token: syn::token::Bracket,
+    values: syn::punctuated::Punctuated<StringOrIdent, syn::Token![,]>,
+}
+
+enum StringOrIdent {
+    String(syn::LitStr),
+    Ident(syn::Ident),
 }
 
 const CRATE_NAME: &str = "roc_integration";
@@ -475,21 +520,71 @@ impl Bitflags {
 
 impl syn::parse::Parse for ImplAttributeArgs {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-        let arg: KeyTypeListValueArg = input.parse()?;
+        let args =
+            syn::punctuated::Punctuated::<ImplAttributeArg, syn::token::Comma>::parse_terminated(
+                input,
+            )?;
 
-        let dependency_types: Vec<_> = match arg.key.to_string().as_str() {
-            "dependencies" => arg.types.iter().cloned().collect(),
-            other => {
-                return Err(syn::Error::new_spanned(
-                    arg.key,
-                    format!("invalid argument `{other}`, must be `dependencies`"),
-                ));
+        let mut dependency_types = None;
+        let mut imports = None;
+
+        for arg in args {
+            match arg {
+                ImplAttributeArg::TypeList(arg) => match arg.key.to_string().as_str() {
+                    "dependencies" => {
+                        if dependency_types
+                            .replace(arg.types.iter().cloned().collect::<Vec<_>>())
+                            .is_some()
+                        {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `dependencies`",
+                            ));
+                        }
+                    }
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            format!(
+                                "invalid argument `{other}`, must be one of `dependencies`, `imports`"
+                            ),
+                        ));
+                    }
+                },
+                ImplAttributeArg::StringOrIdentList(arg) => match arg.key.to_string().as_str() {
+                    "imports" => {
+                        let values: Vec<String> = arg
+                            .values
+                            .iter()
+                            .map(|v| match v {
+                                StringOrIdent::String(s) => s.value(),
+                                StringOrIdent::Ident(i) => i.to_string(),
+                            })
+                            .collect();
+                        if imports.replace(values).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key,
+                                "repeated argument `imports`",
+                            ));
+                        }
+                    }
+                    other => {
+                        return Err(syn::Error::new_spanned(
+                            arg.key,
+                            format!(
+                                "invalid argument `{other}`, must be one of `dependencies`, `imports`"
+                            ),
+                        ));
+                    }
+                },
             }
-        };
+        }
+
+        let dependency_types = dependency_types.unwrap_or_default();
 
         if dependency_types.len() > MAX_DEPENDENCIES {
-            return Err(syn::Error::new_spanned(
-                arg.types,
+            return Err(syn::Error::new(
+                proc_macro2::Span::call_site(),
                 format!(
                     "the `roc` attribute does not support this many dependencies ({}/{})",
                     dependency_types.len(),
@@ -498,7 +593,39 @@ impl syn::parse::Parse for ImplAttributeArgs {
             ));
         }
 
-        Ok(Self { dependency_types })
+        let literal_imports = imports.unwrap_or_default();
+
+        if literal_imports.len() > MAX_LITERAL_IMPORTS {
+            return Err(syn::Error::new(
+                proc_macro2::Span::call_site(),
+                format!(
+                    "the `roc` attribute does not support this many imports ({}/{})",
+                    literal_imports.len(),
+                    MAX_LITERAL_IMPORTS
+                ),
+            ));
+        }
+
+        Ok(Self {
+            dependency_types,
+            literal_imports,
+        })
+    }
+}
+
+impl syn::parse::Parse for ImplAttributeArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let ahead = input.fork();
+        let key: syn::Ident = ahead.parse()?;
+        let _eq: syn::Token![=] = ahead.parse()?;
+        match key.to_string().as_str() {
+            "dependencies" => Ok(Self::TypeList(input.parse()?)),
+            "imports" => Ok(Self::StringOrIdentList(input.parse()?)),
+            other => Err(syn::Error::new_spanned(
+                key,
+                format!("invalid argument `{other}`, must be one of `dependencies`, `imports`"),
+            )),
+        }
     }
 }
 
@@ -553,48 +680,136 @@ impl syn::parse::Parse for AssociatedConstantAttributeArgs {
 impl syn::parse::Parse for AssociatedFunctionAttributeArgs {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         let args =
-            syn::punctuated::Punctuated::<KeyStringValueArg, syn::token::Comma>::parse_terminated(
+            syn::punctuated::Punctuated::<AssociatedFunctionAttributeArg, syn::token::Comma>::parse_terminated(
                 input,
             )?;
 
         let mut body = None;
         let mut name = None;
+        let mut effectful = None;
+        let mut ignore_types = None;
 
         for arg in &args {
-            match arg.key.to_string().as_str() {
-                "body" => {
-                    if body.replace(arg.value.value()).is_some() {
+            match arg {
+                AssociatedFunctionAttributeArg::String(arg) => match arg.key.to_string().as_str() {
+                    "body" => {
+                        if body.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `body`",
+                            ));
+                        }
+                    }
+                    "name" => {
+                        if name.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `name`",
+                            ));
+                        }
+                    }
+                    other => {
                         return Err(syn::Error::new_spanned(
                             arg.key.clone(),
-                            "repeated argument `body`",
+                            format!(
+                                "invalid argument `{other}`, must be one of `body`, `name`, `effectful`, `ignore_types`"
+                            ),
                         ));
                     }
+                },
+                AssociatedFunctionAttributeArg::StringOrIdentList(arg) => {
+                    match arg.key.to_string().as_str() {
+                        "body" => {
+                            // Concatenate string and identifier list to single string
+                            let mut body_string = String::new();
+                            for v in &arg.values {
+                                match v {
+                                    StringOrIdent::String(v) => {
+                                        body_string.push_str(&v.value());
+                                    }
+                                    StringOrIdent::Ident(v) => {
+                                        body_string.push_str(&v.to_string());
+                                    }
+                                }
+                            }
+                            if body.replace(body_string).is_some() {
+                                return Err(syn::Error::new_spanned(
+                                    arg.key.clone(),
+                                    "repeated argument `body`",
+                                ));
+                            }
+                        }
+                        other => {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                format!(
+                                    "invalid argument `{other}`, must be one of `body`, `name`, `effectful`, `ignore_types`"
+                                ),
+                            ));
+                        }
+                    }
                 }
-                "name" => {
-                    if name.replace(arg.value.value()).is_some() {
+                AssociatedFunctionAttributeArg::Bool(arg) => match arg.key.to_string().as_str() {
+                    "effectful" => {
+                        if effectful.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `effectful`",
+                            ));
+                        }
+                    }
+                    "ignore_types" => {
+                        if ignore_types.replace(arg.value.value()).is_some() {
+                            return Err(syn::Error::new_spanned(
+                                arg.key.clone(),
+                                "repeated argument `ignore_types`",
+                            ));
+                        }
+                    }
+                    other => {
                         return Err(syn::Error::new_spanned(
                             arg.key.clone(),
-                            "repeated argument `name`",
+                            format!(
+                                "invalid argument `{other}`, must be one of `body`, `name`, `effectful`, `ignore_types`"
+                            ),
                         ));
                     }
-                }
-                other => {
-                    return Err(syn::Error::new_spanned(
-                        arg.key.clone(),
-                        format!("invalid argument `{other}`, must be one of `body`, `name`"),
-                    ));
-                }
+                },
             }
         }
 
         let Some(body) = body else {
             let span = args
                 .first()
-                .map_or_else(proc_macro2::Span::call_site, |arg| arg.key.span());
+                .map_or_else(proc_macro2::Span::call_site, |arg| match arg {
+                    AssociatedFunctionAttributeArg::String(arg) => arg.key.span(),
+                    AssociatedFunctionAttributeArg::StringOrIdentList(arg) => arg.key.span(),
+                    AssociatedFunctionAttributeArg::Bool(arg) => arg.key.span(),
+                });
             return Err(syn::Error::new(span, "missing required argument `body`"));
         };
 
-        Ok(Self { body, name })
+        Ok(Self {
+            body,
+            name,
+            effectful,
+            ignore_types,
+        })
+    }
+}
+
+impl syn::parse::Parse for AssociatedFunctionAttributeArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let ahead = input.fork();
+        let _key: syn::Ident = ahead.parse()?;
+        let _eq: syn::Token![=] = ahead.parse()?;
+        if ahead.peek(syn::token::Bracket) {
+            Ok(Self::StringOrIdentList(input.parse()?))
+        } else if ahead.parse::<syn::LitBool>().is_ok() {
+            Ok(Self::Bool(input.parse()?))
+        } else {
+            Ok(Self::String(input.parse()?))
+        }
     }
 }
 
@@ -609,6 +824,16 @@ impl syn::parse::Parse for KeyStringValueArg {
 }
 
 impl syn::parse::Parse for KeyIntValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            value: input.parse()?,
+        })
+    }
+}
+
+impl syn::parse::Parse for KeyBoolValueArg {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
         Ok(Self {
             key: input.parse()?,
@@ -639,5 +864,27 @@ impl syn::parse::Parse for KeyKeyedIntListValueArg {
             _bracket_token: syn::bracketed!(content in input),
             values: content.parse_terminated(KeyIntValueArg::parse, syn::Token![,])?,
         })
+    }
+}
+
+impl syn::parse::Parse for KeyStringOrIdentListValueArg {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let content;
+        Ok(Self {
+            key: input.parse()?,
+            _eq_token: input.parse()?,
+            _bracket_token: syn::bracketed!(content in input),
+            values: content.parse_terminated(StringOrIdent::parse, syn::Token![,])?,
+        })
+    }
+}
+
+impl syn::parse::Parse for StringOrIdent {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        if input.peek(syn::LitStr) {
+            Ok(Self::String(input.parse()?))
+        } else {
+            Ok(Self::Ident(input.parse()?))
+        }
     }
 }

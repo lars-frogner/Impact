@@ -1,19 +1,19 @@
-# Hash: 8392694477884630
-# Generated: 2026-01-16T10:02:50.675953324
+# Hash: 54765da4217fa6d6
+# Generated: 2026-01-29T18:41:43.623026933
 # Rust type: impact_geometry::model_transform::ModelTransform
 # Type category: Component
 module [
     ModelTransform,
     identity,
-    with_offset,
-    with_scale,
-    with_offset_and_scale,
     add_identity,
     add_multiple_identity,
+    with_offset,
     add_with_offset,
     add_multiple_with_offset,
+    with_scale,
     add_with_scale,
     add_multiple_with_scale,
+    with_offset_and_scale,
     add_with_offset_and_scale,
     add_multiple_with_offset_and_scale,
     add,

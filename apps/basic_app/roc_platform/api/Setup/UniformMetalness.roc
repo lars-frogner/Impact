@@ -1,13 +1,13 @@
-# Hash: f48c29b5d65dc823
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: 5a7a88b8901a8c0b
+# Generated: 2026-01-30T21:52:52.962466753
 # Rust type: impact_material::setup::physical::UniformMetalness
 # Type category: Component
 module [
     UniformMetalness,
     dielectric,
-    metal,
     add_dielectric,
     add_multiple_dielectric,
+    metal,
     add_metal,
     add_multiple_metal,
     add,

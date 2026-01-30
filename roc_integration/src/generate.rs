@@ -5,7 +5,7 @@ mod roc;
 
 use crate::{HashMap, HashSet, RegisteredType, RegisteredTypeFlags, RocTypeID, ir};
 use anyhow::{Context, Result, anyhow, bail};
-use roc::OptionalExports;
+use roc::Exports;
 use std::{
     borrow::Cow,
     fmt::{self, Display},
@@ -202,7 +202,7 @@ pub fn list_associated_items(for_types: Vec<String>) -> Result<()> {
     }
 
     // (We don't actually care about exports here)
-    let mut exports = OptionalExports::new();
+    let mut exports = Exports::new();
 
     for (type_id, type_name) in type_list {
         let Some(ty) = type_map.get(type_id) else {

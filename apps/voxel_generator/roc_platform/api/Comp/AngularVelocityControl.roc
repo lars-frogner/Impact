@@ -1,16 +1,16 @@
-# Hash: 667a524763e942c7
-# Generated: 2026-01-16T08:12:29.620936497
+# Hash: 65f5a49db1fc3ced
+# Generated: 2026-01-30T21:53:21.240540966
 # Rust type: impact_controller::orientation::AngularVelocityControl
 # Type category: Component
 module [
     AngularVelocityControl,
     all_directions,
-    new,
-    new_local,
     add_all_directions,
     add_multiple_all_directions,
+    new,
     add_new,
     add_multiple_new,
+    new_local,
     add_new_local,
     add_multiple_new_local,
     add,

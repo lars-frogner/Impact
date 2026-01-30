@@ -13,6 +13,7 @@ pub const MAX_BITFLAGS: usize = 64;
 pub const MAX_FUNCTION_ARGS: usize = 16;
 
 pub const MAX_DEPENDENCIES: usize = 16;
+pub const MAX_LITERAL_IMPORTS: usize = 4;
 
 #[derive(Clone, Debug)]
 pub struct Type {
@@ -31,7 +32,9 @@ pub struct AssociatedDependencies {
     /// The type having these dependencies.
     pub for_type_id: RocTypeID,
     /// The types being depended on.
-    pub dependencies: StaticList<RocTypeID, MAX_DEPENDENCIES>,
+    pub type_dependencies: StaticList<RocTypeID, MAX_DEPENDENCIES>,
+    /// Literal items to import in addition to depended on types.
+    pub literal_imports: StaticList<&'static str, MAX_LITERAL_IMPORTS>,
 }
 
 /// A constant associated with a specific type.
@@ -70,6 +73,8 @@ pub struct AssociatedFunction {
     pub body: &'static str,
     /// The return type of the function.
     pub return_type: AssociatedFunctionReturnType,
+    /// Whether the function body produces side effects.
+    pub is_effectful: bool,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -193,17 +198,34 @@ pub enum MethodReceiver {
     OwnedSelf,
 }
 
-/// An explicitly typed function argument.
+/// A typed function argument.
 #[derive(Clone, Debug)]
 pub struct TypedFunctionArgument {
     /// The argument name.
     pub ident: &'static str,
     /// The argument type.
-    pub ty: Containable<Inferrable<TranslatableType>>,
+    pub ty: FunctionArgumentType,
 }
 
+/// The type of a function argument.
+#[derive(Clone, Debug)]
+pub enum FunctionArgumentType {
+    Explicit(ExplicitFunctionArgumentType),
+    Ignored,
+}
+
+/// The explicit type of a function argument.
+pub type ExplicitFunctionArgumentType = Containable<Inferrable<TranslatableType>>;
+
 /// The return type of an associated function.
-pub type AssociatedFunctionReturnType = Containable<Inferrable<TranslatableType>>;
+#[derive(Clone, Debug)]
+pub enum AssociatedFunctionReturnType {
+    Explicit(ExplicitAssociatedFunctionReturnType),
+    Ignored,
+}
+
+/// The explicit return type of an associated function.
+pub type ExplicitAssociatedFunctionReturnType = Containable<Inferrable<TranslatableType>>;
 
 /// Wrapper for types that may appear in a container.
 #[derive(Clone, Debug)]

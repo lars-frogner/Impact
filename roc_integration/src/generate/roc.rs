@@ -26,14 +26,14 @@ pub(super) fn generate_module(
     }
 
     let mut module_body = String::new();
-    let mut optional_exports = OptionalExports::new();
-    let mut optional_imports = OptionalImports::new(package_name);
+    let mut exports = Exports::new();
+    let mut optional_imports = Imports::new(package_name);
 
-    write_type_declaration(&mut module_body, &mut optional_exports, type_map, &ty.ty)?;
+    write_type_declaration(&mut module_body, &mut exports, type_map, &ty.ty)?;
 
     write_associated_constants(
         &mut module_body,
-        &mut optional_exports,
+        &mut exports,
         type_map,
         ty,
         associated_constants,
@@ -41,18 +41,13 @@ pub(super) fn generate_module(
 
     write_associated_functions(
         &mut module_body,
-        &mut optional_exports,
+        &mut exports,
         type_map,
         ty,
         associated_functions,
     )?;
 
-    write_component_functions(
-        &mut module_body,
-        &mut optional_exports,
-        &mut optional_imports,
-        ty,
-    )?;
+    write_component_functions(&mut module_body, &mut exports, &mut optional_imports, ty)?;
 
     write_write_bytes_function(&mut module_body, &mut optional_imports, type_map, ty)?;
 
@@ -62,13 +57,7 @@ pub(super) fn generate_module(
 
     let mut module = String::with_capacity(module_body.len());
 
-    write_module_header(
-        &mut module,
-        optional_exports,
-        associated_constants,
-        associated_functions,
-        ty,
-    )?;
+    write_module_header(&mut module, exports, ty)?;
 
     write_imports(
         &mut module,
@@ -85,12 +74,12 @@ pub(super) fn generate_module(
 }
 
 #[derive(Clone, Debug)]
-pub struct OptionalExports {
+pub struct Exports {
     export_names: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
-pub struct OptionalImports {
+pub struct Imports {
     current_package_name: String,
     import_paths: HashSet<String>,
 }
@@ -102,7 +91,7 @@ enum BitflagsTypeSizeInBytes {
     Eight,
 }
 
-impl OptionalExports {
+impl Exports {
     pub fn new() -> Self {
         Self {
             export_names: Vec::new(),
@@ -114,7 +103,7 @@ impl OptionalExports {
     }
 }
 
-impl OptionalImports {
+impl Imports {
     pub fn new(current_package_name: impl ToString) -> Self {
         Self {
             current_package_name: current_package_name.to_string(),
@@ -134,13 +123,7 @@ impl OptionalImports {
     }
 }
 
-fn write_module_header(
-    roc_code: &mut String,
-    optional_exports: OptionalExports,
-    associated_constants: &[ir::AssociatedConstant],
-    associated_functions: &[ir::AssociatedFunction],
-    ty: &RegisteredType,
-) -> Result<()> {
+fn write_module_header(roc_code: &mut String, exports: Exports, ty: &RegisteredType) -> Result<()> {
     write!(
         roc_code,
         "\
@@ -150,15 +133,7 @@ fn write_module_header(
         ty.ty.name,
     )?;
 
-    for constant in associated_constants {
-        writeln!(roc_code, "    {},", constant.name)?;
-    }
-
-    for function in associated_functions {
-        writeln!(roc_code, "    {},", function.name)?;
-    }
-
-    for export_name in optional_exports.export_names {
+    for export_name in exports.export_names {
         writeln!(roc_code, "    {export_name},")?;
     }
 
@@ -176,7 +151,7 @@ fn write_module_header(
 fn write_imports(
     roc_code: &mut String,
     package_name: &str,
-    optional_imports: OptionalImports,
+    optional_imports: Imports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
@@ -200,7 +175,7 @@ fn write_imports(
 
 fn determine_imports(
     package_name: &str,
-    optional_imports: OptionalImports,
+    optional_imports: Imports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &[ir::AssociatedDependencies],
     ty: &RegisteredType,
@@ -236,10 +211,13 @@ fn add_imports_for_associated_dependencies(
     type_map: &HashMap<RocTypeID, RegisteredType>,
     associated_dependencies: &ir::AssociatedDependencies,
 ) {
-    for dependency_id in &associated_dependencies.dependencies {
+    for dependency_id in &associated_dependencies.type_dependencies {
         if let Some(dependency) = type_map.get(dependency_id) {
             import_paths.insert(dependency.import_path(package_name));
         }
+    }
+    for literal_import in &associated_dependencies.literal_imports {
+        import_paths.insert(literal_import.to_string());
     }
 }
 
@@ -278,7 +256,7 @@ fn add_imports_for_fields<const N: usize>(
 
 fn write_type_declaration(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
+    exports: &mut Exports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::Type,
 ) -> Result<()> {
@@ -327,7 +305,7 @@ fn write_type_declaration(
             Ok(())
         }
         ir::TypeComposition::Bitflags(bitflags) => {
-            write_bitflags_type_declaration(roc_code, optional_exports, type_map, ty, bitflags)?;
+            write_bitflags_type_declaration(roc_code, exports, type_map, ty, bitflags)?;
             Ok(())
         }
     }
@@ -416,19 +394,13 @@ fn qualified_type_name_for_field(
 
 fn write_associated_constants(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
+    exports: &mut Exports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_constants: &[ir::AssociatedConstant],
 ) -> Result<()> {
     for associated_constant in associated_constants {
-        write_associated_constant(
-            roc_code,
-            optional_exports,
-            type_map,
-            ty,
-            associated_constant,
-        )?;
+        write_associated_constant(roc_code, exports, type_map, ty, associated_constant)?;
         roc_code.push('\n');
     }
     Ok(())
@@ -436,7 +408,7 @@ fn write_associated_constants(
 
 pub(super) fn write_associated_constant(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
+    exports: &mut Exports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_constant: &ir::AssociatedConstant,
@@ -478,6 +450,8 @@ pub(super) fn write_associated_constant(
         expr = associated_constant.expr.trim(),
     )?;
 
+    exports.add(associated_constant.name);
+
     if ty.is_component()
         && matches!(
             associated_constant.ty,
@@ -486,8 +460,8 @@ pub(super) fn write_associated_constant(
     {
         let name = associated_constant.name;
 
-        optional_exports.add(format!("add_{name}"));
-        optional_exports.add(format!("add_multiple_{name}"));
+        exports.add(format!("add_{name}"));
+        exports.add(format!("add_multiple_{name}"));
 
         let (docstring, docstring_multi) = if docstring.is_empty() {
             (String::new(), String::new())
@@ -546,19 +520,13 @@ pub(super) fn write_associated_constant(
 
 fn write_associated_functions(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
+    exports: &mut Exports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_functions: &[ir::AssociatedFunction],
 ) -> Result<()> {
     for associated_function in associated_functions {
-        write_associated_function(
-            roc_code,
-            optional_exports,
-            type_map,
-            ty,
-            associated_function,
-        )?;
+        write_associated_function(roc_code, exports, type_map, ty, associated_function)?;
         roc_code.push('\n');
     }
     Ok(())
@@ -566,7 +534,7 @@ fn write_associated_functions(
 
 pub(super) fn write_associated_function(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
+    exports: &mut Exports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
     associated_function: &ir::AssociatedFunction,
@@ -584,27 +552,34 @@ pub(super) fn write_associated_function(
             }
             ir::FunctionArgument::Typed(arg) => {
                 arg_name_list.push(arg.ident);
-                arg_type_list.push(
-                    qualified_type_name_for_containable_type(
-                        |type_map, contained_ty, in_container| {
-                            qualified_type_name_for_inferrable_type(
-                                qualified_type_name_for_translatable_type,
+                match &arg.ty {
+                    ir::FunctionArgumentType::Explicit(explicit_type) => {
+                        arg_type_list.push(
+                            qualified_type_name_for_containable_type(
+                                |type_map, contained_ty, in_container| {
+                                    qualified_type_name_for_inferrable_type(
+                                        qualified_type_name_for_translatable_type,
+                                        type_map,
+                                        contained_ty,
+                                        Cow::Borrowed(ty.ty.name),
+                                        in_container,
+                                    )
+                                },
                                 type_map,
-                                contained_ty,
-                                Cow::Borrowed(ty.ty.name),
-                                in_container,
+                                explicit_type,
                             )
-                        },
-                        type_map,
-                        &arg.ty,
-                    )
-                    .with_context(|| {
-                        format!(
-                            "Invalid type for argument {} of associated function {}",
-                            arg.ident, associated_function.name
-                        )
-                    })?,
-                );
+                            .with_context(|| {
+                                format!(
+                                    "Invalid type for argument {} of associated function {}",
+                                    arg.ident, associated_function.name
+                                )
+                            })?,
+                        );
+                    }
+                    ir::FunctionArgumentType::Ignored => {
+                        arg_type_list.push(Cow::Borrowed("_"));
+                    }
+                }
             }
         }
     }
@@ -618,25 +593,30 @@ pub(super) fn write_associated_function(
         (arg_names.as_str(), arg_types.as_str())
     };
 
-    let return_type = qualified_type_name_for_containable_type(
-        |type_map, contained_ty, in_container| {
-            qualified_type_name_for_inferrable_type(
-                qualified_type_name_for_translatable_type,
+    let return_type = match &associated_function.return_type {
+        ir::AssociatedFunctionReturnType::Explicit(return_type) => {
+            qualified_type_name_for_containable_type(
+                |type_map, contained_ty, in_container| {
+                    qualified_type_name_for_inferrable_type(
+                        qualified_type_name_for_translatable_type,
+                        type_map,
+                        contained_ty,
+                        Cow::Borrowed(ty.ty.name),
+                        in_container,
+                    )
+                },
                 type_map,
-                contained_ty,
-                Cow::Borrowed(ty.ty.name),
-                in_container,
+                return_type,
             )
-        },
-        type_map,
-        &associated_function.return_type,
-    )
-    .with_context(|| {
-        format!(
-            "Invalid return type for associated function {}",
-            associated_function.name
-        )
-    })?;
+            .with_context(|| {
+                format!(
+                    "Invalid return type for associated function {}",
+                    associated_function.name
+                )
+            })?
+        }
+        ir::AssociatedFunctionReturnType::Ignored => Cow::Borrowed("_"),
+    };
 
     let docstring = if associated_function.docstring.is_empty() {
         ""
@@ -644,27 +624,42 @@ pub(super) fn write_associated_function(
         associated_function.docstring
     };
 
+    let (exclamation, arrow) = if associated_function.is_effectful {
+        ("!", "=>")
+    } else {
+        ("", "->")
+    };
+
     writeln!(
         roc_code,
         "\
         {docstring}\
-        {name} : {non_empty_arg_types} -> {return_type}\n\
-        {name} = |{non_empty_arg_names}|\n    \
+        {name}{exclamation} : {non_empty_arg_types} {arrow} {return_type}\n\
+        {name}{exclamation} = |{non_empty_arg_names}|\n    \
             {body}\
         ",
         name = associated_function.name,
         body = associated_function.body.trim(),
     )?;
 
+    if associated_function.is_effectful {
+        exports.add(format!("{}!", associated_function.name));
+    } else {
+        exports.add(associated_function.name);
+    }
+
     if ty.is_component()
         && matches!(
             associated_function.return_type,
-            ir::Containable::Single(ir::Inferrable::SelfType)
+            ir::AssociatedFunctionReturnType::Explicit(ir::Containable::Single(
+                ir::Inferrable::SelfType
+            ))
         )
+        && !associated_function.is_effectful
     {
         let name = associated_function.name;
 
-        optional_exports.add(format!("add_{name}"));
+        exports.add(format!("add_{name}"));
 
         let (docstring, docstring_multi) = if docstring.is_empty() {
             (String::new(), String::new())
@@ -680,7 +675,7 @@ pub(super) fn write_associated_function(
         };
 
         if arg_type_list.is_empty() {
-            optional_exports.add(format!("add_multiple_{name}"));
+            exports.add(format!("add_multiple_{name}"));
 
             if ty.serialized_size == 0 {
                 writeln!(
@@ -733,7 +728,7 @@ pub(super) fn write_associated_function(
 
             // This only works with up to four arguments until we have map5
             if arg_type_list.len() <= 4 {
-                optional_exports.add(format!("add_multiple_{name}"));
+                exports.add(format!("add_multiple_{name}"));
 
                 writeln!(
                     roc_code,
@@ -847,25 +842,25 @@ fn type_name_for_special_type(ty: &ir::SpecialType) -> &'static str {
 
 fn write_component_functions(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
-    optional_imports: &mut OptionalImports,
+    exports: &mut Exports,
+    optional_imports: &mut Imports,
     ty: &RegisteredType,
 ) -> Result<()> {
     if !ty.is_component() {
         return Ok(());
     }
 
-    optional_exports.add("add");
-    optional_exports.add("add_multiple");
+    exports.add("add");
+    exports.add("add_multiple");
 
     if ty.is_standard_component() {
-        optional_exports.add("component_id");
-        optional_exports.add("add_component_id");
+        exports.add("component_id");
+        exports.add("add_component_id");
 
         if ty.serialized_size > 0 {
-            optional_exports.add("read");
-            optional_exports.add("get_for_entity!");
-            optional_exports.add("set_for_entity!");
+            exports.add("read");
+            exports.add("get_for_entity!");
+            exports.add("set_for_entity!");
         }
     }
 
@@ -1024,7 +1019,7 @@ fn write_component_functions(
 
 fn write_bitflags_type_declaration<const N: usize>(
     roc_code: &mut String,
-    optional_exports: &mut OptionalExports,
+    exports: &mut Exports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::Type,
     bitflags: &ir::Bitflags<N>,
@@ -1043,7 +1038,7 @@ fn write_bitflags_type_declaration<const N: usize>(
 
     // Write empty constant
     writeln!(roc_code, "empty = @{type_name}(0)\n")?;
-    optional_exports.add("empty");
+    exports.add("empty");
 
     // Write all constant
     writeln!(
@@ -1051,7 +1046,7 @@ fn write_bitflags_type_declaration<const N: usize>(
         "all = @{type_name}({})\n",
         2_u32.pow(bitflags.0.len() as u32) - 1
     )?;
-    optional_exports.add("all");
+    exports.add("all");
 
     // Write individual flag constants
     for flag in &bitflags.0 {
@@ -1061,7 +1056,7 @@ fn write_bitflags_type_declaration<const N: usize>(
             "{flag_name} = @{type_name}(Num.shift_left_by(1, {flag_bit}))\n",
             flag_bit = flag.bit
         )?;
-        optional_exports.add(flag_name);
+        exports.add(flag_name);
     }
 
     // Write utility functions
@@ -1097,18 +1092,18 @@ fn write_bitflags_type_declaration<const N: usize>(
     )?;
 
     // Add utility function exports
-    optional_exports.add("intersects");
-    optional_exports.add("contains");
-    optional_exports.add("union");
-    optional_exports.add("intersection");
-    optional_exports.add("difference");
+    exports.add("intersects");
+    exports.add("contains");
+    exports.add("union");
+    exports.add("intersection");
+    exports.add("difference");
 
     Ok(())
 }
 
 fn write_bitflags_from_bytes_function(
     roc_code: &mut String,
-    optional_imports: &mut OptionalImports,
+    optional_imports: &mut Imports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::Type,
 ) -> Result<()> {
@@ -1132,7 +1127,7 @@ fn write_bitflags_from_bytes_function(
 
 fn write_bitflags_write_bytes_function(
     roc_code: &mut String,
-    optional_imports: &mut OptionalImports,
+    optional_imports: &mut Imports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &ir::Type,
 ) -> Result<()> {
@@ -1174,7 +1169,7 @@ fn obtain_bitflags_type_size(
 
 fn write_write_bytes_function(
     roc_code: &mut String,
-    optional_imports: &mut OptionalImports,
+    optional_imports: &mut Imports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
 ) -> Result<()> {
@@ -1373,7 +1368,7 @@ fn write_calls_to_write_bytes<const N: usize>(
 
 fn write_from_bytes_function(
     roc_code: &mut String,
-    optional_imports: &mut OptionalImports,
+    optional_imports: &mut Imports,
     type_map: &HashMap<RocTypeID, RegisteredType>,
     ty: &RegisteredType,
 ) -> Result<()> {
