@@ -17,6 +17,7 @@ platform "impact"
         Entity,
         Game,
         Input,
+        Lookup,
         Mesh,
         Model,
         Physics,

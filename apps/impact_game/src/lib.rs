@@ -3,6 +3,7 @@
 pub mod command;
 pub mod input;
 pub mod interface;
+pub mod lookup;
 pub mod player;
 pub mod setup;
 pub mod update;

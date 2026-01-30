@@ -1,4 +1,5 @@
 hosted [
+    lookup_game_target!,
     execute_game_command!,
     execute_ui_command!,
     execute_engine_command!,
@@ -19,6 +20,7 @@ hosted [
 import InternalIOErr
 
 # Game
+lookup_game_target! : List U8 => Result (List U8) Str
 execute_game_command! : List U8 => Result {} Str
 
 # UI

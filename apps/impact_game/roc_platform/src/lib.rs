@@ -5,6 +5,7 @@ dynamic_lib::define_lib! {
     path_env_var = "APP_LIB_PATH",
     fallback_path = "./libapp";
 
+    unsafe fn roc_lookup_game_target(target_bytes: &RocList<u8>) -> RocResult<RocList<u8>, RocStr>;
     unsafe fn roc_execute_game_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_execute_ui_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
@@ -19,6 +20,13 @@ dynamic_lib::define_lib! {
     unsafe fn roc_update_entity(entity_id: u64, component_bytes: &RocList<u8>) -> RocResult<(), RocStr>;
     unsafe fn roc_remove_entity(entity_id: u64) -> RocResult<(), RocStr>;
     unsafe fn roc_read_entity_components(entity_id: u64, only_component_ids: &RocList<u64>) -> RocResult<RocList<u8>, RocStr>;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn roc_fx_lookup_game_target(
+    target_bytes: &RocList<u8>,
+) -> RocResult<RocList<u8>, RocStr> {
+    load_and_then(|lib| unsafe { lib.roc_lookup_game_target(target_bytes) })
 }
 
 #[unsafe(no_mangle)]
