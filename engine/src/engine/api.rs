@@ -20,6 +20,7 @@ use impact_ecs::{
 };
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
+    force::alignment_torque::{AlignmentTorqueGenerator, AlignmentTorqueGeneratorID},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
 use impact_rendering::{
@@ -529,6 +530,24 @@ impl Engine {
             .ok_or_else(|| anyhow!("Missing dynamic rigid body with ID {rigid_body_id:?}"))?;
 
         f(rigid_body)
+    }
+
+    pub fn with_alignment_torque_generator<R>(
+        &self,
+        generator_id: AlignmentTorqueGeneratorID,
+        f: impl FnOnce(&AlignmentTorqueGenerator) -> Result<R>,
+    ) -> Result<R> {
+        let simulator = self.simulator().oread();
+        let force_generator_manager = simulator.force_generator_manager().oread();
+
+        let generator = force_generator_manager
+            .alignment_torques()
+            .get_generator(&generator_id)
+            .ok_or_else(|| {
+                anyhow!("Missing alignment torque generator with ID {generator_id:?}")
+            })?;
+
+        f(generator)
     }
 
     pub fn add_voxel_object(&self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {

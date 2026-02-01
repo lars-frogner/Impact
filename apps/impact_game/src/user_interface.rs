@@ -128,12 +128,31 @@ impl<'a> CustomElements for GameUserInterface<'a> {
             return;
         };
 
-        let acceleration_text = format!("Acceleration: {:.1} m/s²", player_state.acceleration);
+        let alignment_direction_text = format!("Alignment: {}\n", player_state.alignment_direction);
+
+        let acceleration_x_text =
+            format!("Acceleration x: {:.1} m/s²", player_state.acceleration.x());
+        let acceleration_y_text =
+            format!("Acceleration y: {:.1} m/s²", player_state.acceleration.y());
+        let acceleration_z_text = format!(
+            "Acceleration z: {:.1} m/s²\n",
+            player_state.acceleration.z()
+        );
+
         let inventory_mass_text = format!("Inventory: {:.1} kg", player_state.inventory_mass);
 
         TextOverlay::new(egui::Id::new("game_overlay"))
             .corner(Corner::BottomLeft)
             .offset(egui::vec2(10.0, 10.0))
-            .show_lines(ctx, &[&acceleration_text, &inventory_mass_text]);
+            .show_lines(
+                ctx,
+                &[
+                    &alignment_direction_text,
+                    &acceleration_x_text,
+                    &acceleration_y_text,
+                    &acceleration_z_text,
+                    &inventory_mass_text,
+                ],
+            );
     }
 }
