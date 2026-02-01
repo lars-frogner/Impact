@@ -309,11 +309,11 @@ define_task!(
         instrument_engine_task!("Synchronizing voxel object model transforms", engine, {
             let mut ecs_world = engine.ecs_world().owrite();
             let scene = engine.scene().oread();
-            let voxel_object_manager = scene.voxel_object_manager().oread();
+            let voxel_manager = scene.voxel_manager().oread();
 
             impact_voxel::interaction::systems::sync_voxel_object_model_transforms(
                 &mut ecs_world,
-                &voxel_object_manager,
+                voxel_manager.object_manager(),
             );
 
             Ok(())
@@ -362,8 +362,8 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Updating voxel object meshes", engine, {
             let scene = engine.scene().oread();
-            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
-            voxel_object_manager.sync_voxel_object_meshes();
+            let mut voxel_manager = scene.voxel_manager().owrite();
+            voxel_manager.object_manager_mut().sync_voxel_object_meshes();
             Ok(())
         })
     }
@@ -414,9 +414,9 @@ define_task!(
         let engine = ctx.engine();
         instrument_engine_task!("Advancing simulation", engine, {
             let scene =  engine.scene().oread();
-            let voxel_object_manager = scene.voxel_object_manager().oread();
+            let voxel_manager = scene.voxel_manager().oread();
             let mut simulator = engine.simulator().owrite();
-            simulator.advance_simulation(&voxel_object_manager);
+            simulator.advance_simulation(voxel_manager.object_manager());
             Ok(())
         })
     }
@@ -490,14 +490,14 @@ define_task!(
         instrument_engine_task!("Synchronizing scene graph node properties", engine, {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
-            let voxel_object_manager = scene.voxel_object_manager().oread();
+            let voxel_manager = scene.voxel_manager().oread();
             let mut scene_graph = scene.scene_graph().owrite();
 
             impact_scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
 
             impact_voxel::interaction::systems::sync_voxel_object_bounding_spheres_in_scene_graph(
                 &ecs_world,
-                &voxel_object_manager,
+                voxel_manager.object_manager(),
                 &mut scene_graph,
             );
             Ok(())
@@ -799,7 +799,7 @@ define_task!(
             let scene = engine.scene().oread();
             let camera_manager = scene.camera_manager().oread();
             let light_manager = scene.light_manager().oread();
-            let voxel_object_manager = scene.voxel_object_manager().oread();
+            let voxel_manager = scene.voxel_manager().oread();
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let scene_graph = scene.scene_graph().oread();
             let simulator = engine.simulator().oread();
@@ -813,7 +813,7 @@ define_task!(
                 &ecs_world,
                 &camera_manager,
                 &light_manager,
-                &voxel_object_manager,
+                voxel_manager.object_manager(),
                 &scene_graph,
                 &rigid_body_manager,
                 &anchor_manager,
@@ -967,7 +967,7 @@ define_task!(
             let ecs_world = engine.ecs_world().oread();
             let resource_manager = engine.resource_manager().oread();
             let scene = engine.scene().oread();
-            let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+            let mut voxel_manager = scene.voxel_manager().owrite();
             let scene_graph = scene.scene_graph().oread();
             let simulator = engine.simulator().oread();
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
@@ -980,7 +980,7 @@ define_task!(
                 &mut entity_stager,
                 &ecs_world,
                 &scene_graph,
-                &mut voxel_object_manager,
+                &mut voxel_manager,
                 &resource_manager.voxel_types,
                 &mut rigid_body_manager,
                 &mut anchor_manager,

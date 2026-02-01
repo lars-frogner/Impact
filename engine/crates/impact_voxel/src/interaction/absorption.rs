@@ -1,7 +1,7 @@
 //! Voxel absorption.
 
 use crate::{
-    Voxel, VoxelObjectManager, VoxelObjectPhysicsContext,
+    Voxel, VoxelManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{
         self, DynamicDisconnectedVoxelObject, NewVoxelObjectEntity, VoxelObjectEntity,
@@ -12,6 +12,7 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
+use impact_containers::HashMap;
 use impact_geometry::{CapsuleC, SphereC};
 use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3C};
 use impact_physics::{
@@ -22,13 +23,30 @@ use roc_integration::roc;
 use std::mem;
 
 define_component_type! {
+    /// Identifier for a [`VoxelAbsorbingSphere`].
+    #[roc(parents = "Comp")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
+    pub struct VoxelAbsorbingSphereID(u64);
+}
+
+define_component_type! {
+    /// Identifier for a [`VoxelAbsorbingCapsule`].
+    #[roc(parents = "Comp")]
+    #[repr(transparent)]
+    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
+    pub struct VoxelAbsorbingCapsuleID(u64);
+}
+
+define_setup_type! {
+    target = VoxelAbsorbingSphereID;
     /// A sphere that instantly absorbs voxels it comes in contact with.
     ///
     /// Does nothing if the entity does not have a
     /// [`impact_geometry::ReferenceFrame`].
-    #[roc(parents = "Comp")]
+    #[roc(parents = "Setup")]
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelAbsorbingSphere {
         /// The offset of the sphere in the reference frame of the entity.
         offset: Vector3C,
@@ -37,14 +55,15 @@ define_component_type! {
     }
 }
 
-define_component_type! {
+define_setup_type! {
+    target = VoxelAbsorbingCapsuleID;
     /// A capsule that instantly absorbs voxels it comes in contact with.
     ///
     /// Does nothing if the entity does not have a
     /// [`impact_geometry::ReferenceFrame`].
-    #[roc(parents = "Comp")]
+    #[roc(parents = "Setup")]
     #[repr(C)]
-    #[derive(Copy, Clone, Debug, Default,Zeroable, Pod)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct VoxelAbsorbingCapsule {
         /// The offset of the starting point of the capsule's central line segment
         /// in the reference frame of the entity.
@@ -55,6 +74,38 @@ define_component_type! {
         /// The radius of the capsule.
         radius: f32,
     }
+}
+
+/// Manages voxel absorption processes and state.
+#[derive(Debug)]
+pub struct VoxelAbsorptionManager {
+    spheres: HashMap<VoxelAbsorbingSphereID, TrackingVoxelAbsorbingSphere>,
+    capsules: HashMap<VoxelAbsorbingCapsuleID, TrackingVoxelAbsorbingCapsule>,
+    sphere_id_counter: u64,
+    capsule_id_counter: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct TrackingVoxelAbsorbingSphere {
+    pub sphere: VoxelAbsorbingSphere,
+    pub tracker: VoxelAbsorptionTracker,
+}
+
+#[derive(Clone, Debug)]
+pub struct TrackingVoxelAbsorbingCapsule {
+    pub capsule: VoxelAbsorbingCapsule,
+    pub tracker: VoxelAbsorptionTracker,
+}
+
+#[derive(Clone, Debug)]
+pub struct VoxelAbsorptionTracker {
+    absorbed_voxels_by_type: [AbsorbedVoxels; VoxelTypeRegistry::max_n_voxel_types()],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct AbsorbedVoxels {
+    pub count: u32,
+    pub volume: f32,
 }
 
 #[roc]
@@ -146,11 +197,168 @@ impl VoxelAbsorbingCapsule {
     }
 }
 
+impl VoxelAbsorptionManager {
+    pub fn new() -> Self {
+        Self {
+            spheres: HashMap::default(),
+            capsules: HashMap::default(),
+            sphere_id_counter: 0,
+            capsule_id_counter: 0,
+        }
+    }
+
+    /// Returns a reference to the [`TrackingVoxelAbsorbingSphere`] with the
+    /// given ID, or [`None`] if it does not exist.
+    pub fn get_absorbing_sphere(
+        &self,
+        id: VoxelAbsorbingSphereID,
+    ) -> Option<&TrackingVoxelAbsorbingSphere> {
+        self.spheres.get(&id)
+    }
+
+    /// Returns a mutable reference to the [`TrackingVoxelAbsorbingSphere`] with
+    /// the given ID, or [`None`] if it does not exist.
+    pub fn get_absorbing_sphere_mut(
+        &mut self,
+        id: VoxelAbsorbingSphereID,
+    ) -> Option<&mut TrackingVoxelAbsorbingSphere> {
+        self.spheres.get_mut(&id)
+    }
+
+    /// Returns a reference to the [`TrackingVoxelAbsorbingCapsule`] with the
+    /// given ID, or [`None`] if it does not exist.
+    pub fn get_absorbing_capsule(
+        &self,
+        id: VoxelAbsorbingCapsuleID,
+    ) -> Option<&TrackingVoxelAbsorbingCapsule> {
+        self.capsules.get(&id)
+    }
+
+    /// Returns a mutable reference to the [`TrackingVoxelAbsorbingCapsule`] with
+    /// the given ID, or [`None`] if it does not exist.
+    pub fn get_absorbing_capsule_mut(
+        &mut self,
+        id: VoxelAbsorbingCapsuleID,
+    ) -> Option<&mut TrackingVoxelAbsorbingCapsule> {
+        self.capsules.get_mut(&id)
+    }
+
+    /// Adds the given [`VoxelAbsorbingSphere`] to the manager.
+    ///
+    /// # Returns
+    /// A new [`VoxelAbsorbingSphereID`] referring to the added sphere.
+    pub fn add_absorbing_sphere(&mut self, sphere: VoxelAbsorbingSphere) -> VoxelAbsorbingSphereID {
+        let id = self.create_new_absorbing_sphere_id();
+        self.spheres
+            .insert(id, TrackingVoxelAbsorbingSphere::new(sphere));
+        id
+    }
+
+    /// Adds the given [`VoxelAbsorbingCapsule`] to the manager.
+    ///
+    /// # Returns
+    /// A new [`VoxelAbsorbingCapsuleID`] referring to the added capsule.
+    pub fn add_absorbing_capsule(
+        &mut self,
+        capsule: VoxelAbsorbingCapsule,
+    ) -> VoxelAbsorbingCapsuleID {
+        let id = self.create_new_absorbing_capsule_id();
+        self.capsules
+            .insert(id, TrackingVoxelAbsorbingCapsule::new(capsule));
+        id
+    }
+
+    /// Removes the [`VoxelAbsorbingSphere`] with the given ID from the manager
+    /// if it exists.
+    pub fn remove_absorbing_sphere(&mut self, id: VoxelAbsorbingSphereID) {
+        self.spheres.remove(&id);
+    }
+
+    /// Removes the [`VoxelAbsorbingCapsule`] with the given ID from the manager
+    /// if it exists.
+    pub fn remove_absorbing_capsule(&mut self, id: VoxelAbsorbingCapsuleID) {
+        self.capsules.remove(&id);
+    }
+
+    /// Removes all stored voxel absorbers.
+    pub fn remove_all_absorbers(&mut self) {
+        self.spheres.clear();
+        self.capsules.clear();
+    }
+
+    fn create_new_absorbing_sphere_id(&mut self) -> VoxelAbsorbingSphereID {
+        let id = VoxelAbsorbingSphereID(self.sphere_id_counter);
+        self.sphere_id_counter = self.sphere_id_counter.checked_add(1).unwrap();
+        id
+    }
+
+    fn create_new_absorbing_capsule_id(&mut self) -> VoxelAbsorbingCapsuleID {
+        let id = VoxelAbsorbingCapsuleID(self.capsule_id_counter);
+        self.capsule_id_counter = self.capsule_id_counter.checked_add(1).unwrap();
+        id
+    }
+}
+
+impl TrackingVoxelAbsorbingSphere {
+    pub fn new(sphere: VoxelAbsorbingSphere) -> Self {
+        Self {
+            sphere,
+            tracker: VoxelAbsorptionTracker::new(),
+        }
+    }
+}
+
+impl TrackingVoxelAbsorbingCapsule {
+    pub fn new(capsule: VoxelAbsorbingCapsule) -> Self {
+        Self {
+            capsule,
+            tracker: VoxelAbsorptionTracker::new(),
+        }
+    }
+}
+
+impl VoxelAbsorptionTracker {
+    pub fn new() -> Self {
+        Self {
+            absorbed_voxels_by_type: [AbsorbedVoxels::zero();
+                VoxelTypeRegistry::max_n_voxel_types()],
+        }
+    }
+
+    pub fn absorbed_voxels_by_type(
+        &self,
+    ) -> &[AbsorbedVoxels; VoxelTypeRegistry::max_n_voxel_types()] {
+        &self.absorbed_voxels_by_type
+    }
+
+    pub fn register_absorbed_voxel(&mut self, voxel_volume: f32, voxel: Voxel) {
+        self.absorbed_voxels_by_type[voxel.voxel_type().idx()].add_absorbed_voxel(voxel_volume);
+    }
+
+    pub fn clear_absorbed(&mut self) {
+        self.absorbed_voxels_by_type.fill(AbsorbedVoxels::zero());
+    }
+}
+
+impl AbsorbedVoxels {
+    pub const fn zero() -> Self {
+        Self {
+            count: 0,
+            volume: 0.0,
+        }
+    }
+
+    pub fn add_absorbed_voxel(&mut self, voxel_volume: f32) {
+        self.count += 1;
+        self.volume += voxel_volume;
+    }
+}
+
 /// Applies each voxel-absorbing sphere and capsule to the affected voxel
 /// objects.
 pub fn apply_absorption<C>(
     context: &mut C,
-    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_manager: &mut VoxelManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
@@ -158,10 +366,37 @@ pub fn apply_absorption<C>(
     C: VoxelObjectInteractionContext,
     <C as VoxelObjectInteractionContext>::EntityID: Clone,
 {
-    let absorbing_spheres = context.gather_voxel_absorbing_sphere_entities();
-    let absorbing_capsules = context.gather_voxel_absorbing_capsule_entities();
+    let voxel_object_manager = &mut voxel_manager.object_manager;
+    let voxel_absorption_manager = voxel_manager.interaction_manager.absorption_manager_mut();
 
-    if absorbing_spheres.is_empty() && absorbing_capsules.is_empty() {
+    let absorbing_sphere_entities = context.gather_voxel_absorbing_sphere_entities();
+    let absorbing_capsule_entities = context.gather_voxel_absorbing_capsule_entities();
+
+    let mut enabled_count = 0;
+
+    for entity in &absorbing_sphere_entities {
+        if let Some(sphere) = voxel_absorption_manager.get_absorbing_sphere_mut(entity.absorber_id)
+        {
+            sphere.tracker.clear_absorbed();
+
+            if entity.sphere_to_world_transform.is_some() {
+                enabled_count += 1;
+            }
+        }
+    }
+    for entity in &absorbing_capsule_entities {
+        if let Some(capsule) =
+            voxel_absorption_manager.get_absorbing_capsule_mut(entity.absorber_id)
+        {
+            capsule.tracker.clear_absorbed();
+
+            if entity.capsule_to_world_transform.is_some() {
+                enabled_count += 1;
+            }
+        }
+    }
+
+    if enabled_count == 0 {
         return;
     }
 
@@ -209,23 +444,39 @@ pub fn apply_absorption<C>(
             voxel_type_registry.mass_densities(),
         );
 
-        for absorbing_sphere in &absorbing_spheres {
+        for entity in &absorbing_sphere_entities {
+            let Some(sphere_to_world_transform) = &entity.sphere_to_world_transform else {
+                continue;
+            };
+            let Some(tracking_absorbing_sphere) =
+                voxel_absorption_manager.get_absorbing_sphere_mut(entity.absorber_id)
+            else {
+                continue;
+            };
             apply_sphere_absorption(
                 &mut inertial_property_updater,
                 voxel_object,
                 &world_to_voxel_object_transform,
-                &absorbing_sphere.sphere,
-                &absorbing_sphere.sphere_to_world_transform,
+                tracking_absorbing_sphere,
+                sphere_to_world_transform,
             );
         }
 
-        for absorbing_capsule in &absorbing_capsules {
+        for entity in &absorbing_capsule_entities {
+            let Some(capsule_to_world_transform) = &entity.capsule_to_world_transform else {
+                continue;
+            };
+            let Some(tracking_absorbing_capsule) =
+                voxel_absorption_manager.get_absorbing_capsule_mut(entity.absorber_id)
+            else {
+                continue;
+            };
             apply_capsule_absorption(
                 &mut inertial_property_updater,
                 voxel_object,
                 &world_to_voxel_object_transform,
-                &absorbing_capsule.capsule,
-                &absorbing_capsule.capsule_to_world_transform,
+                tracking_absorbing_capsule,
+                capsule_to_world_transform,
             );
         }
 
@@ -295,9 +546,14 @@ fn apply_sphere_absorption(
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
     world_to_voxel_object_transform: &Isometry3,
-    absorbing_sphere: &VoxelAbsorbingSphere,
+    tracking_absorbing_sphere: &mut TrackingVoxelAbsorbingSphere,
     sphere_to_world_transform: &Isometry3,
 ) {
+    let absorbing_sphere = &tracking_absorbing_sphere.sphere;
+    let tracker = &mut tracking_absorbing_sphere.tracker;
+
+    let voxel_volume = voxel_object.voxel_extent().powi(3);
+
     let influence_sphere = absorbing_sphere
         .influence_sphere(voxel_object.voxel_extent())
         .aligned();
@@ -317,6 +573,7 @@ fn apply_sphere_absorption(
             voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
                     inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                    tracker.register_absorbed_voxel(voxel_volume, *voxel);
                 }
             });
         },
@@ -327,9 +584,14 @@ fn apply_capsule_absorption(
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     voxel_object: &mut ChunkedVoxelObject,
     world_to_voxel_object_transform: &Isometry3,
-    absorbing_capsule: &VoxelAbsorbingCapsule,
+    tracking_absorbing_capsule: &mut TrackingVoxelAbsorbingCapsule,
     capsule_to_world_transform: &Isometry3,
 ) {
+    let absorbing_capsule = &tracking_absorbing_capsule.capsule;
+    let tracker = &mut tracking_absorbing_capsule.tracker;
+
+    let voxel_volume = voxel_object.voxel_extent().powi(3);
+
     let influence_capsule = absorbing_capsule
         .influence_capsule(voxel_object.voxel_extent())
         .aligned();
@@ -349,6 +611,7 @@ fn apply_capsule_absorption(
             voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
                     inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                    tracker.register_absorbed_voxel(voxel_volume, *voxel);
                 }
             });
         },

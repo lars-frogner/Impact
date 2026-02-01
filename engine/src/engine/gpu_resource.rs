@@ -138,14 +138,14 @@ impl Engine {
         let scene = self.scene().oread();
         let camera_manager = scene.camera_manager().oread();
         let light_manager = scene.light_manager().oread();
-        let mut voxel_object_manager = scene.voxel_object_manager().owrite();
+        let mut voxel_manager = scene.voxel_manager().owrite();
         let mut model_instance_manager = scene.model_instance_manager().owrite();
         let mut renderer = self.renderer().owrite();
 
         renderer.sync_dynamic_gpu_resources(
             &camera_manager,
             &light_manager,
-            &mut voxel_object_manager,
+            voxel_manager.object_manager_mut(),
             &mut model_instance_manager,
         );
         Ok(())

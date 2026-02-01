@@ -8,7 +8,7 @@ use impact_scene::{
     model::{ModelInstanceManager, ModelInstanceManagerState},
     skybox::Skybox,
 };
-use impact_voxel::VoxelObjectManager;
+use impact_voxel::VoxelManager;
 use parking_lot::RwLock;
 
 /// Container for data needed to render a scene.
@@ -17,7 +17,7 @@ pub struct Scene {
     skybox: RwLock<Option<Skybox>>,
     camera_manager: RwLock<CameraManager>,
     light_manager: RwLock<LightManager>,
-    voxel_object_manager: RwLock<VoxelObjectManager>,
+    voxel_manager: RwLock<VoxelManager>,
     model_instance_manager: RwLock<ModelInstanceManager>,
     initial_model_instance_manager_state: ModelInstanceManagerState,
     scene_graph: RwLock<SceneGraph>,
@@ -34,7 +34,7 @@ impl Scene {
             skybox: RwLock::new(None),
             camera_manager: RwLock::new(CameraManager::new(camera_context)),
             light_manager: RwLock::new(LightManager::new()),
-            voxel_object_manager: RwLock::new(VoxelObjectManager::new()),
+            voxel_manager: RwLock::new(VoxelManager::new()),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
             scene_graph: RwLock::new(SceneGraph::new()),
@@ -57,10 +57,9 @@ impl Scene {
         &self.light_manager
     }
 
-    /// Returns a reference to the [`VoxelObjectManager`], guarded by a
-    /// [`RwLock`].
-    pub fn voxel_object_manager(&self) -> &RwLock<VoxelObjectManager> {
-        &self.voxel_object_manager
+    /// Returns a reference to the [`VoxelManager`], guarded by a [`RwLock`].
+    pub fn voxel_manager(&self) -> &RwLock<VoxelManager> {
+        &self.voxel_manager
     }
 
     /// Returns a reference to the [`ModelInstanceManager`], guarded by a
@@ -92,9 +91,7 @@ impl Scene {
 
         self.light_manager.owrite().remove_all_lights();
 
-        self.voxel_object_manager
-            .owrite()
-            .remove_all_voxel_objects();
+        self.voxel_manager.owrite().remove_all_voxel_entities();
 
         self.model_instance_manager
             .owrite()

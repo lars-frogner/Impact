@@ -35,6 +35,8 @@ use std::{
 use utils::{Dimension, Side};
 use voxel_types::VoxelType;
 
+use crate::interaction::VoxelInteractionManager;
+
 define_component_type! {
     /// Identifier for a
     /// [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject) in a
@@ -101,6 +103,13 @@ pub enum VoxelSurfacePlacement {
     Face,
     Edge,
     Corner,
+}
+
+/// Manager of all voxel state in a scene.
+#[derive(Debug)]
+pub struct VoxelManager {
+    pub object_manager: VoxelObjectManager,
+    pub interaction_manager: VoxelInteractionManager,
 }
 
 /// Manager of all [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject)s in
@@ -438,6 +447,47 @@ impl std::fmt::Display for VoxelObjectID {
 }
 
 impl_InstanceFeature!(VoxelObjectID);
+
+impl VoxelManager {
+    /// Creates a new voxel manager with no state.
+    pub fn new() -> Self {
+        Self {
+            object_manager: VoxelObjectManager::new(),
+            interaction_manager: VoxelInteractionManager::new(),
+        }
+    }
+
+    /// Returns a reference to the [`VoxelObjectManager`].
+    #[inline]
+    pub fn object_manager(&self) -> &VoxelObjectManager {
+        &self.object_manager
+    }
+
+    /// Returns a mutable reference to the [`VoxelObjectManager`].
+    #[inline]
+    pub fn object_manager_mut(&mut self) -> &mut VoxelObjectManager {
+        &mut self.object_manager
+    }
+
+    /// Returns a reference to the [`VoxelInteractionManager`].
+    #[inline]
+    pub fn interaction_manager(&self) -> &VoxelInteractionManager {
+        &self.interaction_manager
+    }
+
+    /// Returns a mutable reference to the [`VoxelInteractionManager`].
+    #[inline]
+    pub fn interaction_manager_mut(&mut self) -> &mut VoxelInteractionManager {
+        &mut self.interaction_manager
+    }
+
+    /// Removes all voxel objects and interaction entities.
+    #[inline]
+    pub fn remove_all_voxel_entities(&mut self) {
+        self.object_manager.remove_all_voxel_objects();
+        self.interaction_manager.remove_all_interactors();
+    }
+}
 
 impl VoxelObjectManager {
     /// Creates a new voxel object manager with no objects.

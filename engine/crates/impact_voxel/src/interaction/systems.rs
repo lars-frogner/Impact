@@ -1,12 +1,12 @@
 //! ECS systems for driving voxel object interaction.
 
 use crate::{
-    VoxelObjectID, VoxelObjectManager,
+    VoxelManager, VoxelObjectID, VoxelObjectManager,
     collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
     interaction::{
         self, NewVoxelObjectEntity, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
         VoxelObjectEntity, VoxelObjectInteractionContext,
-        absorption::{self, VoxelAbsorbingCapsule, VoxelAbsorbingSphere},
+        absorption::{self, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
     },
     voxel_types::VoxelTypeRegistry,
 };
@@ -70,15 +70,17 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         query!(
             self.ecs_world,
-            |sphere: &VoxelAbsorbingSphere,
+            |absorber_id: &VoxelAbsorbingSphereID,
              reference_frame: &ReferenceFrame,
              flags: &SceneEntityFlags| {
-                if flags.is_disabled() {
-                    return;
-                }
+                let sphere_to_world_transform = if !flags.is_disabled() {
+                    Some(reference_frame.create_transform_to_parent_space())
+                } else {
+                    None
+                };
                 entities.push(VoxelAbsorbingSphereEntity {
-                    sphere: *sphere,
-                    sphere_to_world_transform: reference_frame.create_transform_to_parent_space(),
+                    absorber_id: *absorber_id,
+                    sphere_to_world_transform,
                 });
             },
             ![SceneGraphParentNodeHandle]
@@ -86,23 +88,24 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         query!(
             self.ecs_world,
-            |sphere: &VoxelAbsorbingSphere,
+            |absorber_id: &VoxelAbsorbingSphereID,
              reference_frame: &ReferenceFrame,
              parent: &SceneGraphParentNodeHandle,
              flags: &SceneEntityFlags| {
-                if flags.is_disabled() {
-                    return;
-                }
+                let sphere_to_world_transform = if !flags.is_disabled() {
+                    let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let parent_node = self.scene_graph.group_nodes().node(parent.id);
+                    let group_to_root_transform = parent_node.group_to_root_transform().aligned();
 
-                let group_to_root_transform = parent_node.group_to_root_transform().aligned();
-
-                let sphere_to_world_transform =
-                    group_to_root_transform * reference_frame.create_transform_to_parent_space();
-
+                    Some(
+                        group_to_root_transform
+                            * reference_frame.create_transform_to_parent_space(),
+                    )
+                } else {
+                    None
+                };
                 entities.push(VoxelAbsorbingSphereEntity {
-                    sphere: *sphere,
+                    absorber_id: *absorber_id,
                     sphere_to_world_transform,
                 });
             }
@@ -118,15 +121,17 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         query!(
             self.ecs_world,
-            |capsule: &VoxelAbsorbingCapsule,
+            |absorber_id: &VoxelAbsorbingCapsuleID,
              reference_frame: &ReferenceFrame,
              flags: &SceneEntityFlags| {
-                if flags.is_disabled() {
-                    return;
-                }
+                let capsule_to_world_transform = if !flags.is_disabled() {
+                    Some(reference_frame.create_transform_to_parent_space())
+                } else {
+                    None
+                };
                 entities.push(VoxelAbsorbingCapsuleEntity {
-                    capsule: *capsule,
-                    capsule_to_world_transform: reference_frame.create_transform_to_parent_space(),
+                    absorber_id: *absorber_id,
+                    capsule_to_world_transform,
                 });
             },
             ![SceneGraphParentNodeHandle]
@@ -134,23 +139,24 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         query!(
             self.ecs_world,
-            |capsule: &VoxelAbsorbingCapsule,
+            |absorber_id: &VoxelAbsorbingCapsuleID,
              reference_frame: &ReferenceFrame,
              parent: &SceneGraphParentNodeHandle,
              flags: &SceneEntityFlags| {
-                if flags.is_disabled() {
-                    return;
-                }
+                let capsule_to_world_transform = if !flags.is_disabled() {
+                    let parent_node = self.scene_graph.group_nodes().node(parent.id);
 
-                let parent_node = self.scene_graph.group_nodes().node(parent.id);
+                    let group_to_root_transform = parent_node.group_to_root_transform().aligned();
 
-                let group_to_root_transform = parent_node.group_to_root_transform().aligned();
-
-                let capsule_to_world_transform =
-                    group_to_root_transform * reference_frame.create_transform_to_parent_space();
-
+                    Some(
+                        group_to_root_transform
+                            * reference_frame.create_transform_to_parent_space(),
+                    )
+                } else {
+                    None
+                };
                 entities.push(VoxelAbsorbingCapsuleEntity {
-                    capsule: *capsule,
+                    absorber_id: *absorber_id,
                     capsule_to_world_transform,
                 });
             }
@@ -284,7 +290,7 @@ pub fn apply_absorption(
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
     scene_graph: &SceneGraph,
-    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_manager: &mut VoxelManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
@@ -302,7 +308,7 @@ pub fn apply_absorption(
 
     absorption::apply_absorption(
         &mut interaction_context,
-        voxel_object_manager,
+        voxel_manager,
         voxel_type_registry,
         rigid_body_manager,
         anchor_manager,
