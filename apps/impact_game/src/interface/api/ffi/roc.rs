@@ -26,7 +26,12 @@ pub extern "C" fn roc_lookup_game_target(
             let game = access_game();
             target
                 .lookup_and_write_roc_bytes(&game, target_bytes.as_mut_slice())
-                .with_context(|| format!("Failed looking up game target {target:?}"))?;
+                .with_context(|| {
+                    format!(
+                        "Failed looking up game target {:?}",
+                        GameLookupTarget::from_roc_bytes(target_bytes.as_slice()).unwrap()
+                    )
+                })?;
 
             Ok(target_bytes)
         }),

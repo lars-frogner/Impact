@@ -1,6 +1,7 @@
 //! Player inventory.
 
 use crate::{Game, define_lookup_type};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use roc_integration::roc;
 
@@ -10,6 +11,7 @@ pub struct Inventory {
 }
 
 define_lookup_type! {
+    variant = InventoryMass;
     #[roc(parents = "Lookup")]
     #[repr(C)]
     #[derive(Clone, Copy, Debug, Zeroable, Pod)]
@@ -19,10 +21,10 @@ define_lookup_type! {
 }
 
 impl InventoryMass {
-    pub fn lookup(game: &Game) -> Self {
-        Self {
+    pub fn lookup(game: &Game) -> Result<Self> {
+        Ok(Self {
             mass: game.player.inventory.mass(),
-        }
+        })
     }
 }
 
