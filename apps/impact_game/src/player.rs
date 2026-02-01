@@ -5,7 +5,11 @@ pub mod tools;
 
 use anyhow::{Context, Result, anyhow};
 use impact::{
-    engine::Engine, impact_ecs::world::EntityID, impact_physics::rigid_body::DynamicRigidBody,
+    engine::Engine,
+    impact_ecs::world::EntityID,
+    impact_physics::{
+        force::alignment_torque::AlignmentTorqueGenerator, rigid_body::DynamicRigidBody,
+    },
 };
 use inventory::Inventory;
 
@@ -45,5 +49,18 @@ impl Player {
             .with_context(|| anyhow!("Failed to get `DynamicRigidBodyID` component for player"))?;
 
         engine.with_dynamic_rigid_body(rigid_body_id, f)
+    }
+
+    pub fn with_alignment_torque_generator<R>(
+        engine: &Engine,
+        f: impl FnOnce(&AlignmentTorqueGenerator) -> Result<R>,
+    ) -> Result<R> {
+        let generator_id = engine
+            .get_component_copy(Self::entity_ids().player)
+            .with_context(|| {
+                anyhow!("Failed to get `AlignmentTorqueGeneratorID` component for player")
+            })?;
+
+        engine.with_alignment_torque_generator(generator_id, f)
     }
 }
