@@ -31,8 +31,7 @@ import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.SphericalCollidable
 import pf.Physics.ContactResponseParameters
 import pf.Comp.DynamicGravity
-import pf.Comp.VoxelAbsorbingCapsule
-import pf.Comp.VoxelAbsorbingSphere
+import pf.Setup.VoxelAbsorbingCapsule
 import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
@@ -156,7 +155,7 @@ construct_entities = |parent|
             (laser.right_shift, -laser.down_shift, 0.0),
             UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
         )
-        |> Comp.VoxelAbsorbingCapsule.add_new(
+        |> Setup.VoxelAbsorbingCapsule.add_new(
             Vector3.same(0),
             (0, laser.range, 0),
             laser.absorb_radius,

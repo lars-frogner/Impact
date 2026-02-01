@@ -42,6 +42,7 @@ pub fn setup_scene_data_for_new_entities(
     material::setup_materials_for_new_entities(resource_manager, components)?;
 
     voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, components)?;
+    voxel::setup_voxel_interaction_for_new_entities(scene, components);
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, components);
 

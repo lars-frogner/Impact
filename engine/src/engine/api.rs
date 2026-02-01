@@ -31,7 +31,11 @@ use impact_rendering::{
         temporal_anti_aliasing::TemporalAntiAliasingConfig,
     },
 };
-use impact_voxel::{VoxelObjectID, mesh::MeshedChunkedVoxelObject};
+use impact_voxel::{
+    VoxelObjectID,
+    interaction::absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
+    mesh::MeshedChunkedVoxelObject,
+};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -512,8 +516,9 @@ impl Engine {
     pub fn add_voxel_object(&self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
         self.scene()
             .oread()
-            .voxel_object_manager()
+            .voxel_manager()
             .owrite()
+            .object_manager_mut()
             .add_voxel_object(voxel_object)
     }
 
@@ -525,8 +530,9 @@ impl Engine {
         if let Some(existing_voxel_object) = self
             .scene()
             .oread()
-            .voxel_object_manager()
+            .voxel_manager()
             .owrite()
+            .object_manager_mut()
             .get_voxel_object_mut(voxel_object_id)
         {
             *existing_voxel_object = voxel_object;
@@ -542,9 +548,56 @@ impl Engine {
     pub fn remove_voxel_object(&self, voxel_object_id: VoxelObjectID) {
         self.scene()
             .oread()
-            .voxel_object_manager()
+            .voxel_manager()
             .owrite()
+            .object_manager_mut()
             .remove_voxel_object(voxel_object_id);
+    }
+
+    pub fn with_absorbed_voxels_for_sphere<R>(
+        &self,
+        absorber_id: VoxelAbsorbingSphereID,
+        f: impl FnOnce(&[AbsorbedVoxels], &[f32]) -> Result<R>,
+    ) -> Result<R> {
+        let resource_manager = self.resource_manager().oread();
+        let voxel_type_registry = &resource_manager.voxel_types;
+        let scene = self.scene().oread();
+        let voxel_manager = scene.voxel_manager().oread();
+        let absorption_manager = voxel_manager.interaction_manager.absorption_manager();
+
+        let absorbing_sphere = absorption_manager
+            .get_absorbing_sphere(absorber_id)
+            .ok_or_else(|| anyhow!("Missing voxel absorbing sphere with ID {absorber_id:?}"))?;
+
+        let absorbed_voxels_by_type = absorbing_sphere.tracker.absorbed_voxels_by_type();
+        let mass_densities = voxel_type_registry.mass_densities();
+        f(
+            &absorbed_voxels_by_type[0..mass_densities.len()],
+            mass_densities,
+        )
+    }
+
+    pub fn with_absorbed_voxels_for_capsule<R>(
+        &self,
+        absorber_id: VoxelAbsorbingCapsuleID,
+        f: impl FnOnce(&[AbsorbedVoxels], &[f32]) -> Result<R>,
+    ) -> Result<R> {
+        let resource_manager = self.resource_manager().oread();
+        let voxel_type_registry = &resource_manager.voxel_types;
+        let scene = self.scene().oread();
+        let voxel_manager = scene.voxel_manager().oread();
+        let absorption_manager = voxel_manager.interaction_manager.absorption_manager();
+
+        let absorbing_capsule = absorption_manager
+            .get_absorbing_capsule(absorber_id)
+            .ok_or_else(|| anyhow!("Missing voxel absorbing capsule with ID {absorber_id:?}"))?;
+
+        let absorbed_voxels_by_type = absorbing_capsule.tracker.absorbed_voxels_by_type();
+        let mass_densities = voxel_type_registry.mass_densities();
+        f(
+            &absorbed_voxels_by_type[0..mass_densities.len()],
+            mass_densities,
+        )
     }
 
     pub fn with_component<C: Component, R>(

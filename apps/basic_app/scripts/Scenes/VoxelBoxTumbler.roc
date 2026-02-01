@@ -35,8 +35,8 @@ import pf.Physics.ContactResponseParameters
 import pf.Setup.ConstantAcceleration
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.Motion
-import pf.Comp.VoxelAbsorbingCapsule
-import pf.Comp.VoxelAbsorbingSphere
+import pf.Setup.VoxelAbsorbingCapsule
+import pf.Setup.VoxelAbsorbingSphere
 import pf.Comp.SceneEntityFlags
 import pf.Setup.VoxelBox
 import pf.Setup.VoxelCollidable
@@ -124,7 +124,7 @@ laser =
     |> Setup.CylinderMesh.add_new(100, 0.02, 16)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(5e7)
-    |> Comp.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3)
+    |> Setup.VoxelAbsorbingCapsule.add_new(Vector3.same(0), (0, 100, 0), 0.3)
     |> Comp.SceneEntityFlags.add(
         Comp.SceneEntityFlags.union(
             Comp.SceneEntityFlags.is_disabled,
@@ -141,7 +141,7 @@ absorbing_sphere =
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))
     |> Setup.UniformEmissiveLuminance.add(5e7)
     |> Comp.ShadowableOmnidirectionalEmission.add_new(Vector3.scale((1.0, 0.2, 0.2), 5e6), 0.2)
-    |> Comp.VoxelAbsorbingSphere.add_new(Vector3.same(0), 1)
+    |> Setup.VoxelAbsorbingSphere.add_new(Vector3.same(0), 1)
     |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
 sun_light =

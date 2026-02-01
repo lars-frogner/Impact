@@ -13,7 +13,7 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
-use absorption::{VoxelAbsorbingCapsule, VoxelAbsorbingSphere};
+use absorption::{VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID, VoxelAbsorptionManager};
 use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
 use impact_math::{transform::Isometry3, vector::Vector3};
@@ -61,6 +61,12 @@ pub trait VoxelObjectInteractionContext {
     fn on_empty_voxel_object_entity(&mut self, entity_id: Self::EntityID);
 }
 
+/// Manages voxel interaction processes and state.
+#[derive(Debug)]
+pub struct VoxelInteractionManager {
+    absorption_manager: VoxelAbsorptionManager,
+}
+
 #[derive(Debug)]
 pub struct VoxelObjectEntity<EntityID> {
     pub entity_id: EntityID,
@@ -75,14 +81,14 @@ pub struct NewVoxelObjectEntity {
 
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingSphereEntity {
-    pub sphere: VoxelAbsorbingSphere,
-    pub sphere_to_world_transform: Isometry3,
+    pub absorber_id: VoxelAbsorbingSphereID,
+    pub sphere_to_world_transform: Option<Isometry3>,
 }
 
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingCapsuleEntity {
-    pub capsule: VoxelAbsorbingCapsule,
-    pub capsule_to_world_transform: Isometry3,
+    pub absorber_id: VoxelAbsorbingCapsuleID,
+    pub capsule_to_world_transform: Option<Isometry3>,
 }
 
 #[derive(Debug)]
@@ -100,6 +106,29 @@ struct DynamicDisconnectedVoxelObject {
 }
 
 type Anchors = TinyVec<[(DynamicRigidBodyAnchorID, Position); 4]>;
+
+impl VoxelInteractionManager {
+    pub fn new() -> Self {
+        Self {
+            absorption_manager: VoxelAbsorptionManager::new(),
+        }
+    }
+
+    /// Returns a reference to the [`VoxelAbsorptionManager`].
+    pub fn absorption_manager(&self) -> &VoxelAbsorptionManager {
+        &self.absorption_manager
+    }
+
+    /// Returns a mutable reference to the [`VoxelAbsorptionManager`].
+    pub fn absorption_manager_mut(&mut self) -> &mut VoxelAbsorptionManager {
+        &mut self.absorption_manager
+    }
+
+    /// Removes all voxel interaction entities.
+    pub fn remove_all_interactors(&mut self) {
+        self.absorption_manager.remove_all_absorbers();
+    }
+}
 
 /// Synchronizes a voxel object's model transform with its current inertial
 /// properties.

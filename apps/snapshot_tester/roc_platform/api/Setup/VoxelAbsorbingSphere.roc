@@ -1,5 +1,5 @@
-# Hash: 341e07cfea51d821
-# Generated: 2026-01-23T14:20:59.328504116
+# Hash: b01fad39c1d2e6e6
+# Generated: 2026-02-01T13:17:52.9730234
 # Rust type: impact_voxel::interaction::absorption::VoxelAbsorbingSphere
 # Type category: Component
 module [
@@ -9,11 +9,6 @@ module [
     add_multiple_new,
     add,
     add_multiple,
-    component_id,
-    add_component_id,
-    read,
-    get_for_entity!,
-    set_for_entity!,
     write_bytes,
     from_bytes,
 ]
@@ -87,36 +82,6 @@ add_multiple = |entity_data, comp_values|
         |CountMismatch(new_count, orig_count)|
             "Got ${Inspect.to_str(new_count)} values in VoxelAbsorbingSphere.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
-
-## The ID of the [VoxelAbsorbingSphere] component.
-component_id = 13800759532896143647
-
-## Adds the ID of the [VoxelAbsorbingSphere] component to the component list.
-add_component_id : Entity.ComponentIds -> Entity.ComponentIds
-add_component_id = |component_ids|
-    component_ids |> Entity.append_component_id(component_id)
-
-## Reads the component from the given entity data. 
-read : Entity.ComponentData -> Result VoxelAbsorbingSphere Str
-read = |data|
-    Entity.read_component(data, component_id, from_bytes)
-    |> Result.map_err(
-        |err|
-            when err is
-                ComponentMissing -> "No VoxelAbsorbingSphere component in data"
-                Decode(decode_err) -> "Failed to decode VoxelAbsorbingSphere component: ${Inspect.to_str(decode_err)}",
-    )
-
-## Fetches the value of this component for the given entity.
-get_for_entity! : Entity.Id => Result VoxelAbsorbingSphere Str
-get_for_entity! = |entity_id|
-    Entity.get_component!(entity_id, component_id)? |> read
-
-## Sets the value of this component for the given entity to the
-## specified value.
-set_for_entity! : VoxelAbsorbingSphere, Entity.Id => Result {} Str
-set_for_entity! = |value, entity_id|
-    Entity.new_component_data |> add(value) |> Entity.update!(entity_id)
 
 write_packet : List U8, VoxelAbsorbingSphere -> List U8
 write_packet = |bytes, val|
