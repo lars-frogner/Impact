@@ -166,11 +166,16 @@ impl Capsule {
     /// Returns a new point containment tester for the capsule.
     #[inline]
     pub fn create_point_containment_tester(&self) -> CapsulePointContainmentTester {
+        let segment_length_squared = self.segment_vector.norm_squared();
+        let segment_vector_over_length_squared = if segment_length_squared > 1e-8 {
+            self.segment_vector / segment_length_squared
+        } else {
+            Vector3::zeros()
+        };
         CapsulePointContainmentTester {
             segment_start: self.segment_start,
             segment_vector: self.segment_vector,
-            segment_vector_over_length_squared: self.segment_vector
-                / self.segment_vector.norm_squared(),
+            segment_vector_over_length_squared,
             radius_squared: self.radius.powi(2),
         }
     }
@@ -449,5 +454,22 @@ mod tests {
 
         let computed_aabb = capsule.compute_aabb();
         assert_abs_diff_eq!(computed_aabb, expected_aabb);
+    }
+
+    #[test]
+    fn shortest_squared_distance_from_point_to_segment_is_correct_for_zero_segment() {
+        let segment_start = Point3::new(147.89407, 69.424286, 48.413467);
+        let point = Point3::new(102.5, 84.5, 12.5);
+
+        let capsule = Capsule::new(segment_start, Vector3::zeros(), 62.0);
+
+        let squared_dist = capsule
+            .create_point_containment_tester()
+            .shortest_squared_distance_from_point_to_segment(&point);
+
+        assert_abs_diff_eq!(
+            squared_dist.sqrt(),
+            Point3::distance_between(&segment_start, &point)
+        );
     }
 }
