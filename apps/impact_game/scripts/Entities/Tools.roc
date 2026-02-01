@@ -2,11 +2,11 @@ module [
     ToolEntities,
     thruster,
     laser,
-    absorbing_sphere,
+    absorber,
     projectile,
     spawn!,
+    get_absorbed_mass!,
     spawn_projectile!,
-    update!,
 ]
 
 import core.UnitQuaternion
@@ -35,21 +35,22 @@ import pf.Setup.VoxelAbsorbingCapsule
 import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
+import pf.Lookup.CapsuleAbsorbedVoxelMass
 
 import Util
 
 ToolEntities : {
     laser : Entity.ComponentData,
-    absorbing_sphere : Entity.ComponentData,
+    absorber : Entity.ComponentData,
 }
 
 ToolEntityIds : {
     laser : Entity.Id,
-    absorbing_sphere : Entity.Id,
+    absorber : Entity.Id,
 }
 
 thruster = {
-    force: 1e3,
+    force: 2e3,
 }
 
 laser = {
@@ -62,14 +63,15 @@ laser = {
     absorb_radius: 0.5,
 }
 
-absorbing_sphere = {
+absorber = {
     visual_radius: 0.05,
     color: (0.9, 0.05, 0.05),
     emissive_luminance: 1e6,
     light_color: (1.0, 0.2, 0.2),
     luminous_intensity: 1e5,
-    forward_shift: 3.0,
-    absorb_radius: 1.5,
+    forward_shift: 2.0,
+    absorb_radius: 1.0,
+    stored_fraction: 2e-3,
 }
 
 projectile = {
@@ -79,7 +81,7 @@ projectile = {
     roughness: 0.3,
     luminous_intensity: 1e4,
     speed: 10.0,
-    mass: 10.0,
+    mass: 15.0,
     restitution_coef: 0.4,
     static_friction_coef: 0.6,
     dynamic_friction_coef: 0.6,
@@ -91,9 +93,14 @@ spawn! = |entity_ids, parent|
     ents = construct_entities(parent)
 
     Entity.create_with_id!(ents.laser, entity_ids.laser)?
-    Entity.create_with_id!(ents.absorbing_sphere, entity_ids.absorbing_sphere)?
+    Entity.create_with_id!(ents.absorber, entity_ids.absorber)?
 
     Ok({})
+
+get_absorbed_mass! : ToolEntityIds => Result F32 Str
+get_absorbed_mass! = |entity_ids|
+    absorbed_mass = Lookup.CapsuleAbsorbedVoxelMass.get!(entity_ids.absorber)?.mass
+    Ok(absorbed_mass)
 
 spawn_projectile! : Point3, Vector3, UnitVector3 => Result Vector3 Str
 spawn_projectile! = |position, start_velocity, direction|
@@ -139,10 +146,6 @@ spawn_projectile! = |position, start_velocity, direction|
 
     Ok(reaction_impulse)
 
-update! : ToolEntityIds => Result {} Str
-update! = |entity_ids|
-    Ok({})
-
 construct_entities : Entity.Id -> ToolEntities
 construct_entities = |parent|
     laser_ent =
@@ -167,22 +170,23 @@ construct_entities = |parent|
             ),
         )
 
-    absorbing_sphere_ent =
+    absorber_ent =
         Entity.new_component_data
         |> Setup.SceneParent.add_new(parent)
         |> Setup.SphereMesh.add_new(64)
-        |> Setup.UniformColor.add(absorbing_sphere.color)
-        |> Setup.UniformEmissiveLuminance.add(absorbing_sphere.emissive_luminance)
+        |> Setup.UniformColor.add(absorber.color)
+        |> Setup.UniformEmissiveLuminance.add(absorber.emissive_luminance)
         |> Comp.ShadowableOmnidirectionalEmission.add_new(
-            Vector3.scale(absorbing_sphere.light_color, absorbing_sphere.luminous_intensity),
-            2 * absorbing_sphere.visual_radius,
+            Vector3.scale(absorber.light_color, absorber.luminous_intensity),
+            2 * absorber.visual_radius,
         )
-        |> Comp.ModelTransform.add_with_scale(2 * absorbing_sphere.visual_radius)
-        |> Comp.ReferenceFrame.add_unoriented((0, 0, -absorbing_sphere.forward_shift))
-        |> Comp.VoxelAbsorbingSphere.add_new(
-            Vector3.same(0),
-            absorbing_sphere.absorb_radius,
+        |> Comp.ModelTransform.add_with_scale(2 * absorber.visual_radius)
+        |> Comp.ReferenceFrame.add_unoriented((0, 0, -absorber.forward_shift))
+        |> Setup.VoxelAbsorbingCapsule.add_new(
+            (0, 0, 0),
+            (0, 0, absorber.forward_shift - absorber.absorb_radius),
+            absorber.absorb_radius,
         )
         |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
-    { laser: laser_ent, absorbing_sphere: absorbing_sphere_ent }
+    { laser: laser_ent, absorber: absorber_ent }

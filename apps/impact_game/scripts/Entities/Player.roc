@@ -3,6 +3,7 @@ module [
     player,
     camera,
     spawn!,
+    handle_absorbed_voxels!,
     launch_projectile!,
 ]
 
@@ -16,6 +17,7 @@ import core.Sphere
 
 import pf.Entity
 
+import pf.Command
 import pf.Setup.LocalForce
 import pf.Setup.CapsuleMesh
 import pf.Setup.DynamicRigidBodyInertialProperties
@@ -34,6 +36,7 @@ import pf.Setup.LocalForce
 import pf.Setup.SphericalCollidable
 import pf.Comp.DynamicGravity
 import pf.Setup.FixedDirectionAlignmentTorque
+import pf.Lookup.InventoryMass
 
 import Entities.Tools as Tools
 
@@ -49,7 +52,7 @@ entity_ids = {
     player_head: Entity.id("player_head"),
     tools: {
         laser: Entity.id("player_laser"),
-        absorbing_sphere: Entity.id("player_absorbing_sphere"),
+        absorber: Entity.id("player_absorber"),
     },
 }
 
@@ -86,8 +89,34 @@ spawn! = |position, orientation, velocity|
 
     Ok({})
 
+handle_absorbed_voxels! = |_|
+    inventory_mass = Lookup.InventoryMass.get!({})?.mass
+    _ = dbg(inventory_mass)
+
+    absorbed_mass = Tools.get_absorbed_mass!(entity_ids.tools)?
+    stored_mass = absorbed_mass * Tools.absorber.stored_fraction
+
+    if stored_mass > 0.0 then
+        add_to_body = AddMassRetainingMotion {
+            entity_id: entity_ids.player,
+            additional_mass: stored_mass,
+        }
+        [
+            Engine(Physics(add_to_body)),
+            Game(AddMassToInventory(stored_mass)),
+        ]
+        |> List.for_each_try!(Command.execute!)
+    else
+        Ok({})
+
 launch_projectile! = |_|
-    # TODO: check inventory mass
+    inventory_mass = Lookup.InventoryMass.get!({})?.mass
+
+    if inventory_mass < Tools.projectile.mass then
+        # Not enough mass in inventory for a projectile
+        return Ok([])
+    else
+        {}
 
     (head_position, head_orientation) = get_head_pose!({})?
 
@@ -105,12 +134,18 @@ launch_projectile! = |_|
         relative_position: head_position,
     }
 
-    add_mass = AddMassRetainingMotion {
+    remove_body_mass = AddMassRetainingMotion {
         entity_id: entity_ids.player,
-        additional_mass: Num.neg(Tools.projectile.mass),
+        additional_mass: -Tools.projectile.mass,
     }
 
-    Ok([Engine(Physics(apply_impulse)), Engine(Physics(add_mass))])
+    Ok(
+        [
+            Engine(Physics(apply_impulse)),
+            Engine(Physics(remove_body_mass)),
+            Game(AddMassToInventory(-Tools.projectile.mass)),
+        ],
+    )
 
 get_head_pose! = |_|
     player_frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.player)?

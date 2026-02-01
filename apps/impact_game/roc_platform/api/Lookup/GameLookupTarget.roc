@@ -1,5 +1,5 @@
-# Hash: d147159306d34426
-# Generated: 2026-01-30T20:58:23.953353374
+# Hash: 3a6e7191c47ea4e3
+# Generated: 2026-01-31T22:02:32.218650242
 # Rust type: impact_game::lookup::GameLookupTarget
 # Type category: Inline
 module [
@@ -9,10 +9,17 @@ module [
     from_bytes,
 ]
 
+import Entity
 import Lookup
 
 GameLookupTarget : [
     InventoryMass,
+    SphereAbsorbedVoxelMass {
+            entity_id : Entity.Id,
+        },
+    CapsuleAbsorbedVoxelMass {
+            entity_id : Entity.Id,
+        },
 ]
 
 lookup! : GameLookupTarget, _ => _
@@ -26,17 +33,46 @@ write_bytes = |bytes, value|
     when value is
         InventoryMass ->
             bytes
-            |> List.reserve(1)
+            |> List.reserve(9)
             |> List.append(0)
+            |> List.concat(List.repeat(0, 8))
+
+        SphereAbsorbedVoxelMass { entity_id } ->
+            bytes
+            |> List.reserve(9)
+            |> List.append(1)
+            |> Entity.write_bytes_id(entity_id)
+
+        CapsuleAbsorbedVoxelMass { entity_id } ->
+            bytes
+            |> List.reserve(9)
+            |> List.append(2)
+            |> Entity.write_bytes_id(entity_id)
 
 ## Deserializes a value of [GameLookupTarget] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result GameLookupTarget _
 from_bytes = |bytes|
-    if List.len(bytes) != 1 then
+    if List.len(bytes) != 9 then
         Err(InvalidNumberOfBytes)
     else
         when bytes is
             [0, ..] -> Ok(InventoryMass)
+            [1, .. as data_bytes] ->
+                Ok(
+                    SphereAbsorbedVoxelMass     {
+                        entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+                    },
+                )
+
+
+            [2, .. as data_bytes] ->
+                Ok(
+                    CapsuleAbsorbedVoxelMass     {
+                        entity_id: data_bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
+                    },
+                )
+
+
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

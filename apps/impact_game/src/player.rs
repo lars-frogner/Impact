@@ -1,6 +1,7 @@
 //! Player character.
 
 pub mod inventory;
+pub mod tools;
 
 use inventory::Inventory;
 
