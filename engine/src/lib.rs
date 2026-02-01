@@ -42,6 +42,7 @@ pub use impact_material;
 pub use impact_math;
 pub use impact_mesh;
 pub use impact_model;
+pub use impact_physics;
 pub use impact_rendering;
 pub use impact_scene;
 pub use impact_thread;

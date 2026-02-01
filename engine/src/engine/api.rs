@@ -18,7 +18,10 @@ use impact_ecs::{
     },
     world::EntityID,
 };
-use impact_physics::constraint::solver::ConstraintSolverConfig;
+use impact_physics::{
+    constraint::solver::ConstraintSolverConfig,
+    rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
+};
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::RenderAttachmentQuantity,
@@ -511,6 +514,21 @@ impl Engine {
     /// Returns whether render pass timings are enabled.
     pub fn render_pass_timings_enabled(&self) -> bool {
         self.renderer().oread().basic_config().timings_enabled
+    }
+
+    pub fn with_dynamic_rigid_body<R>(
+        &self,
+        rigid_body_id: DynamicRigidBodyID,
+        f: impl FnOnce(&DynamicRigidBody) -> Result<R>,
+    ) -> Result<R> {
+        let simulator = self.simulator().oread();
+        let rigid_body_manager = simulator.rigid_body_manager().oread();
+
+        let rigid_body = rigid_body_manager
+            .get_dynamic_rigid_body(rigid_body_id)
+            .ok_or_else(|| anyhow!("Missing dynamic rigid body with ID {rigid_body_id:?}"))?;
+
+        f(rigid_body)
     }
 
     pub fn add_voxel_object(&self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {

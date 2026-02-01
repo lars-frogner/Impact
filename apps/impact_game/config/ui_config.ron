@@ -1,3 +1,4 @@
 (
+    interactive: false,
     disable_cursor_capture: false,
 )

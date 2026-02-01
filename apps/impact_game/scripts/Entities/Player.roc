@@ -90,9 +90,6 @@ spawn! = |position, orientation, velocity|
     Ok({})
 
 handle_absorbed_voxels! = |_|
-    inventory_mass = Lookup.InventoryMass.get!({})?.mass
-    _ = dbg(inventory_mass)
-
     absorbed_mass = Tools.get_absorbed_mass!(entity_ids.tools)?
     stored_mass = absorbed_mass * Tools.absorber.stored_fraction
 

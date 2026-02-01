@@ -34,7 +34,7 @@ impl SphereAbsorbedVoxelMass {
             anyhow!("Failed to get `VoxelAbsorbingSphereID` component for looking up absorbed mass")
         })?;
 
-        game.engine().with_absorbed_voxels_for_sphere(
+        engine.with_absorbed_voxels_for_sphere(
             absorber_id,
             |absorbed_voxels_by_type, mass_densities_by_type| {
                 let mass = absorbed_voxels_by_type

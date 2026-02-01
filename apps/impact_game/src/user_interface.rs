@@ -1,11 +1,15 @@
 //! User interface.
 
+mod player_state;
+
 use crate::{Game, GameOptions};
 use impact::{egui, engine::Engine};
 use impact_dev_ui::{
     CustomElements, UICommandQueue, UserInterface as DevUserInterface,
     option_panels::{option_group, option_panel},
+    overlay::{Corner, TextOverlay},
 };
+use player_state::DisplayedPlayerState;
 
 pub static UI_COMMANDS: UICommandQueue = UICommandQueue::new();
 
@@ -17,6 +21,7 @@ pub struct UserInterface {
 #[derive(Debug)]
 struct GameUserInterface<'a> {
     options: &'a mut GameOptions,
+    player_state: Option<DisplayedPlayerState>,
 }
 
 impl Game {
@@ -25,7 +30,14 @@ impl Game {
         ctx: &egui::Context,
         input: egui::RawInput,
     ) -> egui::FullOutput {
-        let mut game_ui = GameUserInterface::new(&mut self.game_options);
+        let player_state = match DisplayedPlayerState::gather(self) {
+            Ok(state) => Some(state),
+            Err(error) => {
+                log::error!("Failed to get player state for UI: {error}");
+                None
+            }
+        };
+        let mut game_ui = GameUserInterface::new(&mut self.game_options, player_state);
 
         self.user_interface.run(
             ctx,
@@ -59,13 +71,16 @@ impl UserInterface {
         game_ui: &mut GameUserInterface<'_>,
     ) -> egui::FullOutput {
         self.dev_ui
-            .run_with_custom_panels(ctx, input, engine, command_queue, game_options)
+            .run_with_custom_elements(ctx, input, engine, command_queue, game_ui)
     }
 }
 
 impl<'a> GameUserInterface<'a> {
-    fn new(options: &'a mut GameOptions) -> Self {
-        Self { options }
+    fn new(options: &'a mut GameOptions, player_state: Option<DisplayedPlayerState>) -> Self {
+        Self {
+            options,
+            player_state,
+        }
     }
 
     fn run_game_options(&mut self, ui: &mut egui::Ui) {
@@ -106,5 +121,19 @@ impl<'a> CustomElements for GameUserInterface<'a> {
                 self.run_game_options(ui);
             });
         });
+    }
+
+    fn run_overlays(&mut self, ctx: &egui::Context) {
+        let Some(player_state) = &self.player_state else {
+            return;
+        };
+
+        let acceleration_text = format!("Acceleration: {:.1} m/s²", player_state.acceleration);
+        let inventory_mass_text = format!("Inventory: {:.1} kg", player_state.inventory_mass);
+
+        TextOverlay::new(egui::Id::new("game_overlay"))
+            .corner(Corner::BottomLeft)
+            .offset(egui::vec2(10.0, 10.0))
+            .show_lines(ctx, &[&acceleration_text, &inventory_mass_text]);
     }
 }
