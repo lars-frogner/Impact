@@ -26,6 +26,21 @@ define_lookup_type! {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Launcher {
+    launch_speed: f32,
+}
+
+define_lookup_type! {
+    variant = LauncherLaunchSpeed;
+    #[roc(parents = "Lookup")]
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Zeroable, Pod)]
+    pub struct LauncherLaunchSpeed {
+        speed: f32,
+    }
+}
+
 impl SphereAbsorbedVoxelMass {
     pub fn lookup(game: &Game, entity_id: EntityID) -> Result<Self> {
         let engine = game.engine();
@@ -72,5 +87,27 @@ impl CapsuleAbsorbedVoxelMass {
                 Ok(Self { mass })
             },
         )
+    }
+}
+
+impl Launcher {
+    pub fn new() -> Self {
+        Self { launch_speed: 0.0 }
+    }
+
+    pub fn launch_speed(&self) -> f32 {
+        self.launch_speed
+    }
+
+    pub fn set_launch_speed(&mut self, launch_speed: f32) {
+        self.launch_speed = launch_speed;
+    }
+}
+
+impl LauncherLaunchSpeed {
+    pub fn lookup(game: &Game) -> Result<Self> {
+        Ok(Self {
+            speed: game.player.launcher.launch_speed(),
+        })
     }
 }

@@ -1,5 +1,5 @@
-# Hash: c1a47b5a6eadea0c
-# Generated: 2026-01-25T13:07:28.75818708
+# Hash: b486f17a300779b9
+# Generated: 2026-02-01T20:43:19.603855004
 # Rust type: impact_game::command::GameCommand
 # Type category: Inline
 module [
@@ -14,6 +14,7 @@ import core.Builtin
 GameCommand : [
     SetInteractionMode Game.InteractionMode.InteractionMode,
     AddMassToInventory F32,
+    SetLauncherLaunchSpeed F32,
 ]
 
 ## Serializes a value of [GameCommand] into the binary representation
@@ -34,6 +35,12 @@ write_bytes = |bytes, value|
             |> List.append(1)
             |> Builtin.write_bytes_f32(val)
 
+        SetLauncherLaunchSpeed(val) ->
+            bytes
+            |> List.reserve(5)
+            |> List.append(2)
+            |> Builtin.write_bytes_f32(val)
+
 ## Deserializes a value of [GameCommand] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result GameCommand _
@@ -52,6 +59,13 @@ from_bytes = |bytes|
             [1, .. as data_bytes] ->
                 Ok(
                     AddMassToInventory(
+                        data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+                    ),
+                )
+
+            [2, .. as data_bytes] ->
+                Ok(
+                    SetLauncherLaunchSpeed(
                         data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
                     ),
                 )

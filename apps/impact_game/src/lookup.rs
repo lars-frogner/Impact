@@ -90,7 +90,7 @@ macro_rules! define_lookup_type {
 
 use crate::player::{
     inventory::InventoryMass,
-    tools::{CapsuleAbsorbedVoxelMass, SphereAbsorbedVoxelMass},
+    tools::{CapsuleAbsorbedVoxelMass, LauncherLaunchSpeed, SphereAbsorbedVoxelMass},
 };
 use impact::impact_ecs::world::EntityID;
 use roc_integration::roc;
@@ -102,5 +102,6 @@ define_lookup_target_enum! {
         InventoryMass,
         SphereAbsorbedVoxelMass { entity_id: EntityID },
         CapsuleAbsorbedVoxelMass { entity_id: EntityID },
+        LauncherLaunchSpeed,
     }
 }

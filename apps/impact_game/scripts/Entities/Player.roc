@@ -37,6 +37,7 @@ import pf.Setup.SphericalCollidable
 import pf.Comp.DynamicGravity
 import pf.Setup.FixedDirectionAlignmentTorque
 import pf.Lookup.InventoryMass
+import pf.Lookup.LauncherLaunchSpeed
 
 import Entities.Tools as Tools
 
@@ -119,11 +120,14 @@ launch_projectile! = |_|
 
     player_motion = Comp.Motion.get_for_entity!(entity_ids.player)?
 
+    launch_speed = Lookup.LauncherLaunchSpeed.get!({})?.speed
+
     reaction_impulse = Tools.spawn_projectile!(
         entity_ids.player,
         head_position,
         player_motion.linear_velocity,
         UnitQuaternion.rotate_vector(head_orientation, UnitVector3.neg_unit_z),
+        launch_speed,
     )?
 
     apply_impulse = ApplyImpulse {

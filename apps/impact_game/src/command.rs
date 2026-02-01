@@ -13,6 +13,7 @@ pub type GameCommandQueue = CommandQueue<GameCommand>;
 pub enum GameCommand {
     SetInteractionMode(InteractionMode),
     AddMassToInventory(f32),
+    SetLauncherLaunchSpeed(f32),
 }
 
 impl Game {
@@ -25,6 +26,10 @@ impl Game {
             GameCommand::AddMassToInventory(additional_mass) => {
                 log::debug!("Adding mass {additional_mass} to inventory");
                 self.player.inventory.add_mass(additional_mass);
+            }
+            GameCommand::SetLauncherLaunchSpeed(launch_speed) => {
+                log::debug!("Setting launch speed to {launch_speed}");
+                self.player.launcher.set_launch_speed(launch_speed);
             }
         });
     }
