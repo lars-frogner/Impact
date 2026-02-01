@@ -48,6 +48,6 @@ impl UserInterface {
         command_queue: &UICommandQueue,
     ) -> egui::FullOutput {
         self.dev_ui
-            .run_with_custom_panels(ctx, input, engine, command_queue, &mut self.editor)
+            .run_with_custom_elements(ctx, input, engine, command_queue, &mut self.editor)
     }
 }
