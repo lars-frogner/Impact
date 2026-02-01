@@ -1,4 +1,4 @@
-use crate::{CustomPanels, UserInterfaceConfig};
+use crate::{CustomElements, UserInterfaceConfig};
 use impact::{
     command::{AdminCommand, instrumentation::InstrumentationAdminCommand, uils::ToActiveState},
     egui::{Context, Frame, TopBottomPanel},
@@ -14,7 +14,7 @@ impl Toolbar {
         ctx: &Context,
         config: &mut UserInterfaceConfig,
         engine: &Engine,
-        custom_panels: &mut impl CustomPanels,
+        custom_panels: &mut impl CustomElements,
     ) {
         TopBottomPanel::top("toolbar_panel")
             .frame(Frame {

@@ -9,11 +9,10 @@ use impact::{
         Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, Response, TextEdit, Ui,
         Vec2,
     },
-    engine::Engine,
     impact_alloc::{Allocator, arena::ArenaPool},
 };
 use impact_dev_ui::{
-    CustomPanels, UserInterfaceConfig as DevUserInterfaceConfig,
+    CustomElements,
     option_panels::{
         LabelAndHoverText, labeled_option, option_checkbox, option_group, option_panel,
     },
@@ -300,12 +299,12 @@ impl Editor {
     }
 }
 
-impl CustomPanels for Editor {
+impl CustomElements for Editor {
     fn run_toolbar_buttons(&mut self, ui: &mut Ui) {
         ui.toggle_value(&mut self.config.show_editor, "Voxel editor");
     }
 
-    fn run_panels(&mut self, ctx: &Context, config: &DevUserInterfaceConfig, _engine: &Engine) {
+    fn run_option_panels(&mut self, ctx: &Context, alpha: f32) {
         if !self.config.show_editor {
             return;
         }
@@ -322,7 +321,7 @@ impl CustomPanels for Editor {
             });
         }
 
-        option_panel(ctx, "Editor panel", config.alpha, |ui| {
+        option_panel(ctx, "Editor panel", alpha, |ui| {
             if let Some(path) = &self.last_graph_path {
                 option_group(ui, "file", |ui| {
                     ui.label(path.file_stem_string.trim_end_matches(".graph"))

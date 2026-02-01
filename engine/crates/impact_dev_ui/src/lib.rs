@@ -4,6 +4,7 @@
 
 mod command;
 pub mod option_panels;
+pub mod overlay;
 mod time_overlay;
 mod timing_panels;
 mod toolbar;
@@ -64,14 +65,16 @@ pub struct UserInterfaceConfig {
     pub hide_ui_during_screenshots: bool,
 }
 
-pub trait CustomPanels {
-    fn run_toolbar_buttons(&mut self, ui: &mut Ui);
+pub trait CustomElements {
+    fn run_toolbar_buttons(&mut self, _ui: &mut Ui) {}
 
-    fn run_panels(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine);
+    fn run_option_panels(&mut self, _ctx: &Context, _alpha: f32) {}
+
+    fn run_overlays(&mut self, _ctx: &Context) {}
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NoCustomPanels;
+pub struct NoCustomElements;
 
 impl UserInterface {
     pub fn new(config: UserInterfaceConfig) -> Self {
@@ -104,16 +107,16 @@ impl UserInterface {
         engine: &Engine,
         command_queue: &UICommandQueue,
     ) -> FullOutput {
-        self.run_with_custom_panels(ctx, input, engine, command_queue, &mut NoCustomPanels)
+        self.run_with_custom_elements(ctx, input, engine, command_queue, &mut NoCustomElements)
     }
 
-    pub fn run_with_custom_panels(
+    pub fn run_with_custom_elements(
         &mut self,
         ctx: &Context,
         input: RawInput,
         engine: &Engine,
         command_queue: &UICommandQueue,
-        custom_panels: &mut impl CustomPanels,
+        custom_elements: &mut impl CustomElements,
     ) -> FullOutput {
         let mut output = ctx.run(input, |ctx| {
             // Return without adding any output if we requested a screenshot in
@@ -127,7 +130,7 @@ impl UserInterface {
 
             if self.config.interactive {
                 self.toolbar
-                    .run(ctx, &mut self.config, engine, custom_panels);
+                    .run(ctx, &mut self.config, engine, custom_elements);
 
                 if self.config.show_ui_options {
                     self.ui_option_panel.run(ctx, &mut self.config);
@@ -157,12 +160,14 @@ impl UserInterface {
                 if self.config.show_render_pass_timings {
                     self.render_pass_timing_panel.run(ctx, &self.config, engine);
                 }
-                custom_panels.run_panels(ctx, &self.config, engine);
+                custom_elements.run_option_panels(ctx, self.config.alpha);
             }
 
             if self.config.show_time_overlay {
                 self.time_overlay.run(ctx, engine);
             }
+
+            custom_elements.run_overlays(ctx);
 
             // Re-disable the simulation if we requested a single step in the
             // previous frame
@@ -212,8 +217,4 @@ impl Default for UserInterfaceConfig {
     }
 }
 
-impl CustomPanels for NoCustomPanels {
-    fn run_toolbar_buttons(&mut self, _ui: &mut Ui) {}
-
-    fn run_panels(&mut self, _ctx: &Context, _config: &UserInterfaceConfig, _engine: &Engine) {}
-}
+impl CustomElements for NoCustomElements {}

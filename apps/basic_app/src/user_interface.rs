@@ -3,7 +3,7 @@
 use crate::{App, AppOptions};
 use impact::{egui, engine::Engine};
 use impact_dev_ui::{
-    CustomPanels, UICommandQueue, UserInterface as DevUserInterface, UserInterfaceConfig,
+    CustomElements, UICommandQueue, UserInterface as DevUserInterface,
     option_panels::{option_group, option_panel},
 };
 
@@ -52,20 +52,20 @@ impl UserInterface {
         app_options: &mut AppOptions,
     ) -> egui::FullOutput {
         self.dev_ui
-            .run_with_custom_panels(ctx, input, engine, command_queue, app_options)
+            .run_with_custom_elements(ctx, input, engine, command_queue, app_options)
     }
 }
 
-impl CustomPanels for AppOptions {
+impl CustomElements for AppOptions {
     fn run_toolbar_buttons(&mut self, ui: &mut egui::Ui) {
         ui.toggle_value(&mut self.show_app_options, "App options");
     }
 
-    fn run_panels(&mut self, ctx: &egui::Context, config: &UserInterfaceConfig, _engine: &Engine) {
+    fn run_option_panels(&mut self, ctx: &egui::Context, alpha: f32) {
         if !self.show_app_options {
             return;
         }
-        option_panel(ctx, "app_option_panel", config.alpha, |ui| {
+        option_panel(ctx, "app_option_panel", alpha, |ui| {
             option_group(ui, "app_options", |ui| {
                 self.run_app_options(ui);
             });
