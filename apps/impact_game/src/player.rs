@@ -12,10 +12,12 @@ use impact::{
     },
 };
 use inventory::Inventory;
+use tools::Launcher;
 
 #[derive(Clone, Debug)]
 pub struct Player {
     pub inventory: Inventory,
+    pub launcher: Launcher,
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +39,7 @@ impl Player {
     pub fn new() -> Self {
         Self {
             inventory: Inventory::empty(),
+            launcher: Launcher::new(),
         }
     }
 

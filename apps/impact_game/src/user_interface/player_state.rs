@@ -11,6 +11,7 @@ pub(crate) struct DisplayedPlayerState {
     pub alignment_direction: &'static str,
     pub acceleration: AccelerationC,
     pub inventory_mass: f32,
+    pub launch_speed: f32,
 }
 
 impl DisplayedPlayerState {
@@ -32,11 +33,13 @@ impl DisplayedPlayerState {
         let acceleration = force / mass;
 
         let inventory_mass = game.player.inventory.mass();
+        let launch_speed = game.player.launcher.launch_speed();
 
         Ok(Self {
             alignment_direction,
             acceleration,
             inventory_mass,
+            launch_speed,
         })
     }
 }

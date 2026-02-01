@@ -15,6 +15,7 @@ import Control.Overview
 import Entities.Player as Player
 import Entities.FreeCamera as FreeCamera
 import Entities.OverviewCamera as OverviewCamera
+import Entities.Tools as Tools
 
 handle_button_event! : InputContext, MouseButtonEvent => Result {} Str
 handle_button_event! = |ctx, event|
@@ -32,7 +33,7 @@ handle_drag_event! = |ctx, event|
 handle_scroll_event! : InputContext, MouseScrollEvent => Result {} Str
 handle_scroll_event! = |ctx, event|
     when ctx.interaction_mode is
-        Player | FreeCamera -> Ok({})
+        Player | FreeCamera -> handle_scroll_event_player_and_free_camera_mode!(event)
         OverviewCamera -> handle_scroll_event_overview_camera_mode!(event)
 
 handle_button_event_player_mode! = |{ button, state }|
@@ -50,6 +51,9 @@ handle_button_event_player_mode! = |{ button, state }|
             )
 
         _ -> Ok({})
+
+handle_scroll_event_player_and_free_camera_mode! = |event|
+    Tools.adjust_launch_speed!(Num.to_f32(event.delta_y))
 
 handle_button_event_free_camera_mode! = |{ button, state }|
     when button is

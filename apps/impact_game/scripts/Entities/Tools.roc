@@ -3,18 +3,22 @@ module [
     thruster,
     laser,
     absorber,
+    launcher,
     projectile,
     spawn!,
     get_absorbed_mass!,
+    adjust_launch_speed!,
     spawn_projectile!,
 ]
 
+import core.NumUtil
 import core.UnitQuaternion
 import core.Point3 exposing [Point3]
 import core.Vector3 exposing [Vector3]
 import core.UnitVector3 exposing [UnitVector3]
 import core.Sphere
 
+import pf.Command
 import pf.Entity
 
 import pf.Comp.RemovalBeyondDistance
@@ -37,6 +41,7 @@ import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
 import pf.Lookup.CapsuleAbsorbedVoxelMass
+import pf.Lookup.LauncherLaunchSpeed
 
 import Util
 
@@ -75,13 +80,18 @@ absorber = {
     stored_fraction: 2e-3,
 }
 
+launcher = {
+    initial_launch_speed: 15.0,
+    max_launch_speed: 30.0,
+    scroll_sensitivity: 2e-2,
+}
+
 projectile = {
     radius: 0.3,
     color: (1.0, 0.78, 0.043),
     specular_reflectance_percent: 50.0,
     roughness: 0.3,
     luminous_intensity: 1e4,
-    speed: 10.0,
     mass: 15.0,
     restitution_coef: 0.4,
     static_friction_coef: 0.6,
@@ -97,6 +107,8 @@ spawn! = |entity_ids, parent|
     Entity.create_with_id!(ents.laser, entity_ids.laser)?
     Entity.create_with_id!(ents.absorber, entity_ids.absorber)?
 
+    Command.execute!(Game(SetLauncherLaunchSpeed(launcher.initial_launch_speed)))?
+
     Ok({})
 
 get_absorbed_mass! : ToolEntityIds => Result F32 Str
@@ -104,10 +116,28 @@ get_absorbed_mass! = |entity_ids|
     absorbed_mass = Lookup.CapsuleAbsorbedVoxelMass.get!(entity_ids.absorber)?.mass
     Ok(absorbed_mass)
 
-spawn_projectile! : Entity.Id, Point3, Vector3, UnitVector3 => Result Vector3 Str
-spawn_projectile! = |parent, position, start_velocity, direction|
+adjust_launch_speed! : F32 => Result {} Str
+adjust_launch_speed! = |scroll_delta|
+    launch_speed = Lookup.LauncherLaunchSpeed.get!({})?.speed
+
+    increment = Num.sqrt(launch_speed) * launcher.scroll_sensitivity * scroll_delta
+
+    clamped_increment = if scroll_delta > 0.0 then
+        Num.max(increment, 1.0)
+    else
+        Num.min(increment, -1.0)
+
+    new_launch_speed = NumUtil.clamp(launch_speed + clamped_increment, 0.0, launcher.max_launch_speed)
+
+    if Num.is_approx_eq(new_launch_speed, launch_speed, { atol: 0, rtol: 0 }) then
+        Ok({})
+    else
+        Command.execute!(Game(SetLauncherLaunchSpeed(new_launch_speed)))
+
+spawn_projectile! : Entity.Id, Point3, Vector3, UnitVector3, F32 => Result Vector3 Str
+spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
     launch_position = Vector3.add(position, Vector3.scale(direction, projectile.forward_shift))
-    launch_velocity = Vector3.add(start_velocity, Vector3.scale(direction, projectile.speed))
+    launch_velocity = Vector3.add(start_velocity, Vector3.scale(direction, launch_speed))
 
     projectile_ent =
         Entity.new_component_data

@@ -18,6 +18,7 @@ import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
 import pf.Setup.SceneGraphGroup
 import pf.Comp.Motion
+import pf.Lookup.LauncherLaunchSpeed
 
 import Entities.Tools as Tools
 
@@ -53,11 +54,14 @@ launch_projectile! = |_|
     frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.camera)?
     motion = Comp.Motion.get_for_entity!(entity_ids.camera)?
 
+    launch_speed = Lookup.LauncherLaunchSpeed.get!({})?.speed
+
     _ = Tools.spawn_projectile!(
         entity_ids.camera,
         frame.position,
         motion.linear_velocity,
         UnitQuaternion.rotate_vector(frame.orientation, UnitVector3.neg_unit_z),
+        launch_speed,
     )?
 
     Ok({})

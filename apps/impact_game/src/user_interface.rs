@@ -139,7 +139,9 @@ impl<'a> CustomElements for GameUserInterface<'a> {
             player_state.acceleration.z()
         );
 
-        let inventory_mass_text = format!("Inventory: {:.1} kg", player_state.inventory_mass);
+        let inventory_mass_text = format!("Inventory: {:.1} kg\n", player_state.inventory_mass);
+
+        let launch_speed_text = format!("Launch speed: {:.1} m/s", player_state.launch_speed);
 
         TextOverlay::new(egui::Id::new("game_overlay"))
             .corner(Corner::BottomLeft)
@@ -152,6 +154,7 @@ impl<'a> CustomElements for GameUserInterface<'a> {
                     &acceleration_y_text,
                     &acceleration_z_text,
                     &inventory_mass_text,
+                    &launch_speed_text,
                 ],
             );
     }
