@@ -120,6 +120,7 @@ launch_projectile! = |_|
     player_motion = Comp.Motion.get_for_entity!(entity_ids.player)?
 
     reaction_impulse = Tools.spawn_projectile!(
+        entity_ids.player,
         head_position,
         player_motion.linear_velocity,
         UnitQuaternion.rotate_vector(head_orientation, UnitVector3.neg_unit_z),

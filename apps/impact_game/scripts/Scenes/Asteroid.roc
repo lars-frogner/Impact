@@ -17,6 +17,7 @@ import pf.Game.SetupContext exposing [SetupContext]
 
 import pf.Skybox
 import pf.Texture.TextureID
+import pf.Comp.RemovalBeyondDistance
 import pf.Comp.ReferenceFrame
 import pf.Comp.Motion
 import pf.Physics.AngularVelocity as AngularVelocity
@@ -102,6 +103,7 @@ star_light_ent =
 
 asteroid_ent =
     Entity.new_component_data
+    |> Comp.RemovalBeyondDistance.add_new(Player.entity_ids.player, 2e3)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
     |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 1.0, 0)
     |> Setup.SameVoxelType.add_new("Default")
