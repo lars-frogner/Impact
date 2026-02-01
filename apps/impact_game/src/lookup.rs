@@ -4,27 +4,31 @@ macro_rules! define_lookup_target_enum {
     (
         $(#[$meta:meta])*
         $vis:vis enum $name:ident {
-            $($variant:ident),* $(,)?
+            $(
+                $variant:ident $( { $( $argn:ident : $argt:ty ),* $(,)? } )?
+            ),* $(,)?
         }
     ) => {
         $(#[$meta])*
         $vis enum $name {
             $(
-                $variant,
+                $variant $( { $( $argn : $argt ),* } )?,
             )*
         }
 
         #[::roc_integration::roc(imports=[Lookup])]
         impl $name {
             pub fn lookup_and_write_roc_bytes(
-                &self,
+                self,
                 game: &$crate::Game,
                 buffer: &mut [u8],
             ) -> ::anyhow::Result<()> {
                 use ::roc_integration::Roc as _;
                 match self {
                     $(
-                        Self::$variant => $variant::lookup(game).write_roc_bytes(buffer),
+                        Self::$variant $( { $( $argn ),* } )? => {
+                            $variant::lookup(game $( ,$( $argn ),* )? )?.write_roc_bytes(buffer)
+                        }
                     )*
                 }
             }
@@ -33,7 +37,7 @@ macro_rules! define_lookup_target_enum {
                 use ::roc_integration::Roc as _;
                 match self {
                     $(
-                        Self::$variant => $variant::SERIALIZED_SIZE,
+                        Self::$variant $( { $( $argn: _ ),* } )? => $variant::SERIALIZED_SIZE,
                     )*
                 }
             }
@@ -55,23 +59,29 @@ macro_rules! define_lookup_target_enum {
 #[macro_export]
 macro_rules! define_lookup_type {
     (
+        variant = $variant:ident $( { $( $argn:ident : $argt:ty ),* $(,)? } )?;
         $(#[$meta:meta])*
-        $vis:vis struct $target:ident $($rest:tt)*
+        $vis:vis struct $name:ident $($rest:tt)*
     ) => {
         $(#[$meta])*
-        $vis struct $target $($rest)*
+        $vis struct $name $($rest)*
 
-        const _: $crate::lookup::GameLookupTarget = $crate::lookup::GameLookupTarget::$target;
+        // Statically assert that the enum variant exists
+        const _: fn($( $( $argt ),* )?) -> $crate::lookup::GameLookupTarget =
+            |$( $( $argn : $argt ),* )?| {
+                $crate::lookup::GameLookupTarget::$variant $( { $( $argn ),* } )?
+            };
 
-        #[::roc_integration::roc(dependencies=[$crate::lookup::GameLookupTarget])]
-        impl $target {
+        #[::roc_integration::roc(dependencies=[$crate::lookup::GameLookupTarget $( $( ,$argt )* )? ])]
+        impl $name {
             /// Fetch the current value of this quantity.
             #[::roc_integration::roc(
                 name = "get",
-                body = ["Lookup.GameLookupTarget.lookup!(", $target, ", from_bytes)"],
+                body = ["Lookup.GameLookupTarget.lookup!(", $variant, $( "{" ,$( $argn ,", " ),* ,"}", )? ", from_bytes)"],
                 effectful = true
             )]
-            fn __lookup_for_roc() -> ::anyhow::Result<Self> {
+            #[allow(unused_variables)]
+            fn __lookup_for_roc( $( $( $argn : $argt ),* )? ) -> ::anyhow::Result<Self> {
                 unimplemented!()
             }
         }
