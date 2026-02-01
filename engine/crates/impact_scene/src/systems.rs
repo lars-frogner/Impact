@@ -1,10 +1,15 @@
 //! ECS systems for scenes.
 
 use crate::{
-    SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
+    RemovalBeyondDistance, SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
     SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, graph::SceneGraph,
 };
-use impact_ecs::{query, world::World as ECSWorld};
+use impact_alloc::{AVec, arena::ArenaPool};
+use impact_containers::HashMap;
+use impact_ecs::{
+    query,
+    world::{EntityID, EntityStager, World as ECSWorld},
+};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_light::{
     AmbientEmission, AmbientLightID, LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
@@ -12,7 +17,7 @@ use impact_light::{
     ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLightID,
 };
-use impact_math::transform::Isometry3;
+use impact_math::{point::Point3C, transform::Isometry3};
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
 /// entity that also has the
@@ -46,6 +51,77 @@ pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph:
         let camera_to_parent_transform = frame.create_transform_to_parent_space();
         scene_graph.set_camera_to_parent_transform(node.id, camera_to_parent_transform.compact());
     });
+}
+
+/// Finds entities with a max distance from an anchor and stages them for
+/// removal if the distance is exceeded.
+pub fn stage_too_remote_entities_for_removal(
+    entity_stager: &mut EntityStager,
+    ecs_world: &ECSWorld,
+) {
+    struct Candidate {
+        entity_id: EntityID,
+        position: Point3C,
+        max_dist_squared: f32,
+    }
+
+    let arena = ArenaPool::get_arena();
+
+    let mut candidates_by_anchor =
+        HashMap::with_capacity_and_hasher_in(0, Default::default(), &arena);
+
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         flags: &SceneEntityFlags,
+         frame: &ReferenceFrame,
+         removal_rule: &RemovalBeyondDistance| {
+            if flags.is_disabled() {
+                return;
+            }
+            candidates_by_anchor
+                .entry(removal_rule.anchor_id)
+                .or_insert_with(|| AVec::new_in(&arena))
+                .push(Candidate {
+                    entity_id,
+                    position: frame.position,
+                    max_dist_squared: removal_rule.max_dist_squared(),
+                });
+        }
+    );
+
+    for (anchor_id, candidates) in candidates_by_anchor {
+        let anchor_position: Option<Point3C> = ecs_world.get_entity(anchor_id).and_then(|entity| {
+            entity
+                .get_component::<ReferenceFrame>()
+                .map(|entry| entry.access().position)
+        });
+
+        if let Some(anchor_position) = anchor_position {
+            for Candidate {
+                entity_id,
+                position,
+                max_dist_squared,
+            } in candidates
+            {
+                let displacement = position - anchor_position;
+                if displacement.dot(&displacement) > max_dist_squared {
+                    log::debug!(
+                        "Removing entity {entity_id} exceeding max distance from entity {anchor_id}"
+                    );
+                    entity_stager.stage_entity_for_removal(entity_id);
+                }
+            }
+        } else {
+            // Anchor is gone, so remove all anchored entities
+            log::debug!(
+                "Removing all entities with a max distance from removed entity {anchor_id}"
+            );
+            for Candidate { entity_id, .. } in candidates {
+                entity_stager.stage_entity_for_removal(entity_id);
+            }
+        }
+    }
 }
 
 /// Updates the properties (position, direction, emission, extent and flags) of

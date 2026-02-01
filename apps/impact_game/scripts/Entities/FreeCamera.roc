@@ -54,6 +54,7 @@ launch_projectile! = |_|
     motion = Comp.Motion.get_for_entity!(entity_ids.camera)?
 
     _ = Tools.spawn_projectile!(
+        entity_ids.camera,
         frame.position,
         motion.linear_velocity,
         UnitQuaternion.rotate_vector(frame.orientation, UnitVector3.neg_unit_z),

@@ -17,6 +17,7 @@ import core.Sphere
 
 import pf.Entity
 
+import pf.Comp.RemovalBeyondDistance
 import pf.Setup.SceneParent
 import pf.Setup.CylinderMesh
 import pf.Setup.SphereMesh
@@ -86,6 +87,7 @@ projectile = {
     static_friction_coef: 0.6,
     dynamic_friction_coef: 0.6,
     forward_shift: 2.0,
+    max_distance: 5e2,
 }
 
 spawn! : ToolEntityIds, Entity.Id => Result {} Str
@@ -102,13 +104,14 @@ get_absorbed_mass! = |entity_ids|
     absorbed_mass = Lookup.CapsuleAbsorbedVoxelMass.get!(entity_ids.absorber)?.mass
     Ok(absorbed_mass)
 
-spawn_projectile! : Point3, Vector3, UnitVector3 => Result Vector3 Str
-spawn_projectile! = |position, start_velocity, direction|
+spawn_projectile! : Entity.Id, Point3, Vector3, UnitVector3 => Result Vector3 Str
+spawn_projectile! = |parent, position, start_velocity, direction|
     launch_position = Vector3.add(position, Vector3.scale(direction, projectile.forward_shift))
     launch_velocity = Vector3.add(start_velocity, Vector3.scale(direction, projectile.speed))
 
     projectile_ent =
         Entity.new_component_data
+        |> Comp.RemovalBeyondDistance.add_new(parent, projectile.max_distance)
         |> Setup.SphereMesh.add_new(64)
         |> Setup.UniformColor.add(projectile.color)
         |> Setup.UniformSpecularReflectance.add_in_range_of(

@@ -250,6 +250,26 @@ define_task!(
 );
 
 // =============================================================================
+// ENTITY LIFETIMES
+// =============================================================================
+
+define_task!(
+    /// Stages entities failing their lifetime conditions for removal.
+    [pub] HandleEntityLifetimes,
+    depends_on = [CallApp, HandleInputEvents],
+    execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Handling entity lifetimes", engine, {
+            let mut entity_stager = engine.entity_stager().olock();
+            let ecs_world = engine.ecs_world().oread();
+            impact_scene::systems::stage_too_remote_entities_for_removal(&mut entity_stager, &ecs_world);
+            Ok(())
+        })
+    }
+);
+
+// =============================================================================
 // USER INTERFACE
 // =============================================================================
 
@@ -279,7 +299,8 @@ define_task!(
     depends_on = [
         CallApp,
         HandleInputEvents,
-        ApplyEngineCommands
+        ApplyEngineCommands,
+        HandleEntityLifetimes
     ],
     execute_on = [PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
@@ -1017,6 +1038,9 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     // COMMANDS (affecting the current frame)
     task_scheduler.register_task(ApplyEngineCommands)?;
     task_scheduler.register_task(ApplyRenderCommands)?;
+
+    // ENTITY LIFETIMES (based on state from previous frame)
+    task_scheduler.register_task(HandleEntityLifetimes)?;
 
     // USER INTERFACE
     task_scheduler.register_task(ProcessUserInterface)?;

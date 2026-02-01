@@ -34,6 +34,7 @@ impact_mesh = { path = "../impact_mesh" }
 impact_model = { path = "../impact_model" }
 impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
+log = { path = "../../../interop/log" }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }
