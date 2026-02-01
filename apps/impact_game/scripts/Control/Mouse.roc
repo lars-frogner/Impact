@@ -45,7 +45,7 @@ handle_button_event_player_mode! = |{ button, state }|
 
         Right ->
             toggle_scene_entity_active_state!(
-                Player.entity_ids.tools.absorbing_sphere,
+                Player.entity_ids.tools.absorber,
                 state,
             )
 
@@ -61,7 +61,7 @@ handle_button_event_free_camera_mode! = |{ button, state }|
 
         Right ->
             toggle_scene_entity_active_state!(
-                FreeCamera.entity_ids.tools.absorbing_sphere,
+                FreeCamera.entity_ids.tools.absorber,
                 state,
             )
 

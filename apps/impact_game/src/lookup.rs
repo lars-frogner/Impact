@@ -88,13 +88,19 @@ macro_rules! define_lookup_type {
     };
 }
 
-use crate::player::inventory::InventoryMass;
+use crate::player::{
+    inventory::InventoryMass,
+    tools::{CapsuleAbsorbedVoxelMass, SphereAbsorbedVoxelMass},
+};
+use impact::impact_ecs::world::EntityID;
 use roc_integration::roc;
 
 define_lookup_target_enum! {
     #[roc(parents = "Lookup")]
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Debug)]
     pub enum GameLookupTarget {
         InventoryMass,
+        SphereAbsorbedVoxelMass { entity_id: EntityID },
+        CapsuleAbsorbedVoxelMass { entity_id: EntityID },
     }
 }
