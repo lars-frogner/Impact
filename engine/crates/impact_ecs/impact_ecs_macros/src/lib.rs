@@ -6,31 +6,31 @@ mod query;
 mod querying_util;
 mod setup;
 
+use std::{cell::RefCell, collections::HashMap, env};
+
 use proc_macro::TokenStream;
 use proc_macro_crate::{self, FoundCrate};
-use proc_macro2::{Ident, Span};
-use std::sync::LazyLock;
 use syn::{DeriveInput, parse_macro_input};
 
 /// Derive macro generating an impl of the trait `Component`.
 #[proc_macro_derive(Component)]
 pub fn derive_component(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    component::impl_component(input, &crate_root_ident()).into()
+    component::impl_component(input, &crate_root_path()).into()
 }
 
 /// For use in doctests, where `crate` doesn't work as root identifier.
 #[proc_macro_derive(ComponentDoctest)]
 pub fn derive_component_doctest(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    component::impl_component(input, &crate_root_ident_doctest()).into()
+    component::impl_component(input, &crate_root_path_doctest()).into()
 }
 
 /// Derive macro generating an impl of the trait `SetupComponent`.
 #[proc_macro_derive(SetupComponent)]
 pub fn derive_setup_component(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    component::impl_setup_component(input, &crate_root_ident()).into()
+    component::impl_setup_component(input, &crate_root_path()).into()
 }
 
 /// Creates a new `Archetype` defined by
@@ -46,7 +46,7 @@ pub fn derive_setup_component(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn archetype_of(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as archetype::ArchetypeOfInput);
-    archetype::archetype_of(input, &crate_root_ident())
+    archetype::archetype_of(input, &crate_root_path())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -55,7 +55,7 @@ pub fn archetype_of(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as archetype::ArchetypeOfInput);
-    archetype::archetype_of(input, &crate_root_ident_doctest())
+    archetype::archetype_of(input, &crate_root_path_doctest())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -211,7 +211,7 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn setup(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as setup::SetupInput);
-    setup::setup(input, &crate_root_ident())
+    setup::setup(input, &crate_root_path())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -220,7 +220,7 @@ pub fn setup(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn setup_doctest(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as setup::SetupInput);
-    setup::setup(input, &crate_root_ident_doctest())
+    setup::setup(input, &crate_root_path_doctest())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -350,7 +350,7 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn query(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as query::QueryInput);
-    query::query(input, &crate_root_ident())
+    query::query(input, &crate_root_path())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -359,32 +359,62 @@ pub fn query(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn query_doctest(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as query::QueryInput);
-    query::query(input, &crate_root_ident_doctest())
+    query::query(input, &crate_root_path_doctest())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
 
+const WORKSPACE_CRATE_NAME: &str = "impact";
 const CRATE_NAME: &str = "impact_ecs";
 
-static CRATE_IMPORT_ROOT: LazyLock<String> = LazyLock::new(determine_crate_import_root);
-
-/// Determines whether to use `crate` or the actual crate name as root
-/// for `use` statements.
-fn determine_crate_import_root() -> String {
-    let found_crate =
-        proc_macro_crate::crate_name(CRATE_NAME).expect("impact_ecs not found in Cargo.toml");
-    match found_crate {
-        FoundCrate::Itself => "crate".to_string(),
-        FoundCrate::Name(name) => name,
-    }
+thread_local! {
+    static IMPORT_ROOT_CACHE: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
 }
 
-fn crate_root_ident() -> Ident {
-    Ident::new(CRATE_IMPORT_ROOT.as_str(), Span::call_site())
+fn crate_root_path() -> syn::Path {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+
+    let parse = |root_string: &str| {
+        syn::parse_str::<syn::Path>(root_string).expect("Failed to parse crate root path")
+    };
+
+    IMPORT_ROOT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+
+        if let Some(root_string) = cache.get(&manifest_dir) {
+            return parse(root_string);
+        }
+
+        let root_string = determine_crate_import_root();
+        let root_path = parse(&root_string);
+
+        cache.insert(manifest_dir, root_string);
+        root_path
+    })
 }
 
 /// For doctests, the actual crate name rather than `crate` must be used
 /// as root identifier.
-fn crate_root_ident_doctest() -> Ident {
-    Ident::new(CRATE_NAME, Span::call_site())
+fn crate_root_path_doctest() -> syn::Path {
+    syn::parse_str::<syn::Path>(CRATE_NAME).unwrap()
+}
+
+/// Determines whether to use `crate`, the actual crate name or a re-export of
+/// the crate as root for `use` statements.
+fn determine_crate_import_root() -> String {
+    if let Ok(found) = proc_macro_crate::crate_name(CRATE_NAME) {
+        match found {
+            FoundCrate::Itself => return "crate".to_string(),
+            FoundCrate::Name(name) => return name,
+        }
+    }
+
+    if let Ok(found) = proc_macro_crate::crate_name(WORKSPACE_CRATE_NAME) {
+        match found {
+            FoundCrate::Itself => return format!("crate::{}", CRATE_NAME),
+            FoundCrate::Name(name) => return format!("{}::{}", name, CRATE_NAME),
+        }
+    }
+
+    panic!("Failed to determine import root path")
 }

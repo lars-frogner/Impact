@@ -24,7 +24,7 @@ struct ResolvedAttributeArgs {
 pub(super) fn apply_type_attribute(
     args: TypeAttributeArgs,
     input: syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     if !input.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
@@ -62,7 +62,7 @@ pub(super) fn apply_type_attribute(
 pub(super) fn apply_impl_attribute(
     args: ImplAttributeArgs,
     block: syn::ItemImpl,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     if !block.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
@@ -150,7 +150,7 @@ pub(super) fn apply_impl_attribute(
 pub(super) fn apply_impl_attribute(
     _args: ImplAttributeArgs,
     block: syn::ItemImpl,
-    _crate_root: &TokenStream,
+    _crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     Ok(quote! {
         #block
@@ -243,7 +243,7 @@ fn derives_trait(input: &syn::DeriveInput, trait_name: &str) -> bool {
 fn generate_roc_impl(
     rust_type_name: &Ident,
     input: &syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
     let roc_type_id = generate_roc_type_id(rust_type_name, crate_root);
@@ -261,7 +261,7 @@ fn generate_roc_impl(
 
 fn generate_roc_pod_impl(
     rust_type_name: &Ident,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     type_category: TypeCategory,
 ) -> TokenStream {
     if matches!(
@@ -277,7 +277,7 @@ fn generate_roc_pod_impl(
     }
 }
 
-fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &TokenStream) -> TokenStream {
+fn generate_roc_type_id(rust_type_name: &Ident, crate_root: &syn::Path) -> TokenStream {
     // WARNING: If changing this, make sure to change the generation of
     // component IDs in `impact_ecs_macros` accordingly, since we guarantee
     // that the Roc type ID of any component matches the component ID
@@ -296,7 +296,7 @@ fn generate_qualified_type_path_str(rust_type_name: &Ident) -> TokenStream {
 
 fn generate_size_expr(
     input: &syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
     if matches!(
@@ -320,11 +320,11 @@ fn generate_size_expr(
     }
 }
 
-fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &TokenStream) -> TokenStream {
+fn generate_struct_size_expr(data: &syn::DataStruct, crate_root: &syn::Path) -> TokenStream {
     generate_summed_field_size_expr(&data.fields, crate_root).unwrap_or_else(|| quote! {0})
 }
 
-fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> TokenStream {
+fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &syn::Path) -> TokenStream {
     const _: () = assert!(
         MAX_ENUM_VARIANTS <= 256,
         "Enum discriminant is assumed to fit in one byte"
@@ -360,7 +360,7 @@ fn generate_enum_size_expr(data: &syn::DataEnum, crate_root: &TokenStream) -> To
 
 fn generate_summed_field_size_expr(
     fields: &syn::Fields,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> Option<TokenStream> {
     match fields {
         syn::Fields::Unit => None,
@@ -375,7 +375,7 @@ fn generate_summed_field_size_expr(
 
 fn generate_summed_field_size_expr_from_field_iter<'a>(
     fields: impl IntoIterator<Item = &'a syn::Field>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> Option<TokenStream> {
     let mut fields = fields.into_iter();
     let field = fields.next()?;
@@ -390,7 +390,7 @@ fn generate_summed_field_size_expr_from_field_iter<'a>(
     Some(summed_fields)
 }
 
-fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStream {
+fn serialized_size_of_type(ty: &syn::Type, crate_root: &syn::Path) -> TokenStream {
     if let syn::Type::Array(array) = ty {
         let elem_ty = &array.elem;
         let len = &array.len;
@@ -406,7 +406,7 @@ fn serialized_size_of_type(ty: &syn::Type, crate_root: &TokenStream) -> TokenStr
 
 fn generate_roc_trait_method_impls(
     input: &syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     type_category: TypeCategory,
 ) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
@@ -421,7 +421,7 @@ fn generate_roc_trait_method_impls(
 
 fn generate_roc_trait_method_impls_for_pod_type(
     type_name: &syn::Ident,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let from_bytes_input_check = generate_from_bytes_input_check(type_name, crate_root);
     let write_bytes_input_check = generate_write_bytes_input_check(type_name, crate_root);
@@ -441,7 +441,7 @@ fn generate_roc_trait_method_impls_for_pod_type(
 
 fn generate_roc_trait_method_impls_for_non_pod_type(
     input: &syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
     match &input.data {
@@ -461,7 +461,7 @@ fn generate_roc_trait_method_impls_for_non_pod_type(
 fn generate_roc_trait_method_impls_for_struct(
     type_name: &syn::Ident,
     data: &syn::DataStruct,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let from_bytes_input_check = generate_from_bytes_input_check(type_name, crate_root);
     let write_bytes_input_check = generate_write_bytes_input_check(type_name, crate_root);
@@ -534,7 +534,7 @@ fn generate_roc_trait_method_impls_for_struct(
 fn generate_roc_trait_method_impls_for_enum(
     type_name: &syn::Ident,
     data: &syn::DataEnum,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let (matches_with_from_bytes_calls, matches_with_write_bytes_calls): (Vec<_>, Vec<_>) = data
         .variants
@@ -658,7 +658,7 @@ fn generate_destructuring_for_unnamed_fields(fields: &syn::FieldsUnnamed) -> Tok
 
 fn generate_from_bytes_calls_for_fields(
     fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let calls = fields
         .iter()
@@ -671,7 +671,7 @@ fn generate_from_bytes_calls_for_fields(
 
 fn generate_write_bytes_calls_for_fields(
     fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let calls = fields
         .iter()
@@ -685,7 +685,7 @@ fn generate_write_bytes_calls_for_fields(
 fn generate_from_bytes_call_for_field(
     field_idx: usize,
     field_ty: &syn::Type,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let field_ident = field_ident(field_idx);
     quote! {
@@ -699,7 +699,7 @@ fn generate_from_bytes_call_for_field(
 fn generate_write_bytes_call_for_field(
     field_idx: usize,
     field_ty: &syn::Type,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> TokenStream {
     let field_ident = field_ident(field_idx);
     quote! {
@@ -711,10 +711,7 @@ fn generate_write_bytes_call_for_field(
     }
 }
 
-fn generate_from_bytes_input_check(
-    type_name: &syn::Ident,
-    crate_root: &TokenStream,
-) -> TokenStream {
+fn generate_from_bytes_input_check(type_name: &syn::Ident, crate_root: &syn::Path) -> TokenStream {
     let type_name = type_name.to_string();
     quote! {
         if bytes.len() != <Self as #crate_root::Roc>::SERIALIZED_SIZE {
@@ -728,10 +725,7 @@ fn generate_from_bytes_input_check(
     }
 }
 
-fn generate_write_bytes_input_check(
-    type_name: &syn::Ident,
-    crate_root: &TokenStream,
-) -> TokenStream {
+fn generate_write_bytes_input_check(type_name: &syn::Ident, crate_root: &syn::Path) -> TokenStream {
     let type_name = type_name.to_string();
     quote! {
         if buffer.len() != <Self as #crate_root::Roc>::SERIALIZED_SIZE {
@@ -754,7 +748,7 @@ fn generate_registered_type_submit(
     args: &ResolvedAttributeArgs,
     rust_type_name: &Ident,
     input: &syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
     let rust_type_path = generate_qualified_type_path_str(rust_type_name);
@@ -800,7 +794,7 @@ fn generate_registered_type_submit(
     _args: &ResolvedAttributeArgs,
     _rust_type_name: &Ident,
     _input: &syn::DeriveInput,
-    _crate_root: &TokenStream,
+    _crate_root: &syn::Path,
     _static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
     Ok(quote! {})
@@ -810,7 +804,7 @@ fn generate_associated_dependencies_submit(
     for_type: &syn::Type,
     dependency_types: &[syn::Type],
     literal_imports: &[String],
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     let type_dependencies = generate_type_id_list(dependency_types, crate_root, MAX_DEPENDENCIES);
     let literal_imports = generate_string_list(literal_imports, crate_root, MAX_LITERAL_IMPORTS);
@@ -832,7 +826,7 @@ fn generate_associated_constant_submit(
     specified_name: Option<String>,
     constant: &syn::ImplItemConst,
     expr: String,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     let docstring = extract_and_process_docstring(&constant.attrs);
     let name = specified_name.unwrap_or_else(|| constant.ident.to_string().to_lowercase());
@@ -864,7 +858,7 @@ fn generate_associated_function_submit(
     body: String,
     effectful: Option<bool>,
     ignore_types: Option<bool>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     let ignore_types = ignore_types.unwrap_or(false);
     let docstring = extract_and_process_docstring(&function.attrs);
@@ -891,7 +885,7 @@ fn generate_associated_function_submit(
     })
 }
 
-fn generate_type_flags(crate_root: &TokenStream, type_category: TypeCategory) -> TokenStream {
+fn generate_type_flags(crate_root: &syn::Path, type_category: TypeCategory) -> TokenStream {
     match type_category {
         // All primitives and bitflags are required to be POD
         TypeCategory::Primitive | TypeCategory::Pod | TypeCategory::Bitflags => {
@@ -905,7 +899,7 @@ fn generate_type_flags(crate_root: &TokenStream, type_category: TypeCategory) ->
 
 fn generate_type_composition(
     input: &syn::DeriveInput,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     type_category: TypeCategory,
     flags: Option<&Bitflags>,
     static_assertions: &mut Vec<TokenStream>,
@@ -960,7 +954,7 @@ fn generate_type_composition(
 }
 
 fn generate_bitflags(
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     flags: &Bitflags,
     max_flags: usize,
 ) -> syn::Result<TokenStream> {
@@ -985,7 +979,7 @@ fn generate_bitflags(
 fn generate_fields(
     span: impl ToTokens,
     fields: &syn::Fields,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     max_fields: usize,
 ) -> syn::Result<TokenStream> {
     Ok(match fields {
@@ -1029,7 +1023,7 @@ fn generate_fields(
 
 fn generate_named_field_list(
     fields: &syn::FieldsNamed,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     max_fields: usize,
 ) -> TokenStream {
     assert!(max_fields >= fields.named.len());
@@ -1061,7 +1055,7 @@ fn generate_named_field_list(
 
 fn generate_unnamed_field_list(
     fields: &syn::FieldsUnnamed,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     max_fields: usize,
 ) -> TokenStream {
     assert!(max_fields >= fields.unnamed.len());
@@ -1087,7 +1081,7 @@ fn generate_unnamed_field_list(
     }
 }
 
-fn generate_field_type(field: &syn::Field, crate_root: &TokenStream) -> TokenStream {
+fn generate_field_type(field: &syn::Field, crate_root: &syn::Path) -> TokenStream {
     if let syn::Type::Array(array) = &field.ty {
         let elem_ty = &array.elem;
         let len = &array.len;
@@ -1110,7 +1104,7 @@ fn generate_field_type(field: &syn::Field, crate_root: &TokenStream) -> TokenStr
 fn generate_variants(
     input: &syn::DeriveInput,
     data: &syn::DataEnum,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     require_pod: bool,
     static_assertions: &mut Vec<TokenStream>,
 ) -> syn::Result<TokenStream> {
@@ -1206,7 +1200,7 @@ fn generate_variants(
 fn generate_function_arguments<const MAX_ARGS: usize>(
     sig: &syn::Signature,
     ignore_types: bool,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     if !sig.generics.params.is_empty() {
         return Err(syn::Error::new_spanned(
@@ -1306,7 +1300,7 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
 fn generate_function_return_type(
     return_type: &syn::ReturnType,
     ignore_types: bool,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     if ignore_types {
         Ok(quote! {
@@ -1335,9 +1329,9 @@ fn generate_function_return_type(
 }
 
 fn generate_containable_type(
-    generate_contained_type: impl Fn(Box<syn::Type>, &TokenStream) -> syn::Result<TokenStream>,
+    generate_contained_type: impl Fn(Box<syn::Type>, &syn::Path) -> syn::Result<TokenStream>,
     mut ty: Box<syn::Type>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     ty = unwrap_references(ty)?;
     match ty.as_ref() {
@@ -1380,9 +1374,9 @@ fn generate_containable_type(
 }
 
 fn generate_inferrable_type(
-    generate_specific_type: impl Fn(Box<syn::Type>, &TokenStream) -> syn::Result<TokenStream>,
+    generate_specific_type: impl Fn(Box<syn::Type>, &syn::Path) -> syn::Result<TokenStream>,
     mut ty: Box<syn::Type>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     ty = unwrap_references(ty)?;
     match ty.as_ref() {
@@ -1406,7 +1400,7 @@ fn generate_inferrable_type(
 
 fn generate_translatable_type(
     mut ty: Box<syn::Type>,
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
 ) -> syn::Result<TokenStream> {
     ty = unwrap_references(ty)?;
     if type_is_string(&ty) {
@@ -1478,7 +1472,7 @@ fn unwrap_references(mut ty: Box<syn::Type>) -> syn::Result<Box<syn::Type>> {
 
 fn generate_type_id_list(
     types: &[syn::Type],
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     max_types: usize,
 ) -> TokenStream {
     assert!(max_types >= types.len());
@@ -1499,7 +1493,7 @@ fn generate_type_id_list(
 
 fn generate_string_list(
     strings: &[String],
-    crate_root: &TokenStream,
+    crate_root: &syn::Path,
     max_strings: usize,
 ) -> TokenStream {
     assert!(max_strings >= strings.len());
