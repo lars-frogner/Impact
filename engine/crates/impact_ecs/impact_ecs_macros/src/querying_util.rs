@@ -3,7 +3,7 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{IdentFragment, ToTokens, format_ident, quote, quote_spanned};
 use syn::{
-    Error, Result, Token, Type, bracketed,
+    Error, Path, Result, Token, Type, bracketed,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -137,7 +137,7 @@ pub(crate) fn generate_input_verification_code<'a>(
     arg_comp_types: &[Type],
     requested_comp_types: &[Type],
     additional_comp_types: impl IntoIterator<Item = Option<&'a Vec<Type>>>,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> Result<TokenStream> {
     let mut impl_assertions: Vec<_> = arg_comp_types
         .iter()
@@ -174,7 +174,7 @@ pub(crate) fn create_assertion_that_type_is_not_zero_sized(ty: &Type) -> TokenSt
 pub(crate) fn create_assertion_that_type_impls_component_trait<T: IdentFragment>(
     ty: &Type,
     tag: T,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> TokenStream {
     let dummy_struct_name = format_ident!(
         "__{}_assert_{}_impls_component",
@@ -191,7 +191,7 @@ pub(crate) fn create_assertion_that_type_impls_component_trait<T: IdentFragment>
 
 pub(crate) fn generate_archetype_creation_code(
     required_comp_types: &[Type],
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> (Ident, TokenStream) {
     let archetype_name = Ident::new("_archetype_internal__", Span::call_site());
     let archetype_creation_code = quote! {

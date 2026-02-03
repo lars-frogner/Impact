@@ -4,12 +4,15 @@
 #[cfg_attr(not(feature = "roc_codegen"), allow(dead_code))]
 mod roc_attr;
 
-use lazy_static::lazy_static;
 use proc_macro::TokenStream;
 use proc_macro_crate::{self, FoundCrate};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    env,
+};
 
 /// Attribute macro for annotating Rust types and associated methods that
 /// should be available in Roc.
@@ -131,18 +134,18 @@ use std::{collections::HashSet, str::FromStr};
 pub fn roc(attr: TokenStream, item: TokenStream) -> TokenStream {
     if let Ok(input) = syn::parse::<syn::DeriveInput>(item.clone()) {
             if attr.is_empty() {
-                roc_attr::apply_type_attribute(TypeAttributeArgs::default(), input, &crate_root_tokens())
+                roc_attr::apply_type_attribute(TypeAttributeArgs::default(), input, &crate_root_path())
             } else {
                 syn::parse::<TypeAttributeArgs>(attr).and_then(|args| {
-                    roc_attr::apply_type_attribute(args, input, &crate_root_tokens())
+                    roc_attr::apply_type_attribute(args, input, &crate_root_path())
                 })
             }
         } else if let Ok(block) = syn::parse::<syn::ItemImpl>(item.clone()) {
             if attr.is_empty() {
-                roc_attr::apply_impl_attribute(ImplAttributeArgs::default(), block, &crate_root_tokens())
+                roc_attr::apply_impl_attribute(ImplAttributeArgs::default(), block, &crate_root_path())
             } else {
                 syn::parse::<ImplAttributeArgs>(attr).and_then(|args| {
-                    roc_attr::apply_impl_attribute(args, block, &crate_root_tokens())
+                    roc_attr::apply_impl_attribute(args, block, &crate_root_path())
                 })
             }
         } else if let Ok(constant) = syn::parse::<syn::ImplItemConst>(item.clone()) {
@@ -296,8 +299,30 @@ enum StringOrIdent {
 
 const CRATE_NAME: &str = "roc_integration";
 
-lazy_static! {
-    static ref CRATE_IMPORT_ROOT: String = determine_crate_import_root();
+thread_local! {
+    static IMPORT_ROOT_CACHE: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+}
+
+fn crate_root_path() -> syn::Path {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+
+    let parse = |root_string: &str| {
+        syn::parse_str::<syn::Path>(root_string).expect("Failed to parse crate root path")
+    };
+
+    IMPORT_ROOT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+
+        if let Some(root_string) = cache.get(&manifest_dir) {
+            return parse(root_string);
+        }
+
+        let root_string = determine_crate_import_root();
+        let root_path = parse(&root_string);
+
+        cache.insert(manifest_dir, root_string);
+        root_path
+    })
 }
 
 /// Determines whether to use `crate`, the actual crate name or a re-export of
@@ -312,10 +337,6 @@ fn determine_crate_import_root() -> String {
     } else {
         format!("crate::{CRATE_NAME}")
     }
-}
-
-fn crate_root_tokens() -> TokenStream2 {
-    TokenStream2::from_str(&CRATE_IMPORT_ROOT).unwrap()
 }
 
 impl syn::parse::Parse for TypeAttributeArgs {

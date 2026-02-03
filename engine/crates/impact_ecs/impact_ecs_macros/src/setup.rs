@@ -5,8 +5,8 @@ use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Error, Expr, GenericArgument, PathArguments, Result, Token, Type, TypeReference, TypeTuple,
-    braced, parenthesized,
+    Error, Expr, GenericArgument, Path, PathArguments, Result, Token, Type, TypeReference,
+    TypeTuple, braced, parenthesized,
     parse::{Parse, ParseStream, discouraged::Speculative},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -94,7 +94,7 @@ struct ProcessedSetupClosureReturnType {
     return_tokens: TokenStream,
 }
 
-pub(crate) fn setup(input: SetupInput, crate_root: &Ident) -> Result<TokenStream> {
+pub(crate) fn setup(input: SetupInput, crate_root: &Path) -> Result<TokenStream> {
     let input = input.process();
 
     querying_util::verify_comp_types_unique(&input.requested_comp_types)?;
@@ -577,7 +577,7 @@ fn generate_if_expr_code(
     components_name: &Ident,
     archetype_name: &Ident,
     disallowed_comp_types: &Option<Vec<Type>>,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> TokenStream {
     let contains_all_expr = quote! {
         #components_name.archetype().contains(&#archetype_name)

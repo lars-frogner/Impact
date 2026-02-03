@@ -4,7 +4,7 @@ use crate::querying_util::{self, TypeList};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{
-    Expr, Result, Token, Type, TypeReference,
+    Expr, Path, Result, Token, Type, TypeReference,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
 };
@@ -43,7 +43,7 @@ struct ProcessedQueryInput {
     full_closure_args: Vec<TokenStream>,
 }
 
-pub(crate) fn query(input: QueryInput, crate_root: &Ident) -> Result<TokenStream> {
+pub(crate) fn query(input: QueryInput, crate_root: &Path) -> Result<TokenStream> {
     let input = input.process();
 
     querying_util::verify_comp_types_unique(&input.required_comp_types)?;
@@ -264,7 +264,7 @@ fn generate_table_search_code(
     world: &Expr,
     disallowed_comp_types: &Option<Vec<Type>>,
     archetype_name: &Ident,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> (Ident, TokenStream) {
     let tables_iter_name = Ident::new("_tables_internal__", Span::call_site());
     let table_search_code = match disallowed_comp_types {
@@ -302,7 +302,7 @@ fn generate_storage_iter_names_and_code(
     table_var_name: &Ident,
     comp_arg_names: &[Ident],
     comp_arg_type_refs: &[TypeReference],
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> (Vec<Ident>, Vec<TokenStream>) {
     let (iter_names, iter_code): (Vec<_>, Vec<_>) = comp_arg_names
         .iter()
@@ -363,7 +363,7 @@ fn generate_storage_iter_code(
     table_name: &Ident,
     arg_name: &Ident,
     arg_type_ref: &TypeReference,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> (Ident, TokenStream) {
     let storage_name = format_ident!("{}_storage_internal__", arg_name);
     let iter_name = format_ident!("{}_iter_internal__", arg_name);
@@ -392,7 +392,7 @@ fn generate_mutable_storage_iter(
     storage_name: &Ident,
     iter_name: &Ident,
     arg_type: &Type,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> TokenStream {
     quote! {
         let mut #storage_name = #table_name.component_storage(
@@ -407,7 +407,7 @@ fn generate_immutable_storage_iter(
     storage_name: &Ident,
     iter_name: &Ident,
     arg_type: &Type,
-    crate_root: &Ident,
+    crate_root: &Path,
 ) -> TokenStream {
     quote! {
         let #storage_name = #table_name.component_storage(

@@ -2,9 +2,9 @@
 
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::DeriveInput;
+use syn::{DeriveInput, Path};
 
-pub(crate) fn impl_component(input: DeriveInput, crate_root: &Ident) -> TokenStream {
+pub(crate) fn impl_component(input: DeriveInput, crate_root: &Path) -> TokenStream {
     let type_name = &input.ident;
 
     let component_impl = generate_component_impl(type_name, crate_root);
@@ -18,7 +18,7 @@ pub(crate) fn impl_component(input: DeriveInput, crate_root: &Ident) -> TokenStr
     }
 }
 
-pub(crate) fn impl_setup_component(input: DeriveInput, crate_root: &Ident) -> TokenStream {
+pub(crate) fn impl_setup_component(input: DeriveInput, crate_root: &Path) -> TokenStream {
     let type_name = &input.ident;
 
     let component_impl = generate_component_impl(type_name, crate_root);
@@ -34,7 +34,7 @@ pub(crate) fn impl_setup_component(input: DeriveInput, crate_root: &Ident) -> To
     }
 }
 
-fn generate_component_impl(type_name: &Ident, crate_root: &Ident) -> TokenStream {
+fn generate_component_impl(type_name: &Ident, crate_root: &Path) -> TokenStream {
     let type_path_tail = format!("::{type_name}");
     let component_id = quote!(
         #crate_root::component::ComponentID::hashed_from_str(concat!(
@@ -49,7 +49,7 @@ fn generate_component_impl(type_name: &Ident, crate_root: &Ident) -> TokenStream
     }
 }
 
-fn generate_setup_component_impl(type_name: &Ident, crate_root: &Ident) -> TokenStream {
+fn generate_setup_component_impl(type_name: &Ident, crate_root: &Path) -> TokenStream {
     quote! {
         impl #crate_root::component::SetupComponent for #type_name {}
     }
@@ -57,7 +57,7 @@ fn generate_setup_component_impl(type_name: &Ident, crate_root: &Ident) -> Token
 
 fn generate_component_descriptor_submit(
     type_name: &Ident,
-    crate_root: &Ident,
+    crate_root: &Path,
     category: &Ident,
 ) -> TokenStream {
     let name = type_name.to_string();

@@ -2,10 +2,10 @@
 //! creating entities.
 
 use crate::querying_util;
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    Result, Token, Type,
+    Path, Result, Token, Type,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
 };
@@ -14,7 +14,7 @@ pub(crate) struct ArchetypeOfInput {
     component_types: Punctuated<Type, Token![,]>,
 }
 
-pub(crate) fn archetype_of(input: ArchetypeOfInput, crate_root: &Ident) -> Result<TokenStream> {
+pub(crate) fn archetype_of(input: ArchetypeOfInput, crate_root: &Path) -> Result<TokenStream> {
     let component_types: Vec<_> = input.component_types.into_iter().collect();
 
     querying_util::verify_comp_types_unique(&component_types)?;
