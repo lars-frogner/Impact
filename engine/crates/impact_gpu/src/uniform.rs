@@ -10,13 +10,7 @@ use impact_containers::{
     tracking::{CollectionChange, CollectionChangeTracker},
 };
 use impact_math::hash::ConstStringHash64;
-use std::{
-    borrow::Cow,
-    fmt::Debug,
-    hash::Hash,
-    mem,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::{borrow::Cow, fmt::Debug, hash::Hash, mem};
 
 /// Represents types that can be written to a uniform buffer.
 pub trait UniformBufferable: Pod {
@@ -41,7 +35,6 @@ pub trait UniformBufferable: Pod {
 pub struct UniformBuffer<ID, U> {
     raw_buffer: Vec<U>,
     index_map: KeyIndexMapper<ID>,
-    n_valid_uniforms: AtomicUsize,
     change_tracker: CollectionChangeTracker,
 }
 
@@ -80,7 +73,6 @@ where
         Self {
             raw_buffer: Vec::new(),
             index_map: KeyIndexMapper::new(),
-            n_valid_uniforms: AtomicUsize::new(0),
             change_tracker: CollectionChangeTracker::default(),
         }
     }
@@ -91,7 +83,6 @@ where
         Self {
             raw_buffer: vec![U::zeroed(); capacity],
             index_map: KeyIndexMapper::new(),
-            n_valid_uniforms: AtomicUsize::new(0),
             change_tracker: CollectionChangeTracker::default(),
         }
     }
@@ -104,7 +95,7 @@ where
 
     /// Returns the current number of valid uniforms in the buffer.
     pub fn n_valid_uniforms(&self) -> usize {
-        self.n_valid_uniforms.load(Ordering::Acquire)
+        self.index_map.len()
     }
 
     /// Returns a reference to the uniform with the given ID. If the entity does
@@ -186,7 +177,7 @@ where
     /// If a uniform with the same ID already exists.
     pub fn add_uniform(&mut self, uniform_id: ID, uniform: U) {
         let buffer_length = self.raw_buffer.len();
-        let idx = self.n_valid_uniforms.fetch_add(1, Ordering::SeqCst);
+        let idx = self.n_valid_uniforms();
         assert!(idx <= buffer_length);
 
         // If the buffer is full, grow it first
@@ -207,9 +198,8 @@ where
     /// If no uniform with the given ID exists.
     pub fn remove_uniform(&mut self, uniform_id: ID) {
         let idx = self.index_map.swap_remove_key(uniform_id);
-        let last_idx = self.raw_buffer.len() - 1;
+        let last_idx = self.index_map.len();
         self.raw_buffer.swap(idx, last_idx);
-        self.n_valid_uniforms.fetch_sub(1, Ordering::SeqCst);
 
         self.change_tracker.notify_count_change();
     }
@@ -222,7 +212,6 @@ where
     /// Removes all the uniforms from the buffer.
     pub fn remove_all_uniforms(&mut self) {
         self.index_map.clear();
-        self.n_valid_uniforms.store(0, Ordering::SeqCst);
         self.change_tracker.notify_count_change();
     }
 
