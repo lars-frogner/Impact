@@ -1,6 +1,6 @@
 //! Player info overlay.
 
-use crate::{Game, player::Player};
+use crate::{Game, entities::player::Player};
 use anyhow::Result;
 use impact::impact_physics::{
     force::alignment_torque::AlignmentDirection, quantities::AccelerationC,

@@ -41,6 +41,7 @@ impact_profiling::define_target_enum! {
     },
     lookup_table => {
         compute_specular_ggx_reflectance,
+        compute_black_body_luminance,
     }
 }
 

@@ -4,6 +4,7 @@
 mod macros;
 
 pub mod gpu_resource;
+pub mod photometry;
 pub mod setup;
 pub mod shadow_map;
 
