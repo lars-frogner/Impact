@@ -1,10 +1,10 @@
 //! The Impact game.
 
 pub mod command;
+pub mod entities;
 pub mod input;
 pub mod interface;
 pub mod lookup;
-pub mod player;
 pub mod setup;
 pub mod update;
 pub mod user_interface;
@@ -15,6 +15,7 @@ pub use impact;
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
 use anyhow::Result;
+use entities::player::Player;
 use impact::{
     engine::{Engine, EngineConfig},
     impact_io,
@@ -23,7 +24,6 @@ use impact::{
 };
 use impact_dev_ui::UserInterfaceConfig;
 use interface::scripting::hot_reloading::ScriptReloader;
-use player::Player;
 use roc_integration::roc;
 use serde::{Deserialize, Serialize};
 use std::{

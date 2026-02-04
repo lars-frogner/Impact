@@ -1,5 +1,5 @@
-# Hash: 01cb35d9c8c3cc65
-# Generated: 2026-02-01T20:58:00.538543331
+# Hash: bda77787827ee507
+# Generated: 2026-02-02T22:19:46.27680873
 # Rust type: impact_game::lookup::GameLookupTarget
 # Type category: Inline
 module [
@@ -11,6 +11,7 @@ module [
 
 import Entity
 import Lookup
+import core.Builtin
 
 GameLookupTarget : [
     InventoryMass,
@@ -21,6 +22,9 @@ GameLookupTarget : [
             entity_id : Entity.Id,
         },
     LauncherLaunchSpeed,
+    BlackBodyLuminance {
+            temperature : F32,
+        },
 ]
 
 lookup! : GameLookupTarget, _ => _
@@ -56,6 +60,13 @@ write_bytes = |bytes, value|
             |> List.append(3)
             |> List.concat(List.repeat(0, 8))
 
+        BlackBodyLuminance { temperature } ->
+            bytes
+            |> List.reserve(9)
+            |> List.append(4)
+            |> Builtin.write_bytes_f32(temperature)
+            |> List.concat(List.repeat(0, 4))
+
 ## Deserializes a value of [GameLookupTarget] from its bytes in the
 ## representation used by the engine.
 from_bytes : List U8 -> Result GameLookupTarget _
@@ -82,5 +93,13 @@ from_bytes = |bytes|
 
 
             [3, ..] -> Ok(LauncherLaunchSpeed)
+            [4, .. as data_bytes] ->
+                Ok(
+                    BlackBodyLuminance     {
+                        temperature: data_bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+                    },
+                )
+
+
             [] -> Err(MissingDiscriminant)
             [discr, ..] -> Err(InvalidDiscriminant(discr))

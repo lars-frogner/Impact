@@ -26,7 +26,7 @@ import pf.Setup.SceneParent
 import pf.Setup.CylinderMesh
 import pf.Setup.SphereMesh
 import pf.Setup.UniformColor
-import pf.Setup.UniformRoughness
+import pf.Setup.UniformMetalness
 import pf.Setup.UniformSpecularReflectance
 import pf.Setup.UniformEmissiveLuminance
 import pf.Comp.ModelTransform
@@ -42,6 +42,7 @@ import pf.Comp.OmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
 import pf.Lookup.CapsuleAbsorbedVoxelMass
 import pf.Lookup.LauncherLaunchSpeed
+import pf.Lookup.BlackBodyLuminance
 
 import Util
 
@@ -88,10 +89,13 @@ launcher = {
 
 projectile = {
     radius: 0.3,
+    temperature: 2500,
+
     color: (1.0, 0.78, 0.043),
     specular_reflectance_percent: 50.0,
     roughness: 0.3,
     luminous_intensity: 1e4,
+
     mass: 15.0,
     restitution_coef: 0.4,
     static_friction_coef: 0.6,
@@ -139,21 +143,20 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
     launch_position = Vector3.add(position, Vector3.scale(direction, projectile.forward_shift))
     launch_velocity = Vector3.add(start_velocity, Vector3.scale(direction, launch_speed))
 
+    { rgb_luminance, total_luminance } = Lookup.BlackBodyLuminance.get!(projectile.temperature)?
+    luminous_intensity = rgb_luminance |> Vector3.map(|lum| Util.compute_sphere_luminous_intensity(lum, projectile.radius))
+    color = rgb_luminance |> Vector3.unscale(total_luminance)
+
     projectile_ent =
         Entity.new_component_data
         |> Comp.RemovalBeyondDistance.add_new(parent, projectile.max_distance)
         |> Setup.SphereMesh.add_new(64)
-        |> Setup.UniformColor.add(projectile.color)
-        |> Setup.UniformSpecularReflectance.add_in_range_of(
-            Setup.UniformSpecularReflectance.stone,
-            projectile.specular_reflectance_percent,
-        )
-        |> Setup.UniformRoughness.add(projectile.roughness)
-        |> Setup.UniformEmissiveLuminance.add(
-            Util.compute_sphere_emissive_luminance(projectile.luminous_intensity, projectile.radius),
-        )
-        |> Comp.OmnidirectionalEmission.add_new(
-            Vector3.scale(projectile.color, projectile.luminous_intensity),
+        |> Setup.UniformColor.add(color)
+        |> Setup.UniformSpecularReflectance.add(0.0)
+        |> Setup.UniformMetalness.add(1.0)
+        |> Setup.UniformEmissiveLuminance.add(total_luminance)
+        |> Comp.ShadowableOmnidirectionalEmission.add_new(
+            luminous_intensity,
             2 * projectile.radius,
         )
         |> Comp.ModelTransform.add_with_scale(2 * projectile.radius)
