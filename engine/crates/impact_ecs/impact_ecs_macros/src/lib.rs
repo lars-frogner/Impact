@@ -242,15 +242,15 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// );
 /// ```
 ///
-/// The macro takes as input the `World` to query followed by a closure
-/// definition whose type signature specifies the set of `Component` types to
-/// find matching instances of as well as whether immutable or mutable access to
-/// each component type is required. The type of each closure argument must be
-/// annotated, and has to be an immutable or mutable reference to a type
-/// implementing the `Component` trait. The exception is the first closure
-/// argument, which may be with the `EntityID` type, in which case the ID of the
-/// matching entity will be passed to the closure along with the component
-/// instances.
+/// The macro takes as input the `World` or `QueryableWorld` to query followed
+/// by a closure definition whose type signature specifies the set of
+/// `Component` types to find matching instances of as well as whether immutable
+/// or mutable access to each component type is required. The type of each
+/// closure argument must be annotated, and has to be an immutable or mutable
+/// reference to a type implementing the `Component` trait. The exception is the
+/// first closure argument, which may be with the `EntityID` type, in which case
+/// the ID of the matching entity will be passed to the closure along with the
+/// component instances.
 ///
 /// The body of the closure specifies what to do with each set of
 /// matching component instances. The closure will be called once

@@ -231,7 +231,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 /// Synchronizes model transforms for all voxel objects entities with their
 /// inertial properties.
 pub fn sync_voxel_object_model_transforms(
-    ecs_world: &mut ECSWorld,
+    ecs_world: &ECSWorld,
     voxel_object_manager: &VoxelObjectManager,
 ) {
     query!(

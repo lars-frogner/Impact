@@ -49,8 +49,9 @@ pub use impact_ecs_macros::archetype_of;
 /// );
 /// ```
 ///
-/// The macro takes as input the [`World`](world::World) to query followed by a
-/// closure definition whose type signature specifies the set of
+/// The macro takes as input the [`World`](world::World) or
+/// [`QueryableWorld`](world::QueryableWorld) to query followed by a closure
+/// definition whose type signature specifies the set of
 /// [`Component`](component::Component) types to find matching instances of as
 /// well as whether immutable or mutable access to each component type is
 /// required. The type of each closure argument must be annotated, and has to be
