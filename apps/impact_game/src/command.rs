@@ -1,7 +1,9 @@
 //! Command buffering and execution.
 
 use crate::{Game, InteractionMode};
-use impact::command::queue::CommandQueue;
+use impact::command::{
+    AdminCommand, physics::PhysicsAdminCommand, queue::CommandQueue, uils::ToActiveState,
+};
 use roc_integration::roc;
 
 pub static GAME_COMMANDS: GameCommandQueue = GameCommandQueue::new();
@@ -11,6 +13,7 @@ pub type GameCommandQueue = CommandQueue<GameCommand>;
 #[roc(parents = "Command")]
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameCommand {
+    TogglePaused,
     SetInteractionMode(InteractionMode),
     AddMassToInventory(f32),
     SetLauncherLaunchSpeed(f32),
@@ -19,6 +22,12 @@ pub enum GameCommand {
 impl Game {
     pub(crate) fn execute_game_commands(&mut self) {
         GAME_COMMANDS.execute_commands(|command| match command {
+            GameCommand::TogglePaused => {
+                log::debug!("Toggling paused");
+                self.engine().enqueue_admin_command(AdminCommand::Physics(
+                    PhysicsAdminCommand::SetSimulation(ToActiveState::Opposite),
+                ));
+            }
             GameCommand::SetInteractionMode(to) => {
                 log::debug!("Setting interaction mode to {to:?}");
                 self.game_options.interaction_mode = to;

@@ -29,6 +29,7 @@ handle_event_player_mode! = |{ key, state }|
 
             Letter(letter_key) ->
                 when letter_key is
+                    KeyP -> toggle_paused(state)
                     KeyW -> add_thruster_force(state, Forwards)
                     KeyS -> add_thruster_force(state, Backwards)
                     KeyD -> add_thruster_force(state, Left)
@@ -60,6 +61,7 @@ handle_event_free_camera_mode! = |{ key, state }|
 
             Letter(letter_key) ->
                 when letter_key is
+                    KeyP -> toggle_paused(state)
                     KeyW -> set_motion(state, Backwards)?
                     KeyS -> set_motion(state, Forwards)?
                     KeyD -> set_motion(state, Right)?
@@ -84,6 +86,7 @@ handle_event_overview_camera_mode! = |{ key, state }|
         when key is
             Letter(letter_key) ->
                 when letter_key is
+                    KeyP -> toggle_paused(state)
                     KeyM -> switch_to_player_mode(state)
                     _ -> []
 
@@ -98,6 +101,14 @@ set_ui_interactivity = |key_state, to|
             return []
 
     [UI(SetInteractivity(to))]
+
+toggle_paused = |key_state|
+    when key_state is
+        Released -> {}
+        _ ->
+            return []
+
+    [Game(TogglePaused)]
 
 add_thruster_force = |key_state, direction|
     force_magnitude = Tools.thruster.force
