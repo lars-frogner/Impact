@@ -2,6 +2,7 @@
 
 use crate::{
     Game,
+    entities::setup,
     interface::{
         access_game, access_game_mut,
         scripting::{self, ScriptLib},
@@ -14,6 +15,7 @@ use impact::{
     application::ApplicationInterface,
     egui,
     engine::Engine,
+    impact_ecs::archetype::ArchetypeComponentStorage,
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -69,6 +71,10 @@ impl ApplicationInterface for GameInterfaceForEngine {
         game.execute_game_commands();
 
         Ok(())
+    }
+
+    fn on_new_entities(&self, components: &mut ArchetypeComponentStorage) -> Result<()> {
+        setup::perform_setup_for_new_entities(&access_game(), components)
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {

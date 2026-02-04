@@ -34,6 +34,8 @@ pub fn perform_setup_for_new_entities(
 
     gizmo::setup_gizmos_for_new_entities(engine.gizmo_manager(), components);
 
+    engine.app().on_new_entities(components)?;
+
     let (setup_component_ids, setup_component_names, standard_component_names) =
         engine.extract_component_metadata(components);
 
