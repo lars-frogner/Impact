@@ -16,7 +16,7 @@ use impact_ecs::{
         Component, ComponentArray, ComponentID, ComponentInstance, ComponentStorage, ComponentView,
         SingleInstance,
     },
-    world::EntityID,
+    world::{EntityID, QueryableWorld},
 };
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
@@ -44,6 +44,10 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 impl Engine {
+    pub fn queryable_world(&self) -> QueryableWorld<'_> {
+        QueryableWorld::wrap(self.ecs_world.read())
+    }
+
     pub fn stage_entity_for_creation_with_id<A, E>(
         &self,
         entity_id: EntityID,

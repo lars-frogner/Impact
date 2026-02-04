@@ -54,6 +54,13 @@ pub struct World {
     rng: Rng,
 }
 
+/// Guard for a [`World`] that only exposes the methods needed for the
+/// [`query`](crate::query) macro.
+#[derive(Debug)]
+pub struct QueryableWorld<'a> {
+    world: RwLockReadGuard<'a, World>,
+}
+
 /// A reference into the entry for an entity in the [`World`].
 #[derive(Debug)]
 pub struct EntityEntry<'a> {
@@ -622,6 +629,34 @@ impl World {
 impl Default for World {
     fn default() -> Self {
         Self::new(0)
+    }
+}
+
+impl<'a> QueryableWorld<'a> {
+    /// Wraps the given [`World`] read guard.
+    pub fn wrap(world: RwLockReadGuard<'a, World>) -> Self {
+        Self { world }
+    }
+
+    /// Returns an iterator over all [`ArchetypeTable`]s whose entities have at
+    /// least all the component types defined by the given [`Archetype`].
+    pub fn find_tables_containing_archetype(
+        &self,
+        archetype: Archetype,
+    ) -> impl Iterator<Item = RwLockReadGuard<'_, ArchetypeTable>> {
+        self.world.find_tables_containing_archetype(archetype)
+    }
+
+    /// Returns an iterator over all [`ArchetypeTable`]s whose entities have at
+    /// least all the component types defined by the given [`Archetype`], but
+    /// not any of the given disallowed component types.
+    pub fn find_tables_containing_archetype_except_disallowed<const N: usize>(
+        &self,
+        archetype: Archetype,
+        disallowed_component_ids: [ComponentID; N],
+    ) -> impl Iterator<Item = RwLockReadGuard<'_, ArchetypeTable>> {
+        self.world
+            .find_tables_containing_archetype_except_disallowed(archetype, disallowed_component_ids)
     }
 }
 

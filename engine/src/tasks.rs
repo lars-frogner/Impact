@@ -328,12 +328,12 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Synchronizing voxel object model transforms", engine, {
-            let mut ecs_world = engine.ecs_world().owrite();
+            let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
             let voxel_manager = scene.voxel_manager().oread();
 
             impact_voxel::interaction::systems::sync_voxel_object_model_transforms(
-                &mut ecs_world,
+                &ecs_world,
                 voxel_manager.object_manager(),
             );
 
