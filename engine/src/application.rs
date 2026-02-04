@@ -8,12 +8,17 @@ use crate::{
     },
 };
 use anyhow::Result;
+use impact_ecs::archetype::ArchetypeComponentStorage;
 use std::sync::Arc;
 
 pub trait ApplicationInterface: Send + Sync + std::fmt::Debug {
     fn on_engine_initialized(&self, engine: Arc<Engine>) -> Result<()>;
 
     fn on_new_frame(&self, _frame_number: u64) -> Result<()> {
+        Ok(())
+    }
+
+    fn on_new_entities(&self, _components: &mut ArchetypeComponentStorage) -> Result<()> {
         Ok(())
     }
 
