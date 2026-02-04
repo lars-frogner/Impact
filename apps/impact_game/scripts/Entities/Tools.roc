@@ -141,7 +141,8 @@ adjust_launch_speed! = |scroll_delta|
 spawn_projectile! : Entity.Id, Point3, Vector3, UnitVector3, F32 => Result Vector3 Str
 spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
     launch_position = Vector3.add(position, Vector3.scale(direction, projectile.forward_shift))
-    launch_velocity = Vector3.add(start_velocity, Vector3.scale(direction, launch_speed))
+    relative_launch_velocity = Vector3.scale(direction, launch_speed)
+    launch_velocity = Vector3.add(start_velocity, relative_launch_velocity)
 
     { rgb_luminance, total_luminance } = Lookup.BlackBodyLuminance.get!(projectile.temperature)?
     luminous_intensity = rgb_luminance |> Vector3.map(|lum| Util.compute_sphere_luminous_intensity(lum, projectile.radius))
@@ -178,7 +179,7 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
 
     Entity.stage_for_creation!(projectile_ent)?
 
-    reaction_impulse = Vector3.scale(launch_velocity, -projectile.mass)
+    reaction_impulse = Vector3.scale(relative_launch_velocity, -projectile.mass)
 
     Ok(reaction_impulse)
 
