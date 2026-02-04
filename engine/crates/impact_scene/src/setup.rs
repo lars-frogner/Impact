@@ -3,7 +3,7 @@
 use crate::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
-    graph::{FeatureIDSet, SceneGraph},
+    graph::{FeatureIDSet, ModelInstanceFlags, SceneGraph},
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
@@ -38,6 +38,18 @@ pub struct SceneParent {
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
 pub struct SceneGraphGroup;
+
+/// Enables the property values of the entity's material to be modified
+/// independently.
+///
+/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
+/// purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`
+/// component for an entity. It is therefore not kept after entity creation.
+#[cfg(feature = "ecs")]
+#[roc_integration::roc(parents = "Setup")]
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
+pub struct HasIndependentMaterialValues;
 
 /// The entity should never be frustum culled in the [`SceneGraph`].
 ///
@@ -99,6 +111,7 @@ pub fn setup_scene_graph_model_instance_node(
     material_id: MaterialID,
     parent: Option<&SceneGraphParentNodeHandle>,
     flags: Option<&SceneEntityFlags>,
+    has_independent_material_values: bool,
     uncullable: bool,
 ) -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
     let flags = flags.copied().unwrap_or_default();
@@ -145,18 +158,33 @@ pub fn setup_scene_graph_model_instance_node(
     feature_type_ids.push(model_light_transform_feature_id.feature_type_id());
     feature_ids_for_shadow_mapping.push(model_light_transform_feature_id);
 
-    if let Some(material_property_values_feature_type_id) = material_registry
+    let material_property_values = material_registry
         .get(model_id.material_id())
         .ok_or_else(|| anyhow!("Missing material {} for model", model_id.material_id()))?
-        .property_values
-        .instance_feature_type_id_if_applicable()
+        .property_values;
+
+    if let Some(material_property_values_feature_type_id) =
+        material_property_values.instance_feature_type_id_if_applicable()
     {
         feature_type_ids.push(material_property_values_feature_type_id);
+
+        if has_independent_material_values
+            && let Some(material_property_values_feature_id) =
+                material_property_values.add_to_storage(model_instance_manager)
+        {
+            feature_ids_for_rendering.push(material_property_values_feature_id);
+        }
     }
 
     model_instance_manager.register_instance(model_id, &feature_type_ids);
 
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
+
+    let mut model_instance_flags = flags.into();
+
+    if has_independent_material_values {
+        model_instance_flags |= ModelInstanceFlags::HAS_INDEPENDENT_MATERIAL_VALUES;
+    }
 
     Ok((
         SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
@@ -166,7 +194,7 @@ pub fn setup_scene_graph_model_instance_node(
             bounding_sphere.map(|sphere| sphere.compact()),
             feature_ids_for_rendering,
             feature_ids_for_shadow_mapping,
-            flags.into(),
+            model_instance_flags,
         )),
         flags,
     ))

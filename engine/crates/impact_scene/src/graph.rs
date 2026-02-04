@@ -168,9 +168,12 @@ bitflags! {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct ModelInstanceFlags: u8 {
         /// The model instance should not be rendered.
-        const IS_HIDDEN     = 1 << 0;
+        const IS_HIDDEN                       = 1 << 0;
         /// The model instance should not participate in shadow maps.
-        const CASTS_NO_SHADOWS = 1 << 1;
+        const CASTS_NO_SHADOWS                = 1 << 1;
+        /// The model instance's material property values can be updated
+        /// independently from those of other instances.
+        const HAS_INDEPENDENT_MATERIAL_VALUES = 1 << 2;
     }
 }
 
@@ -823,7 +826,11 @@ impl SceneGraph {
 
         model_instance_manager
             .feature_mut::<InstanceModelViewTransformWithPrevious>(
-                model_instance_node.model_view_transform_feature_id(),
+                model_instance_node
+                    .rendering_feature_id_of_type(
+                        InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                    )
+                    .unwrap(),
             )
             .set_transform_for_new_frame(instance_model_view_transform);
 
@@ -834,7 +841,11 @@ impl SceneGraph {
             model_instance_node.feature_ids_for_rendering(),
         );
 
-        if let Some(material) = material_registry.get(model_id.material_id()) {
+        if !model_instance_node
+            .flags()
+            .contains(ModelInstanceFlags::HAS_INDEPENDENT_MATERIAL_VALUES)
+            && let Some(material) = material_registry.get(model_id.material_id())
+        {
             material
                 .property_values
                 .buffer(model_instance_manager, model_id);
@@ -1588,9 +1599,16 @@ impl ModelInstanceNode {
         &self.model_id
     }
 
-    /// Returns the ID of the instance's model-to-camera transform feature.
-    pub fn model_view_transform_feature_id(&self) -> InstanceFeatureID {
-        self.feature_ids_for_rendering[0]
+    /// Returns the ID of the instance's rendering feature of the specified
+    /// type, or [`None`] if it does not exist.
+    pub fn rendering_feature_id_of_type(
+        &self,
+        feature_type_id: InstanceFeatureTypeID,
+    ) -> Option<InstanceFeatureID> {
+        self.feature_ids_for_rendering
+            .iter()
+            .find(|feature_id| feature_id.feature_type_id() == feature_type_id)
+            .copied()
     }
 
     /// Returns the IDs of the instance's features needed for rendering.

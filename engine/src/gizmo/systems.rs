@@ -30,7 +30,10 @@ use impact_math::{
     transform::{Isometry3, Similarity3},
     vector::{UnitVector3, Vector3, Vector3C},
 };
-use impact_model::transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious};
+use impact_model::{
+    InstanceFeature,
+    transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
+};
 use impact_physics::{
     anchor::AnchorManager,
     collision::{CollidableID, CollidableKind},
@@ -382,7 +385,12 @@ fn buffer_transforms_for_model_instance_gizmos(
     }
 
     let model_view_transform = model_instance_manager
-        .feature::<InstanceModelViewTransformWithPrevious>(node.model_view_transform_feature_id())
+        .feature::<InstanceModelViewTransformWithPrevious>(
+            node.rendering_feature_id_of_type(
+                InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+            )
+            .unwrap(),
+        )
         .current;
 
     if visible_gizmos.contains(GizmoType::ReferenceFrameAxes.as_set()) {
@@ -946,7 +954,10 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
     let model_view_transform = Similarity3::from(
         model_instance_manager
             .feature::<InstanceModelViewTransformWithPrevious>(
-                node.model_view_transform_feature_id(),
+                node.rendering_feature_id_of_type(
+                    InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                )
+                .unwrap(),
             )
             .current,
     );
