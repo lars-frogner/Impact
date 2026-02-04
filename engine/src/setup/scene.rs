@@ -21,7 +21,7 @@ use impact_mesh::TriangleMeshID;
 use impact_scene::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
-    setup::{SceneGraphGroup, SceneParent, Uncullable},
+    setup::{HasIndependentMaterialValues, SceneGraphGroup, SceneParent, Uncullable},
 };
 use parking_lot::RwLock;
 
@@ -159,6 +159,9 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             let model_to_parent_transform = frame.create_transform_to_parent_space()
                 * model_transform.create_transform_to_entity_space();
 
+            let has_independent_material_values =
+                components.has_component_type::<HasIndependentMaterialValues>();
+
             let uncullable = components.has_component_type::<Uncullable>();
 
             let (node_handle, flags) = impact_scene::setup::setup_scene_graph_model_instance_node(
@@ -171,6 +174,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 *material_id,
                 parent,
                 flags,
+                has_independent_material_values,
                 uncullable,
             )?;
 

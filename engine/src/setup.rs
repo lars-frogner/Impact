@@ -11,9 +11,7 @@ use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
 pub fn perform_setup_for_new_entities(
     engine: &Engine,
     components: &mut ArchetypeComponentStorage,
-) -> Result<()>
-where
-{
+) -> Result<()> {
     scene::setup_scene_data_for_new_entities(
         engine.resource_manager(),
         engine.scene(),

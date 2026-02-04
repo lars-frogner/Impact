@@ -9,8 +9,8 @@ use bytemuck::{Pod, Zeroable};
 use impact_gpu::vertex_attribute_ranges::MATERIAL_START;
 use impact_gpu::wgpu;
 use impact_math::vector::Vector2;
-use impact_model::impl_InstanceFeatureForGPU;
 use impact_model::{InstanceFeature, InstanceFeatureTypeID, ModelInstanceManager};
+use impact_model::{InstanceFeatureID, impl_InstanceFeatureForGPU};
 use std::hash::Hash;
 
 bitflags! {
@@ -219,6 +219,22 @@ impl MaterialPropertyValues {
         }
     }
 
+    /// Adds the material property values onto the associated storage and
+    /// returns the instance feature ID for the added entry. Returns [`None`] if
+    /// there are no values to add.
+    ///
+    /// # Panics
+    /// If the associated storage is missing.
+    pub fn add_to_storage<MID: Copy + Eq + Hash>(
+        &self,
+        model_instance_manager: &mut ModelInstanceManager<MID>,
+    ) -> Option<InstanceFeatureID> {
+        match self {
+            Self::Fixed(values) => values.add_to_storage(model_instance_manager),
+            Self::Physical(values) => Some(values.add_to_storage(model_instance_manager)),
+        }
+    }
+
     /// Pushes the material property values onto the associated buffer for the
     /// model with the given ID.
     pub fn buffer<MID: Copy + Eq + Hash>(
@@ -265,6 +281,27 @@ impl FixedMaterialPropertyValues {
         match self {
             Self::FixedColor(_) => FixedColorMaterialValues::FEATURE_TYPE_ID,
             Self::None => InstanceFeatureTypeID::not_applicable(),
+        }
+    }
+
+    /// Adds the material property values onto the associated storage and
+    /// returns the instance feature ID for the added entry. Returns [`None`] if
+    /// there are no values to add.
+    ///
+    /// # Panics
+    /// If the associated storage is missing.
+    pub fn add_to_storage<MID: Copy + Eq + Hash>(
+        &self,
+        model_instance_manager: &mut ModelInstanceManager<MID>,
+    ) -> Option<InstanceFeatureID> {
+        match self {
+            Self::FixedColor(values) => Some(
+                model_instance_manager
+                    .get_storage_mut::<FixedColorMaterialValues>()
+                    .expect("Missing storage for FixedColorMaterialValues feature")
+                    .add_feature(values),
+            ),
+            Self::None => None,
         }
     }
 
@@ -367,6 +404,39 @@ impl PhysicalMaterialPropertyValues {
             Self::TexturedColorParallaxMapped(_) => {
                 TexturedColorParallaxMappedPhysicalMaterialValues::FEATURE_TYPE_ID
             }
+        }
+    }
+
+    /// Adds the material property values onto the associated storage and
+    /// returns the instance feature ID for the added entry.
+    ///
+    /// # Panics
+    /// If the associated storage is missing.
+    pub fn add_to_storage<MID: Copy + Eq + Hash>(
+        &self,
+        model_instance_manager: &mut ModelInstanceManager<MID>,
+    ) -> InstanceFeatureID {
+        match self {
+            Self::UniformColor(values) => model_instance_manager
+                .get_storage_mut::<UniformColorPhysicalMaterialValues>()
+                .expect("Missing storage for UniformColorPhysicalMaterialValues feature")
+                .add_feature(values),
+            Self::TexturedColor(values) => model_instance_manager
+                .get_storage_mut::<TexturedColorPhysicalMaterialValues>()
+                .expect("Missing storage for TexturedColorPhysicalMaterialValues feature")
+                .add_feature(values),
+            Self::UniformColorParallaxMapped(values) => model_instance_manager
+                .get_storage_mut::<UniformColorParallaxMappedPhysicalMaterialValues>()
+                .expect(
+                    "Missing storage for UniformColorParallaxMappedPhysicalMaterialValues feature",
+                )
+                .add_feature(values),
+            Self::TexturedColorParallaxMapped(values) => model_instance_manager
+                .get_storage_mut::<TexturedColorParallaxMappedPhysicalMaterialValues>()
+                .expect(
+                    "Missing storage for TexturedColorParallaxMappedPhysicalMaterialValues feature",
+                )
+                .add_feature(values),
         }
     }
 
