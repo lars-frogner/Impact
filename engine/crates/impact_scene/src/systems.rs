@@ -39,10 +39,10 @@ pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph:
         let model_to_parent_transform = frame.create_transform_to_parent_space()
             * model_transform.create_transform_to_entity_space();
 
-        scene_graph.set_model_to_parent_transform_and_flags(
+        scene_graph.set_model_to_parent_transform_and_update_flags(
             node.id,
             model_to_parent_transform.compact(),
-            (*flags).into(),
+            *flags,
         );
     });
 

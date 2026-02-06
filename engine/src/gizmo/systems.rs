@@ -386,7 +386,7 @@ fn buffer_transforms_for_model_instance_gizmos(
 
     let model_view_transform = model_instance_manager
         .feature::<InstanceModelViewTransformWithPrevious>(
-            node.rendering_feature_id_of_type(
+            node.get_rendering_feature_id_of_type(
                 InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
             )
             .unwrap(),
@@ -954,7 +954,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
     let model_view_transform = Similarity3::from(
         model_instance_manager
             .feature::<InstanceModelViewTransformWithPrevious>(
-                node.rendering_feature_id_of_type(
+                node.get_rendering_feature_id_of_type(
                     InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
                 )
                 .unwrap(),
