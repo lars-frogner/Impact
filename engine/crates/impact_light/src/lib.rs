@@ -1235,6 +1235,7 @@ impl ShadowableOmnidirectionalLight {
             &self.luminous_intensity,
             &luminous_intensity,
         );
+        self.max_reach = self.max_reach.max(Self::MIN_NEAR_DISTANCE);
         self.luminous_intensity = luminous_intensity;
     }
 
@@ -1297,9 +1298,11 @@ impl ShadowableOmnidirectionalLight {
         // light source
         self.near_distance = (bounding_sphere_center_distance
             - camera_space_bounding_sphere.radius())
-        .clamp(Self::MIN_NEAR_DISTANCE, self.max_reach - 1e-9);
+        .clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
 
-        self.far_distance = far_distance.clamp(self.near_distance + 1e-9, self.max_reach);
+        self.far_distance = far_distance.clamp(self.near_distance, self.max_reach);
+
+        self.near_distance = self.near_distance.min(self.far_distance - 1e-8);
 
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }
@@ -1352,7 +1355,8 @@ impl ShadowableOmnidirectionalLight {
         self.max_reach = OmnidirectionalLight::compute_max_reach_from_min_incident_luminance(
             &self.luminous_intensity,
             min_incident_luminance,
-        );
+        )
+        .max(Self::MIN_NEAR_DISTANCE);
     }
 
     fn compute_camera_to_light_space_rotation(
