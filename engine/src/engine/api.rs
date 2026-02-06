@@ -18,6 +18,8 @@ use impact_ecs::{
     },
     world::{EntityID, QueryableWorld},
 };
+use impact_material::values::UniformColorPhysicalMaterialValues;
+use impact_model::InstanceFeature;
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
     force::alignment_torque::{AlignmentTorqueGenerator, AlignmentTorqueGeneratorID},
@@ -35,6 +37,7 @@ use impact_rendering::{
         temporal_anti_aliasing::TemporalAntiAliasingConfig,
     },
 };
+use impact_scene::graph::ModelInstanceNodeID;
 use impact_voxel::{
     VoxelObjectID,
     interaction::absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
@@ -519,6 +522,35 @@ impl Engine {
     /// Returns whether render pass timings are enabled.
     pub fn render_pass_timings_enabled(&self) -> bool {
         self.renderer().oread().basic_config().timings_enabled
+    }
+
+    pub fn with_uniform_physical_material_property_values_mut<R>(
+        &self,
+        model_instance_node_id: ModelInstanceNodeID,
+        f: impl FnOnce(&mut UniformColorPhysicalMaterialValues) -> Result<R>,
+    ) -> Result<R> {
+        let scene = self.scene().oread();
+
+        let scene_graph = scene.scene_graph().oread();
+
+        let node = scene_graph
+            .model_instance_nodes()
+            .get_node(model_instance_node_id)
+            .ok_or_else(|| {
+                anyhow!("Tried to obtain material properties for missing model instance")
+            })?;
+
+        let feature_id = node
+            .get_rendering_feature_id_of_type(UniformColorPhysicalMaterialValues::FEATURE_TYPE_ID)
+            .ok_or_else(|| {
+                anyhow!("Missing `UniformColorPhysicalMaterialValues` feature for model instance")
+            })?;
+
+        drop(scene_graph);
+
+        let mut model_instance_manager = scene.model_instance_manager().owrite();
+
+        f(model_instance_manager.feature_mut(feature_id))
     }
 
     pub fn with_dynamic_rigid_body<R>(

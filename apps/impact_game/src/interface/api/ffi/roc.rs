@@ -18,14 +18,14 @@ pub extern "C" fn roc_lookup_game_target(
         GameLookupTarget::from_roc_bytes(target_bytes.as_slice()).and_then(|target| {
             let size = target.roc_serialized_size();
 
-            let mut target_bytes = RocList::with_capacity(size);
+            let mut output_bytes = RocList::with_capacity(size);
             for _ in 0..size {
-                target_bytes.push(0);
+                output_bytes.push(0);
             }
 
             let game = access_game();
             target
-                .lookup_and_write_roc_bytes(&game, target_bytes.as_mut_slice())
+                .lookup_and_write_roc_bytes(&game, output_bytes.as_mut_slice())
                 .with_context(|| {
                     format!(
                         "Failed looking up game target {:?}",
@@ -33,7 +33,7 @@ pub extern "C" fn roc_lookup_game_target(
                     )
                 })?;
 
-            Ok(target_bytes)
+            Ok(output_bytes)
         }),
     )
 }

@@ -54,7 +54,7 @@ pub enum PhysicalMaterialPropertyValues {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct FixedColorMaterialValues {
-    color: RGBColor,
+    pub color: RGBColor,
 }
 
 /// Fixed property values for a physical material with a uniform base color.
@@ -69,11 +69,11 @@ pub struct FixedColorMaterialValues {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformColorPhysicalMaterialValues {
-    specular_reflectance: f32,
-    roughness: f32,
-    metalness: f32,
-    emissive_luminance: f32,
-    color: RGBColor,
+    pub specular_reflectance: f32,
+    pub roughness: f32,
+    pub metalness: f32,
+    pub emissive_luminance: f32,
+    pub color: RGBColor,
 }
 
 /// Fixed property values for a physical material with a textured base color.
@@ -88,10 +88,10 @@ pub struct UniformColorPhysicalMaterialValues {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedColorPhysicalMaterialValues {
-    specular_reflectance: f32,
-    roughness: f32,
-    metalness: f32,
-    emissive_luminance: f32,
+    pub specular_reflectance: f32,
+    pub roughness: f32,
+    pub metalness: f32,
+    pub emissive_luminance: f32,
 }
 
 /// Fixed property values for a physical material with a uniform base color and
@@ -107,13 +107,13 @@ pub struct TexturedColorPhysicalMaterialValues {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct UniformColorParallaxMappedPhysicalMaterialValues {
-    specular_reflectance: f32,
-    roughness: f32,
-    metalness: f32,
-    emissive_luminance: f32,
-    color: RGBColor,
-    parallax_displacement_scale: f32,
-    parallax_uv_per_distance: Vector2,
+    pub specular_reflectance: f32,
+    pub roughness: f32,
+    pub metalness: f32,
+    pub emissive_luminance: f32,
+    pub color: RGBColor,
+    pub parallax_displacement_scale: f32,
+    pub parallax_uv_per_distance: Vector2,
 }
 
 /// Fixed property values for a physical material with a textured base color and
@@ -129,12 +129,12 @@ pub struct UniformColorParallaxMappedPhysicalMaterialValues {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct TexturedColorParallaxMappedPhysicalMaterialValues {
-    specular_reflectance: f32,
-    roughness: f32,
-    metalness: f32,
-    emissive_luminance: f32,
-    parallax_displacement_scale: f32,
-    parallax_uv_per_distance: Vector2,
+    pub specular_reflectance: f32,
+    pub roughness: f32,
+    pub metalness: f32,
+    pub emissive_luminance: f32,
+    pub parallax_displacement_scale: f32,
+    pub parallax_uv_per_distance: Vector2,
 }
 
 /// Vertex attribute location of a specific type of material instance feature.
