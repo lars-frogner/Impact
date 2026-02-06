@@ -434,20 +434,24 @@ impl SceneGraph {
         }
     }
 
-    /// Sets the given transform and flags as the model-to-parent transform and
-    /// flags for the [`ModelInstanceNode`] with the given ID if it exists.
-    pub fn set_model_to_parent_transform_and_flags(
+    /// Sets the given transform as the model-to-parent transform for the
+    /// [`ModelInstanceNode`] with the given ID if it exists. Also updates the
+    /// node's `ModelInstanceFlags` based on the given scene entity flags.
+    pub fn set_model_to_parent_transform_and_update_flags(
         &mut self,
         model_instance_node_id: ModelInstanceNodeID,
         transform: Similarity3C,
-        flags: ModelInstanceFlags,
+        scene_entity_flags: SceneEntityFlags,
     ) {
         if let Some(node) = self
             .model_instance_nodes
             .get_node_mut(model_instance_node_id)
         {
             node.set_model_to_parent_transform(transform);
-            node.set_flags(flags);
+            node.set_flags(
+                node.flags()
+                    .updated_from_scene_entity_flags(scene_entity_flags),
+            );
         }
     }
 
@@ -827,7 +831,7 @@ impl SceneGraph {
         model_instance_manager
             .feature_mut::<InstanceModelViewTransformWithPrevious>(
                 model_instance_node
-                    .rendering_feature_id_of_type(
+                    .get_rendering_feature_id_of_type(
                         InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
                     )
                     .unwrap(),
@@ -1318,6 +1322,12 @@ impl<N: SceneGraphNode> NodeStorage<N> {
         self.nodes.get_value(node_id.key()).is_some()
     }
 
+    /// Returns a reference to the node with the given ID, or [`None`] if the
+    /// node does not exist.
+    pub fn get_node(&self, node_id: N::ID) -> Option<&N> {
+        self.nodes.get_value(node_id.key())
+    }
+
     /// Returns a reference to the node with the given ID.
     pub fn node(&self, node_id: N::ID) -> &N {
         self.nodes.value(node_id.key())
@@ -1601,7 +1611,7 @@ impl ModelInstanceNode {
 
     /// Returns the ID of the instance's rendering feature of the specified
     /// type, or [`None`] if it does not exist.
-    pub fn rendering_feature_id_of_type(
+    pub fn get_rendering_feature_id_of_type(
         &self,
         feature_type_id: InstanceFeatureTypeID,
     ) -> Option<InstanceFeatureID> {
@@ -1709,6 +1719,23 @@ macro_rules! impl_node_id_key_traits {
 impl_node_id_key_traits!(GroupNodeID);
 impl_node_id_key_traits!(ModelInstanceNodeID);
 impl_node_id_key_traits!(CameraNodeID);
+
+impl ModelInstanceFlags {
+    pub fn updated_from_scene_entity_flags(&self, scene_entity_flags: SceneEntityFlags) -> Self {
+        let mut model_instance_flags = *self;
+        if scene_entity_flags.contains(SceneEntityFlags::IS_DISABLED) {
+            model_instance_flags.insert(ModelInstanceFlags::IS_HIDDEN);
+        } else {
+            model_instance_flags.remove(ModelInstanceFlags::IS_HIDDEN);
+        }
+        if scene_entity_flags.contains(SceneEntityFlags::CASTS_NO_SHADOWS) {
+            model_instance_flags.insert(ModelInstanceFlags::CASTS_NO_SHADOWS);
+        } else {
+            model_instance_flags.remove(ModelInstanceFlags::CASTS_NO_SHADOWS);
+        }
+        model_instance_flags
+    }
+}
 
 impl From<SceneEntityFlags> for ModelInstanceFlags {
     fn from(scene_entity_flags: SceneEntityFlags) -> Self {
