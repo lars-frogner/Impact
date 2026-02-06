@@ -40,9 +40,10 @@ import pf.Setup.VoxelAbsorbingCapsule
 import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.SceneEntityFlags
+import pf.Comp.BlackBody
+import pf.Setup.HasIndependentMaterialValues
 import pf.Lookup.CapsuleAbsorbedVoxelMass
 import pf.Lookup.LauncherLaunchSpeed
-import pf.Lookup.BlackBodyLuminance
 
 import Util
 
@@ -89,14 +90,10 @@ launcher = {
 
 projectile = {
     radius: 0.3,
-    temperature: 2500,
-
-    color: (1.0, 0.78, 0.043),
-    specular_reflectance_percent: 50.0,
-    roughness: 0.3,
-    luminous_intensity: 1e4,
-
     mass: 15.0,
+    temperature: 2500,
+    specific_heat_capacity: 500,
+    emissivity: 0.8,
     restitution_coef: 0.4,
     static_friction_coef: 0.6,
     dynamic_friction_coef: 0.6,
@@ -144,20 +141,24 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
     relative_launch_velocity = Vector3.scale(direction, launch_speed)
     launch_velocity = Vector3.add(start_velocity, relative_launch_velocity)
 
-    { rgb_luminance, total_luminance } = Lookup.BlackBodyLuminance.get!(projectile.temperature)?
-    luminous_intensity = rgb_luminance |> Vector3.map(|lum| Util.compute_sphere_luminous_intensity(lum, projectile.radius))
-    color = rgb_luminance |> Vector3.unscale(total_luminance)
-
     projectile_ent =
         Entity.new_component_data
         |> Comp.RemovalBeyondDistance.add_new(parent, projectile.max_distance)
+        |> Comp.BlackBody.add_sphere(
+            projectile.radius,
+            projectile.mass,
+            projectile.specific_heat_capacity,
+            projectile.emissivity,
+            projectile.temperature,
+        )
+        |> Setup.HasIndependentMaterialValues.add
         |> Setup.SphereMesh.add_new(64)
-        |> Setup.UniformColor.add(color)
+        |> Setup.UniformColor.add(Vector3.same(0))
         |> Setup.UniformSpecularReflectance.add(0.0)
         |> Setup.UniformMetalness.add(1.0)
-        |> Setup.UniformEmissiveLuminance.add(total_luminance)
+        |> Setup.UniformEmissiveLuminance.add(0)
         |> Comp.ShadowableOmnidirectionalEmission.add_new(
-            luminous_intensity,
+            Vector3.same(0),
             2 * projectile.radius,
         )
         |> Comp.ModelTransform.add_with_scale(2 * projectile.radius)

@@ -88,12 +88,9 @@ macro_rules! define_lookup_type {
     };
 }
 
-use crate::entities::{
-    black_body::BlackBodyLuminance,
-    player::{
-        inventory::InventoryMass,
-        tools::{CapsuleAbsorbedVoxelMass, LauncherLaunchSpeed, SphereAbsorbedVoxelMass},
-    },
+use crate::entities::player::{
+    inventory::InventoryMass,
+    tools::{CapsuleAbsorbedVoxelMass, LauncherLaunchSpeed, SphereAbsorbedVoxelMass},
 };
 use impact::impact_ecs::world::EntityID;
 use roc_integration::roc;
@@ -106,6 +103,5 @@ define_lookup_target_enum! {
         SphereAbsorbedVoxelMass { entity_id: EntityID },
         CapsuleAbsorbedVoxelMass { entity_id: EntityID },
         LauncherLaunchSpeed,
-        BlackBodyLuminance { temperature: f32 },
     }
 }
