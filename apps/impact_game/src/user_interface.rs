@@ -22,6 +22,7 @@ pub struct UserInterface {
 struct GameUserInterface<'a> {
     options: &'a mut GameOptions,
     player_state: Option<DisplayedPlayerState>,
+    currently_interactive: bool,
 }
 
 impl Game {
@@ -37,7 +38,11 @@ impl Game {
                 None
             }
         };
-        let mut game_ui = GameUserInterface::new(&mut self.game_options, player_state);
+        let mut game_ui = GameUserInterface::new(
+            &mut self.game_options,
+            player_state,
+            self.user_interface.dev_ui.config().interactive,
+        );
 
         self.user_interface.run(
             ctx,
@@ -76,10 +81,15 @@ impl UserInterface {
 }
 
 impl<'a> GameUserInterface<'a> {
-    fn new(options: &'a mut GameOptions, player_state: Option<DisplayedPlayerState>) -> Self {
+    fn new(
+        options: &'a mut GameOptions,
+        player_state: Option<DisplayedPlayerState>,
+        currently_interactive: bool,
+    ) -> Self {
         Self {
             options,
             player_state,
+            currently_interactive,
         }
     }
 
@@ -124,6 +134,9 @@ impl<'a> CustomElements for GameUserInterface<'a> {
     }
 
     fn run_overlays(&mut self, ctx: &egui::Context) {
+        if self.currently_interactive {
+            return;
+        }
         let Some(player_state) = &self.player_state else {
             return;
         };
