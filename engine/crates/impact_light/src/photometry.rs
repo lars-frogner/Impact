@@ -3,6 +3,7 @@
 use crate::Luminance;
 use anyhow::{Result, anyhow};
 use impact_alloc::{self, AVec, Allocator, Global};
+use impact_math::consts::physics::f64::{BOLTZMANN_CONSTANT, LIGHT_SPEED, PLANCK_CONSTANT};
 use std::{fs, path::Path, str::FromStr, sync::LazyLock};
 
 static COLOR_MATCHING_FUNCTIONS: LazyLock<ColorMatchingFunctions<Global>> = LazyLock::new(|| {
@@ -48,19 +49,13 @@ where
 }
 
 impl BlackBodySpectrum {
-    const PLANCK_CONSTANT: f64 = 6.62607015e-34;
-    const LIGHT_SPEED: f64 = 299792458.0;
-    const BOLTZMANN_CONSTANT: f64 = 1.380649e-23;
-
-    const SCALE: f32 =
-        (2.0 * Self::PLANCK_CONSTANT * Self::LIGHT_SPEED * Self::LIGHT_SPEED * 1e45) as f32;
+    const SCALE: f32 = (2.0 * PLANCK_CONSTANT * LIGHT_SPEED * LIGHT_SPEED * 1e45) as f32;
 
     /// Constructs the spectrum of a black body with the given temperature in
     /// kelvin.
     pub fn new(temperature: f32) -> Self {
-        let exponent_scale = (Self::PLANCK_CONSTANT * Self::LIGHT_SPEED * 1e9
-            / (Self::BOLTZMANN_CONSTANT * f64::from(temperature)))
-            as f32;
+        let exponent_scale = (PLANCK_CONSTANT * LIGHT_SPEED * 1e9
+            / (BOLTZMANN_CONSTANT * f64::from(temperature))) as f32;
 
         Self {
             temperature,
