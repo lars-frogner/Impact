@@ -84,6 +84,10 @@ impl UserInterface {
         }
     }
 
+    pub fn config(&self) -> &UserInterfaceConfig {
+        &self.config
+    }
+
     pub fn setup(&self, engine: &Engine) {
         engine.enqueue_admin_command(AdminCommand::Control(ControlAdminCommand::SetControls(
             ToActiveState::from_enabled(!self.config.interactive),
