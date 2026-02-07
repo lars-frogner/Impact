@@ -59,7 +59,7 @@ pub fn add_new_entities_to_scene_graph(
     components: &mut ArchetypeComponentStorage,
 ) -> Result<()> {
     setup_scene_graph_parent_nodes_for_new_entities(ecs_world, components)?;
-    setup_scene_graph_group_nodes_for_new_entities(scene, components);
+    setup_scene_graph_group_nodes_for_new_entities(scene, components)?;
 
     camera::add_camera_to_scene_for_new_entity(scene, components)?;
 
@@ -105,7 +105,7 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
 fn setup_scene_graph_group_nodes_for_new_entities(
     scene: &RwLock<Scene>,
     components: &mut ArchetypeComponentStorage,
-) {
+) -> Result<()> {
     setup!(
         {
             let scene = scene.oread();
@@ -114,7 +114,7 @@ fn setup_scene_graph_group_nodes_for_new_entities(
         components,
         |frame: Option<&ReferenceFrame>,
          parent: Option<&SceneGraphParentNodeHandle>|
-         -> SceneGraphGroupNodeHandle {
+         -> Result<SceneGraphGroupNodeHandle> {
             let frame = frame.copied().unwrap_or_default();
             let transform_to_parent_space = frame.create_transform_to_parent_space();
 
@@ -126,7 +126,7 @@ fn setup_scene_graph_group_nodes_for_new_entities(
         },
         [SceneGraphGroup],
         ![SceneGraphGroupNodeHandle]
-    );
+    )
 }
 
 fn setup_scene_graph_model_instance_nodes_for_new_entities(
@@ -153,6 +153,8 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             ModelTransform,
             SceneEntityFlags
         )> {
+            let entity_id = todo!();
+
             let model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
 
@@ -169,6 +171,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 &resource_manager.materials,
                 &mut model_instance_manager,
                 &mut scene_graph,
+                entity_id,
                 model_to_parent_transform.compact(),
                 *mesh_id,
                 *material_id,

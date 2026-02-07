@@ -19,7 +19,7 @@ use std::{
 )]
 #[repr(C)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
 pub struct EntityID(u64);
 
 /// Manages provision and registration of [`EntityID`]s.
@@ -31,23 +31,27 @@ pub struct EntityIDManager {
 
 impl EntityID {
     /// Hashes the given string into an entity ID.
+    #[inline]
     pub const fn hashed_from_str(input: &str) -> Self {
         Self(Hash64::from_str(input).to_u64())
     }
 
     /// Converts the given `u64` into an entity ID. Should only be called
     /// with values returned from [`Self::as_u64`].
+    #[inline]
     pub const fn from_u64(value: u64) -> Self {
         Self(value)
     }
 
     /// Returns the `u64` value corresponding to the entity ID.
+    #[inline]
     pub const fn as_u64(&self) -> u64 {
         self.0
     }
 }
 
 impl Hash for EntityID {
+    #[inline]
     fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
         hasher.write_u64(self.0);
     }
@@ -112,4 +116,60 @@ impl EntityIDManager {
     pub fn unregister_id(&mut self, id: EntityID) {
         self.ids_in_use.remove(&id.0);
     }
+}
+
+#[macro_export]
+macro_rules! define_entity_id_newtype {
+    (
+        $(#[$attributes:meta])*
+        $([$pub:ident])? $name:ident
+    ) => {
+        $(#[$attributes])*
+        #[repr(transparent)]
+        #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, ::bytemuck::Zeroable, ::bytemuck::Pod)]
+        $($pub)? struct $name($crate::EntityID);
+
+        impl $name {
+            /// Wraps an `EntityID`.
+            #[inline]
+            pub const fn from_entity_id(entity_id: $crate::EntityID) -> Self {
+                Self(entity_id)
+            }
+
+            /// Returns the underlying `EntityID`.
+            #[inline]
+            pub const fn as_entity_id(&self) -> $crate::EntityID {
+                self.0
+            }
+
+            /// Converts the given `u64` into an ID. Should only be called with
+            /// values returned from [`Self::as_u64`].
+            #[inline]
+            pub const fn from_u64(value: u64) -> Self {
+                Self::from_entity_id($crate::EntityID::from_u64(value))
+            }
+
+            /// Returns the `u64` value corresponding to the ID.
+            #[inline]
+            pub const fn as_u64(&self) -> u64 {
+                self.as_entity_id().as_u64()
+            }
+        }
+
+        impl ::std::hash::Hash for $name {
+            #[inline]
+            fn hash<H: ::std::hash::Hasher>(&self, hasher: &mut H) {
+                hasher.write_u64(self.as_entity_id().as_u64());
+            }
+        }
+
+        impl ::impact_containers::nohash_hasher::IsEnabled for $name {}
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                write!(f, "{}", self.as_entity_id())
+            }
+        }
+
+    };
 }
