@@ -106,6 +106,19 @@ where
     ///
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
+    pub fn try_with_hasher_and_keys(
+        hash_builder: S,
+        key_iter: impl IntoIterator<Item = K>,
+    ) -> Self {
+        Self::with_hasher_and_keys_in(hash_builder, Global, key_iter)
+    }
+
+    /// Creates a new mapper with the given hasher and the given set of keys.
+    /// The index of each key will correspond to the position of the key in the
+    /// provided iterator.
+    ///
+    /// # Panics
+    /// If the iterator has multiple occurences of the same key.
     pub fn with_hasher_and_keys(hash_builder: S, key_iter: impl IntoIterator<Item = K>) -> Self {
         Self::with_hasher_and_keys_in(hash_builder, Global, key_iter)
     }
@@ -257,10 +270,29 @@ where
 
     /// Pushes each of the keys in the given iterator into the map in order.
     ///
+    /// # Errors
+    /// If any of the keys already exist, returns an error with the index of
+    /// the first of them. If any of the keys are duplicates, return an error
+    /// with the index the first of the duplicates was pushed to.
+    pub fn try_push_keys(&mut self, keys: impl IntoIterator<Item = K>) -> Result<(), usize> {
+        let old_len = self.len();
+        for key in keys {
+            let res = self.try_push_key(key);
+            if res.is_err() {
+                self.truncate(old_len);
+                return res;
+            }
+        }
+        Ok(())
+    }
+
+    /// Pushes each of the keys in the given iterator into the map in order.
+    ///
     /// # Panics
-    /// If any of the keys already exists.
+    /// If any of the keys are duplicates or already exist.
     pub fn push_keys(&mut self, keys: impl IntoIterator<Item = K>) {
-        keys.into_iter().for_each(|key| self.push_key(key));
+        self.try_push_keys(keys)
+            .expect("Tried to add an existing key");
     }
 
     /// Removes the given key and assigns the key at the last index to the index
@@ -593,5 +625,45 @@ mod tests {
         assert_eq!(mapper.get(4), None);
         assert_eq!(mapper.get(2), None);
         assert_eq!(mapper.get(100), None);
+    }
+
+    #[test]
+    fn key_index_mapper_try_push_keys_works() {
+        let mut mapper = KeyIndexMapper::<i32>::new();
+        assert!(mapper.is_empty());
+
+        // Successfully push multiple keys
+        assert!(mapper.try_push_keys([4, 100, 7]).is_ok());
+        assert_eq!(mapper.len(), 3);
+        assert_eq!(mapper.idx(4), 0);
+        assert_eq!(mapper.idx(100), 1);
+        assert_eq!(mapper.idx(7), 2);
+        assert_eq!(mapper.keys_at_indices(), &[4, 100, 7]);
+
+        // Try to push keys where one already exists - should fail and rollback
+        let result = mapper.try_push_keys([9, 100, 15]);
+        assert_eq!(result.unwrap_err(), 1); // Index of existing key 100
+
+        // Verify the mapper state is unchanged (rollback worked)
+        assert_eq!(mapper.len(), 3);
+        assert_eq!(mapper.keys_at_indices(), &[4, 100, 7]);
+        assert_eq!(mapper.get(9), None);
+        assert_eq!(mapper.get(15), None);
+
+        // Try to push keys where the first one already exists
+        let result = mapper.try_push_keys([4, 20]);
+        assert_eq!(result.unwrap_err(), 0); // Index of existing key 4
+        assert_eq!(mapper.len(), 3);
+        assert_eq!(mapper.get(20), None);
+
+        // Successfully push more keys to existing mapper
+        assert!(mapper.try_push_keys([25, 30]).is_ok());
+        assert_eq!(mapper.len(), 5);
+        assert_eq!(mapper.idx(25), 3);
+        assert_eq!(mapper.idx(30), 4);
+
+        // Try pushing empty iterator - should succeed
+        assert!(mapper.try_push_keys([]).is_ok());
+        assert_eq!(mapper.len(), 5);
     }
 }
