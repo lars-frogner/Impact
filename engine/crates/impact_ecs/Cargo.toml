@@ -29,7 +29,6 @@ impact_id = { path = "../impact_id" }
 impact_math = { path = "../impact_math" }
 impact_profiling = { path = "../impact_profiling", optional = true }
 inventory = { workspace = true }
-nohash-hasher = { workspace = true }
 parking_lot = { workspace = true }
 pastey = { workspace = true }
 roc_integration = { path = "../../../roc_integration" }

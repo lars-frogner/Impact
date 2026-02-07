@@ -1,7 +1,7 @@
 //! Hash-related utilities.
 
 use bytemuck::{Pod, Zeroable};
-use impact_containers::NoHashMap;
+use impact_containers::{NoHashMap, nohash_hasher};
 use parking_lot::Mutex;
 use roc_integration::roc;
 use std::{

@@ -2,7 +2,7 @@
 
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::NoHashSet;
+use impact_containers::{NoHashSet, nohash_hasher};
 use impact_math::hash::Hash64;
 use std::{
     array, fmt,
