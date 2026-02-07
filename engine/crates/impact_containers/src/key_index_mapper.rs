@@ -43,6 +43,16 @@ where
     /// Creates a new mapper with the given set of keys. The index of each key
     /// will correspond to the position of the key in the provided iterator.
     ///
+    /// # Errors
+    /// Returns an error if the iterator has multiple occurences of the same
+    /// key.
+    pub fn try_new_with_keys(key_iter: impl IntoIterator<Item = K>) -> Result<Self> {
+        Self::try_with_hasher_and_keys(FxBuildHasher, key_iter)
+    }
+
+    /// Creates a new mapper with the given set of keys. The index of each key
+    /// will correspond to the position of the key in the provided iterator.
+    ///
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
     pub fn new_with_keys(key_iter: impl IntoIterator<Item = K>) -> Self {
@@ -104,13 +114,14 @@ where
     /// The index of each key will correspond to the position of the key in the
     /// provided iterator.
     ///
-    /// # Panics
-    /// If the iterator has multiple occurences of the same key.
+    /// # Errors
+    /// Returns an error if the iterator has multiple occurences of the same
+    /// key.
     pub fn try_with_hasher_and_keys(
         hash_builder: S,
         key_iter: impl IntoIterator<Item = K>,
-    ) -> Self {
-        Self::with_hasher_and_keys_in(hash_builder, Global, key_iter)
+    ) -> Result<Self> {
+        Self::try_with_hasher_and_keys_in(hash_builder, Global, key_iter)
     }
 
     /// Creates a new mapper with the given hasher and the given set of keys.
@@ -149,6 +160,30 @@ where
     /// will be allocated with the given allocator. The index of each key will
     /// correspond to the position of the key in the provided iterator.
     ///
+    /// # Errors
+    /// Returns an error if the iterator has multiple occurences of the same
+    /// key.
+    pub fn try_with_hasher_and_keys_in(
+        hash_builder: S,
+        alloc: A,
+        key_iter: impl IntoIterator<Item = K>,
+    ) -> Result<Self> {
+        let key_iter = key_iter.into_iter();
+        let (lower, upper) = key_iter.size_hint();
+        let capacity = upper.unwrap_or(lower);
+        let mut mapper = Self::with_capacity_and_hasher_in(capacity, hash_builder, alloc);
+        for key in key_iter {
+            mapper
+                .try_push_key(key)
+                .map_err(|_err| anyhow!("Got duplicate key"))?;
+        }
+        Ok(mapper)
+    }
+
+    /// Creates a new mapper with the given hasher and the given set of keys. It
+    /// will be allocated with the given allocator. The index of each key will
+    /// correspond to the position of the key in the provided iterator.
+    ///
     /// # Panics
     /// If the iterator has multiple occurences of the same key.
     pub fn with_hasher_and_keys_in(
@@ -156,13 +191,7 @@ where
         alloc: A,
         key_iter: impl IntoIterator<Item = K>,
     ) -> Self {
-        let key_iter = key_iter.into_iter();
-        let capacity = key_iter.size_hint().0;
-        let mut mapper = Self::with_capacity_and_hasher_in(capacity, hash_builder, alloc);
-        for key in key_iter {
-            mapper.push_key(key);
-        }
-        mapper
+        Self::try_with_hasher_and_keys_in(hash_builder, alloc, key_iter).expect("Got duplicate key")
     }
 
     /// Reserves capacity for at least `additional` more elements to be
@@ -273,7 +302,7 @@ where
     /// # Errors
     /// If any of the keys already exist, returns an error with the index of
     /// the first of them. If any of the keys are duplicates, return an error
-    /// with the index the first of the duplicates was pushed to.
+    /// with the index the first of the duplicates would be pushed to.
     pub fn try_push_keys(&mut self, keys: impl IntoIterator<Item = K>) -> Result<(), usize> {
         let old_len = self.len();
         for key in keys {
