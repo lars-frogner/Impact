@@ -159,6 +159,18 @@ where
         self.keys_at_indices.reserve(additional);
     }
 
+    /// Keeps only the first `len` elements. Does nothing if the number of
+    /// elements is not larger than `len`.
+    pub fn truncate(&mut self, len: usize) {
+        if len >= self.len() {
+            return;
+        }
+        for key in &self.keys_at_indices[len..] {
+            self.indices_for_keys.remove(key);
+        }
+        self.keys_at_indices.truncate(len);
+    }
+
     /// Returns a reference to the [`HashMap`] of keys to indices.
     pub fn as_map(&self) -> &HashMap<K, usize, S, A> {
         &self.indices_for_keys
@@ -544,5 +556,42 @@ mod tests {
 
         mapper.swap_remove_key(4);
         assert!(mapper.is_empty());
+    }
+
+    #[test]
+    fn key_index_mapper_truncate_works() {
+        let mut mapper = KeyIndexMapper::new_with_keys([4, 2, 100, 7, 9]);
+        assert_eq!(mapper.len(), 5);
+
+        // Truncating to current length does nothing
+        mapper.truncate(5);
+        assert_eq!(mapper.len(), 5);
+        assert_eq!(mapper.keys_at_indices(), &[4, 2, 100, 7, 9]);
+
+        // Truncating to larger length does nothing
+        mapper.truncate(10);
+        assert_eq!(mapper.len(), 5);
+        assert_eq!(mapper.keys_at_indices(), &[4, 2, 100, 7, 9]);
+
+        // Truncate to length 3
+        mapper.truncate(3);
+        assert_eq!(mapper.len(), 3);
+        assert_eq!(mapper.keys_at_indices(), &[4, 2, 100]);
+
+        // Verify removed keys are no longer in the map
+        assert_eq!(mapper.get(7), None);
+        assert_eq!(mapper.get(9), None);
+
+        // Verify remaining keys are still accessible
+        assert_eq!(mapper.idx(4), 0);
+        assert_eq!(mapper.idx(2), 1);
+        assert_eq!(mapper.idx(100), 2);
+
+        // Truncate to empty
+        mapper.truncate(0);
+        assert!(mapper.is_empty());
+        assert_eq!(mapper.get(4), None);
+        assert_eq!(mapper.get(2), None);
+        assert_eq!(mapper.get(100), None);
     }
 }
