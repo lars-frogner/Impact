@@ -14,8 +14,8 @@ use editor::{Editor, EditorConfig};
 use impact::{
     engine::{Engine, EngineConfig},
     impact_alloc::{Allocator, Global},
-    impact_ecs::world::EntityID,
     impact_geometry::{ModelTransform, ReferenceFrame},
+    impact_id::EntityID,
     impact_io,
     impact_thread::pool::{DynamicThreadPool, ThreadPool},
     runtime::RuntimeConfig,

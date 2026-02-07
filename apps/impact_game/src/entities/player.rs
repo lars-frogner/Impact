@@ -6,7 +6,7 @@ pub mod tools;
 use anyhow::{Context, Result, anyhow};
 use impact::{
     engine::Engine,
-    impact_ecs::world::EntityID,
+    impact_id::EntityID,
     impact_physics::{
         force::alignment_torque::AlignmentTorqueGenerator, rigid_body::DynamicRigidBody,
     },

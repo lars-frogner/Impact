@@ -15,9 +15,10 @@ declare_lockable_resource!(crate::game_loop::GameLoopController, 0);
 declare_lockable_resource!(crate::input::InputManager, 10);
 
 // ============================================================================
-// ECS (20-49)
+// ENTITIES (20-49)
 // ============================================================================
 
+declare_lockable_resource!(impact_id::EntityIDManager, 10);
 declare_lockable_resource!(impact_ecs::world::EntityStager, 20);
 declare_lockable_resource!(impact_ecs::world::World, 30);
 

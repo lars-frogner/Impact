@@ -7,7 +7,7 @@ use crate::{
     physics::PhysicsSimulator,
 };
 use anyhow::{Context, Result, anyhow};
-use impact_ecs::world::EntityID;
+use impact_id::EntityID;
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
     force::alignment_torque::AlignmentDirection,

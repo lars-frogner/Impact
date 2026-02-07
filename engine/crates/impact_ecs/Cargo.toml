@@ -25,6 +25,7 @@ hashing = { path = "../../../interop/hashing" }
 impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs_macros = { path = "impact_ecs_macros" }
+impact_id = { path = "../impact_id" }
 impact_math = { path = "../impact_math" }
 impact_profiling = { path = "../impact_profiling", optional = true }
 inventory = { workspace = true }

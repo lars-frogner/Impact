@@ -2,7 +2,7 @@
 
 use crate::{command::uils::ActiveState, engine::Engine, lock_order::OrderedRwLock};
 use anyhow::{Result, anyhow};
-use impact_ecs::world::EntityID;
+use impact_id::EntityID;
 use impact_physics::medium::UniformMedium;
 use impact_scene::{SceneGraphCameraNodeHandle, skybox::Skybox};
 use roc_integration::roc;

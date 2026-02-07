@@ -3,6 +3,7 @@
 use super::OrientationController;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use impact_math::{
     angle::{Angle, Degrees},
     consts::f32::PI,
@@ -36,7 +37,7 @@ define_component_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct AngularVelocityControlParent {
-        pub entity_id: impact_ecs::world::EntityID,
+        pub entity_id: EntityID,
     }
 }
 

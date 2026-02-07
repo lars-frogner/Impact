@@ -364,7 +364,6 @@ pub fn apply_absorption<C>(
     anchor_manager: &mut AnchorManager,
 ) where
     C: VoxelObjectInteractionContext,
-    <C as VoxelObjectInteractionContext>::EntityID: Clone,
 {
     let voxel_object_manager = &mut voxel_manager.object_manager;
     let voxel_absorption_manager = voxel_manager.interaction_manager.absorption_manager_mut();
@@ -401,8 +400,7 @@ pub fn apply_absorption<C>(
     }
 
     let arena = ArenaPool::get_arena_for_capacity(
-        voxel_object_manager.voxel_object_count()
-            * mem::size_of::<VoxelObjectEntity<C::EntityID>>(),
+        voxel_object_manager.voxel_object_count() * mem::size_of::<VoxelObjectEntity>(),
     );
     let mut voxel_object_entities =
         AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), &arena);
@@ -495,7 +493,7 @@ pub fn apply_absorption<C>(
             );
 
             if original_object_empty {
-                context.on_empty_voxel_object_entity(entity_id.clone());
+                context.on_empty_voxel_object_entity(entity_id);
             }
             if let Some(DynamicDisconnectedVoxelObject {
                 voxel_object,

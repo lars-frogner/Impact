@@ -36,6 +36,7 @@ pub use impact_containers;
 pub use impact_ecs;
 pub use impact_geometry;
 pub use impact_gpu;
+pub use impact_id;
 pub use impact_io;
 pub use impact_light;
 pub use impact_material;

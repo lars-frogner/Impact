@@ -10,7 +10,8 @@ use crate::{
 use anyhow::Result;
 use impact::{
     command::UserCommand,
-    impact_ecs::{component::ComponentID, world::EntityID},
+    impact_ecs::component::ComponentID,
+    impact_id::EntityID,
     roc_integration::Roc,
     run::{headless, window},
     runtime::headless::HeadlessConfig,

@@ -6,8 +6,9 @@ use anyhow::Result;
 use impact_ecs::{
     archetype::ArchetypeComponentStorage,
     component::{ComponentCategory, ComponentID},
-    world::{EntitiesToCreate, EntityID, EntityToCreate, EntityToCreateWithID, EntityToUpdate},
+    world::{EntitiesToCreate, EntityToCreate, EntityToCreateWithID, EntityToUpdate},
 };
+use impact_id::EntityID;
 use impact_scene::SceneEntityFlags;
 use tinyvec::TinyVec;
 

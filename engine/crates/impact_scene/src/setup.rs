@@ -7,6 +7,7 @@ use crate::{
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
+use impact_id::EntityID;
 use impact_material::{MaterialID, MaterialRegistry};
 use impact_math::transform::{Isometry3C, Similarity3C};
 use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
@@ -25,7 +26,7 @@ use tinyvec::TinyVec;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
 pub struct SceneParent {
-    pub entity_id: impact_ecs::world::EntityID,
+    pub entity_id: EntityID,
 }
 
 /// The entity has a group node in the [`SceneGraph`].
@@ -66,7 +67,7 @@ pub struct Uncullable;
 #[roc_integration::roc]
 impl SceneParent {
     #[roc_integration::roc(body = "{ entity_id: parent }")]
-    pub fn new(parent: impact_ecs::world::EntityID) -> Self {
+    pub fn new(parent: EntityID) -> Self {
         Self { entity_id: parent }
     }
 }

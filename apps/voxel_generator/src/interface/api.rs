@@ -3,17 +3,15 @@
 pub mod ffi;
 
 use crate::{
-    App, AppConfig,
     editor::Editor,
-    interface::{APP, access_app, engine::AppInterfaceForEngine},
-    user_interface::{UI_COMMANDS, UserInterface},
+    interface::{access_app, engine::AppInterfaceForEngine, APP},
+    user_interface::{UserInterface, UI_COMMANDS},
+    App, AppConfig,
 };
 use anyhow::Result;
 use impact::{
-    command::UserCommand,
-    impact_ecs::{component::ComponentID, world::EntityID},
-    roc_integration::Roc,
-    run::window,
+    command::UserCommand, impact_ecs::component::ComponentID, impact_id::EntityID,
+    roc_integration::Roc, run::window,
 };
 use impact_dev_ui::{UICommand, UserInterface as DevUserInterface};
 use std::{path::Path, sync::Arc};

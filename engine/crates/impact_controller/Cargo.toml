@@ -20,6 +20,7 @@ bytemuck = { workspace = true }
 impact_alloc = { path = "../impact_alloc" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
+impact_id = { path = "../impact_id" }
 impact_math = { path = "../impact_math" }
 impact_physics = { path = "../impact_physics" }
 inventory = { workspace = true, optional = true }

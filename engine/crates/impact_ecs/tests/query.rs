@@ -3,10 +3,8 @@
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Global;
 use impact_containers::HashSet;
-use impact_ecs::{
-    Component, query,
-    world::{EntityID, World},
-};
+use impact_ecs::{Component, query, world::World};
+use impact_id::EntityID;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
@@ -41,7 +39,7 @@ const RECT: Rectangle = Rectangle {
 /// These query invocations should all compile successfully.
 #[allow(dead_code, clippy::unnecessary_mut_passed)]
 fn test_valid_query_inputs() {
-    let mut world = World::default();
+    let mut world = World::new();
 
     query!(world, |_byte: &Byte| {});
 
@@ -104,21 +102,21 @@ fn test_valid_query_inputs() {
 #[test]
 #[should_panic]
 fn querying_aliased_comps_fails_1() {
-    let world = World::default();
+    let world = World::new();
     query!(world, |_byte: &Byte, _likebyte: &LikeByte| {});
 }
 
 #[test]
 #[should_panic]
 fn querying_aliased_comps_fails_2() {
-    let world = World::default();
+    let world = World::new();
     query!(world, |_byte: &Byte| {}, [LikeByte]);
 }
 
 #[test]
 fn single_entity_single_comp_read_works() {
-    let mut world = World::default();
-    world.create_entity(&BYTE).unwrap();
+    let mut world = World::new();
+    world.create_entity(EntityID::from_u64(1), &BYTE).unwrap();
 
     let mut count = 0;
     query!(world, |byte: &Byte| {
@@ -130,8 +128,10 @@ fn single_entity_single_comp_read_works() {
 
 #[test]
 fn single_entity_two_of_two_matching_comp_read_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &POS))
+        .unwrap();
 
     let mut count = 0;
     query!(world, |byte: &Byte, pos: &Position| {
@@ -144,8 +144,10 @@ fn single_entity_two_of_two_matching_comp_read_works() {
 
 #[test]
 fn single_entity_one_of_two_matching_comp_read_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &POS))
+        .unwrap();
 
     let mut count = 0;
     query!(world, |pos: &Position| {
@@ -157,8 +159,8 @@ fn single_entity_one_of_two_matching_comp_read_works() {
 
 #[test]
 fn single_entity_single_comp_write_works() {
-    let mut world = World::default();
-    world.create_entity(&BYTE).unwrap();
+    let mut world = World::new();
+    world.create_entity(EntityID::from_u64(1), &BYTE).unwrap();
 
     query!(world, |byte: &mut Byte| {
         assert_eq!(byte, &BYTE);
@@ -171,8 +173,10 @@ fn single_entity_single_comp_write_works() {
 
 #[test]
 fn single_entity_two_of_two_matching_comp_write_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &POS))
+        .unwrap();
 
     query!(world, |pos: &mut Position, byte: &mut Byte| {
         assert_eq!(pos, &POS);
@@ -188,8 +192,10 @@ fn single_entity_two_of_two_matching_comp_write_works() {
 
 #[test]
 fn single_entity_two_of_two_matching_comp_mixed_write_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &POS))
+        .unwrap();
 
     query!(world, |pos: &mut Position, byte: &Byte| {
         assert_eq!(pos, &POS);
@@ -203,8 +209,10 @@ fn single_entity_two_of_two_matching_comp_mixed_write_works() {
 
 #[test]
 fn two_equal_entities_single_comp_read_works() {
-    let mut world = World::default();
-    world.create_entities(&[BYTE, BYTE]).unwrap();
+    let mut world = World::new();
+    world
+        .create_entities([1, 2].map(EntityID::from_u64), &[BYTE, BYTE])
+        .unwrap();
 
     let mut count = 0;
     query!(world, |byte: &Byte| {
@@ -216,9 +224,9 @@ fn two_equal_entities_single_comp_read_works() {
 
 #[test]
 fn one_of_two_matching_single_comp_entities_works() {
-    let mut world = World::default();
-    world.create_entity(&BYTE).unwrap();
-    world.create_entity(&POS).unwrap();
+    let mut world = World::new();
+    world.create_entity(EntityID::from_u64(1), &BYTE).unwrap();
+    world.create_entity(EntityID::from_u64(2), &POS).unwrap();
 
     let mut count = 0;
     query!(world, |pos: &Position| {
@@ -230,9 +238,13 @@ fn one_of_two_matching_single_comp_entities_works() {
 
 #[test]
 fn ono_of_two_matching_two_comp_entities_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &BYTE)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &BYTE))
+        .unwrap();
 
     let mut count = 0;
     query!(world, |rect: &Rectangle, byte: &Byte| {
@@ -245,9 +257,13 @@ fn ono_of_two_matching_two_comp_entities_works() {
 
 #[test]
 fn two_of_two_partially_matching_two_comp_entities_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &BYTE)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &BYTE))
+        .unwrap();
 
     let mut count = 0;
     query!(world, |byte: &Byte| {
@@ -259,9 +275,13 @@ fn two_of_two_partially_matching_two_comp_entities_works() {
 
 #[test]
 fn zero_of_two_matching_two_comp_entities_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &BYTE)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &BYTE))
+        .unwrap();
 
     let mut count = 0;
     query!(world, |_pos: &Position, _rect: &Rectangle| {
@@ -272,12 +292,22 @@ fn zero_of_two_matching_two_comp_entities_works() {
 
 #[test]
 fn one_additional_required_comp_works() {
-    let mut world = World::default();
-    world.create_entity((&POS, &BYTE)).unwrap();
-    world.create_entity((&BYTE, &Marked)).unwrap();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&Marked, &BYTE, &POS)).unwrap();
-    world.create_entity((&Marked, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&POS, &BYTE))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&BYTE, &Marked))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(3), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(4), (&Marked, &BYTE, &POS))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(5), (&Marked, &POS))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -292,11 +322,19 @@ fn one_additional_required_comp_works() {
 
 #[test]
 fn two_additional_required_comps_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT, &POS)).unwrap();
-    world.create_entity((&Marked, &BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &Marked, &BYTE)).unwrap();
-    world.create_entity((&POS, &RECT, &Marked, &BYTE)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT, &POS))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&Marked, &BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(3), (&POS, &Marked, &BYTE))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(4), (&POS, &RECT, &Marked, &BYTE))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -311,8 +349,10 @@ fn two_additional_required_comps_works() {
 
 #[test]
 fn excluding_one_comp_of_two_comp_entity_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -327,8 +367,10 @@ fn excluding_one_comp_of_two_comp_entity_works() {
 
 #[test]
 fn excluding_one_aliased_comp_of_two_comp_entity_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -343,8 +385,8 @@ fn excluding_one_aliased_comp_of_two_comp_entity_works() {
 
 #[test]
 fn excluding_comp_that_is_alias_of_queried_comp_works() {
-    let mut world = World::default();
-    world.create_entity(&BYTE).unwrap();
+    let mut world = World::new();
+    world.create_entity(EntityID::from_u64(1), &BYTE).unwrap();
 
     let mut count = 0;
     query!(
@@ -359,9 +401,13 @@ fn excluding_comp_that_is_alias_of_queried_comp_works() {
 
 #[test]
 fn excluding_one_of_two_two_comp_entities_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &BYTE)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &BYTE))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -376,9 +422,13 @@ fn excluding_one_of_two_two_comp_entities_works() {
 
 #[test]
 fn excluding_one_of_a_two_and_three_comp_entity_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &BYTE, &RECT)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &BYTE, &RECT))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -393,9 +443,13 @@ fn excluding_one_of_a_two_and_three_comp_entity_works() {
 
 #[test]
 fn excluding_both_of_a_two_and_three_comp_entity_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&POS, &BYTE, &RECT)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &BYTE, &RECT))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -410,8 +464,10 @@ fn excluding_both_of_a_two_and_three_comp_entity_works() {
 
 #[test]
 fn excluding_one_comp_of_three_comp_entity_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT, &POS))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -426,8 +482,10 @@ fn excluding_one_comp_of_three_comp_entity_works() {
 
 #[test]
 fn excluding_two_comps_of_three_comp_entity_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT, &POS))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -442,9 +500,13 @@ fn excluding_two_comps_of_three_comp_entity_works() {
 
 #[test]
 fn excluding_a_comp_each_of_two_two_comp_entities_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&BYTE, &POS)).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&BYTE, &POS))
+        .unwrap();
 
     let mut count = 0;
     query!(
@@ -459,10 +521,14 @@ fn excluding_a_comp_each_of_two_two_comp_entities_works() {
 
 #[test]
 fn excluding_two_of_three_entities_with_two_disallowed_comps_works() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    world.create_entity((&BYTE, &POS)).unwrap();
-    world.create_entity(&BYTE).unwrap();
+    let mut world = World::new();
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+    world
+        .create_entity(EntityID::from_u64(2), (&BYTE, &POS))
+        .unwrap();
+    world.create_entity(EntityID::from_u64(3), &BYTE).unwrap();
 
     let mut count = 0;
     query!(
@@ -477,10 +543,18 @@ fn excluding_two_of_three_entities_with_two_disallowed_comps_works() {
 
 #[test]
 fn correct_single_entity_is_included() {
-    let mut world = World::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    let correct_included = world.create_entity((&BYTE, &POS)).unwrap();
-    world.create_entity(&BYTE).unwrap();
+    let mut world = World::new();
+
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+
+    let correct_included = EntityID::from_u64(2);
+    world
+        .create_entity(correct_included, (&BYTE, &POS))
+        .unwrap();
+
+    world.create_entity(EntityID::from_u64(3), &BYTE).unwrap();
 
     query!(world, |entity: EntityID, _rect: &Position, _byte: &Byte| {
         assert_eq!(entity, correct_included);
@@ -489,12 +563,22 @@ fn correct_single_entity_is_included() {
 
 #[test]
 fn correct_two_entities_are_included() {
-    let mut world = World::default();
+    let mut world = World::new();
     let mut correct_included = HashSet::<_, Global>::default();
-    world.create_entity((&BYTE, &RECT)).unwrap();
-    correct_included.insert(world.create_entity((&BYTE, &POS, &Marked)).unwrap());
-    world.create_entity(&POS).unwrap();
-    correct_included.insert(world.create_entity((&BYTE, &Marked)).unwrap());
+
+    world
+        .create_entity(EntityID::from_u64(1), (&BYTE, &RECT))
+        .unwrap();
+
+    let id2 = EntityID::from_u64(2);
+    world.create_entity(id2, (&BYTE, &POS, &Marked)).unwrap();
+    correct_included.insert(id2);
+
+    world.create_entity(EntityID::from_u64(3), &POS).unwrap();
+
+    let id4 = EntityID::from_u64(4);
+    world.create_entity(id4, (&BYTE, &Marked)).unwrap();
+    correct_included.insert(id4);
 
     query!(
         world,
@@ -508,15 +592,25 @@ fn correct_two_entities_are_included() {
 
 #[test]
 fn correct_three_entities_are_included() {
-    let mut world = World::default();
+    let mut world = World::new();
     let mut correct_included = HashSet::<_, Global>::default();
-    correct_included.insert(world.create_entity((&RECT, &POS)).unwrap());
-    world.create_entity((&POS, &RECT, &Marked)).unwrap();
-    world.create_entity(&RECT).unwrap();
-    world.create_entity(&Marked).unwrap();
-    correct_included.insert(world.create_entity((&POS, &RECT)).unwrap());
-    world.create_entity((&BYTE, &Marked)).unwrap();
-    correct_included.insert(world.create_entity((&BYTE, &POS, &RECT)).unwrap());
+    let id1 = EntityID::from_u64(1);
+    world.create_entity(id1, (&RECT, &POS)).unwrap();
+    correct_included.insert(id1);
+    world
+        .create_entity(EntityID::from_u64(2), (&POS, &RECT, &Marked))
+        .unwrap();
+    world.create_entity(EntityID::from_u64(3), &RECT).unwrap();
+    world.create_entity(EntityID::from_u64(4), &Marked).unwrap();
+    let id5 = EntityID::from_u64(5);
+    world.create_entity(id5, (&POS, &RECT)).unwrap();
+    correct_included.insert(id5);
+    world
+        .create_entity(EntityID::from_u64(6), (&BYTE, &Marked))
+        .unwrap();
+    let id7 = EntityID::from_u64(7);
+    world.create_entity(id7, (&BYTE, &POS, &RECT)).unwrap();
+    correct_included.insert(id7);
 
     query!(
         world,
@@ -531,14 +625,26 @@ fn correct_three_entities_are_included() {
 
 #[test]
 fn all_entities_are_included_when_no_comps_specified() {
-    let mut world = World::default();
+    let mut world = World::new();
     let mut correct_included = HashSet::<_, Global>::default();
-    correct_included.insert(world.create_entity((&POS, &RECT, &Marked)).unwrap());
-    correct_included.insert(world.create_entity((&BYTE, &RECT)).unwrap());
-    correct_included.insert(world.create_entity((&BYTE, &POS, &Marked)).unwrap());
-    correct_included.insert(world.create_entity(&POS).unwrap());
-    correct_included.insert(world.create_entity((&BYTE, &Marked)).unwrap());
-    correct_included.insert(world.create_entity(&BYTE).unwrap());
+    let id1 = EntityID::from_u64(1);
+    world.create_entity(id1, (&POS, &RECT, &Marked)).unwrap();
+    correct_included.insert(id1);
+    let id2 = EntityID::from_u64(2);
+    world.create_entity(id2, (&BYTE, &RECT)).unwrap();
+    correct_included.insert(id2);
+    let id3 = EntityID::from_u64(3);
+    world.create_entity(id3, (&BYTE, &POS, &Marked)).unwrap();
+    correct_included.insert(id3);
+    let id4 = EntityID::from_u64(4);
+    world.create_entity(id4, &POS).unwrap();
+    correct_included.insert(id4);
+    let id5 = EntityID::from_u64(5);
+    world.create_entity(id5, (&BYTE, &Marked)).unwrap();
+    correct_included.insert(id5);
+    let id6 = EntityID::from_u64(6);
+    world.create_entity(id6, &BYTE).unwrap();
+    correct_included.insert(id6);
 
     query!(world, |entity: EntityID| {
         assert!(correct_included.remove(&entity));

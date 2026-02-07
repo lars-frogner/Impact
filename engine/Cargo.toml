@@ -9,6 +9,7 @@ members = [
     "crates/impact_ecs/impact_ecs_macros",
     "crates/impact_geometry",
     "crates/impact_gpu",
+    "crates/impact_id",
     "crates/impact_io",
     "crates/impact_light",
     "crates/impact_material",
@@ -200,6 +201,7 @@ arbitrary = [
     "impact_controller/arbitrary",
     "impact_ecs/arbitrary",
     "impact_gpu/arbitrary",
+    "impact_id/arbitrary",
     "impact_math/arbitrary",
     "impact_physics/arbitrary",
     "impact_rendering/arbitrary",
@@ -214,6 +216,7 @@ roc_codegen = [
     "impact_camera/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_geometry/roc_codegen",
+    "impact_id/roc_codegen",
     "impact_light/roc_codegen",
     "impact_material/roc_codegen",
     "impact_math/roc_codegen",
@@ -249,6 +252,7 @@ impact_controller = { path = "crates/impact_controller", features = [
 impact_ecs = { path = "crates/impact_ecs" }
 impact_geometry = { path = "crates/impact_geometry", features = ["ecs"] }
 impact_gpu = { path = "crates/impact_gpu", features = ["serde"] }
+impact_id = { path = "crates/impact_id" }
 impact_io = { path = "crates/impact_io", features = ["ron"] }
 impact_light = { path = "crates/impact_light", features = ["ecs", "serde"] }
 log = { path = "../interop/log" }

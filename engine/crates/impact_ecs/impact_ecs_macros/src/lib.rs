@@ -182,7 +182,7 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 ///     );
 /// }
 ///
-/// let mut world = World::default();
+/// let mut world = World::new();
 /// let mut components = ArchetypeComponentStorage::try_from_view(
 ///     (&[Light, Light],
 ///      &[Flux(1.0), Flux(5.0)],
@@ -271,13 +271,12 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 ///
 /// # Examples
 /// ```ignore
-/// # use impact_ecs::{
-/// #     world::{World, EntityID}
-/// # };
+/// # use impact_ecs::world::World;
 /// # use impact_ecs_macros::{
 /// #     ComponentDoctest as Component,
 /// #     query_doctest as query,
 /// # };
+/// # use impact_id::{EntityID, EntityIDManager};
 /// # use bytemuck::{Zeroable, Pod};
 /// # use anyhow::Error;
 /// # use impact_containers::HashSet;
@@ -298,10 +297,13 @@ pub fn setup_doctest(input: TokenStream) -> TokenStream {
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Stuck;
 /// #
-/// let mut world = World::default();
-/// let entity_1_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active))?;
-/// let entity_2_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
-/// let entity_3_id = world.create_entity((&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;
+/// let mut id_manager = EntityIDManager::new();
+/// let [entity_1_id, entity_2_id, entity_3_id] = id_manager.provide_id_arr();
+///
+/// let mut world = World::new();
+/// world.create_entity(entity_1_id, (&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active))?;
+/// world.create_entity(entity_2_id, (&Mass(1.0), &Distance(0.0), &Speed(10.0)))?;
+/// world.create_entity(entity_3_id, (&Mass(1.0), &Distance(0.0), &Speed(10.0), &Active, &Stuck))?;
 ///
 /// let mut matched_entities = HashSet::default();
 ///
