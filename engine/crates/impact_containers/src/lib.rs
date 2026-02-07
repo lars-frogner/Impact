@@ -19,6 +19,8 @@ pub use hashbrown::hash_set;
 pub use rustc_hash::FxBuildHasher as RandomState;
 pub use rustc_hash::FxHasher as DefaultHasher;
 
+pub use nohash_hasher;
+
 use impact_alloc::Global;
 
 pub type HashMap<K, V, A = Global> = hashbrown::HashMap<K, V, rustc_hash::FxBuildHasher, A>;

@@ -6,7 +6,7 @@ use super::component::{
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap};
+use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap, nohash_hasher};
 use impact_ecs_macros::archetype_of;
 use impact_id::EntityID;
 use impact_math::hash::Hash32;

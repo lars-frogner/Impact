@@ -3,7 +3,7 @@
 use anyhow::{Result, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use impact_containers::{AlignedByteVec, Alignment};
+use impact_containers::{AlignedByteVec, Alignment, nohash_hasher};
 use std::{mem, ops::Deref};
 
 /// Represents a component.

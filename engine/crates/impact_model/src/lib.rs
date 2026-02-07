@@ -13,6 +13,7 @@ use gpu_resource::{InstanceFeatureGPUBuffer, ModelInstanceGPUBufferMap};
 use impact_containers::hash_map::Entry;
 use impact_containers::{
     AlignedByteVec, Alignment, HashMap, HashSet, KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap,
+    nohash_hasher,
 };
 use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_math::{self, hash::Hash64};
