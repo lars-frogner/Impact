@@ -3,7 +3,7 @@
 use crate::{
     SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
     SceneGraphParentNodeHandle,
-    graph::{FeatureIDSet, ModelInstanceFlags, SceneGraph},
+    graph::{FeatureIDSet, ModelInstanceFlags, ModelInstanceNodeID, SceneGraph},
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
@@ -94,12 +94,10 @@ pub fn setup_scene_graph_group_node(
     scene_graph: &mut SceneGraph,
     group_to_parent_transform: Isometry3C,
     parent: Option<&SceneGraphParentNodeHandle>,
-) -> SceneGraphGroupNodeHandle {
+) -> Result<SceneGraphGroupNodeHandle> {
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
-
-    SceneGraphGroupNodeHandle::new(
-        scene_graph.create_group_node(parent_node_id, group_to_parent_transform),
-    )
+    let node_id = scene_graph.create_group_node(parent_node_id, group_to_parent_transform)?;
+    Ok(SceneGraphGroupNodeHandle::new(node_id))
 }
 
 pub fn setup_scene_graph_model_instance_node(
@@ -107,6 +105,7 @@ pub fn setup_scene_graph_model_instance_node(
     material_registry: &MaterialRegistry,
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
+    entity_id: EntityID,
     model_to_parent_transform: Similarity3C,
     mesh_id: TriangleMeshID,
     material_id: MaterialID,
@@ -179,6 +178,7 @@ pub fn setup_scene_graph_model_instance_node(
 
     model_instance_manager.register_instance(model_id, &feature_type_ids);
 
+    let model_instance_node_id = ModelInstanceNodeID::from_entity_id(entity_id);
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
     let mut model_instance_flags = flags.into();
@@ -187,16 +187,19 @@ pub fn setup_scene_graph_model_instance_node(
         model_instance_flags |= ModelInstanceFlags::HAS_INDEPENDENT_MATERIAL_VALUES;
     }
 
+    scene_graph.create_model_instance_node(
+        parent_node_id,
+        model_instance_node_id,
+        model_to_parent_transform,
+        model_id,
+        bounding_sphere.map(|sphere| sphere.compact()),
+        feature_ids_for_rendering,
+        feature_ids_for_shadow_mapping,
+        model_instance_flags,
+    )?;
+
     Ok((
-        SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
-            parent_node_id,
-            model_to_parent_transform,
-            model_id,
-            bounding_sphere.map(|sphere| sphere.compact()),
-            feature_ids_for_rendering,
-            feature_ids_for_shadow_mapping,
-            model_instance_flags,
-        )),
+        SceneGraphModelInstanceNodeHandle::new(model_instance_node_id),
         flags,
     ))
 }
@@ -206,6 +209,7 @@ pub fn remove_scene_graph_model_instance_node(
     scene_graph: &mut SceneGraph,
     model_instance_node: &SceneGraphModelInstanceNodeHandle,
 ) {
-    let model_id = scene_graph.remove_model_instance_node(model_instance_node.id);
-    model_instance_manager.unregister_instance(&model_id);
+    if let Some(model_id) = scene_graph.remove_model_instance_node(model_instance_node.id) {
+        model_instance_manager.unregister_instance(&model_id);
+    }
 }

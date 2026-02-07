@@ -469,10 +469,12 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
             ModelTransform,
             SceneEntityFlags
         )> {
+            let entity_id = todo!();
             setup::create_model_instance_node_for_voxel_object(
                 voxel_manager.object_manager(),
                 &mut model_instance_manager,
                 &mut scene_graph,
+                entity_id,
                 voxel_object_id,
                 model_transform,
                 frame,

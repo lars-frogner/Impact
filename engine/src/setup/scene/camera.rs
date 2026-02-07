@@ -6,7 +6,7 @@ use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};
 use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
 use impact_geometry::ReferenceFrame;
 use impact_math::bounds::UpperExclusiveBounds;
-use impact_scene::{SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle};
+use impact_scene::{SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle, graph::CameraNodeID};
 use parking_lot::RwLock;
 
 /// Checks if the entity-to-be with the given components has the required
@@ -49,7 +49,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
         |frame: Option<&ReferenceFrame>,
          camera_props: &setup::PerspectiveCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
-         -> SceneGraphCameraNodeHandle {
+         -> Result<SceneGraphCameraNodeHandle> {
             let frame = frame.copied().unwrap_or_default();
 
             let camera = PerspectiveCamera::new(
@@ -63,15 +63,19 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 
             let camera_to_parent_transform = frame.create_transform_to_parent_space();
 
+            let camera_node_id = CameraNodeID::from_entity_id(todo!());
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id = scene_graph
-                .create_camera_node(parent_node_id, camera_to_parent_transform.compact());
+            scene_graph.create_camera_node(
+                parent_node_id,
+                camera_node_id,
+                camera_to_parent_transform.compact(),
+            )?;
 
-            camera_manager.add_active_camera(camera, node_id);
+            camera_manager.add_active_camera(camera, camera_node_id);
 
-            SceneGraphCameraNodeHandle::new(node_id)
+            Ok(SceneGraphCameraNodeHandle::new(camera_node_id))
         },
         ![SceneGraphCameraNodeHandle]
     );
@@ -101,7 +105,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
         |frame: Option<&ReferenceFrame>,
          camera_props: &setup::OrthographicCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
-         -> SceneGraphCameraNodeHandle {
+         -> Result<SceneGraphCameraNodeHandle> {
             let frame = frame.copied().unwrap_or_default();
 
             let camera = OrthographicCamera::new(
@@ -115,15 +119,19 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 
             let camera_to_parent_transform = frame.create_transform_to_parent_space();
 
+            let camera_node_id = CameraNodeID::from_entity_id(todo!());
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
-            let node_id = scene_graph
-                .create_camera_node(parent_node_id, camera_to_parent_transform.compact());
+            scene_graph.create_camera_node(
+                parent_node_id,
+                camera_node_id,
+                camera_to_parent_transform.compact(),
+            )?;
 
-            camera_manager.add_active_camera(camera, node_id);
+            camera_manager.add_active_camera(camera, camera_node_id);
 
-            SceneGraphCameraNodeHandle::new(node_id)
+            Ok(SceneGraphCameraNodeHandle::new(camera_node_id))
         },
         ![SceneGraphCameraNodeHandle]
     );

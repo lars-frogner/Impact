@@ -16,6 +16,7 @@ use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_id::EntityID;
 use impact_math::{hash::Hash32, vector::Vector3C};
 use impact_model::{
     InstanceFeature,
@@ -28,7 +29,7 @@ use impact_physics::{
 };
 use impact_scene::{
     SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::{FeatureIDSet, SceneGraph},
+    graph::{FeatureIDSet, ModelInstanceNodeID, SceneGraph},
     model::ModelInstanceManager,
 };
 use roc_integration::roc;
@@ -544,6 +545,7 @@ pub fn create_model_instance_node_for_voxel_object(
     voxel_object_manager: &VoxelObjectManager,
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
+    entity_id: EntityID,
     voxel_object_id: &VoxelObjectID,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
@@ -602,18 +604,22 @@ pub fn create_model_instance_node_for_voxel_object(
         Some(voxel_object.compute_bounding_sphere())
     };
 
+    let model_instance_node_id = ModelInstanceNodeID::from_entity_id(entity_id);
     let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
+    scene_graph.create_model_instance_node(
+        parent_node_id,
+        model_instance_node_id,
+        model_to_parent_transform.compact(),
+        model_id,
+        bounding_sphere.map(|sphere| sphere.compact()),
+        FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
+        FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
+        flags.into(),
+    )?;
+
     Ok((
-        SceneGraphModelInstanceNodeHandle::new(scene_graph.create_model_instance_node(
-            parent_node_id,
-            model_to_parent_transform.compact(),
-            model_id,
-            bounding_sphere.map(|sphere| sphere.compact()),
-            FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
-            FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
-            flags.into(),
-        )),
+        SceneGraphModelInstanceNodeHandle::new(model_instance_node_id),
         model_transform,
         flags,
     ))
