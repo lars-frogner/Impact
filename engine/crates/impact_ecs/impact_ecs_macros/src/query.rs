@@ -354,7 +354,7 @@ fn generate_closure_call_code(
 fn generate_entity_iter_code(table_name: &Ident, entity_arg_name: &Ident) -> (Ident, TokenStream) {
     let iter_name = format_ident!("{}_iter_internal__", entity_arg_name);
     let code = quote! {
-        let #iter_name = #table_name.all_entities();
+        let #iter_name = #table_name.all_entities().iter().copied();
     };
     (iter_name, code)
 }

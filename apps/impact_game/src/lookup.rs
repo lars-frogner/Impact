@@ -92,7 +92,7 @@ use crate::entities::player::{
     inventory::InventoryMass,
     tools::{CapsuleAbsorbedVoxelMass, LauncherLaunchSpeed, SphereAbsorbedVoxelMass},
 };
-use impact::impact_ecs::world::EntityID;
+use impact::impact_id::EntityID;
 use roc_integration::roc;
 
 define_lookup_target_enum! {

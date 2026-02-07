@@ -16,6 +16,7 @@ pub mod systems;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use graph::{CameraNodeID, GroupNodeID, ModelInstanceNodeID};
+use impact_id::EntityID;
 use roc_integration::roc;
 
 bitflags! {
@@ -90,7 +91,6 @@ define_component_type! {
     }
 }
 
-#[cfg(feature = "ecs")]
 define_component_type! {
     /// A maximum distance from an anchor entity that will remove this entity
     /// when exceeded.
@@ -99,7 +99,7 @@ define_component_type! {
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct RemovalBeyondDistance {
         /// The ID of the entity the distance is measured from.
-        pub anchor_id: impact_ecs::world::EntityID,
+        pub anchor_id: EntityID,
         /// The square of the maximum distance.
         pub max_dist_squared: f64
     }
@@ -159,13 +159,12 @@ impl SceneGraphModelInstanceNodeHandle {
     }
 }
 
-#[cfg(feature = "ecs")]
 #[roc]
 impl RemovalBeyondDistance {
     /// Creates a new removal beyond distance rule with the given anchor entity
     /// and distance.
     #[roc(body = "{ anchor_id, max_dist_squared: Num.to_f64(max_distance * max_distance) }")]
-    pub fn new(anchor_id: impact_ecs::world::EntityID, max_distance: f32) -> Self {
+    pub fn new(anchor_id: EntityID, max_distance: f32) -> Self {
         Self {
             anchor_id,
             max_dist_squared: f64::from(max_distance.powi(2)),

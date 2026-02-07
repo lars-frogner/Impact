@@ -8,9 +8,10 @@ use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashMap;
 use impact_ecs::{
     query,
-    world::{EntityID, EntityStager, World as ECSWorld},
+    world::{EntityStager, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_id::EntityID;
 use impact_light::{
     AmbientEmission, AmbientLightID, LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,

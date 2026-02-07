@@ -1,16 +1,14 @@
 //! Organization of ECS entities into archetypes.
 
-use super::{
-    component::{
-        CanHaveSingleInstance, Component, ComponentArray, ComponentID, ComponentSlice,
-        ComponentStorage, ComponentView, SingleInstance,
-    },
-    world::EntityID,
+use super::component::{
+    CanHaveSingleInstance, Component, ComponentArray, ComponentID, ComponentSlice,
+    ComponentStorage, ComponentView, SingleInstance,
 };
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{KeyIndexMapper, NoHashKeyIndexMapper, NoHashMap};
 use impact_ecs_macros::archetype_of;
+use impact_id::EntityID;
 use impact_math::hash::Hash32;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use pastey::paste;
@@ -1008,16 +1006,18 @@ impl ArchetypeTable {
     /// a table for the corresponding [`Archetype`] and inserts the
     /// given data, one row per entity.
     ///
-    /// # Panics
-    /// - If the number of entities differs from the number of instances of each
+    /// # Errors
+    /// Returns an error if:
+    /// - Any of the entity IDs are equal.
+    /// - The number of entities differs from the number of instances of each
     ///   component type.
-    /// - If any of the entity IDs are equal.
     pub(crate) fn new_with_entities(
         entity_ids: impl IntoIterator<Item = EntityID>,
         components: ArchetypeComponents<impl ComponentArray>,
-    ) -> Self {
+    ) -> Result<Self> {
         // Initialize mapper between entity ID and index in component storages
-        let entity_index_mapper = KeyIndexMapper::new_with_keys(entity_ids);
+        let entity_index_mapper = KeyIndexMapper::try_new_with_keys(entity_ids)
+            .map_err(|_err| anyhow!("Got duplicate entity ID"))?;
 
         Self::new_with_entity_index_mapper(entity_index_mapper, components)
     }
@@ -1037,33 +1037,50 @@ impl ArchetypeTable {
         self.entity_index_mapper.contains_key(entity_id)
     }
 
-    /// Returns an iterator over all entities whose components
-    /// are stored in the table.
-    pub fn all_entities(&self) -> impl Iterator<Item = EntityID> {
-        self.entity_index_mapper.key_at_each_idx()
+    /// Returns an slice with all entities whose components are stored in the
+    /// table.
+    pub fn all_entities(&self) -> &[EntityID] {
+        self.entity_index_mapper.keys_at_indices()
     }
 
-    /// Takes an iterable of [`EntityID`]s and all the associated
-    /// component data (as an [`ArchetypeComponents`]) and appends
-    /// the given data to the table, one row per entity.
+    /// Takes an iterable of [`EntityID`]s and all the associated component data
+    /// (as an [`ArchetypeComponents`]) and appends the given data to the table,
+    /// one row per entity.
     ///
-    /// # Panics
-    /// - If the number of entities differs from the number of instances of each
+    /// # Returns
+    /// A slice with all the added entity IDs.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Any of the given entity IDs are equal to a new or existing entity ID.
+    /// - The number of entities differs from the number of instances of each
     ///   component type.
-    /// - If any of the given entity IDs are equal to a new or existing entity
-    ///   ID.
     pub(crate) fn add_entities(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
         components: ArchetypeComponents<impl ComponentArray>,
-    ) {
+    ) -> Result<&[EntityID]> {
         let original_entity_count = self.entity_index_mapper.len();
-        self.entity_index_mapper.push_keys(entity_ids);
+
+        self.entity_index_mapper
+            .try_push_keys(entity_ids)
+            .map_err(|idx| {
+                anyhow!(
+                    "Entity with ID {} already exists",
+                    self.entity_index_mapper.key_at_idx(idx)
+                )
+            })?;
+
         let added_entity_count = self.entity_index_mapper.len() - original_entity_count;
-        assert_eq!(
-            added_entity_count, components.component_count,
-            "Number of components per component type differs from number of entities"
-        );
+
+        if added_entity_count != components.component_count {
+            self.entity_index_mapper.truncate(original_entity_count);
+            bail!(
+                "Number of components per component type ({}) differs from number of entities ({})",
+                components.component_count,
+                added_entity_count
+            );
+        }
 
         for array in components.into_component_arrays() {
             let storage_idx = self.component_index_map[&array.component_id()];
@@ -1071,6 +1088,8 @@ impl ArchetypeTable {
                 .write()
                 .push_array(&array);
         }
+
+        Ok(&self.entity_index_mapper.keys_at_indices()[original_entity_count..])
     }
 
     /// Removes the entity with the given [`EntityID`] and all its data from the
@@ -1337,7 +1356,7 @@ impl ArchetypeTable {
     fn new_with_entity_index_mapper(
         entity_index_mapper: KeyIndexMapper<EntityID>,
         components: ArchetypeComponents<impl ComponentArray>,
-    ) -> Self {
+    ) -> Result<Self> {
         let ArchetypeComponents {
             archetype,
             component_index_map,
@@ -1345,12 +1364,15 @@ impl ArchetypeTable {
             component_count,
         } = components;
 
-        assert_eq!(
-            entity_index_mapper.len(),
-            component_count,
-            "Number of components per component type differs from number of entities"
-        );
-        Self {
+        if entity_index_mapper.len() != component_count {
+            bail!(
+                "Number of components per component type ({}) differs from number of entities ({})",
+                component_count,
+                entity_index_mapper.len()
+            );
+        }
+
+        Ok(Self {
             archetype,
             entity_index_mapper,
             component_index_map: component_index_map.into_map(),
@@ -1359,7 +1381,7 @@ impl ArchetypeTable {
                 .into_iter()
                 .map(|array| RwLock::new(array.into_storage()))
                 .collect(),
-        }
+        })
     }
 }
 
@@ -2614,16 +2636,17 @@ mod tests {
 
     #[test]
     fn constructing_table_works() {
-        let entity_0 = EntityID(0);
-        let entity_42 = EntityID(42);
-        let entity_10 = EntityID(10);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_42 = EntityID::from_u64(42);
+        let entity_10 = EntityID::from_u64(10);
 
-        let table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        let table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
         assert!(table.has_entity(entity_0));
         assert_eq!(table.entity(entity_0).component::<Byte>(), &BYTE);
 
         let table =
-            ArchetypeTable::new_with_entities([entity_42], (&RECT, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_42], (&RECT, &POS).try_into().unwrap())
+                .unwrap();
         assert!(table.has_entity(entity_42));
         let entity = table.entity(entity_42);
         assert_eq!(entity.component::<Position>(), &POS);
@@ -2632,7 +2655,8 @@ mod tests {
         let table = ArchetypeTable::new_with_entities(
             [entity_10],
             (&BYTE, &RECT, &POS).try_into().unwrap(),
-        );
+        )
+        .unwrap();
         assert!(table.has_entity(entity_10));
         let entity = table.entity(entity_10);
         assert_eq!(entity.component::<Byte>(), &BYTE);
@@ -2642,42 +2666,48 @@ mod tests {
 
     #[test]
     fn getting_iter_over_all_entities_works() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
         let mut inserted_entities: HashSet<_> = [entity_0, entity_1].into_iter().collect();
 
         let mut table =
-            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
-        table.add_entities([entity_1], (&RECT, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap())
+                .unwrap();
+        table
+            .add_entities([entity_1], (&RECT, &POS).try_into().unwrap())
+            .unwrap();
 
-        let mut entities = table.all_entities();
+        let mut entities = table.all_entities().iter();
 
         let entity = entities.next().unwrap();
-        assert!(inserted_entities.remove(&entity));
+        assert!(inserted_entities.remove(entity));
 
         let entity = entities.next().unwrap();
-        assert!(inserted_entities.remove(&entity));
+        assert!(inserted_entities.remove(entity));
 
         assert!(entities.next().is_none());
     }
 
     #[test]
     fn adding_entity_to_table_works() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
-        let entity_3 = EntityID(3);
-        let entity_7 = EntityID(7);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
+        let entity_3 = EntityID::from_u64(3);
+        let entity_7 = EntityID::from_u64(7);
 
-        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
-        table.add_entities([entity_1], (&BYTE).into());
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
+        table.add_entities([entity_1], (&BYTE).into()).unwrap();
         assert!(table.has_entity(entity_0));
         assert_eq!(table.entity(entity_0).component::<Byte>(), &BYTE);
         assert!(table.has_entity(entity_1));
         assert_eq!(table.entity(entity_1).component::<Byte>(), &BYTE);
 
         let mut table =
-            ArchetypeTable::new_with_entities([entity_3], (&RECT, &POS).try_into().unwrap());
-        table.add_entities([entity_7], (&RECT, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_3], (&RECT, &POS).try_into().unwrap())
+                .unwrap();
+        table
+            .add_entities([entity_7], (&RECT, &POS).try_into().unwrap())
+            .unwrap();
         assert!(table.has_entity(entity_3));
         let entity = table.entity(entity_3);
         assert_eq!(entity.component::<Position>(), &POS);
@@ -2690,31 +2720,37 @@ mod tests {
 
     #[test]
     fn adding_entities_with_components_in_different_orders_to_table_works() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
 
         let mut table =
-            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap())
+                .unwrap();
 
-        table.add_entities([entity_1], (&POS, &BYTE).try_into().unwrap());
+        table
+            .add_entities([entity_1], (&POS, &BYTE).try_into().unwrap())
+            .unwrap();
     }
 
     #[test]
     #[should_panic]
     fn adding_existing_entity_to_table_fails() {
-        let entity_0 = EntityID(0);
-        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
-        table.add_entities([entity_0], (&BYTE).into());
+        let entity_0 = EntityID::from_u64(0);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
+        table.add_entities([entity_0], (&BYTE).into()).unwrap();
     }
 
     #[test]
     fn removing_entity_from_table_works() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
 
         let mut table =
-            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
-        table.add_entities([entity_1], (&RECT, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap())
+                .unwrap();
+        table
+            .add_entities([entity_1], (&RECT, &POS).try_into().unwrap())
+            .unwrap();
 
         table.remove_entity(entity_0).unwrap();
         assert!(!table.has_entity(entity_0));
@@ -2727,25 +2763,29 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_missing_entity_from_table_fails() {
-        let mut table =
-            ArchetypeTable::new_with_entities([EntityID(0)], (&RECT, &POS).try_into().unwrap());
-        table.remove_entity(EntityID(1)).unwrap();
+        let mut table = ArchetypeTable::new_with_entities(
+            [EntityID::from_u64(0)],
+            (&RECT, &POS).try_into().unwrap(),
+        )
+        .unwrap();
+        table.remove_entity(EntityID::from_u64(1)).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn removing_entity_from_empty_table_fails() {
-        let entity_0 = EntityID(0);
+        let entity_0 = EntityID::from_u64(0);
         let mut table =
-            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap())
+                .unwrap();
         table.remove_entity(entity_0).unwrap();
         table.remove_entity(entity_0).unwrap();
     }
 
     #[test]
     fn removing_all_entities_from_single_entity_table_works() {
-        let entity_0 = EntityID(0);
-        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        let entity_0 = EntityID::from_u64(0);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
 
         table.remove_all_entities();
 
@@ -2762,12 +2802,15 @@ mod tests {
 
     #[test]
     fn removing_all_entities_from_multi_entity_table_works() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
 
         let mut table =
-            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap());
-        table.add_entities([entity_1], (&RECT, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&RECT, &POS).try_into().unwrap())
+                .unwrap();
+        table
+            .add_entities([entity_1], (&RECT, &POS).try_into().unwrap())
+            .unwrap();
 
         table.remove_all_entities();
 
@@ -2792,13 +2835,13 @@ mod tests {
 
     #[test]
     fn reusing_table_after_removing_all_entities_works() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
 
-        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
         table.remove_all_entities();
 
-        table.add_entities([entity_1], (&BYTE2).into());
+        table.add_entities([entity_1], (&BYTE2).into()).unwrap();
 
         assert!(!table.has_entity(entity_0));
         assert!(table.has_entity(entity_1));
@@ -2807,8 +2850,8 @@ mod tests {
 
     #[test]
     fn getting_cloned_components_for_existing_entity_with_single_component_works() {
-        let entity_0 = EntityID(0);
-        let table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        let entity_0 = EntityID::from_u64(0);
+        let table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
 
         let cloned_components = table.get_cloned_components_for_entity(entity_0).unwrap();
 
@@ -2821,11 +2864,12 @@ mod tests {
 
     #[test]
     fn getting_cloned_components_for_existing_entity_with_multiple_components_works() {
-        let entity_42 = EntityID(42);
+        let entity_42 = EntityID::from_u64(42);
         let table = ArchetypeTable::new_with_entities(
             [entity_42],
             (&BYTE, &POS, &RECT).try_into().unwrap(),
-        );
+        )
+        .unwrap();
 
         let cloned_components = table.get_cloned_components_for_entity(entity_42).unwrap();
 
@@ -2845,10 +2889,11 @@ mod tests {
 
     #[test]
     fn getting_cloned_components_for_nonexistent_entity_returns_none() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
         let table =
-            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap())
+                .unwrap();
 
         let result = table.get_cloned_components_for_entity(entity_1);
 
@@ -2857,8 +2902,8 @@ mod tests {
 
     #[test]
     fn getting_cloned_components_for_entity_from_empty_table_returns_none() {
-        let entity_0 = EntityID(0);
-        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into());
+        let entity_0 = EntityID::from_u64(0);
+        let mut table = ArchetypeTable::new_with_entities([entity_0], (&BYTE).into()).unwrap();
         table.remove_all_entities();
 
         let result = table.get_cloned_components_for_entity(entity_0);
@@ -2868,11 +2913,14 @@ mod tests {
 
     #[test]
     fn getting_cloned_components_gives_independent_data_with_multiple_entities() {
-        let entity_0 = EntityID(0);
-        let entity_1 = EntityID(1);
+        let entity_0 = EntityID::from_u64(0);
+        let entity_1 = EntityID::from_u64(1);
         let mut table =
-            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap());
-        table.add_entities([entity_1], (&BYTE2, &POS2).try_into().unwrap());
+            ArchetypeTable::new_with_entities([entity_0], (&BYTE, &POS).try_into().unwrap())
+                .unwrap();
+        table
+            .add_entities([entity_1], (&BYTE2, &POS2).try_into().unwrap())
+            .unwrap();
 
         let cloned_components_0 = table.get_cloned_components_for_entity(entity_0).unwrap();
         let cloned_components_1 = table.get_cloned_components_for_entity(entity_1).unwrap();

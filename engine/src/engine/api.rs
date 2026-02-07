@@ -16,8 +16,9 @@ use impact_ecs::{
         Component, ComponentArray, ComponentID, ComponentInstance, ComponentStorage, ComponentView,
         SingleInstance,
     },
-    world::{EntityID, QueryableWorld},
+    world::QueryableWorld,
 };
+use impact_id::EntityID;
 use impact_material::values::UniformColorPhysicalMaterialValues;
 use impact_model::InstanceFeature;
 use impact_physics::{
@@ -116,6 +117,8 @@ impl Engine {
         CA: ComponentArray,
         E: Into<anyhow::Error>,
     {
+        self.entity_id_manager.olock().register_id(entity_id)?;
+
         let mut components = components
             .try_into()
             .map_err(E::into)?
@@ -126,7 +129,9 @@ impl Engine {
 
         self.ecs_world
             .owrite()
-            .create_entity_with_id(entity_id, SingleInstance::new(components))
+            .create_entity(entity_id, SingleInstance::new(components))?;
+
+        Ok(())
     }
 
     pub fn create_entity<AC, E>(
@@ -137,10 +142,21 @@ impl Engine {
         AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        Ok(self
-            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
-            .pop()
-            .unwrap())
+        let mut components = components
+            .try_into()
+            .map_err(E::into)?
+            .into_inner()
+            .into_storage();
+
+        let entity_id = self.entity_id_manager.olock().provide_id();
+
+        setup::perform_setup_for_new_entities(self, &mut components)?;
+
+        self.ecs_world
+            .owrite()
+            .create_entity(entity_id, SingleInstance::new(components))?;
+
+        Ok(entity_id)
     }
 
     pub fn create_entities<AC, E>(
@@ -152,8 +168,19 @@ impl Engine {
         E: Into<anyhow::Error>,
     {
         let mut components = components.try_into().map_err(E::into)?.into_storage();
+
+        let entity_ids = self
+            .entity_id_manager
+            .olock()
+            .provide_id_vec(components.component_count());
+
         setup::perform_setup_for_new_entities(self, &mut components)?;
-        self.ecs_world.owrite().create_entities(components)
+
+        self.ecs_world
+            .owrite()
+            .create_entities(entity_ids.iter().copied(), components)?;
+
+        Ok(entity_ids)
     }
 
     pub fn update_entity<A>(
@@ -188,7 +215,10 @@ impl Engine {
     pub fn remove_entity(&self, entity_id: EntityID) -> Result<()> {
         let mut ecs_world = self.ecs_world.owrite();
         setup::perform_cleanup_for_removed_entity(self, &ecs_world.entity(entity_id))?;
-        ecs_world.remove_entity(entity_id)
+        ecs_world.remove_entity(entity_id)?;
+        drop(ecs_world);
+        self.entity_id_manager.olock().unregister_id(entity_id);
+        Ok(())
     }
 
     pub fn for_entity_components<I>(

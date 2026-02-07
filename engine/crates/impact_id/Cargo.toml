@@ -1,0 +1,23 @@
+[package]
+name = "impact_id"
+description = "IDs for entities in the Impact engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[features]
+arbitrary = ["dep:arbitrary"]
+roc_codegen = ["roc_integration/roc_codegen"]
+
+[dependencies]
+anyhow = { workspace = true }
+arbitrary = { workspace = true, optional = true }
+bytemuck = { workspace = true }
+impact_containers = { path = "../impact_containers" }
+impact_math = { path = "../impact_math" }
+inventory = { workspace = true }
+nohash-hasher = { workspace = true }
+roc_integration = { path = "../../../roc_integration" }
+
+[lints]
+workspace = true

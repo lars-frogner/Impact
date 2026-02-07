@@ -16,6 +16,7 @@ use crate::{
 use absorption::{VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID, VoxelAbsorptionManager};
 use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
+use impact_id::EntityID;
 use impact_math::{transform::Isometry3, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
@@ -31,12 +32,10 @@ use tinyvec::TinyVec;
 /// handling the lifecycle of voxel objects during interactions like voxel
 /// absorption.
 pub trait VoxelObjectInteractionContext {
-    type EntityID;
-
     /// Gathers all voxel object entities that may participate in interactions.
     fn gather_voxel_object_entities<A: Allocator>(
         &mut self,
-        entities: &mut AVec<VoxelObjectEntity<Self::EntityID>, A>,
+        entities: &mut AVec<VoxelObjectEntity, A>,
     );
 
     /// Gathers all active voxel-absorbing sphere entities.
@@ -54,11 +53,11 @@ pub trait VoxelObjectInteractionContext {
     fn on_new_disconnected_voxel_object_entity(
         &mut self,
         entity: NewVoxelObjectEntity,
-        parent_entity_id: Self::EntityID,
+        parent_entity_id: EntityID,
     );
 
     /// Called when a voxel object becomes empty.
-    fn on_empty_voxel_object_entity(&mut self, entity_id: Self::EntityID);
+    fn on_empty_voxel_object_entity(&mut self, entity_id: EntityID);
 }
 
 /// Manages voxel interaction processes and state.
@@ -68,7 +67,7 @@ pub struct VoxelInteractionManager {
 }
 
 #[derive(Debug)]
-pub struct VoxelObjectEntity<EntityID> {
+pub struct VoxelObjectEntity {
     pub entity_id: EntityID,
     pub voxel_object_id: VoxelObjectID,
 }

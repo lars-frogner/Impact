@@ -15,9 +15,10 @@ use impact_ecs::{
     component::{ComponentArray, ComponentFlags, ComponentStorage},
     metadata::ComponentMetadataRegistry,
     query,
-    world::{EntityID, EntityStager, World as ECSWorld},
+    world::{EntityStager, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_id::EntityID;
 use impact_physics::{
     anchor::AnchorManager,
     collision::CollidableID,
@@ -42,11 +43,9 @@ pub struct ECSVoxelObjectInteractionContext<'a> {
 }
 
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
-    type EntityID = EntityID;
-
     fn gather_voxel_object_entities<A: Allocator>(
         &mut self,
-        entities: &mut AVec<VoxelObjectEntity<EntityID>, A>,
+        entities: &mut AVec<VoxelObjectEntity, A>,
     ) {
         query!(
             self.ecs_world,

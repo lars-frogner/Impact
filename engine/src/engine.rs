@@ -35,6 +35,7 @@ use impact_ecs::{
     world::{EntityStager, World as ECSWorld},
 };
 use impact_gpu::device::GraphicsDevice;
+use impact_id::EntityIDManager;
 use impact_scene::{camera::CameraContext, model::ModelInstanceManager};
 use impact_scheduling::TaskErrors;
 use impact_texture::{SamplerRegistry, TextureRegistry};
@@ -60,6 +61,7 @@ pub struct Engine {
     component_metadata_registry: ComponentMetadataRegistry,
     game_loop_controller: RwLock<GameLoopController>,
     input_manager: Mutex<InputManager>,
+    entity_id_manager: Mutex<EntityIDManager>,
     entity_stager: Mutex<EntityStager>,
     ecs_world: RwLock<ECSWorld>,
     resource_manager: RwLock<ResourceManager>,
@@ -82,7 +84,6 @@ pub struct Engine {
 pub struct EngineConfig {
     pub game_loop: GameLoopConfig,
     pub input: InputConfig,
-    pub ecs: ECSConfig,
     pub resources: ResourceConfig,
     pub voxel: VoxelConfig,
     pub physics: PhysicsConfig,
@@ -91,12 +92,6 @@ pub struct EngineConfig {
     pub gizmo: GizmoConfig,
     pub instrumentation: InstrumentationConfig,
     pub screen_capture: ScreenCaptureConfig,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ECSConfig {
-    pub seed: u64,
 }
 
 impl Engine {
@@ -109,7 +104,7 @@ impl Engine {
         let mut component_metadata_registry = ComponentMetadataRegistry::new();
         crate::component::register_metadata_for_all_components(&mut component_metadata_registry)?;
 
-        let ecs_world = ECSWorld::new(config.ecs.seed);
+        let ecs_world = ECSWorld::new();
 
         let mut texture_registry = TextureRegistry::new();
         let mut sampler_registry = SamplerRegistry::new();
@@ -171,6 +166,7 @@ impl Engine {
             component_metadata_registry,
             game_loop_controller: RwLock::new(game_loop_controller),
             input_manager: Mutex::new(input_manager),
+            entity_id_manager: Mutex::new(EntityIDManager::new()),
             entity_stager: Mutex::new(EntityStager::new()),
             ecs_world: RwLock::new(ecs_world),
             resource_manager: RwLock::new(resource_manager),

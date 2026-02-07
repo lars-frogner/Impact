@@ -3,7 +3,7 @@
 use crate::{Game, define_lookup_type};
 use anyhow::{Context, Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact::impact_ecs::world::EntityID;
+use impact::impact_id::EntityID;
 use roc_integration::roc;
 
 define_lookup_type! {

@@ -9,39 +9,10 @@ use super::{
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
 use anyhow::{Result, anyhow, bail};
-use bytemuck::{Pod, Zeroable};
-use impact_containers::{NoHashKeyIndexMapper, NoHashMap, hash_map::Entry};
-use impact_math::{hash::Hash64, random::Rng};
+use impact_containers::{NoHashKeyIndexMapper, NoHashMap};
+use impact_id::EntityID;
 use parking_lot::{RwLock, RwLockReadGuard};
-use std::{
-    fmt,
-    hash::{self, Hash},
-    vec::Drain,
-};
-
-/// Unique ID identifying an entity in the world.
-///
-/// An entity typically refers to an instance of some type of object that has
-/// certain specific [`Component`]s that define its properties. An entity can be
-/// created using a [`World`].
-#[cfg(not(test))]
-#[roc_integration::roc(
-    category = "primitive",
-    package = "pf",
-    module = "Entity",
-    name = "Id",
-    postfix = "_id"
-)]
-#[repr(C)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
-pub struct EntityID(u64);
-
-#[cfg(test)]
-#[repr(C)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable, Pod)]
-pub struct EntityID(pub(crate) u64);
+use std::vec::Drain;
 
 /// Overall manager for entities in the world and their [`Component`] data.
 #[derive(Debug)]
@@ -51,7 +22,6 @@ pub struct World {
     /// [`ArchetypeTable`] in the `archetype_tables` vector.
     archetype_table_indices_by_id: NoHashKeyIndexMapper<ArchetypeID>,
     archetype_tables: Vec<RwLock<ArchetypeTable>>,
-    rng: Rng,
 }
 
 /// Guard for a [`World`] that only exposes the methods needed for the
@@ -105,47 +75,14 @@ pub struct EntityToUpdate {
     pub components: Vec<SingleInstance<ComponentStorage>>,
 }
 
-impl EntityID {
-    /// Hashes the given string into an entity ID.
-    pub const fn hashed_from_str(input: &str) -> Self {
-        Self(Hash64::from_str(input).to_u64())
-    }
-
-    /// Converts the given `u64` into an entity ID. Should only be called
-    /// with values returned from [`Self::as_u64`].
-    pub const fn from_u64(value: u64) -> Self {
-        Self(value)
-    }
-
-    /// Returns the `u64` value corresponding to the entity ID.
-    pub const fn as_u64(&self) -> u64 {
-        self.0
-    }
-}
-
-impl Hash for EntityID {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        hasher.write_u64(self.0);
-    }
-}
-
-impl nohash_hasher::IsEnabled for EntityID {}
-
-impl fmt::Display for EntityID {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_u64())
-    }
-}
-
 impl World {
     /// Creates a new world with no entities. The specified seed is used for
     /// generating random entity IDs.
-    pub fn new(seed: u64) -> Self {
+    pub fn new() -> Self {
         Self {
             entity_archetypes: NoHashMap::default(),
             archetype_table_indices_by_id: NoHashKeyIndexMapper::default(),
             archetype_tables: Vec::new(),
-            rng: Rng::with_seed(seed),
         }
     }
 
@@ -166,8 +103,9 @@ impl World {
     /// # Examples
     /// ```
     /// # use impact_ecs::{
-    /// #    world::{EntityID, World},
+    /// #    world::World,
     /// # };
+    /// # use impact_id::EntityID;
     /// # use impact_ecs_macros::ComponentDoctest as Component;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
@@ -179,12 +117,12 @@ impl World {
     /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
     /// # struct Speed(f32);
     /// #
-    /// let mut world = World::default();
+    /// let mut world = World::new();
     ///
-    /// world.create_entity_with_id(
+    /// world.create_entity(
     ///     EntityID::hashed_from_str("a"), &Distance(5.0),
     /// )?;
-    /// world.create_entity_with_id(
+    /// world.create_entity(
     ///     EntityID::hashed_from_str("b"), (&Distance(0.0), &Speed(10.0)),
     /// )?;
     ///
@@ -192,7 +130,7 @@ impl World {
     /// #
     /// # Ok::<(), Error>(())
     /// ```
-    pub fn create_entity_with_id<A, E>(
+    pub fn create_entity<A, E>(
         &mut self,
         entity_id: EntityID,
         components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
@@ -203,79 +141,21 @@ impl World {
     {
         let components: ArchetypeComponents<A> =
             components.try_into().map_err(E::into)?.into_inner();
-
-        self.try_register_archetype_for_new_entities(entity_id, components.archetype().id())?;
-
-        self.add_entities_to_table([entity_id], components);
-
-        Ok(())
+        self.add_new_entities_to_table_and_register([entity_id], components)
     }
 
-    /// Creates a new entity with the given set of components. The set of
-    /// components must be provided as a type that can be converted to an
-    /// [`ArchetypeComponents`] object wrapped in a [`SingleInstance`].
-    /// Typically, this will be a tuple of references to [`Component`]
-    /// instances, which can be converted into a `SingleInstance` wrapped
+    /// Creates multiple new entities with the given set of components and
+    /// assigns them the given IDs. The set of components must be provided as a
+    /// type that can be converted to an [`ArchetypeComponents`] object.
+    /// Typically, this will be a tuple of slices with [`Component`] instances,
+    /// which can be converted into an
     /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
-    ///
-    /// # Returns
-    /// The randomly generated ID of the new entity.
-    ///
-    /// # Errors
-    /// Returns an error if the given set of components does not have a valid
-    /// [`Archetype`], which happens if there are multiple components of the
-    /// same type.
-    ///
-    /// # Examples
-    /// ```
-    /// # use impact_ecs::{
-    /// #    world::World,
-    /// # };
-    /// # use impact_ecs_macros::ComponentDoctest as Component;
-    /// # use bytemuck::{Zeroable, Pod};
-    /// # use anyhow::Error;
-    /// #
-    /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
-    /// # struct Distance(f32);
-    /// # #[repr(C)]
-    /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
-    /// # struct Speed(f32);
-    /// #
-    /// let mut world = World::default();
-    ///
-    /// let entity_1_id = world.create_entity(&Distance(5.0))?;
-    /// let entity_2_id = world.create_entity((&Distance(0.0), &Speed(10.0)))?;
-    ///
-    /// assert_eq!(world.entity_count(), 2);
-    /// #
-    /// # Ok::<(), Error>(())
-    /// ```
-    pub fn create_entity<A, E>(
-        &mut self,
-        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
-    ) -> Result<EntityID>
-    where
-        A: ComponentArray,
-        E: Into<anyhow::Error>,
-    {
-        Ok(self
-            .create_entities(components.try_into().map_err(E::into)?.into_inner())?
-            .pop()
-            .unwrap())
-    }
-
-    /// Creates multiple new entities with the given set of components. The set
-    /// of components must be provided as a type that can be converted to an
-    /// [`ArchetypeComponents`] object. Typically, this will be a tuple of
-    /// slices with [`Component`] instances, which can be converted into an
-    /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
-    ///
-    /// # Returns
-    /// The randomly generated IDs of the new entities.
     ///
     /// # Errors
     /// Returns an error if:
+    /// - Any of the given entity IDs already exist or are duplicates.
+    /// - The number of entity IDs does not match the number of component
+    ///   instances.
     /// - The given set of components does not have a valid [`Archetype`], which
     ///   happens if there are multiple components of the same type.
     /// - If the number of component instances provided for each component type
@@ -287,6 +167,7 @@ impl World {
     /// #    world::World,
     /// # };
     /// # use impact_ecs_macros::ComponentDoctest as Component;
+    /// # use impact_id::EntityID;
     /// # use bytemuck::{Zeroable, Pod};
     /// # use anyhow::Error;
     /// #
@@ -298,26 +179,29 @@ impl World {
     /// # struct Speed(f32);
     /// #
     /// let mut world = World::default();
-    /// let entity_ids = world.create_entities(
+    /// let entity_ids = [1, 2, 3].map(EntityID::from_u64);
+    /// world.create_entities(
+    ///     entity_ids,
     ///     (
     ///         &[Distance(0.0),Distance(1.0), Distance(2.0)],
     ///         &[Speed(2.0), Speed(1.0), Speed(0.0)]
     ///     )
     /// )?;
-    /// assert_eq!(entity_ids.len(), 3);
     /// assert_eq!(world.entity_count(), 3);
     /// #
     /// # Ok::<(), Error>(())
     /// ```
     pub fn create_entities<A, E>(
         &mut self,
+        entity_ids: impl IntoIterator<Item = EntityID>,
         components: impl TryInto<ArchetypeComponents<A>, Error = E>,
-    ) -> Result<Vec<EntityID>>
+    ) -> Result<()>
     where
         A: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        Ok(self.create_entities_with_archetype_components(components.try_into().map_err(E::into)?))
+        let components = components.try_into().map_err(E::into)?;
+        self.add_new_entities_to_table_and_register(entity_ids, components)
     }
 
     /// Returns the current number of entities in the world.
@@ -376,15 +260,18 @@ impl World {
     /// # };
     /// # use impact_ecs_macros::ComponentDoctest as Component;
     /// # use bytemuck::{Zeroable, Pod};
+    /// # use impact_id::{EntityID, EntityIDManager};
     /// # use anyhow::Error;
     /// #
     /// # #[repr(C)]
     /// # #[derive(Clone, Copy, Debug, PartialEq, Zeroable, Pod, Component)]
     /// # struct Level(u32);
     /// #
-    /// let mut world = World::default();
+    /// let mut id_manager = EntityIDManager::new();
+    /// let entity_id = id_manager.provide_id();
     ///
-    /// let entity_id = world.create_entity(&Level(1))?;
+    /// let mut world = World::new();
+    /// world.create_entity(entity_id, &Level(1))?;
     /// let entry = world.entity(entity_id);
     ///
     /// assert_eq!(entry.n_components(), 1);
@@ -471,15 +358,6 @@ impl World {
         })
     }
 
-    /// Generates a new [`EntityID`].
-    pub fn create_entity_id(&mut self) -> EntityID {
-        let mut id = self.rng.random_u64_in_range(..);
-        while self.entity_archetypes.contains_key(&EntityID(id)) {
-            id = self.rng.random_u64_in_range(..);
-        }
-        EntityID(id)
-    }
-
     fn get_entity_archetype(&self, entity_id: EntityID) -> Result<ArchetypeID> {
         self.entity_archetypes
             .get(&entity_id)
@@ -493,68 +371,76 @@ impl World {
             .ok_or_else(|| anyhow!("Archetype with ID {} not present", archetype_id.as_u32()))
     }
 
-    fn create_entities_with_archetype_components(
-        &mut self,
-        components: ArchetypeComponents<impl ComponentArray>,
-    ) -> Vec<EntityID> {
-        let entity_ids: Vec<_> = (0..components.component_count())
-            .map(|_| self.create_entity_id())
-            .collect();
-
-        self.register_archetype_for_entities(&entity_ids, components.archetype().id());
-        self.add_entities_to_table(entity_ids.iter().copied(), components);
-
-        entity_ids
-    }
-
-    fn register_archetype_for_entities(
-        &mut self,
-        entity_ids: &[EntityID],
-        archetype_id: ArchetypeID,
-    ) {
-        self.entity_archetypes.reserve(entity_ids.len());
-        for entity_id in entity_ids {
-            self.entity_archetypes.insert(*entity_id, archetype_id);
-        }
-    }
-
-    fn try_register_archetype_for_new_entities(
+    fn add_entity_to_table(
         &mut self,
         entity_id: EntityID,
-        archetype_id: ArchetypeID,
+        components: ArchetypeComponents<impl ComponentArray>,
     ) -> Result<()> {
-        match self.entity_archetypes.entry(entity_id) {
-            Entry::Vacant(entry) => {
-                entry.insert(archetype_id);
-            }
-            Entry::Occupied(_) => {
-                bail!("Entity with ID {entity_id} already exists");
-            }
+        let archetype_id = components.archetype().id();
+        if let Some(idx) = self.archetype_table_indices_by_id.get(archetype_id) {
+            // If we already have a table for the archetype, we add the entity
+            // to it
+            let mut archetype_table = self.archetype_tables[idx].write();
+            archetype_table.add_entities([entity_id], components)?;
+        } else {
+            // If we don't have the table, initialize it with the new entity
+            let archetype_table = ArchetypeTable::new_with_entities([entity_id], components)?;
+            self.archetype_table_indices_by_id.push_key(archetype_id);
+            self.archetype_tables.push(RwLock::new(archetype_table));
         }
         Ok(())
     }
 
-    fn add_entities_to_table(
+    fn add_new_entities_to_table_and_register(
         &mut self,
         entity_ids: impl IntoIterator<Item = EntityID>,
         components: ArchetypeComponents<impl ComponentArray>,
-    ) {
+    ) -> Result<()> {
         let archetype_id = components.archetype().id();
         if let Some(idx) = self.archetype_table_indices_by_id.get(archetype_id) {
-            // If we already have a table for the archetype, we add
-            // the entity to it
-            self.archetype_tables[idx]
-                .write()
-                .add_entities(entity_ids, components);
+            // If we already have a table for the archetype, we add the entities
+            // to it
+            let mut archetype_table = self.archetype_tables[idx].write();
+            let entity_ids = archetype_table.add_entities(entity_ids, components)?;
+
+            // Check that no other tables contain any of the entities before
+            // registering them to avoid failing with partially updated state
+            for entity_id in entity_ids {
+                if self.entity_archetypes.contains_key(entity_id) {
+                    bail!("Entity with ID {entity_id} already exists");
+                }
+            }
+
+            // Register the archetype for the new entities
+            self.entity_archetypes.reserve(entity_ids.len());
+            for entity_id in entity_ids {
+                self.entity_archetypes.insert(*entity_id, archetype_id);
+            }
         } else {
-            // If we don't have the table, initialize it with the entity
-            // as the first entry
+            // If we don't have the table, initialize it with the new entities
+            let archetype_table = ArchetypeTable::new_with_entities(entity_ids, components)?;
+
+            let entity_ids = archetype_table.all_entities();
+
+            // Check that no other tables contain any of the entities before
+            // registering them to avoid failing with partially updated state
+            for entity_id in entity_ids {
+                if self.entity_archetypes.contains_key(entity_id) {
+                    bail!("Entity with ID {entity_id} already exists");
+                }
+            }
+
+            // Nothing can fail from here, so register the archetype for the new
+            // entities and push the table
+            self.entity_archetypes.reserve(entity_ids.len());
+            for entity_id in entity_ids {
+                self.entity_archetypes.insert(*entity_id, archetype_id);
+            }
+
             self.archetype_table_indices_by_id.push_key(archetype_id);
-            self.archetype_tables
-                .push(RwLock::new(ArchetypeTable::new_with_entities(
-                    entity_ids, components,
-                )));
+            self.archetype_tables.push(RwLock::new(archetype_table));
         }
+        Ok(())
     }
 
     fn remove_entity_data(
@@ -592,15 +478,22 @@ impl World {
         // component, we need to first remove it from the old table
         let mut components = self.remove_entity_data(entity_id)?.into_inner();
 
-        // We then add the component to the entity's data
-        components.add_new_component_type(component_storage)?;
+        // We then add the component to the entity's data. If it fails, the
+        // component remain unchanged.
+        let component_update_result = components.add_new_component_type(component_storage);
+        let new_archetype_id = components.archetype().id();
 
-        // Set new archetype for the entity
-        self.entity_archetypes
-            .insert(entity_id, components.archetype().id());
+        // Insert the modified entity into the appropriate table. If the
+        // component update failed, this will insert it back into the old table.
+        self.add_entity_to_table(entity_id, components)
+            .expect("Entity should not exist after removal");
 
-        // Finally we insert the modified entity into the appropriate table
-        self.add_entities_to_table([entity_id], components);
+        // If the component update failed, report failure now that we are back
+        // to the initial state
+        component_update_result?;
+
+        // Otherwise, register the new archetype for the entity
+        self.entity_archetypes.insert(entity_id, new_archetype_id);
         Ok(())
     }
 
@@ -614,21 +507,27 @@ impl World {
         let mut components = self.remove_entity_data(entity_id)?.into_inner();
 
         // We then remove the component from the entity's data
-        components.remove_component_type_with_id(component_id)?;
+        let component_update_result = components.remove_component_type_with_id(component_id);
+        let new_archetype_id = components.archetype().id();
 
-        // Set new archetype for the entity
-        self.entity_archetypes
-            .insert(entity_id, components.archetype().id());
+        // Insert the modified entity into the appropriate table. If the
+        // component update failed, this will insert it back into the old table.
+        self.add_entity_to_table(entity_id, components)
+            .expect("Entity should not exist after removal");
 
-        // Finally we insert the modified entity into the appropriate table
-        self.add_entities_to_table([entity_id], components);
+        // If the component update failed, report failure now that we are back
+        // to the initial state
+        component_update_result?;
+
+        // Otherwise, register the new archetype for the entity
+        self.entity_archetypes.insert(entity_id, new_archetype_id);
         Ok(())
     }
 }
 
 impl Default for World {
     fn default() -> Self {
-        Self::new(0)
+        Self::new()
     }
 }
 
@@ -945,16 +844,16 @@ mod tests {
 
     #[test]
     fn creating_world_works() {
-        let world = World::default();
+        let world = World::new();
         assert_eq!(world.entity_count(), 0);
     }
 
     #[test]
-    fn creating_single_entity_with_id_works() {
-        let mut world = World::default();
+    fn creating_single_entity_works() {
+        let mut world = World::new();
 
         let entity_1_id = EntityID::hashed_from_str("entity_1");
-        world.create_entity_with_id(entity_1_id, &POS).unwrap();
+        world.create_entity(entity_1_id, &POS).unwrap();
         assert_eq!(world.entity_count(), 1);
         let entry = world.entity(entity_1_id);
         assert_eq!(entry.archetype(), &archetype_of!(Position));
@@ -963,9 +862,7 @@ mod tests {
         drop(entry);
 
         let entity_2_id = EntityID::hashed_from_str("entity_2");
-        world
-            .create_entity_with_id(entity_2_id, (&POS, &TEMP))
-            .unwrap();
+        world.create_entity(entity_2_id, (&POS, &TEMP)).unwrap();
         assert_eq!(world.entity_count(), 2);
         let entry = world.entity(entity_2_id);
         assert_eq!(entry.archetype(), &archetype_of!(Position, Temperature));
@@ -977,71 +874,36 @@ mod tests {
     #[test]
     #[should_panic]
     fn creating_two_entities_with_same_id_fails() {
-        let mut world = World::default();
+        let mut world = World::new();
         let entity_id = EntityID::hashed_from_str("entity");
-        world.create_entity_with_id(entity_id, &POS).unwrap();
-        world.create_entity_with_id(entity_id, &POS).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn creating_entity_with_id_and_two_aliased_comps_fails() {
-        let mut world = World::default();
-        world
-            .create_entity_with_id(EntityID::hashed_from_str("entity"), (&POS, &LIKEPOS))
-            .unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn creating_entity_with_id_and_two_of_three_aliased_comps_fails() {
-        let mut world = World::default();
-        world
-            .create_entity_with_id(EntityID::hashed_from_str("entity"), (&POS, &TEMP, &LIKEPOS))
-            .unwrap();
-    }
-
-    #[test]
-    fn creating_single_entity_works() {
-        let mut world = World::default();
-
-        let entity_1_id = world.create_entity(&POS).unwrap();
-        assert_eq!(world.entity_count(), 1);
-        let entry = world.entity(entity_1_id);
-        assert_eq!(entry.archetype(), &archetype_of!(Position));
-        assert_eq!(entry.n_components(), 1);
-        assert_eq!(entry.component::<Position>().access(), &POS);
-        drop(entry);
-
-        let entity_2_id = world.create_entity((&POS, &TEMP)).unwrap();
-        assert_eq!(world.entity_count(), 2);
-        let entry = world.entity(entity_2_id);
-        assert_eq!(entry.archetype(), &archetype_of!(Position, Temperature));
-        assert_eq!(entry.n_components(), 2);
-        assert_eq!(entry.component::<Position>().access(), &POS);
-        assert_eq!(entry.component::<Temperature>().access(), &TEMP);
+        world.create_entity(entity_id, &POS).unwrap();
+        world.create_entity(entity_id, &POS).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn creating_entity_with_two_aliased_comps_fails() {
-        let mut world = World::default();
-        world.create_entity((&POS, &LIKEPOS)).unwrap();
+        let mut world = World::new();
+        world
+            .create_entity(EntityID::hashed_from_str("entity"), (&POS, &LIKEPOS))
+            .unwrap();
     }
 
     #[test]
     #[should_panic]
     fn creating_entity_with_two_of_three_aliased_comps_fails() {
-        let mut world = World::default();
-        world.create_entity((&POS, &TEMP, &LIKEPOS)).unwrap();
+        let mut world = World::new();
+        world
+            .create_entity(EntityID::hashed_from_str("entity"), (&POS, &TEMP, &LIKEPOS))
+            .unwrap();
     }
 
     #[test]
     fn creating_two_entities_works() {
-        let mut world = World::default();
-        let entity_ids = world.create_entities(&[TEMP, TEMP2]).unwrap();
+        let mut world = World::new();
+        let entity_ids = [1, 2].map(EntityID::from_u64);
+        world.create_entities(entity_ids, &[TEMP, TEMP2]).unwrap();
 
-        assert_eq!(entity_ids.len(), 2);
         assert_eq!(world.entity_count(), 2);
 
         let entry = world.entity(entity_ids[0]);
@@ -1054,10 +916,10 @@ mod tests {
         assert_eq!(entry.component::<Temperature>().access(), &TEMP2);
         drop(entry);
 
-        let entity_ids = world
-            .create_entities((&[POS, POS2], &[TEMP, TEMP2]))
+        let entity_ids = [3, 4].map(EntityID::from_u64);
+        world
+            .create_entities(entity_ids, (&[POS, POS2], &[TEMP, TEMP2]))
             .unwrap();
-        assert_eq!(entity_ids.len(), 2);
         assert_eq!(world.entity_count(), 4);
 
         let entry = world.entity(entity_ids[0]);
@@ -1074,8 +936,9 @@ mod tests {
 
     #[test]
     fn removing_entity_works() {
-        let mut world = World::default();
-        let entity_id = world.create_entity(&POS).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, &POS).unwrap();
         assert_eq!(world.entity_count(), 1);
 
         world.remove_entity(entity_id).unwrap();
@@ -1086,23 +949,25 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_same_entity_twice_fails() {
-        let mut world = World::default();
-        let entity_id = world.create_entity(&POS).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, &POS).unwrap();
         world.remove_entity(entity_id).unwrap();
         world.remove_entity(entity_id).unwrap();
     }
 
     #[test]
     fn removing_all_entities_from_empty_world_works() {
-        let mut world = World::default();
+        let mut world = World::new();
         world.remove_all_entities();
         assert_eq!(world.entity_count(), 0);
     }
 
     #[test]
     fn removing_all_entities_from_single_entity_world_works() {
-        let mut world = World::default();
-        let entity_id = world.create_entity(&POS).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, &POS).unwrap();
         world.remove_all_entities();
         assert_eq!(world.entity_count(), 0);
         assert!(world.get_entity(entity_id).is_none());
@@ -1110,9 +975,10 @@ mod tests {
 
     #[test]
     fn removing_all_entities_from_multi_entity_world_works() {
-        let mut world = World::default();
-        let entity_ids = world
-            .create_entities((&[POS, POS2], &[TEMP, TEMP2]))
+        let mut world = World::new();
+        let entity_ids = [1, 2].map(EntityID::from_u64);
+        world
+            .create_entities(entity_ids, (&[POS, POS2], &[TEMP, TEMP2]))
             .unwrap();
         world.remove_all_entities();
         assert_eq!(world.entity_count(), 0);
@@ -1122,8 +988,9 @@ mod tests {
 
     #[test]
     fn adding_component_for_entity_works() {
-        let mut world = World::default();
-        let entity_id = world.create_entity(&POS).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, &POS).unwrap();
         world.add_component_for_entity(entity_id, &TEMP).unwrap();
 
         let entry = world.entity(entity_id);
@@ -1136,15 +1003,17 @@ mod tests {
     #[test]
     #[should_panic]
     fn adding_existing_component_for_entity_fails() {
-        let mut world = World::default();
-        let entity_id = world.create_entity(&POS).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, &POS).unwrap();
         world.add_component_for_entity(entity_id, &POS).unwrap();
     }
 
     #[test]
     fn removing_component_for_entity_works() {
-        let mut world = World::default();
-        let entity_id = world.create_entity((&POS, &TEMP)).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, (&POS, &TEMP)).unwrap();
         assert!(world.entity(entity_id).has_component::<Position>());
         world
             .remove_component_for_entity::<Position>(entity_id)
@@ -1159,8 +1028,9 @@ mod tests {
 
     #[test]
     fn removing_all_components_for_entity_works() {
-        let mut world = World::default();
-        let entity_id = world.create_entity((&POS, &TEMP)).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, (&POS, &TEMP)).unwrap();
         world
             .remove_component_for_entity::<Position>(entity_id)
             .unwrap();
@@ -1175,8 +1045,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn removing_absent_component_from_entity_fails() {
-        let mut world = World::default();
-        let entity_id = world.create_entity(&POS).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, &POS).unwrap();
         world
             .remove_component_for_entity::<Temperature>(entity_id)
             .unwrap();
@@ -1184,8 +1055,9 @@ mod tests {
 
     #[test]
     fn modifying_component_for_entity_works() {
-        let mut world = World::default();
-        let entity_id = world.create_entity((&POS, &TEMP)).unwrap();
+        let mut world = World::new();
+        let entity_id = EntityID::from_u64(1);
+        world.create_entity(entity_id, (&POS, &TEMP)).unwrap();
         let entry = world.entity(entity_id);
         *entry.component_mut::<Temperature>().access() = TEMP2;
         assert_eq!(entry.component::<Position>().access(), &POS);

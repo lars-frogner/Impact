@@ -6,11 +6,9 @@ use crate::{
     orientation::{AngularVelocityControl, AngularVelocityControlParent},
 };
 use impact_alloc::{AVec, arena::ArenaPool};
-use impact_ecs::{
-    query,
-    world::{EntityID, World as ECSWorld},
-};
+use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
+use impact_id::EntityID;
 use impact_physics::{
     quantities::{AngularVelocity, Motion},
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
