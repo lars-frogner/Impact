@@ -516,7 +516,7 @@ fn setup_adding_one_zero_size_comp_to_one_comp_one_instance_storage_works() {
     setup!(components, || -> Marked { Marked }, [Byte]);
     assert_eq!(components.archetype(), &archetype_of!(Byte, Marked));
     assert_eq!(components.n_component_types(), 2);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
 }
 
 #[test]
@@ -525,7 +525,7 @@ fn setup_adding_one_comp_to_one_comp_one_instance_storage_works() {
     setup!(components, || -> Rectangle { RECT }, [Byte]);
     assert_eq!(components.archetype(), &archetype_of!(Byte, Rectangle));
     assert_eq!(components.n_component_types(), 2);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE]);
     assert_eq!(components.components_of_type::<Rectangle>(), &[RECT]);
 }
@@ -539,7 +539,7 @@ fn setup_adding_one_comp_to_two_comp_one_instance_storage_works() {
         &archetype_of!(Byte, Rectangle, Position)
     );
     assert_eq!(components.n_component_types(), 3);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE]);
     assert_eq!(components.components_of_type::<Position>(), &[POS]);
     assert_eq!(components.components_of_type::<Rectangle>(), &[RECT]);
@@ -558,7 +558,7 @@ fn setup_adding_two_comps_to_one_comp_one_instance_storage_works() {
         &archetype_of!(Marked, Byte, Rectangle)
     );
     assert_eq!(components.n_component_types(), 3);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE]);
     assert_eq!(components.components_of_type::<Rectangle>(), &[RECT]);
 }
@@ -576,7 +576,7 @@ fn setup_adding_two_comps_to_two_comp_one_instance_storage_works() {
         &archetype_of!(Marked, Byte, Rectangle, Position)
     );
     assert_eq!(components.n_component_types(), 4);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE]);
     assert_eq!(components.components_of_type::<Position>(), &[POS]);
     assert_eq!(components.components_of_type::<Rectangle>(), &[RECT]);
@@ -596,7 +596,7 @@ fn setup_adding_one_comp_to_one_comp_two_instance_storage_works() {
     );
     assert_eq!(components.archetype(), &archetype_of!(Byte, Position));
     assert_eq!(components.n_component_types(), 2);
-    assert_eq!(components.component_count(), 2);
+    assert_eq!(components.instance_count(), 2);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE, BYTE2]);
     assert_eq!(components.components_of_type::<Position>(), &[POS, POS2]);
 }
@@ -622,7 +622,7 @@ fn setup_adding_two_comps_to_one_comp_two_instance_storage_works() {
         &archetype_of!(Byte, Position, Rectangle)
     );
     assert_eq!(components.n_component_types(), 3);
-    assert_eq!(components.component_count(), 2);
+    assert_eq!(components.instance_count(), 2);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE, BYTE2]);
     assert_eq!(components.components_of_type::<Position>(), &[POS, POS2]);
     assert_eq!(components.components_of_type::<Rectangle>(), &[RECT, RECT2]);
@@ -634,7 +634,7 @@ fn setup_overwriting_one_comp_in_one_comp_one_instance_storage_works() {
     setup!(components, || -> Byte { BYTE2 });
     assert_eq!(components.archetype(), &archetype_of!(Byte));
     assert_eq!(components.n_component_types(), 1);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2]);
 }
 
@@ -648,7 +648,7 @@ fn setup_overwriting_one_comp_in_one_comp_two_instance_storage_works() {
     });
     assert_eq!(components.archetype(), &archetype_of!(Byte));
     assert_eq!(components.n_component_types(), 1);
-    assert_eq!(components.component_count(), 2);
+    assert_eq!(components.instance_count(), 2);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2, BYTE]);
 }
 
@@ -658,7 +658,7 @@ fn setup_overwriting_one_comp_in_two_comp_one_instance_storage_works() {
     setup!(components, || -> Byte { BYTE2 });
     assert_eq!(components.archetype(), &archetype_of!(Byte, Position));
     assert_eq!(components.n_component_types(), 2);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2]);
     assert_eq!(components.components_of_type::<Position>(), &[POS]);
 }
@@ -674,7 +674,7 @@ fn setup_overwriting_one_comp_in_two_comp_two_instance_storage_works() {
     });
     assert_eq!(components.archetype(), &archetype_of!(Byte, Position));
     assert_eq!(components.n_component_types(), 2);
-    assert_eq!(components.component_count(), 2);
+    assert_eq!(components.instance_count(), 2);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2, BYTE]);
     assert_eq!(components.components_of_type::<Position>(), &[POS, POS2]);
 }
@@ -685,7 +685,7 @@ fn setup_overwriting_one_included_comp_in_one_comp_one_instance_storage_works() 
     setup!(components, || -> Byte { BYTE2 }, [Byte]);
     assert_eq!(components.archetype(), &archetype_of!(Byte));
     assert_eq!(components.n_component_types(), 1);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2]);
 }
 
@@ -695,7 +695,7 @@ fn setup_overwriting_one_arg_included_comp_in_one_comp_one_instance_storage_work
     setup!(components, |_byte: &Byte| -> Byte { BYTE2 });
     assert_eq!(components.archetype(), &archetype_of!(Byte));
     assert_eq!(components.n_component_types(), 1);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2]);
 }
 
@@ -705,7 +705,7 @@ fn setup_adding_and_overwriting_two_comps_in_one_comp_one_instance_storage_works
     setup!(components, || -> (Position, Byte) { (POS, BYTE2) });
     assert_eq!(components.archetype(), &archetype_of!(Byte, Position));
     assert_eq!(components.n_component_types(), 2);
-    assert_eq!(components.component_count(), 1);
+    assert_eq!(components.instance_count(), 1);
     assert_eq!(components.components_of_type::<Byte>(), &[BYTE2]);
     assert_eq!(components.components_of_type::<Position>(), &[POS]);
 }

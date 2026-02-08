@@ -56,7 +56,7 @@ pub struct ArchetypeComponents<A> {
     archetype: Archetype,
     component_index_map: NoHashKeyIndexMapper<ComponentID>,
     component_arrays: Vec<A>,
-    component_count: usize,
+    instance_count: usize,
 }
 
 /// Container holding [`ComponentView`]s referencing a set
@@ -137,7 +137,7 @@ pub struct ArchetypeComponents<A> {
 ///
 /// let pos_mass_view: ArchetypeComponentView<'_> = (&positions, &masses).try_into()?;
 /// assert_eq!(pos_mass_view.n_component_types(), 2);
-/// assert_eq!(pos_mass_view.component_count(), 3);
+/// assert_eq!(pos_mass_view.instance_count(), 3);
 /// #
 /// # Ok::<(), Error>(())
 /// ```
@@ -390,7 +390,7 @@ impl<A> ArchetypeComponents<A>
 where
     A: ComponentArray,
 {
-    fn new(archetype: Archetype, component_arrays: Vec<A>, component_count: usize) -> Self {
+    fn new(archetype: Archetype, component_arrays: Vec<A>, instance_count: usize) -> Self {
         let component_index_map = KeyIndexMapper::with_hasher_and_keys(
             Default::default(),
             component_arrays.iter().map(A::component_id),
@@ -400,7 +400,7 @@ where
             archetype,
             component_index_map,
             component_arrays,
-            component_count,
+            instance_count,
         }
     }
 
@@ -417,8 +417,8 @@ where
         // Find the number of component instances and check that this is the
         // same for all the component types
         let mut component_iter = component_arrays.iter();
-        let component_count = component_iter.next().map_or(0, A::component_count);
-        if component_iter.any(|array| array.component_count() != component_count) {
+        let instance_count = component_iter.next().map_or(0, A::instance_count);
+        if component_iter.any(|array| array.instance_count() != instance_count) {
             bail!("The number of component instances differs between component types");
         }
 
@@ -438,7 +438,7 @@ where
         Ok(Self::new(
             archetype,
             component_arrays.to_vec(),
-            component_count,
+            instance_count,
         ))
     }
 
@@ -453,8 +453,8 @@ where
         // Find the number of component instances and check that this is the
         // same for all the component types
         let mut component_iter = component_arrays.iter();
-        let component_count = component_iter.next().map_or(0, A::component_count);
-        if component_iter.any(|array| array.component_count() != component_count) {
+        let instance_count = component_iter.next().map_or(0, A::instance_count);
+        if component_iter.any(|array| array.instance_count() != instance_count) {
             bail!("The number of component instances differs between component types");
         }
 
@@ -466,7 +466,7 @@ where
 
         let archetype = Archetype::new_from_sorted_component_ids(component_ids)?;
 
-        Ok(Self::new(archetype, component_arrays, component_count))
+        Ok(Self::new(archetype, component_arrays, instance_count))
     }
 
     /// Creates a new empty [`ArchetypeComponents`] value.
@@ -475,7 +475,7 @@ where
             archetype: archetype_of!(),
             component_index_map: NoHashKeyIndexMapper::default(),
             component_arrays: Vec::new(),
-            component_count: 0,
+            instance_count: 0,
         }
     }
 
@@ -497,8 +497,8 @@ where
 
     /// Returns the number of instances of each contained
     /// component type.
-    pub fn component_count(&self) -> usize {
-        self.component_count
+    pub fn instance_count(&self) -> usize {
+        self.instance_count
     }
 
     /// Returns an iterator over the contained component IDs.
@@ -523,7 +523,7 @@ where
     }
 
     /// Returns an iterator with the number of items equal to
-    /// [`Self::component_count`]. If `C` is the type of a contained component,
+    /// [`Self::instance_count`]. If `C` is the type of a contained component,
     /// each item will be a [`Some`] holding a reference to a different
     /// component instance. Otherwise, each item will be a [`None`].
     pub fn get_option_iter_for_component_of_type<C: Component>(
@@ -538,7 +538,7 @@ where
                     .map(Some),
             )
         } else {
-            Box::new(iter::repeat_n(None, self.component_count()))
+            Box::new(iter::repeat_n(None, self.instance_count()))
         }
     }
 
@@ -654,7 +654,7 @@ where
             archetype,
             component_index_map,
             component_arrays,
-            component_count,
+            instance_count,
         } = self;
 
         ArchetypeComponents {
@@ -664,7 +664,7 @@ where
                 .into_iter()
                 .map(ComponentArray::into_storage)
                 .collect(),
-            component_count,
+            instance_count,
         }
     }
 
@@ -672,9 +672,9 @@ where
         &mut self,
         component_array: A,
     ) -> Result<()> {
-        let component_count = component_array.component_count();
+        let instance_count = component_array.instance_count();
 
-        if !self.component_arrays.is_empty() && (component_count != self.component_count()) {
+        if !self.component_arrays.is_empty() && (instance_count != self.instance_count()) {
             bail!("Inconsistent number of component instances in added component data");
         }
 
@@ -684,7 +684,7 @@ where
 
         self.component_arrays.push(component_array);
 
-        self.component_count = component_count;
+        self.instance_count = instance_count;
 
         Ok(())
     }
@@ -693,9 +693,9 @@ where
         &mut self,
         component_array: A,
     ) -> Result<InclusionResult> {
-        let component_count = component_array.component_count();
+        let instance_count = component_array.instance_count();
 
-        if !self.component_arrays.is_empty() && (component_count != self.component_count()) {
+        if !self.component_arrays.is_empty() && (instance_count != self.instance_count()) {
             bail!("Inconsistent number of component instances in added component data");
         }
 
@@ -705,7 +705,7 @@ where
         {
             Ok(_) => {
                 self.component_arrays.push(component_array);
-                self.component_count = component_count;
+                self.instance_count = instance_count;
                 Ok(InclusionResult::Added)
             }
             Err(idx) => {
@@ -727,8 +727,8 @@ impl<A> CanHaveSingleInstance for ArchetypeComponents<A>
 where
     A: ComponentArray,
 {
-    fn instance_count(&self) -> usize {
-        self.component_count()
+    fn maybe_single_instance_count(&self) -> usize {
+        self.instance_count()
     }
 }
 
@@ -935,7 +935,7 @@ impl ArchetypeComponentStorage {
     /// This is a useful starting point when we want to add a
     /// storage for a new component type.
     pub fn new_storage_with_capacity<C: Component>(&self) -> ComponentStorage {
-        ComponentStorage::with_capacity::<C>(self.component_count)
+        ComponentStorage::with_capacity::<C>(self.instance_count)
     }
 }
 
@@ -954,7 +954,7 @@ impl SingleInstance<ArchetypeComponentStorage> {
             .map(|storage| SingleInstance::new_unchecked(storage).duplicate_instance(n_instances))
             .collect();
 
-        archetype_storage.component_count = n_instances;
+        archetype_storage.instance_count = n_instances;
 
         archetype_storage
     }
@@ -979,7 +979,7 @@ impl SingleInstance<ArchetypeComponentStorage> {
     {
         let components: ArchetypeComponents<A> = components.try_into().map_err(E::into)?;
 
-        let mut duplicated_components = self.duplicate_instance(components.component_count());
+        let mut duplicated_components = self.duplicate_instance(components.instance_count());
 
         duplicated_components
             .add_or_overwrite_component_types(
@@ -1073,11 +1073,11 @@ impl ArchetypeTable {
 
         let added_entity_count = self.entity_index_mapper.len() - original_entity_count;
 
-        if added_entity_count != components.component_count {
+        if added_entity_count != components.instance_count {
             self.entity_index_mapper.truncate(original_entity_count);
             bail!(
                 "Number of components per component type ({}) differs from number of entities ({})",
-                components.component_count,
+                components.instance_count,
                 added_entity_count
             );
         }
@@ -1361,13 +1361,13 @@ impl ArchetypeTable {
             archetype,
             component_index_map,
             component_arrays,
-            component_count,
+            instance_count,
         } = components;
 
-        if entity_index_mapper.len() != component_count {
+        if entity_index_mapper.len() != instance_count {
             bail!(
                 "Number of components per component type ({}) differs from number of entities ({})",
-                component_count,
+                instance_count,
                 entity_index_mapper.len()
             );
         }
@@ -1502,7 +1502,7 @@ where
     C: Component,
 {
     fn new(storage: RwLockReadGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
-        assert!(entity_idx < storage.component_count());
+        assert!(entity_idx < storage.instance_count());
         Self {
             entity_idx,
             storage,
@@ -1524,7 +1524,7 @@ where
     C: Component,
 {
     fn new(storage: RwLockWriteGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
-        assert!(entity_idx < storage.component_count());
+        assert!(entity_idx < storage.instance_count());
         Self {
             entity_idx,
             storage,
@@ -1540,7 +1540,7 @@ where
 
 impl<'a> ComponentStorageBytesEntry<'a> {
     fn new(storage: RwLockReadGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
-        assert!(entity_idx < storage.component_count());
+        assert!(entity_idx < storage.instance_count());
         Self {
             entity_idx,
             storage,
@@ -1555,7 +1555,7 @@ impl<'a> ComponentStorageBytesEntry<'a> {
 
 impl<'a> ComponentStorageBytesEntryMut<'a> {
     fn new(storage: RwLockWriteGuard<'a, ComponentStorage>, entity_idx: usize) -> Self {
-        assert!(entity_idx < storage.component_count());
+        assert!(entity_idx < storage.instance_count());
         Self {
             entity_idx,
             storage,
@@ -1814,7 +1814,7 @@ mod tests {
         let view = ArchetypeComponentView::empty();
         assert_eq!(view.archetype(), &archetype_of!());
         assert_eq!(view.n_component_types(), 0);
-        assert_eq!(view.component_count(), 0);
+        assert_eq!(view.instance_count(), 0);
     }
 
     #[test]
@@ -1829,12 +1829,12 @@ mod tests {
         let view: ArchetypeComponentView<'_> = [].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!());
         assert_eq!(view.n_component_types(), 0);
-        assert_eq!(view.component_count(), 0);
+        assert_eq!(view.instance_count(), 0);
 
         let view: ArchetypeComponentView<'_> = [(&Marked).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view =
@@ -1844,13 +1844,13 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = [(&BYTE).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
@@ -1861,14 +1861,14 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         let view: ArchetypeComponentView<'_> = [(&BYTE).view(), (&POS).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -1882,7 +1882,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -1893,7 +1893,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -1910,7 +1910,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -1924,26 +1924,26 @@ mod tests {
         let view: ArchetypeComponentView<'_> = [(&[Marked]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = [(&[Marked, Marked]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = [(&[BYTE]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         let view: ArchetypeComponentView<'_> = [(&[BYTE, BYTE2]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
 
@@ -1951,7 +1951,7 @@ mod tests {
             [(&[BYTE]).view(), (&[POS]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -1962,7 +1962,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
@@ -1974,26 +1974,26 @@ mod tests {
         let view: ArchetypeComponentView<'_> = vec![(&[Marked]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = vec![(&[Marked, Marked]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = vec![(&[BYTE]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         let view: ArchetypeComponentView<'_> = vec![(&[BYTE, BYTE2]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
 
@@ -2001,7 +2001,7 @@ mod tests {
             vec![(&[BYTE]).view(), (&[POS]).view()].try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -2012,7 +2012,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
@@ -2059,33 +2059,33 @@ mod tests {
         let view: ArchetypeComponentView<'_> = (&Marked).into();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view: SingleInstance<ArchetypeComponentView<'_>> = (&Marked).into();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = (&BYTE).into();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         let view: SingleInstance<ArchetypeComponentView<'_>> = (&BYTE).into();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         let view: ArchetypeComponentView<'_> = (&BYTE, &POS).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -2094,7 +2094,7 @@ mod tests {
         let view: SingleInstance<ArchetypeComponentView<'_>> = (&BYTE, &POS).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -2103,7 +2103,7 @@ mod tests {
         let view: ArchetypeComponentView<'_> = (&BYTE, &POS, &RECT).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2115,7 +2115,7 @@ mod tests {
             (&BYTE, &POS, &RECT).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2129,33 +2129,33 @@ mod tests {
         let view: ArchetypeComponentView<'_> = (&[Marked]).into();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = (&[Marked, Marked]).into();
         assert_eq!(view.archetype(), &archetype_of!(Marked));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Marked>());
 
         let view: ArchetypeComponentView<'_> = (&[BYTE]).into();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         let view: ArchetypeComponentView<'_> = (&[BYTE, BYTE2]).into();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
 
         let view: ArchetypeComponentView<'_> = (&[BYTE], &[POS]).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -2164,7 +2164,7 @@ mod tests {
         let view: ArchetypeComponentView<'_> = (&[BYTE, BYTE2], &[POS, POS2]).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
@@ -2173,7 +2173,7 @@ mod tests {
         let view: ArchetypeComponentView<'_> = (&[BYTE], &[POS], &[RECT]).try_into().unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2186,7 +2186,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2215,14 +2215,14 @@ mod tests {
         view.add_new_component_type((&BYTE).view()).unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
         view.add_new_component_type((&POS).view()).unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -2231,7 +2231,7 @@ mod tests {
         view.add_new_component_type((&RECT).view()).unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2247,14 +2247,14 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
 
         view.add_new_component_type((&[POS, POS2]).view()).unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
@@ -2263,7 +2263,7 @@ mod tests {
         view.add_new_component_type((&[RECT, RECT]).view()).unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2303,7 +2303,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
 
@@ -2311,7 +2311,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
@@ -2321,7 +2321,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2337,7 +2337,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
 
@@ -2345,7 +2345,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE, BYTE2]);
@@ -2359,7 +2359,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2376,7 +2376,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE2]);
@@ -2392,7 +2392,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE2, BYTE]);
@@ -2407,7 +2407,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE2]);
@@ -2423,7 +2423,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position));
         assert_eq!(view.n_component_types(), 2);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE2, BYTE]);
@@ -2438,7 +2438,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2456,7 +2456,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte, Position, Rectangle));
         assert_eq!(view.n_component_types(), 3);
-        assert_eq!(view.component_count(), 2);
+        assert_eq!(view.instance_count(), 2);
         assert!(view.has_component_type::<Byte>());
         assert!(view.has_component_type::<Position>());
         assert!(view.has_component_type::<Rectangle>());
@@ -2473,7 +2473,7 @@ mod tests {
             .unwrap();
         assert_eq!(view.archetype(), &archetype_of!(Byte));
         assert_eq!(view.n_component_types(), 1);
-        assert_eq!(view.component_count(), 1);
+        assert_eq!(view.instance_count(), 1);
         assert!(view.has_component_type::<Byte>());
         assert_eq!(view.components_of_type::<Byte>(), &[BYTE]);
     }
@@ -2567,7 +2567,7 @@ mod tests {
             &archetype_of!(Byte, Position, Rectangle)
         );
         assert_eq!(storage.n_component_types(), 3);
-        assert_eq!(storage.component_count(), 3);
+        assert_eq!(storage.instance_count(), 3);
         assert!(storage.has_component_type::<Byte>());
         assert!(storage.has_component_type::<Position>());
         assert!(storage.has_component_type::<Rectangle>());
@@ -2593,7 +2593,7 @@ mod tests {
             &archetype_of!(Byte, Position, Rectangle)
         );
         assert_eq!(combined_storage.n_component_types(), 3);
-        assert_eq!(combined_storage.component_count(), 1);
+        assert_eq!(combined_storage.instance_count(), 1);
         assert!(combined_storage.has_component_type::<Byte>());
         assert!(combined_storage.has_component_type::<Position>());
         assert!(combined_storage.has_component_type::<Rectangle>());
@@ -2616,7 +2616,7 @@ mod tests {
             &archetype_of!(Byte, Position, Rectangle)
         );
         assert_eq!(combined_storage.n_component_types(), 3);
-        assert_eq!(combined_storage.component_count(), 2);
+        assert_eq!(combined_storage.instance_count(), 2);
         assert!(combined_storage.has_component_type::<Byte>());
         assert!(combined_storage.has_component_type::<Position>());
         assert!(combined_storage.has_component_type::<Rectangle>());
@@ -2795,7 +2795,7 @@ mod tests {
             table
                 .component_storage(Byte::component_id())
                 .read()
-                .component_count(),
+                .instance_count(),
             0
         );
     }
@@ -2821,14 +2821,14 @@ mod tests {
             table
                 .component_storage(Rectangle::component_id())
                 .read()
-                .component_count(),
+                .instance_count(),
             0
         );
         assert_eq!(
             table
                 .component_storage(Position::component_id())
                 .read()
-                .component_count(),
+                .instance_count(),
             0
         );
     }
@@ -2857,7 +2857,7 @@ mod tests {
 
         assert_eq!(cloned_components.archetype(), &archetype_of!(Byte));
         assert_eq!(cloned_components.n_component_types(), 1);
-        assert_eq!(cloned_components.component_count(), 1);
+        assert_eq!(cloned_components.instance_count(), 1);
         assert!(cloned_components.has_component_type::<Byte>());
         assert_eq!(cloned_components.components_of_type::<Byte>(), &[BYTE]);
     }
@@ -2878,7 +2878,7 @@ mod tests {
             &archetype_of!(Byte, Position, Rectangle)
         );
         assert_eq!(cloned_components.n_component_types(), 3);
-        assert_eq!(cloned_components.component_count(), 1);
+        assert_eq!(cloned_components.instance_count(), 1);
         assert!(cloned_components.has_component_type::<Byte>());
         assert!(cloned_components.has_component_type::<Position>());
         assert!(cloned_components.has_component_type::<Rectangle>());
@@ -2939,8 +2939,8 @@ mod tests {
             cloned_components_0.archetype(),
             cloned_components_1.archetype()
         );
-        assert_eq!(cloned_components_0.component_count(), 1);
-        assert_eq!(cloned_components_1.component_count(), 1);
+        assert_eq!(cloned_components_0.instance_count(), 1);
+        assert_eq!(cloned_components_1.instance_count(), 1);
     }
 
     #[test]

@@ -680,7 +680,7 @@ fn generate_closure_call_code(
             arg_names[0].to_token_stream(),
         )
     } else {
-        (quote! {0..#components_name.component_count()}, quote! {_})
+        (quote! {0..#components_name.instance_count()}, quote! {_})
     };
 
     let closure_return_value_name = Ident::new("_closure_result_internal__", Span::call_site());
