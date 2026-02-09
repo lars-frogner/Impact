@@ -2,7 +2,7 @@
 
 use crate::{lock_order::OrderedRwLock, resource::ResourceManager};
 use anyhow::Result;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{setup, world::PrototypeEntities};
 use impact_material::MaterialID;
 use impact_mesh::{
     TriangleMeshID,
@@ -14,19 +14,19 @@ use impact_mesh::{
 };
 use parking_lot::RwLock;
 
-/// Checks if the entites-to-be with the given components have a component
-/// representing a mesh, and if so, generates the meshes and adds them to the
-/// resource registry if not present, then adds the appropriate mesh components
+/// Checks if the given entities have a component representing a mesh, and if
+/// so, generates the meshes and adds them to the resource registry if not
+/// present, then adds the appropriate mesh components
 /// to the entities.
 pub fn setup_meshes_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |rectangle_mesh: &RectangleMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -43,7 +43,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |box_mesh: &BoxMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -60,7 +60,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |cylinder_mesh: &CylinderMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -77,7 +77,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |cone_mesh: &ConeMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -94,7 +94,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |circular_frustum_mesh: &CircularFrustumMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -111,7 +111,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |sphere_mesh: &SphereMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -128,7 +128,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |hemisphere_mesh: &HemisphereMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -145,7 +145,7 @@ pub fn setup_meshes_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |capsule_mesh: &CapsuleMesh,
          planar_projection: Option<&setup::PlanarTextureProjection>|
          -> TriangleMeshID {
@@ -182,19 +182,19 @@ fn setup_triangle_mesh_for_new_entity(
     }
 }
 
-/// Checks if the entities-to-be with the given components have a material
-/// component and a component for a mesh that misses vertex attributes required
-/// by the material, and if so, generates the missing vertex attributes if
+/// Checks if the given entities have a material component and a component for a
+/// mesh that misses vertex attributes required by the material, and if so,
+/// generates the missing vertex attributes if
 /// possible.
 pub fn generate_missing_vertex_properties_for_new_entity_meshes(
     resource_manager: &RwLock<ResourceManager>,
-    components: &ArchetypeComponentStorage,
+    entities: &PrototypeEntities,
 ) {
     setup!(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |mesh_id: &TriangleMeshID, material_id: &MaterialID| {
             let resource_manager = &mut *resource_manager;
             let Some(material_template) =

@@ -11,11 +11,11 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use impact_ecs::{
-    archetype::ArchetypeComponentStorage,
     setup,
-    world::{EntityEntry, World as ECSWorld},
+    world::{EntityEntry, PrototypeEntities, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_id::EntityID;
 use impact_material::MaterialID;
 use impact_mesh::TriangleMeshID;
 use impact_scene::{
@@ -25,47 +25,46 @@ use impact_scene::{
 };
 use parking_lot::RwLock;
 
-/// Performs any modifications to the scene required to accommodate new
-/// entities with the given components, and adds any additional components to
-/// the entities' components (except scene graph components, which are added
-/// by calling [`add_new_entities_to_scene_graph`].
+/// Performs any modifications to the scene required to accommodate the given
+/// new entities, and adds any additional components to the entities' components
+/// (except scene graph components, which are added by calling
+/// [`add_new_entities_to_scene_graph`].
 pub fn setup_scene_data_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
-    mesh::setup_meshes_for_new_entities(resource_manager, components)?;
+    mesh::setup_meshes_for_new_entities(resource_manager, entities)?;
 
-    light::setup_lights_for_new_entities(scene, components);
+    light::setup_lights_for_new_entities(scene, entities);
 
-    material::setup_materials_for_new_entities(resource_manager, components)?;
+    material::setup_materials_for_new_entities(resource_manager, entities)?;
 
-    voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, components)?;
-    voxel::setup_voxel_interaction_for_new_entities(scene, components);
+    voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, entities)?;
+    voxel::setup_voxel_interaction_for_new_entities(scene, entities);
 
-    mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, components);
+    mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, entities);
 
     Ok(())
 }
 
-/// Adds the new entities with the given components to the scene graph if
-/// required, and adds the corresponding scene graph components to the entities'
-/// components.
+/// Adds the given new entities to the scene graph if required, and adds the
+/// corresponding scene graph components to the entities' components.
 pub fn add_new_entities_to_scene_graph(
     ecs_world: &RwLock<ECSWorld>,
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
-    setup_scene_graph_parent_nodes_for_new_entities(ecs_world, components)?;
-    setup_scene_graph_group_nodes_for_new_entities(scene, components)?;
+    setup_scene_graph_parent_nodes_for_new_entities(ecs_world, entities)?;
+    setup_scene_graph_group_nodes_for_new_entities(scene, entities)?;
 
-    camera::add_camera_to_scene_for_new_entity(scene, components)?;
+    camera::add_camera_to_scene_for_new_entities(scene, entities)?;
 
-    setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, components)?;
+    setup_scene_graph_model_instance_nodes_for_new_entities(resource_manager, scene, entities)?;
 
-    voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(scene, components)?;
+    voxel::setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(scene, entities)?;
 
     Ok(())
 }
@@ -84,13 +83,13 @@ pub fn cleanup_scene_data_for_removed_entity(scene: &RwLock<Scene>, entity: &Ent
 
 fn setup_scene_graph_parent_nodes_for_new_entities(
     ecs_world: &RwLock<ECSWorld>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
             let ecs_world = ecs_world.oread();
         },
-        components,
+        entities,
         |parent: &SceneParent| -> Result<SceneGraphParentNodeHandle> {
             let parent_entity = ecs_world
                 .get_entity(parent.entity_id)
@@ -104,14 +103,14 @@ fn setup_scene_graph_parent_nodes_for_new_entities(
 
 fn setup_scene_graph_group_nodes_for_new_entities(
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
             let scene = scene.oread();
             let mut scene_graph = scene.scene_graph().owrite();
         },
-        components,
+        entities,
         |frame: Option<&ReferenceFrame>,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> Result<SceneGraphGroupNodeHandle> {
@@ -132,7 +131,7 @@ fn setup_scene_graph_group_nodes_for_new_entities(
 fn setup_scene_graph_model_instance_nodes_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
@@ -141,8 +140,9 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let mut scene_graph = scene.scene_graph().owrite();
         },
-        components,
-        |mesh_id: &TriangleMeshID,
+        entities,
+        |entity_id: EntityID,
+         mesh_id: &TriangleMeshID,
          material_id: &MaterialID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
@@ -153,8 +153,6 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             ModelTransform,
             SceneEntityFlags
         )> {
-            let entity_id = todo!();
-
             let model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
 
@@ -162,9 +160,9 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 * model_transform.create_transform_to_entity_space();
 
             let has_independent_material_values =
-                components.has_component_type::<HasIndependentMaterialValues>();
+                entities.has_component_type::<HasIndependentMaterialValues>();
 
-            let uncullable = components.has_component_type::<Uncullable>();
+            let uncullable = entities.has_component_type::<Uncullable>();
 
             let (node_handle, flags) = impact_scene::setup::setup_scene_graph_model_instance_node(
                 &resource_manager.triangle_meshes,

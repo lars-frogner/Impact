@@ -8,24 +8,24 @@ pub mod rigid_body;
 
 use crate::{physics::PhysicsSimulator, resource::ResourceManager};
 use anyhow::Result;
-use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
+use impact_ecs::world::{EntityEntry, PrototypeEntities};
 use parking_lot::RwLock;
 
 /// Performs any modifications to the physics simulator required to accommodate
-/// new entities with the given components, and adds any additional components
-/// to the entities' components.
+/// given new entities, and adds any additional components to the entities'
+/// components.
 pub fn setup_physics_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     simulator: &RwLock<PhysicsSimulator>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
-    rigid_body::setup_rigid_bodies_for_new_entities(resource_manager, simulator, components)?;
+    rigid_body::setup_rigid_bodies_for_new_entities(resource_manager, simulator, entities)?;
 
-    force::setup_forces_for_new_entities(resource_manager, simulator, components)?;
+    force::setup_forces_for_new_entities(resource_manager, simulator, entities)?;
 
-    driven_motion::setup_driven_motion_for_new_entities(simulator, components);
+    driven_motion::setup_driven_motion_for_new_entities(simulator, entities);
 
-    collision::setup_collidables_for_new_entities(simulator, components);
+    collision::setup_collidables_for_new_entities(simulator, entities);
 
     Ok(())
 }

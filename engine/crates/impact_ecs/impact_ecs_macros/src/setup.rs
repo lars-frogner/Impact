@@ -15,7 +15,7 @@ use syn::{
 
 pub(crate) struct SetupInput {
     scope: Option<SetupScope>,
-    components_name: Ident,
+    entities_name: Ident,
     closure: SetupClosure,
     also_required_list: Option<TypeList>,
     disallowed_list: Option<TypeList>,
@@ -25,18 +25,24 @@ struct SetupScope {
     scope: TokenStream,
 }
 
+struct EntityClosureArg {
+    var: Ident,
+    ty: Type,
+}
+
 struct SetupCompClosureArg {
     var: Ident,
     ty: Type,
-    interpreted_ty: InterpretedArgType,
+    interpreted_ty: InterpretedComponentArgType,
 }
 
-enum InterpretedArgType {
+enum InterpretedComponentArgType {
     CompRef(Type),
     OptionalCompRef(Type),
 }
 
 struct SetupClosure {
+    entity_arg: Option<EntityClosureArg>,
     comp_args: Punctuated<SetupCompClosureArg, Token![,]>,
     return_type: SetupClosureReturnType,
     body: Expr,
@@ -67,16 +73,18 @@ struct ReturnCompTypes(Punctuated<Type, Token![,]>);
 
 struct ProcessedSetupInput {
     scope: Option<TokenStream>,
-    components_name: Ident,
+    entities_name: Ident,
     closure_body: Expr,
-    arg_names: Vec<Ident>,
-    /// Types of all arguments, classified as being with or without a wrapping
-    /// [`Option`].
-    interpreted_arg_types: Vec<InterpretedArgType>,
-    /// Types of all non-[`Option`] arguments and types wrapped by `Option`s.
+    entity_arg: Option<EntityClosureArg>,
+    comp_arg_names: Vec<Ident>,
+    /// Types of all component arguments, classified as being with or without a
+    /// wrapping [`Option`].
+    interpreted_comp_arg_types: Vec<InterpretedComponentArgType>,
+    /// Types of all non-[`Option`] component arguments and types wrapped by
+    /// `Option`s.
     all_arg_comp_types: Vec<Type>,
-    /// Types of all non-[`Option`] arguments and required types listed after
-    /// the closure.
+    /// Types of all non-[`Option`] component arguments and required types
+    /// listed after the closure.
     required_comp_types: Vec<Type>,
     /// Types of all non-[`Option`] arguments, types wrapped by `Option`s and
     /// required types listed after the closure.
@@ -85,6 +93,7 @@ struct ProcessedSetupInput {
     return_type: ProcessedSetupClosureReturnType,
     /// Disallowed types listed after the closure.
     disallowed_comp_types: Option<Vec<Type>>,
+    closure_arg_names: Vec<Ident>,
     full_closure_args: Vec<TokenStream>,
 }
 
@@ -124,7 +133,7 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Path) -> Result<TokenStream>
         querying_util::generate_archetype_creation_code(&input.required_comp_types, crate_root);
 
     let if_expr_code = generate_if_expr_code(
-        &input.components_name,
+        &input.entities_name,
         &archetype_name,
         &input.disallowed_comp_types,
         crate_root,
@@ -134,27 +143,29 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Path) -> Result<TokenStream>
 
     let (component_storage_array_name, component_storage_array_creation_code) =
         generate_component_storage_array_creation_code(
-            &input.components_name,
+            &input.entities_name,
             &input.return_type.comp_types,
         );
 
-    let (component_iter_names, component_iter_code) = generate_component_iter_names_and_code(
-        &input.components_name,
-        &input.arg_names,
-        &input.interpreted_arg_types,
+    let (iter_names, iter_code) = generate_all_iter_names_and_code(
+        &input.entities_name,
+        &input.entity_arg,
+        &input.comp_arg_names,
+        &input.interpreted_comp_arg_types,
+        &input.full_closure_args,
     );
 
     let (closure_error_name, closure_call_code) = generate_closure_call_code(
-        &input.components_name,
+        &input.entities_name,
         &closure_name,
-        &input.arg_names,
-        &component_iter_names,
+        &input.closure_arg_names,
+        &iter_names,
         &component_storage_array_name,
         &input.return_type,
     );
 
     let extension_code =
-        generate_extension_code(&input.components_name, &component_storage_array_name);
+        generate_extension_code(&input.entities_name, &component_storage_array_name);
 
     let (extension_code_with_error_handling, else_branch_expr) =
         generate_closure_error_handling_code(&closure_error_name, extension_code);
@@ -179,8 +190,8 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Path) -> Result<TokenStream>
                 // Create array with empty component storages
                 #component_storage_array_creation_code
 
-                // Create iterators over requested components
-                #(#component_iter_code)*
+                // Create iterators over requested components (and optionally entity ID)
+                #(#iter_code)*
 
                 // Call closure for each set of component instances
                 // and store any returned components
@@ -203,12 +214,12 @@ pub(crate) fn setup(input: SetupInput, crate_root: &Path) -> Result<TokenStream>
 impl Parse for SetupInput {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let scope = querying_util::parse_scope(input)?;
-        let components_name = querying_util::parse_state(input)?;
+        let entities_name = querying_util::parse_state(input)?;
         let closure = querying_util::parse_closure(input)?;
         let (also_required_list, disallowed_list) = querying_util::parse_type_lists(input)?;
         Ok(Self {
             scope,
-            components_name,
+            entities_name,
             closure,
             also_required_list,
             disallowed_list,
@@ -229,11 +240,25 @@ impl Parse for SetupClosure {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         input.parse::<Token![|]>()?;
 
-        let comp_args = if input.lookahead1().peek(Token![|]) {
-            Punctuated::new()
-        } else {
-            Punctuated::parse_separated_nonempty(input)?
-        };
+        let mut entity_arg = None;
+        let mut comp_args = Punctuated::new();
+
+        if !input.lookahead1().peek(Token![|]) {
+            let fork = input.fork();
+
+            if fork.parse::<SetupCompClosureArg>().is_ok() {
+                comp_args.push(input.parse()?);
+            } else {
+                entity_arg = Some(input.parse()?);
+            };
+
+            if input.lookahead1().peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+                comp_args.extend(
+                    Punctuated::<SetupCompClosureArg, Token![,]>::parse_separated_nonempty(input)?,
+                );
+            }
+        }
 
         input.parse::<Token![|]>()?;
 
@@ -266,10 +291,20 @@ impl Parse for SetupClosure {
         let body = input.parse()?;
 
         Ok(Self {
+            entity_arg,
             comp_args,
             return_type,
             body,
         })
+    }
+}
+
+impl Parse for EntityClosureArg {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let var = input.parse()?;
+        input.parse::<Token![:]>()?;
+        let ty = input.parse()?;
+        Ok(Self { var, ty })
     }
 }
 
@@ -278,7 +313,7 @@ impl Parse for SetupCompClosureArg {
         let var = input.parse()?;
         input.parse::<Token![:]>()?;
         let ty = input.parse()?;
-        let interpreted_ty = InterpretedArgType::from(&var, &ty)?;
+        let interpreted_ty = InterpretedComponentArgType::from(&var, &ty)?;
         Ok(Self {
             var,
             ty,
@@ -334,7 +369,7 @@ impl Parse for ReturnCompTypes {
     }
 }
 
-impl InterpretedArgType {
+impl InterpretedComponentArgType {
     fn from(name: &Ident, ty: &Type) -> Result<Self> {
         let err = || {
             Err(syn::Error::new(
@@ -400,7 +435,7 @@ impl SetupInput {
     fn process(self) -> ProcessedSetupInput {
         let Self {
             scope,
-            components_name,
+            entities_name,
             closure,
             also_required_list,
             disallowed_list,
@@ -409,37 +444,38 @@ impl SetupInput {
         let scope = scope.map(|s| s.scope);
 
         let SetupClosure {
+            entity_arg,
             comp_args,
             return_type,
             body: closure_body,
         } = closure;
 
-        let mut arg_names = Vec::with_capacity(comp_args.len());
-        let mut arg_types = Vec::with_capacity(comp_args.len());
-        let mut interpreted_arg_types = Vec::with_capacity(comp_args.len());
+        let mut comp_arg_names = Vec::with_capacity(comp_args.len());
+        let mut comp_arg_types = Vec::with_capacity(comp_args.len());
+        let mut interpreted_comp_arg_types = Vec::with_capacity(comp_args.len());
         comp_args.into_iter().for_each(
             |SetupCompClosureArg {
                  var,
                  ty,
                  interpreted_ty,
              }| {
-                arg_names.push(var);
-                arg_types.push(ty);
-                interpreted_arg_types.push(interpreted_ty);
+                comp_arg_names.push(var);
+                comp_arg_types.push(ty);
+                interpreted_comp_arg_types.push(interpreted_ty);
             },
         );
 
-        // Types of all arguments that are not `Option`s
-        let required_arg_comp_types: Vec<_> = interpreted_arg_types
+        // Types of all component arguments that are not `Option`s
+        let required_arg_comp_types: Vec<_> = interpreted_comp_arg_types
             .iter()
-            .filter_map(InterpretedArgType::get_non_optional)
+            .filter_map(InterpretedComponentArgType::get_non_optional)
             .collect();
 
-        // Types of all arguments that are not `Option`s and the types inside
-        // the `Option`s
-        let all_arg_comp_types: Vec<_> = interpreted_arg_types
+        // Types of all component arguments that are not `Option`s and the types
+        // inside the `Option`s
+        let all_arg_comp_types: Vec<_> = interpreted_comp_arg_types
             .iter()
-            .map(InterpretedArgType::unwrap_type)
+            .map(InterpretedComponentArgType::unwrap_type)
             .collect();
 
         // Types in the return tuple, potentially wrapped in a `Result`
@@ -453,33 +489,36 @@ impl SetupInput {
         let disallowed_comp_types =
             disallowed_list.map(|TypeList { tys }| tys.into_iter().collect());
 
-        // Types of all arguments that are not `Option`s and required type list
-        // specified after the closure
+        // Types of all component arguments that are not `Option`s and required
+        // type list specified after the closure
         let required_comp_types = querying_util::include_also_required_comp_types(
             &required_arg_comp_types,
             also_required_comp_types.clone(),
         );
 
-        // Types of all arguments that are not `Option`s, types inside the
-        // `Option`s and required type list specified after the closure
+        // Types of all component arguments that are not `Option`s, types inside
+        // the `Option`s and required type list specified after the closure
         let requested_comp_types = querying_util::include_also_required_comp_types(
             &all_arg_comp_types,
             also_required_comp_types,
         );
 
-        let full_closure_args = create_full_closure_args(&arg_names, &arg_types);
+        let (closure_arg_names, full_closure_args) =
+            determine_all_closure_args(&comp_arg_names, &comp_arg_types, &entity_arg);
 
         ProcessedSetupInput {
             scope,
-            components_name,
+            entities_name,
             closure_body,
-            arg_names,
-            interpreted_arg_types,
+            entity_arg,
+            comp_arg_names,
+            interpreted_comp_arg_types,
             all_arg_comp_types,
             required_comp_types,
             requested_comp_types,
             return_type,
             disallowed_comp_types,
+            closure_arg_names,
             full_closure_args,
         }
     }
@@ -552,12 +591,23 @@ fn is_only_unit_type(types: &[Type]) -> bool {
     )
 }
 
-fn create_full_closure_args(arg_names: &[Ident], arg_types: &[Type]) -> Vec<TokenStream> {
-    arg_names
-        .iter()
-        .zip(arg_types.iter())
-        .map(|(name, ty)| quote! { #name: #ty })
-        .collect()
+fn determine_all_closure_args(
+    comp_arg_names: &[Ident],
+    comp_arg_types: &[Type],
+    entity_arg: &Option<EntityClosureArg>,
+) -> (Vec<Ident>, Vec<TokenStream>) {
+    let (mut arg_names, mut full_args) = match entity_arg {
+        Some(EntityClosureArg { var, ty }) => (vec![var.clone()], vec![quote! { #var: #ty }]),
+        None => (Vec::new(), Vec::new()),
+    };
+    arg_names.extend_from_slice(comp_arg_names);
+    full_args.extend(
+        comp_arg_names
+            .iter()
+            .zip(comp_arg_types.iter())
+            .map(|(name, ty)| quote! { #name: #ty }),
+    );
+    (arg_names, full_args)
 }
 
 fn generate_closure_def_code(
@@ -574,19 +624,19 @@ fn generate_closure_def_code(
 }
 
 fn generate_if_expr_code(
-    components_name: &Ident,
+    entities_name: &Ident,
     archetype_name: &Ident,
     disallowed_comp_types: &Option<Vec<Type>>,
     crate_root: &Path,
 ) -> TokenStream {
     let contains_all_expr = quote! {
-        #components_name.archetype().contains(&#archetype_name)
+        #entities_name.archetype().contains(&#archetype_name)
     };
     match disallowed_comp_types {
         Some(disallowed_comp_types) if !disallowed_comp_types.is_empty() => {
             quote! {
                 #contains_all_expr &&
-                #components_name.archetype().contains_none_of(&[
+                #entities_name.archetype().contains_none_of(&[
                     #(<#disallowed_comp_types as #crate_root::component::Component>::component_id()),*
                 ])
             }
@@ -596,7 +646,7 @@ fn generate_if_expr_code(
 }
 
 fn generate_component_storage_array_creation_code(
-    components_name: &Ident,
+    entities_name: &Ident,
     return_comp_types: &Vec<Type>,
 ) -> (Option<Ident>, TokenStream) {
     if return_comp_types.is_empty() {
@@ -605,82 +655,119 @@ fn generate_component_storage_array_creation_code(
         let array_name = Ident::new("_component_storage_array_internal__", Span::call_site());
         let array_creation_code = quote! {
             let mut #array_name = [
-                #(#components_name.new_storage_with_capacity::<#return_comp_types>()),*
+                #(#entities_name.new_storage_with_capacity::<#return_comp_types>()),*
             ];
         };
         (Some(array_name), array_creation_code)
     }
 }
 
-fn generate_component_iter_names_and_code(
-    components_name: &Ident,
-    arg_names: &[Ident],
-    interpreted_arg_types: &[InterpretedArgType],
+fn generate_all_iter_names_and_code(
+    entities_name: &Ident,
+    entity_arg: &Option<EntityClosureArg>,
+    comp_arg_names: &[Ident],
+    interpreted_comp_arg_types: &[InterpretedComponentArgType],
+    full_closure_args: &[TokenStream],
 ) -> (Vec<Ident>, Vec<TokenStream>) {
-    let (iter_names, iter_code): (Vec<_>, Vec<_>) = arg_names
-        .iter()
-        .zip(interpreted_arg_types.iter())
-        .map(|(name, interpreted_arg_type)| match interpreted_arg_type {
-            InterpretedArgType::CompRef(ty) => {
-                generate_required_component_iter_code(components_name, name, ty)
-            }
-            InterpretedArgType::OptionalCompRef(ty) => {
-                generate_optional_component_iter_code(components_name, name, ty)
-            }
-        })
-        .unzip();
+    let mut iter_names = Vec::with_capacity(full_closure_args.len());
+    let mut iter_code = Vec::with_capacity(full_closure_args.len());
+
+    if let Some(EntityClosureArg { var, ty: _ }) = entity_arg {
+        let (entity_iter_name, entity_iter_code) =
+            generate_entity_iter_name_and_code(entities_name, var);
+        iter_names.push(entity_iter_name);
+        iter_code.push(entity_iter_code);
+    }
+
+    extend_with_component_iter_names_and_code(
+        &mut iter_names,
+        &mut iter_code,
+        entities_name,
+        comp_arg_names,
+        interpreted_comp_arg_types,
+    );
 
     (iter_names, iter_code)
 }
 
-fn generate_required_component_iter_code(
-    components_name: &Ident,
-    arg_name: &Ident,
-    comp_type: &Type,
+fn generate_entity_iter_name_and_code(
+    entities_name: &Ident,
+    entity_arg_name: &Ident,
 ) -> (Ident, TokenStream) {
-    let iter_name = format_ident!("{}_iter_internal__", arg_name);
+    let iter_name = format_ident!("{}_iter_internal__", entity_arg_name);
     let code = quote! {
-        let #iter_name = #components_name.components_of_type::<#comp_type>().iter();
+        let #iter_name = #entities_name.entity_ids().iter().copied();
     };
     (iter_name, code)
 }
 
-fn generate_optional_component_iter_code(
-    components_name: &Ident,
+fn extend_with_component_iter_names_and_code(
+    iter_names: &mut Vec<Ident>,
+    iter_code: &mut Vec<TokenStream>,
+    entities_name: &Ident,
+    comp_arg_names: &[Ident],
+    interpreted_comp_arg_types: &[InterpretedComponentArgType],
+) {
+    for (name, interpreted_arg_type) in comp_arg_names.iter().zip(interpreted_comp_arg_types.iter())
+    {
+        let (iter_name, code) = match interpreted_arg_type {
+            InterpretedComponentArgType::CompRef(ty) => {
+                generate_required_component_iter_name_and_code(entities_name, name, ty)
+            }
+            InterpretedComponentArgType::OptionalCompRef(ty) => {
+                generate_optional_component_iter_name_and_code(entities_name, name, ty)
+            }
+        };
+        iter_names.push(iter_name);
+        iter_code.push(code);
+    }
+}
+
+fn generate_required_component_iter_name_and_code(
+    entities_name: &Ident,
     arg_name: &Ident,
     comp_type: &Type,
 ) -> (Ident, TokenStream) {
     let iter_name = format_ident!("{}_iter_internal__", arg_name);
     let code = quote! {
-        let #iter_name = #components_name.get_option_iter_for_component_of_type::<#comp_type>();
+        let #iter_name = #entities_name.components_of_type::<#comp_type>().iter();
+    };
+    (iter_name, code)
+}
+
+fn generate_optional_component_iter_name_and_code(
+    entities_name: &Ident,
+    arg_name: &Ident,
+    comp_type: &Type,
+) -> (Ident, TokenStream) {
+    let iter_name = format_ident!("{}_iter_internal__", arg_name);
+    let code = quote! {
+        let #iter_name = #entities_name.get_option_iter_for_component_of_type::<#comp_type>();
     };
     (iter_name, code)
 }
 
 fn generate_closure_call_code(
-    components_name: &Ident,
+    entities_name: &Ident,
     closure_name: &Ident,
-    arg_names: &[Ident],
-    component_iter_names: &[Ident],
+    closure_arg_names: &[Ident],
+    iter_names: &[Ident],
     component_storage_array_name: &Option<Ident>,
     return_type: &ProcessedSetupClosureReturnType,
 ) -> (Option<Ident>, TokenStream) {
-    let (zipped_iter, nested_arg_names) = if arg_names.len() > 1 {
+    let (zipped_iter, nested_arg_names) = if closure_arg_names.len() > 1 {
         (
-            querying_util::generate_nested_tuple(
-                &quote! { ::core::iter::zip },
-                component_iter_names.iter(),
-            ),
-            querying_util::generate_nested_tuple(&quote! {}, arg_names.iter()),
+            querying_util::generate_nested_tuple(&quote! { ::core::iter::zip }, iter_names.iter()),
+            querying_util::generate_nested_tuple(&quote! {}, closure_arg_names.iter()),
         )
-    } else if !arg_names.is_empty() {
+    } else if !closure_arg_names.is_empty() {
         // For a single component type, no zipping is needed
         (
-            component_iter_names[0].to_token_stream(),
-            arg_names[0].to_token_stream(),
+            iter_names[0].to_token_stream(),
+            closure_arg_names[0].to_token_stream(),
         )
     } else {
-        (quote! {0..#components_name.instance_count()}, quote! {_})
+        (quote! {0..#entities_name.count()}, quote! {_})
     };
 
     let closure_return_value_name = Ident::new("_closure_result_internal__", Span::call_site());
@@ -696,7 +783,7 @@ fn generate_closure_call_code(
         let code = quote! {
             let mut #error_value_name = None;
             for #nested_arg_names in #zipped_iter {
-                let #closure_return_value_name = match #closure_name(#(#arg_names),*) {
+                let #closure_return_value_name = match #closure_name(#(#closure_arg_names),*) {
                     Ok(#closure_return_value_name) => #closure_return_value_name,
                     Err(err) => {
                         #error_value_name = Some(err);
@@ -710,7 +797,7 @@ fn generate_closure_call_code(
     } else {
         let code = quote! {
             for #nested_arg_names in #zipped_iter {
-                let #closure_return_value_name = #closure_name(#(#arg_names),*);
+                let #closure_return_value_name = #closure_name(#(#closure_arg_names),*);
                 #component_storing_code
             }
         };
@@ -752,14 +839,14 @@ fn create_return_comp_names(return_comp_types: &[Type]) -> Vec<Ident> {
 }
 
 fn generate_extension_code(
-    components_name: &Ident,
+    entities_name: &Ident,
     component_storage_array_name: &Option<Ident>,
 ) -> TokenStream {
     if let Some(storage_array_name) = component_storage_array_name {
         quote! {
             // We can just unwrap here because we know that all the added
             // components types will have the same number of instances
-            #components_name.add_or_overwrite_component_types(#storage_array_name).unwrap();
+            #entities_name.add_or_overwrite_component_types(#storage_array_name).unwrap();
         }
     } else {
         quote! {}
