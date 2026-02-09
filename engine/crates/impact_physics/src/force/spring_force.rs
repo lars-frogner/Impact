@@ -4,10 +4,11 @@ use crate::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID, KinematicRigidBodyAnchorID},
     force::ForceGeneratorRegistry,
     quantities::PositionC,
-    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
+    rigid_body::RigidBodyManager,
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use impact_math::vector::UnitVector3;
 use roc_integration::roc;
 
@@ -68,10 +69,10 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct DynamicDynamicSpringForceProperties {
-        /// The first dynamic rigid body the spring is attached to.
-        pub rigid_body_1: DynamicRigidBodyID,
-        /// The second dynamic rigid body the spring is attached to.
-        pub rigid_body_2: DynamicRigidBodyID,
+        /// The first entity the spring is attached to.
+        pub entity_1_id: EntityID,
+        /// The second entity the spring is attached to.
+        pub entity_2_id: EntityID,
         /// The point where the spring is attached to the first body, in that
         /// body's model space.
         pub attachment_point_1: PositionC,
@@ -90,10 +91,10 @@ define_setup_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct DynamicKinematicSpringForceProperties {
-        /// The dynamic rigid body the spring is attached to.
-        pub rigid_body_1: DynamicRigidBodyID,
-        /// The kinematic rigid body the spring is attached to.
-        pub rigid_body_2: KinematicRigidBodyID,
+        /// The first (dynamic) entity the spring is attached to.
+        pub entity_1_id: EntityID,
+        /// The second (kinematic) entity the spring is attached to.
+        pub entity_2_id: EntityID,
         /// The point where the spring is attached to the first (dynamic) body,
         /// in that body's model space.
         pub attachment_point_1: PositionC,
@@ -239,18 +240,18 @@ impl DynamicKinematicSpringForceGenerator {
 
 #[roc]
 impl DynamicDynamicSpringForceProperties {
-    #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
+    #[roc(body = "{ entity_1_id, attachment_point_1, entity_2_id, attachment_point_2, spring }")]
     pub fn new(
-        rigid_body_1: DynamicRigidBodyID,
+        entity_1_id: EntityID,
         attachment_point_1: PositionC,
-        rigid_body_2: DynamicRigidBodyID,
+        entity_2_id: EntityID,
         attachment_point_2: PositionC,
         spring: Spring,
     ) -> Self {
         Self {
-            rigid_body_1,
+            entity_1_id,
             attachment_point_1,
-            rigid_body_2,
+            entity_2_id,
             attachment_point_2,
             spring,
         }
@@ -259,18 +260,18 @@ impl DynamicDynamicSpringForceProperties {
 
 #[roc]
 impl DynamicKinematicSpringForceProperties {
-    #[roc(body = "{ rigid_body_1, attachment_point_1, rigid_body_2, attachment_point_2, spring }")]
+    #[roc(body = "{ entity_1_id, attachment_point_1, entity_2_id, attachment_point_2, spring }")]
     pub fn new(
-        rigid_body_1: DynamicRigidBodyID,
+        entity_1_id: EntityID,
         attachment_point_1: PositionC,
-        rigid_body_2: KinematicRigidBodyID,
+        entity_2_id: EntityID,
         attachment_point_2: PositionC,
         spring: Spring,
     ) -> Self {
         Self {
-            rigid_body_1,
+            entity_1_id,
             attachment_point_1,
-            rigid_body_2,
+            entity_2_id,
             attachment_point_2,
             spring,
         }

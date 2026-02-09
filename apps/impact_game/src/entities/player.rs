@@ -47,11 +47,7 @@ impl Player {
         engine: &Engine,
         f: impl FnOnce(&DynamicRigidBody) -> Result<R>,
     ) -> Result<R> {
-        let rigid_body_id = engine
-            .get_component_copy(Self::entity_ids().player)
-            .with_context(|| anyhow!("Failed to get `DynamicRigidBodyID` component for player"))?;
-
-        engine.with_dynamic_rigid_body(rigid_body_id, f)
+        engine.with_dynamic_rigid_body(Self::entity_ids().player, f)
     }
 
     pub fn with_alignment_torque_generator<R>(

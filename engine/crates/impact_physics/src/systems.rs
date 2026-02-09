@@ -2,10 +2,14 @@
 
 use crate::{
     quantities::Motion,
-    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
+    rigid_body::{
+        DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, KinematicRigidBodyID,
+        RigidBodyManager,
+    },
 };
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
+use impact_id::EntityID;
 
 /// Updates the [`ReferenceFrame`] and [`Motion`] components of entities with
 /// the [`DynamicRigidBodyID`] or [`KinematicRigidBodyID`] component to match
@@ -16,8 +20,9 @@ pub fn synchronize_rigid_body_components(
 ) {
     query!(
         ecs_world,
-        |frame: &mut ReferenceFrame, motion: &mut Motion, rigid_body_id: &DynamicRigidBodyID| {
-            let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(*rigid_body_id) else {
+        |entity_id: EntityID, frame: &mut ReferenceFrame, motion: &mut Motion| {
+            let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+            let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) else {
                 return;
             };
             let linear_velocity = rigid_body.compute_velocity();
@@ -27,13 +32,15 @@ pub fn synchronize_rigid_body_components(
             frame.orientation = *rigid_body.orientation();
             motion.linear_velocity = linear_velocity.compact();
             motion.angular_velocity = angular_velocity.compact();
-        }
+        },
+        [HasDynamicRigidBody]
     );
 
     query!(
         ecs_world,
-        |frame: &mut ReferenceFrame, motion: &mut Motion, rigid_body_id: &KinematicRigidBodyID| {
-            let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body(*rigid_body_id)
+        |entity_id: EntityID, frame: &mut ReferenceFrame, motion: &mut Motion| {
+            let rigid_body_id = KinematicRigidBodyID::from_entity_id(entity_id);
+            let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body(rigid_body_id)
             else {
                 return;
             };
@@ -41,6 +48,7 @@ pub fn synchronize_rigid_body_components(
             frame.orientation = *rigid_body.orientation();
             motion.linear_velocity = *rigid_body.velocity();
             motion.angular_velocity = *rigid_body.angular_velocity();
-        }
+        },
+        [HasKinematicRigidBody]
     );
 }

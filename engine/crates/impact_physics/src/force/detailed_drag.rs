@@ -7,6 +7,7 @@ pub mod setup;
 
 pub use drag_load::DragLoad;
 use impact_alloc::arena::ArenaPool;
+use impact_id::EntityID;
 
 use crate::{
     force::ForceGeneratorRegistry,
@@ -48,8 +49,8 @@ define_component_type! {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct DetailedDragForceGenerator {
-    /// The dynamic rigid body experiencing the drag.
-    pub body: DynamicRigidBodyID,
+    /// The entity experiencing the drag.
+    pub entity_id: EntityID,
     /// The drag force on the body.
     pub force: DetailedDragForce,
     padding: f32,
@@ -168,9 +169,9 @@ impl From<u64> for DetailedDragForceGeneratorID {
 }
 
 impl DetailedDragForceGenerator {
-    pub fn new(body: DynamicRigidBodyID, force: DetailedDragForce) -> Self {
+    pub fn new(entity_id: EntityID, force: DetailedDragForce) -> Self {
         Self {
-            body,
+            entity_id,
             force,
             padding: 0.0,
         }
@@ -183,7 +184,8 @@ impl DetailedDragForceGenerator {
         medium: &UniformMedium,
         drag_load_map_repository: &DragLoadMapRepository,
     ) {
-        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(self.body) else {
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) else {
             return;
         };
         self.force

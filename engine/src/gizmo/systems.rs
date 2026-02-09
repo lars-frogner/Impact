@@ -41,7 +41,10 @@ use impact_physics::{
     anchor::AnchorManager,
     collision::{CollidableID, CollidableKind, HasCollidable},
     quantities::Motion,
-    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager, TypedRigidBodyID},
+    rigid_body::{
+        DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, RigidBodyManager,
+        RigidBodyType, TypedRigidBodyID,
+    },
 };
 use impact_scene::{
     SceneEntityFlags,
@@ -193,37 +196,47 @@ pub fn buffer_transforms_for_gizmos(
         [ShadowableUnidirectionalEmission]
     );
 
-    query!(ecs_world, |gizmos: &GizmosComp,
-                       frame: &ReferenceFrame,
-                       rigid_body_id: &DynamicRigidBodyID,
-                       flags: &SceneEntityFlags| {
-        if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
-            return;
-        }
-        buffer_transforms_for_anchor_gizmos(
-            anchor_manager,
-            model_instance_manager,
-            camera,
-            frame,
-            TypedRigidBodyID::Dynamic(*rigid_body_id),
-        );
-    });
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         gizmos: &GizmosComp,
+         frame: &ReferenceFrame,
+         flags: &SceneEntityFlags| {
+            if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
+                return;
+            }
+            buffer_transforms_for_anchor_gizmos(
+                anchor_manager,
+                model_instance_manager,
+                camera,
+                frame,
+                entity_id,
+                RigidBodyType::Dynamic,
+            );
+        },
+        [HasDynamicRigidBody]
+    );
 
-    query!(ecs_world, |gizmos: &GizmosComp,
-                       frame: &ReferenceFrame,
-                       rigid_body_id: &KinematicRigidBodyID,
-                       flags: &SceneEntityFlags| {
-        if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
-            return;
-        }
-        buffer_transforms_for_anchor_gizmos(
-            anchor_manager,
-            model_instance_manager,
-            camera,
-            frame,
-            TypedRigidBodyID::Kinematic(*rigid_body_id),
-        );
-    });
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         gizmos: &GizmosComp,
+         frame: &ReferenceFrame,
+         flags: &SceneEntityFlags| {
+            if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
+                return;
+            }
+            buffer_transforms_for_anchor_gizmos(
+                anchor_manager,
+                model_instance_manager,
+                camera,
+                frame,
+                entity_id,
+                RigidBodyType::Kinematic,
+            );
+        },
+        [HasKinematicRigidBody]
+    );
 
     query!(ecs_world, |gizmos: &GizmosComp,
                        frame: &ReferenceFrame,
@@ -247,30 +260,34 @@ pub fn buffer_transforms_for_gizmos(
         );
     });
 
-    query!(ecs_world, |gizmos: &GizmosComp,
-                       frame: &ReferenceFrame,
-                       rigid_body_id: &DynamicRigidBodyID,
-                       flags: &SceneEntityFlags| {
-        if !gizmos.visible_gizmos.intersects(
-            GizmoSet::CENTER_OF_MASS
-                .union(GizmoSet::ANGULAR_MOMENTUM)
-                .union(GizmoSet::FORCE)
-                .union(GizmoSet::TORQUE),
-        ) || flags.is_disabled()
-        {
-            return;
-        }
-        buffer_transforms_for_dynamics_gizmos(
-            rigid_body_manager,
-            model_instance_manager,
-            gizmo_manager.parameters(),
-            camera,
-            &camera_position,
-            frame,
-            *rigid_body_id,
-            gizmos.visible_gizmos,
-        );
-    });
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         gizmos: &GizmosComp,
+         frame: &ReferenceFrame,
+         flags: &SceneEntityFlags| {
+            if !gizmos.visible_gizmos.intersects(
+                GizmoSet::CENTER_OF_MASS
+                    .union(GizmoSet::ANGULAR_MOMENTUM)
+                    .union(GizmoSet::FORCE)
+                    .union(GizmoSet::TORQUE),
+            ) || flags.is_disabled()
+            {
+                return;
+            }
+            buffer_transforms_for_dynamics_gizmos(
+                rigid_body_manager,
+                model_instance_manager,
+                gizmo_manager.parameters(),
+                camera,
+                &camera_position,
+                entity_id,
+                frame,
+                gizmos.visible_gizmos,
+            );
+        },
+        [HasDynamicRigidBody]
+    );
 
     query!(
         ecs_world,
@@ -538,9 +555,12 @@ fn buffer_transforms_for_anchor_gizmos(
     model_instance_manager: &mut ModelInstanceManager,
     camera: &Camera,
     frame: &ReferenceFrame,
-    rigid_body_id: TypedRigidBodyID,
+    entity_id: EntityID,
+    rigid_body_type: RigidBodyType,
 ) {
     const RADIUS: f32 = 0.1;
+
+    let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
 
     let anchor_points: TinyVec<[_; 8]> = match rigid_body_id {
         TypedRigidBodyID::Dynamic(rigid_body_id) => anchor_manager
@@ -632,10 +652,11 @@ fn buffer_transforms_for_dynamics_gizmos(
     parameters: &GizmoParameters,
     camera: &Camera,
     camera_position: &Point3,
+    entity_id: EntityID,
     frame: &ReferenceFrame,
-    rigid_body_id: DynamicRigidBodyID,
     visible_gizmos: GizmoSet,
 ) {
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
     let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) else {
         return;
     };

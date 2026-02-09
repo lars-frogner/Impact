@@ -7,6 +7,7 @@ use impact_ecs::{
     world::{EntityEntry, PrototypeEntities},
 };
 use impact_geometry::ModelTransform;
+use impact_id::EntityID;
 use impact_math::hash::StringHash32;
 use impact_mesh::TriangleMeshID;
 use impact_physics::{
@@ -25,7 +26,7 @@ use impact_physics::{
             DynamicKinematicSpringForceGeneratorID, DynamicKinematicSpringForceProperties,
         },
     },
-    rigid_body::DynamicRigidBodyID,
+    rigid_body::{DynamicRigidBodyID, HasDynamicRigidBody},
 };
 use parking_lot::RwLock;
 
@@ -40,15 +41,16 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         entities,
-        |rigid_body_id: &DynamicRigidBodyID,
+        |entity_id: EntityID,
          acceleration: &ConstantAcceleration|
          -> ConstantAccelerationGeneratorID {
             setup::setup_constant_acceleration(
                 &mut force_generator_manager,
-                *rigid_body_id,
+                entity_id,
                 *acceleration,
             )
-        }
+        },
+        [HasDynamicRigidBody]
     );
 
     setup!(
@@ -58,18 +60,19 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         entities,
-        |rigid_body_id: &DynamicRigidBodyID,
+        |entity_id: EntityID,
          local_force: &LocalForce,
          model_transform: Option<&ModelTransform>|
          -> LocalForceGeneratorID {
             setup::setup_local_force(
                 &mut anchor_manager,
                 &mut force_generator_manager,
-                *rigid_body_id,
+                entity_id,
                 *local_force,
                 model_transform,
             )
-        }
+        },
+        [HasDynamicRigidBody]
     );
 
     setup!(
@@ -117,8 +120,8 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         entities,
-        |drag_properties: &DetailedDragProperties,
-         rigid_body_id: &DynamicRigidBodyID,
+        |entity_id: EntityID,
+         drag_properties: &DetailedDragProperties,
          model_transform: &ModelTransform,
          mesh_id: &TriangleMeshID|
          -> Result<DetailedDragForceGeneratorID> {
@@ -133,12 +136,13 @@ pub fn setup_forces_for_new_entities(
             setup::setup_detailed_drag_force(
                 &mut force_generator_manager,
                 *drag_properties,
-                *rigid_body_id,
+                entity_id,
                 model_transform,
                 StringHash32::new(mesh_id.to_string()),
                 triangle_mesh.triangle_vertex_positions(),
             )
-        }
+        },
+        [HasDynamicRigidBody]
     )?;
 
     setup!(
@@ -147,10 +151,10 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         entities,
-        |rigid_body_id: &DynamicRigidBodyID| {
-            setup::setup_dynamic_gravity(&mut force_generator_manager, *rigid_body_id);
+        |entity_id: EntityID| {
+            setup::setup_dynamic_gravity(&mut force_generator_manager, entity_id);
         },
-        [DynamicGravity]
+        [DynamicGravity, HasDynamicRigidBody]
     );
 
     setup!(
@@ -159,15 +163,16 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         entities,
-        |torque: &FixedDirectionAlignmentTorque,
-         rigid_body_id: &DynamicRigidBodyID|
+        |entity_id: EntityID,
+         torque: &FixedDirectionAlignmentTorque|
          -> AlignmentTorqueGeneratorID {
             setup::setup_fixed_direction_alignment_torque(
                 &mut force_generator_manager,
-                *rigid_body_id,
+                entity_id,
                 *torque,
             )
-        }
+        },
+        [HasDynamicRigidBody]
     );
 
     setup!(
@@ -176,15 +181,10 @@ pub fn setup_forces_for_new_entities(
             let mut force_generator_manager = simulator.force_generator_manager().owrite();
         },
         entities,
-        |torque: &GravityAlignmentTorque,
-         rigid_body_id: &DynamicRigidBodyID|
-         -> AlignmentTorqueGeneratorID {
-            setup::setup_gravity_alignment_torque(
-                &mut force_generator_manager,
-                *rigid_body_id,
-                *torque,
-            )
-        }
+        |entity_id: EntityID, torque: &GravityAlignmentTorque| -> AlignmentTorqueGeneratorID {
+            setup::setup_gravity_alignment_torque(&mut force_generator_manager, entity_id, *torque)
+        },
+        [HasDynamicRigidBody]
     );
 
     Ok(())
@@ -192,6 +192,7 @@ pub fn setup_forces_for_new_entities(
 
 pub fn remove_force_generators_for_entity(
     simulator: &RwLock<PhysicsSimulator>,
+    entity_id: EntityID,
     entity: &EntityEntry<'_>,
 ) {
     if let Some(generator_id) = entity.get_component::<ConstantAccelerationGeneratorID>() {
@@ -230,13 +231,12 @@ pub fn remove_force_generators_for_entity(
             .generators_mut()
             .remove_generator(*generator_id.access());
     }
-    if entity.has_component::<DynamicGravity>()
-        && let Some(rigid_body_id) = entity.get_component::<DynamicRigidBodyID>()
-    {
+    if entity.has_component::<DynamicGravity>() && entity.has_component::<HasDynamicRigidBody>() {
         let simulator = simulator.oread();
         let mut force_generator_manager = simulator.force_generator_manager().owrite();
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
         force_generator_manager
             .dynamic_gravity_manager_mut()
-            .remove_body(*rigid_body_id.access());
+            .remove_body(rigid_body_id);
     }
 }

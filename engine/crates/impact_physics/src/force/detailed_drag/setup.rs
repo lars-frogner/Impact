@@ -9,13 +9,13 @@ use crate::{
         },
     },
     quantities::PositionC,
-    rigid_body::DynamicRigidBodyID,
 };
 #[cfg(feature = "postcard")]
 use anyhow::Context;
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::ModelTransform;
+use impact_id::EntityID;
 use impact_math::{hash::StringHash32, point::Point3C};
 use roc_integration::roc;
 use std::path::{Path, PathBuf};
@@ -43,7 +43,7 @@ impl DetailedDragProperties {
 pub fn setup_detailed_drag_force<'a>(
     force_generator_manager: &mut ForceGeneratorManager,
     drag_properties: DetailedDragProperties,
-    rigid_body_id: DynamicRigidBodyID,
+    entity_id: EntityID,
     model_transform: &ModelTransform,
     drag_load_map_id: StringHash32,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
@@ -101,7 +101,7 @@ pub fn setup_detailed_drag_force<'a>(
     let generator_id = detailed_drag_force_registry
         .generators_mut()
         .insert_generator(DetailedDragForceGenerator::new(
-            rigid_body_id,
+            entity_id,
             DetailedDragForce {
                 drag_coefficient: drag_properties.drag_coefficient,
                 drag_load_map: drag_load_map_id,

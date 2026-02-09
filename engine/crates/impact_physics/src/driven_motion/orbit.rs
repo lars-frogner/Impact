@@ -7,6 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use impact_math::consts::f32::{PI, TWO_PI};
 use roc_integration::roc;
 
@@ -27,8 +28,8 @@ define_component_type! {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct OrbitalTrajectoryDriver {
-    /// The kinematic rigid body being driven.
-    pub rigid_body_id: KinematicRigidBodyID,
+    /// The entity being driven.
+    pub entity_id: EntityID,
     /// The orbital trajectory imposed on the body.
     pub trajectory: OrbitalTrajectory,
     padding: f32,
@@ -67,9 +68,9 @@ impl From<u64> for OrbitalTrajectoryDriverID {
 }
 
 impl OrbitalTrajectoryDriver {
-    pub fn new(rigid_body_id: KinematicRigidBodyID, trajectory: OrbitalTrajectory) -> Self {
+    pub fn new(entity_id: EntityID, trajectory: OrbitalTrajectory) -> Self {
         Self {
-            rigid_body_id,
+            entity_id,
             trajectory,
             padding: 0.0,
         }
@@ -78,7 +79,8 @@ impl OrbitalTrajectoryDriver {
     /// Resets the appropriate properties of the driven rigid body in
     /// preparation for applying driven properties.
     pub fn reset(&self, rigid_body_manager: &mut RigidBodyManager) {
-        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
         else {
             return;
         };
@@ -89,7 +91,8 @@ impl OrbitalTrajectoryDriver {
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
     pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
-        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
         else {
             return;
         };

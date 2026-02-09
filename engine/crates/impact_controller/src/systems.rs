@@ -11,7 +11,10 @@ use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 use impact_physics::{
     quantities::{AngularVelocity, Motion},
-    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
+    rigid_body::{
+        DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, KinematicRigidBodyID,
+        RigidBodyManager,
+    },
 };
 
 /// Updates the world-space velocities of all entities controlled by the given
@@ -23,37 +26,37 @@ pub fn update_controlled_entity_velocities(
 ) {
     query!(
         ecs_world,
-        |motion: &mut Motion, frame: &ReferenceFrame, rigid_body_id: &KinematicRigidBodyID| {
+        |entity_id: EntityID, motion: &mut Motion, frame: &ReferenceFrame| {
             let orientation = frame.orientation.aligned();
 
             let new_velocity = motion_controller.compute_controlled_velocity(&orientation);
 
             motion.linear_velocity = new_velocity.compact();
 
-            if let Some(rigid_body) =
-                rigid_body_manager.get_kinematic_rigid_body_mut(*rigid_body_id)
+            let rigid_body_id = KinematicRigidBodyID::from_entity_id(entity_id);
+            if let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
             {
                 rigid_body.set_velocity(motion.linear_velocity);
             }
         },
-        [VelocityControl]
+        [VelocityControl, HasKinematicRigidBody]
     );
 
     query!(
         ecs_world,
-        |motion: &mut Motion, frame: &ReferenceFrame, rigid_body_id: &DynamicRigidBodyID| {
+        |entity_id: EntityID, motion: &mut Motion, frame: &ReferenceFrame| {
             let orientation = frame.orientation.aligned();
 
             let new_velocity = motion_controller.compute_controlled_velocity(&orientation);
 
             motion.linear_velocity = new_velocity.compact();
 
-            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(*rigid_body_id)
-            {
+            let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) {
                 rigid_body.synchronize_momentum(&new_velocity);
             }
         },
-        [VelocityControl]
+        [VelocityControl, HasDynamicRigidBody]
     );
 }
 
@@ -69,10 +72,10 @@ pub fn update_controlled_entity_angular_velocities(
 
     query!(
         ecs_world,
-        |control: &AngularVelocityControl,
+        |entity_id: EntityID,
+         control: &AngularVelocityControl,
          frame: &ReferenceFrame,
-         motion: &mut Motion,
-         rigid_body_id: &KinematicRigidBodyID| {
+         motion: &mut Motion| {
             let mut new_angular_velocity = motion.angular_velocity.aligned();
 
             if orientation_controller.orientation_has_changed() {
@@ -99,20 +102,21 @@ pub fn update_controlled_entity_angular_velocities(
 
             motion.angular_velocity = new_angular_velocity.compact();
 
-            if let Some(rigid_body) =
-                rigid_body_manager.get_kinematic_rigid_body_mut(*rigid_body_id)
+            let rigid_body_id = KinematicRigidBodyID::from_entity_id(entity_id);
+            if let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
             {
                 rigid_body.set_angular_velocity(motion.angular_velocity);
             }
-        }
+        },
+        [HasKinematicRigidBody]
     );
 
     query!(
         ecs_world,
-        |control: &AngularVelocityControl,
+        |entity_id: EntityID,
+         control: &AngularVelocityControl,
          frame: &ReferenceFrame,
-         motion: &mut Motion,
-         rigid_body_id: &DynamicRigidBodyID| {
+         motion: &mut Motion| {
             let mut new_angular_velocity = motion.angular_velocity.aligned();
 
             if orientation_controller.orientation_has_changed() {
@@ -139,11 +143,12 @@ pub fn update_controlled_entity_angular_velocities(
 
             motion.angular_velocity = new_angular_velocity.compact();
 
-            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(*rigid_body_id)
-            {
+            let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) {
                 rigid_body.synchronize_angular_momentum(&new_angular_velocity);
             }
-        }
+        },
+        [HasDynamicRigidBody]
     );
 
     orientation_controller.reset_orientation_change();

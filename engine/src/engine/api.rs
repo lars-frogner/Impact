@@ -581,12 +581,13 @@ impl Engine {
 
     pub fn with_dynamic_rigid_body<R>(
         &self,
-        rigid_body_id: DynamicRigidBodyID,
+        entity_id: EntityID,
         f: impl FnOnce(&DynamicRigidBody) -> Result<R>,
     ) -> Result<R> {
         let simulator = self.simulator().oread();
         let rigid_body_manager = simulator.rigid_body_manager().oread();
 
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
         let rigid_body = rigid_body_manager
             .get_dynamic_rigid_body(rigid_body_id)
             .ok_or_else(|| anyhow!("Missing dynamic rigid body with ID {rigid_body_id:?}"))?;

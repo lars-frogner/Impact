@@ -25,7 +25,7 @@ use impact_model::{
 use impact_physics::{
     inertia::InertialProperties,
     quantities::Motion,
-    rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
+    rigid_body::{self, RigidBodyManager},
 };
 use impact_scene::{
     ParentEntity, SceneEntityFlags,
@@ -507,7 +507,7 @@ pub fn setup_dynamic_rigid_body_for_voxel_object(
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
-) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+) -> Result<(ModelTransform, ReferenceFrame, Motion)> {
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let voxel_object = voxel_object_manager
         .get_voxel_object(voxel_object_id)
@@ -518,8 +518,9 @@ pub fn setup_dynamic_rigid_body_for_voxel_object(
         voxel_type_registry.mass_densities(),
     );
 
-    let (rigid_body_id, model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
+    let (model_transform, frame, velocity) = setup_rigid_body_for_new_voxel_object(
         rigid_body_manager,
+        entity_id,
         inertial_property_manager.derive_inertial_properties(),
         model_transform,
         frame,
@@ -528,12 +529,11 @@ pub fn setup_dynamic_rigid_body_for_voxel_object(
 
     let physics_context = VoxelObjectPhysicsContext {
         inertial_property_manager,
-        rigid_body_id,
     };
 
     voxel_object_manager.add_physics_context_for_voxel_object(voxel_object_id, physics_context)?;
 
-    Ok((rigid_body_id, model_transform, frame, velocity))
+    Ok((model_transform, frame, velocity))
 }
 
 pub fn create_model_instance_node_for_voxel_object(
@@ -617,11 +617,12 @@ pub fn create_model_instance_node_for_voxel_object(
 
 fn setup_rigid_body_for_new_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
+    entity_id: EntityID,
     inertial_properties: InertialProperties,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
-) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+) -> Result<(ModelTransform, ReferenceFrame, Motion)> {
     let mut model_transform = model_transform.copied().unwrap_or_default();
     let frame = frame.copied().unwrap_or_default();
     let motion = motion.copied().unwrap_or_default();
@@ -634,12 +635,13 @@ fn setup_rigid_body_for_new_voxel_object(
     // this entity's space
     model_transform.set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-    let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+    rigid_body::setup::setup_dynamic_rigid_body(
         rigid_body_manager,
+        entity_id,
         inertial_properties,
         frame,
         motion,
-    );
+    )?;
 
-    Ok((rigid_body_id, model_transform, frame, motion))
+    Ok((model_transform, frame, motion))
 }

@@ -24,7 +24,6 @@ use impact_containers::NoHashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use impact_id::define_entity_id_newtype;
 use impact_model::impl_InstanceFeature;
-use impact_physics::rigid_body::DynamicRigidBodyID;
 use impact_scene::model::ModelInstanceManager;
 use mesh::MeshedChunkedVoxelObject;
 use roc_integration::roc;
@@ -56,11 +55,6 @@ define_component_type! {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct HasVoxelObject;
-}
-
-#[cfg(feature = "ecs")]
-impact_ecs::declare_component_flags! {
-    HasVoxelObject => impact_ecs::component::ComponentFlags::INHERITABLE,
 }
 
 /// A voxel, which may either be be empty or filled with a material with
@@ -141,7 +135,6 @@ pub struct VoxelObjectManager {
 #[derive(Debug)]
 pub struct VoxelObjectPhysicsContext {
     pub inertial_property_manager: VoxelObjectInertialPropertyManager,
-    pub rigid_body_id: DynamicRigidBodyID,
 }
 
 #[cfg_attr(

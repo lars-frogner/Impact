@@ -5,6 +5,7 @@ use impact_ecs::{
     setup,
     world::{EntityEntry, PrototypeEntities},
 };
+use impact_id::EntityID;
 use impact_physics::{
     driven_motion::{
         circular::CircularTrajectoryDriverID,
@@ -17,7 +18,7 @@ use impact_physics::{
             HarmonicOscillatorTrajectory, OrbitalTrajectory,
         },
     },
-    rigid_body::KinematicRigidBodyID,
+    rigid_body::HasKinematicRigidBody,
 };
 use parking_lot::RwLock;
 
@@ -31,15 +32,10 @@ pub fn setup_driven_motion_for_new_entities(
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         entities,
-        |rigid_body_id: &KinematicRigidBodyID,
-         trajectory: &CircularTrajectory|
-         -> CircularTrajectoryDriverID {
-            setup::setup_circular_trajectory(
-                &mut motion_driver_manager,
-                *rigid_body_id,
-                *trajectory,
-            )
-        }
+        |entity_id: EntityID, trajectory: &CircularTrajectory| -> CircularTrajectoryDriverID {
+            setup::setup_circular_trajectory(&mut motion_driver_manager, entity_id, *trajectory)
+        },
+        [HasKinematicRigidBody]
     );
 
     setup!(
@@ -48,15 +44,16 @@ pub fn setup_driven_motion_for_new_entities(
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         entities,
-        |rigid_body_id: &KinematicRigidBodyID,
+        |entity_id: EntityID,
          trajectory: &ConstantAccelerationTrajectory|
          -> ConstantAccelerationTrajectoryDriverID {
             setup::setup_constant_acceleration_trajectory(
                 &mut motion_driver_manager,
-                *rigid_body_id,
+                entity_id,
                 *trajectory,
             )
-        }
+        },
+        [HasKinematicRigidBody]
     );
 
     setup!(
@@ -65,11 +62,10 @@ pub fn setup_driven_motion_for_new_entities(
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         entities,
-        |rigid_body_id: &KinematicRigidBodyID,
-         rotation: &ConstantRotation|
-         -> ConstantRotationDriverID {
-            setup::setup_constant_rotation(&mut motion_driver_manager, *rigid_body_id, *rotation)
-        }
+        |entity_id: EntityID, rotation: &ConstantRotation| -> ConstantRotationDriverID {
+            setup::setup_constant_rotation(&mut motion_driver_manager, entity_id, *rotation)
+        },
+        [HasKinematicRigidBody]
     );
 
     setup!(
@@ -78,15 +74,16 @@ pub fn setup_driven_motion_for_new_entities(
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         entities,
-        |rigid_body_id: &KinematicRigidBodyID,
+        |entity_id: EntityID,
          trajectory: &HarmonicOscillatorTrajectory|
          -> HarmonicOscillatorTrajectoryDriverID {
             setup::setup_harmonic_oscillator_trajectory(
                 &mut motion_driver_manager,
-                *rigid_body_id,
+                entity_id,
                 *trajectory,
             )
-        }
+        },
+        [HasKinematicRigidBody]
     );
 
     setup!(
@@ -95,11 +92,10 @@ pub fn setup_driven_motion_for_new_entities(
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
         entities,
-        |rigid_body_id: &KinematicRigidBodyID,
-         trajectory: &OrbitalTrajectory|
-         -> OrbitalTrajectoryDriverID {
-            setup::setup_orbital_trajectory(&mut motion_driver_manager, *rigid_body_id, *trajectory)
-        }
+        |entity_id: EntityID, trajectory: &OrbitalTrajectory| -> OrbitalTrajectoryDriverID {
+            setup::setup_orbital_trajectory(&mut motion_driver_manager, entity_id, *trajectory)
+        },
+        [HasKinematicRigidBody]
     );
 }
 

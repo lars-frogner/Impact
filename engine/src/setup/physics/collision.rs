@@ -13,7 +13,7 @@ use impact_physics::{
         self, CollidableID, HasCollidable,
         setup::{PlanarCollidable, SphericalCollidable},
     },
-    rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
+    rigid_body::{HasDynamicRigidBody, HasKinematicRigidBody, RigidBodyType},
 };
 use impact_voxel::{
     HasVoxelObject,
@@ -35,18 +35,18 @@ pub fn setup_collidables_for_new_entities(
         },
         entities,
         |entity_id: EntityID,
-         spherical_collidable: &SphericalCollidable,
-         rigid_body_id: &DynamicRigidBodyID|
+         spherical_collidable: &SphericalCollidable|
          -> Result<HasCollidable> {
             collision::setup::setup_spherical_collidable(
                 &mut collision_world,
                 entity_id,
-                (*rigid_body_id).into(),
+                RigidBodyType::Dynamic,
                 spherical_collidable,
                 LocalCollidable::Sphere,
             )?;
             Ok(HasCollidable)
         },
+        [HasDynamicRigidBody],
         ![HasCollidable]
     )?;
 
@@ -57,18 +57,18 @@ pub fn setup_collidables_for_new_entities(
         },
         entities,
         |entity_id: EntityID,
-         spherical_collidable: &SphericalCollidable,
-         rigid_body_id: &KinematicRigidBodyID|
+         spherical_collidable: &SphericalCollidable|
          -> Result<HasCollidable> {
             collision::setup::setup_spherical_collidable(
                 &mut collision_world,
                 entity_id,
-                (*rigid_body_id).into(),
+                RigidBodyType::Kinematic,
                 spherical_collidable,
                 LocalCollidable::Sphere,
             )?;
             Ok(HasCollidable)
         },
+        [HasKinematicRigidBody],
         ![HasCollidable]
     )?;
 
@@ -78,19 +78,17 @@ pub fn setup_collidables_for_new_entities(
             let mut collision_world = simulator.collision_world().owrite();
         },
         entities,
-        |entity_id: EntityID,
-         planar_collidable: &PlanarCollidable,
-         rigid_body_id: &DynamicRigidBodyID|
-         -> Result<HasCollidable> {
+        |entity_id: EntityID, planar_collidable: &PlanarCollidable| -> Result<HasCollidable> {
             collision::setup::setup_planar_collidable(
                 &mut collision_world,
                 entity_id,
-                (*rigid_body_id).into(),
+                RigidBodyType::Dynamic,
                 planar_collidable,
                 LocalCollidable::Plane,
             )?;
             Ok(HasCollidable)
         },
+        [HasDynamicRigidBody],
         ![HasCollidable]
     )?;
 
@@ -100,19 +98,17 @@ pub fn setup_collidables_for_new_entities(
             let mut collision_world = simulator.collision_world().owrite();
         },
         entities,
-        |entity_id: EntityID,
-         planar_collidable: &PlanarCollidable,
-         rigid_body_id: &KinematicRigidBodyID|
-         -> Result<HasCollidable> {
+        |entity_id: EntityID, planar_collidable: &PlanarCollidable| -> Result<HasCollidable> {
             collision::setup::setup_planar_collidable(
                 &mut collision_world,
                 entity_id,
-                (*rigid_body_id).into(),
+                RigidBodyType::Kinematic,
                 planar_collidable,
                 LocalCollidable::Plane,
             )?;
             Ok(HasCollidable)
         },
+        [HasKinematicRigidBody],
         ![HasCollidable]
     )?;
 
@@ -124,19 +120,18 @@ pub fn setup_collidables_for_new_entities(
         entities,
         |entity_id: EntityID,
          voxel_collidable: &VoxelCollidable,
-         rigid_body_id: &DynamicRigidBodyID,
          model_transform: &ModelTransform|
          -> Result<HasCollidable> {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
                 entity_id,
-                (*rigid_body_id).into(),
+                RigidBodyType::Dynamic,
                 model_transform.offset,
                 voxel_collidable,
             )?;
             Ok(HasCollidable)
         },
-        [HasVoxelObject],
+        [HasVoxelObject, HasDynamicRigidBody],
         ![HasCollidable]
     )?;
 
@@ -148,13 +143,12 @@ pub fn setup_collidables_for_new_entities(
         entities,
         |entity_id: EntityID,
          voxel_collidable: &VoxelCollidable,
-         rigid_body_id: &KinematicRigidBodyID,
          model_transform: Option<&ModelTransform>|
          -> Result<HasCollidable> {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
                 entity_id,
-                (*rigid_body_id).into(),
+                RigidBodyType::Kinematic,
                 model_transform
                     .map(|model_transform| model_transform.offset)
                     .unwrap_or_default(),
@@ -162,7 +156,7 @@ pub fn setup_collidables_for_new_entities(
             )?;
             Ok(HasCollidable)
         },
-        [HasVoxelObject],
+        [HasVoxelObject, HasKinematicRigidBody],
         ![HasCollidable]
     )
 }

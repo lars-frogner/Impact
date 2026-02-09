@@ -4,8 +4,7 @@ use crate::{
     Voxel, VoxelManager, VoxelObjectID, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{
-        self, DynamicDisconnectedVoxelObject, NewVoxelObjectEntity, VoxelObjectEntity,
-        VoxelObjectInteractionContext, VoxelRemovalOutcome,
+        self, DynamicDisconnectedVoxelObject, VoxelObjectInteractionContext, VoxelRemovalOutcome,
     },
     mesh::MeshedChunkedVoxelObject,
     voxel_types::VoxelTypeRegistry,
@@ -15,11 +14,11 @@ use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashMap;
 use impact_geometry::{CapsuleC, SphereC};
-use impact_id::{EntityIDManager, define_entity_id_newtype};
+use impact_id::{EntityID, EntityIDManager, define_entity_id_newtype};
 use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3C};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
-    rigid_body::RigidBodyManager,
+    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use roc_integration::roc;
 use std::mem;
@@ -413,14 +412,14 @@ pub fn apply_absorption<C>(
     }
 
     let arena = ArenaPool::get_arena_for_capacity(
-        voxel_object_manager.voxel_object_count() * mem::size_of::<VoxelObjectEntity>(),
+        voxel_object_manager.voxel_object_count() * mem::size_of::<EntityID>(),
     );
     let mut voxel_object_entities =
         AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), &arena);
 
     context.gather_voxel_object_entities(&mut voxel_object_entities);
 
-    for VoxelObjectEntity { entity_id } in voxel_object_entities {
+    for entity_id in voxel_object_entities {
         let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
         let Some((voxel_object, physics_context)) =
             voxel_object_manager.get_voxel_object_with_physics_context_mut(voxel_object_id)
@@ -429,9 +428,8 @@ pub fn apply_absorption<C>(
         };
         let voxel_object = voxel_object.object_mut();
 
-        let Some(rigid_body) =
-            rigid_body_manager.get_dynamic_rigid_body_mut(physics_context.rigid_body_id)
-        else {
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) else {
             log::warn!("Voxel object physics context points to missing dynamic rigid body");
             return;
         };
@@ -499,7 +497,7 @@ pub fn apply_absorption<C>(
                 voxel_type_registry,
                 voxel_object,
                 &mut physics_context.inertial_property_manager,
-                physics_context.rigid_body_id,
+                rigid_body_id,
                 rigid_body,
                 local_center_of_mass,
             );
@@ -518,16 +516,18 @@ pub fn apply_absorption<C>(
 
                 let new_entity_id = entity_id_manager.provide_id();
                 let new_voxel_object_id = VoxelObjectID::from_entity_id(new_entity_id);
+                let new_rigid_body_id = DynamicRigidBodyID::from_entity_id(new_entity_id);
 
                 voxel_object_manager
                     .add_voxel_object(new_voxel_object_id, new_meshed_voxel_object)
                     .unwrap();
 
-                let new_rigid_body_id = rigid_body_manager.add_dynamic_rigid_body(new_rigid_body);
+                rigid_body_manager
+                    .add_dynamic_rigid_body(new_rigid_body_id, new_rigid_body)
+                    .unwrap();
 
                 let physics_context = VoxelObjectPhysicsContext {
                     inertial_property_manager,
-                    rigid_body_id: new_rigid_body_id,
                 };
 
                 voxel_object_manager
@@ -546,13 +546,7 @@ pub fn apply_absorption<C>(
                     );
                 }
 
-                context.on_new_disconnected_voxel_object_entity(
-                    NewVoxelObjectEntity {
-                        entity_id: new_entity_id,
-                        rigid_body_id: new_rigid_body_id,
-                    },
-                    entity_id,
-                );
+                context.on_new_disconnected_voxel_object_entity(new_entity_id, entity_id);
             }
         }
     }
