@@ -25,10 +25,10 @@ import pf.Comp.AngularVelocityControl
 import pf.Comp.AngularVelocityControlParent
 import pf.Control.AngularVelocityControlDirections
 import pf.Control.AngularVelocityControlFlags
-import pf.Setup.SceneParent
+import pf.Comp.ParentEntity
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
-import pf.Setup.SceneGraphGroup
+import pf.Comp.CanBeParent
 import pf.Setup.UniformColor
 import pf.Comp.Motion
 import pf.Physics.ContactResponseParameters
@@ -162,7 +162,7 @@ construct_entities : Point3, UnitQuaternion, Vector3 -> PlayerEntities
 construct_entities = |position, orientation, velocity|
     player_ent =
         Entity.new_component_data
-        |> Setup.SceneGraphGroup.add
+        |> Comp.CanBeParent.add
         |> Comp.ReferenceFrame.add_new(
             position,
             orientation,
@@ -208,7 +208,7 @@ construct_entities = |position, orientation, velocity|
 
     player_body_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(entity_ids.player)
+        |> Comp.ParentEntity.add(entity_ids.player)
         |> Setup.CapsuleMesh.add_new(
             player.body_segment_length,
             player.body_radius,
@@ -219,8 +219,8 @@ construct_entities = |position, orientation, velocity|
 
     player_head_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(entity_ids.player)
-        |> Setup.SceneGraphGroup.add
+        |> Comp.ParentEntity.add(entity_ids.player)
+        |> Comp.CanBeParent.add
         |> Comp.ReferenceFrame.add_new(
             (
                 0.0,

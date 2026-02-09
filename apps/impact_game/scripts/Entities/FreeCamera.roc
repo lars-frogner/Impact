@@ -16,7 +16,7 @@ import pf.Comp.AngularVelocityControl
 import pf.Comp.VelocityControl
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
-import pf.Setup.SceneGraphGroup
+import pf.Comp.CanBeParent
 import pf.Comp.Motion
 import pf.Lookup.LauncherLaunchSpeed
 
@@ -70,7 +70,7 @@ construct_entities : Point3, UnitQuaternion -> FreeCameraEntities
 construct_entities = |position, orientation|
     camera_ent =
         Entity.new_component_data
-        |> Setup.SceneGraphGroup.add
+        |> Comp.CanBeParent.add
         |> Comp.ReferenceFrame.add_new(
             position,
             UnitQuaternion.mul(

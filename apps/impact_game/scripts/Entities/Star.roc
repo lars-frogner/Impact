@@ -9,8 +9,8 @@ import core.Point3
 import core.Sphere
 
 import pf.Entity
-import pf.Setup.SceneGraphGroup
-import pf.Setup.SceneParent
+import pf.Comp.ParentEntity
+import pf.Comp.CanBeParent
 import pf.Setup.SphereMesh
 import pf.Setup.UniformColor
 import pf.Setup.UniformEmissiveLuminance
@@ -55,7 +55,7 @@ construct_entities : SolarSystem.Star -> StarEntities
 construct_entities = |{ radius, mass_density, luminous_intensity, emissive_luminance }|
     star_ent =
         Entity.new_component_data
-        |> Setup.SceneGraphGroup.add
+        |> Comp.CanBeParent.add
         |> Setup.SphereMesh.add_new(100)
         |> Setup.UniformColor.add(star.color)
         |> Setup.UniformEmissiveLuminance.add(emissive_luminance)
@@ -76,7 +76,7 @@ construct_entities = |{ radius, mass_density, luminous_intensity, emissive_lumin
 
     star_light_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(entity_ids.star)
+        |> Comp.ParentEntity.add(entity_ids.star)
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.ShadowableOmnidirectionalEmission.add_new(
             Vector3.scale(star.color, luminous_intensity),

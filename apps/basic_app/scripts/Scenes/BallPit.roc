@@ -17,14 +17,14 @@ import pf.Comp.VelocityControl
 import pf.Setup.NormalMap
 import pf.Comp.OmnidirectionalEmission
 import pf.Comp.AngularVelocityControl
-import pf.Setup.SceneParent
+import pf.Comp.ParentEntity
 import pf.Setup.PerspectiveCamera
 import pf.Setup.PlanarTextureProjection
 import pf.Setup.PlanarCollidable
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Setup.SceneGraphGroup
+import pf.Comp.CanBeParent
 import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.SphericalCollidable
 import pf.Setup.SphereMesh
@@ -215,7 +215,7 @@ create_room! = |extent, angular_speed, texture_ids|
             Same(2),
             Same(2),
         )?
-        |> Setup.SceneGraphGroup.add_multiple
+        |> Comp.CanBeParent.add_multiple
         |> Entity.create_multiple!?
 
     wall_ids_for_lights =
@@ -240,7 +240,7 @@ create_room! = |extent, angular_speed, texture_ids|
 
     _ =
         Entity.new_multi_component_data(List.len(wall_ids_for_lights))
-        |> Setup.SceneParent.add_multiple_new(
+        |> Comp.ParentEntity.add_multiple(
             All(wall_ids_for_lights),
         )?
         |> Comp.ModelTransform.add_multiple_with_scale(
