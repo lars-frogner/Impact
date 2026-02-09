@@ -22,6 +22,7 @@ use crate::{
     },
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
 };
+use anyhow::Result;
 use impact_geometry::ModelTransform;
 use impact_id::EntityID;
 
@@ -29,10 +30,14 @@ pub fn setup_constant_acceleration(
     force_generator_manager: &mut ForceGeneratorManager,
     entity_id: EntityID,
     acceleration: ConstantAcceleration,
-) -> ConstantAccelerationGeneratorID {
+) -> Result<()> {
+    let generator_id = ConstantAccelerationGeneratorID::from_entity_id(entity_id);
     force_generator_manager
         .constant_accelerations_mut()
-        .insert_generator(ConstantAccelerationGenerator::new(entity_id, acceleration))
+        .insert_generator(
+            generator_id,
+            ConstantAccelerationGenerator::new(entity_id, acceleration),
+        )
 }
 
 pub fn setup_local_force(
@@ -41,7 +46,7 @@ pub fn setup_local_force(
     entity_id: EntityID,
     local_force: LocalForce,
     model_transform: Option<&ModelTransform>,
-) -> LocalForceGeneratorID {
+) -> Result<()> {
     let mut point = local_force.point.aligned();
 
     if let Some(transform) = model_transform {
@@ -55,20 +60,23 @@ pub fn setup_local_force(
         point: point.compact(),
     });
 
-    force_generator_manager
-        .local_forces_mut()
-        .insert_generator(LocalForceGenerator {
+    let generator_id = LocalForceGeneratorID::from_entity_id(entity_id);
+    force_generator_manager.local_forces_mut().insert_generator(
+        generator_id,
+        LocalForceGenerator {
             anchor,
             force: local_force.force,
-        })
+        },
+    )
 }
 
 pub fn setup_dynamic_dynamic_spring_force(
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
+    entity_id: EntityID,
     properties: DynamicDynamicSpringForceProperties,
     model_transform: Option<&ModelTransform>,
-) -> DynamicDynamicSpringForceGeneratorID {
+) -> Result<()> {
     let mut point_1 = properties.attachment_point_1.aligned();
     let mut point_2 = properties.attachment_point_2.aligned();
 
@@ -90,21 +98,26 @@ pub fn setup_dynamic_dynamic_spring_force(
         point: point_2.compact(),
     });
 
+    let generator_id = DynamicDynamicSpringForceGeneratorID::from_entity_id(entity_id);
     force_generator_manager
         .dynamic_dynamic_spring_forces_mut()
-        .insert_generator(DynamicDynamicSpringForceGenerator {
-            anchor_1,
-            anchor_2,
-            spring: properties.spring,
-        })
+        .insert_generator(
+            generator_id,
+            DynamicDynamicSpringForceGenerator {
+                anchor_1,
+                anchor_2,
+                spring: properties.spring,
+            },
+        )
 }
 
 pub fn setup_dynamic_kinematic_spring_force(
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
+    entity_id: EntityID,
     properties: DynamicKinematicSpringForceProperties,
     model_transform: Option<&ModelTransform>,
-) -> DynamicKinematicSpringForceGeneratorID {
+) -> Result<()> {
     let mut point_1 = properties.attachment_point_1.aligned();
     let mut point_2 = properties.attachment_point_2.aligned();
 
@@ -128,13 +141,17 @@ pub fn setup_dynamic_kinematic_spring_force(
             point: point_2.compact(),
         });
 
+    let generator_id = DynamicKinematicSpringForceGeneratorID::from_entity_id(entity_id);
     force_generator_manager
         .dynamic_kinematic_spring_forces_mut()
-        .insert_generator(DynamicKinematicSpringForceGenerator {
-            anchor_1,
-            anchor_2,
-            spring: properties.spring,
-        })
+        .insert_generator(
+            generator_id,
+            DynamicKinematicSpringForceGenerator {
+                anchor_1,
+                anchor_2,
+                spring: properties.spring,
+            },
+        )
 }
 
 pub fn setup_dynamic_gravity(
@@ -151,26 +168,28 @@ pub fn setup_fixed_direction_alignment_torque(
     force_generator_manager: &mut ForceGeneratorManager,
     entity_id: EntityID,
     torque: FixedDirectionAlignmentTorque,
-) -> AlignmentTorqueGeneratorID {
+) -> Result<()> {
     let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+    let generator_id = AlignmentTorqueGeneratorID::from_entity_id(entity_id);
     force_generator_manager
         .alignment_torques_mut()
-        .insert_generator(AlignmentTorqueGenerator::for_fixed_direction(
-            rigid_body_id,
-            torque,
-        ))
+        .insert_generator(
+            generator_id,
+            AlignmentTorqueGenerator::for_fixed_direction(rigid_body_id, torque),
+        )
 }
 
 pub fn setup_gravity_alignment_torque(
     force_generator_manager: &mut ForceGeneratorManager,
     entity_id: EntityID,
     torque: GravityAlignmentTorque,
-) -> AlignmentTorqueGeneratorID {
+) -> Result<()> {
     let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+    let generator_id = AlignmentTorqueGeneratorID::from_entity_id(entity_id);
     force_generator_manager
         .alignment_torques_mut()
-        .insert_generator(AlignmentTorqueGenerator::for_gravity_direction(
-            rigid_body_id,
-            torque,
-        ))
+        .insert_generator(
+            generator_id,
+            AlignmentTorqueGenerator::for_gravity_direction(rigid_body_id, torque),
+        )
 }

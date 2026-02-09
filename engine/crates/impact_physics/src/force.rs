@@ -10,14 +10,14 @@ pub mod spring_force;
 
 use crate::{UniformMedium, anchor::AnchorManager, rigid_body::RigidBodyManager};
 use alignment_torque::AlignmentTorqueRegistry;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use constant_acceleration::ConstantAccelerationRegistry;
 use detailed_drag::{DetailedDragForceRegistry, DragLoadMapConfig};
 use dynamic_gravity::{DynamicGravityConfig, DynamicGravityManager};
-use impact_containers::IndexMap;
+use impact_containers::HashMap;
 use local_force::LocalForceRegistry;
 use spring_force::{DynamicDynamicSpringForceRegistry, DynamicKinematicSpringForceRegistry};
-use std::{hash::Hash, path::Path};
+use std::{fmt, hash::Hash, path::Path};
 
 /// Manager of all generators of forces and torques on rigid bodies.
 #[derive(Debug)]
@@ -48,8 +48,7 @@ pub struct ForceGenerationConfig {
 /// Manages all instances of a specific type of force generator.
 #[derive(Clone, Debug)]
 pub struct ForceGeneratorRegistry<Id, G> {
-    generators: IndexMap<Id, G>,
-    id_counter: u64,
+    generators: HashMap<Id, G>,
 }
 
 impl ForceGeneratorManager {
@@ -171,11 +170,10 @@ impl ForceGeneratorManager {
     }
 }
 
-impl<Id: Copy + Eq + Hash + From<u64>, G> ForceGeneratorRegistry<Id, G> {
+impl<Id: Copy + Eq + Hash + fmt::Display, G> ForceGeneratorRegistry<Id, G> {
     fn new() -> Self {
         Self {
-            generators: IndexMap::default(),
-            id_counter: 0,
+            generators: HashMap::default(),
         }
     }
 
@@ -196,29 +194,25 @@ impl<Id: Copy + Eq + Hash + From<u64>, G> ForceGeneratorRegistry<Id, G> {
         self.generators.values()
     }
 
-    /// Adds the given force generator to the map.
+    /// Adds the given force generator to the map under the given ID.
     ///
-    /// # Returns
-    /// A new ID representing the added force generator.
-    pub fn insert_generator(&mut self, generator: G) -> Id {
-        let id = self.create_new_id();
+    /// # Errors
+    /// Returns an error if the given generator ID already exists.
+    pub fn insert_generator(&mut self, id: Id, generator: G) -> Result<()> {
+        if self.generators.contains_key(&id) {
+            bail!("A force generator with ID {id} already exists");
+        }
         self.generators.insert(id, generator);
-        id
+        Ok(())
     }
 
     /// Removes the force generator with the given ID from the map if it exists.
     pub fn remove_generator(&mut self, id: Id) {
-        self.generators.swap_remove(&id);
+        self.generators.remove(&id);
     }
 
     fn clear(&mut self) {
         self.generators.clear();
-    }
-
-    fn create_new_id(&mut self) -> Id {
-        let id = Id::from(self.id_counter);
-        self.id_counter = self.id_counter.checked_add(1).unwrap();
-        id
     }
 }
 

@@ -7,18 +7,27 @@ use crate::{
     rigid_body::RigidBodyManager,
 };
 use bytemuck::{Pod, Zeroable};
+use impact_id::define_entity_id_newtype;
 use roc_integration::roc;
 
 /// Manages all [`LocalForceGenerator`]s.
 pub type LocalForceRegistry = ForceGeneratorRegistry<LocalForceGeneratorID, LocalForceGenerator>;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`LocalForceGenerator`].
+    [pub] LocalForceGeneratorID
+}
+
+define_component_type! {
+    /// Marks that an entity has a local force generator identified by a
+    /// [`LocalForceGeneratorID`].
+    ///
+    /// Use [`LocalForceGeneratorID::from_entity_id`] to obtain the generator ID
+    /// from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct LocalForceGeneratorID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasLocalForceGenerator;
 }
 
 /// Generator for a constant body-space force applied to a specific point on
@@ -32,7 +41,6 @@ pub struct LocalForceGenerator {
 }
 
 define_setup_type! {
-    target = LocalForceGeneratorID;
     /// A constant force vector and the point where it is applied, all in the
     /// body-fixed frame.
     #[roc(parents = "Setup")]
@@ -43,18 +51,6 @@ define_setup_type! {
         pub force: ForceC,
         /// The point where the force is applied, in the body's model space.
         pub point: PositionC,
-    }
-}
-
-impl From<u64> for LocalForceGeneratorID {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<LocalForceGeneratorID> for u64 {
-    fn from(id: LocalForceGeneratorID) -> Self {
-        id.0
     }
 }
 

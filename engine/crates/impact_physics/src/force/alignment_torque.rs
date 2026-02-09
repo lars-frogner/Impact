@@ -6,6 +6,7 @@ use crate::{
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
+use impact_id::define_entity_id_newtype;
 use impact_math::vector::UnitVector3C;
 use roc_integration::roc;
 
@@ -13,13 +14,21 @@ use roc_integration::roc;
 pub type AlignmentTorqueRegistry =
     ForceGeneratorRegistry<AlignmentTorqueGeneratorID, AlignmentTorqueGenerator>;
 
+define_entity_id_newtype! {
+    /// Identifier for a [`AlignmentTorqueGenerator`].
+    [pub] AlignmentTorqueGeneratorID
+}
+
 define_component_type! {
-    /// Identifier for an [`AlignmentTorqueGenerator`].
+    /// Marks that an entity has an alignment torque generator identified by a
+    /// [`AlignmentTorqueGeneratorID`].
+    ///
+    /// Use [`AlignmentTorqueGeneratorID::from_entity_id`] to obtain the
+    /// generator ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct AlignmentTorqueGeneratorID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasAlignmentTorqueGenerator;
 }
 
 /// Generator for a torque working to align a body axis with an external
@@ -53,7 +62,6 @@ pub enum AlignmentDirection {
 }
 
 define_setup_type! {
-    target = AlignmentTorqueGeneratorID;
     /// A torque working to align an axis of the body with a fixed external
     /// direction.
     #[roc(parents = "Setup")]
@@ -93,18 +101,6 @@ define_setup_type! {
         /// The strength with which to damp the component of angular velocity
         /// causing precession around the alignement direction.
         pub precession_damping: f32,
-    }
-}
-
-impl From<u64> for AlignmentTorqueGeneratorID {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<AlignmentTorqueGeneratorID> for u64 {
-    fn from(id: AlignmentTorqueGeneratorID) -> Self {
-        id.0
     }
 }
 

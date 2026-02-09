@@ -6,11 +6,14 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use impact_id::EntityID;
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
-    force::alignment_torque::AlignmentDirection,
+    force::{
+        alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
+        local_force::LocalForceGeneratorID,
+    },
     quantities::{ForceC, ImpulseC, Motion, PositionC},
     rigid_body::DynamicRigidBodyID,
 };
@@ -87,17 +90,14 @@ pub fn update_local_force(
     mode: LocalForceUpdateMode,
     force: ForceC,
 ) -> Result<()> {
-    let generator_id = engine
-        .get_component_copy(entity_id)
-        .context("Failed to get `LocalForceGeneratorID` component for local force update")?;
-
     let simulator = engine.simulator().oread();
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
 
+    let generator_id = LocalForceGeneratorID::from_entity_id(entity_id);
     let local_force = force_generator_manager
         .local_forces_mut()
         .get_generator_mut(&generator_id)
-        .ok_or_else(|| anyhow!("No local force with ID {}", u64::from(generator_id)))?;
+        .ok_or_else(|| anyhow!("No local force with ID {generator_id}"))?;
 
     match mode {
         LocalForceUpdateMode::Set => {
@@ -116,17 +116,14 @@ pub fn set_alignment_torque_direction(
     entity_id: EntityID,
     direction: AlignmentDirection,
 ) -> Result<()> {
-    let generator_id = engine
-        .get_component_copy(entity_id)
-        .context("Failed to get `AlignmentTorqueGeneratorID` component for setting alignement torque direction")?;
-
     let simulator = engine.simulator().oread();
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
 
+    let generator_id = AlignmentTorqueGeneratorID::from_entity_id(entity_id);
     let alignment_torque = force_generator_manager
         .alignment_torques_mut()
         .get_generator_mut(&generator_id)
-        .ok_or_else(|| anyhow!("No alignment torque with ID {}", u64::from(generator_id)))?;
+        .ok_or_else(|| anyhow!("No alignment torque with ID {generator_id}"))?;
 
     alignment_torque.alignment_direction = direction;
 

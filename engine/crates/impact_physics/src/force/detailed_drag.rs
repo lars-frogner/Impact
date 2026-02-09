@@ -7,7 +7,7 @@ pub mod setup;
 
 pub use drag_load::DragLoad;
 use impact_alloc::arena::ArenaPool;
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 
 use crate::{
     force::ForceGeneratorRegistry,
@@ -29,19 +29,28 @@ use impact_math::{
 use roc_integration::roc;
 use std::path::{Path, PathBuf};
 
+define_entity_id_newtype! {
+    /// Identifier for a [`DetailedDragForceGenerator`].
+    [pub] DetailedDragForceGeneratorID
+}
+
+define_component_type! {
+    /// Marks that an entity has a detailed drag force generator identified by a
+    /// [`DetailedDragForceGeneratorID`].
+    ///
+    /// Use [`DetailedDragForceGeneratorID::from_entity_id`] to obtain the
+    /// generator ID from the entity ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasDetailedDragForceGenerator;
+}
+
 /// Manages all [`DetailedDragForceGenerator`]s.
 #[derive(Debug)]
 pub struct DetailedDragForceRegistry {
     drag_load_map_repository: DragLoadMapRepository,
     generators: ForceGeneratorRegistry<DetailedDragForceGeneratorID, DetailedDragForceGenerator>,
-}
-
-define_component_type! {
-    /// Identifier for a [`DetailedDragForceGenerator`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct DetailedDragForceGeneratorID(u64);
 }
 
 /// Generator for a shape-dependent drag force on a dynamic rigid body.
@@ -159,12 +168,6 @@ impl DetailedDragForceRegistry {
     pub fn clear(&mut self) {
         self.generators.clear();
         self.drag_load_map_repository.clear();
-    }
-}
-
-impl From<u64> for DetailedDragForceGeneratorID {
-    fn from(value: u64) -> Self {
-        Self(value)
     }
 }
 
