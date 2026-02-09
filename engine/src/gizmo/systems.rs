@@ -39,7 +39,7 @@ use impact_model::{
 };
 use impact_physics::{
     anchor::AnchorManager,
-    collision::{CollidableID, CollidableKind},
+    collision::{CollidableID, CollidableKind, HasCollidable},
     quantities::Motion,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager, TypedRigidBodyID},
 };
@@ -272,27 +272,29 @@ pub fn buffer_transforms_for_gizmos(
         );
     });
 
-    query!(ecs_world, |gizmos: &GizmosComp,
-                       collidable: &CollidableID,
-                       flags: &SceneEntityFlags| {
-        if !gizmos.visible_gizmos.intersects(
-            GizmoSet::DYNAMIC_COLLIDER
-                .union(GizmoSet::STATIC_COLLIDER)
-                .union(GizmoSet::PHANTOM_COLLIDER),
-        ) || flags.is_disabled()
-        {
-            return;
-        }
-        buffer_transforms_for_collider_gizmos(
-            model_instance_manager,
-            collision_world,
-            voxel_object_manager,
-            camera,
-            &camera_position,
-            *collidable,
-            gizmos.visible_gizmos,
-        );
-    });
+    query!(
+        ecs_world,
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+            if !gizmos.visible_gizmos.intersects(
+                GizmoSet::DYNAMIC_COLLIDER
+                    .union(GizmoSet::STATIC_COLLIDER)
+                    .union(GizmoSet::PHANTOM_COLLIDER),
+            ) || flags.is_disabled()
+            {
+                return;
+            }
+            buffer_transforms_for_collider_gizmos(
+                model_instance_manager,
+                collision_world,
+                voxel_object_manager,
+                camera,
+                &camera_position,
+                entity_id,
+                gizmos.visible_gizmos,
+            );
+        },
+        [HasCollidable]
+    );
 
     query!(
         ecs_world,
@@ -312,14 +314,11 @@ pub fn buffer_transforms_for_gizmos(
         [HasVoxelObject, HasModel]
     );
 
-    let mut voxel_objects: Vec<(EntityID, CollidableID)> = Vec::with_capacity(32);
+    let mut voxel_objects: Vec<EntityID> = Vec::with_capacity(32);
 
     query!(
         ecs_world,
-        |entity_id: EntityID,
-         gizmos: &GizmosComp,
-         collidable_id: &CollidableID,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .contains(GizmoSet::VOXEL_INTERSECTIONS)
@@ -328,22 +327,20 @@ pub fn buffer_transforms_for_gizmos(
                 return;
             }
 
-            voxel_objects.push((entity_id, *collidable_id));
+            voxel_objects.push(entity_id);
         },
-        [HasVoxelObject]
+        [HasVoxelObject, HasCollidable]
     );
 
-    for (i, (object_b_id, collidable_b_id)) in voxel_objects.iter().enumerate() {
-        for (object_a_id, collidable_a_id) in &voxel_objects[i + 1..] {
+    for (i, entity_b_id) in voxel_objects.iter().enumerate() {
+        for entity_a_id in &voxel_objects[i + 1..] {
             buffer_transforms_for_voxel_intersections_gizmo(
                 model_instance_manager,
                 voxel_object_manager,
                 collision_world,
                 camera,
-                *object_a_id,
-                *object_b_id,
-                *collidable_a_id,
-                *collidable_b_id,
+                *entity_a_id,
+                *entity_b_id,
             );
         }
     }
@@ -797,9 +794,10 @@ fn buffer_transforms_for_collider_gizmos(
     voxel_object_manager: &VoxelObjectManager,
     camera: &Camera,
     camera_position: &Point3,
-    collidable_id: CollidableID,
+    entity_id: EntityID,
     visible_gizmos: GizmoSet,
 ) {
+    let collidable_id = CollidableID::from_entity_id(entity_id);
     let Some(descriptor) = collision_world.get_collidable_descriptor(collidable_id) else {
         return;
     };
@@ -993,9 +991,8 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     camera: &Camera,
     entity_a_id: EntityID,
     entity_b_id: EntityID,
-    collidable_a_id: CollidableID,
-    collidable_b_id: CollidableID,
 ) {
+    let collidable_a_id = CollidableID::from_entity_id(entity_a_id);
     let Some(descriptor_a) = collision_world.get_collidable_descriptor(collidable_a_id) else {
         return;
     };
@@ -1003,6 +1000,7 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
         return;
     };
 
+    let collidable_b_id = CollidableID::from_entity_id(entity_b_id);
     let Some(descriptor_b) = collision_world.get_collidable_descriptor(collidable_b_id) else {
         return;
     };

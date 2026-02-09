@@ -9,7 +9,7 @@ use impact_geometry::ReferenceFrame;
 use impact_light::{
     OmnidirectionalEmission, ShadowableOmnidirectionalEmission, ShadowableUnidirectionalEmission,
 };
-use impact_physics::collision::CollidableID;
+use impact_physics::collision::HasCollidable;
 use impact_voxel::HasVoxelObject;
 use parking_lot::RwLock;
 
@@ -83,7 +83,7 @@ pub fn setup_gizmos_for_new_entities(
         },
         entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
-        [CollidableID],
+        [HasCollidable],
         ![
             ReferenceFrame,
             OmnidirectionalEmission,
@@ -103,7 +103,7 @@ pub fn setup_gizmos_for_new_entities(
             OmnidirectionalEmission,
             ShadowableOmnidirectionalEmission,
             ShadowableUnidirectionalEmission,
-            CollidableID
+            HasCollidable
         ]
     );
 }

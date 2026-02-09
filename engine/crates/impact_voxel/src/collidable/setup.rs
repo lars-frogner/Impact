@@ -1,6 +1,7 @@
 //! Setup of voxel collidables.
 
 use crate::collidable::{CollisionWorld, LocalCollidable, LocalVoxelObjectCollidable};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_id::EntityID;
 use impact_math::vector::Vector3C;
@@ -56,8 +57,10 @@ pub fn setup_voxel_collidable(
     rigid_body_id: TypedRigidBodyID,
     origin_offset: Vector3C,
     collidable: &VoxelCollidable,
-) -> CollidableID {
+) -> Result<()> {
+    let collidable_id = CollidableID::from_entity_id(entity_id);
     collision_world.add_collidable(
+        collidable_id,
         rigid_body_id,
         collidable.kind(),
         LocalCollidable::VoxelObject(LocalVoxelObjectCollidable {

@@ -2,6 +2,7 @@
 
 use approx::assert_abs_diff_eq;
 use impact_geometry::{PlaneC, ReferenceFrame, SphereC};
+use impact_id::{EntityID, EntityIDManager};
 use impact_math::{
     angle::{Angle, Radians},
     point::Point3C,
@@ -23,6 +24,7 @@ use impact_physics::{
 
 #[derive(Clone, Debug)]
 struct SphereBody {
+    entity_id: EntityID,
     sphere: SphereC,
     velocity: VelocityC,
     mass_density: f32,
@@ -31,14 +33,22 @@ struct SphereBody {
 
 #[derive(Clone, Debug)]
 struct PlaneBody {
+    entity_id: EntityID,
     origin: PositionC,
     orientation: OrientationC,
     restitution_coef: f32,
 }
 
 impl SphereBody {
-    fn new(sphere: SphereC, velocity: VelocityC, mass_density: f32, restitution_coef: f32) -> Self {
+    fn new(
+        entity_id: EntityID,
+        sphere: SphereC,
+        velocity: VelocityC,
+        mass_density: f32,
+        restitution_coef: f32,
+    ) -> Self {
         Self {
+            entity_id,
             sphere,
             velocity,
             mass_density,
@@ -52,8 +62,14 @@ impl SphereBody {
 }
 
 impl PlaneBody {
-    fn new(origin: PositionC, orientation: OrientationC, restitution_coef: f32) -> Self {
+    fn new(
+        entity_id: EntityID,
+        origin: PositionC,
+        orientation: OrientationC,
+        restitution_coef: f32,
+    ) -> Self {
         Self {
+            entity_id,
             origin,
             orientation,
             restitution_coef,
@@ -70,6 +86,7 @@ fn setup_sphere_bodies(
         .into_iter()
         .map(
             |SphereBody {
+                 entity_id,
                  sphere,
                  velocity,
                  mass_density,
@@ -98,10 +115,12 @@ fn setup_sphere_bodies(
 
                 collision::setup::setup_spherical_collidable(
                     collision_world,
+                    entity_id,
                     rigid_body_id.into(),
                     &collidable,
                     LocalCollidable::Sphere,
-                );
+                )
+                .unwrap();
 
                 rigid_body_id
             },
@@ -118,6 +137,7 @@ fn setup_plane_bodies(
         .into_iter()
         .map(
             |PlaneBody {
+                 entity_id,
                  origin,
                  orientation,
                  restitution_coef,
@@ -142,10 +162,12 @@ fn setup_plane_bodies(
 
                 collision::setup::setup_planar_collidable(
                     collision_world,
+                    entity_id,
                     rigid_body_id.into(),
                     &collidable,
                     LocalCollidable::Plane,
-                );
+                )
+                .unwrap();
 
                 rigid_body_id
             },
@@ -180,8 +202,11 @@ fn setup_bodies_and_run_constraints(
 
 #[test]
 fn separated_bodies_unaffected_by_contact_constraints() {
+    let mut entity_id_manager = EntityIDManager::new();
+
     let spheres = [0.0, 2.1].map(|x| {
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(x, 0.0, 0.0), 1.0),
             VelocityC::zeros(),
             1.0,
@@ -272,14 +297,18 @@ fn moving_sphere_colliding_head_on_with_same_mass_stationary_sphere() {
     let mass_density = 1.0;
     let restitution = 1.0;
 
+    let mut entity_id_manager = EntityIDManager::new();
+
     test_binary_sphere_collision(
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(PositionC::origin(), radius),
             Vector3C::new(speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
             VelocityC::zeros(),
             mass_density,
@@ -297,14 +326,18 @@ fn moving_sphere_colliding_head_on_with_very_massive_stationary_sphere() {
     let speed = 0.5;
     let restitution = 1.0;
 
+    let mut entity_id_manager = EntityIDManager::new();
+
     test_binary_sphere_collision(
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(PositionC::origin(), radius),
             Vector3C::new(speed, 0.0, 0.0),
             1.0,
             restitution,
         ),
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
             VelocityC::zeros(),
             1e9,
@@ -323,14 +356,18 @@ fn moving_sphere_colliding_head_on_with_inelastic_same_mass_stationary_sphere() 
     let mass_density = 1.0;
     let restitution = 0.0; // <- Completely inelastic
 
+    let mut entity_id_manager = EntityIDManager::new();
+
     test_binary_sphere_collision(
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(PositionC::origin(), radius),
             Vector3C::new(speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(2.0 * radius - 1e-6, 0.0, 0.0), radius),
             VelocityC::zeros(),
             mass_density,
@@ -350,14 +387,18 @@ fn grazing_sphere_collision() {
     let restitution = 1.0;
     let offset = f32::sqrt(2.0) * radius; // Gives 90 degree deflection
 
+    let mut entity_id_manager = EntityIDManager::new();
+
     test_binary_sphere_collision(
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(1e-6, 0.0, 0.0), radius),
             Vector3C::new(speed, 0.0, 0.0),
             mass_density,
             restitution,
         ),
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(offset, offset, 0.0), radius),
             Vector3C::new(-speed, 0.0, 0.0),
             mass_density,
@@ -375,13 +416,17 @@ fn sphere_colliding_with_static_plane() {
     let speed_y = 0.6;
     let restitution_coef = 1.0;
 
+    let mut entity_id_manager = EntityIDManager::new();
+
     let sphere = SphereBody::new(
+        entity_id_manager.provide_id(),
         SphereC::new(Point3C::new(0.0, radius - 1e-6, 0.0), radius),
         Vector3C::new(speed_x, -speed_y, 0.0),
         1.0,
         restitution_coef,
     );
     let plane = PlaneBody::new(
+        entity_id_manager.provide_id(),
         PositionC::origin(),
         OrientationC::identity(),
         restitution_coef,
@@ -426,14 +471,18 @@ fn position_correction_of_interpenetrating_spheres() {
     let restitution_coef = 1.0;
     let penetration = 0.2;
 
+    let mut entity_id_manager = EntityIDManager::new();
+
     let spheres = [
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(Point3C::new(0.5 * penetration, 0.0, 0.0), radius),
             VelocityC::zeros(),
             mass_density,
             restitution_coef,
         ),
         SphereBody::new(
+            entity_id_manager.provide_id(),
             SphereC::new(
                 Point3C::new(2.0 * radius - 0.5 * penetration, 0.0, 0.0),
                 radius,

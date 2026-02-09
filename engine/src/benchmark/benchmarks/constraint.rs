@@ -1,6 +1,7 @@
 //! Benchmarks for constraint resolution.
 
 use impact_geometry::{ReferenceFrame, SphereC};
+use impact_id::EntityID;
 use impact_math::point::Point3C;
 use impact_physics::{
     anchor::AnchorManager,
@@ -104,22 +105,24 @@ pub fn correct_contact_configurations(benchmarker: impl Benchmarker) {
 }
 
 struct SphereBody {
+    entity_id: EntityID,
     sphere: SphereC,
     mass_density: f32,
     velocity: VelocityC,
 }
 
 impl SphereBody {
-    fn new(sphere: SphereC, mass_density: f32, velocity: VelocityC) -> Self {
+    fn new(entity_id: EntityID, sphere: SphereC, mass_density: f32, velocity: VelocityC) -> Self {
         Self {
+            entity_id,
             sphere,
             mass_density,
             velocity,
         }
     }
 
-    fn stationary(sphere: SphereC, mass_density: f32) -> Self {
-        Self::new(sphere, mass_density, VelocityC::zeros())
+    fn stationary(entity_id: EntityID, sphere: SphereC, mass_density: f32) -> Self {
+        Self::new(entity_id, sphere, mass_density, VelocityC::zeros())
     }
 }
 
@@ -132,6 +135,7 @@ fn setup_sphere_bodies(
         .into_iter()
         .map(
             |SphereBody {
+                 entity_id,
                  sphere,
                  mass_density,
                  velocity,
@@ -159,10 +163,12 @@ fn setup_sphere_bodies(
 
                 collision::setup::setup_spherical_collidable(
                     collision_world,
+                    entity_id,
                     rigid_body_id.into(),
                     &collidable,
                     LocalCollidable::Sphere,
-                );
+                )
+                .unwrap();
 
                 rigid_body_id
             },
@@ -179,6 +185,7 @@ fn setup_stationary_overlapping_spheres(
         collision_world,
         (0..500).map(|i| {
             SphereBody::stationary(
+                EntityID::from_u64(i),
                 SphereC::new(Point3C::new(i as f32 - 0.05, 0.0, 0.0), 0.5),
                 1.0,
             )
