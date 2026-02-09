@@ -8,7 +8,7 @@ use crate::{
 };
 use approx::abs_diff_eq;
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::vector::UnitVector3;
 use roc_integration::roc;
 
@@ -24,20 +24,38 @@ pub type DynamicKinematicSpringForceRegistry = ForceGeneratorRegistry<
     DynamicKinematicSpringForceGenerator,
 >;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`DynamicDynamicSpringForceGenerator`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct DynamicDynamicSpringForceGeneratorID(u64);
+    [pub] DynamicDynamicSpringForceGeneratorID
+}
+
+define_entity_id_newtype! {
+    /// Identifier for a [`DynamicKinematicSpringForceGenerator`].
+    [pub] DynamicKinematicSpringForceGeneratorID
 }
 
 define_component_type! {
-    /// Identifier for a [`DynamicKinematicSpringForceGenerator`].
+    /// Marks that an entity has a dynamic-dynamic spring force generator
+    /// identified by a [`DynamicDynamicSpringForceGeneratorID`].
+    ///
+    /// Use [`DynamicDynamicSpringForceGeneratorID::from_entity_id`] to obtain
+    /// the generator ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct DynamicKinematicSpringForceGeneratorID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasDynamicDynamicSpringForceGenerator;
+}
+
+define_component_type! {
+    /// Marks that an entity has a dynamic-kinematic spring force generator
+    /// identified by a [`DynamicKinematicSpringForceGeneratorID`].
+    ///
+    /// Use [`DynamicKinematicSpringForceGeneratorID::from_entity_id`] to obtain
+    /// the generator ID from the entity ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasDynamicKinematicSpringForceGenerator;
 }
 
 /// Generator for a spring force between two dynamic rigid bodies.
@@ -63,7 +81,6 @@ pub struct DynamicKinematicSpringForceGenerator {
 }
 
 define_setup_type! {
-    target = DynamicDynamicSpringForceGeneratorID;
     /// Generator for a spring force between two dynamic rigid bodies.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -85,7 +102,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = DynamicKinematicSpringForceGeneratorID;
     /// Generator for a spring force between two dynamic rigid bodies.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -119,18 +135,6 @@ pub struct Spring {
     pub rest_length: f32,
     /// The length below which the spring force is always zero.
     pub slack_length: f32,
-}
-
-impl From<u64> for DynamicDynamicSpringForceGeneratorID {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<u64> for DynamicKinematicSpringForceGeneratorID {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
 }
 
 impl DynamicDynamicSpringForceGenerator {

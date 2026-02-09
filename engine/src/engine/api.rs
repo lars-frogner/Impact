@@ -597,12 +597,13 @@ impl Engine {
 
     pub fn with_alignment_torque_generator<R>(
         &self,
-        generator_id: AlignmentTorqueGeneratorID,
+        entity_id: EntityID,
         f: impl FnOnce(&AlignmentTorqueGenerator) -> Result<R>,
     ) -> Result<R> {
         let simulator = self.simulator().oread();
         let force_generator_manager = simulator.force_generator_manager().oread();
 
+        let generator_id = AlignmentTorqueGeneratorID::from_entity_id(entity_id);
         let generator = force_generator_manager
             .alignment_torques()
             .get_generator(&generator_id)

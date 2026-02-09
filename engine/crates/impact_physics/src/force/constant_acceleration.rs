@@ -5,7 +5,7 @@ use crate::{
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::vector::Vector3C;
 use roc_integration::roc;
 
@@ -13,12 +13,21 @@ use roc_integration::roc;
 pub type ConstantAccelerationRegistry =
     ForceGeneratorRegistry<ConstantAccelerationGeneratorID, ConstantAccelerationGenerator>;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`ConstantAccelerationGenerator`].
+    [pub] ConstantAccelerationGeneratorID
+}
+
+define_component_type! {
+    /// Marks that an entity has a constant acceleration generator identified by
+    /// a [`ConstantAccelerationGeneratorID`].
+    ///
+    /// Use [`ConstantAccelerationGeneratorID::from_entity_id`] to obtain the
+    /// generator ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct ConstantAccelerationGeneratorID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasConstantAccelerationGenerator;
 }
 
 /// Generator for a constant world-space acceleration of the center of mass
@@ -35,18 +44,11 @@ pub struct ConstantAccelerationGenerator {
 }
 
 define_setup_type! {
-    target = ConstantAccelerationGeneratorID;
     /// A constant acceleration vector.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
     pub struct ConstantAcceleration(Vector3C);
-}
-
-impl From<u64> for ConstantAccelerationGeneratorID {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
 }
 
 impl ConstantAccelerationGenerator {

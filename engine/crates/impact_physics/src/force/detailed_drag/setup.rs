@@ -21,7 +21,6 @@ use roc_integration::roc;
 use std::path::{Path, PathBuf};
 
 define_setup_type! {
-    target = DetailedDragForceGeneratorID;
     /// The properties governing the effect of a shape-dependent drag on a body.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -47,7 +46,7 @@ pub fn setup_detailed_drag_force<'a>(
     model_transform: &ModelTransform,
     drag_load_map_id: StringHash32,
     triangle_vertex_positions: impl IntoIterator<Item = [&'a Point3C; 3]>,
-) -> Result<DetailedDragForceGeneratorID> {
+) -> Result<()> {
     let drag_load_map_id = DragLoadMapID(drag_load_map_id);
 
     let detailed_drag_force_registry = force_generator_manager.detailed_drag_forces_mut();
@@ -98,18 +97,20 @@ pub fn setup_detailed_drag_force<'a>(
         drag_load_map_repository.add_drag_load_map_unless_present(drag_load_map_id, map);
     }
 
-    let generator_id = detailed_drag_force_registry
+    let generator_id = DetailedDragForceGeneratorID::from_entity_id(entity_id);
+    detailed_drag_force_registry
         .generators_mut()
-        .insert_generator(DetailedDragForceGenerator::new(
-            entity_id,
-            DetailedDragForce {
-                drag_coefficient: drag_properties.drag_coefficient,
-                drag_load_map: drag_load_map_id,
-                scaling: model_transform.scale,
-            },
-        ));
-
-    Ok(generator_id)
+        .insert_generator(
+            generator_id,
+            DetailedDragForceGenerator::new(
+                entity_id,
+                DetailedDragForce {
+                    drag_coefficient: drag_properties.drag_coefficient,
+                    drag_load_map: drag_load_map_id,
+                    scaling: model_transform.scale,
+                },
+            ),
+        )
 }
 
 fn generate_map<'a>(

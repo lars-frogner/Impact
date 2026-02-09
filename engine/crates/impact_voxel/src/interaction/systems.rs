@@ -23,7 +23,12 @@ use impact_model::HasModel;
 use impact_physics::{
     anchor::AnchorManager,
     collision::{CollidableID, HasCollidable},
-    force::{ForceGeneratorManager, constant_acceleration::ConstantAccelerationGeneratorID},
+    force::{
+        ForceGeneratorManager,
+        constant_acceleration::{
+            ConstantAccelerationGeneratorID, HasConstantAccelerationGenerator,
+        },
+    },
     rigid_body::{HasDynamicRigidBody, RigidBodyManager},
 };
 use impact_scene::{
@@ -198,16 +203,22 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
             }
         }
 
-        if let Some(force_generator_id) =
-            parent_components.get_component::<ConstantAccelerationGeneratorID>()
-            && let Some(force_generator) = self
+        if parent_components
+            .archetype()
+            .contains_component::<HasConstantAccelerationGenerator>()
+        {
+            let parent_force_generator_id =
+                ConstantAccelerationGeneratorID::from_entity_id(parent_entity_id);
+
+            if let Some(force_generator) = self
                 .force_generator_manager
                 .constant_accelerations()
-                .get_generator(force_generator_id)
-        {
-            components.push(ComponentStorage::from_single_instance_view(
-                &force_generator.acceleration,
-            ));
+                .get_generator(&parent_force_generator_id)
+            {
+                components.push(ComponentStorage::from_single_instance_view(
+                    &force_generator.acceleration,
+                ));
+            }
         }
 
         // TODO: We don't handle drag force yet (that would also have to be

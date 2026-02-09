@@ -3,7 +3,7 @@
 pub mod inventory;
 pub mod tools;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::Result;
 use impact::{
     engine::Engine,
     impact_id::EntityID,
@@ -54,12 +54,6 @@ impl Player {
         engine: &Engine,
         f: impl FnOnce(&AlignmentTorqueGenerator) -> Result<R>,
     ) -> Result<R> {
-        let generator_id = engine
-            .get_component_copy(Self::entity_ids().player)
-            .with_context(|| {
-                anyhow!("Failed to get `AlignmentTorqueGeneratorID` component for player")
-            })?;
-
-        engine.with_alignment_torque_generator(generator_id, f)
+        engine.with_alignment_torque_generator(Self::entity_ids().player, f)
     }
 }
