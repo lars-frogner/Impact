@@ -1,5 +1,5 @@
-# Hash: 1b300837a7f665dd
-# Generated: 2025-12-29T23:55:22.755341756
+# Hash: 3a553c64273a6a33
+# Generated: 2026-02-09T21:22:14.059230926
 # Rust type: impact_physics::driven_motion::circular::CircularTrajectoryDriver
 # Type category: POD
 module [
@@ -8,14 +8,14 @@ module [
     from_bytes,
 ]
 
-import Comp.KinematicRigidBodyID
+import Entity
 import Setup.CircularTrajectory
 
 ## Driver for imposing a circular trajectory with constant speed on a kinematic
 ## rigid body.
 CircularTrajectoryDriver : {
-    ## The kinematic rigid body being driven.
-    rigid_body_id : Comp.KinematicRigidBodyID.KinematicRigidBodyID,
+    ## The entity being driven.
+    entity_id : Entity.Id,
     ## The circular trajectory imposed on the body.
     trajectory : Setup.CircularTrajectory.CircularTrajectory,
 }
@@ -26,7 +26,7 @@ write_bytes : List U8, CircularTrajectoryDriver -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(48)
-    |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
+    |> Entity.write_bytes_id(value.entity_id)
     |> Setup.CircularTrajectory.write_bytes(value.trajectory)
 
 ## Deserializes a value of [CircularTrajectoryDriver] from its bytes in the
@@ -35,7 +35,7 @@ from_bytes : List U8 -> Result CircularTrajectoryDriver _
 from_bytes = |bytes|
     Ok(
         {
-            rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
             trajectory: bytes |> List.sublist({ start: 8, len: 40 }) |> Setup.CircularTrajectory.from_bytes?,
         },
     )

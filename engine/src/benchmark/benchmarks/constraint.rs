@@ -14,7 +14,7 @@ use impact_physics::{
     inertia::InertialProperties,
     material::ContactResponseParameters,
     quantities::{Motion, PositionC, VelocityC},
-    rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
+    rigid_body::{self, RigidBodyManager, RigidBodyType},
 };
 use impact_profiling::benchmark::Benchmarker;
 
@@ -130,50 +130,46 @@ fn setup_sphere_bodies(
     rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = SphereBody>,
-) -> Vec<DynamicRigidBodyID> {
-    bodies
-        .into_iter()
-        .map(
-            |SphereBody {
-                 entity_id,
-                 sphere,
-                 mass_density,
-                 velocity,
-             }| {
-                let frame = ReferenceFrame::unoriented(*sphere.center());
-                let motion = Motion::linear(velocity);
+) {
+    for SphereBody {
+        entity_id,
+        sphere,
+        mass_density,
+        velocity,
+    } in bodies
+    {
+        let frame = ReferenceFrame::unoriented(*sphere.center());
+        let motion = Motion::linear(velocity);
 
-                let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
+        let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
-                let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
-                    rigid_body_manager,
-                    inertial_properties,
-                    frame,
-                    motion,
-                );
-
-                let collidable = SphericalCollidable::new(
-                    CollidableKind::Dynamic,
-                    SphereC::new(PositionC::origin(), sphere.radius()),
-                    ContactResponseParameters {
-                        restitution_coef: 0.6,
-                        ..Default::default()
-                    },
-                );
-
-                collision::setup::setup_spherical_collidable(
-                    collision_world,
-                    entity_id,
-                    rigid_body_id.into(),
-                    &collidable,
-                    LocalCollidable::Sphere,
-                )
-                .unwrap();
-
-                rigid_body_id
-            },
+        rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body_manager,
+            entity_id,
+            inertial_properties,
+            frame,
+            motion,
         )
-        .collect()
+        .unwrap();
+
+        let collidable = SphericalCollidable::new(
+            CollidableKind::Dynamic,
+            SphereC::new(PositionC::origin(), sphere.radius()),
+            ContactResponseParameters {
+                restitution_coef: 0.6,
+                ..Default::default()
+            },
+        );
+
+        collision::setup::setup_spherical_collidable(
+            collision_world,
+            entity_id,
+            RigidBodyType::Dynamic,
+            &collidable,
+            LocalCollidable::Sphere,
+        )
+        .unwrap();
+    }
 }
 
 fn setup_stationary_overlapping_spheres(

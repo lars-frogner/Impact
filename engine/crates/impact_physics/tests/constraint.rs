@@ -19,7 +19,7 @@ use impact_physics::{
     inertia::InertialProperties,
     material::ContactResponseParameters,
     quantities::{Motion, OrientationC, PositionC, Velocity, VelocityC},
-    rigid_body::{self, DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager},
+    rigid_body::{self, DynamicRigidBodyID, RigidBodyManager, RigidBodyType},
 };
 
 #[derive(Clone, Debug)]
@@ -81,98 +81,85 @@ fn setup_sphere_bodies(
     rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = SphereBody>,
-) -> Vec<DynamicRigidBodyID> {
-    bodies
-        .into_iter()
-        .map(
-            |SphereBody {
-                 entity_id,
-                 sphere,
-                 velocity,
-                 mass_density,
-                 restitution_coef,
-             }| {
-                let frame = ReferenceFrame::unoriented(*sphere.center());
-                let motion = Motion::linear(velocity);
+) {
+    for SphereBody {
+        entity_id,
+        sphere,
+        velocity,
+        mass_density,
+        restitution_coef,
+    } in bodies
+    {
+        let frame = ReferenceFrame::unoriented(*sphere.center());
+        let motion = Motion::linear(velocity);
 
-                let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
+        let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
-                let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
-                    rigid_body_manager,
-                    inertial_properties,
-                    frame,
-                    motion,
-                );
-
-                let collidable = SphericalCollidable::new(
-                    CollidableKind::Dynamic,
-                    SphereC::new(PositionC::origin(), sphere.radius()),
-                    ContactResponseParameters {
-                        restitution_coef,
-                        ..Default::default()
-                    },
-                );
-
-                collision::setup::setup_spherical_collidable(
-                    collision_world,
-                    entity_id,
-                    rigid_body_id.into(),
-                    &collidable,
-                    LocalCollidable::Sphere,
-                )
-                .unwrap();
-
-                rigid_body_id
-            },
+        rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body_manager,
+            entity_id,
+            inertial_properties,
+            frame,
+            motion,
         )
-        .collect()
+        .unwrap();
+
+        let collidable = SphericalCollidable::new(
+            CollidableKind::Dynamic,
+            SphereC::new(PositionC::origin(), sphere.radius()),
+            ContactResponseParameters {
+                restitution_coef,
+                ..Default::default()
+            },
+        );
+
+        collision::setup::setup_spherical_collidable(
+            collision_world,
+            entity_id,
+            RigidBodyType::Dynamic,
+            &collidable,
+            LocalCollidable::Sphere,
+        )
+        .unwrap();
+    }
 }
 
 fn setup_plane_bodies(
     rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = PlaneBody>,
-) -> Vec<KinematicRigidBodyID> {
-    bodies
-        .into_iter()
-        .map(
-            |PlaneBody {
-                 entity_id,
-                 origin,
-                 orientation,
-                 restitution_coef,
-             }| {
-                let frame = ReferenceFrame::new(origin, orientation);
-                let motion = Motion::stationary();
+) {
+    for PlaneBody {
+        entity_id,
+        origin,
+        orientation,
+        restitution_coef,
+    } in bodies
+    {
+        let frame = ReferenceFrame::new(origin, orientation);
+        let motion = Motion::stationary();
 
-                let rigid_body_id = rigid_body::setup::setup_kinematic_rigid_body(
-                    rigid_body_manager,
-                    frame,
-                    motion,
-                );
+        rigid_body::setup::setup_kinematic_rigid_body(rigid_body_manager, entity_id, frame, motion)
+            .unwrap();
 
-                let collidable = PlanarCollidable::new(
-                    CollidableKind::Static,
-                    PlaneC::XZ_PLANE,
-                    ContactResponseParameters {
-                        restitution_coef,
-                        ..Default::default()
-                    },
-                );
-
-                collision::setup::setup_planar_collidable(
-                    collision_world,
-                    entity_id,
-                    rigid_body_id.into(),
-                    &collidable,
-                    LocalCollidable::Plane,
-                )
-                .unwrap();
-
-                rigid_body_id
+        let collidable = PlanarCollidable::new(
+            CollidableKind::Static,
+            PlaneC::XZ_PLANE,
+            ContactResponseParameters {
+                restitution_coef,
+                ..Default::default()
             },
+        );
+
+        collision::setup::setup_planar_collidable(
+            collision_world,
+            entity_id,
+            RigidBodyType::Kinematic,
+            &collidable,
+            LocalCollidable::Plane,
         )
-        .collect()
+        .unwrap();
+    }
 }
 
 fn setup_bodies_and_run_constraints(
@@ -180,12 +167,12 @@ fn setup_bodies_and_run_constraints(
     constraint_manager: &mut ConstraintManager,
     spheres: impl IntoIterator<Item = SphereBody>,
     planes: impl IntoIterator<Item = PlaneBody>,
-) -> (Vec<DynamicRigidBodyID>, Vec<KinematicRigidBodyID>) {
+) {
     let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
 
-    let sphere_entities = setup_sphere_bodies(rigid_body_manager, &mut collision_world, spheres);
-    let plane_entities = setup_plane_bodies(rigid_body_manager, &mut collision_world, planes);
+    setup_sphere_bodies(rigid_body_manager, &mut collision_world, spheres);
+    setup_plane_bodies(rigid_body_manager, &mut collision_world, planes);
 
     collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
 
@@ -196,8 +183,6 @@ fn setup_bodies_and_run_constraints(
         &(),
     );
     constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
-
-    (sphere_entities, plane_entities)
 }
 
 #[test]
@@ -217,7 +202,7 @@ fn separated_bodies_unaffected_by_contact_constraints() {
     let mut rigid_body_manager = RigidBodyManager::new();
     let mut constraint_manager = ConstraintManager::new(ConstraintSolverConfig::default());
 
-    let (sphere_body_ids, _) = setup_bodies_and_run_constraints(
+    setup_bodies_and_run_constraints(
         &mut rigid_body_manager,
         &mut constraint_manager,
         spheres.clone(),
@@ -227,7 +212,8 @@ fn separated_bodies_unaffected_by_contact_constraints() {
     assert_eq!(constraint_manager.solver().prepared_contact_count(), 0);
     assert_eq!(constraint_manager.solver().prepared_body_count(), 0);
 
-    for (id, sphere) in sphere_body_ids.into_iter().zip(spheres) {
+    for sphere in spheres {
+        let id = DynamicRigidBodyID::from_entity_id(sphere.entity_id);
         let body = rigid_body_manager.dynamic_rigid_body(id);
         assert_eq!(body.position(), sphere.center());
         assert_eq!(body.compute_velocity(), sphere.velocity.aligned());
@@ -251,7 +237,7 @@ fn test_binary_sphere_collision(
         ..Default::default()
     });
 
-    let (sphere_body_ids, _) = setup_bodies_and_run_constraints(
+    setup_bodies_and_run_constraints(
         &mut rigid_body_manager,
         &mut constraint_manager,
         [sphere_a.clone(), sphere_b.clone()],
@@ -261,7 +247,8 @@ fn test_binary_sphere_collision(
     assert_eq!(constraint_manager.solver().prepared_contact_count(), 1);
     assert_eq!(constraint_manager.solver().prepared_body_count(), 2);
 
-    let body_a = rigid_body_manager.dynamic_rigid_body(sphere_body_ids[0]);
+    let body_a_id = DynamicRigidBodyID::from_entity_id(sphere_a.entity_id);
+    let body_a = rigid_body_manager.dynamic_rigid_body(body_a_id);
     assert_eq!(body_a.position(), sphere_a.center());
     assert_eq!(body_a.orientation(), &OrientationC::identity());
     assert_abs_diff_eq!(
@@ -275,7 +262,8 @@ fn test_binary_sphere_collision(
         epsilon = 1e-6
     );
 
-    let body_b = rigid_body_manager.dynamic_rigid_body(sphere_body_ids[1]);
+    let body_b_id = DynamicRigidBodyID::from_entity_id(sphere_b.entity_id);
+    let body_b = rigid_body_manager.dynamic_rigid_body(body_b_id);
     assert_eq!(body_b.position(), sphere_b.center());
     assert_eq!(body_b.orientation(), &OrientationC::identity());
     assert_abs_diff_eq!(
@@ -439,7 +427,7 @@ fn sphere_colliding_with_static_plane() {
         ..Default::default()
     });
 
-    let (sphere_body_ids, _) = setup_bodies_and_run_constraints(
+    setup_bodies_and_run_constraints(
         &mut rigid_body_manager,
         &mut constraint_manager,
         [sphere.clone()],
@@ -449,7 +437,8 @@ fn sphere_colliding_with_static_plane() {
     assert_eq!(constraint_manager.solver().prepared_contact_count(), 1);
     assert_eq!(constraint_manager.solver().prepared_body_count(), 2);
 
-    let body = rigid_body_manager.dynamic_rigid_body(sphere_body_ids[0]);
+    let body_id = DynamicRigidBodyID::from_entity_id(sphere.entity_id);
+    let body = rigid_body_manager.dynamic_rigid_body(body_id);
     assert_eq!(body.position(), sphere.center());
     assert_eq!(body.orientation(), &OrientationC::identity());
     assert_abs_diff_eq!(
@@ -501,7 +490,7 @@ fn position_correction_of_interpenetrating_spheres() {
         ..Default::default()
     });
 
-    let (sphere_body_ids, _) = setup_bodies_and_run_constraints(
+    setup_bodies_and_run_constraints(
         &mut rigid_body_manager,
         &mut constraint_manager,
         spheres.clone(),
@@ -511,7 +500,8 @@ fn position_correction_of_interpenetrating_spheres() {
     assert_eq!(constraint_manager.solver().prepared_contact_count(), 1);
     assert_eq!(constraint_manager.solver().prepared_body_count(), 2);
 
-    for (idx, id) in sphere_body_ids.into_iter().enumerate() {
+    for (idx, sphere) in spheres.into_iter().enumerate() {
+        let id = DynamicRigidBodyID::from_entity_id(sphere.entity_id);
         let body = rigid_body_manager.dynamic_rigid_body(id);
         assert_abs_diff_eq!(
             body.position(),

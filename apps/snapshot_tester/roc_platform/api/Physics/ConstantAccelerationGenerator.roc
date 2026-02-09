@@ -1,5 +1,5 @@
-# Hash: a57613039d502109
-# Generated: 2025-12-29T23:55:22.755341756
+# Hash: c6dfdec9cb708bb9
+# Generated: 2026-02-09T21:22:14.059230926
 # Rust type: impact_physics::force::constant_acceleration::ConstantAccelerationGenerator
 # Type category: POD
 module [
@@ -8,15 +8,15 @@ module [
     from_bytes,
 ]
 
-import Comp.DynamicRigidBodyID
+import Entity
 import Setup.ConstantAcceleration
 import core.Builtin
 
 ## Generator for a constant world-space acceleration of the center of mass
 ## of a dynamic rigid body.
 ConstantAccelerationGenerator : {
-    ## The dynamic rigid body experiencing the acceleration.
-    rigid_body_id : Comp.DynamicRigidBodyID.DynamicRigidBodyID,
+    ## The entity experiencing the acceleration.
+    entity_id : Entity.Id,
     ## The acceleration of the body's center of mass in world space.
     acceleration : Setup.ConstantAcceleration.ConstantAcceleration,
     padding : F32,
@@ -28,7 +28,7 @@ write_bytes : List U8, ConstantAccelerationGenerator -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(24)
-    |> Comp.DynamicRigidBodyID.write_bytes(value.rigid_body_id)
+    |> Entity.write_bytes_id(value.entity_id)
     |> Setup.ConstantAcceleration.write_bytes(value.acceleration)
     |> Builtin.write_bytes_f32(value.padding)
 
@@ -38,7 +38,7 @@ from_bytes : List U8 -> Result ConstantAccelerationGenerator _
 from_bytes = |bytes|
     Ok(
         {
-            rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.DynamicRigidBodyID.from_bytes?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
             acceleration: bytes |> List.sublist({ start: 8, len: 12 }) |> Setup.ConstantAcceleration.from_bytes?,
             padding: bytes |> List.sublist({ start: 20, len: 4 }) |> Builtin.from_bytes_f32?,
         },

@@ -34,10 +34,7 @@ use tinyvec::TinyVec;
 /// absorption.
 pub trait VoxelObjectInteractionContext {
     /// Gathers all voxel object entities that may participate in interactions.
-    fn gather_voxel_object_entities<A: Allocator>(
-        &mut self,
-        entities: &mut AVec<VoxelObjectEntity, A>,
-    );
+    fn gather_voxel_object_entities<A: Allocator>(&mut self, entity_ids: &mut AVec<EntityID, A>);
 
     /// Gathers all active voxel-absorbing sphere entities.
     fn gather_voxel_absorbing_sphere_entities(
@@ -53,7 +50,7 @@ pub trait VoxelObjectInteractionContext {
     /// disconnection.
     fn on_new_disconnected_voxel_object_entity(
         &mut self,
-        entity: NewVoxelObjectEntity,
+        new_entity_id: EntityID,
         parent_entity_id: EntityID,
     );
 
@@ -65,17 +62,6 @@ pub trait VoxelObjectInteractionContext {
 #[derive(Debug)]
 pub struct VoxelInteractionManager {
     absorption_manager: VoxelAbsorptionManager,
-}
-
-#[derive(Debug)]
-pub struct VoxelObjectEntity {
-    pub entity_id: EntityID,
-}
-
-#[derive(Debug)]
-pub struct NewVoxelObjectEntity {
-    pub entity_id: EntityID,
-    pub rigid_body_id: DynamicRigidBodyID,
 }
 
 #[derive(Debug, Default)]

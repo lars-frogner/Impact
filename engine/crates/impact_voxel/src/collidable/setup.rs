@@ -8,7 +8,7 @@ use impact_math::vector::Vector3C;
 use impact_physics::{
     collision::{CollidableID, CollidableKind},
     material::ContactResponseParameters,
-    rigid_body::TypedRigidBodyID,
+    rigid_body::{RigidBodyType, TypedRigidBodyID},
 };
 use roc_integration::roc;
 
@@ -54,11 +54,12 @@ impl VoxelCollidable {
 pub fn setup_voxel_collidable(
     collision_world: &mut CollisionWorld,
     entity_id: EntityID,
-    rigid_body_id: TypedRigidBodyID,
+    rigid_body_type: RigidBodyType,
     origin_offset: Vector3C,
     collidable: &VoxelCollidable,
 ) -> Result<()> {
     let collidable_id = CollidableID::from_entity_id(entity_id);
+    let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
     collision_world.add_collidable(
         collidable_id,
         rigid_body_id,

@@ -12,6 +12,7 @@ use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
     force::alignment_torque::AlignmentDirection,
     quantities::{ForceC, ImpulseC, Motion, PositionC},
+    rigid_body::DynamicRigidBodyID,
 };
 use roc_integration::roc;
 
@@ -138,9 +139,7 @@ pub fn apply_impulse(
     impulse: ImpulseC,
     relative_position: PositionC,
 ) -> Result<()> {
-    let rigid_body_id = engine
-        .get_component_copy(entity_id)
-        .context("Failed to get `DynamicRigidBodyID` component for applying impulse")?;
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
 
     let (new_velocity, new_angular_velocity) = {
         let simulator = engine.simulator().oread();
@@ -148,7 +147,7 @@ pub fn apply_impulse(
 
         let rigid_body = rigid_body_manager
             .get_dynamic_rigid_body_mut(rigid_body_id)
-            .ok_or_else(|| anyhow!("No rigid body with ID {}", u64::from(rigid_body_id)))?;
+            .ok_or_else(|| anyhow!("No rigid body with ID {rigid_body_id}"))?;
 
         let impulse = impulse.aligned();
         let relative_position = relative_position.aligned();
@@ -173,16 +172,14 @@ pub fn add_mass_retaining_motion(
     entity_id: EntityID,
     additional_mass: f32,
 ) -> Result<()> {
-    let rigid_body_id = engine
-        .get_component_copy(entity_id)
-        .context("Failed to get `DynamicRigidBodyID` component for adding mass")?;
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
 
     let simulator = engine.simulator().oread();
     let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
 
     let rigid_body = rigid_body_manager
         .get_dynamic_rigid_body_mut(rigid_body_id)
-        .ok_or_else(|| anyhow!("No rigid body with ID {}", u64::from(rigid_body_id)))?;
+        .ok_or_else(|| anyhow!("No rigid body with ID {rigid_body_id}"))?;
 
     let new_mass = rigid_body.mass() + additional_mass;
     rigid_body.set_mass_retaining_motion(new_mass);

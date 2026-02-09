@@ -7,6 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use impact_math::consts::f32::TWO_PI;
 use roc_integration::roc;
 
@@ -28,8 +29,8 @@ define_component_type! {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct CircularTrajectoryDriver {
-    /// The kinematic rigid body being driven.
-    pub rigid_body_id: KinematicRigidBodyID,
+    /// The entity being driven.
+    pub entity_id: EntityID,
     /// The circular trajectory imposed on the body.
     pub trajectory: CircularTrajectory,
 }
@@ -68,7 +69,8 @@ impl CircularTrajectoryDriver {
     /// Resets the appropriate properties of the driven rigid body in
     /// preparation for applying driven properties.
     pub fn reset(&self, rigid_body_manager: &mut RigidBodyManager) {
-        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
         else {
             return;
         };
@@ -79,7 +81,8 @@ impl CircularTrajectoryDriver {
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
     pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
-        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
         else {
             return;
         };

@@ -42,9 +42,9 @@ pub fn cleanup_physics_for_removed_entity(
 
     driven_motion::remove_motion_drivers_for_entity(simulator, entity);
 
-    force::remove_force_generators_for_entity(simulator, entity);
+    force::remove_force_generators_for_entity(simulator, entity_id, entity);
 
-    anchor::remove_anchors_for_entity(simulator, entity);
+    anchor::remove_anchors_for_entity(simulator, entity_id, entity);
 
-    rigid_body::remove_rigid_body_for_entity(simulator, entity);
+    rigid_body::remove_rigid_body_for_entity(simulator, entity_id, entity);
 }

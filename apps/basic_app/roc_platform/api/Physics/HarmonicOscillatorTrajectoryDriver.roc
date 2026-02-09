@@ -1,5 +1,5 @@
-# Hash: 7f71c17ef6ec6ff4
-# Generated: 2025-12-29T23:54:14.852607239
+# Hash: f63d552b1cc09998
+# Generated: 2026-02-09T21:21:57.029236554
 # Rust type: impact_physics::driven_motion::harmonic_oscillation::HarmonicOscillatorTrajectoryDriver
 # Type category: POD
 module [
@@ -8,15 +8,15 @@ module [
     from_bytes,
 ]
 
-import Comp.KinematicRigidBodyID
+import Entity
 import Setup.HarmonicOscillatorTrajectory
 import core.Builtin
 
 ## Driver for imposing a harmonically oscillating trajectory on a kinematic
 ## rigid body.
 HarmonicOscillatorTrajectoryDriver : {
-    ## The kinematic rigid body being driven.
-    rigid_body_id : Comp.KinematicRigidBodyID.KinematicRigidBodyID,
+    ## The entity being driven.
+    entity_id : Entity.Id,
     ## The harmonic oscillator trajectory imposed on the body.
     trajectory : Setup.HarmonicOscillatorTrajectory.HarmonicOscillatorTrajectory,
     padding : F32,
@@ -28,7 +28,7 @@ write_bytes : List U8, HarmonicOscillatorTrajectoryDriver -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(48)
-    |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
+    |> Entity.write_bytes_id(value.entity_id)
     |> Setup.HarmonicOscillatorTrajectory.write_bytes(value.trajectory)
     |> Builtin.write_bytes_f32(value.padding)
 
@@ -38,7 +38,7 @@ from_bytes : List U8 -> Result HarmonicOscillatorTrajectoryDriver _
 from_bytes = |bytes|
     Ok(
         {
-            rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
             trajectory: bytes |> List.sublist({ start: 8, len: 36 }) |> Setup.HarmonicOscillatorTrajectory.from_bytes?,
             padding: bytes |> List.sublist({ start: 44, len: 4 }) |> Builtin.from_bytes_f32?,
         },

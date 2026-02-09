@@ -4,8 +4,8 @@ use crate::{
     HasVoxelObject, VoxelManager, VoxelObjectManager,
     collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
     interaction::{
-        self, NewVoxelObjectEntity, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
-        VoxelObjectEntity, VoxelObjectInteractionContext,
+        self, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
+        VoxelObjectInteractionContext,
         absorption::{self, HasVoxelAbsorbingCapsule, HasVoxelAbsorbingSphere},
     },
     voxel_types::VoxelTypeRegistry,
@@ -24,7 +24,7 @@ use impact_physics::{
     anchor::AnchorManager,
     collision::{CollidableID, HasCollidable},
     force::{ForceGeneratorManager, constant_acceleration::ConstantAccelerationGeneratorID},
-    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+    rigid_body::{HasDynamicRigidBody, RigidBodyManager},
 };
 use impact_scene::{
     ParentEntity, SceneEntityFlags,
@@ -45,19 +45,16 @@ pub struct ECSVoxelObjectInteractionContext<'a> {
 }
 
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
-    fn gather_voxel_object_entities<A: Allocator>(
-        &mut self,
-        entities: &mut AVec<VoxelObjectEntity, A>,
-    ) {
+    fn gather_voxel_object_entities<A: Allocator>(&mut self, entity_ids: &mut AVec<EntityID, A>) {
         query!(
             self.ecs_world,
             |entity_id: EntityID, flags: &SceneEntityFlags| {
                 if flags.is_disabled() {
                     return;
                 }
-                entities.push(VoxelObjectEntity { entity_id });
+                entity_ids.push(entity_id);
             },
-            [HasVoxelObject, DynamicRigidBodyID] // We only let dynamic voxel objects participate in interactions
+            [HasVoxelObject, HasDynamicRigidBody] // We only let dynamic voxel objects participate in interactions
         );
     }
 
@@ -171,15 +168,16 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
     fn on_new_disconnected_voxel_object_entity(
         &mut self,
-        entity: NewVoxelObjectEntity,
+        new_entity_id: EntityID,
         parent_entity_id: EntityID,
     ) {
         let parent_components = self.ecs_world.entity(parent_entity_id).cloned_components();
 
         let mut components = Vec::with_capacity(parent_components.n_component_types());
 
+        components.push(ComponentStorage::from_single_instance_view(&HasVoxelObject));
         components.push(ComponentStorage::from_single_instance_view(
-            &entity.rigid_body_id,
+            &HasDynamicRigidBody,
         ));
 
         if parent_components
@@ -227,7 +225,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
         }
 
         self.entity_stager
-            .stage_entity_for_creation_with_id(entity.entity_id, components)
+            .stage_entity_for_creation_with_id(new_entity_id, components)
             .expect("Failed to stage voxel object entity for creation");
     }
 

@@ -6,6 +6,7 @@ use crate::{
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use roc_integration::roc;
 
 /// Manages all [`ConstantAccelerationTrajectoryDriver`]s.
@@ -28,8 +29,8 @@ define_component_type! {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct ConstantAccelerationTrajectoryDriver {
-    /// The kinematic rigid body being driven.
-    pub rigid_body_id: KinematicRigidBodyID,
+    /// The entity being driven.
+    pub entity_id: EntityID,
     /// The constant acceleration trajectory imposed on the body.
     pub trajectory: ConstantAccelerationTrajectory,
 }
@@ -61,17 +62,20 @@ impl ConstantAccelerationTrajectoryDriver {
     /// Resets the appropriate properties of the driven rigid body in
     /// preparation for applying driven properties.
     pub fn reset(&self, rigid_body_manager: &mut RigidBodyManager) {
-        let Some(body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id) else {
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
+        else {
             return;
         };
-        body.set_position(PositionC::origin());
-        body.set_velocity(VelocityC::zeros());
+        rigid_body.set_position(PositionC::origin());
+        rigid_body.set_velocity(VelocityC::zeros());
     }
 
     /// Applies the driven properties for the given time to the appropriate
     /// rigid body.
     pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, time: f32) {
-        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(self.rigid_body_id)
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body_mut(rigid_body_id)
         else {
             return;
         };

@@ -10,27 +10,54 @@ use crate::{
         Torque, TorqueC, Velocity, VelocityC,
     },
 };
+use anyhow::{Result, bail};
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::ReferenceFrame;
+use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::{angle::Angle, point::Point3, quaternion::Quaternion, vector::Vector3};
 use roc_integration::roc;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`DynamicRigidBody`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct DynamicRigidBodyID(u64);
+    [pub] DynamicRigidBodyID
+}
+
+define_entity_id_newtype! {
+    /// Identifier for a [`KinematicRigidBody`].
+    [pub] KinematicRigidBodyID
 }
 
 define_component_type! {
-    /// Identifier for a [`KinematicRigidBody`].
+    /// Marks that an entity has a dynamic rigid body identified by a
+    /// [`DynamicRigidBodyID`].
+    ///
+    /// Use [`DynamicRigidBodyID::from_entity_id`] to obtain the rigid body ID
+    /// from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct KinematicRigidBodyID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasDynamicRigidBody;
+}
+
+define_component_type! {
+    /// Marks that an entity has a kinematic rigid body identified by a
+    /// [`KinematicRigidBodyID`].
+    ///
+    /// Use [`KinematicRigidBodyID::from_entity_id`] to obtain the rigid body ID
+    /// from the entity ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasKinematicRigidBody;
+}
+
+/// Whether a rigid body is dynamic or kinematic.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RigidBodyType {
+    Dynamic,
+    Kinematic,
 }
 
 /// Identifier for a [`DynamicRigidBody`] or [`KinematicRigidBody`].
@@ -48,8 +75,6 @@ pub struct RigidBodyManager {
     kinematic_bodies: Vec<KinematicRigidBody>,
     dynamic_body_indices_by_id: KeyIndexMapper<DynamicRigidBodyID>,
     kinematic_body_indices_by_id: KeyIndexMapper<KinematicRigidBodyID>,
-    dynamic_body_id_counter: u64,
-    kinematic_body_id_counter: u64,
 }
 
 /// A rigid body whose motion is affected by the force and torque it experiences
@@ -90,15 +115,14 @@ pub struct KinematicRigidBody {
     angular_velocity: AngularVelocityC,
 }
 
-impl From<DynamicRigidBodyID> for u64 {
-    fn from(id: DynamicRigidBodyID) -> Self {
-        id.0
-    }
-}
-
-impl From<KinematicRigidBodyID> for u64 {
-    fn from(id: KinematicRigidBodyID) -> Self {
-        id.0
+impl TypedRigidBodyID {
+    pub fn from_entity_id_and_type(entity_id: EntityID, rigid_body_type: RigidBodyType) -> Self {
+        match rigid_body_type {
+            RigidBodyType::Dynamic => Self::Dynamic(DynamicRigidBodyID::from_entity_id(entity_id)),
+            RigidBodyType::Kinematic => {
+                Self::Kinematic(KinematicRigidBodyID::from_entity_id(entity_id))
+            }
+        }
     }
 }
 
@@ -121,8 +145,6 @@ impl RigidBodyManager {
             kinematic_bodies: Vec::new(),
             dynamic_body_indices_by_id: KeyIndexMapper::default(),
             kinematic_body_indices_by_id: KeyIndexMapper::default(),
-            dynamic_body_id_counter: 0,
-            kinematic_body_id_counter: 0,
         }
     }
 
@@ -256,30 +278,38 @@ impl RigidBodyManager {
         &mut self.kinematic_bodies
     }
 
-    /// Adds the given [`DynamicRigidBody`] to the manager.
+    /// Adds the given [`DynamicRigidBody`] to the manager under the given ID.
     ///
-    /// # Returns
-    /// A new [`DynamicRigidBodyID`] referring to the added body.
-    pub fn add_dynamic_rigid_body(&mut self, body: DynamicRigidBody) -> DynamicRigidBodyID {
-        let id = self.create_new_dynamic_rigid_body_id();
-
+    /// # Error
+    /// Returns an error if the dynamic rigid body ID already exists.
+    pub fn add_dynamic_rigid_body(
+        &mut self,
+        id: DynamicRigidBodyID,
+        body: DynamicRigidBody,
+    ) -> Result<()> {
+        if self.dynamic_body_indices_by_id.contains_key(id) {
+            bail!("A dynamic rigid body with ID {id} already exists");
+        }
         self.dynamic_bodies.push(body);
         self.dynamic_body_indices_by_id.push_key(id);
-
-        id
+        Ok(())
     }
 
-    /// Adds the given [`KinematicRigidBody`] to the manager.
+    /// Adds the given [`KinematicRigidBody`] to the manager under the given ID.
     ///
-    /// # Returns
-    /// A new [`KinematicRigidBodyID`] referring to the added body.
-    pub fn add_kinematic_rigid_body(&mut self, body: KinematicRigidBody) -> KinematicRigidBodyID {
-        let id = self.create_new_kinematic_rigid_body_id();
-
+    /// # Error
+    /// Returns an error if the kinematic rigid body ID already exists.
+    pub fn add_kinematic_rigid_body(
+        &mut self,
+        id: KinematicRigidBodyID,
+        body: KinematicRigidBody,
+    ) -> Result<()> {
+        if self.kinematic_body_indices_by_id.contains_key(id) {
+            bail!("A kinematic rigid body with ID {id} already exists");
+        }
         self.kinematic_bodies.push(body);
         self.kinematic_body_indices_by_id.push_key(id);
-
-        id
+        Ok(())
     }
 
     /// Removes the [`DynamicRigidBody`] with the given ID from the m if it
@@ -336,18 +366,6 @@ impl RigidBodyManager {
         self.dynamic_body_indices_by_id.clear();
         self.kinematic_bodies.clear();
         self.kinematic_body_indices_by_id.clear();
-    }
-
-    fn create_new_dynamic_rigid_body_id(&mut self) -> DynamicRigidBodyID {
-        let id = DynamicRigidBodyID(self.dynamic_body_id_counter);
-        self.dynamic_body_id_counter = self.dynamic_body_id_counter.checked_add(1).unwrap();
-        id
-    }
-
-    fn create_new_kinematic_rigid_body_id(&mut self) -> KinematicRigidBodyID {
-        let id = KinematicRigidBodyID(self.kinematic_body_id_counter);
-        self.kinematic_body_id_counter = self.kinematic_body_id_counter.checked_add(1).unwrap();
-        id
     }
 }
 

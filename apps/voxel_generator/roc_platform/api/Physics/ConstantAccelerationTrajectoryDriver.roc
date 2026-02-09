@@ -1,5 +1,5 @@
-# Hash: 66f2e8ebe91f5015
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: 3b36a4ee30d07a9d
+# Generated: 2026-02-09T21:22:24.23373697
 # Rust type: impact_physics::driven_motion::constant_acceleration::ConstantAccelerationTrajectoryDriver
 # Type category: POD
 module [
@@ -8,14 +8,14 @@ module [
     from_bytes,
 ]
 
-import Comp.KinematicRigidBodyID
+import Entity
 import Setup.ConstantAccelerationTrajectory
 
 ## Driver for imposing a constant acceleration trajectory on a kinematic
 ## rigid body.
 ConstantAccelerationTrajectoryDriver : {
-    ## The kinematic rigid body being driven.
-    rigid_body_id : Comp.KinematicRigidBodyID.KinematicRigidBodyID,
+    ## The entity being driven.
+    entity_id : Entity.Id,
     ## The constant acceleration trajectory imposed on the body.
     trajectory : Setup.ConstantAccelerationTrajectory.ConstantAccelerationTrajectory,
 }
@@ -26,7 +26,7 @@ write_bytes : List U8, ConstantAccelerationTrajectoryDriver -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(48)
-    |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
+    |> Entity.write_bytes_id(value.entity_id)
     |> Setup.ConstantAccelerationTrajectory.write_bytes(value.trajectory)
 
 ## Deserializes a value of [ConstantAccelerationTrajectoryDriver] from its bytes in the
@@ -35,7 +35,7 @@ from_bytes : List U8 -> Result ConstantAccelerationTrajectoryDriver _
 from_bytes = |bytes|
     Ok(
         {
-            rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
             trajectory: bytes |> List.sublist({ start: 8, len: 40 }) |> Setup.ConstantAccelerationTrajectory.from_bytes?,
         },
     )

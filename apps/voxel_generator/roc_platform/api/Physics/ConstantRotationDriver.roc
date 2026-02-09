@@ -1,5 +1,5 @@
-# Hash: 52c9cd121e86dff1
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: c0df0b67eceef527
+# Generated: 2026-02-09T21:22:24.23373697
 # Rust type: impact_physics::driven_motion::constant_rotation::ConstantRotationDriver
 # Type category: POD
 module [
@@ -8,14 +8,14 @@ module [
     from_bytes,
 ]
 
-import Comp.KinematicRigidBodyID
+import Entity
 import Setup.ConstantRotation
 import core.Builtin
 
 ## Driver for imposing constant rotation on a kinematic rigid body.
 ConstantRotationDriver : {
-    ## The kinematic rigid body being driven.
-    rigid_body_id : Comp.KinematicRigidBodyID.KinematicRigidBodyID,
+    ## The entity being driven.
+    entity_id : Entity.Id,
     ## The constant rotation imposed on the body.
     rotation : Setup.ConstantRotation.ConstantRotation,
     padding : F32,
@@ -27,7 +27,7 @@ write_bytes : List U8, ConstantRotationDriver -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(48)
-    |> Comp.KinematicRigidBodyID.write_bytes(value.rigid_body_id)
+    |> Entity.write_bytes_id(value.entity_id)
     |> Setup.ConstantRotation.write_bytes(value.rotation)
     |> Builtin.write_bytes_f32(value.padding)
 
@@ -37,7 +37,7 @@ from_bytes : List U8 -> Result ConstantRotationDriver _
 from_bytes = |bytes|
     Ok(
         {
-            rigid_body_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.KinematicRigidBodyID.from_bytes?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
             rotation: bytes |> List.sublist({ start: 8, len: 36 }) |> Setup.ConstantRotation.from_bytes?,
             padding: bytes |> List.sublist({ start: 44, len: 4 }) |> Builtin.from_bytes_f32?,
         },

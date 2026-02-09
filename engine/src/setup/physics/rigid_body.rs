@@ -7,6 +7,7 @@ use impact_ecs::{
     world::{EntityEntry, PrototypeEntities},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_id::EntityID;
 use impact_mesh::{
     TriangleMeshID,
     setup::{BoxMesh, CapsuleMesh, ConeMesh, CylinderMesh, HemisphereMesh, SphereMesh},
@@ -15,7 +16,7 @@ use impact_physics::{
     inertia::{InertiaTensor, InertialProperties},
     quantities::Motion,
     rigid_body::{
-        self, DynamicRigidBodyID, KinematicRigidBodyID,
+        self, DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, KinematicRigidBodyID,
         setup::{DynamicRigidBodyInertialProperties, DynamicRigidBodySubstance},
     },
 };
@@ -24,8 +25,7 @@ use parking_lot::RwLock;
 
 /// Checks if the given entities have the components representing a dynamic or
 /// kinematic rigid body, and if so, creates the corresponding rigid bodies and
-/// adds the [`DynamicRigidBodyID`]s and/or
-/// [`KinematicRigidBodyID`]s to the entities.
+/// adds the appropriate marker components to the entities.
 pub fn setup_rigid_bodies_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     simulator: &RwLock<PhysicsSimulator>,
@@ -39,11 +39,12 @@ pub fn setup_rigid_bodies_for_new_entities(
             let rigid_body_manager = simulator.rigid_body_manager().oread();
         },
         entities,
-        |rigid_body_id: &DynamicRigidBodyID,
+        |entity_id: EntityID,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
          -> (ReferenceFrame, Motion) {
-            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(*rigid_body_id) {
+            let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+            if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) {
                 (rigid_body.reference_frame(), rigid_body.compute_motion())
             } else {
                 (
@@ -51,7 +52,8 @@ pub fn setup_rigid_bodies_for_new_entities(
                     motion.copied().unwrap_or_default(),
                 )
             }
-        }
+        },
+        [HasDynamicRigidBody]
     );
 
     setup!(
@@ -60,19 +62,20 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |mesh: &BoxMesh,
+        |entity_id: EntityID,
+         mesh: &BoxMesh,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -91,17 +94,18 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -109,19 +113,20 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |mesh: &CylinderMesh,
+        |entity_id: EntityID,
+         mesh: &CylinderMesh,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -139,17 +144,18 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -157,19 +163,20 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |mesh: &ConeMesh,
+        |entity_id: EntityID,
+         mesh: &ConeMesh,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -187,17 +194,18 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -205,18 +213,19 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |substance: &DynamicRigidBodySubstance,
+        |entity_id: EntityID,
+         substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -235,18 +244,19 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
         [SphereMesh],
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -254,18 +264,19 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |substance: &DynamicRigidBodySubstance,
+        |entity_id: EntityID,
+         substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -284,18 +295,19 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
         [HemisphereMesh],
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -303,19 +315,20 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |mesh: &CapsuleMesh,
+        |entity_id: EntityID,
+         mesh: &CapsuleMesh,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -333,17 +346,18 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -351,18 +365,19 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |inertial_properties: &DynamicRigidBodyInertialProperties,
+        |entity_id: EntityID,
+         inertial_properties: &DynamicRigidBodyInertialProperties,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
-         -> (
-            DynamicRigidBodyID,
+         -> Result<(
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
             SceneEntityFlags
-        ) {
+        )> {
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -385,17 +400,18 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            (rigid_body_id, model_transform, frame, motion, flags)
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
-        ![DynamicRigidBodyID]
-    );
+        ![HasDynamicRigidBody]
+    )?;
 
     setup!(
         {
@@ -404,14 +420,15 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |mesh_id: &TriangleMeshID,
+        |entity_id: EntityID,
+         mesh_id: &TriangleMeshID,
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
          flags: Option<&SceneEntityFlags>|
          -> Result<(
-            DynamicRigidBodyID,
+            HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
             Motion,
@@ -439,16 +456,17 @@ pub fn setup_rigid_bodies_for_new_entities(
             model_transform
                 .set_offset_after_scaling(*inertial_properties.center_of_mass().as_vector());
 
-            let rigid_body_id = rigid_body::setup::setup_dynamic_rigid_body(
+            rigid_body::setup::setup_dynamic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 inertial_properties,
                 frame,
                 motion,
-            );
+            )?;
 
-            Ok((rigid_body_id, model_transform, frame, motion, flags))
+            Ok((HasDynamicRigidBody, model_transform, frame, motion, flags))
         },
-        ![DynamicRigidBodyID]
+        ![HasDynamicRigidBody]
     )?;
 
     setup!(
@@ -457,38 +475,43 @@ pub fn setup_rigid_bodies_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |frame: Option<&ReferenceFrame>,
+        |entity_id: EntityID,
+         frame: Option<&ReferenceFrame>,
          motion: &Motion,
          flags: Option<&SceneEntityFlags>|
-         -> (KinematicRigidBodyID, SceneEntityFlags) {
+         -> Result<(HasKinematicRigidBody, SceneEntityFlags)> {
             let flags = flags.copied().unwrap_or_default();
 
-            let rigid_body_id = rigid_body::setup::setup_kinematic_rigid_body(
+            rigid_body::setup::setup_kinematic_rigid_body(
                 &mut rigid_body_manager,
+                entity_id,
                 frame.copied().unwrap_or_default(),
                 *motion,
-            );
+            )?;
 
-            (rigid_body_id, flags)
+            Ok((HasKinematicRigidBody, flags))
         },
-        ![DynamicRigidBodyID, KinematicRigidBodyID]
-    );
+        ![HasDynamicRigidBody, HasKinematicRigidBody]
+    )?;
 
     Ok(())
 }
 
 pub fn remove_rigid_body_for_entity(
     simulator: &RwLock<PhysicsSimulator>,
+    entity_id: EntityID,
     entity: &EntityEntry<'_>,
 ) {
-    if let Some(rigid_body_id) = entity.get_component::<DynamicRigidBodyID>() {
+    if entity.has_component::<HasDynamicRigidBody>() {
         let simulator = simulator.oread();
         let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
-        rigid_body_manager.remove_dynamic_rigid_body(*rigid_body_id.access());
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+        rigid_body_manager.remove_dynamic_rigid_body(rigid_body_id);
     }
-    if let Some(rigid_body_id) = entity.get_component::<KinematicRigidBodyID>() {
+    if entity.has_component::<HasKinematicRigidBody>() {
         let simulator = simulator.oread();
         let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
-        rigid_body_manager.remove_kinematic_rigid_body(*rigid_body_id.access());
+        let rigid_body_id = KinematicRigidBodyID::from_entity_id(entity_id);
+        rigid_body_manager.remove_kinematic_rigid_body(rigid_body_id);
     }
 }

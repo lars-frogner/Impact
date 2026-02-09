@@ -1,5 +1,5 @@
-# Hash: 6de38bc59853d8f8
-# Generated: 2025-12-29T23:55:22.755341756
+# Hash: df2aa689e6a2e6d4
+# Generated: 2026-02-09T21:22:14.059230926
 # Rust type: impact_physics::force::detailed_drag::DetailedDragForceGenerator
 # Type category: POD
 module [
@@ -8,14 +8,14 @@ module [
     from_bytes,
 ]
 
-import Comp.DynamicRigidBodyID
+import Entity
 import Physics.DetailedDragForce
 import core.Builtin
 
 ## Generator for a shape-dependent drag force on a dynamic rigid body.
 DetailedDragForceGenerator : {
-    ## The dynamic rigid body experiencing the drag.
-    body : Comp.DynamicRigidBodyID.DynamicRigidBodyID,
+    ## The entity experiencing the drag.
+    entity_id : Entity.Id,
     ## The drag force on the body.
     force : Physics.DetailedDragForce.DetailedDragForce,
     padding : F32,
@@ -27,7 +27,7 @@ write_bytes : List U8, DetailedDragForceGenerator -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(24)
-    |> Comp.DynamicRigidBodyID.write_bytes(value.body)
+    |> Entity.write_bytes_id(value.entity_id)
     |> Physics.DetailedDragForce.write_bytes(value.force)
     |> Builtin.write_bytes_f32(value.padding)
 
@@ -37,7 +37,7 @@ from_bytes : List U8 -> Result DetailedDragForceGenerator _
 from_bytes = |bytes|
     Ok(
         {
-            body: bytes |> List.sublist({ start: 0, len: 8 }) |> Comp.DynamicRigidBodyID.from_bytes?,
+            entity_id: bytes |> List.sublist({ start: 0, len: 8 }) |> Entity.from_bytes_id?,
             force: bytes |> List.sublist({ start: 8, len: 12 }) |> Physics.DetailedDragForce.from_bytes?,
             padding: bytes |> List.sublist({ start: 20, len: 4 }) |> Builtin.from_bytes_f32?,
         },

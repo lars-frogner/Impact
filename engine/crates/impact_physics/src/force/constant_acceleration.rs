@@ -5,6 +5,7 @@ use crate::{
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use impact_math::vector::Vector3C;
 use roc_integration::roc;
 
@@ -26,8 +27,8 @@ define_component_type! {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct ConstantAccelerationGenerator {
-    /// The dynamic rigid body experiencing the acceleration.
-    pub rigid_body_id: DynamicRigidBodyID,
+    /// The entity experiencing the acceleration.
+    pub entity_id: EntityID,
     /// The acceleration of the body's center of mass in world space.
     pub acceleration: ConstantAcceleration,
     padding: f32,
@@ -49,9 +50,9 @@ impl From<u64> for ConstantAccelerationGeneratorID {
 }
 
 impl ConstantAccelerationGenerator {
-    pub fn new(rigid_body_id: DynamicRigidBodyID, acceleration: ConstantAcceleration) -> Self {
+    pub fn new(entity_id: EntityID, acceleration: ConstantAcceleration) -> Self {
         Self {
-            rigid_body_id,
+            entity_id,
             acceleration,
             padding: 0.0,
         }
@@ -59,8 +60,8 @@ impl ConstantAccelerationGenerator {
 
     /// Applies the acceleration to the appropriate dynamic rigid body.
     pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager) {
-        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(self.rigid_body_id)
-        else {
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(self.entity_id);
+        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) else {
             return;
         };
         self.acceleration.apply(rigid_body);
