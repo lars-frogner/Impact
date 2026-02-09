@@ -99,6 +99,11 @@ impl EntityIDManager {
         ids
     }
 
+    /// Marks the given entity ID as in use if it is not already.
+    pub fn register_id_if_absent(&mut self, id: EntityID) {
+        self.ids_in_use.insert(id.0);
+    }
+
     /// Marks the given entity ID as in use.
     ///
     /// # Errors

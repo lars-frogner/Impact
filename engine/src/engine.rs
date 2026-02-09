@@ -214,6 +214,11 @@ impl Engine {
         &self.game_loop_controller
     }
 
+    /// Returns a reference to the [`EntityIDManager`], guarded by a [`Mutex`].
+    pub(crate) fn entity_id_manager(&self) -> &Mutex<EntityIDManager> {
+        &self.entity_id_manager
+    }
+
     /// Returns a reference to the [`EntityStager`], guarded by a [`Mutex`].
     pub(crate) fn entity_stager(&self) -> &Mutex<EntityStager> {
         &self.entity_stager

@@ -15,11 +15,11 @@ use impact_physics::{
 };
 use impact_scene::{ParentEntity, SceneEntityFlags, setup::Uncullable};
 use impact_voxel::{
-    VoxelObjectID,
+    HasVoxelObject, VoxelObjectID,
     generation::{SDFVoxelGenerator, sdf::SDFGraph},
     interaction::absorption::{
-        VoxelAbsorbingCapsule, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphere,
-        VoxelAbsorbingSphereID,
+        HasVoxelAbsorbingCapsule, HasVoxelAbsorbingSphere, VoxelAbsorbingCapsule,
+        VoxelAbsorbingCapsuleID, VoxelAbsorbingSphere, VoxelAbsorbingSphereID,
     },
     setup::{
         self, DynamicVoxels, GeneratedVoxelObject, GradientNoiseVoxelTypes,
@@ -42,12 +42,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let voxel_manager = scene.voxel_manager().oread();
         },
         entities,
-        |voxel_object_id: &VoxelObjectID,
-         model_transform: Option<&ModelTransform>|
-         -> ModelTransform {
+        |entity_id: EntityID, model_transform: Option<&ModelTransform>| -> ModelTransform {
+            let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
             if let Some(physics_context) = voxel_manager
                 .object_manager()
-                .get_physics_context(*voxel_object_id)
+                .get_physics_context(voxel_object_id)
             {
                 let center_of_mass = physics_context
                     .inertial_property_manager
@@ -67,9 +66,10 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |generated_voxel_object: &GeneratedVoxelObject,
+        |entity_id: EntityID,
+         generated_voxel_object: &GeneratedVoxelObject,
          voxel_type: &SameVoxelType|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let generator_id = generated_voxel_object.generator_id;
 
             let generator = resource_manager
@@ -102,12 +102,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -117,10 +116,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |voxel_box: &VoxelBox,
+        |entity_id: EntityID,
+         voxel_box: &VoxelBox,
          voxel_type: &SameVoxelType,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
@@ -139,12 +139,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -154,10 +153,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |voxel_sphere: &VoxelSphere,
+        |entity_id: EntityID,
+         voxel_sphere: &VoxelSphere,
          voxel_type: &SameVoxelType,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
@@ -176,12 +176,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -191,10 +190,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |voxel_sphere_union: &VoxelSphereUnion,
+        |entity_id: EntityID,
+         voxel_sphere_union: &VoxelSphereUnion,
          voxel_type: &SameVoxelType,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
@@ -213,12 +213,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -228,9 +227,10 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |generated_voxel_object: &GeneratedVoxelObject,
+        |entity_id: EntityID,
+         generated_voxel_object: &GeneratedVoxelObject,
          voxel_types: &GradientNoiseVoxelTypes|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let generator_id = generated_voxel_object.generator_id;
 
             let generator = resource_manager
@@ -263,12 +263,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -278,10 +277,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |voxel_box: &VoxelBox,
+        |entity_id: EntityID,
+         voxel_box: &VoxelBox,
          voxel_types: &GradientNoiseVoxelTypes,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
@@ -300,12 +300,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -315,10 +314,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |voxel_sphere: &VoxelSphere,
+        |entity_id: EntityID,
+         voxel_sphere: &VoxelSphere,
          voxel_types: &GradientNoiseVoxelTypes,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
@@ -337,12 +337,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -352,10 +351,11 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |voxel_sphere_union: &VoxelSphereUnion,
+        |entity_id: EntityID,
+         voxel_sphere_union: &VoxelSphereUnion,
          voxel_types: &GradientNoiseVoxelTypes,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
-         -> Result<VoxelObjectID> {
+         -> Result<HasVoxelObject> {
             let arena = ArenaPool::get_arena();
 
             let mut graph = SDFGraph::new_in(&arena);
@@ -374,12 +374,11 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            Ok(setup::setup_voxel_object(
-                voxel_manager.object_manager_mut(),
-                &generator,
-            ))
+            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+
+            Ok(HasVoxelObject)
         },
-        ![VoxelObjectID]
+        ![HasVoxelObject]
     )?;
 
     setup!(
@@ -391,7 +390,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
         entities,
-        |voxel_object_id: &VoxelObjectID,
+        |entity_id: EntityID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>|
@@ -400,13 +399,13 @@ pub fn setup_voxel_objects_for_new_entities(
                 &mut rigid_body_manager,
                 voxel_manager.object_manager_mut(),
                 &resource_manager.voxel_types,
-                *voxel_object_id,
+                entity_id,
                 model_transform,
                 frame,
                 motion,
             )
         },
-        [DynamicVoxels],
+        [HasVoxelObject, DynamicVoxels],
         ![DynamicRigidBodyID, KinematicRigidBodyID]
     )?;
 
@@ -416,20 +415,25 @@ pub fn setup_voxel_objects_for_new_entities(
 pub fn setup_voxel_interaction_for_new_entities(
     scene: &RwLock<Scene>,
     entities: &mut PrototypeEntities,
-) {
+) -> Result<()> {
     setup!(
         {
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |absorbing_sphere: &VoxelAbsorbingSphere| -> VoxelAbsorbingSphereID {
+        |entity_id: EntityID,
+         absorbing_sphere: &VoxelAbsorbingSphere|
+         -> Result<HasVoxelAbsorbingSphere> {
+            let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity_id);
             voxel_manager
                 .interaction_manager_mut()
                 .absorption_manager_mut()
-                .add_absorbing_sphere(*absorbing_sphere)
-        }
-    );
+                .add_absorbing_sphere(absorber_id, *absorbing_sphere)?;
+            Ok(HasVoxelAbsorbingSphere)
+        },
+        ![HasVoxelAbsorbingSphere]
+    )?;
 
     setup!(
         {
@@ -437,13 +441,18 @@ pub fn setup_voxel_interaction_for_new_entities(
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
         entities,
-        |absorbing_capsule: &VoxelAbsorbingCapsule| -> VoxelAbsorbingCapsuleID {
+        |entity_id: EntityID,
+         absorbing_capsule: &VoxelAbsorbingCapsule|
+         -> Result<HasVoxelAbsorbingCapsule> {
+            let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity_id);
             voxel_manager
                 .interaction_manager_mut()
                 .absorption_manager_mut()
-                .add_absorbing_capsule(*absorbing_capsule)
-        }
-    );
+                .add_absorbing_capsule(absorber_id, *absorbing_capsule)?;
+            Ok(HasVoxelAbsorbingCapsule)
+        },
+        ![HasVoxelAbsorbingSphere]
+    )
 }
 
 pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
@@ -459,7 +468,6 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
         },
         entities,
         |entity_id: EntityID,
-         voxel_object_id: &VoxelObjectID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          parent: Option<&ParentEntity>,
@@ -470,7 +478,6 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
                 &mut model_instance_manager,
                 &mut scene_graph,
                 entity_id,
-                voxel_object_id,
                 model_transform,
                 frame,
                 parent,
@@ -479,41 +486,47 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
             )?;
             Ok((HasModel, model_transform, flags))
         },
+        [HasVoxelObject],
         ![HasModel]
     )
 }
 
 pub fn cleanup_voxel_object_for_removed_entity(
     scene: &RwLock<Scene>,
+    entity_id: EntityID,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
-    if let Some(voxel_object_id) = entity.get_component::<VoxelObjectID>() {
+    if entity.has_component::<HasVoxelObject>() {
         let scene = scene.oread();
         let mut voxel_manager = scene.voxel_manager().owrite();
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
         voxel_manager
             .object_manager_mut()
-            .remove_voxel_object(*voxel_object_id.access());
+            .remove_voxel_object(voxel_object_id);
     }
 }
 
 pub fn cleanup_voxel_interaction_for_removed_entity(
     scene: &RwLock<Scene>,
+    entity_id: EntityID,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
-    if let Some(sphere_id) = entity.get_component::<VoxelAbsorbingSphereID>() {
+    if entity.has_component::<HasVoxelAbsorbingSphere>() {
         let scene = scene.oread();
         let mut voxel_manager = scene.voxel_manager().owrite();
+        let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity_id);
         voxel_manager
             .interaction_manager_mut()
             .absorption_manager_mut()
-            .remove_absorbing_sphere(*sphere_id.access());
+            .remove_absorbing_sphere(absorber_id);
     }
-    if let Some(capsule_id) = entity.get_component::<VoxelAbsorbingCapsuleID>() {
+    if entity.has_component::<HasVoxelAbsorbingCapsule>() {
         let scene = scene.oread();
         let mut voxel_manager = scene.voxel_manager().owrite();
+        let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity_id);
         voxel_manager
             .interaction_manager_mut()
             .absorption_manager_mut()
-            .remove_absorbing_capsule(*capsule_id.access());
+            .remove_absorbing_capsule(absorber_id);
     }
 }

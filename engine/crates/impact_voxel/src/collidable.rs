@@ -11,6 +11,7 @@ use crate::{
     chunks::ChunkedVoxelObject,
 };
 use impact_geometry::{Plane, Sphere};
+use impact_id::EntityID;
 use impact_math::{
     point::Point3,
     transform::{Isometry3, Isometry3C},
@@ -50,14 +51,14 @@ pub enum LocalCollidable {
 
 #[derive(Clone, Debug)]
 pub struct LocalVoxelObjectCollidable {
-    object_id: VoxelObjectID,
+    entity_id: EntityID,
     response_params: ContactResponseParameters,
     origin_offset: Vector3C,
 }
 
 #[derive(Clone, Debug)]
 pub struct VoxelObjectCollidable {
-    object_id: VoxelObjectID,
+    entity_id: EntityID,
     response_params: ContactResponseParameters,
     transform_to_object_space: Isometry3C,
 }
@@ -77,7 +78,7 @@ impl collision::Collidable for Collidable {
             Self::Local::Plane(plane) => Self::Plane(plane.transformed(transform_to_world_space)),
             Self::Local::VoxelObject(voxel_object) => {
                 Self::VoxelObject(VoxelObjectCollidable::new(
-                    voxel_object.object_id,
+                    voxel_object.entity_id,
                     voxel_object.response_params,
                     voxel_object.origin_offset.aligned(),
                     transform_to_world_space,
@@ -196,7 +197,7 @@ impl LocalVoxelObjectCollidable {
 
 impl VoxelObjectCollidable {
     pub fn new(
-        object_id: VoxelObjectID,
+        entity_id: EntityID,
         response_params: ContactResponseParameters,
         origin_offset: Vector3,
         transform_to_world_space: &Isometry3,
@@ -207,14 +208,14 @@ impl VoxelObjectCollidable {
         let transform_to_object_space = transform_from_object_to_world_space.inverted();
 
         Self {
-            object_id,
+            entity_id,
             response_params,
             transform_to_object_space: transform_to_object_space.compact(),
         }
     }
 
-    pub fn object_id(&self) -> VoxelObjectID {
-        self.object_id
+    pub fn entity_id(&self) -> EntityID {
+        self.entity_id
     }
 
     pub fn transform_to_object_space(&self) -> &Isometry3C {
@@ -231,21 +232,24 @@ fn generate_mutual_voxel_object_contact_manifold(
     contact_manifold: &mut ContactManifold,
 ) {
     let VoxelObjectCollidable {
-        object_id: object_a_id,
+        entity_id: entity_a_id,
         response_params: response_params_a,
         transform_to_object_space: transform_from_world_to_a,
     } = voxel_object_a;
 
     let VoxelObjectCollidable {
-        object_id: object_b_id,
+        entity_id: entity_b_id,
         response_params: response_params_b,
         transform_to_object_space: transform_from_world_to_b,
     } = voxel_object_b;
 
-    let Some(object_a) = voxel_object_manager.get_voxel_object(*object_a_id) else {
+    let object_a_id = VoxelObjectID::from_entity_id(*entity_a_id);
+    let Some(object_a) = voxel_object_manager.get_voxel_object(object_a_id) else {
         return;
     };
-    let Some(object_b) = voxel_object_manager.get_voxel_object(*object_b_id) else {
+
+    let object_b_id = VoxelObjectID::from_entity_id(*entity_b_id);
+    let Some(object_b) = voxel_object_manager.get_voxel_object(object_b_id) else {
         return;
     };
 
@@ -492,12 +496,13 @@ fn generate_sphere_voxel_object_contact_manifold(
     contact_manifold: &mut ContactManifold,
 ) {
     let VoxelObjectCollidable {
-        object_id,
+        entity_id,
         response_params,
         transform_to_object_space,
     } = voxel_object;
 
-    let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
+    let object_id = VoxelObjectID::from_entity_id(*entity_id);
+    let Some(voxel_object) = voxel_object_manager.get_voxel_object(object_id) else {
         return;
     };
 
@@ -588,12 +593,13 @@ fn generate_voxel_object_plane_contact_manifold(
     contact_manifold: &mut ContactManifold,
 ) {
     let VoxelObjectCollidable {
-        object_id,
+        entity_id,
         response_params,
         transform_to_object_space,
     } = voxel_object;
 
-    let Some(voxel_object) = voxel_object_manager.get_voxel_object(*object_id) else {
+    let object_id = VoxelObjectID::from_entity_id(*entity_id);
+    let Some(voxel_object) = voxel_object_manager.get_voxel_object(object_id) else {
         return;
     };
 

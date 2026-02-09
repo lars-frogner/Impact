@@ -13,7 +13,7 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
-use absorption::{VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID, VoxelAbsorptionManager};
+use absorption::VoxelAbsorptionManager;
 use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
 use impact_id::EntityID;
@@ -70,24 +70,23 @@ pub struct VoxelInteractionManager {
 #[derive(Debug)]
 pub struct VoxelObjectEntity {
     pub entity_id: EntityID,
-    pub voxel_object_id: VoxelObjectID,
 }
 
 #[derive(Debug)]
 pub struct NewVoxelObjectEntity {
-    pub voxel_object_id: VoxelObjectID,
+    pub entity_id: EntityID,
     pub rigid_body_id: DynamicRigidBodyID,
 }
 
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingSphereEntity {
-    pub absorber_id: VoxelAbsorbingSphereID,
+    pub entity_id: EntityID,
     pub sphere_to_world_transform: Option<Isometry3>,
 }
 
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingCapsuleEntity {
-    pub absorber_id: VoxelAbsorbingCapsuleID,
+    pub entity_id: EntityID,
     pub capsule_to_world_transform: Option<Isometry3>,
 }
 
@@ -136,9 +135,10 @@ impl VoxelInteractionManager {
 /// Updates the model transform's offset to match the object's center of mass.
 pub fn sync_voxel_object_model_transform_with_inertial_properties(
     voxel_object_manager: &VoxelObjectManager,
-    voxel_object_id: VoxelObjectID,
+    entity_id: EntityID,
     model_transform: &mut ModelTransform,
 ) {
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let Some(physics_context) = voxel_object_manager.get_physics_context(voxel_object_id) else {
         return;
     };
@@ -156,9 +156,9 @@ pub fn sync_voxel_object_bounding_sphere_in_scene_graph(
     voxel_object_manager: &VoxelObjectManager,
     scene_graph: &mut SceneGraph,
     entity_id: EntityID,
-    voxel_object_id: VoxelObjectID,
     uncullable: bool,
 ) {
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
         return;
     };

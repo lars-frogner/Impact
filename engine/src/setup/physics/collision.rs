@@ -6,6 +6,7 @@ use impact_ecs::{
     world::{EntityEntry, PrototypeEntities},
 };
 use impact_geometry::ModelTransform;
+use impact_id::EntityID;
 use impact_physics::{
     collision::{
         self, CollidableID,
@@ -14,7 +15,7 @@ use impact_physics::{
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
 };
 use impact_voxel::{
-    VoxelObjectID,
+    HasVoxelObject,
     collidable::{LocalCollidable, setup::VoxelCollidable},
 };
 use parking_lot::RwLock;
@@ -104,19 +105,20 @@ pub fn setup_collidables_for_new_entities(
             let mut collision_world = simulator.collision_world().owrite();
         },
         entities,
-        |voxel_collidable: &VoxelCollidable,
-         voxel_object_id: &VoxelObjectID,
+        |entity_id: EntityID,
+         voxel_collidable: &VoxelCollidable,
          rigid_body_id: &DynamicRigidBodyID,
          model_transform: &ModelTransform|
          -> CollidableID {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
-                *voxel_object_id,
+                entity_id,
                 (*rigid_body_id).into(),
                 model_transform.offset,
                 voxel_collidable,
             )
-        }
+        },
+        [HasVoxelObject]
     );
 
     setup!(
@@ -125,21 +127,22 @@ pub fn setup_collidables_for_new_entities(
             let mut collision_world = simulator.collision_world().owrite();
         },
         entities,
-        |voxel_collidable: &VoxelCollidable,
-         voxel_object_id: &VoxelObjectID,
+        |entity_id: EntityID,
+         voxel_collidable: &VoxelCollidable,
          rigid_body_id: &KinematicRigidBodyID,
          model_transform: Option<&ModelTransform>|
          -> CollidableID {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
-                *voxel_object_id,
+                entity_id,
                 (*rigid_body_id).into(),
                 model_transform
                     .map(|model_transform| model_transform.offset)
                     .unwrap_or_default(),
                 voxel_collidable,
             )
-        }
+        },
+        [HasVoxelObject]
     );
 }
 

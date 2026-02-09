@@ -1,7 +1,7 @@
 //! Voxel absorption.
 
 use crate::{
-    Voxel, VoxelManager, VoxelObjectPhysicsContext,
+    Voxel, VoxelManager, VoxelObjectID, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{
         self, DynamicDisconnectedVoxelObject, NewVoxelObjectEntity, VoxelObjectEntity,
@@ -10,10 +10,12 @@ use crate::{
     mesh::MeshedChunkedVoxelObject,
     voxel_types::VoxelTypeRegistry,
 };
+use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashMap;
 use impact_geometry::{CapsuleC, SphereC};
+use impact_id::{EntityIDManager, define_entity_id_newtype};
 use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3C};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
@@ -22,24 +24,41 @@ use impact_physics::{
 use roc_integration::roc;
 use std::mem;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`VoxelAbsorbingSphere`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct VoxelAbsorbingSphereID(u64);
+    [pub] VoxelAbsorbingSphereID
+}
+
+define_entity_id_newtype! {
+    /// Identifier for a [`VoxelAbsorbingCapsule`].
+    [pub] VoxelAbsorbingCapsuleID
 }
 
 define_component_type! {
-    /// Identifier for a [`VoxelAbsorbingCapsule`].
+    /// Marks that an entity has a voxel-absorbing sphere identified by a
+    /// [`VoxelAbsorbingSphereID`].
+    ///
+    /// Use [`VoxelAbsorbingSphereID::from_entity_id`] to obtain the absorbing
+    /// sphere ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct VoxelAbsorbingCapsuleID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasVoxelAbsorbingSphere;
+}
+
+define_component_type! {
+    /// Marks that an entity has a voxel-absorbing capsule identified by a
+    /// [`VoxelAbsorbingCapsuleID`].
+    ///
+    /// Use [`VoxelAbsorbingCapsuleID::from_entity_id`] to obtain the absorbing
+    /// capsule ID from the entity ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasVoxelAbsorbingCapsule;
 }
 
 define_setup_type! {
-    target = VoxelAbsorbingSphereID;
     /// A sphere that instantly absorbs voxels it comes in contact with.
     ///
     /// Does nothing if the entity does not have a
@@ -56,7 +75,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelAbsorbingCapsuleID;
     /// A capsule that instantly absorbs voxels it comes in contact with.
     ///
     /// Does nothing if the entity does not have a
@@ -81,8 +99,6 @@ define_setup_type! {
 pub struct VoxelAbsorptionManager {
     spheres: HashMap<VoxelAbsorbingSphereID, TrackingVoxelAbsorbingSphere>,
     capsules: HashMap<VoxelAbsorbingCapsuleID, TrackingVoxelAbsorbingCapsule>,
-    sphere_id_counter: u64,
-    capsule_id_counter: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -202,8 +218,6 @@ impl VoxelAbsorptionManager {
         Self {
             spheres: HashMap::default(),
             capsules: HashMap::default(),
-            sphere_id_counter: 0,
-            capsule_id_counter: 0,
         }
     }
 
@@ -243,29 +257,40 @@ impl VoxelAbsorptionManager {
         self.capsules.get_mut(&id)
     }
 
-    /// Adds the given [`VoxelAbsorbingSphere`] to the manager.
+    /// Adds the given [`VoxelAbsorbingSphere`] to the manager under the given
+    /// ID.
     ///
-    /// # Returns
-    /// A new [`VoxelAbsorbingSphereID`] referring to the added sphere.
-    pub fn add_absorbing_sphere(&mut self, sphere: VoxelAbsorbingSphere) -> VoxelAbsorbingSphereID {
-        let id = self.create_new_absorbing_sphere_id();
+    /// # Errors
+    /// Returns an error if the ID already exists.
+    pub fn add_absorbing_sphere(
+        &mut self,
+        id: VoxelAbsorbingSphereID,
+        sphere: VoxelAbsorbingSphere,
+    ) -> Result<()> {
+        if self.spheres.contains_key(&id) {
+            bail!("A voxel-absorbing sphere with ID {id} already exists");
+        }
         self.spheres
             .insert(id, TrackingVoxelAbsorbingSphere::new(sphere));
-        id
+        Ok(())
     }
 
-    /// Adds the given [`VoxelAbsorbingCapsule`] to the manager.
+    /// Adds the given [`VoxelAbsorbingCapsule`] to the manager under the given
+    /// ID.
     ///
-    /// # Returns
-    /// A new [`VoxelAbsorbingCapsuleID`] referring to the added capsule.
+    /// # Errors
+    /// Returns an error if the ID already exists.
     pub fn add_absorbing_capsule(
         &mut self,
+        id: VoxelAbsorbingCapsuleID,
         capsule: VoxelAbsorbingCapsule,
-    ) -> VoxelAbsorbingCapsuleID {
-        let id = self.create_new_absorbing_capsule_id();
+    ) -> Result<()> {
+        if self.capsules.contains_key(&id) {
+            bail!("A voxel-absorbing capsule with ID {id} already exists");
+        }
         self.capsules
             .insert(id, TrackingVoxelAbsorbingCapsule::new(capsule));
-        id
+        Ok(())
     }
 
     /// Removes the [`VoxelAbsorbingSphere`] with the given ID from the manager
@@ -284,18 +309,6 @@ impl VoxelAbsorptionManager {
     pub fn remove_all_absorbers(&mut self) {
         self.spheres.clear();
         self.capsules.clear();
-    }
-
-    fn create_new_absorbing_sphere_id(&mut self) -> VoxelAbsorbingSphereID {
-        let id = VoxelAbsorbingSphereID(self.sphere_id_counter);
-        self.sphere_id_counter = self.sphere_id_counter.checked_add(1).unwrap();
-        id
-    }
-
-    fn create_new_absorbing_capsule_id(&mut self) -> VoxelAbsorbingCapsuleID {
-        let id = VoxelAbsorbingCapsuleID(self.capsule_id_counter);
-        self.capsule_id_counter = self.capsule_id_counter.checked_add(1).unwrap();
-        id
     }
 }
 
@@ -358,6 +371,7 @@ impl AbsorbedVoxels {
 /// objects.
 pub fn apply_absorption<C>(
     context: &mut C,
+    entity_id_manager: &mut EntityIDManager,
     voxel_manager: &mut VoxelManager,
     voxel_type_registry: &VoxelTypeRegistry,
     rigid_body_manager: &mut RigidBodyManager,
@@ -374,8 +388,8 @@ pub fn apply_absorption<C>(
     let mut enabled_count = 0;
 
     for entity in &absorbing_sphere_entities {
-        if let Some(sphere) = voxel_absorption_manager.get_absorbing_sphere_mut(entity.absorber_id)
-        {
+        let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity.entity_id);
+        if let Some(sphere) = voxel_absorption_manager.get_absorbing_sphere_mut(absorber_id) {
             sphere.tracker.clear_absorbed();
 
             if entity.sphere_to_world_transform.is_some() {
@@ -384,9 +398,8 @@ pub fn apply_absorption<C>(
         }
     }
     for entity in &absorbing_capsule_entities {
-        if let Some(capsule) =
-            voxel_absorption_manager.get_absorbing_capsule_mut(entity.absorber_id)
-        {
+        let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity.entity_id);
+        if let Some(capsule) = voxel_absorption_manager.get_absorbing_capsule_mut(absorber_id) {
             capsule.tracker.clear_absorbed();
 
             if entity.capsule_to_world_transform.is_some() {
@@ -407,11 +420,8 @@ pub fn apply_absorption<C>(
 
     context.gather_voxel_object_entities(&mut voxel_object_entities);
 
-    for VoxelObjectEntity {
-        entity_id,
-        voxel_object_id,
-    } in voxel_object_entities
-    {
+    for VoxelObjectEntity { entity_id } in voxel_object_entities {
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
         let Some((voxel_object, physics_context)) =
             voxel_object_manager.get_voxel_object_with_physics_context_mut(voxel_object_id)
         else {
@@ -446,8 +456,9 @@ pub fn apply_absorption<C>(
             let Some(sphere_to_world_transform) = &entity.sphere_to_world_transform else {
                 continue;
             };
+            let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity.entity_id);
             let Some(tracking_absorbing_sphere) =
-                voxel_absorption_manager.get_absorbing_sphere_mut(entity.absorber_id)
+                voxel_absorption_manager.get_absorbing_sphere_mut(absorber_id)
             else {
                 continue;
             };
@@ -464,8 +475,9 @@ pub fn apply_absorption<C>(
             let Some(capsule_to_world_transform) = &entity.capsule_to_world_transform else {
                 continue;
             };
+            let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity.entity_id);
             let Some(tracking_absorbing_capsule) =
-                voxel_absorption_manager.get_absorbing_capsule_mut(entity.absorber_id)
+                voxel_absorption_manager.get_absorbing_capsule_mut(absorber_id)
             else {
                 continue;
             };
@@ -496,25 +508,31 @@ pub fn apply_absorption<C>(
                 context.on_empty_voxel_object_entity(entity_id);
             }
             if let Some(DynamicDisconnectedVoxelObject {
-                voxel_object,
+                voxel_object: new_voxel_object,
                 inertial_property_manager,
-                rigid_body,
+                rigid_body: new_rigid_body,
                 anchors,
             }) = disconnected_object
             {
-                let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+                let new_meshed_voxel_object = MeshedChunkedVoxelObject::create(new_voxel_object);
 
-                let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
+                let new_entity_id = entity_id_manager.provide_id();
+                let new_voxel_object_id = VoxelObjectID::from_entity_id(new_entity_id);
 
-                let rigid_body_id = rigid_body_manager.add_dynamic_rigid_body(rigid_body);
+                voxel_object_manager
+                    .add_voxel_object(new_voxel_object_id, new_meshed_voxel_object)
+                    .unwrap();
+
+                let new_rigid_body_id = rigid_body_manager.add_dynamic_rigid_body(new_rigid_body);
 
                 let physics_context = VoxelObjectPhysicsContext {
                     inertial_property_manager,
-                    rigid_body_id,
+                    rigid_body_id: new_rigid_body_id,
                 };
 
                 voxel_object_manager
-                    .add_physics_context_for_voxel_object(voxel_object_id, physics_context);
+                    .add_physics_context_for_voxel_object(new_voxel_object_id, physics_context)
+                    .unwrap();
 
                 // Update the anchors that have moved from the original object
                 // to the disconnected object
@@ -522,7 +540,7 @@ pub fn apply_absorption<C>(
                     anchor_manager.dynamic_mut().replace(
                         anchor_id,
                         DynamicRigidBodyAnchor {
-                            rigid_body_id,
+                            rigid_body_id: new_rigid_body_id,
                             point: point.compact(),
                         },
                     );
@@ -530,8 +548,8 @@ pub fn apply_absorption<C>(
 
                 context.on_new_disconnected_voxel_object_entity(
                     NewVoxelObjectEntity {
-                        voxel_object_id,
-                        rigid_body_id,
+                        entity_id: new_entity_id,
+                        rigid_body_id: new_rigid_body_id,
                     },
                     entity_id,
                 );

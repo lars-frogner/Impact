@@ -23,6 +23,7 @@ use impact::{
 };
 use impact_dev_ui::UserInterfaceConfig;
 use impact_voxel::{
+    HasVoxelObject,
     chunks::ChunkedVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
     mesh::MeshedChunkedVoxelObject,
@@ -77,12 +78,13 @@ impl App {
             self.user_interface.editor_mut(),
         );
 
-        let voxel_object_id = self.engine().add_voxel_object(voxel_object);
+        self.engine()
+            .add_voxel_object(OBJECT_ENTITY_ID, voxel_object)?;
 
         self.engine().create_entity_with_id(
             OBJECT_ENTITY_ID,
             (
-                &voxel_object_id,
+                &HasVoxelObject,
                 &model_transform,
                 &ReferenceFrame::unoriented([0.0; 3].into()),
             ),
@@ -99,10 +101,7 @@ impl App {
                 *model_transform = new_model_transform;
                 Ok(())
             })?;
-            engine.with_component(OBJECT_ENTITY_ID, |voxel_object_id| {
-                engine.replace_voxel_object(*voxel_object_id, voxel_object);
-                Ok(())
-            })?;
+            engine.replace_voxel_object(OBJECT_ENTITY_ID, voxel_object);
         }
         Ok(())
     }

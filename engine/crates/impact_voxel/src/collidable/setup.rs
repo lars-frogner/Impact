@@ -1,10 +1,8 @@
 //! Setup of voxel collidables.
 
-use crate::{
-    VoxelObjectID,
-    collidable::{CollisionWorld, LocalCollidable, LocalVoxelObjectCollidable},
-};
+use crate::collidable::{CollisionWorld, LocalCollidable, LocalVoxelObjectCollidable};
 use bytemuck::{Pod, Zeroable};
+use impact_id::EntityID;
 use impact_math::vector::Vector3C;
 use impact_physics::{
     collision::{CollidableID, CollidableKind},
@@ -54,7 +52,7 @@ impl VoxelCollidable {
 
 pub fn setup_voxel_collidable(
     collision_world: &mut CollisionWorld,
-    object_id: VoxelObjectID,
+    entity_id: EntityID,
     rigid_body_id: TypedRigidBodyID,
     origin_offset: Vector3C,
     collidable: &VoxelCollidable,
@@ -63,7 +61,7 @@ pub fn setup_voxel_collidable(
         rigid_body_id,
         collidable.kind(),
         LocalCollidable::VoxelObject(LocalVoxelObjectCollidable {
-            object_id,
+            entity_id,
             response_params: *collidable.response_params(),
             origin_offset,
         }),

@@ -1,7 +1,7 @@
 //! ECS systems for voxel object collidables.
 
 use crate::{
-    VoxelObjectID,
+    HasVoxelObject,
     collidable::{CollisionWorld, LocalCollidable},
 };
 use impact_ecs::{query, world::World as ECSWorld};
@@ -18,6 +18,6 @@ pub fn sync_voxel_object_collidables(ecs_world: &ECSWorld, collision_world: &mut
                 collidable.origin_offset = model_transform.offset;
             }
         },
-        [VoxelObjectID]
+        [HasVoxelObject]
     );
 }
