@@ -1,10 +1,10 @@
 //! Scene containing data to render.
 
 use crate::lock_order::OrderedRwLock;
+use impact_camera::{CameraContext, CameraManager};
 use impact_id::EntityIDManager;
 use impact_light::LightManager;
 use impact_scene::{
-    camera::{CameraContext, CameraManager},
     graph::{SceneGraph, SceneGroupID},
     model::{ModelInstanceManager, ModelInstanceManagerState},
     skybox::Skybox,

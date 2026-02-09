@@ -4,57 +4,18 @@
 mod macros;
 
 pub mod gpu_resource;
+pub mod projection;
 pub mod setup;
 
-use approx::assert_abs_diff_ne;
+use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::{
-    Frustum,
-    projection::{OrthographicTransform, PerspectiveTransform},
-};
+use gpu_resource::CameraGPUResource;
+use impact_containers::HashMap;
+use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use impact_id::define_entity_id_newtype;
-use impact_math::{
-    angle::{Angle, Radians},
-    bounds::{Bounds, UpperExclusiveBounds},
-    transform::Projective3,
-};
+use impact_math::{point::Point3, transform::Isometry3};
+use projection::CameraProjection;
 use roc_integration::roc;
-use std::fmt::Debug;
-
-/// Represents a 3D camera.
-pub trait Camera: Debug + Send + Sync + 'static {
-    /// Returns the projection transform used by the camera.
-    fn projection_transform(&self) -> &Projective3;
-
-    /// Returns the vertical field of view angle in radians.
-    fn vertical_field_of_view(&self) -> Radians;
-
-    /// Returns the near distance of the camera.
-    fn near_distance(&self) -> f32;
-
-    /// Returns the far distance of the camera.
-    fn far_distance(&self) -> f32;
-
-    /// Returns the frustum representing the view volume of the
-    /// camera.
-    fn view_frustum(&self) -> &Frustum;
-
-    /// Returns the ratio of width to height of the camera's view plane.
-    fn aspect_ratio(&self) -> f32;
-
-    /// Returns the height of the field of view at the given view distance.
-    fn view_height_at_distance(&self, distance: f32) -> f32;
-
-    /// Sets the ratio of width to height of the camera's view plane.
-    ///
-    /// # Panics
-    /// If `aspect_ratio` is zero.
-    fn set_aspect_ratio(&mut self, aspect_ratio: f32);
-
-    /// Version number to allow callers to know whether the projection transform
-    /// changed since they last checked it.
-    fn projection_transform_version(&self) -> u64;
-}
 
 define_entity_id_newtype! {
     /// Identifier for a camera.
@@ -72,313 +33,222 @@ define_component_type! {
     pub struct HasCamera;
 }
 
-/// 3D camera using a perspective transformation.
+/// Manages active and inactive cameras.
 #[derive(Debug)]
-pub struct PerspectiveCamera {
-    perspective_transform: PerspectiveTransform,
-    view_frustum: Frustum,
-    transform_version: u64,
+pub struct CameraManager {
+    inactive_cameras: HashMap<CameraID, Camera>,
+    active_camera: Option<Camera>,
+    context: CameraContext,
+    active_camera_version: u64,
 }
 
-/// 3D camera using an orthographic transformation.
-#[derive(Debug)]
-pub struct OrthographicCamera {
-    aspect_ratio: f32,
-    vertical_field_of_view: Radians,
-    near_and_far_distance: UpperExclusiveBounds<f32>,
-    orthographic_transform: OrthographicTransform,
-    view_frustum: Frustum,
-    transform_version: u64,
+/// Camera-external context required for creating a camera.
+#[derive(Clone, Debug)]
+pub struct CameraContext {
+    pub aspect_ratio: f32,
+    pub jitter_enabled: bool,
 }
 
-impl PerspectiveCamera {
-    /// Creates a new perspective camera.
-    ///
-    /// # Note
-    /// `aspect_ratio` is the ratio of width to height of the view plane.
-    ///
-    /// # Panics
-    /// If `aspect_ratio`, `vertical_field_of_view` or the near distance is
-    /// zero.
-    pub fn new<A: Angle>(
-        aspect_ratio: f32,
-        vertical_field_of_view: A,
-        near_and_far_distance: UpperExclusiveBounds<f32>,
-    ) -> Self {
-        let perspective_transform =
-            PerspectiveTransform::new(aspect_ratio, vertical_field_of_view, near_and_far_distance);
+/// A camera in a scene.
+#[derive(Debug)]
+pub struct Camera {
+    id: CameraID,
+    projection: Box<dyn CameraProjection>,
+    view_transform: Isometry3,
+    jitter_enabled: bool,
+}
 
-        let view_frustum = Frustum::from_transform(perspective_transform.as_projective());
-
+impl CameraManager {
+    /// Creates a new camera manager with no active camera.
+    pub fn new(context: CameraContext) -> Self {
         Self {
-            perspective_transform,
-            view_frustum,
-            transform_version: 0,
+            inactive_cameras: HashMap::default(),
+            active_camera: None,
+            context,
+            active_camera_version: 0,
         }
     }
 
-    /// Sets the vertical field of view angle.
+    /// Whether there is an active camera.
+    pub fn has_active_camera(&self) -> bool {
+        self.active_camera.is_some()
+    }
+
+    pub fn active_camera(&self) -> Option<&Camera> {
+        self.active_camera.as_ref()
+    }
+
+    pub fn active_camera_mut(&mut self) -> Option<&mut Camera> {
+        self.active_camera.as_mut()
+    }
+
+    pub fn camera_context(&self) -> &CameraContext {
+        &self.context
+    }
+
+    /// Returns the view transform of the active camera, or the identity
+    /// transform if there is no active camera.
+    pub fn active_view_transform(&self) -> Isometry3 {
+        self.active_camera()
+            .map(Camera::view_transform)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// Whether the active camera has the given ID.
+    pub fn active_camera_has_id(&self, camera_id: CameraID) -> bool {
+        self.active_camera()
+            .is_some_and(|camera| camera.id() == camera_id)
+    }
+
+    /// Adds a camera with the given ID and projection as the active camera.
+    pub fn add_active_camera(&mut self, camera_id: CameraID, projection: impl CameraProjection) {
+        self.clear_active_camera();
+
+        self.active_camera = Some(Camera::new(
+            camera_id,
+            projection,
+            self.context.jitter_enabled,
+        ));
+        self.active_camera_version = self.active_camera_version.wrapping_add(1);
+    }
+
+    /// Sets the given camera as active.
     ///
-    /// # Panics
-    /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle>(&mut self, fov: A) {
-        self.perspective_transform.set_vertical_field_of_view(fov);
-        self.update_frustum_and_increment_version();
+    /// # Errors
+    /// Returns an error if the camera is not present.
+    pub fn set_active_camera(&mut self, camera_id: CameraID) -> Result<()> {
+        self.clear_active_camera();
+
+        self.active_camera = Some(self.inactive_cameras.remove(&camera_id).ok_or_else(|| {
+            anyhow!(
+                "Tried to set missing camera with ID {:?} as active",
+                camera_id
+            )
+        })?);
+        self.active_camera_version = self.active_camera_version.wrapping_add(1);
+        Ok(())
     }
 
-    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<f32>) {
-        self.perspective_transform
-            .set_near_and_far_distance(near_and_far_distance);
-        self.update_frustum_and_increment_version();
-    }
-
-    fn update_frustum_and_increment_version(&mut self) {
-        self.view_frustum = Frustum::from_transform(self.perspective_transform.as_projective());
-        self.transform_version = self.transform_version.wrapping_add(1);
-    }
-}
-
-impl Camera for PerspectiveCamera {
-    fn projection_transform(&self) -> &Projective3 {
-        self.perspective_transform.as_projective()
-    }
-
-    fn vertical_field_of_view(&self) -> Radians {
-        self.perspective_transform.vertical_field_of_view()
-    }
-
-    fn near_distance(&self) -> f32 {
-        self.perspective_transform.near_distance()
-    }
-
-    fn far_distance(&self) -> f32 {
-        self.perspective_transform.far_distance()
-    }
-
-    fn view_frustum(&self) -> &Frustum {
-        &self.view_frustum
-    }
-
-    fn aspect_ratio(&self) -> f32 {
-        self.perspective_transform.aspect_ratio()
-    }
-
-    fn view_height_at_distance(&self, distance: f32) -> f32 {
-        2.0 * distance * f32::tan(0.5 * self.vertical_field_of_view().radians())
-    }
-
-    fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
-        self.perspective_transform.set_aspect_ratio(aspect_ratio);
-        self.update_frustum_and_increment_version();
-    }
-
-    fn projection_transform_version(&self) -> u64 {
-        self.transform_version
-    }
-}
-
-impl OrthographicCamera {
-    /// Creates a new orthographic camera.
-    ///
-    /// # Note
-    /// `aspect_ratio` is the ratio of width to height of the view plane.
-    ///
-    /// # Panics
-    /// If `aspect_ratio` or `vertical_field_of_view` is zero.
-    pub fn new<A: Angle>(
-        aspect_ratio: f32,
-        vertical_field_of_view: A,
-        near_and_far_distance: UpperExclusiveBounds<f32>,
-    ) -> Self {
-        let orthographic_transform = OrthographicTransform::with_field_of_view(
-            aspect_ratio,
-            vertical_field_of_view,
-            near_and_far_distance.clone(),
-        );
-
-        let view_frustum = Frustum::from_transform(orthographic_transform.as_projective());
-
-        Self {
-            aspect_ratio,
-            vertical_field_of_view: vertical_field_of_view.as_radians(),
-            near_and_far_distance,
-            orthographic_transform,
-            view_frustum,
-            transform_version: 0,
+    /// Makes no camera active.
+    pub fn clear_active_camera(&mut self) {
+        if let Some(camera) = self.active_camera.take() {
+            self.inactive_cameras.insert(camera.id(), camera);
         }
     }
 
-    /// Sets the vertical field of view angle.
+    /// Removes all cameras.
+    pub fn remove_all_cameras(&mut self) {
+        self.clear_active_camera();
+        self.inactive_cameras.clear();
+    }
+
+    /// Sets the ratio of width to height of the camera's view plane.
     ///
     /// # Panics
-    /// If `fov` is zero.
-    pub fn set_vertical_field_of_view<A: Angle>(&mut self, fov: A) {
-        let fov = fov.as_radians();
-        assert_abs_diff_ne!(fov, Radians::zero());
-        self.vertical_field_of_view = fov;
-        self.update_projection_transform_and_frustum();
+    /// If `aspect_ratio` is zero.
+    pub fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
+        if let Some(camera) = &mut self.active_camera {
+            camera.set_aspect_ratio(aspect_ratio);
+        }
+        for camera in self.inactive_cameras.values_mut() {
+            camera.set_aspect_ratio(aspect_ratio);
+        }
+        self.context.aspect_ratio = aspect_ratio;
     }
 
-    pub fn set_near_and_far_distance(&mut self, near_and_far_distance: UpperExclusiveBounds<f32>) {
-        self.near_and_far_distance = near_and_far_distance;
-        self.update_projection_transform_and_frustum();
+    /// Sets whether jittering is enabled for the cameras.
+    pub fn set_jitter_enabled(&mut self, jitter_enabled: bool) {
+        if let Some(camera) = &mut self.active_camera {
+            camera.set_jitter_enabled(jitter_enabled);
+        }
+        for camera in self.inactive_cameras.values_mut() {
+            camera.set_jitter_enabled(jitter_enabled);
+        }
+        self.context.jitter_enabled = jitter_enabled;
     }
 
-    fn update_projection_transform_and_frustum(&mut self) {
-        self.orthographic_transform = OrthographicTransform::with_field_of_view(
-            self.aspect_ratio,
-            self.vertical_field_of_view,
-            self.near_and_far_distance.clone(),
-        );
-        self.view_frustum = Frustum::from_transform(self.orthographic_transform.as_projective());
-        self.transform_version = self.transform_version.wrapping_add(1);
+    /// Performs any required updates for keeping the camera GPU resources in
+    /// sync with the camera manager.
+    pub fn sync_gpu_resources(
+        &self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        bind_group_layout_registry: &BindGroupLayoutRegistry,
+        camera_gpu_resources: &mut Option<CameraGPUResource>,
+    ) {
+        if let Some(camera) = self.active_camera() {
+            if let Some(camera_gpu_resources) = camera_gpu_resources {
+                camera_gpu_resources.sync_with_camera_manager(
+                    graphics_device,
+                    staging_belt,
+                    command_encoder,
+                    camera,
+                    self.active_camera_version,
+                );
+            } else {
+                *camera_gpu_resources = Some(CameraGPUResource::for_camera(
+                    graphics_device,
+                    bind_group_layout_registry,
+                    camera,
+                    self.active_camera_version,
+                ));
+            }
+        } else {
+            camera_gpu_resources.take();
+        }
     }
 }
 
-impl Camera for OrthographicCamera {
-    fn projection_transform(&self) -> &Projective3 {
-        self.orthographic_transform.as_projective()
+impl Camera {
+    /// Creates a new [`SceneCamera`] with the given ID and projection.
+    pub fn new(id: CameraID, projection: impl CameraProjection, jitter_enabled: bool) -> Self {
+        Self {
+            id,
+            projection: Box::new(projection),
+            view_transform: Isometry3::identity(),
+            jitter_enabled,
+        }
     }
 
-    fn vertical_field_of_view(&self) -> Radians {
-        self.vertical_field_of_view
+    /// Returns the ID of the camera.
+    pub fn id(&self) -> CameraID {
+        self.id
     }
 
-    fn near_distance(&self) -> f32 {
-        self.near_and_far_distance.lower()
+    /// Returns a reference to the camera's [`CameraProjection`].
+    pub fn projection(&self) -> &dyn CameraProjection {
+        self.projection.as_ref()
     }
 
-    fn far_distance(&self) -> f32 {
-        self.near_and_far_distance.upper()
+    /// Returns a reference to the camera's view transform.
+    pub fn view_transform(&self) -> &Isometry3 {
+        &self.view_transform
     }
 
-    fn view_frustum(&self) -> &Frustum {
-        &self.view_frustum
+    /// Returns whether jittering is enabled for the camera.
+    pub fn jitter_enabled(&self) -> bool {
+        self.jitter_enabled
     }
 
-    fn aspect_ratio(&self) -> f32 {
-        self.aspect_ratio
+    /// Computes the world-space position of the camera based on the current
+    /// view transform.
+    pub fn compute_world_space_position(&self) -> Point3 {
+        let camera_to_world = self.view_transform.inverted();
+        Point3::from(*camera_to_world.translation())
     }
 
-    fn view_height_at_distance(&self, _distance: f32) -> f32 {
-        2.0 * self.near_and_far_distance.upper()
-            * f32::tan(0.5 * self.vertical_field_of_view().radians())
+    /// Sets the transform from world space to camera space.
+    pub fn set_view_transform(&mut self, view_transform: Isometry3) {
+        self.view_transform = view_transform;
     }
 
     fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
-        assert_abs_diff_ne!(aspect_ratio, 0.0);
-        self.aspect_ratio = aspect_ratio;
-        self.update_projection_transform_and_frustum();
+        self.projection.set_aspect_ratio(aspect_ratio);
     }
 
-    fn projection_transform_version(&self) -> u64 {
-        self.transform_version
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use approx::assert_abs_diff_eq;
-    use impact_math::angle::Degrees;
-
-    #[test]
-    #[should_panic]
-    fn constructing_perspective_camera_with_zero_aspect_ratio() {
-        PerspectiveCamera::new(0.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-    }
-
-    #[test]
-    #[should_panic]
-    fn constructing_perspective_camera_with_zero_vertical_fov() {
-        PerspectiveCamera::new(1.0, Degrees(0.0), UpperExclusiveBounds::new(0.1, 100.0));
-    }
-
-    #[test]
-    fn setting_perspective_camera_aspect_ratio_works() {
-        let mut camera =
-            PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert_abs_diff_eq!(camera.aspect_ratio(), 1.0);
-        assert_eq!(camera.projection_transform_version(), 0);
-
-        camera.set_aspect_ratio(0.5);
-        assert_abs_diff_eq!(camera.aspect_ratio(), 0.5);
-        assert_eq!(camera.projection_transform_version(), 1);
-    }
-
-    #[test]
-    fn setting_perspective_camera_vertical_field_of_view_works() {
-        let mut camera =
-            PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(45.0));
-        assert_eq!(camera.projection_transform_version(), 0);
-
-        camera.set_vertical_field_of_view(Degrees(90.0));
-        assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(90.0));
-        assert_eq!(camera.projection_transform_version(), 1);
-    }
-
-    #[test]
-    fn setting_perspective_camera_near_and_far_distance_works() {
-        let mut camera =
-            PerspectiveCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert_abs_diff_eq!(camera.near_distance(), 0.1);
-        assert_abs_diff_eq!(camera.far_distance(), 100.0, epsilon = 1e-4);
-        assert_eq!(camera.projection_transform_version(), 0);
-
-        camera.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
-        assert_abs_diff_eq!(camera.near_distance(), 42.0);
-        assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-4);
-        assert_eq!(camera.projection_transform_version(), 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn constructing_orthographic_camera_with_zero_aspect_ratio() {
-        OrthographicCamera::new(0.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-    }
-
-    #[test]
-    #[should_panic]
-    fn constructing_orthographic_camera_with_zero_vertical_fov() {
-        OrthographicCamera::new(1.0, Degrees(0.0), UpperExclusiveBounds::new(0.1, 100.0));
-    }
-
-    #[test]
-    fn setting_orthographic_camera_aspect_ratio_works() {
-        let mut camera =
-            OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert_abs_diff_eq!(camera.aspect_ratio(), 1.0);
-        assert_eq!(camera.projection_transform_version(), 0);
-
-        camera.set_aspect_ratio(0.5);
-        assert_abs_diff_eq!(camera.aspect_ratio(), 0.5);
-        assert_eq!(camera.projection_transform_version(), 1);
-    }
-
-    #[test]
-    fn setting_orthographic_camera_vertical_field_of_view_works() {
-        let mut camera =
-            OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(45.0));
-        assert_eq!(camera.projection_transform_version(), 0);
-
-        camera.set_vertical_field_of_view(Degrees(90.0));
-        assert_abs_diff_eq!(camera.vertical_field_of_view(), Degrees(90.0));
-        assert_eq!(camera.projection_transform_version(), 1);
-    }
-
-    #[test]
-    fn setting_orthographic_camera_near_and_far_distance_works() {
-        let mut camera =
-            OrthographicCamera::new(1.0, Degrees(45.0), UpperExclusiveBounds::new(0.1, 100.0));
-        assert_abs_diff_eq!(camera.near_distance(), 0.1);
-        assert_abs_diff_eq!(camera.far_distance(), 100.0, epsilon = 1e-7);
-        assert_eq!(camera.projection_transform_version(), 0);
-
-        camera.set_near_and_far_distance(UpperExclusiveBounds::new(42.0, 256.0));
-        assert_abs_diff_eq!(camera.near_distance(), 42.0);
-        assert_abs_diff_eq!(camera.far_distance(), 256.0, epsilon = 1e-7);
-        assert_eq!(camera.projection_transform_version(), 1);
+    fn set_jitter_enabled(&mut self, jitter_enabled: bool) {
+        self.jitter_enabled = jitter_enabled;
     }
 }

@@ -1,6 +1,5 @@
 //! Buffering of camera data for rendering.
 
-use crate::Camera;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::Frustum;
 use impact_gpu::{
@@ -20,17 +19,7 @@ use impact_math::{
 };
 use std::{borrow::Cow, sync::LazyLock};
 
-/// Represents a camera that can buffered in a GPU buffer.
-pub trait BufferableCamera {
-    /// Returns a reference to the underlying [`Camera`].
-    fn camera(&self) -> &dyn Camera;
-
-    /// Returns a reference to the camera's view transform.
-    fn view_transform(&self) -> &Isometry3;
-
-    /// Returns whether jittering is enabled for the camera.
-    fn jitter_enabled(&self) -> bool;
-}
+use crate::Camera;
 
 /// Length of the sequence of jitter offsets to apply to the projection for
 /// temporal anti-aliasing.
@@ -95,11 +84,11 @@ impl CameraGPUResource {
     pub fn for_camera(
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        camera: &impl BufferableCamera,
+        camera: &Camera,
         camera_version: u64,
     ) -> Self {
         let view_transform = *camera.view_transform();
-        let view_frustum = camera.camera().view_frustum().clone();
+        let view_frustum = camera.projection().view_frustum().clone();
 
         let projection_uniform = CameraProjectionUniform::new(camera);
 
@@ -125,7 +114,7 @@ impl CameraGPUResource {
             bind_group,
             jitter_enabled: camera.jitter_enabled(),
             camera_version,
-            projection_version: camera.camera().projection_transform_version(),
+            projection_version: camera.projection().transform_version(),
         }
     }
 
@@ -160,21 +149,21 @@ impl CameraGPUResource {
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
-        camera: &impl BufferableCamera,
+        camera: &Camera,
         camera_version: u64,
     ) {
         self.view_transform = *camera.view_transform();
 
         if self.camera_version != camera_version
-            || self.projection_version != camera.camera().projection_transform_version()
+            || self.projection_version != camera.projection().transform_version()
             || camera.jitter_enabled() != self.jitter_enabled
         {
-            self.view_frustum = camera.camera().view_frustum().clone();
+            self.view_frustum = camera.projection().view_frustum().clone();
             self.sync_gpu_buffer(graphics_device, staging_belt, command_encoder, camera);
             self.jitter_enabled = camera.jitter_enabled();
 
             self.camera_version = camera_version;
-            self.projection_version = camera.camera().projection_transform_version();
+            self.projection_version = camera.projection().transform_version();
         }
     }
 
@@ -222,7 +211,7 @@ impl CameraGPUResource {
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
-        camera: &impl BufferableCamera,
+        camera: &Camera,
     ) {
         let projection_uniform = CameraProjectionUniform::new(camera);
         self.projection_uniform_gpu_buffer
@@ -247,11 +236,11 @@ impl CameraProjectionUniform {
         JITTER_COUNT
     }
 
-    fn new(camera: &impl BufferableCamera) -> Self {
-        let transform = camera.camera().projection_transform().compact();
+    fn new(camera: &Camera) -> Self {
+        let transform = camera.projection().transform().compact();
 
         let frustum_far_plane_corners =
-            Self::compute_far_plane_corners(camera.camera().view_frustum());
+            Self::compute_far_plane_corners(camera.projection().view_frustum());
 
         // Important: Don't use camera.far_distance() for this, or reconstructed
         // positions will be off because the corners may not be exactly at the

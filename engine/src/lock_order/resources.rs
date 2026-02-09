@@ -36,7 +36,7 @@ declare_lockable_resource!(crate::scene::Scene, 200);
 
 // Scene components (must be acquired after Scene itself)
 declare_lockable_resource!(Option<impact_scene::skybox::Skybox>, 210);
-declare_lockable_resource!(impact_scene::camera::CameraManager, 220);
+declare_lockable_resource!(impact_camera::CameraManager, 220);
 declare_lockable_resource!(impact_light::LightManager, 230);
 declare_lockable_resource!(impact_voxel::VoxelManager, 240);
 declare_lockable_resource!(impact_scene::model::ModelInstanceManager, 250);

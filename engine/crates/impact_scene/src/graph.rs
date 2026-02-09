@@ -2,14 +2,13 @@
 
 use crate::{
     SceneEntityFlags,
-    camera::SceneCamera,
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
-use impact_camera::CameraID;
+use impact_camera::{Camera, CameraID};
 use impact_containers::{HashMap, NoHashMap, hash_map::Entry, nohash_hasher};
 use impact_geometry::{Frustum, Sphere, SphereC, projection::CubemapFace};
 use impact_id::define_entity_id_newtype;
@@ -529,10 +528,10 @@ impl SceneGraph {
     /// # Warning
     /// Make sure to [`Self::update_all_group_to_root_transforms`] before calling
     /// this method if any group nodes have changed.
-    pub fn sync_camera_view_transform(&self, scene_camera: &mut SceneCamera) {
-        let camera_node = self.camera_nodes.node(scene_camera.id());
+    pub fn sync_camera_view_transform(&self, camera: &mut Camera) {
+        let camera_node = self.camera_nodes.node(camera.id());
         let view_transform = self.compute_view_transform(camera_node);
-        scene_camera.set_view_transform(view_transform);
+        camera.set_view_transform(view_transform);
     }
 
     /// Updates the bounding spheres of all nodes in the scene graph (excluding
@@ -642,15 +641,15 @@ impl SceneGraph {
         &self,
         material_registry: &MaterialRegistry,
         model_instance_manager: &mut ModelInstanceManager,
-        scene_camera: &SceneCamera,
+        camera: &Camera,
         current_frame_number: u32,
     ) where
         InstanceModelViewTransformWithPrevious: InstanceFeature,
     {
         let root_node = self.group_nodes.node(self.root_node_id());
 
-        let camera_space_view_frustum = scene_camera.camera().view_frustum();
-        let root_to_camera_transform = scene_camera.view_transform();
+        let camera_space_view_frustum = camera.projection().view_frustum();
+        let root_to_camera_transform = camera.view_transform();
 
         for &scene_group_id in root_node.child_scene_group_ids() {
             let group_node = self.group_nodes.node(scene_group_id);
@@ -892,13 +891,13 @@ impl SceneGraph {
         &self,
         light_manager: &mut LightManager,
         model_instance_manager: &mut ModelInstanceManager,
-        scene_camera: &SceneCamera,
+        camera: &Camera,
         shadow_mapping_enabled: bool,
     ) {
-        let camera_space_view_frustum = scene_camera.camera().view_frustum();
+        let camera_space_view_frustum = camera.projection().view_frustum();
         let camera_space_view_frustum_aabb = camera_space_view_frustum.compute_aabb();
 
-        let view_transform = scene_camera.view_transform();
+        let view_transform = camera.view_transform();
 
         let root_node_id = self.root_node_id();
         let root_node = self.group_nodes.node(root_node_id);
@@ -911,7 +910,7 @@ impl SceneGraph {
 
             // Anything beyound the far distance will not be visible, so there
             // is no need to have the bounding sphere radius exceed it
-            camera_space_bounding_sphere.bound_radius(scene_camera.camera().far_distance());
+            camera_space_bounding_sphere.bound_radius(camera.projection().far_distance());
 
             for (light_id, omnidirectional_light) in
                 light_manager.shadowable_omnidirectional_lights_with_ids_mut()
@@ -1091,11 +1090,11 @@ impl SceneGraph {
         &self,
         light_manager: &mut LightManager,
         model_instance_manager: &mut ModelInstanceManager,
-        scene_camera: &SceneCamera,
+        camera: &Camera,
         shadow_mapping_enabled: bool,
     ) {
-        let camera_space_view_frustum = scene_camera.camera().view_frustum();
-        let view_transform = scene_camera.view_transform();
+        let camera_space_view_frustum = camera.projection().view_frustum();
+        let view_transform = camera.view_transform();
 
         let root_node_id = self.root_node_id();
         let root_node = self.group_nodes.node(root_node_id);

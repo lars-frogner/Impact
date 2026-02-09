@@ -589,9 +589,9 @@ define_task!(
         instrument_engine_task!("Synchronizing scene camera view transform", engine, {
             let scene = engine.scene().oread();
             let mut camera_manager = scene.camera_manager().owrite();
-            if let Some(scene_camera) = camera_manager.active_camera_mut() {
+            if let Some(camera) = camera_manager.active_camera_mut() {
                 let scene_graph = scene.scene_graph().oread();
-                scene_graph.sync_camera_view_transform(scene_camera);
+                scene_graph.sync_camera_view_transform(camera);
             }
             Ok(())
         })
@@ -622,14 +622,14 @@ define_task!(
             let resource_manager = engine.resource_manager().oread();
             let scene = engine.scene().oread();
             let camera_manager = scene.camera_manager().oread();
-            if let Some(scene_camera) = camera_manager.active_camera() {
+            if let Some(camera) = camera_manager.active_camera() {
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
                 let scene_graph = scene.scene_graph().oread();
 
                 scene_graph.buffer_model_instances_for_rendering(
                     &resource_manager.materials,
                     &mut model_instance_manager,
-                    scene_camera,
+                    camera,
                     current_frame_number,
                 );
             }
@@ -705,7 +705,7 @@ define_task!(
         instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
             let scene = engine.scene().oread();
             let camera_manager = scene.camera_manager().oread();
-            if let Some(scene_camera) = camera_manager.active_camera() {
+            if let Some(camera) = camera_manager.active_camera() {
                 let mut light_manager = scene.light_manager().owrite();
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
                 let scene_graph = scene.scene_graph().oread();
@@ -715,7 +715,7 @@ define_task!(
                     .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut light_manager,
                         &mut model_instance_manager,
-                        scene_camera,
+                        camera,
                         shadow_mapping_enabled,
                     );
             }
@@ -746,7 +746,7 @@ define_task!(
         instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
             let scene = engine.scene().oread();
             let camera_manager = scene.camera_manager().oread();
-            if let Some(scene_camera) = camera_manager.active_camera() {
+            if let Some(camera) = camera_manager.active_camera() {
                 let mut light_manager = scene.light_manager().owrite();
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
                 let scene_graph = scene.scene_graph().oread();
@@ -756,7 +756,7 @@ define_task!(
                     .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut light_manager,
                         &mut model_instance_manager,
-                        scene_camera,
+                        camera,
                         shadow_mapping_enabled,
                     );
             }

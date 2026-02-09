@@ -101,7 +101,7 @@ impl Engine {
                 .camera_manager()
                 .oread()
                 .active_camera()?
-                .camera()
+                .projection()
                 .vertical_field_of_view(),
         )
     }
