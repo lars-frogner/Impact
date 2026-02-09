@@ -1,11 +1,13 @@
-# Hash: 9c5176c0faea1de8
-# Generated: 2026-02-09T11:49:37.207366954
-# Rust type: impact_scene::setup::Uncullable
+# Hash: 9c363a046b4e749f
+# Generated: 2026-02-09T13:08:19.650343097
+# Rust type: impact_camera::HasCamera
 # Type category: Component
 module [
-    Uncullable,
+    HasCamera,
     add,
     add_multiple,
+    component_id,
+    add_component_id,
     write_bytes,
     from_bytes,
 ]
@@ -14,30 +16,37 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## The entity should never be frustum culled in the [`SceneGraph`].
+## Marks that an entity has a camera identified by a [`CameraID`].
 ##
-## This is a [`SetupComponent`](impact_ecs::component::SetupComponent)
-## affecting the entity's initial `SceneEntityFlags` component. It is therefore
-## not kept after entity creation.
-Uncullable : {}
+## Use [`CameraID::from_entity_id`] to obtain the camera ID from the entity
+## ID.
+HasCamera : {}
 
-## Adds the [Uncullable] component to an entity's data.
+## Adds the [HasCamera] component to an entity's data.
 add : Entity.ComponentData -> Entity.ComponentData
 add = |entity_data|
     entity_data |> Entity.append_component(write_packet, {})
 
-## Adds the [Uncullable] component to each entity's data.
+## Adds the [HasCamera] component to each entity's data.
 add_multiple : Entity.MultiComponentData -> Entity.MultiComponentData
 add_multiple = |entity_data|
     res = entity_data
         |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(Same({}), Entity.multi_count(entity_data)))
     when res is
         Ok(res_data) -> res_data
-        Err(err) -> crash "unexpected error in Uncullable.add_multiple: ${Inspect.to_str(err)}"
+        Err(err) -> crash "unexpected error in HasCamera.add_multiple: ${Inspect.to_str(err)}"
 
-write_packet : List U8, Uncullable -> List U8
+## The ID of the [HasCamera] component.
+component_id = 15480732043136768062
+
+## Adds the ID of the [HasCamera] component to the component list.
+add_component_id : Entity.ComponentIds -> Entity.ComponentIds
+add_component_id = |component_ids|
+    component_ids |> Entity.append_component_id(component_id)
+
+write_packet : List U8, HasCamera -> List U8
 write_packet = |bytes, val|
-    type_id = 1207053739455656714
+    type_id = 15480732043136768062
     size = 0
     alignment = 1
     bytes
@@ -47,9 +56,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List Uncullable -> List U8
+write_multi_packet : List U8, List HasCamera -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 1207053739455656714
+    type_id = 15480732043136768062
     size = 0
     alignment = 1
     count = List.len(vals)
@@ -66,15 +75,15 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [Uncullable] into the binary representation
+## Serializes a value of [HasCamera] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, Uncullable -> List U8
+write_bytes : List U8, HasCamera -> List U8
 write_bytes = |bytes, _value|
     bytes
 
-## Deserializes a value of [Uncullable] from its bytes in the
+## Deserializes a value of [HasCamera] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result Uncullable _
+from_bytes : List U8 -> Result HasCamera _
 from_bytes = |_bytes|
     Ok({})
 

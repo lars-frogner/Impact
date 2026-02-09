@@ -10,8 +10,10 @@ arbitrary = ["dep:arbitrary", "impact_texture/arbitrary"]
 ecs = [
     "dep:inventory",
     "dep:impact_ecs",
+    "impact_camera/ecs",
     "impact_geometry/ecs",
     "impact_light/ecs",
+    "impact_model/ecs",
 ]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 

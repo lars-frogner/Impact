@@ -1,9 +1,8 @@
 //! Scene setup.
 
 use crate::{
-    SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
-    SceneGraphParentNodeHandle,
-    graph::{FeatureIDSet, ModelInstanceFlags, ModelInstanceNodeID, SceneGraph},
+    SceneEntityFlags,
+    graph::{FeatureIDSet, ModelInstanceFlags, SceneGraph, SceneGroupID},
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
@@ -11,41 +10,18 @@ use impact_id::EntityID;
 use impact_material::{MaterialID, MaterialRegistry};
 use impact_math::transform::{Isometry3C, Similarity3C};
 use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
-use impact_model::transform::{
-    InstanceModelLightTransform, InstanceModelViewTransformWithPrevious,
+use impact_model::{
+    ModelInstanceID,
+    transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
 use tinyvec::TinyVec;
-
-/// A parent entity.
-///
-/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
-/// purpose is to aid in constructing a `SceneGraphParentNodeHandle` component
-/// for an entity. It is therefore not kept after entity creation.
-#[cfg(feature = "ecs")]
-#[roc_integration::roc(parents = "Setup")]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
-pub struct SceneParent {
-    pub entity_id: EntityID,
-}
-
-/// The entity has a group node in the [`SceneGraph`].
-///
-/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
-/// purpose is to aid in constructing a `SceneGraphGroupNodeHandle` component
-/// for an entity. It is therefore not kept after entity creation.
-#[cfg(feature = "ecs")]
-#[roc_integration::roc(parents = "Setup")]
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
-pub struct SceneGraphGroup;
 
 /// Enables the property values of the entity's material to be modified
 /// independently.
 ///
-/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
-/// purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`
-/// component for an entity. It is therefore not kept after entity creation.
+/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent)
+/// affecting the entity's initial `SceneEntityFlags` component. It is therefore
+/// not kept after entity creation.
 #[cfg(feature = "ecs")]
 #[roc_integration::roc(parents = "Setup")]
 #[repr(transparent)]
@@ -54,50 +30,26 @@ pub struct HasIndependentMaterialValues;
 
 /// The entity should never be frustum culled in the [`SceneGraph`].
 ///
-/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
-/// purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`
-/// component for an entity. It is therefore not kept after entity creation.
+/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent)
+/// affecting the entity's initial `SceneEntityFlags` component. It is therefore
+/// not kept after entity creation.
 #[cfg(feature = "ecs")]
 #[roc_integration::roc(parents = "Setup")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
 pub struct Uncullable;
 
-#[cfg(feature = "ecs")]
-#[roc_integration::roc]
-impl SceneParent {
-    #[roc_integration::roc(body = "{ entity_id: parent }")]
-    pub fn new(parent: EntityID) -> Self {
-        Self { entity_id: parent }
-    }
-}
-
-#[cfg(feature = "ecs")]
-pub fn setup_scene_graph_parent_node(
-    parent_entity: impact_ecs::world::EntityEntry<'_>,
-) -> Result<SceneGraphParentNodeHandle> {
-    let parent_group_node = parent_entity
-        .get_component::<SceneGraphGroupNodeHandle>()
-        .ok_or_else(|| {
-            anyhow!(
-                "Missing group node component for parent entity with ID {}",
-                parent_entity.id()
-            )
-        })?;
-
-    Ok(SceneGraphParentNodeHandle::new(
-        parent_group_node.access().id,
-    ))
-}
-
 pub fn setup_scene_graph_group_node(
     scene_graph: &mut SceneGraph,
+    entity_id: EntityID,
     group_to_parent_transform: Isometry3C,
-    parent: Option<&SceneGraphParentNodeHandle>,
-) -> Result<SceneGraphGroupNodeHandle> {
-    let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
-    let node_id = scene_graph.create_group_node(parent_node_id, group_to_parent_transform)?;
-    Ok(SceneGraphGroupNodeHandle::new(node_id))
+    parent_entity_id: Option<EntityID>,
+) -> Result<()> {
+    let scene_group_id = SceneGroupID::from_entity_id(entity_id);
+    let parent_group_id =
+        parent_entity_id.map_or_else(|| scene_graph.root_node_id(), SceneGroupID::from_entity_id);
+
+    scene_graph.create_group_node(parent_group_id, scene_group_id, group_to_parent_transform)
 }
 
 pub fn setup_scene_graph_model_instance_node(
@@ -109,11 +61,11 @@ pub fn setup_scene_graph_model_instance_node(
     model_to_parent_transform: Similarity3C,
     mesh_id: TriangleMeshID,
     material_id: MaterialID,
-    parent: Option<&SceneGraphParentNodeHandle>,
+    parent_entity_id: Option<EntityID>,
     flags: Option<&SceneEntityFlags>,
     has_independent_material_values: bool,
     uncullable: bool,
-) -> Result<(SceneGraphModelInstanceNodeHandle, SceneEntityFlags)> {
+) -> Result<SceneEntityFlags> {
     let flags = flags.copied().unwrap_or_default();
 
     let model_id = ModelID::for_triangle_mesh_and_material(mesh_id, material_id);
@@ -178,8 +130,9 @@ pub fn setup_scene_graph_model_instance_node(
 
     model_instance_manager.register_instance(model_id, &feature_type_ids);
 
-    let model_instance_node_id = ModelInstanceNodeID::from_entity_id(entity_id);
-    let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
+    let model_instance_id = ModelInstanceID::from_entity_id(entity_id);
+    let parent_group_id =
+        parent_entity_id.map_or_else(|| scene_graph.root_node_id(), SceneGroupID::from_entity_id);
 
     let mut model_instance_flags = flags.into();
 
@@ -188,8 +141,8 @@ pub fn setup_scene_graph_model_instance_node(
     }
 
     scene_graph.create_model_instance_node(
-        parent_node_id,
-        model_instance_node_id,
+        parent_group_id,
+        model_instance_id,
         model_to_parent_transform,
         model_id,
         bounding_sphere.map(|sphere| sphere.compact()),
@@ -198,18 +151,17 @@ pub fn setup_scene_graph_model_instance_node(
         model_instance_flags,
     )?;
 
-    Ok((
-        SceneGraphModelInstanceNodeHandle::new(model_instance_node_id),
-        flags,
-    ))
+    Ok(flags)
 }
 
 pub fn remove_scene_graph_model_instance_node(
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
-    model_instance_node: &SceneGraphModelInstanceNodeHandle,
+    entity_id: EntityID,
 ) {
-    if let Some(model_id) = scene_graph.remove_model_instance_node(model_instance_node.id) {
+    if let Some(model_id) =
+        scene_graph.remove_model_instance_node(ModelInstanceID::from_entity_id(entity_id))
+    {
         model_instance_manager.unregister_instance(&model_id);
     }
 }

@@ -4,11 +4,12 @@ use bytemuck::{Pod, Zeroable};
 use impact::{
     engine::Engine,
     impact_ecs::{Component, query},
+    impact_id::EntityID,
     impact_light::{
         LuminousIntensity, OmnidirectionalEmission, ShadowableOmnidirectionalEmission, photometry,
     },
     impact_math::consts::{f32::PI, physics::f32::STEFAN_BOLTZMANN_CONSTANT},
-    impact_scene::SceneGraphModelInstanceNodeHandle,
+    impact_model::HasModel,
 };
 use roc_integration::roc;
 
@@ -66,37 +67,38 @@ pub fn update_black_bodies(engine: &Engine) {
 
     query!(
         world,
-        |black_body: &BlackBody,
-         model_instance: &SceneGraphModelInstanceNodeHandle,
-         emission: &mut OmnidirectionalEmission| {
+        |entity_id: EntityID, black_body: &BlackBody, emission: &mut OmnidirectionalEmission| {
             update_black_body_material_and_light(
                 engine,
                 black_body,
-                model_instance,
+                entity_id,
                 Some(&mut emission.luminous_intensity),
             );
-        }
+        },
+        [HasModel]
     );
 
     query!(
         world,
-        |black_body: &BlackBody,
-         model_instance: &SceneGraphModelInstanceNodeHandle,
+        |entity_id: EntityID,
+         black_body: &BlackBody,
          emission: &mut ShadowableOmnidirectionalEmission| {
             update_black_body_material_and_light(
                 engine,
                 black_body,
-                model_instance,
+                entity_id,
                 Some(&mut emission.luminous_intensity),
             );
-        }
+        },
+        [HasModel]
     );
 
     query!(
         world,
-        |black_body: &BlackBody, model_instance: &SceneGraphModelInstanceNodeHandle| {
-            update_black_body_material_and_light(engine, black_body, model_instance, None);
+        |entity_id: EntityID, black_body: &BlackBody| {
+            update_black_body_material_and_light(engine, black_body, entity_id, None);
         },
+        [HasModel],
         ![OmnidirectionalEmission, ShadowableOmnidirectionalEmission]
     );
 }
@@ -121,7 +123,7 @@ fn update_black_body_temperature(black_body: &mut BlackBody, time_step_duration:
 fn update_black_body_material_and_light(
     engine: &Engine,
     black_body: &BlackBody,
-    model_instance: &SceneGraphModelInstanceNodeHandle,
+    entity_id: EntityID,
     luminous_intensity: Option<&mut LuminousIntensity>,
 ) {
     let rgb_luminance = photometry::compute_black_body_luminance(black_body.temperature);
@@ -133,7 +135,7 @@ fn update_black_body_material_and_light(
 
     let color = rgb_luminance / total_luminance;
 
-    let _ = engine.with_uniform_physical_material_property_values_mut(model_instance.id, |props| {
+    let _ = engine.with_uniform_physical_material_property_values_mut(entity_id, |props| {
         props.color = color;
         props.emissive_luminance = total_luminance;
         Ok(())

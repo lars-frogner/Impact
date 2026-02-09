@@ -1,9 +1,8 @@
 //! Cameras in a scene.
 
-use crate::graph::CameraNodeID;
 use anyhow::{Result, anyhow};
 use impact_camera::{
-    Camera,
+    Camera, CameraID,
     gpu_resource::{BufferableCamera, CameraGPUResource},
 };
 use impact_containers::HashMap;
@@ -13,7 +12,7 @@ use impact_math::{point::Point3, transform::Isometry3};
 /// Manager for the cameras in a scene.
 #[derive(Debug)]
 pub struct CameraManager {
-    inactive_cameras: HashMap<CameraNodeID, SceneCamera>,
+    inactive_cameras: HashMap<CameraID, SceneCamera>,
     active_camera: Option<SceneCamera>,
     context: CameraContext,
     active_camera_version: u64,
@@ -26,13 +25,12 @@ pub struct CameraContext {
     pub jitter_enabled: bool,
 }
 
-/// Represents a [`Camera`] that has a camera node in a
-/// [`SceneGraph`](crate::graph::SceneGraph).
+/// Represents a [`Camera`] in a scene.
 #[derive(Debug)]
 pub struct SceneCamera {
+    id: CameraID,
     camera: Box<dyn Camera>,
     view_transform: Isometry3,
-    scene_graph_node_id: CameraNodeID,
     jitter_enabled: bool,
 }
 
@@ -73,20 +71,19 @@ impl CameraManager {
             .unwrap_or_default()
     }
 
-    /// Whether the active camera has the camera node with the give ID in the
-    /// scene graph.
-    pub fn active_camera_has_node(&self, scene_graph_node_id: CameraNodeID) -> bool {
+    /// Whether the active camera has the given ID.
+    pub fn active_camera_has_id(&self, camera_id: CameraID) -> bool {
         self.active_camera()
-            .is_some_and(|camera| camera.scene_graph_node_id() == scene_graph_node_id)
+            .is_some_and(|camera| camera.id() == camera_id)
     }
 
     /// Adds the given camera to the manager and sets it as active.
-    pub fn add_active_camera(&mut self, camera: impl Camera, scene_graph_node_id: CameraNodeID) {
+    pub fn add_active_camera(&mut self, camera: impl Camera, camera_id: CameraID) {
         self.clear_active_camera();
 
         self.active_camera = Some(SceneCamera::new(
+            camera_id,
             camera,
-            scene_graph_node_id,
             self.context.jitter_enabled,
         ));
         self.active_camera_version = self.active_camera_version.wrapping_add(1);
@@ -96,19 +93,15 @@ impl CameraManager {
     ///
     /// # Errors
     /// Returns an error if the camera is not present.
-    pub fn set_active_camera(&mut self, scene_graph_node_id: CameraNodeID) -> Result<()> {
+    pub fn set_active_camera(&mut self, camera_id: CameraID) -> Result<()> {
         self.clear_active_camera();
 
-        self.active_camera = Some(
-            self.inactive_cameras
-                .remove(&scene_graph_node_id)
-                .ok_or_else(|| {
-                    anyhow!(
-                        "Tried to set missing camera with node ID {:?} as active",
-                        scene_graph_node_id
-                    )
-                })?,
-        );
+        self.active_camera = Some(self.inactive_cameras.remove(&camera_id).ok_or_else(|| {
+            anyhow!(
+                "Tried to set missing camera with ID {:?} as active",
+                camera_id
+            )
+        })?);
         self.active_camera_version = self.active_camera_version.wrapping_add(1);
         Ok(())
     }
@@ -116,8 +109,7 @@ impl CameraManager {
     /// Makes no camera active.
     pub fn clear_active_camera(&mut self) {
         if let Some(camera) = self.active_camera.take() {
-            self.inactive_cameras
-                .insert(camera.scene_graph_node_id(), camera);
+            self.inactive_cameras.insert(camera.id(), camera);
         }
     }
 
@@ -186,20 +178,20 @@ impl CameraManager {
 }
 
 impl SceneCamera {
-    /// Creates a new [`SceneCamera`] representing the given [`Camera`] in the
-    /// camera node with the given ID in the
-    /// [`SceneGraph`](crate::graph::SceneGraph).
-    pub fn new(
-        camera: impl Camera,
-        scene_graph_node_id: CameraNodeID,
-        jitter_enabled: bool,
-    ) -> Self {
+    /// Creates a new [`SceneCamera`] with the given ID representing the given
+    /// [`Camera`].
+    pub fn new(id: CameraID, camera: impl Camera, jitter_enabled: bool) -> Self {
         Self {
+            id,
             camera: Box::new(camera),
             view_transform: Isometry3::identity(),
-            scene_graph_node_id,
             jitter_enabled,
         }
+    }
+
+    /// Returns the ID of the camera.
+    pub fn id(&self) -> CameraID {
+        self.id
     }
 
     /// Returns a reference to the underlying [`Camera`].
@@ -215,12 +207,6 @@ impl SceneCamera {
     /// Returns whether jittering is enabled for the camera.
     pub fn jitter_enabled(&self) -> bool {
         self.jitter_enabled
-    }
-
-    /// Returns the ID of the [`CameraNode`](crate::graph::CameraNode)
-    /// for the camera in the [`SceneGraph`](crate::graph::SceneGraph).
-    pub fn scene_graph_node_id(&self) -> CameraNodeID {
-        self.scene_graph_node_id
     }
 
     /// Computes the world-space position of the camera based on the current

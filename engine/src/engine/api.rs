@@ -20,7 +20,7 @@ use impact_ecs::{
 };
 use impact_id::EntityID;
 use impact_material::values::UniformColorPhysicalMaterialValues;
-use impact_model::InstanceFeature;
+use impact_model::{InstanceFeature, ModelInstanceID};
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
     force::alignment_torque::{AlignmentTorqueGenerator, AlignmentTorqueGeneratorID},
@@ -38,7 +38,6 @@ use impact_rendering::{
         temporal_anti_aliasing::TemporalAntiAliasingConfig,
     },
 };
-use impact_scene::graph::ModelInstanceNodeID;
 use impact_voxel::{
     VoxelObjectID,
     interaction::absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
@@ -209,7 +208,7 @@ impl Engine {
 
     pub fn remove_entity(&self, entity_id: EntityID) -> Result<()> {
         let mut ecs_world = self.ecs_world.owrite();
-        setup::perform_cleanup_for_removed_entity(self, &ecs_world.entity(entity_id))?;
+        setup::perform_cleanup_for_removed_entity(self, entity_id, &ecs_world.entity(entity_id))?;
         ecs_world.remove_entity(entity_id)?;
         drop(ecs_world);
         self.entity_id_manager.olock().unregister_id(entity_id);
@@ -551,7 +550,7 @@ impl Engine {
 
     pub fn with_uniform_physical_material_property_values_mut<R>(
         &self,
-        model_instance_node_id: ModelInstanceNodeID,
+        entity_id: EntityID,
         f: impl FnOnce(&mut UniformColorPhysicalMaterialValues) -> Result<R>,
     ) -> Result<R> {
         let scene = self.scene().oread();
@@ -560,7 +559,7 @@ impl Engine {
 
         let node = scene_graph
             .model_instance_nodes()
-            .get_node(model_instance_node_id)
+            .get_node(ModelInstanceID::from_entity_id(entity_id))
             .ok_or_else(|| {
                 anyhow!("Tried to obtain material properties for missing model instance")
             })?;

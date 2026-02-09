@@ -19,7 +19,7 @@ use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
 use impact_math::{hash::Hash32, vector::Vector3C};
 use impact_model::{
-    InstanceFeature,
+    InstanceFeature, ModelInstanceID,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
 use impact_physics::{
@@ -28,8 +28,8 @@ use impact_physics::{
     rigid_body::{self, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_scene::{
-    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::{FeatureIDSet, ModelInstanceNodeID, SceneGraph},
+    ParentEntity, SceneEntityFlags,
+    graph::{FeatureIDSet, SceneGraph, SceneGroupID},
     model::ModelInstanceManager,
 };
 use roc_integration::roc;
@@ -549,14 +549,10 @@ pub fn create_model_instance_node_for_voxel_object(
     voxel_object_id: &VoxelObjectID,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
-    parent: Option<&SceneGraphParentNodeHandle>,
+    parent_entity_id: Option<&ParentEntity>,
     flags: Option<&SceneEntityFlags>,
     uncullable: bool,
-) -> Result<(
-    SceneGraphModelInstanceNodeHandle,
-    ModelTransform,
-    SceneEntityFlags,
-)> {
+) -> Result<(ModelTransform, SceneEntityFlags)> {
     let model_transform = model_transform.copied().unwrap_or_default();
     let frame = frame.copied().unwrap_or_default();
     let flags = flags.copied().unwrap_or_default();
@@ -604,12 +600,15 @@ pub fn create_model_instance_node_for_voxel_object(
         Some(voxel_object.compute_bounding_sphere())
     };
 
-    let model_instance_node_id = ModelInstanceNodeID::from_entity_id(entity_id);
-    let parent_node_id = parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
+    let model_instance_id = ModelInstanceID::from_entity_id(entity_id);
+    let parent_group_id = parent_entity_id.map_or_else(
+        || scene_graph.root_node_id(),
+        |parent| SceneGroupID::from_entity_id(parent.0),
+    );
 
     scene_graph.create_model_instance_node(
-        parent_node_id,
-        model_instance_node_id,
+        parent_group_id,
+        model_instance_id,
         model_to_parent_transform.compact(),
         model_id,
         bounding_sphere.map(|sphere| sphere.compact()),
@@ -618,11 +617,7 @@ pub fn create_model_instance_node_for_voxel_object(
         flags.into(),
     )?;
 
-    Ok((
-        SceneGraphModelInstanceNodeHandle::new(model_instance_node_id),
-        model_transform,
-        flags,
-    ))
+    Ok((model_transform, flags))
 }
 
 fn setup_rigid_body_for_new_voxel_object(

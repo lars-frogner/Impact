@@ -1,10 +1,11 @@
 //! Scene containing data to render.
 
 use crate::lock_order::OrderedRwLock;
+use impact_id::EntityIDManager;
 use impact_light::LightManager;
 use impact_scene::{
     camera::{CameraContext, CameraManager},
-    graph::SceneGraph,
+    graph::{SceneGraph, SceneGroupID},
     model::{ModelInstanceManager, ModelInstanceManagerState},
     skybox::Skybox,
 };
@@ -26,9 +27,11 @@ pub struct Scene {
 impl Scene {
     /// Creates a new scene data container.
     pub fn new(
+        entity_id_manager: &mut EntityIDManager,
         camera_context: CameraContext,
         model_instance_manager: ModelInstanceManager,
     ) -> Self {
+        let scene_graph_root_node_id = SceneGroupID::from_entity_id(entity_id_manager.provide_id());
         let initial_model_instance_manager_state = model_instance_manager.record_state();
         Self {
             skybox: RwLock::new(None),
@@ -37,7 +40,7 @@ impl Scene {
             voxel_manager: RwLock::new(VoxelManager::new()),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
-            scene_graph: RwLock::new(SceneGraph::new()),
+            scene_graph: RwLock::new(SceneGraph::new(scene_graph_root_node_id)),
         }
     }
 

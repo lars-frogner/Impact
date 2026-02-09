@@ -104,6 +104,7 @@ impl Engine {
         let mut component_metadata_registry = ComponentMetadataRegistry::new();
         crate::component::register_metadata_for_all_components(&mut component_metadata_registry)?;
 
+        let mut entity_id_manager = EntityIDManager::new();
         let ecs_world = ECSWorld::new();
 
         let mut texture_registry = TextureRegistry::new();
@@ -137,7 +138,11 @@ impl Engine {
             aspect_ratio: graphics.surface.surface_aspect_ratio(),
             jitter_enabled: config.rendering.temporal_anti_aliasing.enabled,
         };
-        let scene = Scene::new(camera_context, model_instance_manager);
+        let scene = Scene::new(
+            &mut entity_id_manager,
+            camera_context,
+            model_instance_manager,
+        );
 
         let graphics_device = Arc::new(graphics.device);
         let rendering_surface = graphics.surface;
@@ -166,7 +171,7 @@ impl Engine {
             component_metadata_registry,
             game_loop_controller: RwLock::new(game_loop_controller),
             input_manager: Mutex::new(input_manager),
-            entity_id_manager: Mutex::new(EntityIDManager::new()),
+            entity_id_manager: Mutex::new(entity_id_manager),
             entity_stager: Mutex::new(EntityStager::new()),
             ecs_world: RwLock::new(ecs_world),
             resource_manager: RwLock::new(resource_manager),

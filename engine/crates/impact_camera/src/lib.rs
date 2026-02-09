@@ -7,15 +7,18 @@ pub mod gpu_resource;
 pub mod setup;
 
 use approx::assert_abs_diff_ne;
+use bytemuck::{Pod, Zeroable};
 use impact_geometry::{
     Frustum,
     projection::{OrthographicTransform, PerspectiveTransform},
 };
+use impact_id::define_entity_id_newtype;
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
     transform::Projective3,
 };
+use roc_integration::roc;
 use std::fmt::Debug;
 
 /// Represents a 3D camera.
@@ -51,6 +54,22 @@ pub trait Camera: Debug + Send + Sync + 'static {
     /// Version number to allow callers to know whether the projection transform
     /// changed since they last checked it.
     fn projection_transform_version(&self) -> u64;
+}
+
+define_entity_id_newtype! {
+    /// Identifier for a camera.
+    [pub] CameraID
+}
+
+define_component_type! {
+    /// Marks that an entity has a camera identified by a [`CameraID`].
+    ///
+    /// Use [`CameraID::from_entity_id`] to obtain the camera ID from the entity
+    /// ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasCamera;
 }
 
 /// 3D camera using a perspective transformation.

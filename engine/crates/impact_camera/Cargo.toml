@@ -17,6 +17,7 @@ impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
+impact_id = { path = "../impact_id" }
 impact_math = { path = "../impact_math" }
 inventory = { workspace = true, optional = true }
 pastey = { workspace = true }

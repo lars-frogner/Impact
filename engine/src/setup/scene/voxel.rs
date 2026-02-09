@@ -8,14 +8,12 @@ use impact_alloc::arena::ArenaPool;
 use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
+use impact_model::HasModel;
 use impact_physics::{
     quantities::Motion,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
 };
-use impact_scene::{
-    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    setup::Uncullable,
-};
+use impact_scene::{ParentEntity, SceneEntityFlags, setup::Uncullable};
 use impact_voxel::{
     VoxelObjectID,
     generation::{SDFVoxelGenerator, sdf::SDFGraph},
@@ -464,14 +462,10 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
          voxel_object_id: &VoxelObjectID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         parent: Option<&SceneGraphParentNodeHandle>,
+         parent: Option<&ParentEntity>,
          flags: Option<&SceneEntityFlags>|
-         -> Result<(
-            SceneGraphModelInstanceNodeHandle,
-            ModelTransform,
-            SceneEntityFlags
-        )> {
-            setup::create_model_instance_node_for_voxel_object(
+         -> Result<(HasModel, ModelTransform, SceneEntityFlags)> {
+            let (model_transform, flags) = setup::create_model_instance_node_for_voxel_object(
                 voxel_manager.object_manager(),
                 &mut model_instance_manager,
                 &mut scene_graph,
@@ -482,9 +476,10 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
                 parent,
                 flags,
                 entities.has_component_type::<Uncullable>(),
-            )
+            )?;
+            Ok((HasModel, model_transform, flags))
         },
-        ![SceneGraphModelInstanceNodeHandle]
+        ![HasModel]
     )
 }
 

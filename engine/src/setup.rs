@@ -7,6 +7,7 @@ pub mod scene;
 use crate::engine::Engine;
 use anyhow::Result;
 use impact_ecs::world::{EntityEntry, PrototypeEntities};
+use impact_id::EntityID;
 
 pub fn perform_setup_for_new_entities(
     engine: &Engine,
@@ -25,12 +26,7 @@ pub fn perform_setup_for_new_entities(
         entities,
     )?;
 
-    scene::add_new_entities_to_scene_graph(
-        engine.ecs_world(),
-        engine.resource_manager(),
-        engine.scene(),
-        entities,
-    )?;
+    scene::add_new_entities_to_scene_graph(engine.resource_manager(), engine.scene(), entities)?;
 
     gizmo::setup_gizmos_for_new_entities(engine.gizmo_manager(), entities);
 
@@ -60,8 +56,12 @@ pub fn perform_setup_for_new_entities(
     Ok(())
 }
 
-pub fn perform_cleanup_for_removed_entity(engine: &Engine, entity: &EntityEntry<'_>) -> Result<()> {
+pub fn perform_cleanup_for_removed_entity(
+    engine: &Engine,
+    entity_id: EntityID,
+    entity: &EntityEntry<'_>,
+) -> Result<()> {
     physics::cleanup_physics_for_removed_entity(engine.simulator(), entity);
-    scene::cleanup_scene_data_for_removed_entity(engine.scene(), entity);
+    scene::cleanup_scene_data_for_removed_entity(engine.scene(), entity_id, entity);
     Ok(())
 }

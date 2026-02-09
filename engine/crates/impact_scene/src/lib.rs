@@ -15,7 +15,6 @@ pub mod systems;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use graph::{CameraNodeID, GroupNodeID, ModelInstanceNodeID};
 use impact_id::EntityID;
 use roc_integration::roc;
 
@@ -44,51 +43,20 @@ bitflags! {
 }
 
 define_component_type! {
-    /// Handle to a parent group node in a scene graph.
+    /// A parent entity.
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct SceneGraphParentNodeHandle {
-        /// The ID of the parent node in the
-        /// [`SceneGraph`](crate::graph::SceneGraph).
-        pub id: GroupNodeID,
-    }
+    pub struct ParentEntity(pub EntityID);
 }
 
 define_component_type! {
-    /// Handle to a group node in a scene graph.
+    /// Marks that an entity can have children, meaning it has a group node in
+    /// the scene graph identified by the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
+    #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct SceneGraphGroupNodeHandle {
-        /// The ID of the group node in the
-        /// [`SceneGraph`](crate::graph::SceneGraph).
-        pub id: GroupNodeID,
-    }
-}
-
-define_component_type! {
-    /// Handle to a camera node in a scene graph.
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct SceneGraphCameraNodeHandle {
-        /// The ID of the camera node in the
-        /// [`SceneGraph`](crate::graph::SceneGraph).
-        pub id: CameraNodeID,
-    }
-}
-
-define_component_type! {
-    /// Handle to a model instance node in a scene graph.
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct SceneGraphModelInstanceNodeHandle {
-        /// The ID of the model instance node in the
-        /// [`SceneGraph`](crate::graph::SceneGraph).
-        pub id: ModelInstanceNodeID,
-    }
+    pub struct CanBeParent;
 }
 
 define_component_type! {
@@ -108,7 +76,7 @@ define_component_type! {
 #[cfg(feature = "ecs")]
 impact_ecs::declare_component_flags! {
     SceneEntityFlags => impact_ecs::component::ComponentFlags::INHERITABLE,
-    SceneGraphParentNodeHandle => impact_ecs::component::ComponentFlags::INHERITABLE,
+    ParentEntity => impact_ecs::component::ComponentFlags::INHERITABLE,
     RemovalBeyondDistance => impact_ecs::component::ComponentFlags::INHERITABLE,
 }
 
@@ -116,46 +84,6 @@ impl SceneEntityFlags {
     /// Whether the [`SceneEntityFlags::IS_DISABLED`] flag is set.
     pub fn is_disabled(&self) -> bool {
         self.contains(Self::IS_DISABLED)
-    }
-}
-
-#[roc]
-impl SceneGraphParentNodeHandle {
-    /// Creates a new handle to the parent
-    /// [`SceneGraph`](crate::graph::SceneGraph) group node with the given ID.
-    #[roc(body = "{ id: parent_node_id }")]
-    pub fn new(parent_node_id: GroupNodeID) -> Self {
-        Self { id: parent_node_id }
-    }
-}
-
-#[roc]
-impl SceneGraphGroupNodeHandle {
-    /// Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
-    /// group node with the given ID.
-    #[roc(body = "{ id: node_id }")]
-    pub fn new(node_id: GroupNodeID) -> Self {
-        Self { id: node_id }
-    }
-}
-
-#[roc]
-impl SceneGraphCameraNodeHandle {
-    /// Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
-    /// camera node with the given ID.
-    #[roc(body = "{ id: node_id }")]
-    pub fn new(node_id: CameraNodeID) -> Self {
-        Self { id: node_id }
-    }
-}
-
-#[roc]
-impl SceneGraphModelInstanceNodeHandle {
-    /// Creates a new handle to the [`SceneGraph`](crate::graph::SceneGraph)
-    /// model instance node with the given ID.
-    #[roc(body = "{ id: node_id }")]
-    pub fn new(node_id: ModelInstanceNodeID) -> Self {
-        Self { id: node_id }
     }
 }
 
