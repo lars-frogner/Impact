@@ -8,6 +8,7 @@ pub mod photometry;
 pub mod setup;
 pub mod shadow_map;
 
+use anyhow::{Result, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::LightGPUResources;
@@ -19,6 +20,7 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, uniform::UniformBuffer,
     wgpu,
 };
+use impact_id::define_entity_id_newtype;
 use impact_math::{
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
@@ -44,6 +46,31 @@ pub type Illumninance = Vector3C;
 /// and area of light traveling in a given direction, represented as an RGB
 /// triplet.
 pub type Luminance = Vector3C;
+
+define_entity_id_newtype! {
+    /// The ID of an [`AmbientLight`] in the [`LightManager`].
+    [pub] AmbientLightID
+}
+
+define_entity_id_newtype! {
+    /// The ID of an [`OmnidirectionalLight`] in the [`LightManager`].
+    [pub] OmnidirectionalLightID
+}
+
+define_entity_id_newtype! {
+    /// The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightManager`].
+    [pub] ShadowableOmnidirectionalLightID
+}
+
+define_entity_id_newtype! {
+    /// The ID of a [`UnidirectionalLight`] in the [`LightManager`].
+    [pub] UnidirectionalLightID
+}
+
+define_entity_id_newtype! {
+    /// The ID of a [`ShadowableUnidirectionalLight`] in the [`LightManager`].
+    [pub] ShadowableUnidirectionalLightID
+}
 
 define_component_type! {
     /// A spatially uniform and isotropic (ambient) light field.
@@ -143,46 +170,6 @@ define_component_type! {
         /// specular highlights and the softness of shadows.
         pub angular_source_extent: Degrees,
     }
-}
-
-define_component_type! {
-    /// The ID of an [`AmbientLight`] in the [`LightManager`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct AmbientLightID(u32);
-}
-
-define_component_type! {
-    /// The ID of an [`OmnidirectionalLight`] in the [`LightManager`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct OmnidirectionalLightID(u32);
-}
-
-define_component_type! {
-    /// The ID of a [`ShadowableOmnidirectionalLight`] in the [`LightManager`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct ShadowableOmnidirectionalLightID(u32);
-}
-
-define_component_type! {
-    /// The ID of a [`UnidirectionalLight`] in the [`LightManager`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct UnidirectionalLightID(u32);
-}
-
-define_component_type! {
-    /// The ID of a [`ShadowableUnidirectionalLight`] in the [`LightManager`].
-    #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct ShadowableUnidirectionalLightID(u32);
 }
 
 /// A spatially uniform and isotropic light field, represented by an RGB
@@ -373,7 +360,6 @@ pub struct LightManager {
     unidirectional_light_buffer: UnidirectionalLightUniformBuffer,
     shadowable_unidirectional_light_buffer: ShadowableUnidirectionalLightUniformBuffer,
     total_ambient_luminance: Luminance,
-    light_id_counter: u32,
 }
 
 #[roc]
@@ -450,66 +436,6 @@ impl ShadowableUnidirectionalEmission {
     }
 }
 
-impl From<AmbientLightID> for u32 {
-    fn from(id: AmbientLightID) -> u32 {
-        id.0
-    }
-}
-
-impl std::fmt::Display for AmbientLightID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<OmnidirectionalLightID> for u32 {
-    fn from(id: OmnidirectionalLightID) -> u32 {
-        id.0
-    }
-}
-
-impl std::fmt::Display for OmnidirectionalLightID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<ShadowableOmnidirectionalLightID> for u32 {
-    fn from(id: ShadowableOmnidirectionalLightID) -> u32 {
-        id.0
-    }
-}
-
-impl std::fmt::Display for ShadowableOmnidirectionalLightID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<UnidirectionalLightID> for u32 {
-    fn from(id: UnidirectionalLightID) -> u32 {
-        id.0
-    }
-}
-
-impl std::fmt::Display for UnidirectionalLightID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<ShadowableUnidirectionalLightID> for u32 {
-    fn from(id: ShadowableUnidirectionalLightID) -> u32 {
-        id.0
-    }
-}
-
-impl std::fmt::Display for ShadowableUnidirectionalLightID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl LightManager {
     /// By creating light uniform buffers with a small initial capacity, we
     /// avoid excessive buffer reallocation when the first few lights are added.
@@ -534,7 +460,6 @@ impl LightManager {
                     Self::INITIAL_LIGHT_CAPACITY,
                 ),
             total_ambient_luminance: Luminance::zeros(),
-            light_id_counter: 0,
         }
     }
 
@@ -572,79 +497,113 @@ impl LightManager {
         &self.shadowable_unidirectional_light_buffer
     }
 
-    /// Adds the given [`AmbientLight`] to the storage.
+    /// Adds the given [`AmbientLight`] to the storage under the given ID.
     ///
-    /// # Returns
-    /// A new [`AmbientLightID`] representing the added light source.
-    pub fn add_ambient_light(&mut self, ambient_light: AmbientLight) -> AmbientLightID {
-        let light_id = AmbientLightID(self.create_new_light_id());
+    /// # Errors
+    /// Returns an error if the ID is already present.
+    pub fn add_ambient_light(
+        &mut self,
+        light_id: AmbientLightID,
+        ambient_light: AmbientLight,
+    ) -> Result<()> {
+        if self.ambient_light_buffer.has_uniform(light_id) {
+            bail!("An ambient light with ID {light_id} already exists");
+        }
         self.ambient_light_buffer
             .add_uniform(light_id, ambient_light);
 
         self.total_ambient_luminance += ambient_light.luminance;
         self.update_max_reach_for_omnidirectional_lights();
 
-        light_id
+        Ok(())
     }
 
-    /// Adds the given [`OmnidirectionalLight`] to the storage.
+    /// Adds the given [`OmnidirectionalLight`] to the storage under the given
+    /// ID.
     ///
-    /// # Returns
-    /// A new [`OmnidirectionalLightID`] representing the added light source.
+    /// # Errors
+    /// Returns an error if the ID is already present.
     pub fn add_omnidirectional_light(
         &mut self,
+        light_id: OmnidirectionalLightID,
         mut omnidirectional_light: OmnidirectionalLight,
-    ) -> OmnidirectionalLightID {
+    ) -> Result<()> {
+        if self.omnidirectional_light_buffer.has_uniform(light_id) {
+            bail!("An omnidirectional light with ID {light_id} already exists");
+        }
+
         self.update_max_reach_for_omnidirectional_light(&mut omnidirectional_light);
-        let light_id = OmnidirectionalLightID(self.create_new_light_id());
+
         self.omnidirectional_light_buffer
             .add_uniform(light_id, omnidirectional_light);
-        light_id
+
+        Ok(())
     }
 
-    /// Adds the given [`ShadowableOmnidirectionalLight`] to the storage.
+    /// Adds the given [`ShadowableOmnidirectionalLight`] to the storage under
+    /// the given ID.
     ///
-    /// # Returns
-    /// A new [`ShadowableOmnidirectionalLightID`] representing the added light
-    /// source.
+    /// # Errors
+    /// Returns an error if the ID is already present.
     pub fn add_shadowable_omnidirectional_light(
         &mut self,
+        light_id: ShadowableOmnidirectionalLightID,
         mut omnidirectional_light: ShadowableOmnidirectionalLight,
-    ) -> ShadowableOmnidirectionalLightID {
+    ) -> Result<()> {
+        if self
+            .shadowable_omnidirectional_light_buffer
+            .has_uniform(light_id)
+        {
+            bail!("A shadowable omnidirectional light with ID {light_id} already exists");
+        }
+
         self.update_max_reach_for_shadowable_omnidirectional_light(&mut omnidirectional_light);
-        let light_id = ShadowableOmnidirectionalLightID(self.create_new_light_id());
+
         self.shadowable_omnidirectional_light_buffer
             .add_uniform(light_id, omnidirectional_light);
-        light_id
+
+        Ok(())
     }
 
-    /// Adds the given [`UnidirectionalLight`] to the storage.
+    /// Adds the given [`UnidirectionalLight`] to the storage under the given
+    /// ID.
     ///
-    /// # Returns
-    /// A new [`UnidirectionalLightID`] representing the added light source.
+    /// # Errors
+    /// Returns an error if the ID is already present.
     pub fn add_unidirectional_light(
         &mut self,
+        light_id: UnidirectionalLightID,
         unidirectional_light: UnidirectionalLight,
-    ) -> UnidirectionalLightID {
-        let light_id = UnidirectionalLightID(self.create_new_light_id());
+    ) -> Result<()> {
+        if self.unidirectional_light_buffer.has_uniform(light_id) {
+            bail!("A unidirectional light with ID {light_id} already exists");
+        }
+
         self.unidirectional_light_buffer
             .add_uniform(light_id, unidirectional_light);
-        light_id
+
+        Ok(())
     }
 
-    /// Adds the given [`ShadowableUnidirectionalLight`] to the storage.
+    /// Adds the given [`ShadowableUnidirectionalLight`] to the storage under
+    /// the given ID.
     ///
-    /// # Returns
-    /// A new [`ShadowableUnidirectionalLightID`] representing the added light
-    /// source.
+    /// # Errors
+    /// Returns an error if the ID is already present.
     pub fn add_shadowable_unidirectional_light(
         &mut self,
+        light_id: ShadowableUnidirectionalLightID,
         unidirectional_light: ShadowableUnidirectionalLight,
-    ) -> ShadowableUnidirectionalLightID {
-        let light_id = ShadowableUnidirectionalLightID(self.create_new_light_id());
+    ) -> Result<()> {
+        if self
+            .shadowable_unidirectional_light_buffer
+            .has_uniform(light_id)
+        {
+            bail!("A shadowable unidirectional light with ID {light_id} already exists");
+        }
         self.shadowable_unidirectional_light_buffer
             .add_uniform(light_id, unidirectional_light);
-        light_id
+        Ok(())
     }
 
     /// Removes the [`AmbientLight`] with the given ID from the storage.
@@ -1016,12 +975,6 @@ impl LightManager {
                 * OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO,
         );
         min_incident_luminance
-    }
-
-    fn create_new_light_id(&mut self) -> u32 {
-        let light_id = self.light_id_counter;
-        self.light_id_counter = self.light_id_counter.checked_add(1).unwrap();
-        light_id
     }
 }
 

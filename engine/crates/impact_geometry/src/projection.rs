@@ -551,6 +551,13 @@ impl CubemapFace {
     }
 
     /// Returns the index of the face according the conventional ordering as a
+    /// [`u64`].
+    #[inline]
+    pub const fn as_idx_u64(&self) -> u64 {
+        *self as u64
+    }
+
+    /// Returns the index of the face according the conventional ordering as a
     /// [`usize`].
     #[inline]
     pub const fn as_idx_usize(&self) -> usize {

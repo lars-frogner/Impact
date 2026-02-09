@@ -8,30 +8,33 @@ use crate::{
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, UnidirectionalEmission,
     UnidirectionalLight, UnidirectionalLightID,
 };
+use anyhow::Result;
+use impact_id::EntityID;
 use impact_math::{
     angle::Degrees, point::Point3, quaternion::UnitQuaternion, transform::Isometry3,
 };
 
 pub fn setup_ambient_light(
     light_manager: &mut LightManager,
+    entity_id: EntityID,
     ambient_emission: &AmbientEmission,
-) -> AmbientLightID {
+) -> Result<()> {
     let ambient_light = AmbientLight::new(crate::compute_luminance_for_uniform_illuminance(
         &ambient_emission.illuminance,
     ));
 
-    let id = light_manager.add_ambient_light(ambient_light);
-
-    id
+    let light_id = AmbientLightID::from_entity_id(entity_id);
+    light_manager.add_ambient_light(light_id, ambient_light)
 }
 
 pub fn setup_omnidirectional_light(
     light_manager: &mut LightManager,
+    entity_id: EntityID,
     view_transform: &Isometry3,
     position: &Point3,
     omnidirectional_emission: &OmnidirectionalEmission,
     flags: LightFlags,
-) -> OmnidirectionalLightID {
+) -> Result<()> {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = OmnidirectionalLight::new(
         position.compact(),
@@ -39,18 +42,19 @@ pub fn setup_omnidirectional_light(
         f32::max(omnidirectional_emission.source_extent, 0.0),
         flags,
     );
-    let id = light_manager.add_omnidirectional_light(omnidirectional_light);
 
-    id
+    let light_id = OmnidirectionalLightID::from_entity_id(entity_id);
+    light_manager.add_omnidirectional_light(light_id, omnidirectional_light)
 }
 
 pub fn setup_shadowable_omnidirectional_light(
     light_manager: &mut LightManager,
+    entity_id: EntityID,
     view_transform: &Isometry3,
     position: &Point3,
     omnidirectional_emission: &ShadowableOmnidirectionalEmission,
     flags: LightFlags,
-) -> ShadowableOmnidirectionalLightID {
+) -> Result<()> {
     let position = view_transform.transform_point(position);
     let omnidirectional_light = ShadowableOmnidirectionalLight::new(
         position.compact(),
@@ -58,17 +62,18 @@ pub fn setup_shadowable_omnidirectional_light(
         f32::max(omnidirectional_emission.source_extent, 0.0),
         flags,
     );
-    let id = light_manager.add_shadowable_omnidirectional_light(omnidirectional_light);
 
-    id
+    let light_id = ShadowableOmnidirectionalLightID::from_entity_id(entity_id);
+    light_manager.add_shadowable_omnidirectional_light(light_id, omnidirectional_light)
 }
 
 pub fn setup_unidirectional_light(
     light_manager: &mut LightManager,
+    entity_id: EntityID,
     view_transform: &Isometry3,
     unidirectional_emission: &UnidirectionalEmission,
     flags: LightFlags,
-) -> UnidirectionalLightID {
+) -> Result<()> {
     let direction = unidirectional_emission.direction.aligned();
     let camera_space_direction = view_transform.transform_unit_vector(&direction);
 
@@ -81,17 +86,18 @@ pub fn setup_unidirectional_light(
         )),
         flags,
     );
-    let id = light_manager.add_unidirectional_light(unidirectional_light);
 
-    id
+    let light_id = UnidirectionalLightID::from_entity_id(entity_id);
+    light_manager.add_unidirectional_light(light_id, unidirectional_light)
 }
 
 pub fn setup_shadowable_unidirectional_light(
     light_manager: &mut LightManager,
+    entity_id: EntityID,
     view_transform: &Isometry3,
     unidirectional_emission: &ShadowableUnidirectionalEmission,
     flags: LightFlags,
-) -> ShadowableUnidirectionalLightID {
+) -> Result<()> {
     let direction = unidirectional_emission.direction.aligned();
     let camera_space_direction = view_transform.transform_unit_vector(&direction);
 
@@ -104,9 +110,9 @@ pub fn setup_shadowable_unidirectional_light(
         )),
         flags,
     );
-    let id = light_manager.add_shadowable_unidirectional_light(unidirectional_light);
 
-    id
+    let light_id = ShadowableUnidirectionalLightID::from_entity_id(entity_id);
+    light_manager.add_shadowable_unidirectional_light(light_id, unidirectional_light)
 }
 
 pub fn sync_ambient_light_in_storage(

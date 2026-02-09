@@ -1,19 +1,18 @@
 //! Light sources.
 
 use crate::SceneEntityFlags;
+use impact_id::EntityID;
 use impact_light::LightFlags;
 use impact_model::InstanceFeatureBufferRangeID;
 
-/// Converts the light ID into an [`InstanceFeatureBufferRangeID`].
-pub fn light_id_to_instance_feature_buffer_range_id<ID>(
-    light_id: ID,
-) -> InstanceFeatureBufferRangeID
-where
-    ID: Into<u32>,
-{
+/// Converts the given entity ID for a light into an
+/// [`InstanceFeatureBufferRangeID`].
+pub fn light_entity_id_to_instance_feature_buffer_range_id(
+    entity_id: EntityID,
+) -> InstanceFeatureBufferRangeID {
     // Use a stride of 6 so that the ID can be incremented up to 5 times to
     // create additional ranges associated with the same light
-    6 * light_id.into()
+    6 * entity_id.as_u64()
 }
 
 impl From<SceneEntityFlags> for LightFlags {

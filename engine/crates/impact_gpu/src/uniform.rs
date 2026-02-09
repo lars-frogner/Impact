@@ -98,6 +98,11 @@ where
         self.index_map.len()
     }
 
+    /// Whether a uniform with the given ID is present in the buffer.
+    pub fn has_uniform(&mut self, uniform_id: ID) -> bool {
+        self.index_map.contains_key(uniform_id)
+    }
+
     /// Returns a reference to the uniform with the given ID. If the entity does
     /// not have this component, [`None`] is returned.
     pub fn get_uniform(&self, uniform_id: ID) -> Option<&U> {

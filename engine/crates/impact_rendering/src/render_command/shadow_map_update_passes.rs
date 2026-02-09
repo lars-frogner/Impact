@@ -292,9 +292,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 // Offset the light's buffer range ID with the face index to get the index for
                 // the range of transforms for the specific cubemap face
                 let instance_range_id =
-                    impact_scene::light::light_id_to_instance_feature_buffer_range_id(
-                        omnidirectional_light.id,
-                    ) + cubemap_face.as_idx_u32();
+                    impact_scene::light::light_entity_id_to_instance_feature_buffer_range_id(
+                        omnidirectional_light.id.as_entity_id(),
+                    ) + cubemap_face.as_idx_u64();
 
                 if shadow_mapping_enabled {
                     record_additional_commands_before_face_update(
@@ -656,9 +656,9 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 // Offset the light's buffer range ID with the cascade index to get the index
                 // for the range of transforms for the specific cascade
                 let instance_range_id =
-                    impact_scene::light::light_id_to_instance_feature_buffer_range_id(
-                        unidirectional_light.id,
-                    ) + cascade_idx;
+                    impact_scene::light::light_entity_id_to_instance_feature_buffer_range_id(
+                        unidirectional_light.id.as_entity_id(),
+                    ) + u64::from(cascade_idx);
 
                 let cascade_frustum = unidirectional_light
                     .create_light_space_orthographic_obb_for_cascade(cascade_idx);

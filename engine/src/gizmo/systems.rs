@@ -21,8 +21,9 @@ use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 use impact_light::{
-    LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
-    ShadowableUnidirectionalLightID,
+    LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
+    ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
+    ShadowableUnidirectionalEmission, ShadowableUnidirectionalLightID,
 };
 use impact_math::{
     angle::Angle,
@@ -132,25 +133,22 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |gizmos: &GizmosComp,
-         omnidirectional_light_id: &OmnidirectionalLightID,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) || flags.is_disabled() {
                 return;
             }
             buffer_transform_for_light_sphere_gizmo(
                 model_instance_manager,
                 light_manager,
-                *omnidirectional_light_id,
+                entity_id,
             );
-        }
+        },
+        [OmnidirectionalEmission]
     );
 
     query!(
         ecs_world,
-        |gizmos: &GizmosComp,
-         omnidirectional_light_id: &ShadowableOmnidirectionalLightID,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }
@@ -158,7 +156,7 @@ pub fn buffer_transforms_for_gizmos(
                 buffer_transform_for_shadowable_light_sphere_gizmo(
                     model_instance_manager,
                     light_manager,
-                    *omnidirectional_light_id,
+                    entity_id,
                 );
             }
             if gizmos
@@ -168,17 +166,16 @@ pub fn buffer_transforms_for_gizmos(
                 buffer_transforms_for_shadow_cubemap_faces_gizmo(
                     model_instance_manager,
                     light_manager,
-                    *omnidirectional_light_id,
+                    entity_id,
                 );
             }
-        }
+        },
+        [ShadowableOmnidirectionalEmission]
     );
 
     query!(
         ecs_world,
-        |gizmos: &GizmosComp,
-         unidirectional_light_id: &ShadowableUnidirectionalLightID,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .contains(GizmoSet::SHADOW_MAP_CASCADES)
@@ -190,9 +187,10 @@ pub fn buffer_transforms_for_gizmos(
                 model_instance_manager,
                 light_manager,
                 camera,
-                *unidirectional_light_id,
+                entity_id,
             );
-        }
+        },
+        [ShadowableUnidirectionalEmission]
     );
 
     query!(ecs_world, |gizmos: &GizmosComp,
@@ -415,8 +413,9 @@ fn compute_transform_for_bounding_sphere_gizmo(
 fn buffer_transform_for_light_sphere_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     light_manager: &LightManager,
-    light_id: OmnidirectionalLightID,
+    entity_id: EntityID,
 ) {
+    let light_id = OmnidirectionalLightID::from_entity_id(entity_id);
     let Some(light) = light_manager.get_omnidirectional_light(light_id) else {
         return;
     };
@@ -436,8 +435,9 @@ fn buffer_transform_for_light_sphere_gizmo(
 fn buffer_transform_for_shadowable_light_sphere_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     light_manager: &LightManager,
-    light_id: ShadowableOmnidirectionalLightID,
+    entity_id: EntityID,
 ) {
+    let light_id = ShadowableOmnidirectionalLightID::from_entity_id(entity_id);
     let Some(light) = light_manager.get_shadowable_omnidirectional_light(light_id) else {
         return;
     };
@@ -457,8 +457,9 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
 fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     light_manager: &LightManager,
-    light_id: ShadowableOmnidirectionalLightID,
+    entity_id: EntityID,
 ) {
+    let light_id = ShadowableOmnidirectionalLightID::from_entity_id(entity_id);
     let Some(light) = light_manager.get_shadowable_omnidirectional_light(light_id) else {
         return;
     };
@@ -498,8 +499,9 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     light_manager: &LightManager,
     camera: &Camera,
-    light_id: ShadowableUnidirectionalLightID,
+    entity_id: EntityID,
 ) {
+    let light_id = ShadowableUnidirectionalLightID::from_entity_id(entity_id);
     let Some(light) = light_manager.get_shadowable_unidirectional_light(light_id) else {
         return;
     };
