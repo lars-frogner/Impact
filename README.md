@@ -127,7 +127,7 @@ Here is how the laser beam in the video above was created in the script's `setup
 
 ```roc
 Entity.new_component_data
-    |> Setup.SceneParent.add_new(entity_ids.player)
+    |> Comp.ParentEntity.add(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.x_axis, (-Num.pi) / 2),

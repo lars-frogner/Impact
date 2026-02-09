@@ -22,7 +22,7 @@ import pf.Command
 import pf.Entity
 
 import pf.Comp.RemovalBeyondDistance
-import pf.Setup.SceneParent
+import pf.Comp.ParentEntity
 import pf.Setup.CylinderMesh
 import pf.Setup.SphereMesh
 import pf.Setup.UniformColor
@@ -188,7 +188,7 @@ construct_entities : Entity.Id -> ToolEntities
 construct_entities = |parent|
     laser_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(parent)
+        |> Comp.ParentEntity.add(parent)
         |> Setup.CylinderMesh.add_new(laser.range, 2 * laser.visual_radius, 16)
         |> Setup.UniformColor.add(laser.color)
         |> Setup.UniformEmissiveLuminance.add(laser.emissive_luminance)
@@ -210,7 +210,7 @@ construct_entities = |parent|
 
     absorber_ent =
         Entity.new_component_data
-        |> Setup.SceneParent.add_new(parent)
+        |> Comp.ParentEntity.add(parent)
         |> Setup.SphereMesh.add_new(64)
         |> Setup.UniformColor.add(absorber.color)
         |> Setup.UniformEmissiveLuminance.add(absorber.emissive_luminance)

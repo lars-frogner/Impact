@@ -17,12 +17,12 @@ import pf.Setup.CylinderMesh
 import pf.Setup.GradientNoiseVoxelTypes
 import pf.Comp.VelocityControl
 import pf.Comp.AngularVelocityControl
-import pf.Setup.SceneParent
+import pf.Comp.ParentEntity
 import pf.Setup.PerspectiveCamera
 import pf.Setup.RectangleMesh
 import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
-import pf.Setup.SceneGraphGroup
+import pf.Comp.CanBeParent
 import pf.Setup.SphereMesh
 import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.ShadowableUnidirectionalEmission
@@ -101,16 +101,16 @@ player =
     |> Comp.Motion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
-    |> Setup.SceneGraphGroup.add
+    |> Comp.CanBeParent.add
 
 camera =
     Entity.new_component_data
-    |> Setup.SceneParent.add_new(entity_ids.player)
+    |> Comp.ParentEntity.add(entity_ids.player)
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
 
 laser =
     Entity.new_component_data
-    |> Setup.SceneParent.add_new(entity_ids.player)
+    |> Comp.ParentEntity.add(entity_ids.player)
     |> Comp.ReferenceFrame.add_new(
         (0.15, -0.3, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
@@ -128,7 +128,7 @@ laser =
 
 absorbing_sphere =
     Entity.new_component_data
-    |> Setup.SceneParent.add_new(entity_ids.player)
+    |> Comp.ParentEntity.add(entity_ids.player)
     |> Comp.ModelTransform.add_with_scale(0.1)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, -3))
     |> Setup.SphereMesh.add_new(64)
