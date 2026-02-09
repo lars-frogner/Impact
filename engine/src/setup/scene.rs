@@ -42,7 +42,7 @@ pub fn setup_scene_data_for_new_entities(
     material::setup_materials_for_new_entities(resource_manager, entities)?;
 
     voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, entities)?;
-    voxel::setup_voxel_interaction_for_new_entities(scene, entities);
+    voxel::setup_voxel_interaction_for_new_entities(scene, entities)?;
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, entities);
 
@@ -80,7 +80,7 @@ pub fn cleanup_scene_data_for_removed_entity(
 
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
-    voxel::cleanup_voxel_object_for_removed_entity(scene, entity);
+    voxel::cleanup_voxel_object_for_removed_entity(scene, entity_id, entity);
 }
 
 fn setup_scene_graph_group_nodes_for_new_entities(

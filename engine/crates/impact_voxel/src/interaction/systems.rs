@@ -1,12 +1,12 @@
 //! ECS systems for driving voxel object interaction.
 
 use crate::{
-    VoxelManager, VoxelObjectID, VoxelObjectManager,
+    HasVoxelObject, VoxelManager, VoxelObjectManager,
     collidable::{CollisionWorld, LocalCollidable, setup::VoxelCollidable},
     interaction::{
         self, NewVoxelObjectEntity, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
         VoxelObjectEntity, VoxelObjectInteractionContext,
-        absorption::{self, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
+        absorption::{self, HasVoxelAbsorbingCapsule, HasVoxelAbsorbingSphere},
     },
     voxel_types::VoxelTypeRegistry,
 };
@@ -18,7 +18,7 @@ use impact_ecs::{
     world::{EntityStager, World as ECSWorld},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
-use impact_id::EntityID;
+use impact_id::{EntityID, EntityIDManager};
 use impact_model::HasModel;
 use impact_physics::{
     anchor::AnchorManager,
@@ -51,16 +51,13 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
     ) {
         query!(
             self.ecs_world,
-            |entity_id: EntityID, voxel_object_id: &VoxelObjectID, flags: &SceneEntityFlags| {
+            |entity_id: EntityID, flags: &SceneEntityFlags| {
                 if flags.is_disabled() {
                     return;
                 }
-                entities.push(VoxelObjectEntity {
-                    entity_id,
-                    voxel_object_id: *voxel_object_id,
-                });
+                entities.push(VoxelObjectEntity { entity_id });
             },
-            [DynamicRigidBodyID] // We only let dynamic voxel objects participate in interactions
+            [HasVoxelObject, DynamicRigidBodyID] // We only let dynamic voxel objects participate in interactions
         );
     }
 
@@ -71,25 +68,24 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         query!(
             self.ecs_world,
-            |absorber_id: &VoxelAbsorbingSphereID,
-             reference_frame: &ReferenceFrame,
-             flags: &SceneEntityFlags| {
+            |entity_id: EntityID, reference_frame: &ReferenceFrame, flags: &SceneEntityFlags| {
                 let sphere_to_world_transform = if !flags.is_disabled() {
                     Some(reference_frame.create_transform_to_parent_space())
                 } else {
                     None
                 };
                 entities.push(VoxelAbsorbingSphereEntity {
-                    absorber_id: *absorber_id,
+                    entity_id,
                     sphere_to_world_transform,
                 });
             },
+            [HasVoxelAbsorbingSphere],
             ![ParentEntity]
         );
 
         query!(
             self.ecs_world,
-            |absorber_id: &VoxelAbsorbingSphereID,
+            |entity_id: EntityID,
              reference_frame: &ReferenceFrame,
              parent: &ParentEntity,
              flags: &SceneEntityFlags| {
@@ -109,10 +105,11 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                     None
                 };
                 entities.push(VoxelAbsorbingSphereEntity {
-                    absorber_id: *absorber_id,
+                    entity_id,
                     sphere_to_world_transform,
                 });
-            }
+            },
+            [HasVoxelAbsorbingSphere]
         );
 
         entities
@@ -125,25 +122,24 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         query!(
             self.ecs_world,
-            |absorber_id: &VoxelAbsorbingCapsuleID,
-             reference_frame: &ReferenceFrame,
-             flags: &SceneEntityFlags| {
+            |entity_id: EntityID, reference_frame: &ReferenceFrame, flags: &SceneEntityFlags| {
                 let capsule_to_world_transform = if !flags.is_disabled() {
                     Some(reference_frame.create_transform_to_parent_space())
                 } else {
                     None
                 };
                 entities.push(VoxelAbsorbingCapsuleEntity {
-                    absorber_id: *absorber_id,
+                    entity_id,
                     capsule_to_world_transform,
                 });
             },
+            [HasVoxelAbsorbingCapsule],
             ![ParentEntity]
         );
 
         query!(
             self.ecs_world,
-            |absorber_id: &VoxelAbsorbingCapsuleID,
+            |entity_id: EntityID,
              reference_frame: &ReferenceFrame,
              parent: &ParentEntity,
              flags: &SceneEntityFlags| {
@@ -163,10 +159,11 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                     None
                 };
                 entities.push(VoxelAbsorbingCapsuleEntity {
-                    absorber_id: *absorber_id,
+                    entity_id,
                     capsule_to_world_transform,
                 });
-            }
+            },
+            [HasVoxelAbsorbingCapsule]
         );
 
         entities
@@ -181,9 +178,6 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         let mut components = Vec::with_capacity(parent_components.n_component_types());
 
-        components.push(ComponentStorage::from_single_instance_view(
-            &entity.voxel_object_id,
-        ));
         components.push(ComponentStorage::from_single_instance_view(
             &entity.rigid_body_id,
         ));
@@ -226,7 +220,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
         }
 
         self.entity_stager
-            .stage_entity_for_creation(components)
+            .stage_entity_for_creation_with_id(entity.entity_id, components)
             .expect("Failed to stage voxel object entity for creation");
     }
 
@@ -243,10 +237,10 @@ pub fn sync_voxel_object_model_transforms(
 ) {
     query!(
         ecs_world,
-        |voxel_object_id: &VoxelObjectID, model_transform: &mut ModelTransform| {
+        |entity_id: EntityID, model_transform: &mut ModelTransform| {
             interaction::sync_voxel_object_model_transform_with_inertial_properties(
                 voxel_object_manager,
-                *voxel_object_id,
+                entity_id,
                 model_transform,
             );
         }
@@ -262,30 +256,28 @@ pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
 ) {
     query!(
         ecs_world,
-        |entity_id: EntityID, voxel_object_id: &VoxelObjectID| {
+        |entity_id: EntityID| {
             interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
                 voxel_object_manager,
                 scene_graph,
                 entity_id,
-                *voxel_object_id,
                 false,
             );
         },
-        [HasModel],
+        [HasVoxelObject, HasModel],
         ![Uncullable]
     );
     query!(
         ecs_world,
-        |entity_id: EntityID, voxel_object_id: &VoxelObjectID| {
+        |entity_id: EntityID| {
             interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
                 voxel_object_manager,
                 scene_graph,
                 entity_id,
-                *voxel_object_id,
                 true,
             );
         },
-        [HasModel, Uncullable]
+        [HasVoxelObject, HasModel, Uncullable]
     );
 }
 
@@ -293,6 +285,7 @@ pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
 /// objects.
 pub fn apply_absorption(
     component_metadata_registry: &ComponentMetadataRegistry,
+    entity_id_manager: &mut EntityIDManager,
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
     scene_graph: &SceneGraph,
@@ -314,6 +307,7 @@ pub fn apply_absorption(
 
     absorption::apply_absorption(
         &mut interaction_context,
+        entity_id_manager,
         voxel_manager,
         voxel_type_registry,
         rigid_body_manager,

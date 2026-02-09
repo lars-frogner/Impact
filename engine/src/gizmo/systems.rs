@@ -49,7 +49,7 @@ use impact_scene::{
     model::ModelInstanceManager,
 };
 use impact_voxel::{
-    VoxelObjectID, VoxelObjectManager,
+    HasVoxelObject, VoxelObjectID, VoxelObjectManager,
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
 };
@@ -296,10 +296,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID,
-         gizmos: &GizmosComp,
-         voxel_object_id: &VoxelObjectID,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::VOXEL_CHUNKS) || flags.is_disabled() {
                 return;
             }
@@ -310,28 +307,31 @@ pub fn buffer_transforms_for_gizmos(
                 gizmo_manager.parameters(),
                 current_frame_count,
                 entity_id,
-                *voxel_object_id,
             );
         },
-        [HasModel]
+        [HasVoxelObject, HasModel]
     );
 
-    let mut voxel_objects: Vec<(VoxelObjectID, CollidableID)> = Vec::with_capacity(32);
+    let mut voxel_objects: Vec<(EntityID, CollidableID)> = Vec::with_capacity(32);
 
-    query!(ecs_world, |gizmos: &GizmosComp,
-                       voxel_object_id: &VoxelObjectID,
-                       collidable_id: &CollidableID,
-                       flags: &SceneEntityFlags| {
-        if !gizmos
-            .visible_gizmos
-            .contains(GizmoSet::VOXEL_INTERSECTIONS)
-            || flags.is_disabled()
-        {
-            return;
-        }
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         gizmos: &GizmosComp,
+         collidable_id: &CollidableID,
+         flags: &SceneEntityFlags| {
+            if !gizmos
+                .visible_gizmos
+                .contains(GizmoSet::VOXEL_INTERSECTIONS)
+                || flags.is_disabled()
+            {
+                return;
+            }
 
-        voxel_objects.push((*voxel_object_id, *collidable_id));
-    });
+            voxel_objects.push((entity_id, *collidable_id));
+        },
+        [HasVoxelObject]
+    );
 
     for (i, (object_b_id, collidable_b_id)) in voxel_objects.iter().enumerate() {
         for (object_a_id, collidable_a_id) in &voxel_objects[i + 1..] {
@@ -865,9 +865,9 @@ fn buffer_transforms_for_collider_gizmos(
             );
         }
         Collidable::VoxelObject(voxel_object_collidable) => {
-            let Some(voxel_object) =
-                voxel_object_manager.get_voxel_object(voxel_object_collidable.object_id())
-            else {
+            let voxel_object_id =
+                VoxelObjectID::from_entity_id(voxel_object_collidable.entity_id());
+            let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
                 return;
             };
             let voxel_object = voxel_object.object();
@@ -919,7 +919,6 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
     parameters: &GizmoParameters,
     current_frame_number: u32,
     entity_id: EntityID,
-    voxel_object_id: VoxelObjectID,
 ) {
     let node = scene_graph
         .model_instance_nodes()
@@ -929,6 +928,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
         return;
     }
 
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
         return;
     };
@@ -991,8 +991,8 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     voxel_object_manager: &VoxelObjectManager,
     collision_world: &CollisionWorld,
     camera: &Camera,
-    object_a_id: VoxelObjectID,
-    object_b_id: VoxelObjectID,
+    entity_a_id: EntityID,
+    entity_b_id: EntityID,
     collidable_a_id: CollidableID,
     collidable_b_id: CollidableID,
 ) {
@@ -1021,11 +1021,13 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     let transform_from_world_to_a = transform_from_world_to_a.aligned();
     let transform_from_world_to_b = transform_from_world_to_b.aligned();
 
+    let object_a_id = VoxelObjectID::from_entity_id(entity_a_id);
     let Some(object_a) = voxel_object_manager.get_voxel_object(object_a_id) else {
         return;
     };
     let object_a = object_a.object();
 
+    let object_b_id = VoxelObjectID::from_entity_id(entity_b_id);
     let Some(object_b) = voxel_object_manager.get_voxel_object(object_b_id) else {
         return;
     };

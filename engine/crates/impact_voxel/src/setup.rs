@@ -35,7 +35,6 @@ use impact_scene::{
 use roc_integration::roc;
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// A generated voxel object.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -49,7 +48,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// A voxel type that is the only type present in a voxel object.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -60,7 +58,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// A set of voxel types distributed according to a gradient noise pattern.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -75,7 +72,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// A modification of a voxel signed distance field based on multifractal
     /// noise.
     #[roc(parents = "Setup")]
@@ -92,7 +88,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// An object made of voxels in a box configuration.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -110,7 +105,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// An object made of voxels in a spherical configuration.
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -124,7 +118,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// An object made of voxels in a configuration described by the smooth
     /// union of two spheres.
     #[roc(parents = "Setup")]
@@ -146,7 +139,6 @@ define_setup_type! {
 }
 
 define_setup_type! {
-    target = VoxelObjectID;
     /// A voxel object with dynamic voxels will behave like a dynamic rigid body
     /// and respond to voxel absorption.
     #[roc(parents = "Setup")]
@@ -495,25 +487,28 @@ pub fn apply_modifications<A: Allocator>(
 pub fn setup_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
     generator: &impl ChunkedVoxelGenerator,
-) -> VoxelObjectID {
+    entity_id: EntityID,
+) -> Result<()> {
     let voxel_object = ChunkedVoxelObject::generate(generator);
 
     let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
 
-    let voxel_object_id = voxel_object_manager.add_voxel_object(meshed_voxel_object);
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+    voxel_object_manager.add_voxel_object(voxel_object_id, meshed_voxel_object)?;
 
-    voxel_object_id
+    Ok(())
 }
 
 pub fn setup_dynamic_rigid_body_for_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
     voxel_object_manager: &mut VoxelObjectManager,
     voxel_type_registry: &VoxelTypeRegistry,
-    voxel_object_id: VoxelObjectID,
+    entity_id: EntityID,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
     motion: Option<&Motion>,
 ) -> Result<(DynamicRigidBodyID, ModelTransform, ReferenceFrame, Motion)> {
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let voxel_object = voxel_object_manager
         .get_voxel_object(voxel_object_id)
         .ok_or_else(|| anyhow!("Tried to setup dynamic rigid body for missing voxel object"))?;
@@ -536,7 +531,7 @@ pub fn setup_dynamic_rigid_body_for_voxel_object(
         rigid_body_id,
     };
 
-    voxel_object_manager.add_physics_context_for_voxel_object(voxel_object_id, physics_context);
+    voxel_object_manager.add_physics_context_for_voxel_object(voxel_object_id, physics_context)?;
 
     Ok((rigid_body_id, model_transform, frame, velocity))
 }
@@ -546,7 +541,6 @@ pub fn create_model_instance_node_for_voxel_object(
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
     entity_id: EntityID,
-    voxel_object_id: &VoxelObjectID,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
     parent_entity_id: Option<&ParentEntity>,
@@ -557,8 +551,9 @@ pub fn create_model_instance_node_for_voxel_object(
     let frame = frame.copied().unwrap_or_default();
     let flags = flags.copied().unwrap_or_default();
 
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let voxel_object = voxel_object_manager
-        .get_voxel_object(*voxel_object_id)
+        .get_voxel_object(voxel_object_id)
         .ok_or_else(|| anyhow!("Tried to create model instance node for missing voxel object (with ID {voxel_object_id})"))?
         .object();
 
@@ -591,7 +586,7 @@ pub fn create_model_instance_node_for_voxel_object(
     let voxel_object_id_feature_id = model_instance_manager
         .get_storage_mut::<VoxelObjectID>()
         .expect("Missing storage for VoxelObjectID feature")
-        .add_feature(voxel_object_id);
+        .add_feature(&voxel_object_id);
 
     let bounding_sphere = if uncullable || voxel_object.contains_only_empty_voxels() {
         // The scene graph will not cull models with no bounding sphere

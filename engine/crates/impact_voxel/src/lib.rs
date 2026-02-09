@@ -15,12 +15,14 @@ pub mod shader_templates;
 pub mod utils;
 pub mod voxel_types;
 
+use anyhow::{Result, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use chunks::inertia::VoxelObjectInertialPropertyManager;
 use gpu_resource::VoxelObjectGPUResources;
-use impact_containers::HashMap;
+use impact_containers::NoHashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
+use impact_id::define_entity_id_newtype;
 use impact_model::impl_InstanceFeature;
 use impact_physics::rigid_body::DynamicRigidBodyID;
 use impact_scene::model::ModelInstanceManager;
@@ -37,14 +39,28 @@ use voxel_types::VoxelType;
 
 use crate::interaction::VoxelInteractionManager;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a
     /// [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject) in a
     /// [`VoxelObjectManager`].
+    [pub] VoxelObjectID
+}
+
+define_component_type! {
+    /// Marks that an entity has a voxel object identified by a
+    /// [`VoxelObjectID`].
+    ///
+    /// Use [`VoxelObjectID::from_entity_id`] to obtain the voxel object ID from
+    /// the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct VoxelObjectID(u32);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasVoxelObject;
+}
+
+#[cfg(feature = "ecs")]
+impact_ecs::declare_component_flags! {
+    HasVoxelObject => impact_ecs::component::ComponentFlags::INHERITABLE,
 }
 
 /// A voxel, which may either be be empty or filled with a material with
@@ -116,9 +132,8 @@ pub struct VoxelManager {
 /// a scene.
 #[derive(Debug)]
 pub struct VoxelObjectManager {
-    voxel_objects: HashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
-    physics_contexts: HashMap<VoxelObjectID, VoxelObjectPhysicsContext>,
-    id_counter: u32,
+    voxel_objects: NoHashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
+    physics_contexts: NoHashMap<VoxelObjectID, VoxelObjectPhysicsContext>,
 }
 
 /// Physics context for voxel objects that participate in dynamic rigid body
@@ -431,21 +446,6 @@ impl Voxel {
     }
 }
 
-#[cfg(test)]
-impl VoxelObjectID {
-    /// Creates a dummy [`ChunkedVoxelObjectID`] that will never match an actual
-    /// ID returned from the [`VoxelObjectManager`]. Used for testing purposes.
-    pub fn dummy() -> Self {
-        Self(0)
-    }
-}
-
-impl std::fmt::Display for VoxelObjectID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl_InstanceFeature!(VoxelObjectID);
 
 impl VoxelManager {
@@ -493,9 +493,8 @@ impl VoxelObjectManager {
     /// Creates a new voxel object manager with no objects.
     pub fn new() -> Self {
         Self {
-            voxel_objects: HashMap::default(),
-            physics_contexts: HashMap::default(),
-            id_counter: 1,
+            voxel_objects: NoHashMap::default(),
+            physics_contexts: NoHashMap::default(),
         }
     }
 
@@ -559,38 +558,54 @@ impl VoxelObjectManager {
 
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
     #[inline]
-    pub fn voxel_objects(&self) -> &HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
+    pub fn voxel_objects(&self) -> &NoHashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
         &self.voxel_objects
     }
 
     /// Returns a mutable reference to the [`HashMap`] storing all voxel
     /// objects.
     #[inline]
-    pub fn voxel_objects_mut(&mut self) -> &mut HashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
+    pub fn voxel_objects_mut(&mut self) -> &mut NoHashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
         &mut self.voxel_objects
     }
 
-    /// Adds the given [`MeshedChunkedVoxelObject`] to the manager.
+    /// Adds the given [`MeshedChunkedVoxelObject`] to the manager under the
+    /// given ID.
     ///
-    /// # Returns
-    /// A new [`VoxelObjectID`] representing the added voxel object.
+    /// # Errors
+    /// Returns an error if the ID is already present.
     #[inline]
-    pub fn add_voxel_object(&mut self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
-        let voxel_object_id = self.create_new_voxel_object_id();
+    pub fn add_voxel_object(
+        &mut self,
+        voxel_object_id: VoxelObjectID,
+        voxel_object: MeshedChunkedVoxelObject,
+    ) -> Result<()> {
+        if self.voxel_objects.contains_key(&voxel_object_id) {
+            bail!("A voxel object with ID {voxel_object_id} is already present");
+        }
         self.voxel_objects.insert(voxel_object_id, voxel_object);
-        voxel_object_id
+        Ok(())
     }
 
     /// Adds the given [`VoxelObjectPhysicsContext`] for the voxel object with
     /// the given ID.
+    ///
+    /// # Errors
+    /// Returns an error if there is no voxel object with the given ID.
     #[inline]
     pub fn add_physics_context_for_voxel_object(
         &mut self,
         voxel_object_id: VoxelObjectID,
         physics_context: VoxelObjectPhysicsContext,
-    ) {
+    ) -> Result<()> {
+        if !self.voxel_objects.contains_key(&voxel_object_id) {
+            bail!(
+                "Tried to add physics context for missing voxel object with ID {voxel_object_id}"
+            );
+        }
         self.physics_contexts
             .insert(voxel_object_id, physics_context);
+        Ok(())
     }
 
     /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.
@@ -637,13 +652,6 @@ impl VoxelObjectManager {
         );
 
         voxel_object_gpu_resources.sync_visible_objects(model_instance_manager);
-    }
-
-    #[inline]
-    fn create_new_voxel_object_id(&mut self) -> VoxelObjectID {
-        let voxel_object_id = VoxelObjectID(self.id_counter);
-        self.id_counter = self.id_counter.checked_add(1).unwrap();
-        voxel_object_id
     }
 }
 

@@ -984,6 +984,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_engine_task!("Applying voxel absorbers", engine, {
+            let mut entity_id_manager = engine.entity_id_manager().olock();
             let mut entity_stager = engine.entity_stager().olock();
             let ecs_world = engine.ecs_world().oread();
             let resource_manager = engine.resource_manager().oread();
@@ -998,6 +999,7 @@ define_task!(
 
             impact_voxel::interaction::systems::apply_absorption(
                 engine.component_metadata_registry(),
+                &mut entity_id_manager,
                 &mut entity_stager,
                 &ecs_world,
                 &scene_graph,

@@ -116,7 +116,9 @@ impl Engine {
         CA: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        self.entity_id_manager.olock().register_id(entity_id)?;
+        self.entity_id_manager
+            .olock()
+            .register_id_if_absent(entity_id);
 
         let mut entities = PrototypeEntities::new_single(entity_id, components)?;
 
@@ -610,20 +612,27 @@ impl Engine {
         f(generator)
     }
 
-    pub fn add_voxel_object(&self, voxel_object: MeshedChunkedVoxelObject) -> VoxelObjectID {
+    pub fn add_voxel_object(
+        &self,
+        entity_id: EntityID,
+        voxel_object: MeshedChunkedVoxelObject,
+    ) -> Result<()> {
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
         self.scene()
             .oread()
             .voxel_manager()
             .owrite()
             .object_manager_mut()
-            .add_voxel_object(voxel_object)
+            .add_voxel_object(voxel_object_id, voxel_object)
     }
 
     pub fn replace_voxel_object(
         &self,
-        voxel_object_id: VoxelObjectID,
+        entity_id: EntityID,
         voxel_object: MeshedChunkedVoxelObject,
     ) {
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+
         if let Some(existing_voxel_object) = self
             .scene()
             .oread()
@@ -653,7 +662,7 @@ impl Engine {
 
     pub fn with_absorbed_voxels_for_sphere<R>(
         &self,
-        absorber_id: VoxelAbsorbingSphereID,
+        entity_id: EntityID,
         f: impl FnOnce(&[AbsorbedVoxels], &[f32]) -> Result<R>,
     ) -> Result<R> {
         let resource_manager = self.resource_manager().oread();
@@ -662,6 +671,7 @@ impl Engine {
         let voxel_manager = scene.voxel_manager().oread();
         let absorption_manager = voxel_manager.interaction_manager.absorption_manager();
 
+        let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity_id);
         let absorbing_sphere = absorption_manager
             .get_absorbing_sphere(absorber_id)
             .ok_or_else(|| anyhow!("Missing voxel absorbing sphere with ID {absorber_id:?}"))?;
@@ -676,7 +686,7 @@ impl Engine {
 
     pub fn with_absorbed_voxels_for_capsule<R>(
         &self,
-        absorber_id: VoxelAbsorbingCapsuleID,
+        entity_id: EntityID,
         f: impl FnOnce(&[AbsorbedVoxels], &[f32]) -> Result<R>,
     ) -> Result<R> {
         let resource_manager = self.resource_manager().oread();
@@ -685,6 +695,7 @@ impl Engine {
         let voxel_manager = scene.voxel_manager().oread();
         let absorption_manager = voxel_manager.interaction_manager.absorption_manager();
 
+        let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity_id);
         let absorbing_capsule = absorption_manager
             .get_absorbing_capsule(absorber_id)
             .ok_or_else(|| anyhow!("Missing voxel absorbing capsule with ID {absorber_id:?}"))?;
