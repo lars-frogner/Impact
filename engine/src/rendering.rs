@@ -8,6 +8,7 @@ use crate::{
     lock_order::OrderedRwLock, resource::ResourceManager, tasks::RenderToSurface, ui::UserInterface,
 };
 use anyhow::Result;
+use impact_camera::CameraManager;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
@@ -31,7 +32,7 @@ use impact_rendering::{
     },
     surface::RenderingSurface,
 };
-use impact_scene::{camera::CameraManager, model::ModelInstanceManager};
+use impact_scene::model::ModelInstanceManager;
 use impact_scheduling::{Task, TaskErrors};
 use impact_voxel::VoxelObjectManager;
 use parking_lot::RwLock;

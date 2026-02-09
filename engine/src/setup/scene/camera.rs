@@ -2,7 +2,11 @@
 
 use crate::{lock_order::OrderedRwLock, scene::Scene};
 use anyhow::Result;
-use impact_camera::{CameraID, HasCamera, OrthographicCamera, PerspectiveCamera, setup};
+use impact_camera::{
+    CameraID, HasCamera,
+    projection::{OrthographicCameraProjection, PerspectiveCameraProjection},
+    setup,
+};
 use impact_ecs::{
     setup,
     world::{EntityEntry, PrototypeEntities},
@@ -49,7 +53,7 @@ pub fn add_perspective_camera_to_scene_for_new_entities(
          -> Result<HasCamera> {
             let frame = frame.copied().unwrap_or_default();
 
-            let camera = PerspectiveCamera::new(
+            let projection = PerspectiveCameraProjection::new(
                 camera_manager.camera_context().aspect_ratio,
                 camera_props.vertical_field_of_view(),
                 UpperExclusiveBounds::new(
@@ -72,7 +76,7 @@ pub fn add_perspective_camera_to_scene_for_new_entities(
                 camera_to_parent_transform.compact(),
             )?;
 
-            camera_manager.add_active_camera(camera, camera_id);
+            camera_manager.add_active_camera(camera_id, projection);
 
             Ok(HasCamera)
         },
@@ -103,7 +107,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entities(
          -> Result<HasCamera> {
             let frame = frame.copied().unwrap_or_default();
 
-            let camera = OrthographicCamera::new(
+            let projection = OrthographicCameraProjection::new(
                 camera_manager.camera_context().aspect_ratio,
                 camera_props.vertical_field_of_view(),
                 UpperExclusiveBounds::new(
@@ -126,7 +130,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entities(
                 camera_to_parent_transform.compact(),
             )?;
 
-            camera_manager.add_active_camera(camera, camera_id);
+            camera_manager.add_active_camera(camera_id, projection);
 
             Ok(HasCamera)
         },

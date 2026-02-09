@@ -3,7 +3,6 @@
 #[macro_use]
 mod macros;
 
-pub mod camera;
 pub mod graph;
 pub mod light;
 pub mod model;

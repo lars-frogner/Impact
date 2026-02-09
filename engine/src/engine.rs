@@ -29,6 +29,7 @@ use crate::{
     scene::Scene,
 };
 use anyhow::Result;
+use impact_camera::CameraContext;
 use impact_controller::{ControllerConfig, MotionController, OrientationController};
 use impact_ecs::{
     metadata::ComponentMetadataRegistry,
@@ -36,7 +37,7 @@ use impact_ecs::{
 };
 use impact_gpu::device::GraphicsDevice;
 use impact_id::EntityIDManager;
-use impact_scene::{camera::CameraContext, model::ModelInstanceManager};
+use impact_scene::model::ModelInstanceManager;
 use impact_scheduling::TaskErrors;
 use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};

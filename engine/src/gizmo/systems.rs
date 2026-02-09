@@ -16,6 +16,7 @@ use crate::gizmo::{
     },
 };
 use approx::abs_diff_ne;
+use impact_camera::{Camera, CameraManager};
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
@@ -43,7 +44,6 @@ use impact_physics::{
 };
 use impact_scene::{
     SceneEntityFlags,
-    camera::{CameraManager, SceneCamera},
     graph::{ModelInstanceNode, SceneGraph},
     model::ModelInstanceManager,
 };
@@ -104,10 +104,10 @@ pub fn buffer_transforms_for_gizmos(
     gizmo_manager: &GizmoManager,
     current_frame_count: u32,
 ) {
-    let Some(scene_camera) = camera_manager.active_camera() else {
+    let Some(camera) = camera_manager.active_camera() else {
         return;
     };
-    let camera_position = scene_camera.compute_world_space_position();
+    let camera_position = camera.compute_world_space_position();
 
     query!(
         ecs_world,
@@ -189,7 +189,7 @@ pub fn buffer_transforms_for_gizmos(
             buffer_transforms_for_shadow_map_cascades_gizmo(
                 model_instance_manager,
                 light_manager,
-                scene_camera,
+                camera,
                 *unidirectional_light_id,
             );
         }
@@ -205,7 +205,7 @@ pub fn buffer_transforms_for_gizmos(
         buffer_transforms_for_anchor_gizmos(
             anchor_manager,
             model_instance_manager,
-            scene_camera,
+            camera,
             frame,
             TypedRigidBodyID::Dynamic(*rigid_body_id),
         );
@@ -221,7 +221,7 @@ pub fn buffer_transforms_for_gizmos(
         buffer_transforms_for_anchor_gizmos(
             anchor_manager,
             model_instance_manager,
-            scene_camera,
+            camera,
             frame,
             TypedRigidBodyID::Kinematic(*rigid_body_id),
         );
@@ -241,7 +241,7 @@ pub fn buffer_transforms_for_gizmos(
         buffer_transforms_for_kinematics_gizmos(
             model_instance_manager,
             gizmo_manager.parameters(),
-            scene_camera,
+            camera,
             &camera_position,
             frame,
             motion,
@@ -266,7 +266,7 @@ pub fn buffer_transforms_for_gizmos(
             rigid_body_manager,
             model_instance_manager,
             gizmo_manager.parameters(),
-            scene_camera,
+            camera,
             &camera_position,
             frame,
             *rigid_body_id,
@@ -289,7 +289,7 @@ pub fn buffer_transforms_for_gizmos(
             model_instance_manager,
             collision_world,
             voxel_object_manager,
-            scene_camera,
+            camera,
             &camera_position,
             *collidable,
             gizmos.visible_gizmos,
@@ -341,7 +341,7 @@ pub fn buffer_transforms_for_gizmos(
                 model_instance_manager,
                 voxel_object_manager,
                 collision_world,
-                scene_camera,
+                camera,
                 *object_a_id,
                 *object_b_id,
                 *collidable_a_id,
@@ -497,14 +497,14 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 fn buffer_transforms_for_shadow_map_cascades_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     light_manager: &LightManager,
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     light_id: ShadowableUnidirectionalLightID,
 ) {
     let Some(light) = light_manager.get_shadowable_unidirectional_light(light_id) else {
         return;
     };
 
-    let view_frustum = scene_camera.camera().view_frustum();
+    let view_frustum = camera.projection().view_frustum();
 
     for (cascade_idx, near_partition_depth_for_cascade) in iter::once(light.near_partition_depth())
         .chain(light.partition_depths().iter().copied())
@@ -517,11 +517,9 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
         // make the plane doesn't get clipped
         let plane_z = -plane_distance.max(view_frustum.near_distance() + 1e-6);
 
-        let plane_height = scene_camera
-            .camera()
-            .view_height_at_distance(plane_distance);
+        let plane_height = camera.projection().view_height_at_distance(plane_distance);
 
-        let scaling = plane_height * scene_camera.camera().aspect_ratio().max(1.0);
+        let scaling = plane_height * camera.projection().aspect_ratio().max(1.0);
 
         let camera_cascade_from_vertical_square = InstanceModelViewTransform {
             translation: Vector3C::new(0.0, 0.0, plane_z),
@@ -539,7 +537,7 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
 fn buffer_transforms_for_anchor_gizmos(
     anchor_manager: &AnchorManager,
     model_instance_manager: &mut ModelInstanceManager,
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     frame: &ReferenceFrame,
     rigid_body_id: TypedRigidBodyID,
 ) {
@@ -569,7 +567,7 @@ fn buffer_transforms_for_anchor_gizmos(
             );
 
         let view_sphere_from_unit_sphere_transform =
-            scene_camera.view_transform() * world_sphere_from_unit_sphere_transform;
+            camera.view_transform() * world_sphere_from_unit_sphere_transform;
 
         model_instance_manager.buffer_instance_feature(
             GizmoType::Anchors.only_model_id(),
@@ -581,7 +579,7 @@ fn buffer_transforms_for_anchor_gizmos(
 fn buffer_transforms_for_kinematics_gizmos(
     model_instance_manager: &mut ModelInstanceManager,
     parameters: &GizmoParameters,
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     camera_position: &Point3,
     frame: &ReferenceFrame,
     motion: &Motion,
@@ -598,7 +596,7 @@ fn buffer_transforms_for_kinematics_gizmos(
             model_instance_manager.buffer_instance_feature(
                 GizmoType::LinearVelocity.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
-                    scene_camera,
+                    camera,
                     camera_position,
                     frame.position.aligned(),
                     direction,
@@ -618,7 +616,7 @@ fn buffer_transforms_for_kinematics_gizmos(
             model_instance_manager.buffer_instance_feature(
                 GizmoType::AngularVelocity.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
-                    scene_camera,
+                    camera,
                     camera_position,
                     frame.position.aligned(),
                     axis_of_rotation,
@@ -633,7 +631,7 @@ fn buffer_transforms_for_dynamics_gizmos(
     rigid_body_manager: &RigidBodyManager,
     model_instance_manager: &mut ModelInstanceManager,
     parameters: &GizmoParameters,
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     camera_position: &Point3,
     frame: &ReferenceFrame,
     rigid_body_id: DynamicRigidBodyID,
@@ -656,7 +654,7 @@ fn buffer_transforms_for_dynamics_gizmos(
         );
 
         let view_sphere_from_unit_sphere_transform =
-            scene_camera.view_transform() * world_sphere_from_unit_sphere_transform;
+            camera.view_transform() * world_sphere_from_unit_sphere_transform;
 
         model_instance_manager.buffer_instance_feature(
             GizmoType::CenterOfMass.only_model_id(),
@@ -675,7 +673,7 @@ fn buffer_transforms_for_dynamics_gizmos(
             model_instance_manager.buffer_instance_feature(
                 GizmoType::AngularMomentum.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
-                    scene_camera,
+                    camera,
                     camera_position,
                     frame.position.aligned(),
                     axis,
@@ -696,7 +694,7 @@ fn buffer_transforms_for_dynamics_gizmos(
             model_instance_manager.buffer_instance_feature(
                 GizmoType::Force.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
-                    scene_camera,
+                    camera,
                     camera_position,
                     frame.position.aligned(),
                     direction,
@@ -717,7 +715,7 @@ fn buffer_transforms_for_dynamics_gizmos(
             model_instance_manager.buffer_instance_feature(
                 GizmoType::Torque.only_model_id(),
                 &model_view_transform_for_vector_gizmo(
-                    scene_camera,
+                    camera,
                     camera_position,
                     frame.position.aligned(),
                     axis,
@@ -733,7 +731,7 @@ fn sphere_radius_from_mass_and_density(mass: f32, density: f32) -> f32 {
 }
 
 fn model_view_transform_for_vector_gizmo(
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     camera_position: &Point3,
     position: Point3,
     direction: UnitVector3,
@@ -747,7 +745,7 @@ fn model_view_transform_for_vector_gizmo(
 
     let model_to_world_transform = Similarity3::from_parts(*position.as_vector(), rotation, length);
 
-    let instance_model_view_transform = scene_camera.view_transform() * model_to_world_transform;
+    let instance_model_view_transform = camera.view_transform() * model_to_world_transform;
 
     InstanceModelViewTransform::from(&instance_model_view_transform)
 }
@@ -795,7 +793,7 @@ fn buffer_transforms_for_collider_gizmos(
     model_instance_manager: &mut ModelInstanceManager,
     collision_world: &CollisionWorld,
     voxel_object_manager: &VoxelObjectManager,
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     camera_position: &Point3,
     collidable_id: CollidableID,
     visible_gizmos: GizmoSet,
@@ -834,7 +832,7 @@ fn buffer_transforms_for_collider_gizmos(
             );
 
             let model_to_camera_transform =
-                scene_camera.view_transform() * unit_sphere_to_sphere_collider_transform;
+                camera.view_transform() * unit_sphere_to_sphere_collider_transform;
 
             model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id,
@@ -851,13 +849,13 @@ fn buffer_transforms_for_collider_gizmos(
             let translation = plane.project_point_onto_plane(camera_position);
             let rotation =
                 UnitQuaternion::rotation_between_axes(&UnitVector3::unit_z(), plane.unit_normal());
-            let scaling = scene_camera.camera().view_frustum().far_distance();
+            let scaling = camera.projection().view_frustum().far_distance();
 
             let unit_square_to_plane_collider_transform =
                 Similarity3::from_parts(*translation.as_vector(), rotation, scaling);
 
             let model_to_camera_transform =
-                scene_camera.view_transform() * unit_square_to_plane_collider_transform;
+                camera.view_transform() * unit_square_to_plane_collider_transform;
 
             model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id,
@@ -879,7 +877,7 @@ fn buffer_transforms_for_collider_gizmos(
             let transform_from_object_to_world_space = transform_to_object_space.inverted();
 
             let transform_from_object_to_camera_space =
-                scene_camera.view_transform() * transform_from_object_to_world_space;
+                camera.view_transform() * transform_from_object_to_world_space;
 
             let rotation_from_object_to_camera_space =
                 transform_from_object_to_camera_space.rotation();
@@ -990,7 +988,7 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     voxel_object_manager: &VoxelObjectManager,
     collision_world: &CollisionWorld,
-    scene_camera: &SceneCamera,
+    camera: &Camera,
     object_a_id: VoxelObjectID,
     object_b_id: VoxelObjectID,
     collidable_a_id: CollidableID,
@@ -1044,10 +1042,10 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
     };
 
     let transform_from_a_to_camera_space =
-        scene_camera.view_transform() * transform_from_world_to_a.inverted();
+        camera.view_transform() * transform_from_world_to_a.inverted();
 
     let transform_from_b_to_camera_space =
-        scene_camera.view_transform() * transform_from_world_to_b.inverted();
+        camera.view_transform() * transform_from_world_to_b.inverted();
 
     let mut transforms = Vec::with_capacity(256);
 
