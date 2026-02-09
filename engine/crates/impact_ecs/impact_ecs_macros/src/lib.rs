@@ -60,7 +60,7 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Macro for performing setup on components before creating entities.
+/// Macro for performing setup on a group of entities before creating them.
 ///
 /// ```ignore
 /// setup!(
@@ -68,81 +68,80 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 ///         // Setup to run once if criteria are matched (optional)
 ///         // ....
 ///     },
-///     // Identifier for the `ArchetypeComponentStorage` to match on
-///     components,
-///     // Call closure for each component instance if `components` has both
-///     // `Comp1` and `Comp2`
-///     |comp_1: &Comp1, comp_2: &Comp2, comp_3: Option<&Comp3>| -> (Comp4, Comp5) {
-///         // Do something with `comp_1` and `comp_2`, and `comp_3` if `Comp3` is present
+///     // Identifier for the `PrototypeEntities` whose components to match on
+///     entities,
+///     // Call closure for each entity if the current archetype ("prototype")
+///     // has both `Comp1` and `Comp2`
+///     |entity_id: EntityID, comp_1: &Comp1, comp_2: &Comp2, comp_3: Option<&Comp3>| -> (Comp4, Comp5) {
+///         // Do something with `entity_id`, `comp_1` and `comp_2`, and `comp_3` if `Comp3` is present
 ///         // ...
-///         // Return instances of `comp_4` and `comp_5` to add to `components`
+///         // Return instances of `comp_4` and `comp_5` to add to `entities`
 ///         (comp_4, comp_5)
 ///     },
-///     // Require additionaly that `components` has `MarkerComp1` and
+///     // Require additionaly that the prototype has `MarkerComp1` and
 ///     // `MarkerComp2` (optional)
 ///     [MarkerComp1, MarkerComp2]
-///     // Do not call the closure if `components` has `Comp4` or `Comp5`
+///     // Do not call the closure if the prototype has `Comp4` or `Comp5`
 ///     // (optional)
 ///     ![Comp4, Comp5]
 /// );
 /// ```
 ///
-/// The macro takes as input an `ArchetypeComponentStorage` wrapping a set of
-/// component instances, followed by a closure definition whose type signature
-/// specifies the set of `Component` types to look for in the set of existing
-/// components as well as the component types the closure will return instances
-/// of for inclusion in the `ArchetypeComponentStorage`. The type of each
-/// closure argument must be annotated, and has to be an immutable reference to
-/// a type implementing the `Component` trait, optionally wrapped in an
-/// [`Option`]. If the closure returns anything, the return type has to be
-/// annotated in the closure signature. It can be a single value or a tuple of
-/// values implementing the `Component` trait, or the unit type `()`, and
-/// optionally be wrapped in a `Result`. If the closure returns a `Result<C,
+/// The macro takes as input a `PrototypeEntities` representing a set of
+/// entities of the same prototype (i.e. archetype, but subject to change),
+/// followed by a closure definition whose argument signature specifies the set
+/// of `Component` types to look for in the prototype. The first argument to the
+/// closure may optionally have the `EntityID` type. The closure's return type
+/// defines the component types the closure will add or update for each entity.
+/// The type of each closure argument must be annotated, and has to be an
+/// immutable reference to a type implementing the `Component` trait, optionally
+/// wrapped in an [`Option`]. If the closure returns anything, the return type
+/// has to be annotated in the closure signature. It can be a single value or a
+/// tuple of values implementing the `Component` trait, or the unit type `()`,
+/// and optionally be wrapped in a `Result`. If the closure returns a `Result<C,
 /// E>`, the `setup!` expression will evaluate to a `Result<(), E>`.
 ///
-/// The body of the closure specifies what to do with each set of matching
-/// component instances present in the `ArchetypeComponentStorage`. The closure
-/// will only be called if the `ArchetypeComponentStorage` has all the
-/// non-`Option` component types specified as closure arguments, and if so it
-/// will be called once with each set of requested component instances. Any of
-/// the `Option`-wrapped component types present in the
-/// `ArchetypeComponentStorage` will be passed as `Some` to the closure, the
-/// ones that are not present will be `None`. Any instances of a new component
-/// type that the closure returns will be added under a new component type in
-/// the `ArchetypeComponentStorage`. Any returned instances of an already
-/// existing component type will overwrite the existing instances for that
-/// component type.
+/// The body of the closure specifies what to do with each entity's instances of
+/// the matching component types (and optionally its ID). The closure will only
+/// be called if the prototype has all the non-`Option` component types
+/// specified as closure arguments, and if so it will be called once with the
+/// matching component instances of each entity. Any of the `Option`-wrapped
+/// component types present in the prototype will be passed as `Some` to the
+/// closure, the ones that are not present will be `None`. Any instances of a
+/// new component type that the closure returns will be added under a new
+/// component type in the `PrototypeEntities`. Any returned instances of an
+/// already existing component type will overwrite the existing instances for
+/// that component type.
 ///
 /// Optionally, an array of additionaly required component types can be included
 /// as an argument to the macro. The closure will only be called if the
-/// `ArchetypeComponentStorage` also has these component types. The primary use
-/// of specifying a required component here instead of in the closure signature
-/// is for zero-sized marker components, which are not allowed in the closure
+/// prototype also has these component types. The primary use of specifying a
+/// required component here instead of in the closure signature is for
+/// zero-sized marker components, which are not allowed in the closure
 /// signature.
 ///
 /// Another option is to include an array of disallowed component types as an
-/// argument to the macro. The array must be prefixed with `!`. If the
-/// `ArchetypeComponentStorage` has all of the required components, but also has
-/// a component type specified in the dissalowed component list, the closure
-/// will not be called.
+/// argument to the macro. The array must be prefixed with `!`. If the prototype
+/// has all of the required components, but also has a component type specified
+/// in the dissalowed component list, the closure will not be called.
 ///
-/// Finally, arbitrary code to run once if (and only if) the
-/// `ArchetypeComponentStorage` has all of the required components can be
-/// specified inside curly braces as the first argument to the macro. This code
-/// will be included in the parent scope of the closure, and will go out of
-/// scope when all closure calls have been executed.
+/// Finally, arbitrary code to run once if (and only if) the prototype has all
+/// of the required components can be specified inside curly braces as the first
+/// argument to the macro. This code will be included in the parent scope of the
+/// closure, and will go out of scope when all closure calls have been executed.
 ///
 /// # Examples
 /// ```ignore
-/// # use impact_ecs::{
-/// #     archetype::ArchetypeComponentStorage,
-/// #     world::World,
+/// # use impact_ecs::world::{
+/// #     PrototypeEntities,
+/// #     World,
 /// # };
 /// # use impact_ecs_macros::{
 /// #     ComponentDoctest as Component,
 /// #     setup_doctest as setup,
 /// # };
 /// # use bytemuck::{Zeroable, Pod};
+/// # use impact_id::EntityIDManager;
 /// # use anyhow::Error;
 /// #
 /// # #[repr(C)]
@@ -164,12 +163,12 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 /// # #[derive(Clone, Copy, Zeroable, Pod, Component)]
 /// # struct Disabled;
 /// #
-/// fn setup_area_lights(components: &mut ArchetypeComponentStorage, contains_area_lights: &mut bool) {
+/// fn setup_area_lights(entities: &mut PrototypeEntities, contains_area_lights: &mut bool) {
 ///     setup!(
 ///         {
 ///             *contains_area_lights = true;
 ///         },
-///         components,
+///         entities,
 ///         |flux: &Flux, area: &Area, dimming: Option<&Dimming>| -> Luminosity {
 ///             if let Some(dimming_factor) = dimming {
 ///                 Luminosity(dimming_factor.0 * flux.0 * area.0)
@@ -182,18 +181,22 @@ pub fn archetype_of_doctest(input: TokenStream) -> TokenStream {
 ///     );
 /// }
 ///
+/// let mut id_manager = EntityIDManager::new();
+/// let entity_ids = id_manager.provide_id_vec(2);
+///
 /// let mut world = World::new();
-/// let mut components = ArchetypeComponentStorage::try_from_view(
+/// let mut entities = PrototypeEntities::new(
+///     entity_ids,
 ///     (&[Light, Light],
 ///      &[Flux(1.0), Flux(5.0)],
 ///      &[Area(2.0), Area(2.0)],
-///      &[Dimming(0.5), Dimming(0.2)])
+///      &[Dimming(0.5), Dimming(0.2)]),
 /// )?;
 /// let mut contains_area_lights = false;
 ///
-/// setup_area_lights(&mut components, &mut contains_area_lights);
+/// setup_area_lights(&mut entities, &mut contains_area_lights);
 ///
-/// let entity_ids = world.create_entities(components)?;
+/// let entity_ids = world.create_prototype_entities(entities)?;
 ///
 /// assert!(contains_area_lights);
 /// assert_eq!(

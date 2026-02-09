@@ -4,9 +4,10 @@ use super::Engine;
 use crate::lock_order::OrderedMutex;
 use anyhow::Result;
 use impact_ecs::{
-    archetype::ArchetypeComponentStorage,
     component::{ComponentCategory, ComponentID},
-    world::{EntitiesToCreate, EntityToCreate, EntityToCreateWithID, EntityToUpdate},
+    world::{
+        EntitiesToCreate, EntityToCreate, EntityToCreateWithID, EntityToUpdate, PrototypeEntities,
+    },
 };
 use impact_id::EntityID;
 use impact_scene::SceneEntityFlags;
@@ -79,17 +80,17 @@ impl Engine {
 
     pub(crate) fn extract_component_metadata(
         &self,
-        components: &ArchetypeComponentStorage,
+        entities: &PrototypeEntities,
     ) -> (
         ComponentMetadataList<ComponentID>,
         ComponentMetadataList<&'static str>,
         ComponentMetadataList<&'static str>,
     ) {
-        let mut setup_component_ids = TinyVec::with_capacity(components.n_component_types());
-        let mut setup_component_names = TinyVec::with_capacity(components.n_component_types());
-        let mut standard_component_names = TinyVec::with_capacity(components.n_component_types());
+        let mut setup_component_ids = TinyVec::with_capacity(entities.n_component_types());
+        let mut setup_component_names = TinyVec::with_capacity(entities.n_component_types());
+        let mut standard_component_names = TinyVec::with_capacity(entities.n_component_types());
 
-        for component_id in components.component_ids() {
+        for &component_id in entities.archetype().component_ids() {
             let component_metadata = self.component_metadata_registry.metadata(component_id);
             match component_metadata.category {
                 ComponentCategory::Standard => {

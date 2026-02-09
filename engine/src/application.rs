@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use anyhow::Result;
-use impact_ecs::archetype::ArchetypeComponentStorage;
+use impact_ecs::world::PrototypeEntities;
 use std::sync::Arc;
 
 pub trait ApplicationInterface: Send + Sync + std::fmt::Debug {
@@ -18,7 +18,7 @@ pub trait ApplicationInterface: Send + Sync + std::fmt::Debug {
         Ok(())
     }
 
-    fn on_new_entities(&self, _components: &mut ArchetypeComponentStorage) -> Result<()> {
+    fn on_new_entities(&self, _entities: &mut PrototypeEntities) -> Result<()> {
         Ok(())
     }
 

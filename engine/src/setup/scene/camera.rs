@@ -3,41 +3,37 @@
 use crate::{lock_order::OrderedRwLock, scene::Scene};
 use anyhow::Result;
 use impact_camera::{OrthographicCamera, PerspectiveCamera, setup};
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_ecs::{
+    setup,
+    world::{EntityEntry, PrototypeEntities},
+};
 use impact_geometry::ReferenceFrame;
+use impact_id::EntityID;
 use impact_math::bounds::UpperExclusiveBounds;
 use impact_scene::{SceneGraphCameraNodeHandle, SceneGraphParentNodeHandle, graph::CameraNodeID};
 use parking_lot::RwLock;
 
-/// Checks if the entity-to-be with the given components has the required
-/// components for a camera, and if so, adds a node for the camera in the
+/// Checks if the given entities have the required components for a camera, and
+/// if so, adds a node for the camera in the
 /// [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
 /// [`SceneCamera`](impact_scene::camera::SceneCamera) into the `Scene` and adds
 /// a [`SceneGraphCameraNodeHandle`] to the entity.
-///
-/// # Errors
-/// Returns an error if the content of `scene_camera` is not [`None`], meaning
-/// that the scene already has a camera.
-pub fn add_camera_to_scene_for_new_entity(
+pub fn add_camera_to_scene_for_new_entities(
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
-    add_perspective_camera_to_scene_for_new_entity(scene, components)?;
-    add_orthographic_camera_to_scene_for_new_entity(scene, components)
+    add_perspective_camera_to_scene_for_new_entities(scene, entities)?;
+    add_orthographic_camera_to_scene_for_new_entities(scene, entities)
 }
 
-/// Checks if the entity-to-be with the given components has the required
-/// components for a perspective camera, and if so, adds a node for the camera
-/// in the [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
+/// Checks if the given entities have the required components for a perspective
+/// camera, and if so, adds a node for the camera in the
+/// [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
 /// [`SceneCamera`](impact_scene::camera::SceneCamera) into the `Scene` and adds
 /// a [`SceneGraphCameraNodeHandle`] to the entity.
-///
-/// # Errors
-/// Returns an error if the content of `scene_camera` is not [`None`], meaning
-/// that the scene already has a camera.
-pub fn add_perspective_camera_to_scene_for_new_entity(
+pub fn add_perspective_camera_to_scene_for_new_entities(
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
@@ -45,8 +41,9 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             let mut camera_manager = scene.camera_manager().owrite();
             let mut scene_graph = scene.scene_graph().owrite();
         },
-        components,
-        |frame: Option<&ReferenceFrame>,
+        entities,
+        |entity_id: EntityID,
+         frame: Option<&ReferenceFrame>,
          camera_props: &setup::PerspectiveCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> Result<SceneGraphCameraNodeHandle> {
@@ -63,7 +60,7 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
 
             let camera_to_parent_transform = frame.create_transform_to_parent_space();
 
-            let camera_node_id = CameraNodeID::from_entity_id(todo!());
+            let camera_node_id = CameraNodeID::from_entity_id(entity_id);
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
@@ -78,22 +75,17 @@ pub fn add_perspective_camera_to_scene_for_new_entity(
             Ok(SceneGraphCameraNodeHandle::new(camera_node_id))
         },
         ![SceneGraphCameraNodeHandle]
-    );
-    Ok(())
+    )
 }
 
-/// Checks if the entity-to-be with the given components has the required
-/// components for an orthographic camera, and if so, adds a node for the camera
-/// in the [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
+/// Checks if the given entities have the required components for an
+/// orthographic camera, and if so, adds a node for the camera in the
+/// [`SceneGraph`](impact_scene::graph::SceneGraph), inserts a
 /// [`SceneCamera`](impact_scene::camera::SceneCamera) into the `Scene` and adds
 /// a [`SceneGraphCameraNodeHandle`] to the entity.
-///
-/// # Errors
-/// Returns an error if the content of `scene_camera` is not [`None`], meaning
-/// that the scene already has a camera.
-pub fn add_orthographic_camera_to_scene_for_new_entity(
+pub fn add_orthographic_camera_to_scene_for_new_entities(
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
@@ -101,8 +93,9 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             let mut camera_manager = scene.camera_manager().owrite();
             let mut scene_graph = scene.scene_graph().owrite();
         },
-        components,
-        |frame: Option<&ReferenceFrame>,
+        entities,
+        |entity_id: EntityID,
+         frame: Option<&ReferenceFrame>,
          camera_props: &setup::OrthographicCamera,
          parent: Option<&SceneGraphParentNodeHandle>|
          -> Result<SceneGraphCameraNodeHandle> {
@@ -119,7 +112,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
 
             let camera_to_parent_transform = frame.create_transform_to_parent_space();
 
-            let camera_node_id = CameraNodeID::from_entity_id(todo!());
+            let camera_node_id = CameraNodeID::from_entity_id(entity_id);
             let parent_node_id =
                 parent.map_or_else(|| scene_graph.root_node_id(), |parent| parent.id);
 
@@ -134,8 +127,7 @@ pub fn add_orthographic_camera_to_scene_for_new_entity(
             Ok(SceneGraphCameraNodeHandle::new(camera_node_id))
         },
         ![SceneGraphCameraNodeHandle]
-    );
-    Ok(())
+    )
 }
 
 /// Checks if the given entity has a [`SceneGraphCameraNodeHandle`], and if so,

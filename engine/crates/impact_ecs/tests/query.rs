@@ -87,6 +87,9 @@ fn test_valid_query_inputs() {
 
     query!(world, |_byte: &Byte| {}, ![Position, Rectangle], [Marked]);
 
+    query!(world, |_entity_id: EntityID| {});
+    query!(world, |_entity_id: EntityID, _byte: &Byte| {});
+
     // The macro accepts this because it does not know they are
     // the same type, but the result is just that there are no
     // matches

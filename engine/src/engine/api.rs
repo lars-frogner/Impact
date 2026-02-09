@@ -16,7 +16,7 @@ use impact_ecs::{
         Component, ComponentArray, ComponentID, ComponentInstance, ComponentStorage, ComponentView,
         SingleInstance,
     },
-    world::QueryableWorld,
+    world::{PrototypeEntities, QueryableWorld},
 };
 use impact_id::EntityID;
 use impact_material::values::UniformColorPhysicalMaterialValues;
@@ -119,17 +119,13 @@ impl Engine {
     {
         self.entity_id_manager.olock().register_id(entity_id)?;
 
-        let mut components = components
-            .try_into()
-            .map_err(E::into)?
-            .into_inner()
-            .into_storage();
+        let mut entities = PrototypeEntities::new_single(entity_id, components)?;
 
-        setup::perform_setup_for_new_entities(self, &mut components)?;
+        setup::perform_setup_for_new_entities(self, &mut entities)?;
 
         self.ecs_world
             .owrite()
-            .create_entity(entity_id, SingleInstance::new(components))?;
+            .create_prototype_entities(entities)?;
 
         Ok(())
     }
@@ -142,19 +138,15 @@ impl Engine {
         AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        let mut components = components
-            .try_into()
-            .map_err(E::into)?
-            .into_inner()
-            .into_storage();
-
         let entity_id = self.entity_id_manager.olock().provide_id();
 
-        setup::perform_setup_for_new_entities(self, &mut components)?;
+        let mut entities = PrototypeEntities::new_single(entity_id, components)?;
+
+        setup::perform_setup_for_new_entities(self, &mut entities)?;
 
         self.ecs_world
             .owrite()
-            .create_entity(entity_id, SingleInstance::new(components))?;
+            .create_prototype_entities(entities)?;
 
         Ok(entity_id)
     }
@@ -167,20 +159,23 @@ impl Engine {
         AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        let mut components = components.try_into().map_err(E::into)?.into_storage();
+        let components = components.try_into().map_err(E::into)?;
 
         let entity_ids = self
             .entity_id_manager
             .olock()
-            .provide_id_vec(components.component_count());
+            .provide_id_vec(components.instance_count());
 
-        setup::perform_setup_for_new_entities(self, &mut components)?;
+        let mut entities = PrototypeEntities::new(entity_ids, components)?;
 
-        self.ecs_world
+        setup::perform_setup_for_new_entities(self, &mut entities)?;
+
+        let entity_ids = self
+            .ecs_world
             .owrite()
-            .create_entities(entity_ids.iter().copied(), components)?;
+            .create_prototype_entities(entities)?;
 
-        Ok(entity_ids)
+        Ok(entity_ids.into_vec())
     }
 
     pub fn update_entity<A>(

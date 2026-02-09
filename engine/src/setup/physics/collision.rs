@@ -1,7 +1,10 @@
 //! Setup of collidables for new entities.
 
 use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator};
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_ecs::{
+    setup,
+    world::{EntityEntry, PrototypeEntities},
+};
 use impact_geometry::ModelTransform;
 use impact_physics::{
     collision::{
@@ -16,19 +19,19 @@ use impact_voxel::{
 };
 use parking_lot::RwLock;
 
-/// Checks if the entities-to-be with the given components have a component
-/// representing a collidable, and if so, creates the corresponding collidables
-/// and adds the [`CollidableID`]s to the entity.
+/// Checks if the given entities have a component representing a collidable, and
+/// if so, creates the corresponding collidables and adds the [`CollidableID`]s
+/// to the entity.
 pub fn setup_collidables_for_new_entities(
     simulator: &RwLock<PhysicsSimulator>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) {
     setup!(
         {
             let simulator = simulator.oread();
             let mut collision_world = simulator.collision_world().owrite();
         },
-        components,
+        entities,
         |spherical_collidable: &SphericalCollidable,
          rigid_body_id: &DynamicRigidBodyID|
          -> CollidableID {
@@ -46,7 +49,7 @@ pub fn setup_collidables_for_new_entities(
             let simulator = simulator.oread();
             let mut collision_world = simulator.collision_world().owrite();
         },
-        components,
+        entities,
         |spherical_collidable: &SphericalCollidable,
          rigid_body_id: &KinematicRigidBodyID|
          -> CollidableID {
@@ -64,7 +67,7 @@ pub fn setup_collidables_for_new_entities(
             let simulator = simulator.oread();
             let mut collision_world = simulator.collision_world().owrite();
         },
-        components,
+        entities,
         |planar_collidable: &PlanarCollidable,
          rigid_body_id: &DynamicRigidBodyID|
          -> CollidableID {
@@ -82,7 +85,7 @@ pub fn setup_collidables_for_new_entities(
             let simulator = simulator.oread();
             let mut collision_world = simulator.collision_world().owrite();
         },
-        components,
+        entities,
         |planar_collidable: &PlanarCollidable,
          rigid_body_id: &KinematicRigidBodyID|
          -> CollidableID {
@@ -100,7 +103,7 @@ pub fn setup_collidables_for_new_entities(
             let simulator = simulator.oread();
             let mut collision_world = simulator.collision_world().owrite();
         },
-        components,
+        entities,
         |voxel_collidable: &VoxelCollidable,
          voxel_object_id: &VoxelObjectID,
          rigid_body_id: &DynamicRigidBodyID,
@@ -121,7 +124,7 @@ pub fn setup_collidables_for_new_entities(
             let simulator = simulator.oread();
             let mut collision_world = simulator.collision_world().owrite();
         },
-        components,
+        entities,
         |voxel_collidable: &VoxelCollidable,
          voxel_object_id: &VoxelObjectID,
          rigid_body_id: &KinematicRigidBodyID,

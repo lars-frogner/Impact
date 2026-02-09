@@ -4,7 +4,7 @@ use crate::{
     gizmo::{GizmoManager, GizmoSet, GizmoType, GizmoVisibility, components::GizmosComp},
     lock_order::OrderedRwLock,
 };
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::ReferenceFrame;
 use impact_light::{
     OmnidirectionalLightID, ShadowableOmnidirectionalLightID, ShadowableUnidirectionalLightID,
@@ -18,7 +18,7 @@ use parking_lot::RwLock;
 /// gizmos are currently configured to be globally visible.
 pub fn setup_gizmos_for_new_entities(
     gizmo_manager: &RwLock<GizmoManager>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) {
     fn setup_gizmos(gizmo_manager: &GizmoManager, gizmos: Option<&GizmosComp>) -> GizmosComp {
         let mut visible_gizmos =
@@ -42,7 +42,7 @@ pub fn setup_gizmos_for_new_entities(
         {
             let gizmo_manager = gizmo_manager.oread();
         },
-        components,
+        entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
         [ReferenceFrame]
     );
@@ -50,7 +50,7 @@ pub fn setup_gizmos_for_new_entities(
         {
             let gizmo_manager = gizmo_manager.oread();
         },
-        components,
+        entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
         [OmnidirectionalLightID],
         ![ReferenceFrame]
@@ -59,7 +59,7 @@ pub fn setup_gizmos_for_new_entities(
         {
             let gizmo_manager = gizmo_manager.oread();
         },
-        components,
+        entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
         [ShadowableOmnidirectionalLightID],
         ![ReferenceFrame, OmnidirectionalLightID]
@@ -68,7 +68,7 @@ pub fn setup_gizmos_for_new_entities(
         {
             let gizmo_manager = gizmo_manager.oread();
         },
-        components,
+        entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
         [ShadowableUnidirectionalLightID],
         ![
@@ -81,7 +81,7 @@ pub fn setup_gizmos_for_new_entities(
         {
             let gizmo_manager = gizmo_manager.oread();
         },
-        components,
+        entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
         [CollidableID],
         ![
@@ -95,7 +95,7 @@ pub fn setup_gizmos_for_new_entities(
         {
             let gizmo_manager = gizmo_manager.oread();
         },
-        components,
+        entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
         [VoxelObjectID],
         ![

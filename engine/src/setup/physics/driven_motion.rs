@@ -1,7 +1,10 @@
 //! Setup of driven motion for new entities.
 
 use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator};
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup, world::EntityEntry};
+use impact_ecs::{
+    setup,
+    world::{EntityEntry, PrototypeEntities},
+};
 use impact_physics::{
     driven_motion::{
         circular::CircularTrajectoryDriverID,
@@ -20,14 +23,14 @@ use parking_lot::RwLock;
 
 pub fn setup_driven_motion_for_new_entities(
     simulator: &RwLock<PhysicsSimulator>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) {
     setup!(
         {
             let simulator = simulator.oread();
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
-        components,
+        entities,
         |rigid_body_id: &KinematicRigidBodyID,
          trajectory: &CircularTrajectory|
          -> CircularTrajectoryDriverID {
@@ -44,7 +47,7 @@ pub fn setup_driven_motion_for_new_entities(
             let simulator = simulator.oread();
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
-        components,
+        entities,
         |rigid_body_id: &KinematicRigidBodyID,
          trajectory: &ConstantAccelerationTrajectory|
          -> ConstantAccelerationTrajectoryDriverID {
@@ -61,7 +64,7 @@ pub fn setup_driven_motion_for_new_entities(
             let simulator = simulator.oread();
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
-        components,
+        entities,
         |rigid_body_id: &KinematicRigidBodyID,
          rotation: &ConstantRotation|
          -> ConstantRotationDriverID {
@@ -74,7 +77,7 @@ pub fn setup_driven_motion_for_new_entities(
             let simulator = simulator.oread();
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
-        components,
+        entities,
         |rigid_body_id: &KinematicRigidBodyID,
          trajectory: &HarmonicOscillatorTrajectory|
          -> HarmonicOscillatorTrajectoryDriverID {
@@ -91,7 +94,7 @@ pub fn setup_driven_motion_for_new_entities(
             let simulator = simulator.oread();
             let mut motion_driver_manager = simulator.motion_driver_manager().owrite();
         },
-        components,
+        entities,
         |rigid_body_id: &KinematicRigidBodyID,
          trajectory: &OrbitalTrajectory|
          -> OrbitalTrajectoryDriverID {

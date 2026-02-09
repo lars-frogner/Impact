@@ -2,11 +2,11 @@
 
 use crate::Game;
 use anyhow::Result;
-use impact::impact_ecs::archetype::ArchetypeComponentStorage;
+use impact::impact_ecs::world::PrototypeEntities;
 
 pub fn perform_setup_for_new_entities(
     _game: &Game,
-    _components: &mut ArchetypeComponentStorage,
+    _entities: &mut PrototypeEntities,
 ) -> Result<()> {
     Ok(())
 }

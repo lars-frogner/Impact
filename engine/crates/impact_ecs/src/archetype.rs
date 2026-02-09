@@ -147,11 +147,6 @@ pub type ArchetypeComponentView<'a> = ArchetypeComponents<ComponentView<'a>>;
 /// of components making up a specific [`Archetype`].
 pub type ArchetypeComponentStorage = ArchetypeComponents<ComponentStorage>;
 
-/// Container holding [`SingleInstance`] [`ComponentStorage`]s for a set
-/// of components making up a specific [`Archetype`].
-pub type SingleInstanceArchetypeComponentStorage =
-    ArchetypeComponents<SingleInstance<ComponentStorage>>;
-
 /// A table holding the component data belonging to all entities
 /// with a specific archetype.
 ///
@@ -847,6 +842,12 @@ where
             1,
         )))
     }
+
+    /// Converts all the contained component arrays into [`ComponentStorage`]s
+    /// and returns them in a new `SingleInstance<ArchetypeComponentStorage>`.
+    pub fn into_storage(self) -> SingleInstance<ArchetypeComponentStorage> {
+        SingleInstance::new_unchecked(self.into_inner().into_storage())
+    }
 }
 
 impl<A, const N: usize> TryFrom<[SingleInstance<A>; N]> for SingleInstance<ArchetypeComponents<A>>
@@ -1228,13 +1229,13 @@ impl ArchetypeTable {
         ))
     }
 
-    /// Returns a [`SingleInstanceArchetypeComponentStorage`] containing the
-    /// cloned data for all the components of the entity with the given ID, or
-    /// [`None`] if the entity is not present in the table.
+    /// Returns a `ArchetypeComponents<SingleInstance<ComponentStorage>>`
+    /// containing the cloned data for all the components of the entity with the
+    /// given ID, or [`None`] if the entity is not present in the table.
     pub fn get_cloned_components_for_entity(
         &self,
         entity_id: EntityID,
-    ) -> Option<SingleInstanceArchetypeComponentStorage> {
+    ) -> Option<ArchetypeComponents<SingleInstance<ComponentStorage>>> {
         let entity_idx = self.entity_index_mapper.get(entity_id)?;
 
         let mut component_arrays = Vec::with_capacity(self.component_storages.len());

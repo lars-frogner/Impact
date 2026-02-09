@@ -15,7 +15,7 @@ use impact::{
     application::ApplicationInterface,
     egui,
     engine::Engine,
-    impact_ecs::archetype::ArchetypeComponentStorage,
+    impact_ecs::world::PrototypeEntities,
     input::{
         key::KeyboardEvent,
         mouse::{MouseButtonEvent, MouseDragEvent, MouseScrollEvent},
@@ -78,8 +78,8 @@ impl ApplicationInterface for GameInterfaceForEngine {
         Ok(())
     }
 
-    fn on_new_entities(&self, components: &mut ArchetypeComponentStorage) -> Result<()> {
-        setup::perform_setup_for_new_entities(&access_game(), components)
+    fn on_new_entities(&self, entities: &mut PrototypeEntities) -> Result<()> {
+        setup::perform_setup_for_new_entities(&access_game(), entities)
     }
 
     fn handle_keyboard_event(&self, event: KeyboardEvent) -> Result<()> {

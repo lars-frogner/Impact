@@ -2,7 +2,7 @@
 
 use crate::{lock_order::OrderedRwLock, resource::ResourceManager};
 use anyhow::Result;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{setup, world::PrototypeEntities};
 use impact_material::{
     MaterialID,
     setup::{
@@ -17,29 +17,29 @@ use impact_material::{
 };
 use parking_lot::RwLock;
 
-/// Checks if the entites-to-be with the given components have the components
-/// for a material, and if so, adds the material to the resource manager adds
-/// the appropriate material components to the entities.
+/// Checks if the given entities have the components for a material, and if so,
+/// adds the material to the resource manager adds the appropriate material
+/// components to the entities.
 pub fn setup_materials_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
-    setup_fixed_materials_for_new_entities(resource_manager, components)?;
+    setup_fixed_materials_for_new_entities(resource_manager, entities)?;
 
-    setup_physical_materials_for_new_entities(resource_manager, components)?;
+    setup_physical_materials_for_new_entities(resource_manager, entities)?;
 
     Ok(())
 }
 
 fn setup_fixed_materials_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |fixed_color: &FixedColor| -> Result<MaterialID> {
             let resource_manager = &mut **resource_manager;
             setup::fixed::setup_fixed_material(
@@ -60,7 +60,7 @@ fn setup_fixed_materials_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |fixed_texture: &FixedTexture| -> Result<MaterialID> {
             let resource_manager = &mut **resource_manager;
             setup::fixed::setup_fixed_material(
@@ -81,13 +81,13 @@ fn setup_fixed_materials_for_new_entities(
 
 fn setup_physical_materials_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |uniform_color: &UniformColor,
          uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
          textured_specular_reflectance: Option<&TexturedSpecularReflectance>,
@@ -129,7 +129,7 @@ fn setup_physical_materials_for_new_entities(
         {
             let mut resource_manager = resource_manager.owrite();
         },
-        components,
+        entities,
         |textured_color: &TexturedColor,
          uniform_specular_reflectance: Option<&UniformSpecularReflectance>,
          textured_specular_reflectance: Option<&TexturedSpecularReflectance>,

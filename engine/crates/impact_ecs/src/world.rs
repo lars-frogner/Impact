@@ -4,7 +4,7 @@ use super::{
     archetype::{
         Archetype, ArchetypeComponentStorage, ArchetypeComponents, ArchetypeID, ArchetypeTable,
         ComponentStorageBytesEntry, ComponentStorageBytesEntryMut, ComponentStorageEntry,
-        ComponentStorageEntryMut, SingleInstanceArchetypeComponentStorage,
+        ComponentStorageEntryMut,
     },
     component::{Component, ComponentArray, ComponentID, ComponentStorage, SingleInstance},
 };
@@ -13,6 +13,7 @@ use impact_containers::{NoHashKeyIndexMapper, NoHashMap};
 use impact_id::EntityID;
 use parking_lot::{RwLock, RwLockReadGuard};
 use std::vec::Drain;
+use tinyvec::TinyVec;
 
 /// Overall manager for entities in the world and their [`Component`] data.
 #[derive(Debug)]
@@ -29,6 +30,16 @@ pub struct World {
 #[derive(Debug)]
 pub struct QueryableWorld<'a> {
     world: RwLockReadGuard<'a, World>,
+}
+
+/// A group of entities of the same archetype pending creation. Since the
+/// archetype typically will change as component types are added and removed
+/// when the entities undergo setup, we refer to this volatile archetype as a
+/// "prototype".
+#[derive(Debug)]
+pub struct PrototypeEntities {
+    ids: EntityIDList,
+    components: ArchetypeComponentStorage,
 }
 
 /// A reference into the entry for an entity in the [`World`].
@@ -75,6 +86,8 @@ pub struct EntityToUpdate {
     pub components: Vec<SingleInstance<ComponentStorage>>,
 }
 
+type EntityIDList = TinyVec<[EntityID; 1]>;
+
 impl World {
     /// Creates a new world with no entities. The specified seed is used for
     /// generating random entity IDs.
@@ -86,12 +99,12 @@ impl World {
         }
     }
 
-    /// Creates a new entity with the given set of components and assigns it the
-    /// given ID. The set of components must be provided as a type that can be
-    /// converted to an [`ArchetypeComponents`] object wrapped in a
-    /// [`SingleInstance`]. Typically, this will be a tuple of references to
-    /// [`Component`] instances, which can be converted into a `SingleInstance`
-    /// wrapped
+    /// Adds a new entity with the given set of components to the world and
+    /// assigns it the given ID. The set of components must be provided as a
+    /// type that can be converted to an [`ArchetypeComponents`] object wrapped
+    /// in a [`SingleInstance`]. Typically, this will be a tuple of references
+    /// to [`Component`] instances, which can be converted into a
+    /// `SingleInstance` wrapped
     /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
     ///
     /// # Errors
@@ -144,9 +157,9 @@ impl World {
         self.add_new_entities_to_table_and_register([entity_id], components)
     }
 
-    /// Creates multiple new entities with the given set of components and
-    /// assigns them the given IDs. The set of components must be provided as a
-    /// type that can be converted to an [`ArchetypeComponents`] object.
+    /// Adds multiple new entities with the given set of components to the world
+    /// and assigns them the given IDs. The set of components must be provided
+    /// as a type that can be converted to an [`ArchetypeComponents`] object.
     /// Typically, this will be a tuple of slices with [`Component`] instances,
     /// which can be converted into an
     /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
@@ -158,8 +171,8 @@ impl World {
     ///   instances.
     /// - The given set of components does not have a valid [`Archetype`], which
     ///   happens if there are multiple components of the same type.
-    /// - If the number of component instances provided for each component type
-    ///   is not the same.
+    /// - The number of component instances provided for each component type is
+    ///   not the same.
     ///
     /// # Examples
     /// ```
@@ -202,6 +215,23 @@ impl World {
     {
         let components = components.try_into().map_err(E::into)?;
         self.add_new_entities_to_table_and_register(entity_ids, components)
+    }
+
+    /// Adds the given [`PrototypeEntities`] to the world.
+    ///
+    /// # Returns
+    /// The list of added entity IDs.
+    ///
+    /// # Errors
+    /// Returns an error if any of the entity IDs already exist or are
+    /// duplicates.
+    pub fn create_prototype_entities(
+        &mut self,
+        entities: PrototypeEntities,
+    ) -> Result<EntityIDList> {
+        let (entity_ids, components) = entities.into_ids_and_components();
+        self.add_new_entities_to_table_and_register(entity_ids.iter().copied(), components)?;
+        Ok(entity_ids)
     }
 
     /// Returns the current number of entities in the world.
@@ -559,6 +589,158 @@ impl<'a> QueryableWorld<'a> {
     }
 }
 
+impl PrototypeEntities {
+    /// Creates a group of entities with the given IDs and components. The set
+    /// of components must be provided as a type that can be converted to an
+    /// [`ArchetypeComponents`] object. Typically, this will be a tuple of
+    /// slices with [`Component`] instances, which can be converted into an
+    /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The number of IDs does not match the number of component instances.
+    /// - The given set of components does not have a valid [`Archetype`], which
+    ///   happens if there are multiple components of the same type.
+    /// - The number of component instances provided for each component type is
+    ///   not the same.
+    pub fn new<A, E>(
+        ids: Vec<EntityID>,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
+    ) -> Result<Self>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components.try_into().map_err(E::into)?.into_storage();
+
+        if ids.len() != components.instance_count() {
+            bail!("Mismatching number of IDs and component instances for new entities");
+        }
+
+        Ok(Self {
+            ids: TinyVec::Heap(ids),
+            components,
+        })
+    }
+
+    /// Creates an entity with the given ID and components. The set of
+    /// components must be provided as a type that can be converted to an
+    /// [`ArchetypeComponents`] object wrapped in a [`SingleInstance`].
+    /// Typically, this will be a tuple of references to [`Component`]
+    /// instances, which can be converted into a `SingleInstance` wrapped
+    /// [`ArchetypeComponentView`](crate::archetype::ArchetypeComponentView).
+    ///
+    /// # Errors
+    /// Returns an error if the given set of components does not have a valid
+    /// [`Archetype`], which happens if there are multiple components of the
+    /// same type.
+    pub fn new_single<A, E>(
+        id: EntityID,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<A>>, Error = E>,
+    ) -> Result<Self>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components.try_into().map_err(E::into)?.into_storage();
+
+        Ok(Self {
+            ids: TinyVec::from_array_len([id], 1),
+            components: components.into_inner(),
+        })
+    }
+
+    /// Returns the ID of each entity.
+    pub fn entity_ids(&self) -> &[EntityID] {
+        &self.ids
+    }
+
+    /// Returns the archetype of the entities.
+    pub fn archetype(&self) -> &Archetype {
+        self.components.archetype()
+    }
+
+    /// Returns the number of component types in the prototype.
+    pub fn n_component_types(&self) -> usize {
+        self.components.n_component_types()
+    }
+
+    /// Returns the number of entities.
+    pub fn count(&self) -> usize {
+        self.components.instance_count()
+    }
+
+    /// Whether the prototype has a component of type `C`.
+    pub fn has_component_type<C: Component>(&self) -> bool {
+        self.components.has_component_type::<C>()
+    }
+
+    /// Returns a slice with all the instances of component type `C`.
+    ///
+    /// # Panics
+    /// If none of the prototype's components are of type `C`.
+    pub fn components_of_type<C: Component>(&self) -> &[C] {
+        self.components.components_of_type()
+    }
+
+    /// Creates an empty [`ComponentStorage`] for components of type `C`, with
+    /// preallocated capacity for the same number of component instances as
+    /// the present number of entities.
+    ///
+    /// This is a useful starting point when we want to add a storage for a new
+    /// component type.
+    pub fn new_storage_with_capacity<C: Component>(&self) -> ComponentStorage {
+        self.components.new_storage_with_capacity::<C>()
+    }
+
+    /// Returns an iterator with the number of items equal to the number of
+    /// entities. If `C` is the type of a component in this prototype, each
+    /// item will be a [`Some`] holding a reference to a different component
+    /// instance. Otherwise, each item will be a [`None`].
+    pub fn get_option_iter_for_component_of_type<C: Component>(
+        &self,
+    ) -> Box<dyn Iterator<Item = Option<&C>> + '_> {
+        self.components.get_option_iter_for_component_of_type()
+    }
+
+    /// Includes each given component storage in the entities' set of
+    /// components, overwriting the existing instances if the same component
+    /// type is already present. Note that the corresponding archetype will
+    /// change if any new component types are added.
+    ///
+    /// # Errors
+    /// Returns an error if the number of component instances does not match the
+    /// number of entities.
+    ///
+    /// Even if including some of the component storages fails, all the other
+    /// component storages will still be included.
+    pub fn add_or_overwrite_component_types(
+        &mut self,
+        component_storages: impl IntoIterator<Item = ComponentStorage>,
+    ) -> Result<()> {
+        self.components
+            .add_or_overwrite_component_types(component_storages)
+    }
+
+    /// Removes all the instances for all the component types with the given
+    /// IDs. Note that this changes the corresponding archetype.
+    ///
+    /// # Errors
+    /// Returns an error if any of the component types to remove is not present.
+    pub fn remove_component_types_with_ids(
+        &mut self,
+        component_ids: impl IntoIterator<Item = ComponentID>,
+    ) -> Result<()> {
+        self.components
+            .remove_component_types_with_ids(component_ids)
+    }
+
+    /// Unwraps the entity IDs and components.
+    pub fn into_ids_and_components(self) -> (EntityIDList, ArchetypeComponentStorage) {
+        (self.ids, self.components)
+    }
+}
+
 impl<'a> EntityEntry<'a> {
     fn new(entity_id: EntityID, table: RwLockReadGuard<'a, ArchetypeTable>) -> Self {
         Self { entity_id, table }
@@ -677,9 +859,9 @@ impl<'a> EntityEntry<'a> {
             .get_component_bytes_for_entity_mut(self.entity_id, component_id)
     }
 
-    /// Returns a [`SingleInstanceArchetypeComponentStorage`] containing the
-    /// cloned data for all the components of the entity.
-    pub fn cloned_components(&self) -> SingleInstanceArchetypeComponentStorage {
+    /// Returns a `ArchetypeComponents<SingleInstance<ComponentStorage>>`
+    /// containing the cloned data for all the components of the entity.
+    pub fn cloned_components(&self) -> ArchetypeComponents<SingleInstance<ComponentStorage>> {
         self.table
             .get_cloned_components_for_entity(self.entity_id)
             .unwrap()
@@ -709,15 +891,11 @@ impl EntityStager {
         A: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        let components = components
-            .try_into()
-            .map_err(E::into)?
-            .into_inner()
-            .into_storage();
+        let components = components.try_into().map_err(E::into)?.into_storage();
 
         self.to_create_with_id.push(EntityToCreateWithID {
             entity_id,
-            components: SingleInstance::new(components),
+            components,
         });
 
         Ok(())
@@ -732,15 +910,9 @@ impl EntityStager {
         A: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        let components = components
-            .try_into()
-            .map_err(E::into)?
-            .into_inner()
-            .into_storage();
+        let components = components.try_into().map_err(E::into)?.into_storage();
 
-        self.to_create.push(EntityToCreate {
-            components: SingleInstance::new(components),
-        });
+        self.to_create.push(EntityToCreate { components });
 
         Ok(())
     }

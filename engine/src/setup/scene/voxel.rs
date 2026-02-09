@@ -5,8 +5,9 @@ use crate::{
 };
 use anyhow::{Context, Result, anyhow};
 use impact_alloc::arena::ArenaPool;
-use impact_ecs::{archetype::ArchetypeComponentStorage, setup};
+use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_id::EntityID;
 use impact_physics::{
     quantities::Motion,
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID},
@@ -33,7 +34,7 @@ pub fn setup_voxel_objects_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     // Make sure entities that have manually created voxel object and physics
     // context get a model transform component with the center of mass offset
@@ -42,7 +43,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let voxel_manager = scene.voxel_manager().oread();
         },
-        components,
+        entities,
         |voxel_object_id: &VoxelObjectID,
          model_transform: Option<&ModelTransform>|
          -> ModelTransform {
@@ -67,7 +68,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |generated_voxel_object: &GeneratedVoxelObject,
          voxel_type: &SameVoxelType|
          -> Result<VoxelObjectID> {
@@ -117,7 +118,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |voxel_box: &VoxelBox,
          voxel_type: &SameVoxelType,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
@@ -154,7 +155,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |voxel_sphere: &VoxelSphere,
          voxel_type: &SameVoxelType,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
@@ -191,7 +192,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |voxel_sphere_union: &VoxelSphereUnion,
          voxel_type: &SameVoxelType,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
@@ -228,7 +229,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |generated_voxel_object: &GeneratedVoxelObject,
          voxel_types: &GradientNoiseVoxelTypes|
          -> Result<VoxelObjectID> {
@@ -278,7 +279,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |voxel_box: &VoxelBox,
          voxel_types: &GradientNoiseVoxelTypes,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
@@ -315,7 +316,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |voxel_sphere: &VoxelSphere,
          voxel_types: &GradientNoiseVoxelTypes,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
@@ -352,7 +353,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |voxel_sphere_union: &VoxelSphereUnion,
          voxel_types: &GradientNoiseVoxelTypes,
          multifractal_noise_modification: Option<&MultifractalNoiseSDFModification>|
@@ -391,7 +392,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let simulator = simulator.oread();
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
         },
-        components,
+        entities,
         |voxel_object_id: &VoxelObjectID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
@@ -416,14 +417,14 @@ pub fn setup_voxel_objects_for_new_entities(
 
 pub fn setup_voxel_interaction_for_new_entities(
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) {
     setup!(
         {
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |absorbing_sphere: &VoxelAbsorbingSphere| -> VoxelAbsorbingSphereID {
             voxel_manager
                 .interaction_manager_mut()
@@ -437,7 +438,7 @@ pub fn setup_voxel_interaction_for_new_entities(
             let scene = scene.oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
         },
-        components,
+        entities,
         |absorbing_capsule: &VoxelAbsorbingCapsule| -> VoxelAbsorbingCapsuleID {
             voxel_manager
                 .interaction_manager_mut()
@@ -449,7 +450,7 @@ pub fn setup_voxel_interaction_for_new_entities(
 
 pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
     scene: &RwLock<Scene>,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     setup!(
         {
@@ -458,8 +459,9 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let mut scene_graph = scene.scene_graph().owrite();
         },
-        components,
-        |voxel_object_id: &VoxelObjectID,
+        entities,
+        |entity_id: EntityID,
+         voxel_object_id: &VoxelObjectID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          parent: Option<&SceneGraphParentNodeHandle>,
@@ -469,7 +471,6 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
             ModelTransform,
             SceneEntityFlags
         )> {
-            let entity_id = todo!();
             setup::create_model_instance_node_for_voxel_object(
                 voxel_manager.object_manager(),
                 &mut model_instance_manager,
@@ -480,7 +481,7 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
                 frame,
                 parent,
                 flags,
-                components.has_component_type::<Uncullable>(),
+                entities.has_component_type::<Uncullable>(),
             )
         },
         ![SceneGraphModelInstanceNodeHandle]

@@ -6,42 +6,42 @@ pub mod scene;
 
 use crate::engine::Engine;
 use anyhow::Result;
-use impact_ecs::{archetype::ArchetypeComponentStorage, world::EntityEntry};
+use impact_ecs::world::{EntityEntry, PrototypeEntities};
 
 pub fn perform_setup_for_new_entities(
     engine: &Engine,
-    components: &mut ArchetypeComponentStorage,
+    entities: &mut PrototypeEntities,
 ) -> Result<()> {
     scene::setup_scene_data_for_new_entities(
         engine.resource_manager(),
         engine.scene(),
         engine.simulator(),
-        components,
+        entities,
     )?;
 
     physics::setup_physics_for_new_entities(
         engine.resource_manager(),
         engine.simulator(),
-        components,
+        entities,
     )?;
 
     scene::add_new_entities_to_scene_graph(
         engine.ecs_world(),
         engine.resource_manager(),
         engine.scene(),
-        components,
+        entities,
     )?;
 
-    gizmo::setup_gizmos_for_new_entities(engine.gizmo_manager(), components);
+    gizmo::setup_gizmos_for_new_entities(engine.gizmo_manager(), entities);
 
-    engine.app().on_new_entities(components)?;
+    engine.app().on_new_entities(entities)?;
 
     let (setup_component_ids, setup_component_names, standard_component_names) =
-        engine.extract_component_metadata(components);
+        engine.extract_component_metadata(entities);
 
     log::info!(
         "Creating {} entities:\nSetup components:\n    {}\nStandard components:\n    {}",
-        components.component_count(),
+        entities.count(),
         if setup_component_names.is_empty() {
             String::from("<None>")
         } else {
@@ -55,7 +55,7 @@ pub fn perform_setup_for_new_entities(
     );
 
     // Remove all setup components
-    components.remove_component_types_with_ids(setup_component_ids)?;
+    entities.remove_component_types_with_ids(setup_component_ids)?;
 
     Ok(())
 }
