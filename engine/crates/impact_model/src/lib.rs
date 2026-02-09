@@ -102,13 +102,11 @@ pub struct ModelInstanceBuffer {
 }
 
 /// Identifier for a type of instance feature.
-#[roc(parents = "Model")]
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct InstanceFeatureTypeID(Hash64);
 
 /// Identifier for an instance feature value.
-#[roc(parents = "Model")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct InstanceFeatureID {
