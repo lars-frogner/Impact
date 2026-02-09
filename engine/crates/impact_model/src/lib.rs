@@ -155,7 +155,7 @@ pub struct DynamicInstanceFeatureBuffer {
 
 /// Identifier for a specific range of valid features in a
 /// [`DynamicInstanceFeatureBuffer`].
-pub type InstanceFeatureBufferRangeID = u32;
+pub type InstanceFeatureBufferRangeID = u64;
 
 /// Helper for managing ranges in a [`DynamicInstanceFeatureBuffer`].
 #[derive(Debug)]

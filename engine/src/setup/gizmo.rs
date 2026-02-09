@@ -7,7 +7,7 @@ use crate::{
 use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::ReferenceFrame;
 use impact_light::{
-    OmnidirectionalLightID, ShadowableOmnidirectionalLightID, ShadowableUnidirectionalLightID,
+    OmnidirectionalEmission, ShadowableOmnidirectionalEmission, ShadowableUnidirectionalEmission,
 };
 use impact_physics::collision::CollidableID;
 use impact_voxel::VoxelObjectID;
@@ -52,7 +52,7 @@ pub fn setup_gizmos_for_new_entities(
         },
         entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
-        [OmnidirectionalLightID],
+        [OmnidirectionalEmission],
         ![ReferenceFrame]
     );
     setup!(
@@ -61,8 +61,8 @@ pub fn setup_gizmos_for_new_entities(
         },
         entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
-        [ShadowableOmnidirectionalLightID],
-        ![ReferenceFrame, OmnidirectionalLightID]
+        [ShadowableOmnidirectionalEmission],
+        ![ReferenceFrame, OmnidirectionalEmission]
     );
     setup!(
         {
@@ -70,11 +70,11 @@ pub fn setup_gizmos_for_new_entities(
         },
         entities,
         |gizmos: Option<&GizmosComp>| -> GizmosComp { setup_gizmos(&gizmo_manager, gizmos) },
-        [ShadowableUnidirectionalLightID],
+        [ShadowableUnidirectionalEmission],
         ![
             ReferenceFrame,
-            OmnidirectionalLightID,
-            ShadowableOmnidirectionalLightID
+            OmnidirectionalEmission,
+            ShadowableOmnidirectionalEmission
         ]
     );
     setup!(
@@ -86,9 +86,9 @@ pub fn setup_gizmos_for_new_entities(
         [CollidableID],
         ![
             ReferenceFrame,
-            OmnidirectionalLightID,
-            ShadowableOmnidirectionalLightID,
-            ShadowableUnidirectionalLightID
+            OmnidirectionalEmission,
+            ShadowableOmnidirectionalEmission,
+            ShadowableUnidirectionalEmission
         ]
     );
     setup!(
@@ -100,9 +100,9 @@ pub fn setup_gizmos_for_new_entities(
         [VoxelObjectID],
         ![
             ReferenceFrame,
-            OmnidirectionalLightID,
-            ShadowableOmnidirectionalLightID,
-            ShadowableUnidirectionalLightID,
+            OmnidirectionalEmission,
+            ShadowableOmnidirectionalEmission,
+            ShadowableUnidirectionalEmission,
             CollidableID
         ]
     );

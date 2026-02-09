@@ -2,6 +2,7 @@
 
 use crate::{
     SceneEntityFlags,
+    light::light_entity_id_to_instance_feature_buffer_range_id,
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow, bail};
@@ -940,9 +941,10 @@ impl SceneGraph {
                     // cubemap face space for the current light at the end of
                     // each transform buffer, identified by the light's ID plus
                     // a face index offset
-                    let range_id =
-                        crate::light::light_id_to_instance_feature_buffer_range_id(light_id)
-                            + face.as_idx_u32();
+                    let range_id = light_entity_id_to_instance_feature_buffer_range_id(
+                        light_id.as_entity_id(),
+                    ) + face.as_idx_u64();
+
                     model_instance_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,
@@ -1134,9 +1136,10 @@ impl SceneGraph {
                     // light's space for instances casting shadows in he current
                     // cascade at the end of each transform buffer, identified
                     // by the light's ID plus a cascade index offset
-                    let range_id =
-                        crate::light::light_id_to_instance_feature_buffer_range_id(light_id)
-                            + cascade_idx;
+                    let range_id = light_entity_id_to_instance_feature_buffer_range_id(
+                        light_id.as_entity_id(),
+                    ) + u64::from(cascade_idx);
+
                     model_instance_manager.begin_range_in_feature_buffers(
                         InstanceModelLightTransform::FEATURE_TYPE_ID,
                         range_id,

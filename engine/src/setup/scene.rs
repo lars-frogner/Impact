@@ -37,7 +37,7 @@ pub fn setup_scene_data_for_new_entities(
 ) -> Result<()> {
     mesh::setup_meshes_for_new_entities(resource_manager, entities)?;
 
-    light::setup_lights_for_new_entities(scene, entities);
+    light::setup_lights_for_new_entities(scene, entities)?;
 
     material::setup_materials_for_new_entities(resource_manager, entities)?;
 
@@ -76,7 +76,7 @@ pub fn cleanup_scene_data_for_removed_entity(
 ) {
     remove_scene_graph_model_instance_node_for_entity(scene, entity_id, entity);
 
-    light::cleanup_light_for_removed_entity(scene, entity);
+    light::cleanup_light_for_removed_entity(scene, entity_id, entity);
 
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
