@@ -1,5 +1,5 @@
-# Hash: 1fa3fdde13945e51
-# Generated: 2026-02-01T22:56:53.98081865
+# Hash: 7963ecae239c73d3
+# Generated: 2026-02-09T11:49:37.207366954
 # Rust type: impact_scene::setup::HasIndependentMaterialValues
 # Type category: Component
 module [
@@ -17,9 +17,9 @@ import core.Builtin
 ## Enables the property values of the entity's material to be modified
 ## independently.
 ##
-## This is a [`SetupComponent`](impact_ecs::component::SetupComponent) whose
-## purpose is to aid in constructing a `SceneGraphModelInstanceNodeHandle`
-## component for an entity. It is therefore not kept after entity creation.
+## This is a [`SetupComponent`](impact_ecs::component::SetupComponent)
+## affecting the entity's initial `SceneEntityFlags` component. It is therefore
+## not kept after entity creation.
 HasIndependentMaterialValues : {}
 
 ## Adds the [HasIndependentMaterialValues] component to an entity's data.

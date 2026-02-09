@@ -1,10 +1,11 @@
 //! Commands for scene manipulation.
 
 use crate::{command::uils::ActiveState, engine::Engine, lock_order::OrderedRwLock};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use impact_camera::CameraID;
 use impact_id::EntityID;
 use impact_physics::medium::UniformMedium;
-use impact_scene::{SceneGraphCameraNodeHandle, skybox::Skybox};
+use impact_scene::skybox::Skybox;
 use roc_integration::roc;
 
 #[roc(parents = "Command")]
@@ -25,25 +26,10 @@ pub enum SceneCommand {
 pub fn set_active_camera(engine: &Engine, entity_id: EntityID) -> Result<()> {
     log::info!("Setting camera of entity {entity_id} to active");
 
-    let ecs_world = engine.ecs_world().oread();
-
-    let entity = ecs_world
-        .get_entity(entity_id)
-        .ok_or_else(|| anyhow!("No entity with ID {entity_id} for setting active camera"))?;
-
-    let scene_graph_node_id = entity
-        .get_component::<SceneGraphCameraNodeHandle>()
-        .ok_or_else(|| anyhow!("Entity {entity_id} does not have a camera to set as active"))?
-        .access()
-        .id;
-
-    drop(entity);
-    drop(ecs_world);
-
     let scene = engine.scene().oread();
     let mut camera_manager = scene.camera_manager().owrite();
 
-    camera_manager.set_active_camera(scene_graph_node_id)
+    camera_manager.set_active_camera(CameraID::from_entity_id(entity_id))
 }
 
 pub fn set_skybox(engine: &Engine, skybox: Skybox) {

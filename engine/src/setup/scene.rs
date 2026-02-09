@@ -9,19 +9,19 @@ pub mod voxel;
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use impact_ecs::{
     setup,
-    world::{EntityEntry, PrototypeEntities, World as ECSWorld},
+    world::{EntityEntry, PrototypeEntities},
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
 use impact_material::MaterialID;
 use impact_mesh::TriangleMeshID;
+use impact_model::HasModel;
 use impact_scene::{
-    SceneEntityFlags, SceneGraphGroupNodeHandle, SceneGraphModelInstanceNodeHandle,
-    SceneGraphParentNodeHandle,
-    setup::{HasIndependentMaterialValues, SceneGraphGroup, SceneParent, Uncullable},
+    CanBeParent, ParentEntity, SceneEntityFlags,
+    setup::{HasIndependentMaterialValues, Uncullable},
 };
 use parking_lot::RwLock;
 
@@ -52,12 +52,10 @@ pub fn setup_scene_data_for_new_entities(
 /// Adds the given new entities to the scene graph if required, and adds the
 /// corresponding scene graph components to the entities' components.
 pub fn add_new_entities_to_scene_graph(
-    ecs_world: &RwLock<ECSWorld>,
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     entities: &mut PrototypeEntities,
 ) -> Result<()> {
-    setup_scene_graph_parent_nodes_for_new_entities(ecs_world, entities)?;
     setup_scene_graph_group_nodes_for_new_entities(scene, entities)?;
 
     camera::add_camera_to_scene_for_new_entities(scene, entities)?;
@@ -71,34 +69,18 @@ pub fn add_new_entities_to_scene_graph(
 
 /// Performs any modifications required to clean up the scene when
 /// the given entity is removed.
-pub fn cleanup_scene_data_for_removed_entity(scene: &RwLock<Scene>, entity: &EntityEntry<'_>) {
-    remove_scene_graph_model_instance_node_for_entity(scene, entity);
+pub fn cleanup_scene_data_for_removed_entity(
+    scene: &RwLock<Scene>,
+    entity_id: EntityID,
+    entity: &EntityEntry<'_>,
+) {
+    remove_scene_graph_model_instance_node_for_entity(scene, entity_id, entity);
 
     light::cleanup_light_for_removed_entity(scene, entity);
 
-    camera::remove_camera_from_scene_for_removed_entity(scene, entity);
+    camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
     voxel::cleanup_voxel_object_for_removed_entity(scene, entity);
-}
-
-fn setup_scene_graph_parent_nodes_for_new_entities(
-    ecs_world: &RwLock<ECSWorld>,
-    entities: &mut PrototypeEntities,
-) -> Result<()> {
-    setup!(
-        {
-            let ecs_world = ecs_world.oread();
-        },
-        entities,
-        |parent: &SceneParent| -> Result<SceneGraphParentNodeHandle> {
-            let parent_entity = ecs_world
-                .get_entity(parent.entity_id)
-                .ok_or_else(|| anyhow!("Missing parent entity with ID {}", parent.entity_id))?;
-
-            impact_scene::setup::setup_scene_graph_parent_node(parent_entity)
-        },
-        ![SceneGraphParentNodeHandle]
-    )
 }
 
 fn setup_scene_graph_group_nodes_for_new_entities(
@@ -111,20 +93,23 @@ fn setup_scene_graph_group_nodes_for_new_entities(
             let mut scene_graph = scene.scene_graph().owrite();
         },
         entities,
-        |frame: Option<&ReferenceFrame>,
-         parent: Option<&SceneGraphParentNodeHandle>|
-         -> Result<SceneGraphGroupNodeHandle> {
+        |entity_id: EntityID,
+         frame: Option<&ReferenceFrame>,
+         parent: Option<&ParentEntity>|
+         -> Result<()> {
             let frame = frame.copied().unwrap_or_default();
             let transform_to_parent_space = frame.create_transform_to_parent_space();
 
+            let parent_entity_id = parent.map(|parent| parent.0);
+
             impact_scene::setup::setup_scene_graph_group_node(
                 &mut scene_graph,
+                entity_id,
                 transform_to_parent_space.compact(),
-                parent,
+                parent_entity_id,
             )
         },
-        [SceneGraphGroup],
-        ![SceneGraphGroupNodeHandle]
+        [CanBeParent]
     )
 }
 
@@ -146,25 +131,23 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
          material_id: &MaterialID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         parent: Option<&SceneGraphParentNodeHandle>,
+         parent: Option<&ParentEntity>,
          flags: Option<&SceneEntityFlags>|
-         -> Result<(
-            SceneGraphModelInstanceNodeHandle,
-            ModelTransform,
-            SceneEntityFlags
-        )> {
+         -> Result<(HasModel, ModelTransform, SceneEntityFlags)> {
             let model_transform = model_transform.copied().unwrap_or_default();
             let frame = frame.copied().unwrap_or_default();
 
             let model_to_parent_transform = frame.create_transform_to_parent_space()
                 * model_transform.create_transform_to_entity_space();
 
+            let parent_entity_id = parent.map(|parent| parent.0);
+
             let has_independent_material_values =
                 entities.has_component_type::<HasIndependentMaterialValues>();
 
             let uncullable = entities.has_component_type::<Uncullable>();
 
-            let (node_handle, flags) = impact_scene::setup::setup_scene_graph_model_instance_node(
+            let flags = impact_scene::setup::setup_scene_graph_model_instance_node(
                 &resource_manager.triangle_meshes,
                 &resource_manager.materials,
                 &mut model_instance_manager,
@@ -173,30 +156,31 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 model_to_parent_transform.compact(),
                 *mesh_id,
                 *material_id,
-                parent,
+                parent_entity_id,
                 flags,
                 has_independent_material_values,
                 uncullable,
             )?;
 
-            Ok((node_handle, model_transform, flags))
+            Ok((HasModel, model_transform, flags))
         },
-        ![SceneGraphModelInstanceNodeHandle]
+        ![HasModel]
     )
 }
 
 fn remove_scene_graph_model_instance_node_for_entity(
     scene: &RwLock<Scene>,
+    entity_id: EntityID,
     entity: &EntityEntry<'_>,
 ) {
-    if let Some(node) = entity.get_component::<SceneGraphModelInstanceNodeHandle>() {
+    if entity.has_component::<HasModel>() {
         let scene = scene.oread();
         let mut model_instance_manager = scene.model_instance_manager().owrite();
         let mut scene_graph = scene.scene_graph().owrite();
         impact_scene::setup::remove_scene_graph_model_instance_node(
             &mut model_instance_manager,
             &mut scene_graph,
-            node.access(),
+            entity_id,
         );
     }
 }

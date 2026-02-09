@@ -1,10 +1,11 @@
 //! ECS systems for scenes.
 
 use crate::{
-    RemovalBeyondDistance, SceneEntityFlags, SceneGraphCameraNodeHandle, SceneGraphGroupNodeHandle,
-    SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle, graph::SceneGraph,
+    CanBeParent, ParentEntity, RemovalBeyondDistance, SceneEntityFlags,
+    graph::{SceneGraph, SceneGroupID},
 };
 use impact_alloc::{AVec, arena::ArenaPool};
+use impact_camera::{CameraID, HasCamera};
 use impact_containers::HashMap;
 use impact_ecs::{
     query,
@@ -19,6 +20,7 @@ use impact_light::{
     UnidirectionalLightID,
 };
 use impact_math::{point::Point3C, transform::Isometry3};
+use impact_model::{HasModel, ModelInstanceID};
 
 /// Updates the model transform of each [`SceneGraph`] node representing an
 /// entity that also has the
@@ -27,31 +29,46 @@ use impact_math::{point::Point3C, transform::Isometry3};
 /// position, orientation and scaling. Also updates any flags for the node to
 /// match the entity's [`SceneEntityFlags`].
 pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph: &mut SceneGraph) {
-    query!(ecs_world, |node: &SceneGraphGroupNodeHandle,
-                       frame: &ReferenceFrame| {
-        let group_to_parent_transform = frame.create_transform_to_parent_space();
-        scene_graph.set_group_to_parent_transform(node.id, group_to_parent_transform.compact());
-    });
+    query!(
+        ecs_world,
+        |entity_id: EntityID, frame: &ReferenceFrame| {
+            let node_id = SceneGroupID::from_entity_id(entity_id);
+            let group_to_parent_transform = frame.create_transform_to_parent_space();
+            scene_graph.set_group_to_parent_transform(node_id, group_to_parent_transform.compact());
+        },
+        [CanBeParent]
+    );
 
-    query!(ecs_world, |node: &SceneGraphModelInstanceNodeHandle,
-                       model_transform: &ModelTransform,
-                       frame: &ReferenceFrame,
-                       flags: &SceneEntityFlags| {
-        let model_to_parent_transform = frame.create_transform_to_parent_space()
-            * model_transform.create_transform_to_entity_space();
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         model_transform: &ModelTransform,
+         frame: &ReferenceFrame,
+         flags: &SceneEntityFlags| {
+            let model_instance_id = ModelInstanceID::from_entity_id(entity_id);
 
-        scene_graph.set_model_to_parent_transform_and_update_flags(
-            node.id,
-            model_to_parent_transform.compact(),
-            *flags,
-        );
-    });
+            let model_to_parent_transform = frame.create_transform_to_parent_space()
+                * model_transform.create_transform_to_entity_space();
 
-    query!(ecs_world, |node: &SceneGraphCameraNodeHandle,
-                       frame: &ReferenceFrame| {
-        let camera_to_parent_transform = frame.create_transform_to_parent_space();
-        scene_graph.set_camera_to_parent_transform(node.id, camera_to_parent_transform.compact());
-    });
+            scene_graph.set_model_to_parent_transform_and_update_flags(
+                model_instance_id,
+                model_to_parent_transform.compact(),
+                *flags,
+            );
+        },
+        [HasModel]
+    );
+
+    query!(
+        ecs_world,
+        |entity_id: EntityID, frame: &ReferenceFrame| {
+            let camera_id = CameraID::from_entity_id(entity_id);
+            let camera_to_parent_transform = frame.create_transform_to_parent_space();
+            scene_graph
+                .set_camera_to_parent_transform(camera_id, camera_to_parent_transform.compact());
+        },
+        [HasCamera]
+    );
 }
 
 /// Finds entities with a max distance from an anchor and stages them for
@@ -159,7 +176,7 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeHandle]
+        ![ParentEntity]
     );
 
     query!(
@@ -167,9 +184,11 @@ pub fn sync_lights_in_storage(
         |omnidirectional_light_id: &OmnidirectionalLightID,
          frame: &ReferenceFrame,
          omnidirectional_emission: &OmnidirectionalEmission,
-         parent: &SceneGraphParentNodeHandle,
+         parent: &ParentEntity,
          flags: &SceneEntityFlags| {
-            let parent_group_node = scene_graph.group_nodes().node(parent.id);
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
 
             let group_to_root_transform = parent_group_node.group_to_root_transform().aligned();
             let view_transform = view_transform * group_to_root_transform;
@@ -200,7 +219,7 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeHandle]
+        ![ParentEntity]
     );
 
     query!(
@@ -208,9 +227,11 @@ pub fn sync_lights_in_storage(
         |omnidirectional_light_id: &ShadowableOmnidirectionalLightID,
          frame: &ReferenceFrame,
          omnidirectional_emission: &ShadowableOmnidirectionalEmission,
-         parent: &SceneGraphParentNodeHandle,
+         parent: &ParentEntity,
          flags: &SceneEntityFlags| {
-            let parent_group_node = scene_graph.group_nodes().node(parent.id);
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
 
             let group_to_root_transform = parent_group_node.group_to_root_transform().aligned();
             let view_transform = view_transform * group_to_root_transform;
@@ -239,16 +260,18 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeHandle, ReferenceFrame]
+        ![ParentEntity, ReferenceFrame]
     );
 
     query!(
         ecs_world,
         |unidirectional_light_id: &UnidirectionalLightID,
          unidirectional_emission: &UnidirectionalEmission,
-         parent: &SceneGraphParentNodeHandle,
+         parent: &ParentEntity,
          flags: &SceneEntityFlags| {
-            let parent_group_node = scene_graph.group_nodes().node(parent.id);
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
 
             let group_to_root_transform = parent_group_node.group_to_root_transform().aligned();
             let view_transform = view_transform * group_to_root_transform;
@@ -279,7 +302,7 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeHandle]
+        ![ParentEntity]
     );
 
     query!(
@@ -287,9 +310,11 @@ pub fn sync_lights_in_storage(
         |unidirectional_light_id: &UnidirectionalLightID,
          unidirectional_emission: &UnidirectionalEmission,
          frame: &ReferenceFrame,
-         parent: &SceneGraphParentNodeHandle,
+         parent: &ParentEntity,
          flags: &SceneEntityFlags| {
-            let parent_group_node = scene_graph.group_nodes().node(parent.id);
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
 
             let group_to_root_transform = parent_group_node.group_to_root_transform().aligned();
             let view_transform = view_transform * group_to_root_transform;
@@ -318,16 +343,18 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeHandle, ReferenceFrame]
+        ![ParentEntity, ReferenceFrame]
     );
 
     query!(
         ecs_world,
         |unidirectional_light_id: &ShadowableUnidirectionalLightID,
          unidirectional_emission: &ShadowableUnidirectionalEmission,
-         parent: &SceneGraphParentNodeHandle,
+         parent: &ParentEntity,
          flags: &SceneEntityFlags| {
-            let parent_group_node = scene_graph.group_nodes().node(parent.id);
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
 
             let group_to_root_transform = parent_group_node.group_to_root_transform().aligned();
             let view_transform = view_transform * group_to_root_transform;
@@ -358,7 +385,7 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         },
-        ![SceneGraphParentNodeHandle]
+        ![ParentEntity]
     );
 
     query!(
@@ -366,9 +393,11 @@ pub fn sync_lights_in_storage(
         |unidirectional_light_id: &ShadowableUnidirectionalLightID,
          unidirectional_emission: &ShadowableUnidirectionalEmission,
          frame: &ReferenceFrame,
-         parent: &SceneGraphParentNodeHandle,
+         parent: &ParentEntity,
          flags: &SceneEntityFlags| {
-            let parent_group_node = scene_graph.group_nodes().node(parent.id);
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
 
             let group_to_root_transform = parent_group_node.group_to_root_transform().aligned();
             let view_transform = view_transform * group_to_root_transform;

@@ -5,6 +5,7 @@ use impact_math::angle::{Angle, Radians};
 use roc_integration::roc;
 
 define_setup_type! {
+    target = HasCamera;
     /// Properties of a [`PerspectiveCamera`](crate::PerspectiveCamera).
     #[roc(parents = "Setup")]
     #[repr(C)]
@@ -17,6 +18,7 @@ define_setup_type! {
 }
 
 define_setup_type! {
+    target = HasCamera;
     /// Properties of an [`OrthographicCamera`](crate::OrthographicCamera).
     #[roc(parents = "Setup")]
     #[repr(C)]

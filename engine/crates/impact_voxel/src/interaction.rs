@@ -18,12 +18,13 @@ use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
 use impact_id::EntityID;
 use impact_math::{transform::Isometry3, vector::Vector3};
+use impact_model::ModelInstanceID;
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
     quantities::{AngularVelocity, Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
-use impact_scene::graph::{ModelInstanceNodeID, SceneGraph};
+use impact_scene::graph::SceneGraph;
 use tinyvec::TinyVec;
 
 /// Context trait for handling voxel object interactions in a generic way.
@@ -154,8 +155,8 @@ pub fn sync_voxel_object_model_transform_with_inertial_properties(
 pub fn sync_voxel_object_bounding_sphere_in_scene_graph(
     voxel_object_manager: &VoxelObjectManager,
     scene_graph: &mut SceneGraph,
+    entity_id: EntityID,
     voxel_object_id: VoxelObjectID,
-    model_instance_node_id: ModelInstanceNodeID,
     uncullable: bool,
 ) {
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
@@ -166,7 +167,7 @@ pub fn sync_voxel_object_bounding_sphere_in_scene_graph(
         .then(|| voxel_object.object().compute_bounding_sphere());
 
     scene_graph.set_model_instance_bounding_sphere(
-        model_instance_node_id,
+        ModelInstanceID::from_entity_id(entity_id),
         bounding_sphere.map(|sphere| sphere.compact()),
     );
 }

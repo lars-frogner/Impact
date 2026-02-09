@@ -19,6 +19,7 @@ use impact_ecs::{
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
+use impact_model::HasModel;
 use impact_physics::{
     anchor::AnchorManager,
     collision::CollidableID,
@@ -26,8 +27,9 @@ use impact_physics::{
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_scene::{
-    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
-    graph::SceneGraph, setup::Uncullable,
+    ParentEntity, SceneEntityFlags,
+    graph::{SceneGraph, SceneGroupID},
+    setup::Uncullable,
 };
 use tinyvec::TinyVec;
 
@@ -82,17 +84,20 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                     sphere_to_world_transform,
                 });
             },
-            ![SceneGraphParentNodeHandle]
+            ![ParentEntity]
         );
 
         query!(
             self.ecs_world,
             |absorber_id: &VoxelAbsorbingSphereID,
              reference_frame: &ReferenceFrame,
-             parent: &SceneGraphParentNodeHandle,
+             parent: &ParentEntity,
              flags: &SceneEntityFlags| {
                 let sphere_to_world_transform = if !flags.is_disabled() {
-                    let parent_node = self.scene_graph.group_nodes().node(parent.id);
+                    let parent_node = self
+                        .scene_graph
+                        .group_nodes()
+                        .node(SceneGroupID::from_entity_id(parent.0));
 
                     let group_to_root_transform = parent_node.group_to_root_transform().aligned();
 
@@ -133,17 +138,20 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                     capsule_to_world_transform,
                 });
             },
-            ![SceneGraphParentNodeHandle]
+            ![ParentEntity]
         );
 
         query!(
             self.ecs_world,
             |absorber_id: &VoxelAbsorbingCapsuleID,
              reference_frame: &ReferenceFrame,
-             parent: &SceneGraphParentNodeHandle,
+             parent: &ParentEntity,
              flags: &SceneEntityFlags| {
                 let capsule_to_world_transform = if !flags.is_disabled() {
-                    let parent_node = self.scene_graph.group_nodes().node(parent.id);
+                    let parent_node = self
+                        .scene_graph
+                        .group_nodes()
+                        .node(SceneGroupID::from_entity_id(parent.0));
 
                     let group_to_root_transform = parent_node.group_to_root_transform().aligned();
 
@@ -254,31 +262,30 @@ pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
 ) {
     query!(
         ecs_world,
-        |voxel_object_id: &VoxelObjectID,
-         model_instance_node: &SceneGraphModelInstanceNodeHandle| {
+        |entity_id: EntityID, voxel_object_id: &VoxelObjectID| {
             interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
                 voxel_object_manager,
                 scene_graph,
+                entity_id,
                 *voxel_object_id,
-                model_instance_node.id,
                 false,
             );
         },
+        [HasModel],
         ![Uncullable]
     );
     query!(
         ecs_world,
-        |voxel_object_id: &VoxelObjectID,
-         model_instance_node: &SceneGraphModelInstanceNodeHandle| {
+        |entity_id: EntityID, voxel_object_id: &VoxelObjectID| {
             interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
                 voxel_object_manager,
                 scene_graph,
+                entity_id,
                 *voxel_object_id,
-                model_instance_node.id,
                 true,
             );
         },
-        [Uncullable]
+        [HasModel, Uncullable]
     );
 }
 

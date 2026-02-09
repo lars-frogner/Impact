@@ -18,6 +18,7 @@ use crate::gizmo::{
 use approx::abs_diff_ne;
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
+use impact_id::EntityID;
 use impact_light::{
     LightManager, OmnidirectionalLightID, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLightID,
@@ -31,7 +32,7 @@ use impact_math::{
     vector::{UnitVector3, Vector3, Vector3C},
 };
 use impact_model::{
-    InstanceFeature,
+    HasModel, InstanceFeature, ModelInstanceID,
     transform::{InstanceModelViewTransform, InstanceModelViewTransformWithPrevious},
 };
 use impact_physics::{
@@ -41,9 +42,9 @@ use impact_physics::{
     rigid_body::{DynamicRigidBodyID, KinematicRigidBodyID, RigidBodyManager, TypedRigidBodyID},
 };
 use impact_scene::{
-    SceneEntityFlags, SceneGraphModelInstanceNodeHandle, SceneGraphParentNodeHandle,
+    SceneEntityFlags,
     camera::{CameraManager, SceneCamera},
-    graph::{ModelInstanceNode, ModelInstanceNodeID, SceneGraph},
+    graph::{ModelInstanceNode, SceneGraph},
     model::ModelInstanceManager,
 };
 use impact_voxel::{
@@ -110,9 +111,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |gizmos: &GizmosComp,
-         model_instance_node: &SceneGraphModelInstanceNodeHandle,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .intersects(GizmoSet::REFERENCE_FRAME_AXES.union(GizmoSet::BOUNDING_SPHERE))
@@ -125,9 +124,10 @@ pub fn buffer_transforms_for_gizmos(
                 scene_graph,
                 current_frame_count,
                 gizmos.visible_gizmos,
-                model_instance_node.id,
+                entity_id,
             );
-        }
+        },
+        [HasModel]
     );
 
     query!(
@@ -298,9 +298,9 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |gizmos: &GizmosComp,
+        |entity_id: EntityID,
+         gizmos: &GizmosComp,
          voxel_object_id: &VoxelObjectID,
-         model_instance_node: &SceneGraphModelInstanceNodeHandle,
          flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::VOXEL_CHUNKS) || flags.is_disabled() {
                 return;
@@ -311,36 +311,18 @@ pub fn buffer_transforms_for_gizmos(
                 scene_graph,
                 gizmo_manager.parameters(),
                 current_frame_count,
-                model_instance_node.id,
+                entity_id,
                 *voxel_object_id,
             );
-        }
+        },
+        [HasModel]
     );
 
     let mut voxel_objects: Vec<(VoxelObjectID, CollidableID)> = Vec::with_capacity(32);
 
-    query!(
-        ecs_world,
-        |gizmos: &GizmosComp,
-         voxel_object_id: &VoxelObjectID,
-         collidable_id: &CollidableID,
-         flags: &SceneEntityFlags| {
-            if !gizmos
-                .visible_gizmos
-                .contains(GizmoSet::VOXEL_INTERSECTIONS)
-                || flags.is_disabled()
-            {
-                return;
-            }
-
-            voxel_objects.push((*voxel_object_id, *collidable_id));
-        },
-        ![SceneGraphParentNodeHandle]
-    );
     query!(ecs_world, |gizmos: &GizmosComp,
                        voxel_object_id: &VoxelObjectID,
                        collidable_id: &CollidableID,
-                       _parent: &SceneGraphParentNodeHandle,
                        flags: &SceneEntityFlags| {
         if !gizmos
             .visible_gizmos
@@ -374,11 +356,11 @@ fn buffer_transforms_for_model_instance_gizmos(
     scene_graph: &SceneGraph,
     current_frame_number: u32,
     visible_gizmos: GizmoSet,
-    model_instance_node_id: ModelInstanceNodeID,
+    entity_id: EntityID,
 ) {
     let node = scene_graph
         .model_instance_nodes()
-        .node(model_instance_node_id);
+        .node(ModelInstanceID::from_entity_id(entity_id));
 
     if node.frame_number_when_last_visible() != current_frame_number {
         return;
@@ -936,12 +918,12 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
     scene_graph: &SceneGraph,
     parameters: &GizmoParameters,
     current_frame_number: u32,
-    model_instance_node_id: ModelInstanceNodeID,
+    entity_id: EntityID,
     voxel_object_id: VoxelObjectID,
 ) {
     let node = scene_graph
         .model_instance_nodes()
-        .node(model_instance_node_id);
+        .node(ModelInstanceID::from_entity_id(entity_id));
 
     if node.frame_number_when_last_visible() != current_frame_number {
         return;

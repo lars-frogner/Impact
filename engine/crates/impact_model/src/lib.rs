@@ -6,6 +6,7 @@ pub mod macros;
 pub mod gpu_resource;
 pub mod transform;
 
+use impact_id::define_entity_id_newtype;
 pub use transform::register_model_feature_types;
 
 use bytemuck::{Pod, Zeroable};
@@ -46,6 +47,23 @@ pub trait InstanceFeature: Pod {
     fn feature_slice_bytes(slice: &[Self]) -> &[u8] {
         bytemuck::cast_slice(slice)
     }
+}
+
+define_entity_id_newtype! {
+    /// Identifier for a specific instance of a model.
+    [pub] ModelInstanceID
+}
+
+define_component_type! {
+    /// Marks that an entity has a model instance identified by a
+    /// [`ModelInstanceID`].
+    ///
+    /// Use [`ModelInstanceID::from_entity_id`] to obtain the model instance ID
+    /// from the entity ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasModel;
 }
 
 /// Manages storage and buffering of per-instance data for different models.
