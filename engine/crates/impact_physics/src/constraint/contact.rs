@@ -7,6 +7,7 @@ use crate::{
 };
 use impact_math::{
     quaternion::UnitQuaternion,
+    random::splitmix,
     vector::{UnitVector3, UnitVector3C, Vector3},
 };
 use std::ops::{Add, Mul, Sub};
@@ -132,15 +133,15 @@ impl Default for ContactWithID {
 }
 
 impl ContactID {
-    pub fn from_two_u32(a: u32, b: u32) -> Self {
-        Self((u64::from(a) << 32) | u64::from(b))
+    pub fn from_two_u64(a: u64, b: u64) -> Self {
+        Self(splitmix::random_u64_from_two_states(a, b))
     }
 
-    pub fn from_two_u32_and_n_indices<const N: usize>(a: u32, b: u32, indices: [usize; N]) -> Self {
-        let mut id = Self::from_two_u32(a, b).0;
+    pub fn from_two_u64_and_n_indices<const N: usize>(a: u64, b: u64, indices: [usize; N]) -> Self {
+        let mut id = splitmix::random_u64_from_two_states(a, b);
         for index in indices {
             // Mix in indices
-            id = id.wrapping_mul(31).wrapping_add(index as u64);
+            id = splitmix::random_u64_from_two_states(id, index as u64);
         }
         Self(id)
     }

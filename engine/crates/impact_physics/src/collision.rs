@@ -7,8 +7,10 @@ use crate::{
     constraint::contact::ContactManifold,
     rigid_body::{RigidBodyManager, TypedRigidBodyID},
 };
+use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_containers::HashMap;
+use impact_containers::{NoHashMap, hash_map::Entry};
+use impact_id::define_entity_id_newtype;
 use impact_math::transform::Isometry3;
 use roc_integration::roc;
 use std::fmt;
@@ -32,9 +34,8 @@ pub trait Collidable: Sized + fmt::Debug {
 
 #[derive(Debug)]
 pub struct CollisionWorld<C: Collidable> {
-    collidable_descriptors: HashMap<CollidableID, CollidableDescriptor<C>>,
+    collidable_descriptors: NoHashMap<CollidableID, CollidableDescriptor<C>>,
     collidables: [Vec<CollidableWithId<C>>; 3],
-    collidable_id_counter: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -59,12 +60,20 @@ pub struct CollidableWithId<C> {
     collidable: C,
 }
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a collidable in a [`CollisionWorld`].
+    [pub] CollidableID
+}
+
+define_component_type! {
+    /// Marks that an entity has a collidable identified by a [`CollidableID`].
+    ///
+    /// Use [`CollidableID::from_entity_id`] to obtain the collidable ID from
+    /// the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
-    pub struct CollidableID(u32);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasCollidable;
 }
 
 #[derive(Clone, Debug)]
@@ -83,9 +92,8 @@ pub enum CollidableOrder {
 impl<C: Collidable> CollisionWorld<C> {
     pub fn new() -> Self {
         Self {
-            collidable_descriptors: HashMap::default(),
+            collidable_descriptors: NoHashMap::default(),
             collidables: [Vec::new(), Vec::new(), Vec::new()],
-            collidable_id_counter: 0,
         }
     }
 
@@ -118,15 +126,21 @@ impl<C: Collidable> CollisionWorld<C> {
 
     pub fn add_collidable(
         &mut self,
+        collidable_id: CollidableID,
         rigid_body_id: TypedRigidBodyID,
         kind: CollidableKind,
         local_collidable: C::Local,
-    ) -> CollidableID {
+    ) -> Result<()> {
         let descriptor = CollidableDescriptor::new(rigid_body_id, kind, local_collidable);
-        let collidable_id = self.create_new_collidable_id();
-        self.collidable_descriptors
-            .insert(collidable_id, descriptor);
-        collidable_id
+
+        match self.collidable_descriptors.entry(collidable_id) {
+            Entry::Vacant(entry) => {
+                entry.insert(descriptor);
+            }
+            Entry::Occupied(_) => bail!("A collidable with ID {collidable_id} already exists"),
+        }
+
+        Ok(())
     }
 
     pub fn synchronize_collidables_with_rigid_bodies(
@@ -283,12 +297,6 @@ impl<C: Collidable> CollisionWorld<C> {
         for descriptor in self.collidable_descriptors.values_mut() {
             descriptor.idx = usize::MAX;
         }
-    }
-
-    fn create_new_collidable_id(&mut self) -> CollidableID {
-        let collidable_id = CollidableID(self.collidable_id_counter);
-        self.collidable_id_counter = self.collidable_id_counter.checked_add(1).unwrap();
-        collidable_id
     }
 }
 

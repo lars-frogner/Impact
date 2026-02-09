@@ -8,8 +8,10 @@ use crate::{
     material::ContactResponseParameters,
     rigid_body::TypedRigidBodyID,
 };
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::{PlaneC, SphereC};
+use impact_id::EntityID;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -114,11 +116,14 @@ impl PlanarCollidable {
 
 pub fn setup_spherical_collidable<C: Collidable>(
     collision_world: &mut CollisionWorld<C>,
+    entity_id: EntityID,
     rigid_body_id: TypedRigidBodyID,
     collidable: &SphericalCollidable,
     get_local: impl FnOnce(SphereCollidable) -> C::Local,
-) -> CollidableID {
+) -> Result<()> {
+    let collidable_id = CollidableID::from_entity_id(entity_id);
     collision_world.add_collidable(
+        collidable_id,
         rigid_body_id,
         collidable.kind(),
         get_local(SphereCollidable::new(
@@ -130,11 +135,14 @@ pub fn setup_spherical_collidable<C: Collidable>(
 
 pub fn setup_planar_collidable<C: Collidable>(
     collision_world: &mut CollisionWorld<C>,
+    entity_id: EntityID,
     rigid_body_id: TypedRigidBodyID,
     collidable: &PlanarCollidable,
     get_local: impl FnOnce(PlaneCollidable) -> C::Local,
-) -> CollidableID {
+) -> Result<()> {
+    let collidable_id = CollidableID::from_entity_id(entity_id);
     collision_world.add_collidable(
+        collidable_id,
         rigid_body_id,
         collidable.kind(),
         get_local(PlaneCollidable::new(

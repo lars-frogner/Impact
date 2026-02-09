@@ -22,7 +22,7 @@ use impact_id::{EntityID, EntityIDManager};
 use impact_model::HasModel;
 use impact_physics::{
     anchor::AnchorManager,
-    collision::CollidableID,
+    collision::{CollidableID, HasCollidable},
     force::{ForceGeneratorManager, constant_acceleration::ConstantAccelerationGeneratorID},
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
@@ -182,15 +182,22 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
             &entity.rigid_body_id,
         ));
 
-        if let Some(collidable_id) = parent_components.get_component::<CollidableID>()
-            && let Some(descriptor) = self
-                .collision_world
-                .get_collidable_descriptor(*collidable_id)
-            && let LocalCollidable::VoxelObject(local_collidable) = descriptor.local_collidable()
+        if parent_components
+            .archetype()
+            .contains_component::<HasCollidable>()
         {
-            components.push(ComponentStorage::from_single_instance_view(
-                &VoxelCollidable::new(descriptor.kind(), *local_collidable.response_params()),
-            ));
+            let parent_collidable_id = CollidableID::from_entity_id(parent_entity_id);
+
+            if let Some(descriptor) = self
+                .collision_world
+                .get_collidable_descriptor(parent_collidable_id)
+                && let LocalCollidable::VoxelObject(local_collidable) =
+                    descriptor.local_collidable()
+            {
+                components.push(ComponentStorage::from_single_instance_view(
+                    &VoxelCollidable::new(descriptor.kind(), *local_collidable.response_params()),
+                ));
+            }
         }
 
         if let Some(force_generator_id) =
