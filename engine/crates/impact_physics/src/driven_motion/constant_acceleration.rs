@@ -6,7 +6,7 @@ use crate::{
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use roc_integration::roc;
 
 /// Manages all [`ConstantAccelerationTrajectoryDriver`]s.
@@ -15,12 +15,21 @@ pub type ConstantAccelerationTrajectoryRegistry = MotionDriverRegistry<
     ConstantAccelerationTrajectoryDriver,
 >;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`ConstantAccelerationTrajectoryDriver`].
+    [pub] ConstantAccelerationTrajectoryDriverID
+}
+
+define_component_type! {
+    /// Marks that an entity has a constant acceleration trajectory driver
+    /// identified by a [`ConstantAccelerationTrajectoryDriverID`].
+    ///
+    /// Use [`ConstantAccelerationTrajectoryDriverID::from_entity_id`] to obtain the
+    /// driver ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct ConstantAccelerationTrajectoryDriverID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasConstantAccelerationTrajectoryDriver;
 }
 
 /// Driver for imposing a constant acceleration trajectory on a kinematic
@@ -49,12 +58,6 @@ define_setup_type! {
         pub initial_velocity: VelocityC,
         /// The constant acceleration of the body.
         pub acceleration: AccelerationC,
-    }
-}
-
-impl From<u64> for ConstantAccelerationTrajectoryDriverID {
-    fn from(value: u64) -> Self {
-        Self(value)
     }
 }
 

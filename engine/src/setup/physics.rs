@@ -24,7 +24,7 @@ pub fn setup_physics_for_new_entities(
 
     force::setup_forces_for_new_entities(resource_manager, simulator, entities)?;
 
-    driven_motion::setup_driven_motion_for_new_entities(simulator, entities);
+    driven_motion::setup_driven_motion_for_new_entities(simulator, entities)?;
 
     collision::setup_collidables_for_new_entities(simulator, entities)?;
 
@@ -40,7 +40,7 @@ pub fn cleanup_physics_for_removed_entity(
 ) {
     collision::remove_collidable_for_entity(simulator, entity_id, entity);
 
-    driven_motion::remove_motion_drivers_for_entity(simulator, entity);
+    driven_motion::remove_motion_drivers_for_entity(simulator, entity_id, entity);
 
     force::remove_force_generators_for_entity(simulator, entity_id, entity);
 

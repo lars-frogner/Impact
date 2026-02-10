@@ -7,19 +7,28 @@ use crate::{
     rigid_body::{KinematicRigidBodyID, RigidBodyManager},
 };
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use roc_integration::roc;
 
 /// Manages all [`ConstantRotationDriver`]s.
 pub type ConstantRotationRegistry =
     MotionDriverRegistry<ConstantRotationDriverID, ConstantRotationDriver>;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`ConstantRotationDriver`].
+    [pub] ConstantRotationDriverID
+}
+
+define_component_type! {
+    /// Marks that an entity has a constant rotation driver identified by a
+    /// [`ConstantRotationDriverID`].
+    ///
+    /// Use [`ConstantRotationDriverID::from_entity_id`] to obtain the driver
+    /// ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct ConstantRotationDriverID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasConstantRotationDriver;
 }
 
 /// Driver for imposing constant rotation on a kinematic rigid body.
@@ -47,12 +56,6 @@ define_setup_type! {
         pub initial_orientation: OrientationC,
         /// The angular velocity of the body.
         pub angular_velocity: AngularVelocityC,
-    }
-}
-
-impl From<u64> for ConstantRotationDriverID {
-    fn from(value: u64) -> Self {
-        Self(value)
     }
 }
 

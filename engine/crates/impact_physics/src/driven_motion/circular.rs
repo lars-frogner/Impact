@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::consts::f32::TWO_PI;
 use roc_integration::roc;
 
@@ -15,12 +15,21 @@ use roc_integration::roc;
 pub type CircularTrajectoryRegistry =
     MotionDriverRegistry<CircularTrajectoryDriverID, CircularTrajectoryDriver>;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`CircularTrajectoryDriver`].
+    [pub] CircularTrajectoryDriverID
+}
+
+define_component_type! {
+    /// Marks that an entity has a circular trajectory driver identified by a
+    /// [`CircularTrajectoryDriverID`].
+    ///
+    /// Use [`CircularTrajectoryDriverID::from_entity_id`] to obtain the driver
+    /// ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct CircularTrajectoryDriverID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasCircularTrajectoryDriver;
 }
 
 /// Driver for imposing a circular trajectory with constant speed on a kinematic
@@ -56,12 +65,6 @@ define_setup_type! {
         pub radius: f32,
         /// The duration of one revolution.
         pub period: f32,
-    }
-}
-
-impl From<u64> for CircularTrajectoryDriverID {
-    fn from(value: u64) -> Self {
-        Self(value)
     }
 }
 
