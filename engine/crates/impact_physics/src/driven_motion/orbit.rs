@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::consts::f32::{PI, TWO_PI};
 use roc_integration::roc;
 
@@ -15,12 +15,21 @@ use roc_integration::roc;
 pub type OrbitalTrajectoryRegistry =
     MotionDriverRegistry<OrbitalTrajectoryDriverID, OrbitalTrajectoryDriver>;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`OrbitalTrajectoryDriver`].
+    [pub] OrbitalTrajectoryDriverID
+}
+
+define_component_type! {
+    /// Marks that an entity has an orbital trajectory driver identified by a
+    /// [`OrbitalTrajectoryDriverID`].
+    ///
+    /// Use [`OrbitalTrajectoryDriverID::from_entity_id`] to obtain the driver
+    /// ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct OrbitalTrajectoryDriverID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasOrbitalTrajectoryDriver;
 }
 
 /// Driver for imposing an orbital trajectory on a kinematic rigid body.
@@ -58,12 +67,6 @@ define_setup_type! {
         pub eccentricity: f32,
         /// The orbital period.
         pub period: f32,
-    }
-}
-
-impl From<u64> for OrbitalTrajectoryDriverID {
-    fn from(value: u64) -> Self {
-        Self(value)
     }
 }
 

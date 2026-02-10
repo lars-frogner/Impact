@@ -8,13 +8,14 @@ pub mod orbit;
 pub mod setup;
 
 use crate::rigid_body::RigidBodyManager;
+use anyhow::{Result, bail};
 use circular::CircularTrajectoryRegistry;
 use constant_acceleration::ConstantAccelerationTrajectoryRegistry;
 use constant_rotation::ConstantRotationRegistry;
 use harmonic_oscillation::HarmonicOscillatorTrajectoryRegistry;
-use impact_containers::IndexMap;
+use impact_containers::HashMap;
 use orbit::OrbitalTrajectoryRegistry;
-use std::hash::Hash;
+use std::{fmt, hash::Hash};
 
 /// Manager of all motion drivers for kinematic bodies.
 #[derive(Debug)]
@@ -28,9 +29,8 @@ pub struct MotionDriverManager {
 
 /// Manages all instances of a specific type of analytical motion driver.
 #[derive(Clone, Debug)]
-pub struct MotionDriverRegistry<Id, G> {
-    drivers: IndexMap<Id, G>,
-    id_counter: u64,
+pub struct MotionDriverRegistry<Id, D> {
+    drivers: HashMap<Id, D>,
 }
 
 impl MotionDriverManager {
@@ -141,53 +141,48 @@ impl Default for MotionDriverManager {
     }
 }
 
-impl<Id: Copy + Eq + Hash + From<u64>, G> MotionDriverRegistry<Id, G> {
+impl<Id: Copy + Eq + Hash + fmt::Display, D> MotionDriverRegistry<Id, D> {
     fn new() -> Self {
         Self {
-            drivers: IndexMap::default(),
-            id_counter: 0,
+            drivers: HashMap::default(),
         }
     }
 
     /// Returns a reference to the driver with the given ID, or [`None`] if it
     /// does not exist.
-    pub fn get_driver(&self, id: &Id) -> Option<&G> {
+    pub fn get_driver(&self, id: &Id) -> Option<&D> {
         self.drivers.get(id)
     }
 
     /// Returns a mutable reference to the driver with the given ID, or [`None`]
     /// if it does not exist.
-    pub fn get_driver_mut(&mut self, id: &Id) -> Option<&mut G> {
+    pub fn get_driver_mut(&mut self, id: &Id) -> Option<&mut D> {
         self.drivers.get_mut(id)
     }
 
     /// Returns an iterator over all drivers.
-    pub fn drivers(&self) -> impl Iterator<Item = &G> {
+    pub fn drivers(&self) -> impl Iterator<Item = &D> {
         self.drivers.values()
     }
 
-    /// Adds the given motion driver to the map.
+    /// Adds the given motion driver to the map under the given ID.
     ///
-    /// # Returns
-    /// A new ID representing the added motion driver.
-    pub fn insert_driver(&mut self, driver: G) -> Id {
-        let id = self.create_new_id();
+    /// # Errors
+    /// Returns an error if the given driver ID already exists.
+    pub fn insert_driver(&mut self, id: Id, driver: D) -> Result<()> {
+        if self.drivers.contains_key(&id) {
+            bail!("A motion driver with ID {id} already exists");
+        }
         self.drivers.insert(id, driver);
-        id
+        Ok(())
     }
 
     /// Removes the motion driver with the given ID from the map if it exists.
     pub fn remove_driver(&mut self, id: Id) {
-        self.drivers.swap_remove(&id);
+        self.drivers.remove(&id);
     }
 
     fn clear(&mut self) {
         self.drivers.clear();
-    }
-
-    fn create_new_id(&mut self) -> Id {
-        let id = Id::from(self.id_counter);
-        self.id_counter = self.id_counter.checked_add(1).unwrap();
-        id
     }
 }

@@ -7,7 +7,7 @@ use crate::{
 };
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
-use impact_id::EntityID;
+use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::consts::f32::TWO_PI;
 use roc_integration::roc;
 
@@ -15,12 +15,21 @@ use roc_integration::roc;
 pub type HarmonicOscillatorTrajectoryRegistry =
     MotionDriverRegistry<HarmonicOscillatorTrajectoryDriverID, HarmonicOscillatorTrajectoryDriver>;
 
-define_component_type! {
+define_entity_id_newtype! {
     /// Identifier for a [`HarmonicOscillatorTrajectoryDriver`].
+    [pub] HarmonicOscillatorTrajectoryDriverID
+}
+
+define_component_type! {
+    /// Marks that an entity has a harmonic oscillator trajectory driver
+    /// identified by a [`HarmonicOscillatorTrajectoryDriverID`].
+    ///
+    /// Use [`HarmonicOscillatorTrajectoryDriverID::from_entity_id`] to obtain
+    /// the driver ID from the entity ID.
     #[roc(parents = "Comp")]
-    #[repr(transparent)]
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
-    pub struct HarmonicOscillatorTrajectoryDriverID(u64);
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasHarmonicOscillatorTrajectoryDriver;
 }
 
 /// Driver for imposing a harmonically oscillating trajectory on a kinematic
@@ -53,12 +62,6 @@ define_setup_type! {
         pub amplitude: f32,
         /// The duration of one full oscillation.
         pub period: f32,
-    }
-}
-
-impl From<u64> for HarmonicOscillatorTrajectoryDriverID {
-    fn from(value: u64) -> Self {
-        Self(value)
     }
 }
 
