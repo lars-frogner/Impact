@@ -32,6 +32,3 @@ pub type NoHashSet<K, A = Global> = hashbrown::HashSet<K, nohash_hasher::BuildNo
 
 pub type NoHashKeyIndexMapper<K, A = Global> =
     KeyIndexMapper<K, nohash_hasher::BuildNoHashHasher<K>, A>;
-
-pub type IndexMap<K, V> = indexmap::IndexMap<K, V, rustc_hash::FxBuildHasher>;
-pub type IndexSet<K> = indexmap::IndexSet<K, rustc_hash::FxBuildHasher>;
