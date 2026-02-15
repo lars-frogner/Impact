@@ -8,6 +8,7 @@ members = [
     "crates/impact_ecs",
     "crates/impact_ecs/impact_ecs_macros",
     "crates/impact_geometry",
+    "crates/impact_gizmo",
     "crates/impact_gpu",
     "crates/impact_id",
     "crates/impact_intersection",
@@ -217,6 +218,7 @@ roc_codegen = [
     "impact_camera/roc_codegen",
     "impact_ecs/roc_codegen",
     "impact_geometry/roc_codegen",
+    "impact_gizmo/roc_codegen",
     "impact_id/roc_codegen",
     "impact_intersection/roc_codegen",
     "impact_light/roc_codegen",
@@ -253,6 +255,7 @@ impact_controller = { path = "crates/impact_controller", features = [
 ] }
 impact_ecs = { path = "crates/impact_ecs" }
 impact_geometry = { path = "crates/impact_geometry", features = ["ecs"] }
+impact_gizmo = { path = "crates/impact_gizmo", features = ["ecs", "serde"]  }
 impact_gpu = { path = "crates/impact_gpu", features = ["serde"] }
 impact_id = { path = "crates/impact_id" }
 impact_intersection = { path = "crates/impact_intersection" }

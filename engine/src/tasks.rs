@@ -1,7 +1,6 @@
 //! Task definitions, arranged in dependency-consistent order.
 
 use crate::{
-    gizmo,
     lock_order::{OrderedMutex, OrderedRwLock},
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
@@ -807,7 +806,7 @@ define_task!(
         instrument_engine_task!("Updating visibility flags for gizmos", engine, {
             let ecs_world = engine.ecs_world().oread();
             let mut gizmo_manager = engine.gizmo_manager().owrite();
-            gizmo::systems::update_visibility_flags_for_gizmos(&mut gizmo_manager, &ecs_world);
+            impact_gizmo::systems::update_visibility_flags_for_gizmos(&mut gizmo_manager, &ecs_world);
             Ok(())
         })
     }
@@ -856,7 +855,7 @@ define_task!(
             let collision_world = simulator.collision_world().oread();
             let gizmo_manager = engine.gizmo_manager().oread();
 
-            gizmo::systems::buffer_transforms_for_gizmos(
+            impact_gizmo::systems::buffer_transforms_for_gizmos(
                 &mut model_instance_manager,
                 &ecs_world,
                 &camera_manager,

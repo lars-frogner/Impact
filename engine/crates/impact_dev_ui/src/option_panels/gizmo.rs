@@ -4,7 +4,7 @@ use impact::{
     command::{AdminCommand, gizmo::GizmoAdminCommand},
     egui::{Context, Response, Slider, Ui},
     engine::Engine,
-    gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
+    impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
 };
 
 fn gizmo_parameter_options(

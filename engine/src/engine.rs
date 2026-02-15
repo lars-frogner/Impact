@@ -12,8 +12,8 @@ use crate::{
     application::ApplicationInterface,
     command::{self, EngineCommandQueues},
     game_loop::{GameLoopConfig, GameLoopController},
-    gizmo::{self, GizmoConfig, GizmoManager},
     gpu::GraphicsContext,
+    impact_gizmo::{self, GizmoConfig, GizmoManager},
     input::{
         InputConfig, InputEvent, InputManager,
         mouse::{MouseDragEvent, MouseMotionEvent},
@@ -127,13 +127,13 @@ impl Engine {
         resource_manager.load_builtin_resources()?;
         resource_manager.load_resources_declared_in_config()?;
 
-        gizmo::mesh::generate_gizmo_meshes(&mut resource_manager);
+        impact_gizmo::mesh::generate_gizmo_meshes(&mut resource_manager);
 
         let mut model_instance_manager = ModelInstanceManager::new();
         impact_model::register_model_feature_types(&mut model_instance_manager);
         impact_material::register_material_feature_types(&mut model_instance_manager);
         impact_voxel::register_voxel_feature_types(&mut model_instance_manager);
-        gizmo::initialize_buffers_for_gizmo_models(&mut model_instance_manager);
+        impact_gizmo::initialize_buffers_for_gizmo_models(&mut model_instance_manager);
 
         let camera_context = CameraContext {
             aspect_ratio: graphics.surface.surface_aspect_ratio(),

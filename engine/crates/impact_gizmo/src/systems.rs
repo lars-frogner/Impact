@@ -1,8 +1,7 @@
 //! ECS systems for gizmo management.
 
-use crate::gizmo::{
-    GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility,
-    components::GizmosComp,
+use crate::{
+    GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility, Gizmos,
     model::{
         COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
         COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
@@ -87,7 +86,7 @@ fn update_visibility_flags_for_gizmo(
             return;
         }
     };
-    query!(ecs_world, |gizmos: &mut GizmosComp| {
+    query!(ecs_world, |gizmos: &mut Gizmos| {
         gizmos.visible_gizmos.set(gizmo.as_set(), globally_visible);
     });
 }
@@ -116,7 +115,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .contains(GizmoSet::REFERENCE_FRAME_AXES)
@@ -136,7 +135,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::BOUNDING_VOLUME) || flags.is_disabled() {
                 return;
             }
@@ -153,7 +152,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::LIGHT_SPHERE) || flags.is_disabled() {
                 return;
             }
@@ -168,7 +167,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if flags.is_disabled() {
                 return;
             }
@@ -195,7 +194,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .contains(GizmoSet::SHADOW_MAP_CASCADES)
@@ -215,10 +214,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID,
-         gizmos: &GizmosComp,
-         frame: &ReferenceFrame,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, frame: &ReferenceFrame, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
                 return;
             }
@@ -236,10 +232,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID,
-         gizmos: &GizmosComp,
-         frame: &ReferenceFrame,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, frame: &ReferenceFrame, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::ANCHORS) || flags.is_disabled() {
                 return;
             }
@@ -255,7 +248,7 @@ pub fn buffer_transforms_for_gizmos(
         [HasKinematicRigidBody]
     );
 
-    query!(ecs_world, |gizmos: &GizmosComp,
+    query!(ecs_world, |gizmos: &Gizmos,
                        frame: &ReferenceFrame,
                        motion: &Motion,
                        flags: &SceneEntityFlags| {
@@ -279,10 +272,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID,
-         gizmos: &GizmosComp,
-         frame: &ReferenceFrame,
-         flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, frame: &ReferenceFrame, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.intersects(
                 GizmoSet::CENTER_OF_MASS
                     .union(GizmoSet::ANGULAR_MOMENTUM)
@@ -308,7 +298,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.intersects(
                 GizmoSet::DYNAMIC_COLLIDER
                     .union(GizmoSet::STATIC_COLLIDER)
@@ -332,7 +322,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos.visible_gizmos.contains(GizmoSet::VOXEL_CHUNKS) || flags.is_disabled() {
                 return;
             }
@@ -352,7 +342,7 @@ pub fn buffer_transforms_for_gizmos(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
                 .contains(GizmoSet::VOXEL_INTERSECTIONS)

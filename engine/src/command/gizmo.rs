@@ -1,10 +1,7 @@
 //! Commands for operating gizmos.
 
-use crate::{
-    engine::Engine,
-    gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
-    lock_order::OrderedRwLock,
-};
+use crate::{engine::Engine, lock_order::OrderedRwLock};
+use impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibility};
 
 #[derive(Clone, Debug)]
 pub enum GizmoAdminCommand {

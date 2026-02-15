@@ -1,9 +1,15 @@
 //! Simple visual elements drawn over the scene to provide technical
 //! information.
 
-pub mod components;
+#[macro_use]
+mod macros;
+
 pub mod mesh;
 pub mod model;
+pub mod render_commands;
+pub mod setup;
+
+#[cfg(feature = "ecs")]
 pub mod systems;
 
 use bitflags::{Flags, bitflags};
@@ -12,7 +18,16 @@ use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
 use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
 use impact_scene::model::{ModelID, ModelInstanceManager};
 use model::{GizmoModel, gizmo_models};
-use serde::{Deserialize, Serialize};
+
+define_component_type! {
+    /// Marks that an entity supports one or more gizmos.
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+    pub struct Gizmos {
+        /// The gizmos currently visible for the entity.
+        pub visible_gizmos: GizmoSet,
+    }
+}
 
 /// A specific gizmo type.
 ///
@@ -71,16 +86,24 @@ bitflags! {
 ///
 /// Gizmos are simple visual elements drawn over the scene to provide technical
 /// information.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
 pub struct GizmoConfig {
     pub visibilities: GizmoVisibilities,
     pub parameters: GizmoParameters,
 }
 
 /// The [`GizmoVisibility`] of each gizmo type.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
 pub struct GizmoVisibilities {
     /// The visibility of the gizmo indicating reference frame axes.
     ///
@@ -218,8 +241,12 @@ pub struct GizmoVisibilities {
 }
 
 /// The configuration parameters associated with each gizmo type.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug)]
 pub struct GizmoParameters {
     /// The density used to calculate the size of the center of mass sphere from
     /// the mass of the body.
@@ -245,7 +272,8 @@ pub struct GizmoParameters {
 }
 
 /// The scope of visibility for a gizmo.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GizmoVisibility {
     /// The gizmo is hidden for all entities.
     #[default]

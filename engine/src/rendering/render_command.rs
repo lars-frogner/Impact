@@ -1,9 +1,7 @@
 //! Render commands.
 
-pub mod gizmo_passes;
-
 use anyhow::Result;
-use gizmo_passes::GizmoPasses;
+use impact_gizmo::render_commands::GizmoPasses;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice,
     resource_group::GPUResourceGroupManager, shader::ShaderManager,

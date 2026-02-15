@@ -20,7 +20,11 @@ use impact_texture::{
 pub trait BasicResourceRegistries {
     fn triangle_mesh(&self) -> &TriangleMeshRegistry;
 
+    fn triangle_mesh_mut(&mut self) -> &mut TriangleMeshRegistry;
+
     fn line_segment_mesh(&self) -> &LineSegmentMeshRegistry;
+
+    fn line_segment_mesh_mut(&mut self) -> &mut LineSegmentMeshRegistry;
 
     fn texture(&self) -> &TextureRegistry;
 
