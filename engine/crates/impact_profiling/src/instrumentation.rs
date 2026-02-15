@@ -1,3 +1,4 @@
+pub mod timing;
 pub mod tracy;
 
 #[cfg(not(feature = "tracy"))]

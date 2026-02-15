@@ -4,6 +4,7 @@ use egui_extras::{Column, TableBuilder};
 use impact::{
     egui::{Context, TextStyle, TextWrapMode},
     engine::Engine,
+    impact_profiling::TimedTask,
 };
 use impact_alloc::{AVec, arena::ArenaPool};
 
@@ -59,10 +60,10 @@ impl TaskTimingPanel {
                         });
                     })
                     .body(|mut body| {
-                        for (id, duration) in &task_execution_times {
+                        for &TimedTask { label, duration } in &task_execution_times {
                             body.row(row_height, |mut row| {
                                 row.col(|ui| {
-                                    ui.label(id.string());
+                                    ui.label(label);
                                 });
                                 row.col(|ui| {
                                     ui.scope(|ui| {

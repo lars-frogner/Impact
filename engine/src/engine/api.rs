@@ -3,7 +3,6 @@
 use super::Engine;
 use crate::{
     command::{AdminCommand, UserCommand},
-    instrumentation::timing::TimedTaskID,
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::SimulatorConfig,
     setup,
@@ -26,6 +25,7 @@ use impact_physics::{
     force::alignment_torque::{AlignmentTorqueGenerator, AlignmentTorqueGeneratorID},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
+use impact_profiling::TimedTask;
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::RenderAttachmentQuantity,
@@ -515,7 +515,7 @@ impl Engine {
     }
 
     /// Returns the last task execution times.
-    pub fn collect_task_execution_times(&self, results: &mut impl Extend<(TimedTaskID, Duration)>) {
+    pub fn collect_task_execution_times(&self, results: &mut impl Extend<TimedTask>) {
         results.extend(
             self.metrics()
                 .oread()

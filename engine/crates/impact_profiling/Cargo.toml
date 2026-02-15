@@ -12,6 +12,7 @@ tracy = ["dep:tracy-client"]
 [dependencies]
 anyhow = { workspace = true }
 criterion = { version = "0.8", optional = true }
+parking_lot = { workspace = true }
 tracy-client = { version = "=0.18.3", optional = true, default-features = false, features = [
     "enable",
     "system-tracing",
