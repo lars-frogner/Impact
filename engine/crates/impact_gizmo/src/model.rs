@@ -1,6 +1,6 @@
 //! Gizmo models.
 
-use crate::gizmo::{GizmoDepthClipping, GizmoObscurability, GizmoType};
+use crate::{GizmoDepthClipping, GizmoObscurability, GizmoType};
 use impact_math::hash64;
 use impact_mesh::{LineSegmentMeshID, MeshID, MeshPrimitive, TriangleMeshID};
 use impact_scene::model::ModelID;

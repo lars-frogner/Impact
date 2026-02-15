@@ -89,5 +89,5 @@ declare_lockable_resource!(Box<dyn impact_controller::OrientationController>, 51
 // UTILITIES (600+)
 // ============================================================================
 
-declare_lockable_resource!(crate::gizmo::GizmoManager, 600);
+declare_lockable_resource!(impact_gizmo::GizmoManager, 600);
 declare_lockable_resource!(crate::instrumentation::EngineMetrics, 610);

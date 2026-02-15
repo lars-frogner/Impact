@@ -157,8 +157,16 @@ impl BasicResourceRegistries for ResourceManager {
         &self.triangle_meshes
     }
 
+    fn triangle_mesh_mut(&mut self) -> &mut TriangleMeshRegistry {
+        &mut self.triangle_meshes
+    }
+
     fn line_segment_mesh(&self) -> &LineSegmentMeshRegistry {
         &self.line_segment_meshes
+    }
+
+    fn line_segment_mesh_mut(&mut self) -> &mut LineSegmentMeshRegistry {
+        &mut self.line_segment_meshes
     }
 
     fn texture(&self) -> &TextureRegistry {

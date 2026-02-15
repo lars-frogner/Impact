@@ -3,7 +3,6 @@
 use super::Engine;
 use crate::{
     command::{AdminCommand, UserCommand},
-    gizmo::{GizmoParameters, GizmoType, GizmoVisibilities, GizmoVisibility},
     instrumentation::timing::TimedTaskID,
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::SimulatorConfig,
@@ -18,6 +17,7 @@ use impact_ecs::{
     },
     world::{PrototypeEntities, QueryableWorld},
 };
+use impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibilities, GizmoVisibility};
 use impact_id::EntityID;
 use impact_material::values::UniformColorPhysicalMaterialValues;
 use impact_model::{InstanceFeature, ModelInstanceID};

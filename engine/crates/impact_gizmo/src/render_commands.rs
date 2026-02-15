@@ -1,6 +1,6 @@
 //! Passes for rendering gizmos.
 
-use crate::gizmo::{self, GizmoDepthClipping, GizmoObscurability, model::GizmoModel};
+use crate::{GizmoDepthClipping, GizmoObscurability, model::GizmoModel};
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
@@ -361,7 +361,7 @@ impl GizmoPassPipeline {
         camera_gpu_resources: &CameraGPUResource,
         render_pass: &mut wgpu::RenderPass<'_>,
     ) -> Result<()> {
-        let models = gizmo::model::select_gizmo_models(
+        let models = crate::model::select_gizmo_models(
             self.mesh_primitive,
             self.obscurability,
             self.depth_clipping,
