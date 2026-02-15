@@ -15,16 +15,12 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
-use impact_geometry::{ModelTransform, ReferenceFrame, Sphere};
+use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
 use impact_intersection::bounding_volume::{
-    AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
+    AxisAlignedBoundingBoxC, BoundingVolumeID, BoundingVolumeManager,
 };
-use impact_math::{
-    hash::Hash32,
-    point::Point3,
-    vector::{Vector3, Vector3C},
-};
+use impact_math::{hash::Hash32, point::Point3C, vector::Vector3C};
 use impact_model::{
     InstanceFeature, ModelInstanceID,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -619,20 +615,14 @@ pub fn setup_bounding_volume_for_voxel_object(
         .ok_or_else(|| anyhow!("Tried to create bounding volume for missing voxel object (with ID {voxel_object_id})"))?
         .object();
 
-    let bounding_sphere = if voxel_object.contains_only_empty_voxels() {
-        Sphere::new(Point3::origin(), 0.0)
+    let aabb = if voxel_object.contains_only_empty_voxels() {
+        AxisAlignedBoundingBoxC::new(Point3C::origin(), Point3C::origin())
     } else {
-        voxel_object.compute_bounding_sphere()
+        voxel_object.compute_aabb().compact()
     };
 
-    let bounding_volume = AxisAlignedBoundingBox::new(
-        bounding_sphere.center() - Vector3::same(bounding_sphere.radius()),
-        bounding_sphere.center() + Vector3::same(bounding_sphere.radius()),
-    )
-    .compact();
-
     let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
-    bounding_volume_manager.insert_bounding_volume(bounding_volume_id, bounding_volume)
+    bounding_volume_manager.insert_bounding_volume(bounding_volume_id, aabb)
 }
 
 fn setup_rigid_body_for_new_voxel_object(
