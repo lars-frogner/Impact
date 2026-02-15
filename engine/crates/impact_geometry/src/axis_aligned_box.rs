@@ -6,6 +6,7 @@ use approx::AbsDiffEq;
 use impact_math::{
     matrix::Matrix4,
     point::{Point3, Point3C},
+    quaternion::UnitQuaternion,
     vector::{UnitVector3, Vector3, Vector3C},
 };
 
@@ -205,6 +206,51 @@ impl AxisAlignedBox {
             && point.z() <= self.upper_corner().z()
     }
 
+    /// Returns the point inside or on the boundary of the axis-aligned box that
+    /// is closest to the given point.
+    #[inline]
+    pub fn closest_interior_point_to(&self, point: &Point3) -> Point3 {
+        point
+            .max_with(self.lower_corner())
+            .min_with(self.upper_corner())
+    }
+
+    /// Returns the corner of the axis aligned box that is farthest from the
+    /// given point.
+    #[inline]
+    pub fn farthest_corner_from(&self, point: &Point3) -> Point3 {
+        let lower = self.lower_corner();
+        let upper = self.upper_corner();
+        let center = self.center();
+
+        Point3::new(
+            if point.x() > center.x() {
+                lower.x()
+            } else {
+                upper.x()
+            },
+            if point.y() > center.y() {
+                lower.y()
+            } else {
+                upper.y()
+            },
+            if point.z() > center.z() {
+                lower.z()
+            } else {
+                upper.z()
+            },
+        )
+    }
+
+    /// Returns the start and end coordinate of the box when projected onto the
+    /// given axis.
+    #[inline]
+    pub fn displacement_range_along_axis(&self, axis: &UnitVector3) -> (f32, f32) {
+        let center_dot = self.center().as_vector().dot(axis);
+        let extent_dot = self.half_extents().dot(&axis.component_abs());
+        (center_dot - extent_dot, center_dot + extent_dot)
+    }
+
     /// Whether all of the given axis-aligned box is inside this box. If a
     /// corner exactly touches the surface, it is still considered inside.
     #[inline]
@@ -227,40 +273,6 @@ impl AxisAlignedBox {
                 && self.upper_corner().y() >= other.lower_corner().y())
             && (self.lower_corner().z() <= other.upper_corner().z()
                 && self.upper_corner().z() >= other.lower_corner().z()))
-    }
-
-    /// Computes the corner of the axis aligned box that is closest to the given
-    /// point.
-    #[inline]
-    pub fn compute_closest_corner(&self, point: &Point3) -> Point3 {
-        let mut closest_corner = Point3::origin();
-        for dim in 0..3 {
-            if (self.lower_corner()[dim] - point[dim]).abs()
-                < (self.upper_corner()[dim] - point[dim]).abs()
-            {
-                closest_corner[dim] = self.lower_corner()[dim];
-            } else {
-                closest_corner[dim] = self.upper_corner()[dim];
-            }
-        }
-        closest_corner
-    }
-
-    /// Computes the corner of the axis aligned box that is farthest from the
-    /// given point.
-    #[inline]
-    pub fn compute_farthest_corner(&self, point: &Point3) -> Point3 {
-        let mut farthest_corner = Point3::origin();
-        for dim in 0..3 {
-            if (self.lower_corner()[dim] - point[dim]).abs()
-                > (self.upper_corner()[dim] - point[dim]).abs()
-            {
-                farthest_corner[dim] = self.lower_corner()[dim];
-            } else {
-                farthest_corner[dim] = self.upper_corner()[dim];
-            }
-        }
-        farthest_corner
     }
 
     /// Computes the axis-aligned bounding box enclosing only the volume
@@ -328,6 +340,22 @@ impl AxisAlignedBox {
         Self::new(
             transformed_center - transformed_half_extents,
             transformed_center + transformed_half_extents,
+        )
+    }
+
+    /// Computes the AABB for the rotated (about the origin) version of this
+    /// AABB.
+    #[inline]
+    pub fn aabb_of_rotated(&self, rotation: &UnitQuaternion) -> Self {
+        let rotated_center = rotation.rotate_point(&self.center());
+
+        let rotation_matrix = rotation.to_rotation_matrix();
+        let abs_rotation_matrix = rotation_matrix.mapped(f32::abs);
+        let rotated_half_extents = abs_rotation_matrix * self.half_extents();
+
+        Self::new(
+            rotated_center - rotated_half_extents,
+            rotated_center + rotated_half_extents,
         )
     }
 
@@ -555,73 +583,37 @@ mod tests {
     }
 
     #[test]
-    fn compute_closest_corner_with_point_inside_box_works() {
+    fn farthest_corner_from_with_point_inside_box_works() {
         let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(0.6, 0.6, 0.6)),
-            Point3::new(1.0, 1.0, 1.0)
-        );
-    }
-
-    #[test]
-    fn compute_closest_corner_with_point_outside_box_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(2.0, 2.0, 2.0)),
-            Point3::new(1.0, 1.0, 1.0)
-        );
-    }
-
-    #[test]
-    fn compute_closest_corner_with_point_on_box_corner_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(1.0, 1.0, 1.0)),
-            Point3::new(1.0, 1.0, 1.0)
-        );
-    }
-
-    #[test]
-    fn compute_closest_corner_with_point_on_box_edge_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        assert_abs_diff_eq!(
-            aabb.compute_closest_corner(&Point3::new(0.0, 0.4, 0.4)),
+            aabb.farthest_corner_from(&Point3::new(0.6, 0.6, 0.6)),
             Point3::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
-    fn compute_farthest_corner_with_point_inside_box_works() {
+    fn farthest_corner_from_with_point_outside_box_works() {
         let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(0.6, 0.6, 0.6)),
+            aabb.farthest_corner_from(&Point3::new(2.0, 2.0, 2.0)),
             Point3::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
-    fn compute_farthest_corner_with_point_outside_box_works() {
+    fn farthest_corner_from_with_point_on_box_corner_works() {
         let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(2.0, 2.0, 2.0)),
+            aabb.farthest_corner_from(&Point3::new(1.0, 1.0, 1.0)),
             Point3::new(0.0, 0.0, 0.0)
         );
     }
 
     #[test]
-    fn compute_farthest_corner_with_point_on_box_corner_works() {
+    fn farthest_corner_from_with_point_on_box_edge_works() {
         let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
         assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(1.0, 1.0, 1.0)),
-            Point3::new(0.0, 0.0, 0.0)
-        );
-    }
-
-    #[test]
-    fn compute_farthest_corner_with_point_on_box_edge_works() {
-        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
-        assert_abs_diff_eq!(
-            aabb.compute_farthest_corner(&Point3::new(0.0, 0.4, 0.4)),
+            aabb.farthest_corner_from(&Point3::new(0.0, 0.4, 0.4)),
             Point3::new(1.0, 1.0, 1.0)
         );
     }
