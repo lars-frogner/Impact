@@ -9,18 +9,18 @@ use crate::declare_lockable_resource;
 declare_lockable_resource!(crate::game_loop::GameLoopController, 0);
 
 // ============================================================================
-// INPUT MANAGER (10-19)
+// INPUT MANAGER (10-49)
 // ============================================================================
 
 declare_lockable_resource!(crate::input::InputManager, 10);
 
 // ============================================================================
-// ENTITIES (20-49)
+// ENTITIES (50-99)
 // ============================================================================
 
-declare_lockable_resource!(impact_id::EntityIDManager, 10);
-declare_lockable_resource!(impact_ecs::world::EntityStager, 20);
-declare_lockable_resource!(impact_ecs::world::World, 30);
+declare_lockable_resource!(impact_id::EntityIDManager, 50);
+declare_lockable_resource!(impact_ecs::world::EntityStager, 60);
+declare_lockable_resource!(impact_ecs::world::World, 70);
 
 // ============================================================================
 // RESOURCES (100-199)
@@ -40,7 +40,8 @@ declare_lockable_resource!(impact_camera::CameraManager, 220);
 declare_lockable_resource!(impact_light::LightManager, 230);
 declare_lockable_resource!(impact_voxel::VoxelManager, 240);
 declare_lockable_resource!(impact_scene::model::ModelInstanceManager, 250);
-declare_lockable_resource!(impact_scene::graph::SceneGraph, 260);
+declare_lockable_resource!(impact_intersection::IntersectionManager, 260);
+declare_lockable_resource!(impact_scene::graph::SceneGraph, 270);
 
 // ============================================================================
 // PHYSICS (300-399)

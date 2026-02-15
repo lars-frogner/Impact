@@ -15,16 +15,17 @@ use crate::{
 };
 use absorption::VoxelAbsorptionManager;
 use impact_alloc::{AVec, Allocator};
-use impact_geometry::ModelTransform;
+use impact_geometry::{ModelTransform, Sphere};
 use impact_id::EntityID;
-use impact_math::{transform::Isometry3, vector::Vector3};
-use impact_model::ModelInstanceID;
+use impact_intersection::bounding_volume::{
+    AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
+};
+use impact_math::{point::Point3, transform::Isometry3, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
     quantities::{AngularVelocity, Orientation, Position, Velocity},
     rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
 };
-use impact_scene::graph::SceneGraph;
 use tinyvec::TinyVec;
 
 /// Context trait for handling voxel object interactions in a generic way.
@@ -136,26 +137,34 @@ pub fn sync_voxel_object_model_transform_with_inertial_properties(
     model_transform.offset = center_of_mass.compact();
 }
 
-/// Updates the bounding sphere of a voxel object's model instance node to match
-/// the current bounding sphere of the object.
-pub fn sync_voxel_object_bounding_sphere_in_scene_graph(
+/// Updates the voxel object's bounding volume in the bounding volume manager to
+/// match the current bounding volume of the object.
+pub fn sync_voxel_object_bounding_volume(
     voxel_object_manager: &VoxelObjectManager,
-    scene_graph: &mut SceneGraph,
+    bounding_volume_manager: &mut BoundingVolumeManager,
     entity_id: EntityID,
-    uncullable: bool,
 ) {
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
         return;
     };
 
-    let bounding_sphere = (!uncullable && !voxel_object.object().contains_only_empty_voxels())
-        .then(|| voxel_object.object().compute_bounding_sphere());
+    let bounding_sphere = if voxel_object.object().contains_only_empty_voxels() {
+        Sphere::new(Point3::origin(), 0.0)
+    } else {
+        voxel_object.object().compute_bounding_sphere()
+    };
 
-    scene_graph.set_model_instance_bounding_sphere(
-        ModelInstanceID::from_entity_id(entity_id),
-        bounding_sphere.map(|sphere| sphere.compact()),
-    );
+    let bounding_volume = AxisAlignedBoundingBox::new(
+        bounding_sphere.center() - Vector3::same(bounding_sphere.radius()),
+        bounding_sphere.center() + Vector3::same(bounding_sphere.radius()),
+    )
+    .compact();
+
+    let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+    *bounding_volume_manager
+        .get_bounding_volume_mut(bounding_volume_id)
+        .expect("Missing bounding volume for voxel object") = bounding_volume;
 }
 
 fn handle_voxel_object_after_removing_voxels(

@@ -1,5 +1,6 @@
 //! Setup and cleanup of scene data for new and removed entities.
 
+pub mod bounding_volume;
 pub mod camera;
 pub mod light;
 pub mod material;
@@ -20,8 +21,7 @@ use impact_material::MaterialID;
 use impact_mesh::TriangleMeshID;
 use impact_model::HasModel;
 use impact_scene::{
-    CanBeParent, ParentEntity, SceneEntityFlags,
-    setup::{HasIndependentMaterialValues, Uncullable},
+    CanBeParent, ParentEntity, SceneEntityFlags, setup::HasIndependentMaterialValues,
 };
 use parking_lot::RwLock;
 
@@ -43,6 +43,8 @@ pub fn setup_scene_data_for_new_entities(
 
     voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, entities)?;
     voxel::setup_voxel_interaction_for_new_entities(scene, entities)?;
+
+    bounding_volume::setup_bounding_volumes_for_new_entities(resource_manager, scene, entities)?;
 
     mesh::generate_missing_vertex_properties_for_new_entity_meshes(resource_manager, entities);
 
@@ -81,6 +83,8 @@ pub fn cleanup_scene_data_for_removed_entity(
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
     voxel::cleanup_voxel_object_for_removed_entity(scene, entity_id, entity);
+
+    bounding_volume::cleanup_bounding_volume_for_removed_entity(scene, entity_id, entity);
 }
 
 fn setup_scene_graph_group_nodes_for_new_entities(
@@ -145,10 +149,7 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
             let has_independent_material_values =
                 entities.has_component_type::<HasIndependentMaterialValues>();
 
-            let uncullable = entities.has_component_type::<Uncullable>();
-
             let flags = impact_scene::setup::setup_scene_graph_model_instance_node(
-                &resource_manager.triangle_meshes,
                 &resource_manager.materials,
                 &mut model_instance_manager,
                 &mut scene_graph,
@@ -159,7 +160,6 @@ fn setup_scene_graph_model_instance_nodes_for_new_entities(
                 parent_entity_id,
                 flags,
                 has_independent_material_values,
-                uncullable,
             )?;
 
             Ok((HasModel, model_transform, flags))

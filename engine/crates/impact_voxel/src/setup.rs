@@ -15,9 +15,16 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
-use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_geometry::{ModelTransform, ReferenceFrame, Sphere};
 use impact_id::EntityID;
-use impact_math::{hash::Hash32, vector::Vector3C};
+use impact_intersection::bounding_volume::{
+    AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
+};
+use impact_math::{
+    hash::Hash32,
+    point::Point3,
+    vector::{Vector3, Vector3C},
+};
 use impact_model::{
     InstanceFeature, ModelInstanceID,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
@@ -537,7 +544,6 @@ pub fn setup_dynamic_rigid_body_for_voxel_object(
 }
 
 pub fn create_model_instance_node_for_voxel_object(
-    voxel_object_manager: &VoxelObjectManager,
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
     entity_id: EntityID,
@@ -545,17 +551,10 @@ pub fn create_model_instance_node_for_voxel_object(
     frame: Option<&ReferenceFrame>,
     parent_entity_id: Option<&ParentEntity>,
     flags: Option<&SceneEntityFlags>,
-    uncullable: bool,
 ) -> Result<(ModelTransform, SceneEntityFlags)> {
     let model_transform = model_transform.copied().unwrap_or_default();
     let frame = frame.copied().unwrap_or_default();
     let flags = flags.copied().unwrap_or_default();
-
-    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
-    let voxel_object = voxel_object_manager
-        .get_voxel_object(voxel_object_id)
-        .ok_or_else(|| anyhow!("Tried to create model instance node for missing voxel object (with ID {voxel_object_id})"))?
-        .object();
 
     let model_id = *VOXEL_MODEL_ID;
 
@@ -583,17 +582,12 @@ pub fn create_model_instance_node_for_voxel_object(
         .expect("Missing storage for InstanceModelLightTransform feature")
         .add_feature(&InstanceModelLightTransform::default());
 
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+
     let voxel_object_id_feature_id = model_instance_manager
         .get_storage_mut::<VoxelObjectID>()
         .expect("Missing storage for VoxelObjectID feature")
         .add_feature(&voxel_object_id);
-
-    let bounding_sphere = if uncullable || voxel_object.contains_only_empty_voxels() {
-        // The scene graph will not cull models with no bounding sphere
-        None
-    } else {
-        Some(voxel_object.compute_bounding_sphere())
-    };
 
     let model_instance_id = ModelInstanceID::from_entity_id(entity_id);
     let parent_group_id = parent_entity_id.map_or_else(
@@ -606,13 +600,39 @@ pub fn create_model_instance_node_for_voxel_object(
         model_instance_id,
         model_to_parent_transform.compact(),
         model_id,
-        bounding_sphere.map(|sphere| sphere.compact()),
         FeatureIDSet::from_iter([model_view_transform_feature_id, voxel_object_id_feature_id]),
         FeatureIDSet::from_iter([model_light_transform_feature_id, voxel_object_id_feature_id]),
         flags.into(),
     )?;
 
     Ok((model_transform, flags))
+}
+
+pub fn setup_bounding_volume_for_voxel_object(
+    voxel_object_manager: &VoxelObjectManager,
+    bounding_volume_manager: &mut BoundingVolumeManager,
+    entity_id: EntityID,
+) -> Result<()> {
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+    let voxel_object = voxel_object_manager
+        .get_voxel_object(voxel_object_id)
+        .ok_or_else(|| anyhow!("Tried to create bounding volume for missing voxel object (with ID {voxel_object_id})"))?
+        .object();
+
+    let bounding_sphere = if voxel_object.contains_only_empty_voxels() {
+        Sphere::new(Point3::origin(), 0.0)
+    } else {
+        voxel_object.compute_bounding_sphere()
+    };
+
+    let bounding_volume = AxisAlignedBoundingBox::new(
+        bounding_sphere.center() - Vector3::same(bounding_sphere.radius()),
+        bounding_sphere.center() + Vector3::same(bounding_sphere.radius()),
+    )
+    .compact();
+
+    let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+    bounding_volume_manager.insert_bounding_volume(bounding_volume_id, bounding_volume)
 }
 
 fn setup_rigid_body_for_new_voxel_object(

@@ -799,6 +799,20 @@ impl TriangleMesh {
         cube
     }
 
+    /// Creates a mesh representing a cube with extent 1.0, centered at the
+    /// origin, with all vertices having the given color.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    pub fn create_unit_cube_with_color(color: VertexColor) -> Self {
+        let mut cube = Self::create_box(1.0, 1.0, 1.0, FrontFaceSide::Outside);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        cube.remove_normal_vectors(&mut dirty_mask);
+        cube.set_same_color(color, &mut dirty_mask);
+
+        cube
+    }
+
     /// Creates a mesh representing a sphere with radius 1.0, centered at the
     /// origin, with all vertices having the given color.
     ///

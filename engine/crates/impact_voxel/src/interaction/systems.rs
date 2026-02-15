@@ -19,6 +19,7 @@ use impact_ecs::{
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::{EntityID, EntityIDManager};
+use impact_intersection::bounding_volume::BoundingVolumeManager;
 use impact_model::HasModel;
 use impact_physics::{
     anchor::AnchorManager,
@@ -34,7 +35,6 @@ use impact_physics::{
 use impact_scene::{
     ParentEntity, SceneEntityFlags,
     graph::{SceneGraph, SceneGroupID},
-    setup::Uncullable,
 };
 use tinyvec::TinyVec;
 
@@ -263,37 +263,23 @@ pub fn sync_voxel_object_model_transforms(
     );
 }
 
-/// Updates the bounding spheres of all voxel object's model instance nodes to match
-/// the current bounding sphere of the object.
-pub fn sync_voxel_object_bounding_spheres_in_scene_graph(
+/// Updates the bounding volumes of all voxel object's bounding volumes in the
+/// bounding volume manager to match the current bounding sphere of the object.
+pub fn sync_voxel_object_bounding_volumes(
     ecs_world: &ECSWorld,
     voxel_object_manager: &VoxelObjectManager,
-    scene_graph: &mut SceneGraph,
+    bounding_volume_manager: &mut BoundingVolumeManager,
 ) {
     query!(
         ecs_world,
         |entity_id: EntityID| {
-            interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
+            interaction::sync_voxel_object_bounding_volume(
                 voxel_object_manager,
-                scene_graph,
+                bounding_volume_manager,
                 entity_id,
-                false,
             );
         },
-        [HasVoxelObject, HasModel],
-        ![Uncullable]
-    );
-    query!(
-        ecs_world,
-        |entity_id: EntityID| {
-            interaction::sync_voxel_object_bounding_sphere_in_scene_graph(
-                voxel_object_manager,
-                scene_graph,
-                entity_id,
-                true,
-            );
-        },
-        [HasVoxelObject, HasModel, Uncullable]
+        [HasVoxelObject, HasModel]
     );
 }
 

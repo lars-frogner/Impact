@@ -512,14 +512,15 @@ define_task!(
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
             let voxel_manager = scene.voxel_manager().oread();
+            let mut intersection_manager = scene.intersection_manager().owrite();
             let mut scene_graph = scene.scene_graph().owrite();
 
             impact_scene::systems::sync_scene_object_transforms_and_flags(&ecs_world, &mut scene_graph);
 
-            impact_voxel::interaction::systems::sync_voxel_object_bounding_spheres_in_scene_graph(
+            impact_voxel::interaction::systems::sync_voxel_object_bounding_volumes(
                 &ecs_world,
                 voxel_manager.object_manager(),
-                &mut scene_graph,
+                &mut intersection_manager.bounding_volume_manager,
             );
             Ok(())
         })
@@ -547,24 +548,47 @@ define_task!(
 );
 
 define_task!(
-    /// Updates the bounding spheres of all
-    /// [`SceneGraph`](crate::scene::SceneGraph) nodes.
-    [pub] UpdateSceneObjectBoundingSpheres,
+    /// Adds the world-space bounding volumes of the appropriate entities to the
+    /// bounding volume hierarchy.
+    [pub] AddBoundingVolumesToHierarchy,
     depends_on = [
-        // This is non strictly a dependency (we only use the group-to-parent
-        // transforms), but there is no point in trying to do both at the same
-        // time, since both need write access to the scene graph.
+        // We depend on the updated group-to-world transforms.
         UpdateSceneGroupToWorldTransforms
-        // This is the actual dependency.
-        // SyncSceneObjectTransformsAndFlags
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Updating scene object bounding spheres", engine, {
+        instrument_engine_task!("Adding bounding volumes to hierarchy", engine, {
+            let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
-            let mut scene_graph = scene.scene_graph().owrite();
-            scene_graph.update_all_bounding_spheres();
+            let mut intersection_manager = scene.intersection_manager().owrite();
+            let scene_graph = scene.scene_graph().oread();
+
+            intersection_manager.reset_bounding_volume_hierarchy();
+
+            impact_scene::systems::add_bounding_volumes_to_hierarchy(
+                &ecs_world,
+                &mut intersection_manager,
+                &scene_graph,
+            );
+            Ok(())
+        })
+    }
+);
+
+define_task!(
+    /// Builds the bounding volume hierarchy for the added bounding volumes.
+    [pub] BuildBoundingVolumeHierarchy,
+    depends_on = [
+        AddBoundingVolumesToHierarchy
+    ],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_engine_task!("Building bounding volume hierarchy", engine, {
+            let scene = engine.scene().oread();
+            let mut intersection_manager = scene.intersection_manager().owrite();
+            intersection_manager.build_bounding_volume_hierarchy();
             Ok(())
         })
     }
@@ -575,13 +599,7 @@ define_task!(
     /// transform of the scene camera.
     [pub] SyncSceneCameraViewTransform,
     depends_on = [
-        // This is non strictly a dependency (we don't use the bounding
-        // spheres), but there is no point in trying to do both at the same
-        // time, since updating bounding spheres requires exclusive accesss to
-        // the scene graph.
-        UpdateSceneObjectBoundingSpheres
-        // This is the actual dependency.
-        // UpdateSceneGroupToWorldTransforms
+        UpdateSceneGroupToWorldTransforms
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
@@ -608,8 +626,8 @@ define_task!(
         // We need the current view transform to compute model-to-camera
         // transforms.
         SyncSceneCameraViewTransform,
-        // We need the bounding spheres for view frustum culling.
-        UpdateSceneObjectBoundingSpheres,
+        // We need the BVH for view frustum culling.
+        BuildBoundingVolumeHierarchy,
         // The buffers must have been cleared from the previous frame before we
         // write into them.
         ClearModelInstanceBuffers
@@ -624,11 +642,13 @@ define_task!(
             let camera_manager = scene.camera_manager().oread();
             if let Some(camera) = camera_manager.active_camera() {
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
+                let intersection_manager = scene.intersection_manager().oread();
                 let scene_graph = scene.scene_graph().oread();
 
                 scene_graph.buffer_model_instances_for_rendering(
                     &resource_manager.materials,
                     &mut model_instance_manager,
+                    &intersection_manager,
                     camera,
                     current_frame_number,
                 );
@@ -684,17 +704,18 @@ define_task!(
 // =============================================================================
 
 define_task!(
-    /// Uses the [`SceneGraph`](crate::scene::SceneGraph) to determine which model
-    /// instances may cast a visible shadows for each omnidirectional light,
-    /// bounds the light's cubemap projections to encompass these and buffer
-    /// their model to cubemap face space transforms for shadow mapping.
+    /// Determines which model instances may cast a visible shadow for each
+    /// omnidirectional light, bounds the light's cubemap projections to
+    /// encompass these and buffer their model to cubemap face space transforms
+    /// for shadow mapping.
     [pub] BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
-        // We need to up-to-date light state for this.
+        // We need the up-to-date light state for this.
         SyncLights,
         // The current task begins new ranges in the instance feature buffers,
         // so all tasks writing to the initial range have to be completed first.
-        BufferModelInstancesForRendering
+        BufferModelInstancesForRendering,
+        BuildBoundingVolumeHierarchy
         // Since gizmo models can't cast shadows, we luckily don't need this
         // dependency (which would create a cycle).
         // BufferTransformsForGizmos
@@ -708,6 +729,7 @@ define_task!(
             if let Some(camera) = camera_manager.active_camera() {
                 let mut light_manager = scene.light_manager().owrite();
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
+                let intersection_manager = scene.intersection_manager().oread();
                 let scene_graph = scene.scene_graph().oread();
                 let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
 
@@ -715,6 +737,7 @@ define_task!(
                     .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut light_manager,
                         &mut model_instance_manager,
+                        &intersection_manager,
                         camera,
                         shadow_mapping_enabled,
                     );
@@ -725,17 +748,18 @@ define_task!(
 );
 
 define_task!(
-    /// Uses the [`SceneGraph`](crate::scene::SceneGraph) to determine which model
-    /// instances may cast a visible shadows for each unidirectional light,
-    /// bounds the light's orthographic projection to encompass these and buffer
-    /// their model to light transforms for shadow mapping.
+    /// Determines which model instances may cast a visible shadow for each
+    /// unidirectional light, bounds the light's orthographic projection to
+    /// encompass these and buffer their model to light transforms for shadow
+    /// mapping.
     [pub] BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
     depends_on = [
         // We need to up-to-date light state for this.
         SyncLights,
         // The current task begins new ranges in the instance feature buffers,
         // so all tasks writing to the initial range have to be completed first
-        BufferModelInstancesForRendering
+        BufferModelInstancesForRendering,
+        BuildBoundingVolumeHierarchy
         // Since gizmo models can't cast shadows, we luckily don't need this
         // dependency (which would create a cycle).
         // BufferTransformsForGizmos
@@ -749,6 +773,7 @@ define_task!(
             if let Some(camera) = camera_manager.active_camera() {
                 let mut light_manager = scene.light_manager().owrite();
                 let mut model_instance_manager = scene.model_instance_manager().owrite();
+                let intersection_manager = scene.intersection_manager().oread();
                 let scene_graph = scene.scene_graph().oread();
                 let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
 
@@ -756,6 +781,7 @@ define_task!(
                     .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                         &mut light_manager,
                         &mut model_instance_manager,
+                        &intersection_manager,
                         camera,
                         shadow_mapping_enabled,
                     );
@@ -822,6 +848,7 @@ define_task!(
             let light_manager = scene.light_manager().oread();
             let voxel_manager = scene.voxel_manager().oread();
             let mut model_instance_manager = scene.model_instance_manager().owrite();
+            let intersection_manager = scene.intersection_manager().oread();
             let scene_graph = scene.scene_graph().oread();
             let simulator = engine.simulator().oread();
             let rigid_body_manager = simulator.rigid_body_manager().oread();
@@ -835,6 +862,7 @@ define_task!(
                 &camera_manager,
                 &light_manager,
                 voxel_manager.object_manager(),
+                &intersection_manager,
                 &scene_graph,
                 &rigid_body_manager,
                 &anchor_manager,
@@ -1068,7 +1096,8 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     // SCENE GRAPH, TRANSFORMS AND CULLING (for current frame)
     task_scheduler.register_task(SyncSceneGraphNodeProperties)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
-    task_scheduler.register_task(UpdateSceneObjectBoundingSpheres)?;
+    task_scheduler.register_task(AddBoundingVolumesToHierarchy)?;
+    task_scheduler.register_task(BuildBoundingVolumeHierarchy)?;
     task_scheduler.register_task(SyncSceneCameraViewTransform)?;
     task_scheduler.register_task(BufferModelInstancesForRendering)?;
 

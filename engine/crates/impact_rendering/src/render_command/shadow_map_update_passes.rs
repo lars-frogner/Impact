@@ -352,7 +352,11 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                             )
                         })?;
 
-                    let transform_range = transform_buffer.feature_range(instance_range_id);
+                    let Some(transform_range) =
+                        transform_buffer.get_feature_range(instance_range_id)
+                    else {
+                        continue;
+                    };
 
                     if transform_range.is_empty() {
                         continue;
@@ -720,7 +724,11 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                             )
                         })?;
 
-                    let transform_range = transform_buffer.feature_range(instance_range_id);
+                    let Some(transform_range) =
+                        transform_buffer.get_feature_range(instance_range_id)
+                    else {
+                        continue;
+                    };
 
                     if transform_range.is_empty() {
                         continue;

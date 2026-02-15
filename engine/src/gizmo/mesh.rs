@@ -30,11 +30,9 @@ impl GizmoType {
                     .line_segment_meshes
                     .insert(self.only_line_segment_mesh_id(), mesh);
             }
-            Self::BoundingSphere => {
-                let mesh = TriangleMesh::create_unit_sphere_with_color(
-                    64,
-                    VertexColor::CYAN.with_alpha(0.15),
-                );
+            Self::BoundingVolume => {
+                let mesh =
+                    TriangleMesh::create_unit_cube_with_color(VertexColor::CYAN.with_alpha(0.15));
                 resource_manager
                     .triangle_meshes
                     .insert(self.only_triangle_mesh_id(), mesh);

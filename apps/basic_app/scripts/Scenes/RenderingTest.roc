@@ -242,7 +242,7 @@ bulb_light =
     |> Setup.UniformColor.add((1.0, 1.0, 1.0))
     |> Setup.UniformEmissiveLuminance.add(1e6)
     |> Comp.ShadowableOmnidirectionalEmission.add_new(
-        Vector3.same(2e7),
+        Vector3.same(5e6),
         0.7,
     )
 

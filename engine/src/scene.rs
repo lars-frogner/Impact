@@ -3,6 +3,7 @@
 use crate::lock_order::OrderedRwLock;
 use impact_camera::{CameraContext, CameraManager};
 use impact_id::EntityIDManager;
+use impact_intersection::IntersectionManager;
 use impact_light::LightManager;
 use impact_scene::{
     graph::{SceneGraph, SceneGroupID},
@@ -21,6 +22,7 @@ pub struct Scene {
     voxel_manager: RwLock<VoxelManager>,
     model_instance_manager: RwLock<ModelInstanceManager>,
     initial_model_instance_manager_state: ModelInstanceManagerState,
+    intersection_manager: RwLock<IntersectionManager>,
     scene_graph: RwLock<SceneGraph>,
 }
 
@@ -40,6 +42,7 @@ impl Scene {
             voxel_manager: RwLock::new(VoxelManager::new()),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
+            intersection_manager: RwLock::new(IntersectionManager::new()),
             scene_graph: RwLock::new(SceneGraph::new(scene_graph_root_node_id)),
         }
     }
@@ -71,6 +74,12 @@ impl Scene {
         &self.model_instance_manager
     }
 
+    /// Returns a reference to the [`IntersectionManager`], guarded by a
+    /// [`RwLock`].
+    pub fn intersection_manager(&self) -> &RwLock<IntersectionManager> {
+        &self.intersection_manager
+    }
+
     /// Returns a reference to the [`SceneGraph`], guarded by a [`RwLock`].
     pub fn scene_graph(&self) -> &RwLock<SceneGraph> {
         &self.scene_graph
@@ -99,6 +108,10 @@ impl Scene {
         self.model_instance_manager
             .owrite()
             .reset_to_state(&self.initial_model_instance_manager_state);
+
+        self.intersection_manager
+            .owrite()
+            .remove_all_intersection_state();
 
         self.scene_graph.owrite().clear_nodes();
     }
