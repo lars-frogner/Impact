@@ -13,6 +13,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_containers::HashMap;
+use impact_intersection::IntersectionManager;
 use impact_math::{matrix::Matrix3C, vector::Vector3C};
 use solver::{ConstraintSolver, ConstraintSolverConfig};
 use spherical_joint::SphericalJoint;
@@ -170,6 +171,7 @@ impl ConstraintManager {
     /// velocities and configurations for the frame.
     pub fn prepare_constraints<C: Collidable>(
         &mut self,
+        intersection_manager: &IntersectionManager,
         rigid_body_manager: &RigidBodyManager,
         anchor_manager: &AnchorManager,
         collision_world: &CollisionWorld<C>,
@@ -186,6 +188,7 @@ impl ConstraintManager {
 
         collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
             collidable_context,
+            intersection_manager,
             &mut |Collision {
                       collider_a,
                       collider_b,

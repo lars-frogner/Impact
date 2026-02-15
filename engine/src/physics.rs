@@ -2,6 +2,7 @@
 
 use crate::lock_order::OrderedRwLock;
 use anyhow::{Result, bail};
+use impact_intersection::IntersectionManager;
 use impact_physics::{
     anchor::AnchorManager,
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
@@ -10,6 +11,7 @@ use impact_physics::{
     medium::UniformMedium,
     rigid_body::RigidBodyManager,
 };
+use impact_profiling::TaskTimer;
 use impact_voxel::{VoxelObjectManager, collidable::CollisionWorld};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -240,11 +242,16 @@ impl PhysicsSimulator {
     }
 
     /// Advances the physics simulation by one time step.
-    pub fn advance_simulation(&mut self, voxel_object_manager: &VoxelObjectManager) {
+    pub fn advance_simulation(
+        &mut self,
+        task_timer: &TaskTimer,
+        voxel_object_manager: &VoxelObjectManager,
+        intersection_manager: &IntersectionManager,
+    ) {
         if !self.config.enabled {
             return;
         }
-        self.do_advance_simulation(voxel_object_manager);
+        self.do_advance_simulation(task_timer, voxel_object_manager, intersection_manager);
 
         log::trace!("Simulation time: {:.1}", self.simulation_time);
     }
@@ -260,7 +267,12 @@ impl PhysicsSimulator {
         self.simulation_time = 0.0;
     }
 
-    fn do_advance_simulation(&mut self, voxel_object_manager: &VoxelObjectManager) {
+    fn do_advance_simulation(
+        &mut self,
+        task_timer: &TaskTimer,
+        voxel_object_manager: &VoxelObjectManager,
+        intersection_manager: &IntersectionManager,
+    ) {
         let mut rigid_body_manager = self.rigid_body_manager.owrite();
         let anchor_manager = self.anchor_manager.oread();
         let mut force_generator_manager = self.force_generator_manager.owrite();
@@ -271,6 +283,8 @@ impl PhysicsSimulator {
         let substep_duration = self.compute_substep_duration();
         for _ in 0..self.n_substeps() {
             impact_physics::perform_physics_step(
+                task_timer,
+                intersection_manager,
                 &mut rigid_body_manager,
                 &anchor_manager,
                 &mut force_generator_manager,

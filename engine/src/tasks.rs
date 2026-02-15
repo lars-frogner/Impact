@@ -433,19 +433,16 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-
-        instrument_task!("Advancing simulation", engine.task_timer(), {
-            let scene =  engine.scene().oread();
-            let voxel_manager = scene.voxel_manager().oread();
-            let intersection_manager = scene.intersection_manager().oread();
-            let mut simulator = engine.simulator().owrite();
-            simulator.advance_simulation(
-                engine.task_timer(),
-                voxel_manager.object_manager(),
-                &intersection_manager,
-            );
-            Ok(())
-        })
+        let scene =  engine.scene().oread();
+        let voxel_manager = scene.voxel_manager().oread();
+        let intersection_manager = scene.intersection_manager().oread();
+        let mut simulator = engine.simulator().owrite();
+        simulator.advance_simulation(
+            engine.task_timer(),
+            voxel_manager.object_manager(),
+            &intersection_manager,
+        );
+        Ok(())
     }
 );
 
