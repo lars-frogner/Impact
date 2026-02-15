@@ -11,9 +11,14 @@ use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::CameraGPUResource;
 use impact_containers::HashMap;
+use impact_geometry::Frustum;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use impact_id::define_entity_id_newtype;
-use impact_math::{point::Point3, transform::Isometry3};
+use impact_math::{
+    point::Point3,
+    transform::{Isometry3, Projective3},
+    vector::UnitVector3,
+};
 use projection::CameraProjection;
 use roc_integration::roc;
 
@@ -227,6 +232,12 @@ impl Camera {
         &self.view_transform
     }
 
+    /// Returns the camera's view direction in world space.
+    pub fn view_direction(&self) -> UnitVector3 {
+        self.view_transform
+            .inverse_transform_unit_vector(&UnitVector3::neg_unit_z())
+    }
+
     /// Returns whether jittering is enabled for the camera.
     pub fn jitter_enabled(&self) -> bool {
         self.jitter_enabled
@@ -237,6 +248,16 @@ impl Camera {
     pub fn compute_world_space_position(&self) -> Point3 {
         let camera_to_world = self.view_transform.inverted();
         Point3::from(*camera_to_world.translation())
+    }
+
+    /// Computes the world-space view frustum for the camera based on the
+    /// current view transform.
+    pub fn compute_world_space_view_frustum(&self) -> Frustum {
+        let projection_matrix = self.projection.transform().matrix();
+        let view_matrix = self.view_transform.to_matrix();
+        let view_projection_transform =
+            Projective3::from_matrix_unchecked(projection_matrix * view_matrix);
+        Frustum::from_transform(&view_projection_transform)
     }
 
     /// Sets the transform from world space to camera space.
