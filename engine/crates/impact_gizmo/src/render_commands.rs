@@ -1,6 +1,10 @@
 //! Passes for rendering gizmos.
 
-use crate::{GizmoDepthClipping, GizmoObscurability, model::GizmoModel};
+use crate::{
+    GizmoDepthClipping, GizmoObscurability,
+    model::{GizmoInstanceModelViewTransform, GizmoModel},
+    shader_templates::gizmo::GizmoShaderTemplate,
+};
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
@@ -13,12 +17,11 @@ use impact_gpu::{
 use impact_mesh::{
     MeshPrimitive, VertexAttributeSet, VertexColor, VertexPosition, gpu_resource::VertexBufferable,
 };
-use impact_model::{InstanceFeature, transform::InstanceModelViewTransform};
+use impact_model::InstanceFeature;
 use impact_rendering::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     render_command::{self, STANDARD_FRONT_FACE, begin_single_render_pass},
     resource::BasicGPUResources,
-    shader_templates::fixed_color::FixedColorShaderTemplate,
     surface::RenderingSurface,
 };
 use std::borrow::Cow;
@@ -64,10 +67,8 @@ impl GizmoPasses {
         let color_target_state = Self::color_target_state(rendering_surface);
         let color_target_states = [Some(color_target_state)];
 
-        let (_, shader) = shader_manager.get_or_create_rendering_shader_from_template(
-            graphics_device,
-            &FixedColorShaderTemplate,
-        );
+        let (_, shader) = shader_manager
+            .get_or_create_rendering_shader_from_template(graphics_device, &GizmoShaderTemplate);
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
@@ -102,7 +103,7 @@ impl GizmoPasses {
 
     const fn vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 3] {
         [
-            InstanceModelViewTransform::BUFFER_LAYOUT.unwrap(),
+            GizmoInstanceModelViewTransform::BUFFER_LAYOUT.unwrap(),
             VertexPosition::BUFFER_LAYOUT,
             VertexColor::BUFFER_LAYOUT,
         ]
@@ -399,7 +400,7 @@ impl GizmoPassPipeline {
         for model in models {
             let transform_buffer = gpu_resources
                 .model_instance_buffer()
-                .get_model_buffer_for_feature_feature_type::<InstanceModelViewTransform>(
+                .get_model_buffer_for_feature_feature_type::<GizmoInstanceModelViewTransform>(
                     model.model_id(),
                 )
                 .ok_or_else(|| {
@@ -467,7 +468,7 @@ impl GizmoPassPipeline {
         for model in models {
             let transform_buffer = gpu_resources
                 .model_instance_buffer()
-                .get_model_buffer_for_feature_feature_type::<InstanceModelViewTransform>(
+                .get_model_buffer_for_feature_feature_type::<GizmoInstanceModelViewTransform>(
                     model.model_id(),
                 )
                 .ok_or_else(|| {
