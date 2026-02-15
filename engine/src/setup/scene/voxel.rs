@@ -13,7 +13,7 @@ use impact_physics::{
     quantities::Motion,
     rigid_body::{HasDynamicRigidBody, HasKinematicRigidBody},
 };
-use impact_scene::{ParentEntity, SceneEntityFlags, setup::Uncullable};
+use impact_scene::{ParentEntity, SceneEntityFlags};
 use impact_voxel::{
     HasVoxelObject, VoxelObjectID,
     generation::{SDFVoxelGenerator, sdf::SDFGraph},
@@ -469,7 +469,6 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
     setup!(
         {
             let scene = scene.oread();
-            let voxel_manager = scene.voxel_manager().oread();
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let mut scene_graph = scene.scene_graph().owrite();
         },
@@ -481,7 +480,6 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
          flags: Option<&SceneEntityFlags>|
          -> Result<(HasModel, ModelTransform, SceneEntityFlags)> {
             let (model_transform, flags) = setup::create_model_instance_node_for_voxel_object(
-                voxel_manager.object_manager(),
                 &mut model_instance_manager,
                 &mut scene_graph,
                 entity_id,
@@ -489,7 +487,6 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
                 frame,
                 parent,
                 flags,
-                entities.has_component_type::<Uncullable>(),
             )?;
             Ok((HasModel, model_transform, flags))
         },

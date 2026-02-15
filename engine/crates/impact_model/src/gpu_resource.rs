@@ -144,13 +144,10 @@ impl InstanceFeatureGPUBuffer {
     }
 
     /// Returns the range of feature indices with the given
-    /// [`InstanceFeatureBufferRangeID`]. See
+    /// [`InstanceFeatureBufferRangeID`], or [`None`] if it does not exist. See
     /// [`DynamicInstanceFeatureBuffer::valid_feature_range`] for more
     /// information.
-    ///
-    /// # Panics
-    /// If no range with the given ID exists.
-    pub fn feature_range(&self, range_id: InstanceFeatureBufferRangeID) -> Range<u32> {
+    pub fn get_feature_range(&self, range_id: InstanceFeatureBufferRangeID) -> Option<Range<u32>> {
         self.range_map.get_range(range_id, self.n_features)
     }
 
@@ -159,7 +156,8 @@ impl InstanceFeatureGPUBuffer {
     /// [`DynamicInstanceFeatureBuffer::initial_valid_feature_range`] for more
     /// information.
     pub fn initial_feature_range(&self) -> Range<u32> {
-        self.feature_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+        self.get_feature_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+            .expect("Missing initial feature range")
     }
 
     /// Whether the buffer has features in the initial feature range.

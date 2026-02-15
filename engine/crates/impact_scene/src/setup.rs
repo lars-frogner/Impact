@@ -6,9 +6,17 @@ use crate::{
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
+use impact_geometry::Sphere;
 use impact_id::EntityID;
+use impact_intersection::bounding_volume::{
+    AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
+};
 use impact_material::{MaterialID, MaterialRegistry};
-use impact_math::transform::{Isometry3C, Similarity3C};
+use impact_math::{
+    point::Point3,
+    transform::{Isometry3C, Similarity3C},
+    vector::Vector3,
+};
 use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
 use impact_model::{
     ModelInstanceID,
@@ -28,17 +36,6 @@ use tinyvec::TinyVec;
 #[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
 pub struct HasIndependentMaterialValues;
 
-/// The entity should never be frustum culled in the [`SceneGraph`].
-///
-/// This is a [`SetupComponent`](impact_ecs::component::SetupComponent)
-/// affecting the entity's initial `SceneEntityFlags` component. It is therefore
-/// not kept after entity creation.
-#[cfg(feature = "ecs")]
-#[roc_integration::roc(parents = "Setup")]
-#[repr(transparent)]
-#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod, impact_ecs::SetupComponent)]
-pub struct Uncullable;
-
 pub fn setup_scene_graph_group_node(
     scene_graph: &mut SceneGraph,
     entity_id: EntityID,
@@ -53,7 +50,6 @@ pub fn setup_scene_graph_group_node(
 }
 
 pub fn setup_scene_graph_model_instance_node(
-    mesh_registry: &TriangleMeshRegistry,
     material_registry: &MaterialRegistry,
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &mut SceneGraph,
@@ -64,28 +60,10 @@ pub fn setup_scene_graph_model_instance_node(
     parent_entity_id: Option<EntityID>,
     flags: Option<&SceneEntityFlags>,
     has_independent_material_values: bool,
-    uncullable: bool,
 ) -> Result<SceneEntityFlags> {
     let flags = flags.copied().unwrap_or_default();
 
     let model_id = ModelID::for_triangle_mesh_and_material(mesh_id, material_id);
-
-    let bounding_sphere = if uncullable {
-        // The scene graph will not cull models with no bounding sphere
-        None
-    } else {
-        Some(
-            mesh_registry
-                .get(mesh_id)
-                .ok_or_else(|| {
-                    anyhow!("Tried to create renderable entity with missing mesh: {mesh_id}")
-                })?
-                .compute_bounding_sphere()
-                .ok_or_else(|| {
-                    anyhow!("Tried to create renderable entity with empty mesh: {mesh_id}")
-                })?,
-        )
-    };
 
     let mut feature_type_ids: TinyVec<[_; 4]> = TinyVec::new();
     let mut feature_ids_for_rendering = FeatureIDSet::new();
@@ -145,13 +123,36 @@ pub fn setup_scene_graph_model_instance_node(
         model_instance_id,
         model_to_parent_transform,
         model_id,
-        bounding_sphere.map(|sphere| sphere.compact()),
         feature_ids_for_rendering,
         feature_ids_for_shadow_mapping,
         model_instance_flags,
     )?;
 
     Ok(flags)
+}
+
+pub fn setup_bounding_volume_for_mesh(
+    mesh_registry: &TriangleMeshRegistry,
+    bounding_volume_manager: &mut BoundingVolumeManager,
+    entity_id: EntityID,
+    mesh_id: TriangleMeshID,
+) -> Result<()> {
+    let mesh = mesh_registry.get(mesh_id).ok_or_else(|| {
+        anyhow!("Tried to create bounding volume for entity with missing mesh: {mesh_id}")
+    })?;
+
+    let bounding_sphere = mesh
+        .compute_bounding_sphere()
+        .unwrap_or_else(|| Sphere::new(Point3::origin(), 0.0));
+
+    let aabb = AxisAlignedBoundingBox::new(
+        bounding_sphere.center() - Vector3::same(bounding_sphere.radius()),
+        bounding_sphere.center() + Vector3::same(bounding_sphere.radius()),
+    )
+    .compact();
+
+    let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+    bounding_volume_manager.insert_bounding_volume(bounding_volume_id, aabb)
 }
 
 pub fn remove_scene_graph_model_instance_node(

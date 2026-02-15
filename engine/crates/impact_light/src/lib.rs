@@ -13,7 +13,7 @@ use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::LightGPUResources;
 use impact_geometry::{
-    AxisAlignedBox, Frustum, Sphere,
+    AxisAlignedBox, Frustum,
     projection::{CubeMapper, CubemapFace, OrthographicTransform},
 };
 use impact_gpu::{
@@ -1202,56 +1202,48 @@ impl ShadowableOmnidirectionalLight {
     /// unnecessary draw calls.
     pub fn orient_and_scale_cubemap_for_shadow_casting_models(
         &mut self,
-        camera_space_bounding_sphere: &Sphere,
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox>,
+        world_to_camera_transform: &Isometry3,
+        camera_to_world_transform: &Isometry3,
+        world_space_scene_aabb: &AxisAlignedBox,
+        world_space_scene_aabb_for_visible_models: &AxisAlignedBox,
     ) {
         let camera_space_position = self.camera_space_position.aligned();
+        let world_space_position =
+            camera_to_world_transform.transform_point(&camera_space_position);
 
-        let bounding_sphere_center_distance = Point3::distance_between(
-            &camera_space_position,
-            camera_space_bounding_sphere.center(),
+        let camera_space_scene_center =
+            world_to_camera_transform.transform_point(&world_space_scene_aabb.center());
+
+        // Let the orientation of cubemap space be so that the negative
+        // z-axis points towards the center of the scene bounding box
+        let neg_z_axis_camera_space_direction = UnitVector3::normalized_from_if_above(
+            camera_space_scene_center - camera_space_position,
+            1e-6,
+        )
+        .unwrap_or_else(UnitVector3::neg_unit_z);
+
+        let camera_to_light_space_rotation =
+            Self::compute_camera_to_light_space_rotation(&neg_z_axis_camera_space_direction);
+
+        // For the near distance, we must use the closest point of the full
+        // scene AABB, since there could be non-visible models in front casting
+        // shadows into the visible region
+        let near_distance = Point3::distance_between(
+            &world_space_scene_aabb.closest_interior_point_to(&world_space_position),
+            &world_space_position,
         );
 
-        let (camera_to_light_space_rotation, far_distance) = if let Some(
-            camera_space_aabb_for_visible_models,
-        ) =
-            camera_space_aabb_for_visible_models
-        {
-            // Let the orientation of cubemap space be so that the negative
-            // z-axis points towards the center of the volume containing visible
-            // models
-            let camera_to_light_space_rotation =
-                Self::compute_camera_to_light_space_rotation(&UnitVector3::normalized_from(
-                    camera_space_aabb_for_visible_models.center() - camera_space_position,
-                ));
-
-            // Use the farthest point of the volume containing visible models as
-            // the far distance
-            let far_distance = Point3::distance_between(
-                &camera_space_aabb_for_visible_models
-                    .compute_farthest_corner(&camera_space_position),
-                &camera_space_position,
-            );
-
-            (camera_to_light_space_rotation, far_distance)
-        } else {
-            // In this case no models are visible, so the rotation does not
-            // matter
-            let camera_to_light_space_rotation = UnitQuaternion::identity();
-
-            let far_distance =
-                bounding_sphere_center_distance + camera_space_bounding_sphere.radius();
-
-            (camera_to_light_space_rotation, far_distance)
-        };
+        // For the far distance, we can use the farthest point on the visible
+        // part of the scene AABB, since models farther away can't cast shadows
+        // back into the visible region
+        let far_distance = Point3::distance_between(
+            &world_space_scene_aabb_for_visible_models.farthest_corner_from(&world_space_position),
+            &world_space_position,
+        );
 
         self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
 
-        // The near distance must never be farther than the closest model to the
-        // light source
-        self.near_distance = (bounding_sphere_center_distance
-            - camera_space_bounding_sphere.radius())
-        .clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
+        self.near_distance = near_distance.clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
 
         self.far_distance = far_distance.clamp(self.near_distance, self.max_reach);
 
@@ -1265,6 +1257,22 @@ impl ShadowableOmnidirectionalLight {
         CubeMapper::compute_transformed_frustum_for_face(
             face,
             &Similarity3::from_isometry(self.create_camera_to_light_space_transform()),
+            self.near_distance,
+            self.far_distance,
+        )
+    }
+
+    /// Computes the frustum for the given cubemap face in world space.
+    pub fn compute_world_space_frustum_for_face(
+        &self,
+        face: CubemapFace,
+        world_to_camera_transform: &Isometry3,
+    ) -> Frustum {
+        let world_to_light_transform =
+            self.create_camera_to_light_space_transform() * world_to_camera_transform;
+        CubeMapper::compute_transformed_frustum_for_face(
+            face,
+            &Similarity3::from_isometry(world_to_light_transform),
             self.near_distance,
             self.far_distance,
         )
@@ -1284,21 +1292,6 @@ impl ShadowableOmnidirectionalLight {
             self.camera_space_position.as_vector().aligned(),
             self.camera_to_light_space_rotation.aligned().inverse(),
         )
-    }
-
-    /// Whether the given cubemap face frustum may contain any visible models.
-    pub fn camera_space_frustum_for_face_may_contain_visible_models(
-        camera_space_aabb_for_visible_models: Option<&AxisAlignedBox>,
-        camera_space_face_frustum: &Frustum,
-    ) -> bool {
-        if let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models {
-            !camera_space_face_frustum
-                .compute_aabb()
-                .box_lies_outside(camera_space_aabb_for_visible_models)
-        } else {
-            // In this case no models are visible
-            false
-        }
     }
 
     /// Sets `self.max_reach` to the distance at which the incident luminance
@@ -1431,6 +1424,16 @@ impl ShadowableUnidirectionalLight {
         transform_to_camera_space.rotated(&self.camera_to_light_space_rotation.aligned())
     }
 
+    /// Takes a transform from camera space to world space and returns the
+    /// corresponding transform from the light's space to world space.
+    pub fn create_light_to_world_space_transform(
+        &self,
+        camera_to_world_transform: &Isometry3,
+    ) -> Isometry3 {
+        camera_to_world_transform
+            .applied_to_rotation(&self.camera_to_light_space_rotation.aligned().inverse())
+    }
+
     /// Creates an axis-aligned bounding box in the light's reference frame
     /// containing all models that may cast visible shadows into the given
     /// cascade.
@@ -1484,23 +1487,35 @@ impl ShadowableUnidirectionalLight {
     pub fn update_cascade_partition_depths(
         &mut self,
         camera_space_view_frustum: &Frustum,
-        camera_space_bounding_sphere: &Sphere,
+        world_space_camera_position: &Point3,
+        camera_view_direction: &UnitVector3,
+        world_space_scene_aabb_for_visible_models: &AxisAlignedBox,
     ) {
         const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
 
         // Find the tightest near and far distance that encompass visible models
+
+        let (scene_near_distance_from_world_origin, scene_far_distance_from_world_origin) =
+            world_space_scene_aabb_for_visible_models
+                .displacement_range_along_axis(camera_view_direction);
+
+        let camera_displacement_along_view_direction = world_space_camera_position
+            .as_vector()
+            .dot(camera_view_direction);
+
+        let scene_near_distance =
+            scene_near_distance_from_world_origin - camera_displacement_along_view_direction;
+        let scene_far_distance =
+            scene_far_distance_from_world_origin - camera_displacement_along_view_direction;
+
         let near_distance = f32::max(
+            scene_near_distance,
             camera_space_view_frustum.near_distance(),
-            -(camera_space_bounding_sphere.center().z() + camera_space_bounding_sphere.radius()),
         );
 
-        let far_distance = f32::max(
+        let far_distance = scene_far_distance.clamp(
             near_distance.next_up(),
-            f32::min(
-                camera_space_view_frustum.far_distance(),
-                -(camera_space_bounding_sphere.center().z()
-                    - camera_space_bounding_sphere.radius()),
-            ),
+            camera_space_view_frustum.far_distance(),
         );
 
         // Use a blend between exponential and linear increase in the span of
@@ -1543,32 +1558,43 @@ impl ShadowableUnidirectionalLight {
     /// scene within or in front of each cascade in the camera view frustum with
     /// respect to the light, i.e. all objects that may cast visible shadows
     /// into each cascade, will be included in the clip space for that cascade.
+    ///
+    /// # Returns
+    /// A mask array indicating which cascades may have models included in their
+    /// clip space.
     pub fn bound_orthographic_transforms_to_cascaded_view_frustum(
         &mut self,
+        world_to_camera_transform: &Isometry3,
         camera_space_view_frustum: &Frustum,
-        camera_space_bounding_sphere: &Sphere,
-    ) {
+        world_space_scene_aabb: &AxisAlignedBox,
+    ) -> [bool; MAX_SHADOW_MAP_CASCADES_USIZE] {
         let camera_to_light_space_rotation = self.camera_to_light_space_rotation.aligned();
+
+        let world_to_light_space_transform =
+            world_to_camera_transform.rotated(&camera_to_light_space_rotation);
+
+        // Use the scene bounding box in light space along with the view frustum
+        // to constrain limits for orthographic projection
+
+        let light_space_scene_aabb =
+            world_space_scene_aabb.aabb_of_transformed(&world_to_light_space_transform.to_matrix());
+
+        // For the near plane we use the point on the scene bounding box
+        // farthest towards the light source, as models between the light and
+        // the view frustum may cast shadows into the frustum
+        let near_coord = light_space_scene_aabb.upper_corner().z();
 
         let camera_space_view_frustum_corners = camera_space_view_frustum.compute_corners();
         let view_frustum_near_distance = camera_space_view_frustum.near_distance();
         let view_frustum_far_distance = camera_space_view_frustum.far_distance();
 
-        // Rotate to light space, where the light direction is -z
+        // Rotate view frustum to light space, where the light direction is -z
         let light_space_view_frustum_corners = camera_space_view_frustum_corners
             .map(|corner| camera_to_light_space_rotation.rotate_point(&corner));
 
-        let light_space_bounding_sphere =
-            camera_space_bounding_sphere.rotated(&camera_to_light_space_rotation);
+        let mut cascade_may_have_models = [true; MAX_SHADOW_MAP_CASCADES_USIZE];
 
-        let bounding_sphere_aabb = light_space_bounding_sphere.compute_aabb();
-
-        // For the near plane we use the point on the bounding sphere farthest
-        // towards the light source, as models between the light and the view
-        // frustum may cast shadows into the frustum
-        let near = light_space_bounding_sphere.center().z() + light_space_bounding_sphere.radius();
-
-        for (partition_depth_limits, orthographic_transform) in
+        for (cascade_idx, (partition_depth_limits, orthographic_transform)) in
             (iter::once(&self.near_partition_depth).chain(self.partition_depths.iter()))
                 .zip(
                     self.partition_depths
@@ -1577,57 +1603,56 @@ impl ShadowableUnidirectionalLight {
                 )
                 .map(|(&lower, &upper)| UpperExclusiveBounds::new(lower, upper))
                 .zip(self.orthographic_transforms.iter_mut())
+                .enumerate()
         {
-            // Use the bounds of the view frustum in light space along with the
-            // bounding sphere to constrain limits for orthographic projection
-            let subfrustum_corners = Frustum::compute_corners_of_subfrustum(
+            // Obtain view sub-frustum for current cascade
+            let cascade_subfrustum_corners = Frustum::compute_corners_of_subfrustum(
                 &light_space_view_frustum_corners,
                 view_frustum_near_distance,
                 view_frustum_far_distance,
                 partition_depth_limits,
             );
-            let light_space_view_frustum_aabb =
-                AxisAlignedBox::aabb_for_point_array(&subfrustum_corners);
+            let light_space_cascade_subfrustum_aabb =
+                AxisAlignedBox::aabb_for_point_array(&cascade_subfrustum_corners);
 
-            // Constrain limits using either the view frustum or the bounding
-            // volume, depending on which gives the snuggest fit
-            let aabb_for_visible_models =
-                bounding_sphere_aabb.compute_overlap_with(&light_space_view_frustum_aabb);
+            // Constrain limits using either the view frustum or the scene
+            // bounding box, depending on which gives the snuggest fit. Since
+            // the light is unidirectional, the shadows of any models to the
+            // side or above/below the cascade sub-frustum will not be visible.
+            let aabb_for_visible_cascade_models =
+                light_space_scene_aabb.compute_overlap_with(&light_space_cascade_subfrustum_aabb);
 
-            if let Some(aabb_for_visible_models) = aabb_for_visible_models {
-                let visible_models_aabb_lower_corner = aabb_for_visible_models.lower_corner();
-                let visible_models_aabb_upper_corner = aabb_for_visible_models.upper_corner();
+            let Some(aabb_for_visible_cascade_models) = aabb_for_visible_cascade_models else {
+                cascade_may_have_models[cascade_idx] = false;
+                continue;
+            };
 
-                let left = visible_models_aabb_lower_corner.x();
-                let right = visible_models_aabb_upper_corner.x();
+            let lower_corner_for_visible_cascade_models =
+                aabb_for_visible_cascade_models.lower_corner();
+            let upper_corner_for_visible_cascade_models =
+                aabb_for_visible_cascade_models.upper_corner();
 
-                let bottom = visible_models_aabb_lower_corner.y();
-                let top = visible_models_aabb_upper_corner.y();
+            let left_coord = lower_corner_for_visible_cascade_models.x();
+            let right_coord = upper_corner_for_visible_cascade_models.x();
 
-                // We use lower corner here because smaller (more negative) z is
-                // farther away
-                let far = visible_models_aabb_lower_corner.z();
+            let bottom_coord = lower_corner_for_visible_cascade_models.y();
+            let top_coord = upper_corner_for_visible_cascade_models.y();
 
-                orthographic_transform.set_planes(left, right, bottom, top, near, far);
-            }
+            // We use lower corner here because smaller (more negative) z is
+            // farther away
+            let far_coord = lower_corner_for_visible_cascade_models.z();
+
+            orthographic_transform.set_planes(
+                left_coord,
+                right_coord,
+                bottom_coord,
+                top_coord,
+                near_coord,
+                far_coord,
+            );
         }
-    }
 
-    /// Determines whether the object with the given camera space bounding
-    /// sphere would be included in the clip space for the given cascade,
-    /// meaning that it could potentially cast a visible shadow within the
-    /// cascade.
-    pub fn bounding_sphere_may_cast_visible_shadow_in_cascade(
-        &self,
-        cascade_idx: CascadeIdx,
-        camera_space_bounding_sphere: &Sphere,
-    ) -> bool {
-        let light_space_bounding_sphere =
-            camera_space_bounding_sphere.rotated(&self.camera_to_light_space_rotation.aligned());
-
-        let orthographic_aabb = self.create_light_space_orthographic_aabb_for_cascade(cascade_idx);
-
-        !light_space_bounding_sphere.is_outside_axis_aligned_box(&orthographic_aabb)
+        cascade_may_have_models
     }
 
     fn compute_camera_to_light_space_rotation(

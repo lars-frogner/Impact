@@ -203,9 +203,12 @@ impl VoxelRenderCommands {
             return Ok(());
         }
 
-        let visible_voxel_object_ids = gpu_resources
+        let Some(visible_voxel_object_ids) = gpu_resources
             .voxel_objects()
-            .visible_voxel_object_ids_in_range(instance_range_id);
+            .get_visible_voxel_object_ids_in_range(instance_range_id)
+        else {
+            return Ok(());
+        };
 
         // Return early if no voxel objects fall within the shadow map
         if visible_voxel_object_ids.is_empty() {
@@ -408,14 +411,20 @@ impl VoxelChunkCullingPass {
             return Ok(());
         }
 
-        let visible_voxel_object_ids = gpu_resources
+        let Some(visible_voxel_object_ids) = gpu_resources
             .voxel_objects()
-            .visible_voxel_object_ids_in_range(instance_range_id);
+            .get_visible_voxel_object_ids_in_range(instance_range_id)
+        else {
+            return Ok(());
+        };
 
-        let (visible_voxel_object_to_frustum_transforms, instance_range_for_transforms) =
+        let Some((visible_voxel_object_to_frustum_transforms, instance_range_for_transforms)) =
             gpu_resources
                 .voxel_objects()
-                .visible_object_model_light_transforms_in_range(instance_range_id);
+                .get_visible_object_model_light_transforms_in_range(instance_range_id)
+        else {
+            return Ok(());
+        };
 
         self.record(
             gpu_resources,
@@ -449,14 +458,20 @@ impl VoxelChunkCullingPass {
             return Ok(());
         }
 
-        let visible_voxel_object_ids = gpu_resources
+        let Some(visible_voxel_object_ids) = gpu_resources
             .voxel_objects()
-            .visible_voxel_object_ids_in_range(instance_range_id);
+            .get_visible_voxel_object_ids_in_range(instance_range_id)
+        else {
+            return Ok(());
+        };
 
-        let (visible_voxel_object_to_frustum_transforms, instance_range_for_transforms) =
+        let Some((visible_voxel_object_to_frustum_transforms, instance_range_for_transforms)) =
             gpu_resources
                 .voxel_objects()
-                .visible_object_model_light_transforms_in_range(instance_range_id);
+                .get_visible_object_model_light_transforms_in_range(instance_range_id)
+        else {
+            return Ok(());
+        };
 
         self.record(
             gpu_resources,

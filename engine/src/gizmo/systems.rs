@@ -20,6 +20,10 @@ use impact_camera::{Camera, CameraManager};
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
+use impact_intersection::{
+    IntersectionManager,
+    bounding_volume::{BoundingVolumeID, BoundingVolumeManager},
+};
 use impact_light::{
     LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
@@ -46,11 +50,7 @@ use impact_physics::{
         RigidBodyType, TypedRigidBodyID,
     },
 };
-use impact_scene::{
-    SceneEntityFlags,
-    graph::{ModelInstanceNode, SceneGraph},
-    model::ModelInstanceManager,
-};
+use impact_scene::{SceneEntityFlags, graph::SceneGraph, model::ModelInstanceManager};
 use impact_voxel::{
     HasVoxelObject, VoxelObjectID, VoxelObjectManager,
     chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
@@ -101,6 +101,7 @@ pub fn buffer_transforms_for_gizmos(
     camera_manager: &CameraManager,
     light_manager: &LightManager,
     voxel_object_manager: &VoxelObjectManager,
+    intersection_manager: &IntersectionManager,
     scene_graph: &SceneGraph,
     rigid_body_manager: &RigidBodyManager,
     anchor_manager: &AnchorManager,
@@ -118,16 +119,32 @@ pub fn buffer_transforms_for_gizmos(
         |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
             if !gizmos
                 .visible_gizmos
-                .intersects(GizmoSet::REFERENCE_FRAME_AXES.union(GizmoSet::BOUNDING_SPHERE))
+                .contains(GizmoSet::REFERENCE_FRAME_AXES)
                 || flags.is_disabled()
             {
                 return;
             }
-            buffer_transforms_for_model_instance_gizmos(
+            buffer_transform_for_reference_frame_gizmo(
                 model_instance_manager,
                 scene_graph,
                 current_frame_count,
-                gizmos.visible_gizmos,
+                entity_id,
+            );
+        },
+        [HasModel]
+    );
+
+    query!(
+        ecs_world,
+        |entity_id: EntityID, gizmos: &GizmosComp, flags: &SceneEntityFlags| {
+            if !gizmos.visible_gizmos.contains(GizmoSet::BOUNDING_VOLUME) || flags.is_disabled() {
+                return;
+            }
+            buffer_transform_for_bounding_volume_gizmo(
+                model_instance_manager,
+                &intersection_manager.bounding_volume_manager,
+                scene_graph,
+                current_frame_count,
                 entity_id,
             );
         },
@@ -363,11 +380,10 @@ pub fn buffer_transforms_for_gizmos(
     }
 }
 
-fn buffer_transforms_for_model_instance_gizmos(
+fn buffer_transform_for_reference_frame_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     scene_graph: &SceneGraph,
     current_frame_number: u32,
-    visible_gizmos: GizmoSet,
     entity_id: EntityID,
 ) {
     let node = scene_graph
@@ -387,37 +403,68 @@ fn buffer_transforms_for_model_instance_gizmos(
         )
         .current;
 
-    if visible_gizmos.contains(GizmoType::ReferenceFrameAxes.as_set()) {
-        model_instance_manager.buffer_instance_feature(
-            GizmoType::ReferenceFrameAxes.only_model_id(),
-            &model_view_transform,
-        );
+    model_instance_manager.buffer_instance_feature(
+        GizmoType::ReferenceFrameAxes.only_model_id(),
+        &model_view_transform,
+    );
+}
+
+fn buffer_transform_for_bounding_volume_gizmo(
+    model_instance_manager: &mut ModelInstanceManager,
+    bounding_volume_manager: &BoundingVolumeManager,
+    scene_graph: &SceneGraph,
+    current_frame_number: u32,
+    entity_id: EntityID,
+) {
+    let node = scene_graph
+        .model_instance_nodes()
+        .node(ModelInstanceID::from_entity_id(entity_id));
+
+    if node.frame_number_when_last_visible() != current_frame_number {
+        return;
     }
 
-    if visible_gizmos.contains(GizmoType::BoundingSphere.as_set())
-        && let Some(transform) =
-            compute_transform_for_bounding_sphere_gizmo(node, model_view_transform)
-    {
+    let model_view_transform = model_instance_manager
+        .feature::<InstanceModelViewTransformWithPrevious>(
+            node.get_rendering_feature_id_of_type(
+                InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+            )
+            .unwrap(),
+        )
+        .current;
+
+    if let Some(transform) = compute_transform_for_bounding_volume_gizmo(
+        bounding_volume_manager,
+        entity_id,
+        model_view_transform,
+    ) {
         model_instance_manager
-            .buffer_instance_feature(GizmoType::BoundingSphere.only_model_id(), &transform);
+            .buffer_instance_feature(GizmoType::BoundingVolume.only_model_id(), &transform);
     }
 }
 
-fn compute_transform_for_bounding_sphere_gizmo(
-    node: &ModelInstanceNode,
+fn compute_transform_for_bounding_volume_gizmo(
+    bounding_volume_manager: &BoundingVolumeManager,
+    entity_id: EntityID,
     model_view_transform: InstanceModelViewTransform,
 ) -> Option<InstanceModelViewTransform> {
-    let bounding_sphere = node.get_model_bounding_sphere()?.aligned();
+    let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+    let bounding_volume = bounding_volume_manager
+        .get_bounding_volume(bounding_volume_id)?
+        .aligned();
 
-    let center = bounding_sphere.center();
-    let radius = bounding_sphere.radius();
+    // TODO: Requires non-uniform scaling
+    let scale = bounding_volume.extents().max_component();
 
-    let bounding_sphere_from_unit_sphere =
-        Similarity3::from_parts(*center.as_vector(), UnitQuaternion::identity(), radius);
+    let bounding_box_from_unit_cube = Similarity3::from_parts(
+        *bounding_volume.center().as_vector(),
+        UnitQuaternion::identity(),
+        scale,
+    );
 
     let model_view_transform = Similarity3::from(model_view_transform);
 
-    let instance_model_view_transform = model_view_transform * bounding_sphere_from_unit_sphere;
+    let instance_model_view_transform = model_view_transform * bounding_box_from_unit_cube;
 
     Some(InstanceModelViewTransform::from(
         &instance_model_view_transform,

@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GizmoType {
     ReferenceFrameAxes = 0,
-    BoundingSphere = 1,
+    BoundingVolume = 1,
     LightSphere = 2,
     ShadowCubemapFaces = 3,
     ShadowMapCascades = 4,
@@ -48,7 +48,7 @@ bitflags! {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct GizmoSet: u32 {
         const REFERENCE_FRAME_AXES = 1 << 0;
-        const BOUNDING_SPHERE      = 1 << 1;
+        const BOUNDING_VOLUME      = 1 << 1;
         const LIGHT_SPHERE         = 1 << 2;
         const SHADOW_CUBEMAP_FACES = 1 << 3;
         const SHADOW_MAP_CASCADES  = 1 << 4;
@@ -91,11 +91,11 @@ pub struct GizmoVisibilities {
     /// origin offset (typically used to shift the origin to the center of mass)
     /// is not accounted for.
     pub reference_frame_axes: GizmoVisibility,
-    /// The visibility of the gizmo showing bounding spheres.
+    /// The visibility of the gizmo showing bounding volumes.
     ///
-    /// When visible, the bounding spheres of models in the scene graph will
-    /// be rendered as semi-transparent cyan spheres.
-    pub bounding_sphere: GizmoVisibility,
+    /// When visible, the axis-aligned bounding boxes of models in the scene
+    /// will be rendered in a semi-transparent cyan color.
+    pub bounding_volume: GizmoVisibility,
     /// The visibility of the gizmo showing spheres of influence for
     /// omnidirectional lights.
     ///
@@ -292,7 +292,7 @@ impl GizmoType {
     pub const fn all() -> [Self; 17] {
         [
             Self::ReferenceFrameAxes,
-            Self::BoundingSphere,
+            Self::BoundingVolume,
             Self::LightSphere,
             Self::ShadowCubemapFaces,
             Self::ShadowMapCascades,
@@ -322,7 +322,7 @@ impl GizmoType {
     pub const fn as_set(&self) -> GizmoSet {
         match self {
             Self::ReferenceFrameAxes => GizmoSet::REFERENCE_FRAME_AXES,
-            Self::BoundingSphere => GizmoSet::BOUNDING_SPHERE,
+            Self::BoundingVolume => GizmoSet::BOUNDING_VOLUME,
             Self::LightSphere => GizmoSet::LIGHT_SPHERE,
             Self::ShadowCubemapFaces => GizmoSet::SHADOW_CUBEMAP_FACES,
             Self::ShadowMapCascades => GizmoSet::SHADOW_MAP_CASCADES,
@@ -345,7 +345,7 @@ impl GizmoType {
     pub const fn label(&self) -> &'static str {
         match self {
             Self::ReferenceFrameAxes => "Reference frame axes",
-            Self::BoundingSphere => "Bounding spheres",
+            Self::BoundingVolume => "Bounding volumes",
             Self::LightSphere => "Light spheres",
             Self::ShadowCubemapFaces => "Shadow cubemap faces",
             Self::ShadowMapCascades => "Shadow map cascades",
@@ -376,10 +376,10 @@ impl GizmoType {
                 origin offset (typically used to shift the origin to the center of mass) \
                 is not accounted for."
             }
-            Self::BoundingSphere => {
+            Self::BoundingVolume => {
                 "\
-                When enabled, the bounding spheres of models in the scene graph will be \
-                rendered as semi-transparent cyan spheres."
+                When enabled, the axis-aligned bounding boxes of models in the scene will \
+                be rendered in a semi-transparent cyan color."
             }
             Self::LightSphere => {
                 "\
@@ -552,7 +552,7 @@ impl GizmoVisibilities {
     pub fn get_for(&self, gizmo: GizmoType) -> GizmoVisibility {
         match gizmo {
             GizmoType::ReferenceFrameAxes => self.reference_frame_axes,
-            GizmoType::BoundingSphere => self.bounding_sphere,
+            GizmoType::BoundingVolume => self.bounding_volume,
             GizmoType::LightSphere => self.light_sphere,
             GizmoType::ShadowCubemapFaces => self.shadow_cubemap_face,
             GizmoType::ShadowMapCascades => self.shadow_map_cascade,
@@ -575,7 +575,7 @@ impl GizmoVisibilities {
     pub fn get_mut_for(&mut self, gizmo: GizmoType) -> &mut GizmoVisibility {
         match gizmo {
             GizmoType::ReferenceFrameAxes => &mut self.reference_frame_axes,
-            GizmoType::BoundingSphere => &mut self.bounding_sphere,
+            GizmoType::BoundingVolume => &mut self.bounding_volume,
             GizmoType::LightSphere => &mut self.light_sphere,
             GizmoType::ShadowCubemapFaces => &mut self.shadow_cubemap_face,
             GizmoType::ShadowMapCascades => &mut self.shadow_map_cascade,

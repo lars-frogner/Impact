@@ -13,6 +13,10 @@ use impact_ecs::{
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
+use impact_intersection::{
+    IntersectionManager,
+    bounding_volume::{BoundingVolumeID, HasBoundingVolume},
+};
 use impact_light::{
     AmbientEmission, AmbientLightID, LightManager, OmnidirectionalEmission, OmnidirectionalLightID,
     ShadowableOmnidirectionalEmission, ShadowableOmnidirectionalLightID,
@@ -411,5 +415,64 @@ pub fn sync_lights_in_storage(
                 (*flags).into(),
             );
         }
+    );
+}
+
+pub fn add_bounding_volumes_to_hierarchy(
+    ecs_world: &ECSWorld,
+    intersection_manager: &mut IntersectionManager,
+    scene_graph: &SceneGraph,
+) {
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         model_transform: &ModelTransform,
+         frame: &ReferenceFrame,
+         flags: &SceneEntityFlags| {
+            if flags.is_disabled() {
+                return;
+            }
+
+            let model_to_world_transform = frame.create_transform_to_parent_space()
+                * model_transform.create_transform_to_entity_space();
+
+            let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+            if let Err(err) = intersection_manager
+                .add_bounding_volume_to_hierarchy(bounding_volume_id, &model_to_world_transform)
+            {
+                log::error!("Failed to add bounding volume to hierarchy: {err}");
+            }
+        },
+        [HasBoundingVolume],
+        ![ParentEntity]
+    );
+
+    query!(
+        ecs_world,
+        |entity_id: EntityID,
+         model_transform: &ModelTransform,
+         frame: &ReferenceFrame,
+         parent: &ParentEntity,
+         flags: &SceneEntityFlags| {
+            if flags.is_disabled() {
+                return;
+            }
+
+            let parent_group_node = scene_graph
+                .group_nodes()
+                .node(SceneGroupID::from_entity_id(parent.0));
+
+            let model_to_world_transform = (parent_group_node.group_to_root_transform().aligned()
+                * frame.create_transform_to_parent_space())
+                * model_transform.create_transform_to_entity_space();
+
+            let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+            if let Err(err) = intersection_manager
+                .add_bounding_volume_to_hierarchy(bounding_volume_id, &model_to_world_transform)
+            {
+                log::error!("Failed to add bounding volume to hierarchy: {err}");
+            }
+        },
+        [HasBoundingVolume]
     );
 }

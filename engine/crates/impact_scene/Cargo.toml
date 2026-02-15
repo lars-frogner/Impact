@@ -12,6 +12,7 @@ ecs = [
     "dep:impact_ecs",
     "impact_camera/ecs",
     "impact_geometry/ecs",
+    "impact_intersection/ecs",
     "impact_light/ecs",
     "impact_model/ecs",
 ]
@@ -30,6 +31,7 @@ impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }
 impact_gpu = { path = "../impact_gpu" }
 impact_id = { path = "../impact_id" }
+impact_intersection = { path = "../impact_intersection" }
 impact_light = { path = "../impact_light" }
 impact_material = { path = "../impact_material" }
 impact_math = { path = "../impact_math" }

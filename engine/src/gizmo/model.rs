@@ -85,7 +85,7 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
         | GizmoType::Torque => {
             vec![define_non_obscurable_line_segment_model(gizmo.label())]
         }
-        GizmoType::BoundingSphere => {
+        GizmoType::BoundingVolume => {
             vec![define_obscurable_triangle_model(gizmo.label())]
         }
         GizmoType::LightSphere => {

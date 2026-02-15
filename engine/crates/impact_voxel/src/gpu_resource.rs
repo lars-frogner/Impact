@@ -154,34 +154,35 @@ impl VoxelObjectGPUResources {
     /// Returns the IDs of the currently visible voxel objects in the initial
     /// instance range.
     pub fn visible_voxel_object_ids_in_initial_range(&self) -> &[VoxelObjectID] {
-        self.visible_voxel_object_ids_in_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+        self.get_visible_voxel_object_ids_in_range(InstanceFeatureBufferRangeMap::INITIAL_RANGE_ID)
+            .unwrap()
     }
 
     /// Returns the IDs of the currently visible voxel objects in the specified
-    /// instance range.
-    pub fn visible_voxel_object_ids_in_range(
+    /// instance range, or [`None`] if there is no such instance range.
+    pub fn get_visible_voxel_object_ids_in_range(
         &self,
         instance_range_id: InstanceFeatureBufferRangeID,
-    ) -> &[VoxelObjectID] {
+    ) -> Option<&[VoxelObjectID]> {
         let range = self
             .id_ranges
-            .get_range(instance_range_id, self.visible_object_ids.len() as u32);
-        &self.visible_object_ids[range.start as usize..range.end as usize]
+            .get_range(instance_range_id, self.visible_object_ids.len() as u32)?;
+        Some(&self.visible_object_ids[range.start as usize..range.end as usize])
     }
 
     /// Returns the model-light transforms of the currently visible voxel
     /// objects in the specified instance range, as well as the range itself.
-    pub fn visible_object_model_light_transforms_in_range(
+    pub fn get_visible_object_model_light_transforms_in_range(
         &self,
         instance_range_id: InstanceFeatureBufferRangeID,
-    ) -> (&[InstanceModelLightTransform], Range<u32>) {
+    ) -> Option<(&[InstanceModelLightTransform], Range<u32>)> {
         let range = self.model_light_transform_ranges.get_range(
             instance_range_id,
             self.visible_object_model_light_transforms.len() as u32,
-        );
+        )?;
         let transforms =
             &self.visible_object_model_light_transforms[range.start as usize..range.end as usize];
-        (transforms, range)
+        Some((transforms, range))
     }
 
     /// Returns the model-view transforms of all currently visible voxel
