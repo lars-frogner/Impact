@@ -1,10 +1,8 @@
 //! Instrumentation for engine systems.
 
-pub mod timing;
-
+use impact_profiling::TimedTask;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use timing::TaskExecutionTimes;
 
 /// Configuration for engine instrumentation features.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -21,7 +19,7 @@ pub struct EngineMetrics {
     pub current_smooth_frame_duration: Duration,
     /// The execution times of all [`Task`](impact_scheduling::Task)s executed
     /// during the last frame the engine's task timer was enabled.
-    pub last_task_execution_times: TaskExecutionTimes,
+    pub last_task_execution_times: Vec<TimedTask>,
 }
 
 /// A generic tracker that maintains a rolling window of frame durations.

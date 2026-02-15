@@ -5,6 +5,7 @@ use crate::{
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
+use impact_profiling::instrument_task;
 use impact_scheduling::{define_execution_tag, define_task};
 
 // =============================================================================
@@ -37,7 +38,7 @@ define_task!(
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Calling app", engine, {
+        instrument_task!("Calling app", engine.task_timer(), {
             let frame_number = engine.game_loop_controller().oread().iteration();
             engine.app().on_new_frame(frame_number)
         })
@@ -51,7 +52,7 @@ define_task!(
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Handling input events", engine, {
+        instrument_task!("Handling input events", engine.task_timer(), {
             engine.handle_queued_input_events()
         })
     }
@@ -69,7 +70,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing render commands", engine, {
+        instrument_task!("Synchronizing render commands", engine.task_timer(), {
             let mut renderer = engine.renderer().owrite();
             if renderer.is_initial_frame() {
                 // No previous frame to render on the first frame
@@ -92,7 +93,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Rendering before surface", engine, {
+        instrument_task!("Rendering before surface", engine.task_timer(), {
             let mut renderer = engine.renderer().owrite();
             if renderer.is_initial_frame() {
                 return Ok(());
@@ -119,11 +120,11 @@ define_task!(
             return Ok(());
         }
 
-        let (surface_texture_view, surface_texture) = instrument_engine_task!("Obtaining surface", engine, {
+        let (surface_texture_view, surface_texture) = instrument_task!("Obtaining surface", engine.task_timer(), {
             renderer.obtain_surface()
         })?;
 
-        instrument_engine_task!("Rendering to surface", engine, {
+        instrument_task!("Rendering to surface", engine.task_timer(), {
             renderer.render_to_surface(
                 surface_texture_view,
                 surface_texture,
@@ -141,7 +142,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Performing post-rendering updates", engine, {
+        instrument_task!("Performing post-rendering updates", engine.task_timer(), {
             let mut renderer = engine.renderer().owrite();
 
             if renderer.is_initial_frame() {
@@ -172,7 +173,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Saving requested screenshots", engine, {
+        instrument_task!("Saving requested screenshots", engine.task_timer(), {
             engine.save_requested_screenshots()
         })
     }
@@ -190,7 +191,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Presenting surface", engine, {
+        instrument_task!("Presenting surface", engine.task_timer(), {
             engine.renderer().owrite().present();
             Ok(())
         })
@@ -212,7 +213,7 @@ define_task!(
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Executing enqueued engine commands", engine, {
+        instrument_task!("Executing enqueued engine commands", engine.task_timer(), {
             engine.execute_enqueued_scene_commands()?;
             engine.execute_enqueued_control_commands()?;
             engine.execute_enqueued_physics_commands()?;
@@ -241,7 +242,7 @@ define_task!(
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Executing enqueued rendering commands", engine, {
+        instrument_task!("Executing enqueued rendering commands", engine.task_timer(), {
             engine.execute_enqueued_rendering_admin_commands()?;
             engine.execute_enqueued_capture_admin_commands()
         })
@@ -259,7 +260,7 @@ define_task!(
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Handling entity lifetimes", engine, {
+        instrument_task!("Handling entity lifetimes", engine.task_timer(), {
             let mut entity_stager = engine.entity_stager().olock();
             let ecs_world = engine.ecs_world().oread();
             impact_scene::systems::stage_too_remote_entities_for_removal(&mut entity_stager, &ecs_world);
@@ -281,7 +282,7 @@ define_task!(
     execute_on = [UserInterfaceTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Processing user interface", engine, {
+        instrument_task!("Processing user interface", engine.task_timer(), {
             ctx.user_interface().process()
         })
     }
@@ -304,7 +305,7 @@ define_task!(
     execute_on = [PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Handling staged entities", engine, {
+        instrument_task!("Handling staged entities", engine.task_timer(), {
             engine.handle_staged_entities()
         })
     }
@@ -326,7 +327,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing voxel object model transforms", engine, {
+        instrument_task!("Synchronizing voxel object model transforms", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
             let voxel_manager = scene.voxel_manager().oread();
@@ -349,7 +350,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing voxel object collidables", engine, {
+        instrument_task!("Synchronizing voxel object collidables", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let simulator = engine.simulator().oread();
             let mut collision_world = simulator.collision_world().owrite();
@@ -380,7 +381,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Updating voxel object meshes", engine, {
+        instrument_task!("Updating voxel object meshes", engine.task_timer(), {
             let scene = engine.scene().oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
             voxel_manager.object_manager_mut().sync_voxel_object_meshes();
@@ -403,7 +404,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Updating controlled entities", engine, {
+        instrument_task!("Updating controlled entities", engine.task_timer(), {
             engine.update_controlled_entity_motion();
             Ok(())
         })
@@ -432,11 +433,17 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Advancing simulation", engine, {
+
+        instrument_task!("Advancing simulation", engine.task_timer(), {
             let scene =  engine.scene().oread();
             let voxel_manager = scene.voxel_manager().oread();
+            let intersection_manager = scene.intersection_manager().oread();
             let mut simulator = engine.simulator().owrite();
-            simulator.advance_simulation(voxel_manager.object_manager());
+            simulator.advance_simulation(
+                engine.task_timer(),
+                voxel_manager.object_manager(),
+                &intersection_manager,
+            );
             Ok(())
         })
     }
@@ -453,7 +460,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing rigid body components", engine, {
+        instrument_task!("Synchronizing rigid body components", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let simulator = engine.simulator().oread();
             let rigid_body_manager = simulator.rigid_body_manager().oread();
@@ -475,7 +482,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Clearing model instance buffers", engine, {
+        instrument_task!("Clearing model instance buffers", engine.task_timer(), {
             let scene = engine.scene().oread();
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             model_instance_manager.clear_buffer_contents();
@@ -507,7 +514,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing scene graph node properties", engine, {
+        instrument_task!("Synchronizing scene graph node properties", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
             let voxel_manager = scene.voxel_manager().oread();
@@ -537,7 +544,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Updating scene object group-to-world transforms", engine, {
+        instrument_task!("Updating scene object group-to-world transforms", engine.task_timer(), {
             let scene = engine.scene().oread();
             let mut scene_graph = scene.scene_graph().owrite();
             scene_graph.update_all_group_to_root_transforms();
@@ -557,7 +564,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Adding bounding volumes to hierarchy", engine, {
+        instrument_task!("Adding bounding volumes to hierarchy", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
             let mut intersection_manager = scene.intersection_manager().owrite();
@@ -584,7 +591,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Building bounding volume hierarchy", engine, {
+        instrument_task!("Building bounding volume hierarchy", engine.task_timer(), {
             let scene = engine.scene().oread();
             let mut intersection_manager = scene.intersection_manager().owrite();
             intersection_manager.build_bounding_volume_hierarchy();
@@ -603,7 +610,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing scene camera view transform", engine, {
+        instrument_task!("Synchronizing scene camera view transform", engine.task_timer(), {
             let scene = engine.scene().oread();
             let mut camera_manager = scene.camera_manager().owrite();
             if let Some(camera) = camera_manager.active_camera_mut() {
@@ -634,7 +641,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Buffering model instances for rendering", engine, {
+        instrument_task!("Buffering model instances for rendering", engine.task_timer(), {
             let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
             let resource_manager = engine.resource_manager().oread();
             let scene = engine.scene().oread();
@@ -681,7 +688,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing lights in storage", engine, {
+        instrument_task!("Synchronizing lights in storage", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
             let view_transform = scene.camera_manager().oread().active_view_transform();
@@ -722,7 +729,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine, {
+        instrument_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine.task_timer(), {
             let scene = engine.scene().oread();
             let camera_manager = scene.camera_manager().oread();
             if let Some(camera) = camera_manager.active_camera() {
@@ -766,7 +773,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine, {
+        instrument_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine.task_timer(), {
             let scene = engine.scene().oread();
             let camera_manager = scene.camera_manager().oread();
             if let Some(camera) = camera_manager.active_camera() {
@@ -803,7 +810,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Updating visibility flags for gizmos", engine, {
+        instrument_task!("Updating visibility flags for gizmos", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let mut gizmo_manager = engine.gizmo_manager().owrite();
             impact_gizmo::systems::update_visibility_flags_for_gizmos(&mut gizmo_manager, &ecs_world);
@@ -839,7 +846,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Buffering transforms for gizmos", engine, {
+        instrument_task!("Buffering transforms for gizmos", engine.task_timer(), {
             let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
@@ -885,7 +892,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing texture GPU resources", engine, {
+        instrument_task!("Synchronizing texture GPU resources", engine.task_timer(), {
             engine.sync_texture_gpu_resources()
         })
     }
@@ -904,7 +911,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing mesh GPU resources", engine, {
+        instrument_task!("Synchronizing mesh GPU resources", engine.task_timer(), {
             engine.sync_mesh_gpu_resources()
         })
     }
@@ -925,7 +932,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing material GPU resources", engine, {
+        instrument_task!("Synchronizing material GPU resources", engine.task_timer(), {
             engine.sync_material_gpu_resources()
         })
     }
@@ -942,7 +949,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing miscellaneous GPU resources", engine, {
+        instrument_task!("Synchronizing miscellaneous GPU resources", engine.task_timer(), {
             engine.sync_misc_gpu_resources()
         })
     }
@@ -973,7 +980,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Synchronizing dynamic GPU resources", engine, {
+        instrument_task!("Synchronizing dynamic GPU resources", engine.task_timer(), {
             engine.sync_dynamic_gpu_resources()
         })
     }
@@ -1010,7 +1017,7 @@ define_task!(
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_engine_task!("Applying voxel absorbers", engine, {
+        instrument_task!("Applying voxel absorbers", engine.task_timer(), {
             let mut entity_id_manager = engine.entity_id_manager().olock();
             let mut entity_stager = engine.entity_stager().olock();
             let ecs_world = engine.ecs_world().oread();

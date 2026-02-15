@@ -1,8 +1,7 @@
 //! Commands for instrumentation.
 
-use crate::{
-    command::uils::ToActiveState, instrumentation::timing::TaskTimer, rendering::RenderingSystem,
-};
+use crate::{command::uils::ToActiveState, rendering::RenderingSystem};
+use impact_profiling::TaskTimer;
 
 #[derive(Clone, Debug)]
 pub enum InstrumentationAdminCommand {

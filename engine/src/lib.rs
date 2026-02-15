@@ -1,8 +1,5 @@
 //! Graphics and physics engine.
 
-#[macro_use]
-mod macros;
-
 pub mod application;
 pub mod command;
 pub mod component;
@@ -44,6 +41,7 @@ pub use impact_math;
 pub use impact_mesh;
 pub use impact_model;
 pub use impact_physics;
+pub use impact_profiling;
 pub use impact_rendering;
 pub use impact_scene;
 pub use impact_thread;

@@ -18,7 +18,7 @@ use crate::{
         InputConfig, InputEvent, InputManager,
         mouse::{MouseDragEvent, MouseMotionEvent},
     },
-    instrumentation::{EngineMetrics, InstrumentationConfig, timing::TaskTimer},
+    instrumentation::{EngineMetrics, InstrumentationConfig},
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::{PhysicsConfig, PhysicsSimulator},
     rendering::{
@@ -37,6 +37,7 @@ use impact_ecs::{
 };
 use impact_gpu::device::GraphicsDevice;
 use impact_id::EntityIDManager;
+use impact_profiling::TaskTimer;
 use impact_scene::model::ModelInstanceManager;
 use impact_scheduling::TaskErrors;
 use impact_texture::{SamplerRegistry, TextureRegistry};
