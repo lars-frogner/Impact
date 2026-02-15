@@ -1,8 +1,11 @@
 //! Gizmo models.
 
 use crate::{GizmoDepthClipping, GizmoObscurability, GizmoType};
-use impact_math::hash64;
+use bytemuck::{Pod, Zeroable};
+use impact_gpu::{vertex_attribute_ranges::INSTANCE_START, wgpu};
+use impact_math::{hash64, quaternion::UnitQuaternionC, transform::Similarity3, vector::Vector3C};
 use impact_mesh::{LineSegmentMeshID, MeshID, MeshPrimitive, TriangleMeshID};
+use impact_model::{impl_InstanceFeatureForGPU, transform::InstanceModelViewTransform};
 use impact_scene::model::ModelID;
 use std::sync::LazyLock;
 
@@ -23,6 +26,20 @@ pub struct GizmoModel {
     /// Whether this gizmo should be clipped against the camera's near and far
     /// plane.
     pub depth_clipping: GizmoDepthClipping,
+}
+
+/// A model-to-camera transform for a specific instance of a gizmo model. Unlike
+/// [`InstanceModelViewTransform`](impact_model::transform::InstanceModelViewTransform),
+/// this variant support non-uniform scaling.
+///
+/// This struct is intended to be passed to the GPU in a vertex buffer. The
+/// order of the fields is assumed in the shaders.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct GizmoInstanceModelViewTransform {
+    rotation: UnitQuaternionC,
+    translation: Vector3C,
+    scaling: Vector3C,
 }
 
 impl GizmoModel {
@@ -52,6 +69,98 @@ impl GizmoModel {
         }
     }
 }
+
+impl GizmoInstanceModelViewTransform {
+    /// Returns the binding location of the transform's rotation quaternion in
+    /// the instance buffer.
+    pub const fn rotation_location() -> u32 {
+        INSTANCE_START
+    }
+
+    /// Returns the binding location of the transform's translation in the
+    /// instance buffer.
+    pub const fn translation_location() -> u32 {
+        INSTANCE_START + 1
+    }
+
+    /// Returns the binding location of the transform's non-uniform scaling in
+    /// the instance buffer.
+    pub const fn scaling_location() -> u32 {
+        INSTANCE_START + 2
+    }
+
+    pub fn new(rotation: UnitQuaternionC, translation: Vector3C, scaling: Vector3C) -> Self {
+        Self {
+            rotation,
+            translation,
+            scaling,
+        }
+    }
+
+    pub fn new_with_uniform_scaling(
+        rotation: UnitQuaternionC,
+        translation: Vector3C,
+        scaling: f32,
+    ) -> Self {
+        Self::new(rotation, translation, Vector3C::same(scaling))
+    }
+
+    pub fn identity() -> Self {
+        Self::new_with_uniform_scaling(UnitQuaternionC::identity(), Vector3C::zeros(), 1.0)
+    }
+
+    pub fn applied_before_transform(&self, transform: &Similarity3) -> Self {
+        let rotation = self.rotation.aligned();
+        let translation = self.translation.aligned();
+        let scaling = self.scaling.aligned();
+
+        let new_rotation = transform.rotation() * rotation;
+
+        let new_translation = transform
+            .rotation()
+            .rotate_vector(&(transform.scaling() * translation))
+            + transform.translation();
+
+        let new_scaling = transform.scaling() * scaling;
+
+        Self::new(
+            new_rotation.compact(),
+            new_translation.compact(),
+            new_scaling.compact(),
+        )
+    }
+}
+
+impl From<InstanceModelViewTransform> for GizmoInstanceModelViewTransform {
+    fn from(transform: InstanceModelViewTransform) -> Self {
+        Self::new_with_uniform_scaling(transform.rotation, transform.translation, transform.scaling)
+    }
+}
+
+impl From<&Similarity3> for GizmoInstanceModelViewTransform {
+    fn from(transform: &Similarity3) -> Self {
+        Self::new_with_uniform_scaling(
+            transform.rotation().compact(),
+            transform.translation().compact(),
+            transform.scaling(),
+        )
+    }
+}
+
+impl Default for GizmoInstanceModelViewTransform {
+    fn default() -> Self {
+        Self::identity()
+    }
+}
+
+impl_InstanceFeatureForGPU!(
+    GizmoInstanceModelViewTransform,
+    wgpu::vertex_attr_array![
+        INSTANCE_START => Float32x4,
+        INSTANCE_START + 1 => Float32x3,
+        INSTANCE_START + 2 => Float32x3,
+    ]
+);
 
 /// Returns the set of models used for each gizmo.
 pub fn gizmo_models() -> &'static [Vec<GizmoModel>; GizmoType::count()] {

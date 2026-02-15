@@ -4,8 +4,8 @@ use crate::{
     GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility, Gizmos,
     model::{
         COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
-        COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
-        SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
+        COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, GizmoInstanceModelViewTransform,
+        SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_EMPTY_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_NON_UNIFORM_MODEL_IDX,
         VOXEL_CHUNKS_GIZMO_NON_OBSCURABLE_UNIFORM_MODEL_IDX,
@@ -393,9 +393,11 @@ fn buffer_transform_for_reference_frame_gizmo(
         )
         .current;
 
+    let gizmo_model_view_transform = GizmoInstanceModelViewTransform::from(model_view_transform);
+
     model_instance_manager.buffer_instance_feature(
         GizmoType::ReferenceFrameAxes.only_model_id(),
-        &model_view_transform,
+        &gizmo_model_view_transform,
     );
 }
 
@@ -437,28 +439,26 @@ fn compute_transform_for_bounding_volume_gizmo(
     bounding_volume_manager: &BoundingVolumeManager,
     entity_id: EntityID,
     model_view_transform: InstanceModelViewTransform,
-) -> Option<InstanceModelViewTransform> {
+) -> Option<GizmoInstanceModelViewTransform> {
     let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
     let bounding_volume = bounding_volume_manager
         .get_bounding_volume(bounding_volume_id)?
         .aligned();
 
-    // TODO: Requires non-uniform scaling
-    let scale = bounding_volume.extents().max_component();
+    let scaling = bounding_volume.extents();
 
-    let bounding_box_from_unit_cube = Similarity3::from_parts(
-        *bounding_volume.center().as_vector(),
-        UnitQuaternion::identity(),
-        scale,
+    let bounding_box_from_unit_cube = GizmoInstanceModelViewTransform::new(
+        UnitQuaternionC::identity(),
+        bounding_volume.center().as_vector().compact(),
+        scaling.compact(),
     );
 
     let model_view_transform = Similarity3::from(model_view_transform);
 
-    let instance_model_view_transform = model_view_transform * bounding_box_from_unit_cube;
+    let instance_model_view_transform =
+        bounding_box_from_unit_cube.applied_before_transform(&model_view_transform);
 
-    Some(InstanceModelViewTransform::from(
-        &instance_model_view_transform,
-    ))
+    Some(instance_model_view_transform)
 }
 
 fn buffer_transform_for_light_sphere_gizmo(
@@ -471,11 +471,11 @@ fn buffer_transform_for_light_sphere_gizmo(
         return;
     };
 
-    let light_sphere_from_unit_sphere = InstanceModelViewTransform {
-        translation: *light.camera_space_position().as_vector(),
-        scaling: light.max_reach(),
-        rotation: UnitQuaternionC::identity(),
-    };
+    let light_sphere_from_unit_sphere = GizmoInstanceModelViewTransform::new_with_uniform_scaling(
+        UnitQuaternionC::identity(),
+        *light.camera_space_position().as_vector(),
+        light.max_reach(),
+    );
 
     model_instance_manager.buffer_instance_feature(
         GizmoType::LightSphere.only_model_id(),
@@ -493,11 +493,11 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
         return;
     };
 
-    let light_sphere_from_unit_sphere = InstanceModelViewTransform {
-        translation: *light.camera_space_position().as_vector(),
-        scaling: light.far_distance(), // The shader uses the far distance as the light sphere radius
-        rotation: UnitQuaternionC::identity(),
-    };
+    let light_sphere_from_unit_sphere = GizmoInstanceModelViewTransform::new_with_uniform_scaling(
+        UnitQuaternionC::identity(),
+        *light.camera_space_position().as_vector(),
+        light.far_distance(), // The shader uses the far distance as the light sphere radius
+    );
 
     model_instance_manager.buffer_instance_feature(
         GizmoType::LightSphere.only_model_id(),
@@ -517,7 +517,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
 
     let light_space_to_camera_transform = light.create_light_space_to_camera_transform();
 
-    let cubemap_near_plane_transform = InstanceModelViewTransform::from(
+    let cubemap_near_plane_transform = GizmoInstanceModelViewTransform::from(
         &Similarity3::from_isometry(light_space_to_camera_transform)
             .applied_to_scaling(light.near_distance()),
     );
@@ -528,7 +528,7 @@ fn buffer_transforms_for_shadow_cubemap_faces_gizmo(
         &cubemap_near_plane_transform,
     );
 
-    let cubemap_far_plane_transform = InstanceModelViewTransform::from(
+    let cubemap_far_plane_transform = GizmoInstanceModelViewTransform::from(
         &Similarity3::from_isometry(light_space_to_camera_transform)
             .applied_to_scaling(light.far_distance()),
     );
@@ -574,11 +574,12 @@ fn buffer_transforms_for_shadow_map_cascades_gizmo(
 
         let scaling = plane_height * camera.projection().aspect_ratio().max(1.0);
 
-        let camera_cascade_from_vertical_square = InstanceModelViewTransform {
-            translation: Vector3C::new(0.0, 0.0, plane_z),
-            rotation: UnitQuaternionC::identity(),
-            scaling,
-        };
+        let camera_cascade_from_vertical_square =
+            GizmoInstanceModelViewTransform::new_with_uniform_scaling(
+                UnitQuaternionC::identity(),
+                Vector3C::new(0.0, 0.0, plane_z),
+                scaling,
+            );
 
         model_instance_manager.buffer_instance_feature(
             &GizmoType::ShadowMapCascades.models()[cascade_idx].model_id,
@@ -627,7 +628,7 @@ fn buffer_transforms_for_anchor_gizmos(
 
         model_instance_manager.buffer_instance_feature(
             GizmoType::Anchors.only_model_id(),
-            &InstanceModelViewTransform::from(&view_sphere_from_unit_sphere_transform),
+            &GizmoInstanceModelViewTransform::from(&view_sphere_from_unit_sphere_transform),
         );
     }
 }
@@ -715,7 +716,7 @@ fn buffer_transforms_for_dynamics_gizmos(
 
         model_instance_manager.buffer_instance_feature(
             GizmoType::CenterOfMass.only_model_id(),
-            &InstanceModelViewTransform::from(&view_sphere_from_unit_sphere_transform),
+            &GizmoInstanceModelViewTransform::from(&view_sphere_from_unit_sphere_transform),
         );
     }
 
@@ -793,7 +794,7 @@ fn model_view_transform_for_vector_gizmo(
     position: Point3,
     direction: UnitVector3,
     length: f32,
-) -> InstanceModelViewTransform {
+) -> GizmoInstanceModelViewTransform {
     let rotation = compute_rotation_to_camera_space_for_cylindrical_billboard(
         *camera_position,
         position,
@@ -804,7 +805,7 @@ fn model_view_transform_for_vector_gizmo(
 
     let instance_model_view_transform = camera.view_transform() * model_to_world_transform;
 
-    InstanceModelViewTransform::from(&instance_model_view_transform)
+    GizmoInstanceModelViewTransform::from(&instance_model_view_transform)
 }
 
 /// Computes the model-view rotation of a billboard model such that:
@@ -894,7 +895,7 @@ fn buffer_transforms_for_collider_gizmos(
 
             model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id,
-                &InstanceModelViewTransform::from(&model_to_camera_transform),
+                &GizmoInstanceModelViewTransform::from(&model_to_camera_transform),
             );
         }
         Collidable::Plane(plane_collidable) => {
@@ -917,7 +918,7 @@ fn buffer_transforms_for_collider_gizmos(
 
             model_instance_manager.buffer_instance_feature(
                 &models[COLLIDER_GIZMO_PLANE_MODEL_IDX].model_id,
-                &InstanceModelViewTransform::from(&model_to_camera_transform),
+                &GizmoInstanceModelViewTransform::from(&model_to_camera_transform),
             );
         }
         Collidable::VoxelObject(voxel_object_collidable) => {
@@ -951,11 +952,12 @@ fn buffer_transforms_for_collider_gizmos(
 
                 let voxel_radius = -voxel.signed_distance().to_f32() * voxel_object.voxel_extent();
 
-                let model_to_camera_transform = InstanceModelViewTransform {
-                    translation: voxel_center_in_camera_space.as_vector().compact(),
-                    rotation: rotation_from_object_to_camera_space.compact(),
-                    scaling: voxel_radius,
-                };
+                let model_to_camera_transform =
+                    GizmoInstanceModelViewTransform::new_with_uniform_scaling(
+                        rotation_from_object_to_camera_space.compact(),
+                        voxel_center_in_camera_space.as_vector().compact(),
+                        voxel_radius,
+                    );
 
                 transforms.push(model_to_camera_transform);
             });
@@ -1037,7 +1039,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
 
             model_instance_manager.buffer_instance_feature(
                 model_id,
-                &InstanceModelViewTransform::from(&chunk_transform),
+                &GizmoInstanceModelViewTransform::from(&chunk_transform),
             );
         });
 }
@@ -1120,11 +1122,11 @@ fn buffer_transforms_for_voxel_intersections_gizmo(
         let voxel_center_in_camera_space =
             transform_from_object_to_camera_space.transform_point(&voxel_center_in_object_space);
 
-        let model_to_camera_transform = InstanceModelViewTransform {
-            translation: voxel_center_in_camera_space.as_vector().compact(),
-            rotation: transform_from_object_to_camera_space.rotation().compact(),
-            scaling: 0.5 * voxel_object.voxel_extent(),
-        };
+        let model_to_camera_transform = GizmoInstanceModelViewTransform::new_with_uniform_scaling(
+            transform_from_object_to_camera_space.rotation().compact(),
+            voxel_center_in_camera_space.as_vector().compact(),
+            0.5 * voxel_object.voxel_extent(),
+        );
 
         transforms.push(model_to_camera_transform);
     };
