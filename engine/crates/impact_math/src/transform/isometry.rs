@@ -1,6 +1,7 @@
 //! Isometry transforms.
 
 use crate::{
+    matrix::Matrix4,
     point::Point3,
     quaternion::{UnitQuaternion, UnitQuaternionC},
     vector::{UnitVector3, Vector3, Vector3C},
@@ -130,6 +131,14 @@ impl Isometry3 {
             -inverse_rotation.rotate_vector(&self.translation),
             inverse_rotation,
         )
+    }
+
+    /// Converts the transform to a 4x4 homogeneous matrix.
+    #[inline]
+    pub fn to_matrix(&self) -> Matrix4 {
+        let mut m = self.rotation.to_homogeneous_matrix();
+        m.translate_transform(&self.translation);
+        m
     }
 
     /// Applies the transform to the given point.
@@ -372,6 +381,31 @@ mod tests {
         let inverted = iso.inverted();
 
         assert_abs_diff_eq!(inverted * iso, Isometry3::identity(), epsilon = EPSILON);
+    }
+
+    #[test]
+    fn isometry3_to_matrix_produces_correct_transform() {
+        let translation = TRANSLATION_1;
+        let rotation = rotation_90_z();
+        let sim = Isometry3::from_parts(translation, rotation);
+        let matrix = sim.to_matrix();
+
+        // Test by transforming a point
+        let point = Point3::new(1.0, 0.0, 0.0);
+        let sim_transformed = sim.transform_point(&point);
+        let matrix_transformed = matrix.transform_point(&point);
+
+        assert_abs_diff_eq!(
+            sim_transformed.x(),
+            matrix_transformed.x(),
+            epsilon = EPSILON
+        );
+        assert_abs_diff_eq!(
+            sim_transformed.y(),
+            matrix_transformed.y(),
+            epsilon = EPSILON
+        );
+        assert_abs_diff_eq!(sim_transformed, matrix_transformed, epsilon = EPSILON);
     }
 
     #[test]
