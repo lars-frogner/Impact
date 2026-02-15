@@ -15,12 +15,12 @@ use crate::{
 };
 use absorption::VoxelAbsorptionManager;
 use impact_alloc::{AVec, Allocator};
-use impact_geometry::{ModelTransform, Sphere};
+use impact_geometry::ModelTransform;
 use impact_id::EntityID;
 use impact_intersection::bounding_volume::{
-    AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
+    AxisAlignedBoundingBoxC, BoundingVolumeID, BoundingVolumeManager,
 };
-use impact_math::{point::Point3, transform::Isometry3, vector::Vector3};
+use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
     quantities::{AngularVelocity, Orientation, Position, Velocity},
@@ -149,22 +149,16 @@ pub fn sync_voxel_object_bounding_volume(
         return;
     };
 
-    let bounding_sphere = if voxel_object.object().contains_only_empty_voxels() {
-        Sphere::new(Point3::origin(), 0.0)
+    let aabb = if voxel_object.object().contains_only_empty_voxels() {
+        AxisAlignedBoundingBoxC::new(Point3C::origin(), Point3C::origin())
     } else {
-        voxel_object.object().compute_bounding_sphere()
+        voxel_object.object().compute_aabb().compact()
     };
-
-    let bounding_volume = AxisAlignedBoundingBox::new(
-        bounding_sphere.center() - Vector3::same(bounding_sphere.radius()),
-        bounding_sphere.center() + Vector3::same(bounding_sphere.radius()),
-    )
-    .compact();
 
     let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
     *bounding_volume_manager
         .get_bounding_volume_mut(bounding_volume_id)
-        .expect("Missing bounding volume for voxel object") = bounding_volume;
+        .expect("Missing bounding volume for voxel object") = aabb;
 }
 
 fn handle_voxel_object_after_removing_voxels(

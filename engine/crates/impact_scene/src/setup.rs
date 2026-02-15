@@ -6,7 +6,6 @@ use crate::{
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
-use impact_geometry::Sphere;
 use impact_id::EntityID;
 use impact_intersection::bounding_volume::{
     AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
@@ -15,7 +14,6 @@ use impact_material::{MaterialID, MaterialRegistry};
 use impact_math::{
     point::Point3,
     transform::{Isometry3C, Similarity3C},
-    vector::Vector3,
 };
 use impact_mesh::{TriangleMeshID, TriangleMeshRegistry};
 use impact_model::{
@@ -141,15 +139,10 @@ pub fn setup_bounding_volume_for_mesh(
         anyhow!("Tried to create bounding volume for entity with missing mesh: {mesh_id}")
     })?;
 
-    let bounding_sphere = mesh
-        .compute_bounding_sphere()
-        .unwrap_or_else(|| Sphere::new(Point3::origin(), 0.0));
-
-    let aabb = AxisAlignedBoundingBox::new(
-        bounding_sphere.center() - Vector3::same(bounding_sphere.radius()),
-        bounding_sphere.center() + Vector3::same(bounding_sphere.radius()),
-    )
-    .compact();
+    let aabb = mesh
+        .compute_aabb()
+        .unwrap_or_else(|| AxisAlignedBoundingBox::new(Point3::origin(), Point3::origin()))
+        .compact();
 
     let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
     bounding_volume_manager.insert_bounding_volume(bounding_volume_id, aabb)
