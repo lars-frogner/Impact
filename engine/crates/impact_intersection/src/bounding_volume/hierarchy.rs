@@ -75,9 +75,10 @@ impl BoundingVolumeHierarchy {
         }
     }
 
-    pub fn for_each_intersecting_bounding_volume_pair(
+    pub fn for_each_intersecting_bounding_volume_pair<R>(
         &self,
-        mut f: impl FnMut(BoundingVolumeID, BoundingVolumeID),
+        mut filter_map_first: impl FnMut(BoundingVolumeID) -> Option<R>,
+        mut process_intersection: impl FnMut(&R, BoundingVolumeID),
     ) {
         let aabbs = &self.primitive_volumes.bounding_volumes;
         let n_primitives = aabbs.len();
@@ -87,11 +88,14 @@ impl BoundingVolumeHierarchy {
         }
 
         for (i, aabb_i) in (0..n_primitives - 1).zip(&aabbs[0..n_primitives - 1]) {
+            let id_i = self.primitive_volumes.index_map.key_at_idx(i);
+            let Some(mapped_first) = filter_map_first(id_i) else {
+                continue;
+            };
             for (j, aabb_j) in (i + 1..n_primitives).zip(&aabbs[i + 1..n_primitives]) {
                 if !aabb_i.aligned().box_lies_outside(&aabb_j.aligned()) {
-                    let id_i = self.primitive_volumes.index_map.key_at_idx(i);
                     let id_j = self.primitive_volumes.index_map.key_at_idx(j);
-                    f(id_i, id_j);
+                    process_intersection(&mapped_first, id_j);
                 }
             }
         }

@@ -11,6 +11,7 @@ use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::{NoHashMap, hash_map::Entry};
 use impact_id::define_entity_id_newtype;
+use impact_intersection::IntersectionManager;
 use impact_math::transform::Isometry3;
 use roc_integration::roc;
 use std::fmt;
@@ -183,65 +184,39 @@ impl<C: Collidable> CollisionWorld<C> {
         self.collidable_descriptors.remove(&collidable_id);
     }
 
-    pub fn for_each_collision_with_collidable(
-        &self,
-        context: &C::Context,
-        collidable_id: CollidableID,
-        f: &mut impl FnMut(Collision<'_, C>),
-    ) {
-        let descriptor_a = self.collidable_descriptor(collidable_id);
-        let collidable_a = self.collidable_with_descriptor(descriptor_a);
-
-        let mut contact_manifold = ContactManifold::new();
-
-        for collidables_of_kind in &self.collidables {
-            for collidable_b in collidables_of_kind {
-                if collidable_b.id == collidable_a.id {
-                    continue;
-                }
-
-                let order = C::generate_contact_manifold(
-                    context,
-                    collidable_a,
-                    collidable_b,
-                    &mut contact_manifold,
-                );
-
-                if !contact_manifold.is_empty() {
-                    let descriptor_b = self.collidable_descriptor(collidable_b.id);
-
-                    let (collider_a, collider_b) =
-                        order.swap_if_required(descriptor_a, descriptor_b);
-
-                    f(Collision {
-                        collider_a,
-                        collider_b,
-                        contact_manifold: &contact_manifold,
-                    });
-
-                    contact_manifold.clear();
-                }
-            }
-        }
-    }
-
     pub fn for_each_non_phantom_collision_involving_dynamic_collidable(
         &self,
         context: &C::Context,
+        intersection_manager: &IntersectionManager,
         f: &mut impl FnMut(Collision<'_, C>),
     ) {
         let dynamic_collidables = self.collidables(CollidableKind::Dynamic);
-        let static_collidables = self.collidables(CollidableKind::Static);
 
         let mut contact_manifold = ContactManifold::new();
 
-        for (idx, collidable_a) in dynamic_collidables.iter().enumerate() {
-            let descriptor_a = self.collidable_descriptor(collidable_a.id);
+        intersection_manager.for_each_intersecting_bounding_volume_pair(
+            |id| {
+                let collidable_id = CollidableID::from_entity_id(id.as_entity_id());
+                let descriptor = self.get_collidable_descriptor(collidable_id)?;
 
-            for collidable_b in dynamic_collidables[idx + 1..]
-                .iter()
-                .chain(static_collidables)
-            {
+                if descriptor.kind == CollidableKind::Dynamic {
+                    Some((descriptor, &dynamic_collidables[descriptor.idx]))
+                } else {
+                    None
+                }
+            },
+            |&(descriptor_a, collidable_a), id_b| {
+                let collidable_b_id = CollidableID::from_entity_id(id_b.as_entity_id());
+
+                let Some(descriptor_b) = self.get_collidable_descriptor(collidable_b_id) else {
+                    return;
+                };
+                if descriptor_b.kind == CollidableKind::Phantom {
+                    return;
+                }
+
+                let collidable_b = self.collidable_with_descriptor(descriptor_b);
+
                 let order = C::generate_contact_manifold(
                     context,
                     collidable_a,
@@ -263,8 +238,8 @@ impl<C: Collidable> CollisionWorld<C> {
 
                     contact_manifold.clear();
                 }
-            }
-        }
+            },
+        );
     }
 
     /// Removes all stored collision state.

@@ -1,11 +1,13 @@
 //! Constraint resolution tests.
 
 use approx::assert_abs_diff_eq;
-use impact_geometry::{PlaneC, ReferenceFrame, SphereC};
+use impact_geometry::{AxisAlignedBoxC, PlaneC, ReferenceFrame, SphereC};
 use impact_id::{EntityID, EntityIDManager};
+use impact_intersection::{IntersectionManager, bounding_volume::BoundingVolumeID};
 use impact_math::{
     angle::{Angle, Radians},
     point::Point3C,
+    transform::Similarity3,
     vector::{Vector3, Vector3C},
 };
 use impact_physics::{
@@ -78,6 +80,7 @@ impl PlaneBody {
 }
 
 fn setup_sphere_bodies(
+    intersection_manager: &mut IntersectionManager,
     rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = SphereBody>,
@@ -113,6 +116,26 @@ fn setup_sphere_bodies(
             },
         );
 
+        let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+
+        intersection_manager
+            .bounding_volume_manager
+            .insert_bounding_volume(
+                bounding_volume_id,
+                AxisAlignedBoxC::new(
+                    Vector3C::same(-sphere.radius()).into(),
+                    Vector3C::same(sphere.radius()).into(),
+                ),
+            )
+            .unwrap();
+
+        intersection_manager
+            .add_bounding_volume_to_hierarchy(
+                bounding_volume_id,
+                &Similarity3::from_isometry(frame.create_transform_to_parent_space()),
+            )
+            .unwrap();
+
         collision::setup::setup_spherical_collidable(
             collision_world,
             entity_id,
@@ -125,6 +148,7 @@ fn setup_sphere_bodies(
 }
 
 fn setup_plane_bodies(
+    intersection_manager: &mut IntersectionManager,
     rigid_body_manager: &mut RigidBodyManager,
     collision_world: &mut CollisionWorld,
     bodies: impl IntoIterator<Item = PlaneBody>,
@@ -151,6 +175,23 @@ fn setup_plane_bodies(
             },
         );
 
+        let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+
+        intersection_manager
+            .bounding_volume_manager
+            .insert_bounding_volume(
+                bounding_volume_id,
+                AxisAlignedBoxC::new(Point3C::new(-1e8, -1e8, 0.0), Point3C::new(1e8, 1e8, 0.0)),
+            )
+            .unwrap();
+
+        intersection_manager
+            .add_bounding_volume_to_hierarchy(
+                bounding_volume_id,
+                &Similarity3::from_isometry(frame.create_transform_to_parent_space()),
+            )
+            .unwrap();
+
         collision::setup::setup_planar_collidable(
             collision_world,
             entity_id,
@@ -170,13 +211,27 @@ fn setup_bodies_and_run_constraints(
 ) {
     let anchor_manager = AnchorManager::new();
     let mut collision_world = CollisionWorld::new();
+    let mut intersection_manager = IntersectionManager::new();
 
-    setup_sphere_bodies(rigid_body_manager, &mut collision_world, spheres);
-    setup_plane_bodies(rigid_body_manager, &mut collision_world, planes);
+    setup_sphere_bodies(
+        &mut intersection_manager,
+        rigid_body_manager,
+        &mut collision_world,
+        spheres,
+    );
+    setup_plane_bodies(
+        &mut intersection_manager,
+        rigid_body_manager,
+        &mut collision_world,
+        planes,
+    );
+
+    intersection_manager.build_bounding_volume_hierarchy();
 
     collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
 
     constraint_manager.prepare_constraints(
+        &intersection_manager,
         rigid_body_manager,
         &anchor_manager,
         &collision_world,

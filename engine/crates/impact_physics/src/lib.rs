@@ -22,11 +22,15 @@ use collision::{Collidable, CollisionWorld};
 use constraint::ConstraintManager;
 use driven_motion::MotionDriverManager;
 use force::ForceGeneratorManager;
+use impact_intersection::IntersectionManager;
+use impact_profiling::{TaskTimer, instrument_task};
 use medium::UniformMedium;
 use rigid_body::RigidBodyManager;
 
 /// Advances the physics simulation by one time step.
 pub fn perform_physics_step<C: Collidable>(
+    task_timer: &TaskTimer,
+    intersection_manager: &IntersectionManager,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
@@ -40,28 +44,53 @@ pub fn perform_physics_step<C: Collidable>(
 ) {
     let new_simulation_time = current_simulation_time + step_duration;
 
-    collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
+    instrument_task!("Synchronizing collidables with rigid bodies", task_timer, {
+        collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
+    });
 
-    constraint_manager.prepare_constraints(
-        rigid_body_manager,
-        anchor_manager,
-        collision_world,
-        collidable_context,
+    instrument_task!("Preparing constraints", task_timer, {
+        constraint_manager.prepare_constraints(
+            intersection_manager,
+            rigid_body_manager,
+            anchor_manager,
+            collision_world,
+            collidable_context,
+        );
+    });
+
+    instrument_task!("Advancing dynamic rigid body momenta", task_timer, {
+        rigid_body_manager.advance_dynamic_rigid_body_momenta(step_duration);
+    });
+
+    instrument_task!("Computing and applying constrained state", task_timer, {
+        constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
+    });
+
+    instrument_task!("Advancing dynamic rigid body configurations", task_timer, {
+        rigid_body_manager.advance_dynamic_rigid_body_configurations(step_duration);
+    });
+
+    instrument_task!(
+        "Advancing kinematic rigid body configurations",
+        task_timer,
+        {
+            // We really only want to advance non-driven kinematic bodies, but since
+            // the bodies with a motion driver will have their state overwritten
+            // when we call `apply_motion` anyway, we advance all kinematic bodies
+            // here for simplicity
+            rigid_body_manager.advance_kinematic_rigid_body_configurations(step_duration);
+        }
     );
 
-    rigid_body_manager.advance_dynamic_rigid_body_momenta(step_duration);
+    instrument_task!("Applying motion", task_timer, {
+        motion_driver_manager.apply_motion(rigid_body_manager, new_simulation_time);
+    });
 
-    constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
-
-    rigid_body_manager.advance_dynamic_rigid_body_configurations(step_duration);
-
-    // We really only want to advance non-driven kinematic bodies, but since
-    // the bodies with a motion driver will have their state overwritten
-    // when we call `apply_motion` anyway, we advance all kinematic bodies
-    // here for simplicity
-    rigid_body_manager.advance_kinematic_rigid_body_configurations(step_duration);
-
-    motion_driver_manager.apply_motion(rigid_body_manager, new_simulation_time);
-
-    force_generator_manager.apply_forces_and_torques(medium, rigid_body_manager, anchor_manager);
+    instrument_task!("Applying forces and torques", task_timer, {
+        force_generator_manager.apply_forces_and_torques(
+            medium,
+            rigid_body_manager,
+            anchor_manager,
+        );
+    });
 }

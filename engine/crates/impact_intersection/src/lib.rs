@@ -83,11 +83,13 @@ impl IntersectionManager {
             .for_each_bounding_volume_in_axis_aligned_box(axis_aligned_box, f);
     }
 
-    pub fn for_each_intersecting_bounding_volume_pair(
+    pub fn for_each_intersecting_bounding_volume_pair<R>(
         &self,
-        f: impl FnMut(BoundingVolumeID, BoundingVolumeID),
+        filter_map_first: impl FnMut(BoundingVolumeID) -> Option<R>,
+        process_intersection: impl FnMut(&R, BoundingVolumeID),
     ) {
-        self.bvh.for_each_intersecting_bounding_volume_pair(f);
+        self.bvh
+            .for_each_intersecting_bounding_volume_pair(filter_map_first, process_intersection);
     }
 
     pub fn reset_bounding_volume_hierarchy(&mut self) {
