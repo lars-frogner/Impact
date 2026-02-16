@@ -23,6 +23,7 @@ import pf.Entity
 
 import pf.Comp.RemovalBeyondDistance
 import pf.Comp.ParentEntity
+import pf.Comp.CanBeParent
 import pf.Setup.CylinderMesh
 import pf.Setup.SphereMesh
 import pf.Setup.UniformColor
@@ -49,12 +50,16 @@ import Util
 
 ToolEntities : {
     laser : Entity.ComponentData,
+    laser_model : Entity.ComponentData,
     absorber : Entity.ComponentData,
+    absorber_model : Entity.ComponentData,
 }
 
 ToolEntityIds : {
     laser : Entity.Id,
+    laser_model : Entity.Id,
     absorber : Entity.Id,
+    absorber_model : Entity.Id,
 }
 
 thruster = {
@@ -103,10 +108,12 @@ projectile = {
 
 spawn! : ToolEntityIds, Entity.Id => Result {} Str
 spawn! = |entity_ids, parent|
-    ents = construct_entities(parent)
+    ents = construct_entities(entity_ids, parent)
 
     Entity.create_with_id!(ents.laser, entity_ids.laser)?
+    Entity.create_with_id!(ents.laser_model, entity_ids.laser_model)?
     Entity.create_with_id!(ents.absorber, entity_ids.absorber)?
+    Entity.create_with_id!(ents.absorber_model, entity_ids.absorber_model)?
 
     Command.execute!(Game(SetLauncherLaunchSpeed(launcher.initial_launch_speed)))?
 
@@ -184,14 +191,12 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
 
     Ok(reaction_impulse)
 
-construct_entities : Entity.Id -> ToolEntities
-construct_entities = |parent|
+construct_entities : ToolEntityIds, Entity.Id -> ToolEntities
+construct_entities = |entity_ids, parent|
     laser_ent =
         Entity.new_component_data
+        |> Comp.CanBeParent.add
         |> Comp.ParentEntity.add(parent)
-        |> Setup.CylinderMesh.add_new(laser.range, 2 * laser.visual_radius, 16)
-        |> Setup.UniformColor.add(laser.color)
-        |> Setup.UniformEmissiveLuminance.add(laser.emissive_luminance)
         |> Comp.ReferenceFrame.add_new(
             (laser.right_shift, -laser.down_shift, 0.0),
             UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
@@ -201,6 +206,15 @@ construct_entities = |parent|
             (0, laser.range, 0),
             laser.absorb_radius,
         )
+        |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
+
+    laser_model_ent =
+        Entity.new_component_data
+        |> Comp.ParentEntity.add(entity_ids.laser)
+        |> Setup.CylinderMesh.add_new(laser.range, 2 * laser.visual_radius, 16)
+        |> Setup.UniformColor.add(laser.color)
+        |> Setup.UniformEmissiveLuminance.add(laser.emissive_luminance)
+        |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.SceneEntityFlags.add(
             Comp.SceneEntityFlags.union(
                 Comp.SceneEntityFlags.is_disabled,
@@ -210,15 +224,8 @@ construct_entities = |parent|
 
     absorber_ent =
         Entity.new_component_data
+        |> Comp.CanBeParent.add
         |> Comp.ParentEntity.add(parent)
-        |> Setup.SphereMesh.add_new(64)
-        |> Setup.UniformColor.add(absorber.color)
-        |> Setup.UniformEmissiveLuminance.add(absorber.emissive_luminance)
-        |> Comp.ShadowableOmnidirectionalEmission.add_new(
-            Vector3.scale(absorber.light_color, absorber.luminous_intensity),
-            2 * absorber.visual_radius,
-        )
-        |> Comp.ModelTransform.add_with_scale(2 * absorber.visual_radius)
         |> Comp.ReferenceFrame.add_unoriented((0, 0, -absorber.forward_shift))
         |> Setup.VoxelAbsorbingCapsule.add_new(
             (0, 0, 0),
@@ -227,4 +234,23 @@ construct_entities = |parent|
         )
         |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 
-    { laser: laser_ent, absorber: absorber_ent }
+    absorber_model_ent =
+        Entity.new_component_data
+        |> Comp.ParentEntity.add(entity_ids.absorber)
+        |> Setup.SphereMesh.add_new(64)
+        |> Setup.UniformColor.add(absorber.color)
+        |> Setup.UniformEmissiveLuminance.add(absorber.emissive_luminance)
+        |> Comp.ShadowableOmnidirectionalEmission.add_new(
+            Vector3.scale(absorber.light_color, absorber.luminous_intensity),
+            2 * absorber.visual_radius,
+        )
+        |> Comp.ModelTransform.add_with_scale(2 * absorber.visual_radius)
+        |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
+        |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
+
+    {
+        laser: laser_ent,
+        laser_model: laser_model_ent,
+        absorber: absorber_ent,
+        absorber_model: absorber_model_ent,
+    }

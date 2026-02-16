@@ -30,7 +30,9 @@ entity_ids = {
     camera: Entity.id("free_camera"),
     tools: {
         laser: Entity.id("free_camera_laser"),
+        laser_model: Entity.id("free_camera_laser_model"),
         absorber: Entity.id("free_camera_absorber"),
+        absorber_model: Entity.id("free_camera_absorber_model"),
     },
 }
 
