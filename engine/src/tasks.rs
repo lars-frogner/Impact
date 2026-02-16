@@ -1021,6 +1021,7 @@ define_task!(
             let resource_manager = engine.resource_manager().oread();
             let scene = engine.scene().oread();
             let mut voxel_manager = scene.voxel_manager().owrite();
+            let intersection_manager = scene.intersection_manager().oread();
             let scene_graph = scene.scene_graph().oread();
             let simulator = engine.simulator().oread();
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
@@ -1036,6 +1037,7 @@ define_task!(
                 &scene_graph,
                 &mut voxel_manager,
                 &resource_manager.voxel_types,
+                &intersection_manager,
                 &mut rigid_body_manager,
                 &mut anchor_manager,
                 &force_generator_manager,

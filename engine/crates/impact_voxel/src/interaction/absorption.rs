@@ -1,7 +1,7 @@
 //! Voxel absorption.
 
 use crate::{
-    Voxel, VoxelManager, VoxelObjectID, VoxelObjectPhysicsContext,
+    Voxel, VoxelManager, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{
         self, DynamicDisconnectedVoxelObject, VoxelObjectInteractionContext, VoxelRemovalOutcome,
@@ -11,17 +11,21 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashMap;
 use impact_geometry::{CapsuleC, SphereC};
 use impact_id::{EntityID, EntityIDManager, define_entity_id_newtype};
-use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3C};
+use impact_intersection::IntersectionManager;
+use impact_math::{
+    point::Point3C,
+    transform::Isometry3,
+    vector::{Vector3, Vector3C},
+};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchor},
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use roc_integration::roc;
-use std::mem;
+use tinyvec::TinyVec;
 
 define_entity_id_newtype! {
     /// Identifier for a [`VoxelAbsorbingSphere`].
@@ -139,6 +143,11 @@ impl VoxelAbsorbingSphere {
         Self { offset, radius }
     }
 
+    /// Returns the sphere in the reference frame of the entity.
+    pub fn sphere(&self) -> SphereC {
+        SphereC::new(Point3C::from(self.offset), self.radius)
+    }
+
     /// Returns the sphere of influence in the reference frame of the entity.
     ///
     /// The sphere of influence is slightly larger than the absorbing sphere in
@@ -183,6 +192,15 @@ impl VoxelAbsorbingCapsule {
             segment_vector,
             radius,
         }
+    }
+
+    /// Returns the capsule in the reference frame of the entity.
+    pub fn capsule(&self) -> CapsuleC {
+        CapsuleC::new(
+            Point3C::from(self.offset_to_segment_start),
+            self.segment_vector,
+            self.radius,
+        )
     }
 
     /// Returns the capsule of influence in the reference frame of the entity.
@@ -373,6 +391,7 @@ pub fn apply_absorption<C>(
     entity_id_manager: &mut EntityIDManager,
     voxel_manager: &mut VoxelManager,
     voxel_type_registry: &VoxelTypeRegistry,
+    intersection_manager: &IntersectionManager,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
 ) where
@@ -384,111 +403,128 @@ pub fn apply_absorption<C>(
     let absorbing_sphere_entities = context.gather_voxel_absorbing_sphere_entities();
     let absorbing_capsule_entities = context.gather_voxel_absorbing_capsule_entities();
 
-    let mut enabled_count = 0;
+    let mut affected_voxel_objects = TinyVec::<[(EntityID, Vector3); 16]>::new();
 
     for entity in &absorbing_sphere_entities {
         let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity.entity_id);
-        if let Some(sphere) = voxel_absorption_manager.get_absorbing_sphere_mut(absorber_id) {
-            sphere.tracker.clear_absorbed();
-
-            if entity.sphere_to_world_transform.is_some() {
-                enabled_count += 1;
-            }
-        }
-    }
-    for entity in &absorbing_capsule_entities {
-        let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity.entity_id);
-        if let Some(capsule) = voxel_absorption_manager.get_absorbing_capsule_mut(absorber_id) {
-            capsule.tracker.clear_absorbed();
-
-            if entity.capsule_to_world_transform.is_some() {
-                enabled_count += 1;
-            }
-        }
-    }
-
-    if enabled_count == 0 {
-        return;
-    }
-
-    let arena = ArenaPool::get_arena_for_capacity(
-        voxel_object_manager.voxel_object_count() * mem::size_of::<EntityID>(),
-    );
-    let mut voxel_object_entities =
-        AVec::with_capacity_in(voxel_object_manager.voxel_object_count(), &arena);
-
-    context.gather_voxel_object_entities(&mut voxel_object_entities);
-
-    for entity_id in voxel_object_entities {
-        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
-        let Some((voxel_object, physics_context)) =
-            voxel_object_manager.get_voxel_object_with_physics_context_mut(voxel_object_id)
+        let Some(absorbing_sphere) = voxel_absorption_manager.get_absorbing_sphere_mut(absorber_id)
         else {
             continue;
         };
-        let voxel_object = voxel_object.object_mut();
+        absorbing_sphere.tracker.clear_absorbed();
 
-        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
-        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) else {
-            log::warn!("Voxel object physics context points to missing dynamic rigid body");
-            return;
+        let Some(sphere_to_world_transform) = &entity.sphere_to_world_transform else {
+            continue;
         };
 
-        let local_center_of_mass = physics_context
-            .inertial_property_manager
-            .derive_center_of_mass();
+        let sphere = absorbing_sphere
+            .sphere
+            .sphere()
+            .aligned()
+            .iso_transformed(sphere_to_world_transform);
 
-        let voxel_object_to_world_transform = rigid_body
-            .reference_frame()
-            .create_transform_to_parent_space()
-            .applied_to_translation(&(-local_center_of_mass));
+        let aabb = sphere.compute_aabb();
 
-        let world_to_voxel_object_transform = voxel_object_to_world_transform.inverted();
-
-        let mut inertial_property_updater = physics_context.inertial_property_manager.begin_update(
-            voxel_object.voxel_extent(),
-            voxel_type_registry.mass_densities(),
+        intersection_manager.for_each_bounding_volume_in_axis_aligned_box(
+            &aabb,
+            |bounding_volume_id| {
+                let object_entity_id = bounding_volume_id.as_entity_id();
+                with_potential_voxel_object(
+                    voxel_object_manager,
+                    voxel_type_registry,
+                    rigid_body_manager,
+                    object_entity_id,
+                    |inertial_property_updater,
+                     voxel_object,
+                     local_center_of_mass,
+                     world_to_voxel_object_transform| {
+                        apply_sphere_absorption(
+                            inertial_property_updater,
+                            voxel_object,
+                            &world_to_voxel_object_transform,
+                            absorbing_sphere,
+                            sphere_to_world_transform,
+                        );
+                        if !affected_voxel_objects
+                            .iter()
+                            .any(|(id, _)| *id == object_entity_id)
+                        {
+                            affected_voxel_objects.push((object_entity_id, local_center_of_mass));
+                        }
+                    },
+                );
+            },
         );
+    }
 
-        for entity in &absorbing_sphere_entities {
-            let Some(sphere_to_world_transform) = &entity.sphere_to_world_transform else {
-                continue;
-            };
-            let absorber_id = VoxelAbsorbingSphereID::from_entity_id(entity.entity_id);
-            let Some(tracking_absorbing_sphere) =
-                voxel_absorption_manager.get_absorbing_sphere_mut(absorber_id)
-            else {
-                continue;
-            };
-            apply_sphere_absorption(
-                &mut inertial_property_updater,
-                voxel_object,
-                &world_to_voxel_object_transform,
-                tracking_absorbing_sphere,
-                sphere_to_world_transform,
-            );
-        }
+    for entity in &absorbing_capsule_entities {
+        let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity.entity_id);
+        let Some(absorbing_capsule) =
+            voxel_absorption_manager.get_absorbing_capsule_mut(absorber_id)
+        else {
+            continue;
+        };
+        absorbing_capsule.tracker.clear_absorbed();
 
-        for entity in &absorbing_capsule_entities {
-            let Some(capsule_to_world_transform) = &entity.capsule_to_world_transform else {
-                continue;
-            };
-            let absorber_id = VoxelAbsorbingCapsuleID::from_entity_id(entity.entity_id);
-            let Some(tracking_absorbing_capsule) =
-                voxel_absorption_manager.get_absorbing_capsule_mut(absorber_id)
-            else {
-                continue;
-            };
-            apply_capsule_absorption(
-                &mut inertial_property_updater,
-                voxel_object,
-                &world_to_voxel_object_transform,
-                tracking_absorbing_capsule,
-                capsule_to_world_transform,
-            );
-        }
+        let Some(capsule_to_world_transform) = &entity.capsule_to_world_transform else {
+            continue;
+        };
+
+        let capsule = absorbing_capsule
+            .capsule
+            .capsule()
+            .aligned()
+            .iso_transformed(capsule_to_world_transform);
+
+        let aabb = capsule.compute_aabb();
+
+        intersection_manager.for_each_bounding_volume_in_axis_aligned_box(
+            &aabb,
+            |bounding_volume_id| {
+                let object_entity_id = bounding_volume_id.as_entity_id();
+                with_potential_voxel_object(
+                    voxel_object_manager,
+                    voxel_type_registry,
+                    rigid_body_manager,
+                    object_entity_id,
+                    |inertial_property_updater,
+                     voxel_object,
+                     local_center_of_mass,
+                     world_to_voxel_object_transform| {
+                        apply_capsule_absorption(
+                            inertial_property_updater,
+                            voxel_object,
+                            &world_to_voxel_object_transform,
+                            absorbing_capsule,
+                            capsule_to_world_transform,
+                        );
+                        if !affected_voxel_objects
+                            .iter()
+                            .any(|(id, _)| *id == object_entity_id)
+                        {
+                            affected_voxel_objects.push((object_entity_id, local_center_of_mass));
+                        }
+                    },
+                );
+            },
+        );
+    }
+
+    for (entity_id, original_local_center_of_mass) in affected_voxel_objects {
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+
+        let (voxel_object, physics_context) = voxel_object_manager
+            .get_voxel_object_with_physics_context_mut(voxel_object_id)
+            .unwrap();
+
+        let voxel_object = voxel_object.object_mut();
 
         if voxel_object.invalidated_mesh_chunk_indices().len() > 0 {
+            let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+            let rigid_body = rigid_body_manager
+                .get_dynamic_rigid_body_mut(rigid_body_id)
+                .unwrap();
+
             let VoxelRemovalOutcome {
                 original_object_empty,
                 disconnected_object,
@@ -499,7 +535,7 @@ pub fn apply_absorption<C>(
                 &mut physics_context.inertial_property_manager,
                 rigid_body_id,
                 rigid_body,
-                local_center_of_mass,
+                original_local_center_of_mass,
             );
 
             if original_object_empty {
@@ -550,6 +586,58 @@ pub fn apply_absorption<C>(
             }
         }
     }
+}
+
+fn with_potential_voxel_object(
+    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_type_registry: &VoxelTypeRegistry,
+    rigid_body_manager: &mut RigidBodyManager,
+    entity_id: EntityID,
+    mut f: impl FnMut(
+        &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
+        &mut ChunkedVoxelObject,
+        Vector3,
+        Isometry3,
+    ),
+) {
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+
+    let Some((voxel_object, physics_context)) =
+        voxel_object_manager.get_voxel_object_with_physics_context_mut(voxel_object_id)
+    else {
+        return;
+    };
+
+    let voxel_object = voxel_object.object_mut();
+
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+    let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id) else {
+        log::warn!("Voxel object physics context points to missing dynamic rigid body");
+        return;
+    };
+
+    let local_center_of_mass = physics_context
+        .inertial_property_manager
+        .derive_center_of_mass();
+
+    let voxel_object_to_world_transform = rigid_body
+        .reference_frame()
+        .create_transform_to_parent_space()
+        .applied_to_translation(&(-local_center_of_mass));
+
+    let world_to_voxel_object_transform = voxel_object_to_world_transform.inverted();
+
+    let mut inertial_property_updater = physics_context.inertial_property_manager.begin_update(
+        voxel_object.voxel_extent(),
+        voxel_type_registry.mass_densities(),
+    );
+
+    f(
+        &mut inertial_property_updater,
+        voxel_object,
+        local_center_of_mass,
+        world_to_voxel_object_transform,
+    );
 }
 
 fn apply_sphere_absorption(

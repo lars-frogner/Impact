@@ -14,7 +14,6 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::VoxelAbsorptionManager;
-use impact_alloc::{AVec, Allocator};
 use impact_geometry::ModelTransform;
 use impact_id::EntityID;
 use impact_intersection::bounding_volume::{
@@ -34,9 +33,6 @@ use tinyvec::TinyVec;
 /// handling the lifecycle of voxel objects during interactions like voxel
 /// absorption.
 pub trait VoxelObjectInteractionContext {
-    /// Gathers all voxel object entities that may participate in interactions.
-    fn gather_voxel_object_entities<A: Allocator>(&mut self, entity_ids: &mut AVec<EntityID, A>);
-
     /// Gathers all active voxel-absorbing sphere entities.
     fn gather_voxel_absorbing_sphere_entities(
         &mut self,

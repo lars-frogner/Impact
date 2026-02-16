@@ -10,7 +10,6 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
-use impact_alloc::{AVec, Allocator};
 use impact_ecs::{
     component::{ComponentArray, ComponentFlags, ComponentStorage},
     metadata::ComponentMetadataRegistry,
@@ -19,7 +18,7 @@ use impact_ecs::{
 };
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::{EntityID, EntityIDManager};
-use impact_intersection::bounding_volume::BoundingVolumeManager;
+use impact_intersection::{IntersectionManager, bounding_volume::BoundingVolumeManager};
 use impact_model::HasModel;
 use impact_physics::{
     anchor::AnchorManager,
@@ -50,19 +49,6 @@ pub struct ECSVoxelObjectInteractionContext<'a> {
 }
 
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
-    fn gather_voxel_object_entities<A: Allocator>(&mut self, entity_ids: &mut AVec<EntityID, A>) {
-        query!(
-            self.ecs_world,
-            |entity_id: EntityID, flags: &SceneEntityFlags| {
-                if flags.is_disabled() {
-                    return;
-                }
-                entity_ids.push(entity_id);
-            },
-            [HasVoxelObject, HasDynamicRigidBody] // We only let dynamic voxel objects participate in interactions
-        );
-    }
-
     fn gather_voxel_absorbing_sphere_entities(
         &mut self,
     ) -> TinyVec<[VoxelAbsorbingSphereEntity; 4]> {
@@ -293,6 +279,7 @@ pub fn apply_absorption(
     scene_graph: &SceneGraph,
     voxel_manager: &mut VoxelManager,
     voxel_type_registry: &VoxelTypeRegistry,
+    intersection_manager: &IntersectionManager,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &ForceGeneratorManager,
@@ -312,6 +299,7 @@ pub fn apply_absorption(
         entity_id_manager,
         voxel_manager,
         voxel_type_registry,
+        intersection_manager,
         rigid_body_manager,
         anchor_manager,
     );
