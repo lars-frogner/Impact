@@ -317,6 +317,26 @@ path = "src/bin/impact.rs"
 required-features = ["cli"]
 
 [[bench]]
+name = "vector"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
+name = "matrix"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
+name = "quaternion"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
+name = "isometry"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
 name = "model"
 harness = false
 required-features = ["criterion"]

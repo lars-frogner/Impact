@@ -1,4 +1,6 @@
-use crate::quaternion::{Quaternion, QuaternionC};
+//! Benchmarks for quaternions.
+
+use impact_math::quaternion::{Quaternion, QuaternionC};
 use impact_profiling::benchmark::Benchmarker;
 
 pub fn unpack_quaternion(benchmarker: impl Benchmarker) {

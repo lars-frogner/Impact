@@ -1,4 +1,4 @@
-use impact_math::benchmark::benchmarks::quaternion;
+use impact::benchmark::benchmarks::quaternion;
 use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(quaternion, unpack_quaternion);

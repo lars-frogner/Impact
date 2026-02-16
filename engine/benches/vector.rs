@@ -1,4 +1,4 @@
-use impact_math::benchmark::benchmarks::vector;
+use impact::benchmark::benchmarks::vector;
 use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(vector, unpack_vector3);

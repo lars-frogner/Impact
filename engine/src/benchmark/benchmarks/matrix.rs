@@ -1,4 +1,6 @@
-use crate::matrix::{Matrix3, Matrix3C, Matrix4, Matrix4C};
+//! Benchmarks for matrices.
+
+use impact_math::matrix::{Matrix3, Matrix3C, Matrix4, Matrix4C};
 use impact_profiling::benchmark::Benchmarker;
 
 pub fn unpack_matrix3(benchmarker: impl Benchmarker) {

@@ -1,4 +1,4 @@
-use impact_math::benchmark::benchmarks::isometry;
+use impact::benchmark::benchmarks::isometry;
 use impact_profiling::{benchmark::criterion, define_criterion_target};
 
 define_criterion_target!(isometry, unpack_isometry);

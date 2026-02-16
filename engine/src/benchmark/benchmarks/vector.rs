@@ -1,4 +1,6 @@
-use crate::vector::{Vector3, Vector3C, Vector4, Vector4C};
+//! Benchmarks for vectors.
+
+use impact_math::vector::{Vector3, Vector3C, Vector4, Vector4C};
 use impact_profiling::benchmark::Benchmarker;
 
 pub fn unpack_vector3(benchmarker: impl Benchmarker) {
