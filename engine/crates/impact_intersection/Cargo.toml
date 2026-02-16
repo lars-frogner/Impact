@@ -6,11 +6,14 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [features]
+arbitrary = ["dep:arbitrary"]
 ecs = ["dep:inventory", "dep:impact_ecs"]
+fuzzing = ["arbitrary"]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 
 [dependencies]
 anyhow = { workspace = true }
+arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }

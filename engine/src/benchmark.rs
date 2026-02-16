@@ -94,7 +94,17 @@ impact_profiling::define_target_enum! {
     lookup_table => {
         compute_specular_ggx_reflectance,
         compute_black_body_luminance,
-    }
+    },
+    bvh => {
+        build_non_overlapping,
+        build_fully_overlapping,
+        build_grid_distributed,
+        build_varying_size,
+        build_stratified_random,
+        query_small_aabb,
+        query_medium_aabb,
+        query_full_aabb,
+    },
 }
 
 pub fn benchmark(target: Target, duration: f64, delay: f64) {
