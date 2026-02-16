@@ -65,15 +65,6 @@ impl IntersectionManager {
         self.bvh.root_bounding_volume()
     }
 
-    pub fn for_each_bounding_volume_maybe_in_frustum(
-        &self,
-        frustum: &Frustum,
-        f: impl FnMut(BoundingVolumeID),
-    ) {
-        self.bvh
-            .for_each_bounding_volume_maybe_in_frustum(frustum, f);
-    }
-
     pub fn for_each_bounding_volume_in_axis_aligned_box(
         &self,
         axis_aligned_box: &AxisAlignedBox,
@@ -81,6 +72,15 @@ impl IntersectionManager {
     ) {
         self.bvh
             .for_each_bounding_volume_in_axis_aligned_box(axis_aligned_box, f);
+    }
+
+    pub fn for_each_bounding_volume_maybe_in_frustum(
+        &self,
+        frustum: &Frustum,
+        f: impl FnMut(BoundingVolumeID),
+    ) {
+        self.bvh
+            .for_each_bounding_volume_maybe_in_frustum(frustum, f);
     }
 
     pub fn for_each_intersecting_bounding_volume_pair<R>(

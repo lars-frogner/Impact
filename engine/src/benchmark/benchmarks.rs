@@ -1,5 +1,6 @@
 //! Benchmarks.
 
+pub mod bvh;
 pub mod constraint;
 pub mod generation;
 pub mod isometry;
