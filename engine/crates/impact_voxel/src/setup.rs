@@ -15,11 +15,9 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::Allocator;
-use impact_geometry::{ModelTransform, ReferenceFrame};
+use impact_geometry::{AxisAlignedBoxC, ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
-use impact_intersection::bounding_volume::{
-    AxisAlignedBoundingBoxC, BoundingVolumeID, BoundingVolumeManager,
-};
+use impact_intersection::bounding_volume::{BoundingVolumeID, BoundingVolumeManager};
 use impact_math::{hash::Hash32, point::Point3C, vector::Vector3C};
 use impact_model::{
     InstanceFeature, ModelInstanceID,
@@ -616,7 +614,7 @@ pub fn setup_bounding_volume_for_voxel_object(
         .object();
 
     let aabb = if voxel_object.contains_only_empty_voxels() {
-        AxisAlignedBoundingBoxC::new(Point3C::origin(), Point3C::origin())
+        AxisAlignedBoxC::new(Point3C::origin(), Point3C::origin())
     } else {
         voxel_object.compute_aabb().compact()
     };

@@ -9,10 +9,8 @@ use anyhow::Result;
 use bounding_volume::{
     BoundingVolumeID, BoundingVolumeManager, hierarchy::BoundingVolumeHierarchy,
 };
-use impact_geometry::{AxisAlignedBox, Frustum};
+use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum};
 use impact_math::transform::Similarity3;
-
-use crate::bounding_volume::AxisAlignedBoundingBox;
 
 #[derive(Debug)]
 pub struct IntersectionManager {
@@ -61,7 +59,7 @@ impl IntersectionManager {
         self.bvh.build();
     }
 
-    pub fn total_bounding_volume(&self) -> AxisAlignedBoundingBox {
+    pub fn total_bounding_volume(&self) -> AxisAlignedBoxC {
         self.bvh.root_bounding_volume()
     }
 
@@ -83,13 +81,11 @@ impl IntersectionManager {
             .for_each_bounding_volume_maybe_in_frustum(frustum, f);
     }
 
-    pub fn for_each_intersecting_bounding_volume_pair<R>(
+    pub fn for_each_intersecting_bounding_volume_pair(
         &self,
-        filter_map_first: impl FnMut(BoundingVolumeID) -> Option<R>,
-        process_intersection: impl FnMut(&R, BoundingVolumeID),
+        f: impl FnMut(BoundingVolumeID, BoundingVolumeID),
     ) {
-        self.bvh
-            .for_each_intersecting_bounding_volume_pair(filter_map_first, process_intersection);
+        self.bvh.for_each_intersecting_bounding_volume_pair(f);
     }
 
     pub fn reset_bounding_volume_hierarchy(&mut self) {

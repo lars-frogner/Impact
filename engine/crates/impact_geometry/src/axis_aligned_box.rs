@@ -17,9 +17,10 @@ use impact_math::{
 /// That leads to an 8 extra bytes in size (4 per corner) and 16-byte alignment.
 /// For cache-friendly storage, prefer the compact 4-byte aligned
 /// [`AxisAlignedBoxC`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct AxisAlignedBox {
-    corners: [Point3; 2],
+    lower_corner: Point3,
+    upper_corner: Point3,
 }
 
 /// A box with orientation aligned with the coordinate system axes. The width,
@@ -29,7 +30,7 @@ pub struct AxisAlignedBox {
 /// This type only supports a few basic operations, as is primarily intended for
 /// compact storage inside other types and collections. For computations, prefer
 /// the SIMD-friendly 16-byte aligned [`AxisAlignedBox`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct AxisAlignedBoxC {
     lower_corner: Point3C,
     upper_corner: Point3C,
@@ -59,7 +60,8 @@ impl AxisAlignedBox {
     #[inline]
     pub fn new(lower_corner: Point3, upper_corner: Point3) -> Self {
         Self {
-            corners: [lower_corner, upper_corner],
+            lower_corner,
+            upper_corner,
         }
     }
 
@@ -132,13 +134,13 @@ impl AxisAlignedBox {
     /// Returns a reference to the lower corner of the box.
     #[inline]
     pub fn lower_corner(&self) -> &Point3 {
-        &self.corners[0]
+        &self.lower_corner
     }
 
     /// Returns a reference to the upper corner of the box.
     #[inline]
     pub fn upper_corner(&self) -> &Point3 {
-        &self.corners[1]
+        &self.upper_corner
     }
 
     /// Calculates and returns the center point of the box.
@@ -159,6 +161,12 @@ impl AxisAlignedBox {
         0.5 * self.extents()
     }
 
+    /// Returns the volume of the box.
+    #[inline]
+    pub fn volume(&self) -> f32 {
+        self.extents().component_product()
+    }
+
     /// Returns an array with all the eight corners of the box. The corners are
     /// ordered from smaller to larger coordinates, with the z-component varying
     /// fastest.
@@ -175,11 +183,12 @@ impl AxisAlignedBox {
     /// If the given index exceeds 7.
     #[inline]
     pub fn corner(&self, corner_idx: usize) -> Point3 {
+        let corners = [self.lower_corner(), self.upper_corner()];
         let corner_components = &ALL_CORNER_COMPONENTS[corner_idx];
         Point3::new(
-            self.corners[corner_components[0] as usize].x(),
-            self.corners[corner_components[1] as usize].y(),
-            self.corners[corner_components[2] as usize].z(),
+            corners[corner_components[0] as usize].x(),
+            corners[corner_components[1] as usize].y(),
+            corners[corner_components[2] as usize].z(),
         )
     }
 
@@ -444,21 +453,24 @@ impl AxisAlignedBox {
 
         let mut fitted = self.clone();
 
+        let corners = [self.lower_corner(), self.upper_corner()];
+        let fitted_corners = [&mut fitted.lower_corner, &mut fitted.upper_corner];
+
         for (i, j, k) in [(0, 1, 2), (1, 2, 0), (2, 0, 1)] {
             if normal[k].abs() > TOLERANCE {
-                let a = normal[i] * self.corners[0][i] + normal[j] * self.corners[0][j];
-                let b = normal[i] * self.corners[0][i] + normal[j] * self.corners[1][j];
-                let c = normal[i] * self.corners[1][i] + normal[j] * self.corners[0][j];
-                let d = normal[i] * self.corners[1][i] + normal[j] * self.corners[1][j];
+                let a = normal[i] * corners[0][i] + normal[j] * corners[0][j];
+                let b = normal[i] * corners[0][i] + normal[j] * corners[1][j];
+                let c = normal[i] * corners[1][i] + normal[j] * corners[0][j];
+                let d = normal[i] * corners[1][i] + normal[j] * corners[1][j];
 
                 let extremal = (plane.displacement() - a.min(b).min(c).min(d)) / normal[k];
 
                 if normal[k].is_sign_positive() {
-                    fitted.corners[0][k] = fitted.corners[0][k].min(extremal);
-                    fitted.corners[1][k] = fitted.corners[1][k].min(extremal);
+                    fitted_corners[0][k] = fitted_corners[0][k].min(extremal);
+                    fitted_corners[1][k] = fitted_corners[1][k].min(extremal);
                 } else {
-                    fitted.corners[0][k] = fitted.corners[0][k].max(extremal);
-                    fitted.corners[1][k] = fitted.corners[1][k].max(extremal);
+                    fitted_corners[0][k] = fitted_corners[0][k].max(extremal);
+                    fitted_corners[1][k] = fitted_corners[1][k].max(extremal);
                 }
             }
         }
@@ -496,6 +508,15 @@ impl AxisAlignedBoxC {
         }
     }
 
+    /// Creates the axis-aligned box bounding both the given axis-aligned boxes.
+    #[inline]
+    pub fn aabb_from_pair(aabb_1: &Self, aabb_2: &Self) -> Self {
+        Self::new(
+            aabb_1.lower_corner().min_with(aabb_2.lower_corner()),
+            aabb_1.upper_corner().max_with(aabb_2.upper_corner()),
+        )
+    }
+
     /// Returns a reference to the lower corner of the box.
     #[inline]
     pub const fn lower_corner(&self) -> &Point3C {
@@ -518,6 +539,41 @@ impl AxisAlignedBoxC {
     #[inline]
     pub fn half_extents(&self) -> Vector3C {
         0.5 * self.extents()
+    }
+
+    /// Returns the volume of the box.
+    #[inline]
+    pub fn volume(&self) -> f32 {
+        self.extents().component_product()
+    }
+
+    /// Returns the box corner with the given index. The corners are ordered
+    /// from smaller to larger coordinates, with the z-component varying
+    /// fastest.
+    ///
+    /// # Panics
+    /// If the given index exceeds 7.
+    #[inline]
+    pub fn corner(&self, corner_idx: usize) -> Point3C {
+        let corners = [self.lower_corner(), self.upper_corner()];
+        let corner_components = &ALL_CORNER_COMPONENTS[corner_idx];
+        Point3C::new(
+            corners[corner_components[0] as usize].x(),
+            corners[corner_components[1] as usize].y(),
+            corners[corner_components[2] as usize].z(),
+        )
+    }
+
+    /// Whether all of the given axis-aligned box is outside this box. If the
+    /// boundaries exactly touch each other, the box is considered inside.
+    #[inline]
+    pub fn box_lies_outside(&self, other: &Self) -> bool {
+        !((self.lower_corner().x() <= other.upper_corner().x()
+            && self.upper_corner().x() >= other.lower_corner().x())
+            && (self.lower_corner().y() <= other.upper_corner().y()
+                && self.upper_corner().y() >= other.lower_corner().y())
+            && (self.lower_corner().z() <= other.upper_corner().z()
+                && self.upper_corner().z() >= other.lower_corner().z()))
     }
 
     /// Converts the box to the 16-byte aligned SIMD-friendly
@@ -580,6 +636,20 @@ mod tests {
         let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
         let aabb2 = AxisAlignedBox::new(Point3::new(0.5, 0.5, 0.5), Point3::new(1.5, 1.5, 1.5));
         assert!(!aabb1.box_lies_outside(&aabb2));
+    }
+
+    #[test]
+    fn box_lies_outside_with_degenerate_box_works() {
+        let aabb1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let aabb2 = AxisAlignedBox::new(Point3::new(0.5, 0.5, 0.5), Point3::new(0.5, 0.5, 0.5));
+        assert!(!aabb2.box_lies_outside(&aabb1));
+    }
+
+    #[test]
+    fn box_lies_outside_with_crossing_collapsed_boxes_works() {
+        let aabb1 = AxisAlignedBox::new(Point3::new(-0.5, 0.0, 0.0), Point3::new(0.5, 0.0, 0.0));
+        let aabb2 = AxisAlignedBox::new(Point3::new(0.0, -0.5, 0.0), Point3::new(0.0, 0.5, 0.0));
+        assert!(!aabb2.box_lies_outside(&aabb1));
     }
 
     #[test]
@@ -739,12 +809,12 @@ mod tests {
         let projected = aabb.projected_onto_negative_halfspace(&plane);
 
         // The projection should reduce the box size while preserving volume in negative halfspace
-        assert!(projected.corners[0].x() >= aabb.corners[0].x());
-        assert!(projected.corners[0].y() >= aabb.corners[0].y());
-        assert!(projected.corners[1].x() <= aabb.corners[1].x());
-        assert!(projected.corners[1].y() <= aabb.corners[1].y());
-        assert_abs_diff_eq!(projected.corners[0].z(), aabb.corners[0].z());
-        assert_abs_diff_eq!(projected.corners[1].z(), aabb.corners[1].z());
+        assert!(projected.lower_corner().x() >= aabb.lower_corner().x());
+        assert!(projected.lower_corner().y() >= aabb.lower_corner().y());
+        assert!(projected.upper_corner().x() <= aabb.upper_corner().x());
+        assert!(projected.upper_corner().y() <= aabb.upper_corner().y());
+        assert_abs_diff_eq!(projected.lower_corner().z(), aabb.lower_corner().z());
+        assert_abs_diff_eq!(projected.upper_corner().z(), aabb.upper_corner().z());
     }
 
     #[test]
@@ -755,14 +825,14 @@ mod tests {
         let projected = aabb.projected_onto_negative_halfspace(&plane);
 
         // X and Y dimensions should be unchanged
-        assert_abs_diff_eq!(projected.corners[0].x(), aabb.corners[0].x());
-        assert_abs_diff_eq!(projected.corners[0].y(), aabb.corners[0].y());
-        assert_abs_diff_eq!(projected.corners[1].x(), aabb.corners[1].x());
-        assert_abs_diff_eq!(projected.corners[1].y(), aabb.corners[1].y());
+        assert_abs_diff_eq!(projected.lower_corner().x(), aabb.lower_corner().x());
+        assert_abs_diff_eq!(projected.lower_corner().y(), aabb.lower_corner().y());
+        assert_abs_diff_eq!(projected.upper_corner().x(), aabb.upper_corner().x());
+        assert_abs_diff_eq!(projected.upper_corner().y(), aabb.upper_corner().y());
 
         // Z dimension should be clipped
-        assert_abs_diff_eq!(projected.corners[0].z(), aabb.corners[0].z());
-        assert_abs_diff_eq!(projected.corners[1].z(), 2.0);
+        assert_abs_diff_eq!(projected.lower_corner().z(), aabb.lower_corner().z());
+        assert_abs_diff_eq!(projected.upper_corner().z(), 2.0);
     }
 
     #[test]

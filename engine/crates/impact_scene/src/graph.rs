@@ -615,7 +615,7 @@ impl SceneGraph {
         shadow_mapping_enabled: bool,
     ) {
         let world_space_view_frustum = camera.compute_world_space_view_frustum();
-        let world_space_scene_aabb = intersection_manager.total_bounding_volume();
+        let world_space_scene_aabb = intersection_manager.total_bounding_volume().aligned();
 
         let Some(world_space_scene_aabb_for_visible_models) = world_space_view_frustum
             .compute_aabb()
@@ -753,7 +753,7 @@ impl SceneGraph {
         shadow_mapping_enabled: bool,
     ) {
         let world_space_view_frustum = camera.compute_world_space_view_frustum();
-        let world_space_scene_aabb = intersection_manager.total_bounding_volume();
+        let world_space_scene_aabb = intersection_manager.total_bounding_volume().aligned();
 
         let Some(world_space_scene_aabb_for_visible_models) = world_space_view_frustum
             .compute_aabb()

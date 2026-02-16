@@ -96,14 +96,11 @@ impact_profiling::define_target_enum! {
         compute_black_body_luminance,
     },
     bvh => {
-        build_non_overlapping,
-        build_fully_overlapping,
-        build_grid_distributed,
-        build_varying_size,
         build_stratified_random,
-        query_small_aabb,
-        query_medium_aabb,
-        query_full_aabb,
+        query_many_external_intersections,
+        query_all_internal_intersections,
+        query_with_brute_force_many_external_intersections,
+        query_with_brute_force_all_internal_intersections,
     },
 }
 

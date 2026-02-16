@@ -5,12 +5,9 @@ pub mod hierarchy;
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_containers::NoHashMap;
-use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC};
+use impact_geometry::AxisAlignedBoxC;
 use impact_id::define_entity_id_newtype;
 use roc_integration::roc;
-
-pub type AxisAlignedBoundingBox = AxisAlignedBox;
-pub type AxisAlignedBoundingBoxC = AxisAlignedBoxC;
 
 define_entity_id_newtype! {
     /// Identifier for a [`BoundingVolume`] in a [`BoundingVolumeManager`].
@@ -31,7 +28,7 @@ define_component_type! {
 
 #[derive(Debug)]
 pub struct BoundingVolumeManager {
-    aabbs: NoHashMap<BoundingVolumeID, AxisAlignedBoundingBoxC>,
+    aabbs: NoHashMap<BoundingVolumeID, AxisAlignedBoxC>,
 }
 
 impl BoundingVolumeManager {
@@ -43,7 +40,7 @@ impl BoundingVolumeManager {
 
     /// Returns a reference to the bounding volume with the given ID, or
     /// [`None`] if it does not exist.
-    pub fn get_bounding_volume(&self, id: BoundingVolumeID) -> Option<&AxisAlignedBoundingBoxC> {
+    pub fn get_bounding_volume(&self, id: BoundingVolumeID) -> Option<&AxisAlignedBoxC> {
         self.aabbs.get(&id)
     }
 
@@ -52,12 +49,12 @@ impl BoundingVolumeManager {
     pub fn get_bounding_volume_mut(
         &mut self,
         id: BoundingVolumeID,
-    ) -> Option<&mut AxisAlignedBoundingBoxC> {
+    ) -> Option<&mut AxisAlignedBoxC> {
         self.aabbs.get_mut(&id)
     }
 
     /// Returns an iterator over all bounding volumes.
-    pub fn bounding_volumes(&self) -> impl Iterator<Item = &AxisAlignedBoundingBoxC> {
+    pub fn bounding_volumes(&self) -> impl Iterator<Item = &AxisAlignedBoxC> {
         self.aabbs.values()
     }
 
@@ -68,7 +65,7 @@ impl BoundingVolumeManager {
     pub fn insert_bounding_volume(
         &mut self,
         id: BoundingVolumeID,
-        aabb: AxisAlignedBoundingBoxC,
+        aabb: AxisAlignedBoxC,
     ) -> Result<()> {
         if self.aabbs.contains_key(&id) {
             bail!("A bounding volume with ID {id} already exists");
