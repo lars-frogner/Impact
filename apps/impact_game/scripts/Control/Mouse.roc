@@ -39,14 +39,20 @@ handle_scroll_event! = |ctx, event|
 handle_button_event_player_mode! = |{ button, state }|
     when button is
         Left ->
-            toggle_scene_entity_active_state!(
-                Player.entity_ids.tools.laser,
+            toggle_scene_entity_active_states!(
+                [
+                    Player.entity_ids.tools.laser,
+                    Player.entity_ids.tools.laser_model,
+                ],
                 state,
             )
 
         Right ->
-            toggle_scene_entity_active_state!(
-                Player.entity_ids.tools.absorber,
+            toggle_scene_entity_active_states!(
+                [
+                    Player.entity_ids.tools.absorber,
+                    Player.entity_ids.tools.absorber_model,
+                ],
                 state,
             )
 
@@ -58,14 +64,20 @@ handle_scroll_event_player_and_free_camera_mode! = |event|
 handle_button_event_free_camera_mode! = |{ button, state }|
     when button is
         Left ->
-            toggle_scene_entity_active_state!(
-                FreeCamera.entity_ids.tools.laser,
+            toggle_scene_entity_active_states!(
+                [
+                    FreeCamera.entity_ids.tools.laser,
+                    FreeCamera.entity_ids.tools.laser_model,
+                ],
                 state,
             )
 
         Right ->
-            toggle_scene_entity_active_state!(
-                FreeCamera.entity_ids.tools.absorber,
+            toggle_scene_entity_active_states!(
+                [
+                    FreeCamera.entity_ids.tools.absorber,
+                    FreeCamera.entity_ids.tools.absorber_model,
+                ],
                 state,
             )
 
@@ -98,9 +110,14 @@ handle_scroll_event_overview_camera_mode! = |event|
         Num.to_f32(event.delta_y),
     )
 
-toggle_scene_entity_active_state! = |entity_id, button_state|
+toggle_scene_entity_active_states! = |entity_ids, button_state|
     state =
         when button_state is
             Pressed -> Enabled
             Released -> Disabled
-    Command.execute!(Engine(Scene(SetSceneEntityActiveState({ entity_id, state }))))
+
+    commands =
+        entity_ids
+        |> List.map(|entity_id| Engine(Scene(SetSceneEntityActiveState({ entity_id, state }))))
+
+    commands |> List.for_each_try!(Command.execute!)

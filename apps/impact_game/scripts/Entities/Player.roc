@@ -53,7 +53,9 @@ entity_ids = {
     player_head: Entity.id("player_head"),
     tools: {
         laser: Entity.id("player_laser"),
+        laser_model: Entity.id("player_laser_model"),
         absorber: Entity.id("player_absorber"),
+        absorber_model: Entity.id("player_absorber_model"),
     },
 }
 
