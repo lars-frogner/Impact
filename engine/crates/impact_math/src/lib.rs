@@ -13,6 +13,3 @@ pub mod quaternion;
 pub mod random;
 pub mod transform;
 pub mod vector;
-
-#[cfg(feature = "benchmark")]
-pub mod benchmark;

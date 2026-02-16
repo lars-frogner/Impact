@@ -7,12 +7,6 @@ license = { workspace = true }
 
 [features]
 arbitrary = ["dep:arbitrary", "glam/arbitrary"]
-cli = ["dep:clap"]
-benchmark = ["dep:impact_profiling", "dep:pastey"]
-criterion = [
-    "benchmark",
-    "impact_profiling/criterion",
-]
 roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 serde = ["dep:serde", "glam/serde"]
 
@@ -21,42 +15,14 @@ anyhow = { workspace = true }
 approx = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
-clap = { workspace = true, optional = true }
 fastrand = "2.3"
 glam = { version = "0.30", features = ["approx", "bytemuck"] }
 hashing = { path = "../../../interop/hashing" }
 impact_containers = { path = "../impact_containers" }
-impact_profiling = { path = "../impact_profiling", optional = true }
 inventory = { workspace = true, optional = true }
 parking_lot = { workspace = true }
-pastey = { workspace = true, optional = true }
 roc_integration = { path = "../../../roc_integration" }
 serde = { workspace = true, optional = true }
 
 [lints]
 workspace = true
-
-[[bin]]
-name = "impact_math"
-path = "src/bin/impact_math.rs"
-required-features = ["cli"]
-
-[[bench]]
-name = "vector"
-harness = false
-required-features = ["criterion"]
-
-[[bench]]
-name = "matrix"
-harness = false
-required-features = ["criterion"]
-
-[[bench]]
-name = "quaternion"
-harness = false
-required-features = ["criterion"]
-
-[[bench]]
-name = "isometry"
-harness = false
-required-features = ["criterion"]

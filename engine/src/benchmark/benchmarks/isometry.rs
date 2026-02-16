@@ -1,4 +1,6 @@
-use crate::transform::{Isometry3, Isometry3C};
+//! Benchmarks for isometry transforms.
+
+use impact_math::transform::{Isometry3, Isometry3C};
 use impact_profiling::benchmark::Benchmarker;
 
 pub fn unpack_isometry(benchmarker: impl Benchmarker) {
