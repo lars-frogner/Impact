@@ -4,7 +4,7 @@ use crate::Sphere;
 use approx::AbsDiffEq;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
-    point::Point3,
+    point::{Point3, Point3C},
     quaternion::UnitQuaternion,
     transform::{Isometry3, Similarity3},
     vector::{UnitVector3, UnitVector3C},
@@ -266,6 +266,14 @@ impl PlaneC {
     #[inline]
     pub const fn displacement(&self) -> f32 {
         self.displacement
+    }
+
+    /// Computes the signed distance from the plane to the given
+    /// point. If the signed distance is negative, the point lies
+    /// in the negative halfspace of the plane.
+    #[inline]
+    pub fn compute_signed_distance(&self, point: &Point3C) -> f32 {
+        self.unit_normal().dot(point.as_vector()) - self.displacement
     }
 
     /// Deconstructs the plane into its unit normal and displacement.

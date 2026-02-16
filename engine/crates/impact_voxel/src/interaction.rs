@@ -14,11 +14,9 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::VoxelAbsorptionManager;
-use impact_geometry::ModelTransform;
+use impact_geometry::{AxisAlignedBoxC, ModelTransform};
 use impact_id::EntityID;
-use impact_intersection::bounding_volume::{
-    AxisAlignedBoundingBoxC, BoundingVolumeID, BoundingVolumeManager,
-};
+use impact_intersection::bounding_volume::{BoundingVolumeID, BoundingVolumeManager};
 use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3};
 use impact_physics::{
     anchor::{AnchorManager, DynamicRigidBodyAnchorID},
@@ -146,7 +144,7 @@ pub fn sync_voxel_object_bounding_volume(
     };
 
     let aabb = if voxel_object.object().contains_only_empty_voxels() {
-        AxisAlignedBoundingBoxC::new(Point3C::origin(), Point3C::origin())
+        AxisAlignedBoxC::new(Point3C::origin(), Point3C::origin())
     } else {
         voxel_object.object().compute_aabb().compact()
     };

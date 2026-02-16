@@ -22,3 +22,10 @@ path = "fuzz_targets/single_aabb_intersection_query.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "all_internal_intersections_query"
+path = "fuzz_targets/all_internal_intersections_query.rs"
+test = false
+doc = false
+bench = false

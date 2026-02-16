@@ -1,6 +1,6 @@
 //! Representation of frustums.
 
-use crate::{AxisAlignedBox, Plane, PlaneC, Sphere};
+use crate::{AxisAlignedBox, AxisAlignedBoxC, Plane, PlaneC, Sphere};
 use approx::AbsDiffEq;
 use impact_math::{
     bounds::{Bounds, UpperExclusiveBounds},
@@ -468,6 +468,29 @@ impl FrustumC {
     #[inline]
     pub fn far_distance(&self) -> f32 {
         -self.far_plane().displacement()
+    }
+
+    /// Whether any part of the given axis-aligned box could be inside the
+    /// frustum. If the box lies close to an edge or a corner, this method may
+    /// return `true` even if the box is really outside. However, this method is
+    /// will always return `true` if the box is really inside. If the boundaries
+    /// exactly touch each other, the box is considered inside.
+    #[inline]
+    pub fn could_contain_part_of_axis_aligned_box(
+        &self,
+        axis_aligned_box: &AxisAlignedBoxC,
+    ) -> bool {
+        self.planes
+            .iter()
+            .zip(
+                self.largest_signed_dist_aab_corner_indices_for_planes
+                    .iter(),
+            )
+            .all(|(plane, &largest_signed_dist_corner_idx)| {
+                plane.compute_signed_distance(
+                    &axis_aligned_box.corner(largest_signed_dist_corner_idx as usize),
+                ) >= 0.0
+            })
     }
 
     /// Converts the frustum to the 16-byte aligned SIMD-friendly [`Frustum`].

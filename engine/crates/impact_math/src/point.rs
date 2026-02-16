@@ -461,6 +461,28 @@ impl Point3C {
         Self::new(0.0, 0.0, 0.0)
     }
 
+    /// Returns a point where each component is the minimum of the corresponding
+    /// components in this and another point.
+    #[inline]
+    pub fn min_with(&self, other: &Self) -> Self {
+        Self::new(
+            self.x.min(other.x),
+            self.y.min(other.y),
+            self.z.min(other.z),
+        )
+    }
+
+    /// Returns a point where each component is the maximum of the corresponding
+    /// components in this and another point.
+    #[inline]
+    pub fn max_with(&self, other: &Self) -> Self {
+        Self::new(
+            self.x.max(other.x),
+            self.y.max(other.y),
+            self.z.max(other.z),
+        )
+    }
+
     /// The x-component.
     #[inline]
     pub const fn x(&self) -> f32 {

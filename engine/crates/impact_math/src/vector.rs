@@ -470,6 +470,12 @@ impl Vector3 {
         self.inner.length_squared()
     }
 
+    /// Computes the product of the three vector components.
+    #[inline]
+    pub fn component_product(&self) -> f32 {
+        self.inner.element_product()
+    }
+
     /// Computes the dot product of this vector with another.
     #[inline]
     pub fn dot(&self, other: &Self) -> f32 {
@@ -729,6 +735,12 @@ impl Vector3C {
     #[inline]
     pub fn norm_squared(&self) -> f32 {
         self.dot(self)
+    }
+
+    /// Computes the product of the three vector components.
+    #[inline]
+    pub fn component_product(&self) -> f32 {
+        self.x * self.y * self.z
     }
 
     /// Computes the dot product of this vector with another.

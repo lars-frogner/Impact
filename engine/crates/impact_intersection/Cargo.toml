@@ -15,6 +15,7 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, optional = true }
 bytemuck = { workspace = true }
+impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_geometry = { path = "../impact_geometry" }

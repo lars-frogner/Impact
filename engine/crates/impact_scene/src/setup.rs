@@ -6,10 +6,9 @@ use crate::{
     model::{ModelID, ModelInstanceManager},
 };
 use anyhow::{Result, anyhow};
+use impact_geometry::AxisAlignedBox;
 use impact_id::EntityID;
-use impact_intersection::bounding_volume::{
-    AxisAlignedBoundingBox, BoundingVolumeID, BoundingVolumeManager,
-};
+use impact_intersection::bounding_volume::{BoundingVolumeID, BoundingVolumeManager};
 use impact_material::{MaterialID, MaterialRegistry};
 use impact_math::{
     point::Point3,
@@ -141,7 +140,7 @@ pub fn setup_bounding_volume_for_mesh(
 
     let aabb = mesh
         .compute_aabb()
-        .unwrap_or_else(|| AxisAlignedBoundingBox::new(Point3::origin(), Point3::origin()))
+        .unwrap_or_else(|| AxisAlignedBox::new(Point3::origin(), Point3::origin()))
         .compact();
 
     let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
