@@ -494,6 +494,22 @@ impl Vector3 {
         Self::wrap(self.inner.abs())
     }
 
+    /// Returns a vector with the reciprocal value of each component.
+    #[inline]
+    pub fn component_recip(&self) -> Self {
+        Self::wrap(self.inner.recip())
+    }
+
+    /// Returns a vector with the value of each component clamped to the given
+    /// scalar bounds.
+    #[inline]
+    pub fn component_clamp(&self, min: f32, max: f32) -> Self {
+        Self::wrap(
+            self.inner
+                .clamp(glam::Vec3A::splat(min), glam::Vec3A::splat(max)),
+        )
+    }
+
     /// Multiplies each component by the corresponding component in another
     /// vector.
     #[inline]
@@ -763,6 +779,23 @@ impl Vector3C {
     #[inline]
     pub fn component_abs(&self) -> Self {
         Self::new(self.x.abs(), self.y.abs(), self.z.abs())
+    }
+
+    /// Returns a vector with the reciprocal value of each component.
+    #[inline]
+    pub fn component_recip(&self) -> Self {
+        Self::new(self.x.recip(), self.y.recip(), self.z.recip())
+    }
+
+    /// Returns a vector with the value of each component clamped to the given
+    /// scalar bounds.
+    #[inline]
+    pub fn component_clamp(&self, min: f32, max: f32) -> Self {
+        Self::new(
+            self.x.clamp(min, max),
+            self.y.clamp(min, max),
+            self.z.clamp(min, max),
+        )
     }
 
     /// Multiplies each component by the corresponding component in another
