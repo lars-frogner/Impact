@@ -8,6 +8,7 @@ pub mod bounds;
 pub mod consts;
 pub mod hash;
 pub mod matrix;
+pub mod morton;
 pub mod point;
 pub mod quaternion;
 pub mod random;
