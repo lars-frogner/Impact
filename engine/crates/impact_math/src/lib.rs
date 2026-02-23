@@ -12,5 +12,6 @@ pub mod morton;
 pub mod point;
 pub mod quaternion;
 pub mod random;
+pub mod sorting;
 pub mod transform;
 pub mod vector;

@@ -55,6 +55,11 @@ impact_profiling::define_target_enum! {
         mul_isometry_one_compact_as_uncompact_to_compact,
         mul_isometry_both_compact_as_uncompact_to_compact,
     },
+    sorting => {
+        radix_sort_u64,
+        radix_sort_by_u64_keys,
+        std_sort_u64,
+    },
     generation => {
         generate_box,
         generate_sphere_union,

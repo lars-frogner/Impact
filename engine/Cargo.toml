@@ -337,6 +337,11 @@ harness = false
 required-features = ["criterion"]
 
 [[bench]]
+name = "sorting"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
 name = "model"
 harness = false
 required-features = ["criterion"]
