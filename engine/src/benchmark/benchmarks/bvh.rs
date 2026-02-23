@@ -1,22 +1,32 @@
 //! Benchmarks for bounding volume hierarchies.
 
-use std::hint::black_box;
-
 use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC};
-use impact_intersection::bounding_volume::{BoundingVolumeID, hierarchy::BoundingVolumeHierarchy};
+use impact_intersection::bounding_volume::{
+    BoundingVolumeID,
+    hierarchy::{BVHBuildMethod, BoundingVolumeHierarchy},
+};
 use impact_math::{hash::Hash32, point::Point3C};
 use impact_profiling::benchmark::Benchmarker;
+use std::hint::black_box;
 
-const N_PRIMITIVES: usize = 500;
+const N_PRIMITIVES: usize = 25000;
 const N_QUERIES: usize = 1000;
 
-pub fn build_stratified_random(benchmarker: impl Benchmarker) {
-    let mut bvh = create_bvh_with_aabbs(stratified_random_aabbs(N_PRIMITIVES, 1.0));
+pub fn build_naive_bottom_up(benchmarker: impl Benchmarker) {
+    let mut bvh = BoundingVolumeHierarchy::new_with_build_method(BVHBuildMethod::NaiveBottomUp);
+    add_primitive_volumes(&mut bvh, stratified_random_aabbs(N_PRIMITIVES, 1.0));
+    benchmarker.benchmark(&mut || bvh.build());
+}
+
+pub fn build_fast_bottom_up(benchmarker: impl Benchmarker) {
+    let mut bvh = BoundingVolumeHierarchy::new_with_build_method(BVHBuildMethod::FastBottomUp);
+    add_primitive_volumes(&mut bvh, stratified_random_aabbs(N_PRIMITIVES, 1.0));
     benchmarker.benchmark(&mut || bvh.build());
 }
 
 pub fn query_many_external_intersections(benchmarker: impl Benchmarker) {
-    let mut bvh = create_bvh_with_aabbs(stratified_random_aabbs(N_PRIMITIVES, 1.0));
+    let mut bvh = BoundingVolumeHierarchy::new();
+    add_primitive_volumes(&mut bvh, stratified_random_aabbs(N_PRIMITIVES, 1.0));
     bvh.build();
     let queries = generate_query_aabbs(&bvh, N_QUERIES);
     benchmarker.benchmark(&mut || {
@@ -29,7 +39,8 @@ pub fn query_many_external_intersections(benchmarker: impl Benchmarker) {
 }
 
 pub fn query_all_internal_intersections(benchmarker: impl Benchmarker) {
-    let mut bvh = create_bvh_with_aabbs(stratified_random_aabbs(N_PRIMITIVES, 2.0));
+    let mut bvh = BoundingVolumeHierarchy::new();
+    add_primitive_volumes(&mut bvh, stratified_random_aabbs(N_PRIMITIVES, 2.0));
     bvh.build();
     benchmarker.benchmark(&mut || {
         bvh.for_each_intersecting_bounding_volume_pair(|id_a, id_b| {
@@ -39,7 +50,8 @@ pub fn query_all_internal_intersections(benchmarker: impl Benchmarker) {
 }
 
 pub fn query_with_brute_force_many_external_intersections(benchmarker: impl Benchmarker) {
-    let mut bvh = create_bvh_with_aabbs(stratified_random_aabbs(N_PRIMITIVES, 1.0));
+    let mut bvh = BoundingVolumeHierarchy::new();
+    add_primitive_volumes(&mut bvh, stratified_random_aabbs(N_PRIMITIVES, 1.0));
     bvh.build();
     let queries = generate_query_aabbs(&bvh, N_QUERIES);
     benchmarker.benchmark(&mut || {
@@ -52,7 +64,8 @@ pub fn query_with_brute_force_many_external_intersections(benchmarker: impl Benc
 }
 
 pub fn query_with_brute_force_all_internal_intersections(benchmarker: impl Benchmarker) {
-    let mut bvh = create_bvh_with_aabbs(stratified_random_aabbs(N_PRIMITIVES, 2.0));
+    let mut bvh = BoundingVolumeHierarchy::new();
+    add_primitive_volumes(&mut bvh, stratified_random_aabbs(N_PRIMITIVES, 2.0));
     bvh.build();
     benchmarker.benchmark(&mut || {
         bvh.for_each_intersecting_bounding_volume_pair_brute_force(|id_a, id_b| {
@@ -61,13 +74,14 @@ pub fn query_with_brute_force_all_internal_intersections(benchmarker: impl Bench
     });
 }
 
-fn create_bvh_with_aabbs(aabbs: impl Iterator<Item = AxisAlignedBoxC>) -> BoundingVolumeHierarchy {
-    let mut bvh = BoundingVolumeHierarchy::new();
+fn add_primitive_volumes(
+    bvh: &mut BoundingVolumeHierarchy,
+    aabbs: impl Iterator<Item = AxisAlignedBoxC>,
+) {
     for (i, aabb) in aabbs.enumerate() {
         bvh.add_primitive_volume(BoundingVolumeID::from_u64(i as u64), aabb)
             .unwrap();
     }
-    bvh
 }
 
 /// AABBs placed in grid cells with hashed offsets and sizes.

@@ -1,5 +1,6 @@
 //! Bounding volume hierarchy.
 
+mod fast_bottom_up;
 mod naive_bottom_up;
 
 use crate::bounding_volume::BoundingVolumeID;
@@ -13,7 +14,15 @@ use std::mem;
 pub struct BoundingVolumeHierarchy {
     primitives: Primitives,
     nodes: Vec<Node>,
-    root_node_idx: Option<usize>,
+    root_node_id: Option<NodeID>,
+    build_method: BVHBuildMethod,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BVHBuildMethod {
+    NaiveBottomUp,
+    #[default]
+    FastBottomUp,
 }
 
 #[derive(Debug)]
@@ -21,6 +30,8 @@ struct Primitives {
     aabbs: Vec<AxisAlignedBoxC>,
     index_map: KeyIndexMapper<BoundingVolumeID>,
 }
+
+type NodeID = usize;
 
 #[derive(Clone, Debug)]
 struct Node {
@@ -30,28 +41,33 @@ struct Node {
 
 #[derive(Clone, Debug)]
 enum NodePayload {
-    Children { left_idx: usize, right_idx: usize },
-    Primitive,
+    Children { left_id: NodeID, right_id: NodeID },
+    Primitive { idx: usize },
 }
 
 #[derive(Clone, Debug)]
 struct PackedNodePayload {
-    /// These are the child node indices unless `left_idx ==
-    /// PRIMITIVE_SENTINEL_IDX`, in which case the node represents a primitive.
-    /// By reserving a sentinel value we save the extra 8 bytes an explicit enum
-    /// would require.
-    left_idx: usize,
-    right_idx: usize,
+    /// These are the child node indices unless `left_id_or_sentinel ==
+    /// PRIMITIVE_SENTINEL_ID`, in which case the node represents a primitive
+    /// and `right_id_or_primitive_idx` is the primitive index. By reserving a
+    /// sentinel value we save the extra 8 bytes an explicit enum would require.
+    left_id_or_sentinel: usize,
+    right_id_or_primitive_idx: usize,
 }
 
-const PRIMITIVE_SENTINEL_IDX: usize = usize::MAX;
+const PRIMITIVE_SENTINEL_ID: usize = usize::MAX;
 
 impl BoundingVolumeHierarchy {
     pub fn new() -> Self {
+        Self::new_with_build_method(BVHBuildMethod::default())
+    }
+
+    pub fn new_with_build_method(build_method: BVHBuildMethod) -> Self {
         Self {
             primitives: Primitives::new(),
             nodes: Vec::new(),
-            root_node_idx: None,
+            root_node_id: None,
+            build_method,
         }
     }
 
@@ -68,14 +84,21 @@ impl BoundingVolumeHierarchy {
     }
 
     pub fn build(&mut self) {
-        self.root_node_idx = naive_bottom_up::build(&mut self.nodes, &self.primitives.aabbs);
+        self.root_node_id = match self.build_method {
+            BVHBuildMethod::NaiveBottomUp => {
+                naive_bottom_up::build(&mut self.nodes, &self.primitives.aabbs)
+            }
+            BVHBuildMethod::FastBottomUp => {
+                fast_bottom_up::build(&mut self.nodes, &self.primitives.aabbs)
+            }
+        };
     }
 
     pub fn root_bounding_volume(&self) -> AxisAlignedBoxC {
-        let Some(root_node_idx) = self.root_node_idx else {
+        let Some(root_node_id) = self.root_node_id else {
             return AxisAlignedBoxC::default();
         };
-        let root_node = &self.nodes[root_node_idx];
+        let root_node = &self.nodes[root_node_id];
         root_node.aabb.clone()
     }
 
@@ -89,8 +112,8 @@ impl BoundingVolumeHierarchy {
                 let aabb = aabb.aligned();
                 !aabb.box_lies_outside(axis_aligned_box)
             },
-            |idx| {
-                f(self.primitives.id_at_idx(idx));
+            |primitive_idx| {
+                f(self.primitives.id_at_idx(primitive_idx));
             },
         );
     }
@@ -105,8 +128,8 @@ impl BoundingVolumeHierarchy {
                 let aabb = aabb.aligned();
                 frustum.could_contain_part_of_axis_aligned_box(&aabb)
             },
-            |idx| {
-                f(self.primitives.id_at_idx(idx));
+            |primitive_idx| {
+                f(self.primitives.id_at_idx(primitive_idx));
             },
         );
     }
@@ -115,10 +138,10 @@ impl BoundingVolumeHierarchy {
         &self,
         mut f: impl FnMut(BoundingVolumeID, BoundingVolumeID),
     ) {
-        self.for_each_internal_intersection(|idx_i, idx_j| {
+        self.for_each_internal_intersection(|primitive_idx_i, primitive_idx_j| {
             f(
-                self.primitives.id_at_idx(idx_i),
-                self.primitives.id_at_idx(idx_j),
+                self.primitives.id_at_idx(primitive_idx_i),
+                self.primitives.id_at_idx(primitive_idx_j),
             );
         });
     }
@@ -184,29 +207,26 @@ impl BoundingVolumeHierarchy {
         mut is_intersection: impl FnMut(&AxisAlignedBoxC) -> bool,
         mut process_intersection: impl FnMut(usize),
     ) {
-        let Some(root_node_idx) = self.root_node_idx else {
+        let Some(root_node_id) = self.root_node_id else {
             return;
         };
 
         let arena = ArenaPool::get_arena_for_capacity(self.nodes.len() * mem::size_of::<usize>());
-        let mut node_idx_stack = AVec::with_capacity_in(self.nodes.len(), &arena);
+        let mut node_id_stack = AVec::with_capacity_in(self.nodes.len(), &arena);
 
-        node_idx_stack.push(root_node_idx);
+        node_id_stack.push(root_node_id);
 
-        while let Some(node_idx) = node_idx_stack.pop() {
-            let node = &self.nodes[node_idx];
+        while let Some(node_id) = node_id_stack.pop() {
+            let node = &self.nodes[node_id];
 
             if is_intersection(&node.aabb) {
                 match node.payload() {
-                    NodePayload::Children {
-                        left_idx,
-                        right_idx,
-                    } => {
-                        node_idx_stack.push(right_idx);
-                        node_idx_stack.push(left_idx);
+                    NodePayload::Children { left_id, right_id } => {
+                        node_id_stack.push(right_id);
+                        node_id_stack.push(left_id);
                     }
-                    NodePayload::Primitive => {
-                        process_intersection(node_idx);
+                    NodePayload::Primitive { idx } => {
+                        process_intersection(idx);
                     }
                 }
             }
@@ -215,11 +235,11 @@ impl BoundingVolumeHierarchy {
 
     fn for_each_internal_intersection(&self, mut f: impl FnMut(usize, usize)) {
         enum Operation {
-            CheckSelf { check_idx: usize },
-            CheckPair { left_idx: usize, right_idx: usize },
+            CheckSelf { check_id: usize },
+            CheckPair { left_id: usize, right_id: usize },
         }
 
-        let Some(root_node_idx) = self.root_node_idx else {
+        let Some(root_node_id) = self.root_node_id else {
             return;
         };
 
@@ -227,120 +247,114 @@ impl BoundingVolumeHierarchy {
         let mut operation_stack = AVec::with_capacity_in(self.nodes.len(), &arena);
 
         operation_stack.push(Operation::CheckSelf {
-            check_idx: root_node_idx,
+            check_id: root_node_id,
         });
 
         while let Some(op) = operation_stack.pop() {
             match op {
-                Operation::CheckSelf { check_idx: idx } => {
-                    let node = &self.nodes[idx];
+                Operation::CheckSelf { check_id: id } => {
+                    let node = &self.nodes[id];
                     match node.payload() {
-                        NodePayload::Primitive => {
+                        NodePayload::Primitive { .. } => {
                             // Nothing to do (the primitive can't collide with itself)
                         }
-                        NodePayload::Children {
-                            left_idx,
-                            right_idx,
-                        } => {
+                        NodePayload::Children { left_id, right_id } => {
                             // Check for intersections between left and right branch
-                            operation_stack.push(Operation::CheckPair {
-                                left_idx,
-                                right_idx,
-                            });
+                            operation_stack.push(Operation::CheckPair { left_id, right_id });
                             // Check for internal intersections in right branch
-                            operation_stack.push(Operation::CheckSelf {
-                                check_idx: right_idx,
-                            });
+                            operation_stack.push(Operation::CheckSelf { check_id: right_id });
                             // Check for internal intersections in left branch
-                            operation_stack.push(Operation::CheckSelf {
-                                check_idx: left_idx,
-                            });
+                            operation_stack.push(Operation::CheckSelf { check_id: left_id });
                         }
                     }
                 }
-                Operation::CheckPair {
-                    left_idx,
-                    right_idx,
-                } => {
-                    let left_node = &self.nodes[left_idx];
-                    let right_node = &self.nodes[right_idx];
+                Operation::CheckPair { left_id, right_id } => {
+                    let left_node = &self.nodes[left_id];
+                    let right_node = &self.nodes[right_id];
 
                     if left_node.aabb.box_lies_outside(&right_node.aabb) {
                         continue;
                     }
 
                     match (left_node.payload(), right_node.payload()) {
-                        (NodePayload::Primitive, NodePayload::Primitive) => {
+                        (
+                            NodePayload::Primitive {
+                                idx: left_primitive_idx,
+                            },
+                            NodePayload::Primitive {
+                                idx: right_primitive_idx,
+                            },
+                        ) => {
                             // The primitives are intersecting
-                            f(left_idx, right_idx);
+                            f(left_primitive_idx, right_primitive_idx);
                         }
                         (
                             NodePayload::Children {
-                                left_idx: left_idx_for_left,
-                                right_idx: right_idx_for_left,
+                                left_id: left_id_for_left,
+                                right_id: right_id_for_left,
                             },
-                            NodePayload::Primitive,
+                            NodePayload::Primitive { .. },
                         ) => {
                             // Check the left node's children against the right
                             // primitive node
                             operation_stack.push(Operation::CheckPair {
-                                left_idx: right_idx_for_left,
-                                right_idx,
+                                left_id: right_id_for_left,
+                                right_id,
                             });
                             operation_stack.push(Operation::CheckPair {
-                                left_idx: left_idx_for_left,
-                                right_idx,
+                                left_id: left_id_for_left,
+                                right_id,
                             });
                         }
                         (
-                            NodePayload::Primitive,
+                            NodePayload::Primitive { .. },
                             NodePayload::Children {
-                                left_idx: left_idx_for_right,
-                                right_idx: right_idx_for_right,
+                                left_id: left_id_for_right,
+                                right_id: right_id_for_right,
                             },
                         ) => {
                             // Check the right node's children against the left
                             // primitive node
                             operation_stack.push(Operation::CheckPair {
-                                left_idx,
-                                right_idx: right_idx_for_right,
+                                left_id,
+                                right_id: right_id_for_right,
                             });
                             operation_stack.push(Operation::CheckPair {
-                                left_idx,
-                                right_idx: left_idx_for_right,
+                                left_id,
+                                right_id: left_id_for_right,
                             });
                         }
                         (
                             NodePayload::Children {
-                                left_idx: left_idx_for_left,
-                                right_idx: right_idx_for_left,
+                                left_id: left_id_for_left,
+                                right_id: right_id_for_left,
                             },
                             NodePayload::Children {
-                                left_idx: left_idx_for_right,
-                                right_idx: right_idx_for_right,
+                                left_id: left_id_for_right,
+                                right_id: right_id_for_right,
                             },
                         ) => {
                             if right_node.aabb.volume() > left_node.aabb.volume() {
                                 // Since the right node is larger, we split it
                                 // and test its children against the left node
                                 operation_stack.push(Operation::CheckPair {
-                                    left_idx,
-                                    right_idx: right_idx_for_right,
+                                    left_id,
+                                    right_id: right_id_for_right,
                                 });
                                 operation_stack.push(Operation::CheckPair {
-                                    left_idx,
-                                    right_idx: left_idx_for_right,
+                                    left_id,
+                                    right_id: left_id_for_right,
                                 });
                             } else {
                                 // The left node is larger, so we split that
                                 // instead
                                 operation_stack.push(Operation::CheckPair {
-                                    left_idx: right_idx_for_left,
-                                    right_idx,
+                                    left_id: right_id_for_left,
+                                    right_id,
                                 });
                                 operation_stack.push(Operation::CheckPair {
-                                    left_idx: left_idx_for_left,
-                                    right_idx,
+                                    left_id: left_id_for_left,
+                                    right_id,
                                 });
                             }
                         }
@@ -397,17 +411,14 @@ impl Node {
 impl NodePayload {
     #[inline]
     fn pack(&self) -> PackedNodePayload {
-        match self {
-            &Self::Children {
-                left_idx,
-                right_idx,
-            } => PackedNodePayload {
-                left_idx,
-                right_idx,
+        match *self {
+            Self::Children { left_id, right_id } => PackedNodePayload {
+                left_id_or_sentinel: left_id,
+                right_id_or_primitive_idx: right_id,
             },
-            Self::Primitive => PackedNodePayload {
-                left_idx: PRIMITIVE_SENTINEL_IDX,
-                right_idx: PRIMITIVE_SENTINEL_IDX,
+            Self::Primitive { idx } => PackedNodePayload {
+                left_id_or_sentinel: PRIMITIVE_SENTINEL_ID,
+                right_id_or_primitive_idx: idx,
             },
         }
     }
@@ -416,13 +427,15 @@ impl NodePayload {
 impl PackedNodePayload {
     #[inline]
     fn unpack(&self) -> NodePayload {
-        if self.left_idx != PRIMITIVE_SENTINEL_IDX {
+        if self.left_id_or_sentinel != PRIMITIVE_SENTINEL_ID {
             NodePayload::Children {
-                left_idx: self.left_idx,
-                right_idx: self.right_idx,
+                left_id: self.left_id_or_sentinel,
+                right_id: self.right_id_or_primitive_idx,
             }
         } else {
-            NodePayload::Primitive
+            NodePayload::Primitive {
+                idx: self.right_id_or_primitive_idx,
+            }
         }
     }
 }
@@ -463,9 +476,10 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_single_aabb_intersection_query(
+        build_method: BVHBuildMethod,
         (aabbs_for_hierarchy, test_aabb): (Vec<ArbitraryAABB>, ArbitraryAABB),
     ) {
-        let mut bvh = BoundingVolumeHierarchy::new();
+        let mut bvh = BoundingVolumeHierarchy::new_with_build_method(build_method);
         for (idx, aabb) in aabbs_for_hierarchy.iter().enumerate() {
             bvh.add_primitive_volume(BoundingVolumeID::from_u64(idx as u64), aabb.0.compact())
                 .unwrap();
@@ -492,8 +506,11 @@ pub mod fuzzing {
         assert_eq!(intersected_ids, intersected_ids_brute_force);
     }
 
-    pub fn fuzz_test_all_internal_intersections_query(aabbs_for_hierarchy: Vec<ArbitraryAABB>) {
-        let mut bvh = BoundingVolumeHierarchy::new();
+    pub fn fuzz_test_all_internal_intersections_query(
+        build_method: BVHBuildMethod,
+        aabbs_for_hierarchy: Vec<ArbitraryAABB>,
+    ) {
+        let mut bvh = BoundingVolumeHierarchy::new_with_build_method(build_method);
         for (idx, aabb) in aabbs_for_hierarchy.iter().enumerate() {
             bvh.add_primitive_volume(BoundingVolumeID::from_u64(idx as u64), aabb.0.compact())
                 .unwrap();

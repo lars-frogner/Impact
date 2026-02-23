@@ -101,7 +101,8 @@ impact_profiling::define_target_enum! {
         compute_black_body_luminance,
     },
     bvh => {
-        build_stratified_random,
+        build_naive_bottom_up,
+        build_fast_bottom_up,
         query_many_external_intersections,
         query_all_internal_intersections,
         query_with_brute_force_many_external_intersections,

@@ -17,15 +17,29 @@ path = ".."
 features = ["fuzzing"]
 
 [[bin]]
-name = "single_aabb_intersection_query"
-path = "fuzz_targets/single_aabb_intersection_query.rs"
+name = "naive_bottom_up_single_aabb_intersection_query"
+path = "fuzz_targets/naive_bottom_up_single_aabb_intersection_query.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "all_internal_intersections_query"
-path = "fuzz_targets/all_internal_intersections_query.rs"
+name = "naive_bottom_up_all_internal_intersections_query"
+path = "fuzz_targets/naive_bottom_up_all_internal_intersections_query.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fast_bottom_up_single_aabb_intersection_query"
+path = "fuzz_targets/fast_bottom_up_single_aabb_intersection_query.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fast_bottom_up_all_internal_intersections_query"
+path = "fuzz_targets/fast_bottom_up_all_internal_intersections_query.rs"
 test = false
 doc = false
 bench = false
