@@ -8,6 +8,7 @@ pub mod lookup_table;
 pub mod matrix;
 pub mod model;
 pub mod quaternion;
+pub mod sorting;
 pub mod vector;
 pub mod voxel_object;
 
