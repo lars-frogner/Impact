@@ -28,7 +28,7 @@ impl GizmoType {
                     .line_segment_mesh_mut()
                     .insert(self.only_line_segment_mesh_id(), mesh);
             }
-            Self::BoundingVolume => {
+            Self::BoundingVolume | Self::BoundingVolumeHierarchy => {
                 let mesh =
                     TriangleMesh::create_unit_cube_with_color(VertexColor::CYAN.with_alpha(0.15));
                 resource_registries
