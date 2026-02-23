@@ -200,6 +200,8 @@ impl BoundingVolumeHierarchy {
 
     pub fn clear(&mut self) {
         self.primitives.clear();
+        self.nodes.clear();
+        self.root_node_id = None;
     }
 
     fn for_each_intersecting_bounding_volume(
