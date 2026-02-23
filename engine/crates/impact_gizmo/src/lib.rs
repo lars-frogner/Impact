@@ -38,21 +38,22 @@ define_component_type! {
 pub enum GizmoType {
     ReferenceFrameAxes = 0,
     BoundingVolume = 1,
-    LightSphere = 2,
-    ShadowCubemapFaces = 3,
-    ShadowMapCascades = 4,
-    CenterOfMass = 5,
-    LinearVelocity = 6,
-    AngularVelocity = 7,
-    AngularMomentum = 8,
-    Force = 9,
-    Torque = 10,
-    Anchors = 11,
-    DynamicCollider = 12,
-    StaticCollider = 13,
-    PhantomCollider = 14,
-    VoxelChunks = 15,
-    VoxelIntersections = 16,
+    BoundingVolumeHierarchy = 2,
+    LightSphere = 3,
+    ShadowCubemapFaces = 4,
+    ShadowMapCascades = 5,
+    CenterOfMass = 6,
+    LinearVelocity = 7,
+    AngularVelocity = 8,
+    AngularMomentum = 9,
+    Force = 10,
+    Torque = 11,
+    Anchors = 12,
+    DynamicCollider = 13,
+    StaticCollider = 14,
+    PhantomCollider = 15,
+    VoxelChunks = 16,
+    VoxelIntersections = 17,
 }
 
 bitflags! {
@@ -63,23 +64,24 @@ bitflags! {
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct GizmoSet: u32 {
-        const REFERENCE_FRAME_AXES = 1 << 0;
-        const BOUNDING_VOLUME      = 1 << 1;
-        const LIGHT_SPHERE         = 1 << 2;
-        const SHADOW_CUBEMAP_FACES = 1 << 3;
-        const SHADOW_MAP_CASCADES  = 1 << 4;
-        const CENTER_OF_MASS       = 1 << 5;
-        const LINEAR_VELOCITY      = 1 << 6;
-        const ANGULAR_VELOCITY     = 1 << 7;
-        const ANGULAR_MOMENTUM     = 1 << 8;
-        const FORCE                = 1 << 9;
-        const TORQUE               = 1 << 10;
-        const ANCHORS              = 1 << 11;
-        const DYNAMIC_COLLIDER     = 1 << 12;
-        const STATIC_COLLIDER      = 1 << 13;
-        const PHANTOM_COLLIDER     = 1 << 14;
-        const VOXEL_CHUNKS         = 1 << 15;
-        const VOXEL_INTERSECTIONS  = 1 << 16;
+        const REFERENCE_FRAME_AXES      = 1 << 0;
+        const BOUNDING_VOLUME           = 1 << 1;
+        const BOUNDING_VOLUME_HIERARCHY = 1 << 2;
+        const LIGHT_SPHERE              = 1 << 3;
+        const SHADOW_CUBEMAP_FACES      = 1 << 4;
+        const SHADOW_MAP_CASCADES       = 1 << 5;
+        const CENTER_OF_MASS            = 1 << 6;
+        const LINEAR_VELOCITY           = 1 << 7;
+        const ANGULAR_VELOCITY          = 1 << 8;
+        const ANGULAR_MOMENTUM          = 1 << 9;
+        const FORCE                     = 1 << 10;
+        const TORQUE                    = 1 << 11;
+        const ANCHORS                   = 1 << 12;
+        const DYNAMIC_COLLIDER          = 1 << 13;
+        const STATIC_COLLIDER           = 1 << 14;
+        const PHANTOM_COLLIDER          = 1 << 15;
+        const VOXEL_CHUNKS              = 1 << 16;
+        const VOXEL_INTERSECTIONS       = 1 << 17;
     }
 }
 
@@ -120,6 +122,11 @@ pub struct GizmoVisibilities {
     /// When visible, the axis-aligned bounding boxes of models in the scene
     /// will be rendered in a semi-transparent cyan color.
     pub bounding_volume: GizmoVisibility,
+    /// The visibility of the gizmo showing the bounding volume hierarchy.
+    ///
+    /// When visible, the full hierarchy of axis-aligned bounding boxes for
+    /// models in the scene will be rendered in a semi-transparent cyan color.
+    pub bounding_volume_hierarchy: GizmoVisibility,
     /// The visibility of the gizmo showing spheres of influence for
     /// omnidirectional lights.
     ///
@@ -318,10 +325,11 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 17] {
+    pub const fn all() -> [Self; 18] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingVolume,
+            Self::BoundingVolumeHierarchy,
             Self::LightSphere,
             Self::ShadowCubemapFaces,
             Self::ShadowMapCascades,
@@ -352,6 +360,7 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => GizmoSet::REFERENCE_FRAME_AXES,
             Self::BoundingVolume => GizmoSet::BOUNDING_VOLUME,
+            Self::BoundingVolumeHierarchy => GizmoSet::BOUNDING_VOLUME_HIERARCHY,
             Self::LightSphere => GizmoSet::LIGHT_SPHERE,
             Self::ShadowCubemapFaces => GizmoSet::SHADOW_CUBEMAP_FACES,
             Self::ShadowMapCascades => GizmoSet::SHADOW_MAP_CASCADES,
@@ -375,6 +384,7 @@ impl GizmoType {
         match self {
             Self::ReferenceFrameAxes => "Reference frame axes",
             Self::BoundingVolume => "Bounding volumes",
+            Self::BoundingVolumeHierarchy => "Bounding volume hierarchy",
             Self::LightSphere => "Light spheres",
             Self::ShadowCubemapFaces => "Shadow cubemap faces",
             Self::ShadowMapCascades => "Shadow map cascades",
@@ -409,6 +419,11 @@ impl GizmoType {
                 "\
                 When enabled, the axis-aligned bounding boxes of models in the scene will \
                 be rendered in a semi-transparent cyan color."
+            }
+            Self::BoundingVolumeHierarchy => {
+                "\
+                When enabled, the full hierarchy of axis-aligned bounding boxes for \
+                models in the scene will be rendered in a semi-transparent cyan color."
             }
             Self::LightSphere => {
                 "\
@@ -582,6 +597,7 @@ impl GizmoVisibilities {
         match gizmo {
             GizmoType::ReferenceFrameAxes => self.reference_frame_axes,
             GizmoType::BoundingVolume => self.bounding_volume,
+            GizmoType::BoundingVolumeHierarchy => self.bounding_volume_hierarchy,
             GizmoType::LightSphere => self.light_sphere,
             GizmoType::ShadowCubemapFaces => self.shadow_cubemap_face,
             GizmoType::ShadowMapCascades => self.shadow_map_cascade,
@@ -605,6 +621,7 @@ impl GizmoVisibilities {
         match gizmo {
             GizmoType::ReferenceFrameAxes => &mut self.reference_frame_axes,
             GizmoType::BoundingVolume => &mut self.bounding_volume,
+            GizmoType::BoundingVolumeHierarchy => &mut self.bounding_volume_hierarchy,
             GizmoType::LightSphere => &mut self.light_sphere,
             GizmoType::ShadowCubemapFaces => &mut self.shadow_cubemap_face,
             GizmoType::ShadowMapCascades => &mut self.shadow_map_cascade,

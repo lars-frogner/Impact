@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use approx::abs_diff_ne;
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_camera::{Camera, CameraManager};
 use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
@@ -112,6 +113,18 @@ pub fn buffer_transforms_for_gizmos(
         return;
     };
     let camera_position = camera.compute_world_space_position();
+
+    if gizmo_manager
+        .visibilities()
+        .get_for(GizmoType::BoundingVolumeHierarchy)
+        .is_visible_for_all()
+    {
+        buffer_transforms_for_bounding_volume_hierarchy_gizmo(
+            model_instance_manager,
+            intersection_manager,
+            camera,
+        );
+    }
 
     query!(
         ecs_world,
@@ -459,6 +472,40 @@ fn compute_transform_for_bounding_volume_gizmo(
         bounding_box_from_unit_cube.applied_before_transform(&model_view_transform);
 
     Some(instance_model_view_transform)
+}
+
+fn buffer_transforms_for_bounding_volume_hierarchy_gizmo(
+    model_instance_manager: &mut ModelInstanceManager,
+    intersection_manager: &IntersectionManager,
+    camera: &Camera,
+) {
+    let arena = ArenaPool::get_arena();
+    let mut transforms = AVec::with_capacity_in(
+        intersection_manager.n_bounding_volumes_in_hierarchy(),
+        &arena,
+    );
+
+    let view_transform = Similarity3::from_isometry(*camera.view_transform());
+
+    for aabb in intersection_manager.all_bounding_volumes_in_hierarchy() {
+        let scaling = aabb.extents();
+
+        let world_space_aabb_from_unit_cube = GizmoInstanceModelViewTransform::new(
+            UnitQuaternionC::identity(),
+            *aabb.center().as_vector(),
+            scaling,
+        );
+
+        let instance_model_view_transform =
+            world_space_aabb_from_unit_cube.applied_before_transform(&view_transform);
+
+        transforms.push(instance_model_view_transform);
+    }
+
+    model_instance_manager.buffer_instance_feature_slice(
+        GizmoType::BoundingVolumeHierarchy.only_model_id(),
+        &transforms,
+    );
 }
 
 fn buffer_transform_for_light_sphere_gizmo(

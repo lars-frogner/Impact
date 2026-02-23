@@ -102,6 +102,14 @@ impl BoundingVolumeHierarchy {
         root_node.aabb.clone()
     }
 
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn all_bounding_volumes(&self) -> impl Iterator<Item = &AxisAlignedBoxC> {
+        self.nodes.iter().map(|node| &node.aabb)
+    }
+
     pub fn for_each_bounding_volume_in_axis_aligned_box(
         &self,
         axis_aligned_box: &AxisAlignedBox,

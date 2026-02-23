@@ -52,7 +52,11 @@ impl IntersectionManager {
     }
 
     pub fn n_bounding_volumes_in_hierarchy(&self) -> usize {
-        self.bvh.primitive_count()
+        self.bvh.node_count()
+    }
+
+    pub fn all_bounding_volumes_in_hierarchy(&self) -> impl Iterator<Item = &AxisAlignedBoxC> {
+        self.bvh.all_bounding_volumes()
     }
 
     pub fn build_bounding_volume_hierarchy(&mut self) {
