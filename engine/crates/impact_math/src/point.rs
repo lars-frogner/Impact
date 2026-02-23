@@ -461,6 +461,16 @@ impl Point3C {
         Self::new(0.0, 0.0, 0.0)
     }
 
+    /// Computes the center position between two points.
+    #[inline]
+    pub fn center_of(point_a: &Self, point_b: &Self) -> Self {
+        Self {
+            x: 0.5 * (point_a.x + point_b.x),
+            y: 0.5 * (point_a.y + point_b.y),
+            z: 0.5 * (point_a.z + point_b.z),
+        }
+    }
+
     /// Returns a point where each component is the minimum of the corresponding
     /// components in this and another point.
     #[inline]

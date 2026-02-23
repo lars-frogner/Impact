@@ -529,6 +529,12 @@ impl AxisAlignedBoxC {
         &self.upper_corner
     }
 
+    /// Calculates and returns the center point of the box.
+    #[inline]
+    pub fn center(&self) -> Point3C {
+        Point3C::center_of(self.lower_corner(), self.upper_corner())
+    }
+
     /// Returns the extents of the box along the three axes.
     #[inline]
     pub fn extents(&self) -> Vector3C {
