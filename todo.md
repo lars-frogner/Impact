@@ -22,6 +22,8 @@
 
 - Consider Texel Snapping for shadow map cascades.
 
+- Ignore models with disabled shadown casting when determining shadow map bounds.
+
 ## Physics
 
 - Support disabling rigid bodies.
@@ -32,13 +34,25 @@
 
 - Implement N-body gravity simulation using multipole expansion for the gravitational field of extended objects and a Barnes-Hut tree as acceleration structure.
 
+- Correct gravitational field inside voxel objects.
+
 - Improve physics stability (avoid crash when small pieces explode with NaN).
+
+- Continuous collision detection.
+
+- Capsule collider shape.
+
+- Prevent colliders from being pushed towards voxel object interior when colliding with voxels.
 
 ## Voxels
 
 - Add smoothing pass after Surface Nets.
 
 - Per surface voxel state (e.g. temperature).
+
+- Make voxels carry ID for region association? Would enable detection of disconnected regions without empty voxels between, useful for e.g. Voronoi fracturing. Optionally, implement dedicated disconnected region detection with explicit region labels that could be sourced directly from Voronoi computation.
+
+- Define empty voxels as having signed distance larger than voxel radius, rather than just having positive signed distance.
 
 ## Generation
 
@@ -76,10 +90,6 @@
 
 - Ray intersection queries.
 
-## Roc
-
-- Support state/context in Roc script.
-
 ## Misc
 
 - Fix black square flashes due to bloom filter propagating NaNs.
@@ -89,5 +99,3 @@
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
 - Fix surface-grazing chunked marked as empty after voxel absorption even though the surface protrudes slightly into the chunk and no voxels were absorbed in or near the chunk (run at commit #9f72fb5f to reproduce).
-
-- Add impact_intersection crate with BoundingVolumeManager storing model-space bounding volumes for entities (under entity ID after new ID scheme). Implement IntersectionManager that queries reference frames to get world-space bounding volumes. Builds bounding volume hierarchy each frame. Use for collision detection, ray intersection and frustum culling queries. Scene graph obtains entity IDs for camera- and light-visible instances.
