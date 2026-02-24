@@ -10,13 +10,13 @@ use crate::{
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::{PlaneC, SphereC};
+use impact_geometry::{ModelTransform, PlaneC, SphereC};
 use impact_id::EntityID;
 use roc_integration::roc;
 
 define_setup_type! {
     target = CollidableID;
-    /// A spherical collidable.
+    /// A spherical collidable. The sphere is defined in model space.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -29,7 +29,7 @@ define_setup_type! {
 
 define_setup_type! {
     target = CollidableID;
-    /// A planar collidable.
+    /// A planar collidable. The plane is defined in model space.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
@@ -120,17 +120,22 @@ pub fn setup_spherical_collidable<C: Collidable>(
     rigid_body_type: RigidBodyType,
     collidable: &SphericalCollidable,
     get_local: impl FnOnce(SphereCollidable) -> C::Local,
+    model_transform: Option<&ModelTransform>,
 ) -> Result<()> {
+    let mut sphere = *collidable.sphere();
+
+    if let Some(transform) = model_transform.map(ModelTransform::create_transform_to_entity_space) {
+        // Transform sphere from model to body frame
+        sphere = sphere.aligned().transformed(&transform).compact();
+    }
+
     let collidable_id = CollidableID::from_entity_id(entity_id);
     let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
     collision_world.add_collidable(
         collidable_id,
         rigid_body_id,
         collidable.kind(),
-        get_local(SphereCollidable::new(
-            *collidable.sphere(),
-            *collidable.response_params(),
-        )),
+        get_local(SphereCollidable::new(sphere, *collidable.response_params())),
     )
 }
 
@@ -140,16 +145,21 @@ pub fn setup_planar_collidable<C: Collidable>(
     rigid_body_type: RigidBodyType,
     collidable: &PlanarCollidable,
     get_local: impl FnOnce(PlaneCollidable) -> C::Local,
+    model_transform: Option<&ModelTransform>,
 ) -> Result<()> {
+    let mut plane = *collidable.plane();
+
+    if let Some(transform) = model_transform.map(ModelTransform::create_transform_to_entity_space) {
+        // Transform plane from model to body frame
+        plane = plane.aligned().transformed(&transform).compact();
+    }
+
     let collidable_id = CollidableID::from_entity_id(entity_id);
     let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
     collision_world.add_collidable(
         collidable_id,
         rigid_body_id,
         collidable.kind(),
-        get_local(PlaneCollidable::new(
-            *collidable.plane(),
-            *collidable.response_params(),
-        )),
+        get_local(PlaneCollidable::new(plane, *collidable.response_params())),
     )
 }

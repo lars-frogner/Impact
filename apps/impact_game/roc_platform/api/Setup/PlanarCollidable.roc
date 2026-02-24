@@ -1,5 +1,5 @@
-# Hash: 79cfecccb03167b0
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: 9596722aca3df170
+# Generated: 2026-02-24T20:00:41.432447478
 # Rust type: impact_physics::collision::setup::PlanarCollidable
 # Type category: Component
 module [
@@ -20,7 +20,7 @@ import Physics.ContactResponseParameters
 import core.Builtin
 import core.Plane
 
-## A planar collidable.
+## A planar collidable. The plane is defined in model space.
 PlanarCollidable : {
     kind : U32,
     plane : Plane.Plane,

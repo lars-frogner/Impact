@@ -65,7 +65,7 @@ construct_entities = |{ radius, mass_density, luminous_intensity, emissive_lumin
         |> Setup.DynamicRigidBodySubstance.add_new(mass_density)
         |> Setup.SphericalCollidable.add_new(
             Dynamic,
-            Sphere.new(Point3.origin, radius),
+            Sphere.new(Point3.origin, 0.5),
             Physics.ContactResponseParameters.new(
                 star.restitution_coef,
                 star.static_friction_coef,

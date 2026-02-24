@@ -234,7 +234,7 @@ create_room! = |extent, angular_speed|
         )?
         |> Setup.PlanarCollidable.add_multiple_new(
             Same(Static),
-            Same(Plane.new(unit_y, plane_y)),
+            Same(Plane.new(unit_y, 0.0)),
             Same(Physics.ContactResponseParameters.new(0.2, 0.7, 0.5)),
         )?
         |> Setup.UniformColor.add_multiple(

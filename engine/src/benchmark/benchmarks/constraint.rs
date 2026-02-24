@@ -207,6 +207,7 @@ fn setup_sphere_bodies(
             RigidBodyType::Dynamic,
             &collidable,
             LocalCollidable::Sphere,
+            None,
         )
         .unwrap();
     }

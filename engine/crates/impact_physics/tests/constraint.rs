@@ -142,6 +142,7 @@ fn setup_sphere_bodies(
             RigidBodyType::Dynamic,
             &collidable,
             LocalCollidable::Sphere,
+            None,
         )
         .unwrap();
     }
@@ -198,6 +199,7 @@ fn setup_plane_bodies(
             RigidBodyType::Kinematic,
             &collidable,
             LocalCollidable::Plane,
+            None,
         )
         .unwrap();
     }

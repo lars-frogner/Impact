@@ -3,8 +3,8 @@
 use crate::collidable::{CollisionWorld, LocalCollidable, LocalVoxelObjectCollidable};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use impact_geometry::ModelTransform;
 use impact_id::EntityID;
-use impact_math::vector::Vector3C;
 use impact_physics::{
     collision::{CollidableID, CollidableKind},
     material::ContactResponseParameters,
@@ -55,8 +55,8 @@ pub fn setup_voxel_collidable(
     collision_world: &mut CollisionWorld,
     entity_id: EntityID,
     rigid_body_type: RigidBodyType,
-    origin_offset: Vector3C,
     collidable: &VoxelCollidable,
+    model_transform: Option<&ModelTransform>,
 ) -> Result<()> {
     let collidable_id = CollidableID::from_entity_id(entity_id);
     let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
@@ -67,7 +67,9 @@ pub fn setup_voxel_collidable(
         LocalCollidable::VoxelObject(LocalVoxelObjectCollidable {
             entity_id,
             response_params: *collidable.response_params(),
-            origin_offset,
+            origin_offset: model_transform
+                .map(|transform| transform.offset)
+                .unwrap_or_default(),
         }),
     )
 }
