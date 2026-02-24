@@ -668,9 +668,10 @@ impl SceneGraph {
                 // current cubemap face space for the current light at the end
                 // of each transform buffer, identified by the light's ID plus a
                 // face index offset
-                let range_id =
-                    light_entity_id_to_instance_feature_buffer_range_id(light_id.as_entity_id())
-                        + face.as_idx_u64();
+                let range_id = light_entity_id_to_instance_feature_buffer_range_id(
+                    light_id.as_entity_id(),
+                    face.as_idx_u64(),
+                );
 
                 intersection_manager.for_each_bounding_volume_maybe_in_frustum(
                     &world_space_face_frustum,
@@ -810,9 +811,10 @@ impl SceneGraph {
                 // current light's space for instances casting shadows in he
                 // current cascade at the end of each transform buffer,
                 // identified by the light's ID plus a cascade index offset
-                let range_id =
-                    light_entity_id_to_instance_feature_buffer_range_id(light_id.as_entity_id())
-                        + u64::from(cascade_idx);
+                let range_id = light_entity_id_to_instance_feature_buffer_range_id(
+                    light_id.as_entity_id(),
+                    u64::from(cascade_idx),
+                );
 
                 let light_space_orthographic_aabb = unidirectional_light
                     .create_light_space_orthographic_aabb_for_cascade(cascade_idx);

@@ -294,7 +294,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 let instance_range_id =
                     impact_scene::light::light_entity_id_to_instance_feature_buffer_range_id(
                         omnidirectional_light.id.as_entity_id(),
-                    ) + cubemap_face.as_idx_u64();
+                        cubemap_face.as_idx_u64(),
+                    );
 
                 if shadow_mapping_enabled {
                     record_additional_commands_before_face_update(
@@ -662,7 +663,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 let instance_range_id =
                     impact_scene::light::light_entity_id_to_instance_feature_buffer_range_id(
                         unidirectional_light.id.as_entity_id(),
-                    ) + u64::from(cascade_idx);
+                        u64::from(cascade_idx),
+                    );
 
                 let cascade_frustum = unidirectional_light
                     .create_light_space_orthographic_obb_for_cascade(cascade_idx);
