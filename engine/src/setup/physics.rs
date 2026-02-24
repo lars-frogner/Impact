@@ -1,12 +1,13 @@
 //! Setup and cleanup of physics for new and removed entities.
 
 pub mod anchor;
+pub mod bounding_volume;
 pub mod collision;
 pub mod driven_motion;
 pub mod force;
 pub mod rigid_body;
 
-use crate::{physics::PhysicsSimulator, resource::ResourceManager};
+use crate::{physics::PhysicsSimulator, resource::ResourceManager, scene::Scene};
 use anyhow::Result;
 use impact_ecs::world::{EntityEntry, PrototypeEntities};
 use impact_id::EntityID;
@@ -17,6 +18,7 @@ use parking_lot::RwLock;
 /// components.
 pub fn setup_physics_for_new_entities(
     resource_manager: &RwLock<ResourceManager>,
+    scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
     entities: &mut PrototypeEntities,
 ) -> Result<()> {
@@ -27,6 +29,8 @@ pub fn setup_physics_for_new_entities(
     driven_motion::setup_driven_motion_for_new_entities(simulator, entities)?;
 
     collision::setup_collidables_for_new_entities(simulator, entities)?;
+
+    bounding_volume::setup_bounding_volumes_for_new_entities(scene, entities);
 
     Ok(())
 }
