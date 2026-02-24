@@ -22,6 +22,7 @@ pub fn perform_setup_for_new_entities(
 
     physics::setup_physics_for_new_entities(
         engine.resource_manager(),
+        engine.scene(),
         engine.simulator(),
         entities,
     )?;

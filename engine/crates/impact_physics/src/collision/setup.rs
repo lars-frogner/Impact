@@ -10,8 +10,9 @@ use crate::{
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::{ModelTransform, PlaneC, SphereC};
+use impact_geometry::{AxisAlignedBoxC, ModelTransform, PlaneC, SphereC};
 use impact_id::EntityID;
+use impact_intersection::bounding_volume::{BoundingVolumeID, BoundingVolumeManager};
 use roc_integration::roc;
 
 define_setup_type! {
@@ -162,4 +163,23 @@ pub fn setup_planar_collidable<C: Collidable>(
         collidable.kind(),
         get_local(PlaneCollidable::new(plane, *collidable.response_params())),
     )
+}
+
+pub fn setup_bounding_volume_for_spherical_collidable(
+    bounding_volume_manager: &mut BoundingVolumeManager,
+    entity_id: EntityID,
+    collidable: &SphericalCollidable,
+) {
+    let aabb = collidable.sphere().aligned().compute_aabb().compact();
+
+    let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+
+    if let Some(existing_aabb) = bounding_volume_manager.get_bounding_volume_mut(bounding_volume_id)
+    {
+        *existing_aabb = AxisAlignedBoxC::aabb_from_pair(existing_aabb, &aabb);
+    } else {
+        bounding_volume_manager
+            .insert_bounding_volume(bounding_volume_id, aabb)
+            .unwrap();
+    }
 }
