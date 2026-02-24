@@ -35,7 +35,8 @@ pub fn setup_collidables_for_new_entities(
         },
         entities,
         |entity_id: EntityID,
-         spherical_collidable: &SphericalCollidable|
+         spherical_collidable: &SphericalCollidable,
+         model_transform: Option<&ModelTransform>|
          -> Result<HasCollidable> {
             collision::setup::setup_spherical_collidable(
                 &mut collision_world,
@@ -43,6 +44,7 @@ pub fn setup_collidables_for_new_entities(
                 RigidBodyType::Dynamic,
                 spherical_collidable,
                 LocalCollidable::Sphere,
+                model_transform,
             )?;
             Ok(HasCollidable)
         },
@@ -57,7 +59,8 @@ pub fn setup_collidables_for_new_entities(
         },
         entities,
         |entity_id: EntityID,
-         spherical_collidable: &SphericalCollidable|
+         spherical_collidable: &SphericalCollidable,
+         model_transform: Option<&ModelTransform>|
          -> Result<HasCollidable> {
             collision::setup::setup_spherical_collidable(
                 &mut collision_world,
@@ -65,6 +68,7 @@ pub fn setup_collidables_for_new_entities(
                 RigidBodyType::Kinematic,
                 spherical_collidable,
                 LocalCollidable::Sphere,
+                model_transform,
             )?;
             Ok(HasCollidable)
         },
@@ -78,13 +82,17 @@ pub fn setup_collidables_for_new_entities(
             let mut collision_world = simulator.collision_world().owrite();
         },
         entities,
-        |entity_id: EntityID, planar_collidable: &PlanarCollidable| -> Result<HasCollidable> {
+        |entity_id: EntityID,
+         planar_collidable: &PlanarCollidable,
+         model_transform: Option<&ModelTransform>|
+         -> Result<HasCollidable> {
             collision::setup::setup_planar_collidable(
                 &mut collision_world,
                 entity_id,
                 RigidBodyType::Dynamic,
                 planar_collidable,
                 LocalCollidable::Plane,
+                model_transform,
             )?;
             Ok(HasCollidable)
         },
@@ -98,13 +106,17 @@ pub fn setup_collidables_for_new_entities(
             let mut collision_world = simulator.collision_world().owrite();
         },
         entities,
-        |entity_id: EntityID, planar_collidable: &PlanarCollidable| -> Result<HasCollidable> {
+        |entity_id: EntityID,
+         planar_collidable: &PlanarCollidable,
+         model_transform: Option<&ModelTransform>|
+         -> Result<HasCollidable> {
             collision::setup::setup_planar_collidable(
                 &mut collision_world,
                 entity_id,
                 RigidBodyType::Kinematic,
                 planar_collidable,
                 LocalCollidable::Plane,
+                model_transform,
             )?;
             Ok(HasCollidable)
         },
@@ -120,14 +132,14 @@ pub fn setup_collidables_for_new_entities(
         entities,
         |entity_id: EntityID,
          voxel_collidable: &VoxelCollidable,
-         model_transform: &ModelTransform|
+         model_transform: Option<&ModelTransform>|
          -> Result<HasCollidable> {
             impact_voxel::collidable::setup::setup_voxel_collidable(
                 &mut collision_world,
                 entity_id,
                 RigidBodyType::Dynamic,
-                model_transform.offset,
                 voxel_collidable,
+                model_transform,
             )?;
             Ok(HasCollidable)
         },
@@ -149,10 +161,8 @@ pub fn setup_collidables_for_new_entities(
                 &mut collision_world,
                 entity_id,
                 RigidBodyType::Kinematic,
-                model_transform
-                    .map(|model_transform| model_transform.offset)
-                    .unwrap_or_default(),
                 voxel_collidable,
+                model_transform,
             )?;
             Ok(HasCollidable)
         },

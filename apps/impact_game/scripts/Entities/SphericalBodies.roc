@@ -47,10 +47,6 @@ construct_entities = |bodies|
         |> List.map(|{ position, velocity, size }| (position, velocity, size))
         |> ListUtil.unzip3
 
-    collidable_spheres =
-        diameters
-        |> List.map(|diameter| Sphere.new(Point3.origin, 0.5 * diameter))
-
     Entity.new_multi_component_data(List.len(bodies))
     |> Setup.SphereMesh.add_multiple_new(
         Same(100),
@@ -79,7 +75,7 @@ construct_entities = |bodies|
     )?
     |> Setup.SphericalCollidable.add_multiple_new(
         Same(Dynamic),
-        All(collidable_spheres),
+        Same(Sphere.new(Point3.origin, 0.5)),
         Same(
             Physics.ContactResponseParameters.new(
                 body.restitution_coef,

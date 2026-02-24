@@ -1,5 +1,5 @@
-# Hash: 1cff6a0fa634b373
-# Generated: 2025-12-29T23:56:08.53639192
+# Hash: d09546ad030959b8
+# Generated: 2026-02-24T20:01:39.643833734
 # Rust type: impact_physics::collision::setup::SphericalCollidable
 # Type category: Component
 module [
@@ -20,7 +20,7 @@ import Physics.ContactResponseParameters
 import core.Builtin
 import core.Sphere
 
-## A spherical collidable.
+## A spherical collidable. The sphere is defined in model space.
 SphericalCollidable : {
     kind : U32,
     sphere : Sphere.Sphere,

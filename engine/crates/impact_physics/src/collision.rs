@@ -17,6 +17,8 @@ use roc_integration::roc;
 use std::fmt;
 
 pub trait Collidable: Sized + fmt::Debug {
+    /// A local collidable is defined in the body-fixed frame instead of world
+    /// space.
     type Local: fmt::Debug;
     type Context;
 

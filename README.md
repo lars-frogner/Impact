@@ -177,7 +177,7 @@ Entity.new_multi_component_data(List.len(positions))
     )?
     |> Setup.SphericalCollidable.add_multiple_new(
         Same(Dynamic),
-        Same(Sphere.new(Point3.origin, radius)),
+        Same(Sphere.new(Point3.origin, 0.5)),
         Same(Physics.ContactResponseParameters.new(0.7, 0.5, 0.3)),
     )?
     |> Setup.ConstantAcceleration.add_multiple_earth

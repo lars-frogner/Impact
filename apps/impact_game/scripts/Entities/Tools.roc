@@ -176,7 +176,7 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
         )
         |> Setup.SphericalCollidable.add_new(
             Dynamic,
-            Sphere.new(Point3.origin, projectile.radius),
+            Sphere.new(Point3.origin, 0.5),
             Physics.ContactResponseParameters.new(
                 projectile.restitution_coef,
                 projectile.static_friction_coef,
