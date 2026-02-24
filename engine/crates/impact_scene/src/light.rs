@@ -3,16 +3,16 @@
 use crate::SceneEntityFlags;
 use impact_id::EntityID;
 use impact_light::LightFlags;
+use impact_math::random::splitmix;
 use impact_model::InstanceFeatureBufferRangeID;
 
-/// Converts the given entity ID for a light into an
-/// [`InstanceFeatureBufferRangeID`].
+/// Converts the given entity ID for a light along with an offset (for cascades
+/// or cubemap faces) into an [`InstanceFeatureBufferRangeID`].
 pub fn light_entity_id_to_instance_feature_buffer_range_id(
     entity_id: EntityID,
+    offset: u64,
 ) -> InstanceFeatureBufferRangeID {
-    // Use a stride of 6 so that the ID can be incremented up to 5 times to
-    // create additional ranges associated with the same light
-    6 * entity_id.as_u64()
+    splitmix::random_u64_from_two_states(entity_id.as_u64(), offset)
 }
 
 impl From<SceneEntityFlags> for LightFlags {
