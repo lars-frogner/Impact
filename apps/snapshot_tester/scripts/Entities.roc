@@ -125,6 +125,7 @@ box_scale = 0.75
 box_height = -0.5
 
 sphere_rings = 15
+sphere_scale = 0.5
 sphere_height = 0.5
 
 diffuse_box =
@@ -151,18 +152,21 @@ metallic_box =
 diffuse_sphere =
     Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
+    |> Comp.ModelTransform.add_with_scale(sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented((1 + hspacing, sphere_height + vspacing + voffset, dist))
     |> add_diffuse
 
 plastic_sphere =
     Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
+    |> Comp.ModelTransform.add_with_scale(sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented((0, sphere_height + vspacing + voffset, dist))
     |> add_plastic
 
 metallic_sphere =
     Entity.new_component_data
     |> Setup.SphereMesh.add_new(sphere_rings)
+    |> Comp.ModelTransform.add_with_scale(sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented((-1 - hspacing, sphere_height + vspacing + voffset, dist))
     |> add_metallic
 
@@ -213,7 +217,7 @@ obscuring_square =
 ao_ground_height = -2.0
 ao_box_scale = 1.0
 ao_box_hshift = 0.6
-ao_sphere_scale = 1.2
+ao_sphere_scale = 0.6
 
 ambient_occlusion_ground =
     Entity.new_component_data
@@ -237,7 +241,7 @@ ambient_occlusion_sphere =
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ModelTransform.add_with_scale(ao_sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented(
-        (ao_box_hshift - (ao_box_scale + ao_sphere_scale) / 2, ao_ground_height + ao_sphere_scale / 2, 2.8),
+        (ao_box_hshift - ao_box_scale / 2 - ao_sphere_scale, ao_ground_height + ao_sphere_scale, 2.8),
     )
     |> add_plastic
 
@@ -245,7 +249,7 @@ ambient_occlusion_sphere =
 
 scm_dist = 4.5
 scm_ground_height = -2.0
-scm_sphere_scale = 0.8
+scm_sphere_scale = 0.4
 scm_box_scale = 0.6
 
 shadow_cube_mapping_light =
@@ -276,7 +280,7 @@ shadow_cube_mapping_sphere =
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ModelTransform.add_with_scale(scm_sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented(
-        (-0.8, scm_ground_height + scm_sphere_scale / 2, scm_dist - 1.5),
+        (-0.8, scm_ground_height + scm_sphere_scale, scm_dist - 1.5),
     )
     |> add_plastic
 
@@ -298,7 +302,7 @@ shadow_cube_mapping_box =
 # **** Cascaded shadow mapping ****
 
 csm_ground_height = -2.0
-csm_sphere_scale = 1.0
+csm_sphere_scale = 0.5
 csm_box_scale = 0.8
 
 cascaded_shadow_mapping_light =
@@ -329,7 +333,7 @@ cascaded_shadow_mapping_sphere =
     |> Setup.SphereMesh.add_new(sphere_rings)
     |> Comp.ModelTransform.add_with_scale(csm_sphere_scale)
     |> Comp.ReferenceFrame.add_unoriented(
-        (0.8, csm_ground_height + csm_sphere_scale / 2, 4.0),
+        (0.8, csm_ground_height + csm_sphere_scale, 4.0),
     )
     |> add_plastic
 

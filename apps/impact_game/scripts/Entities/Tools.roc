@@ -168,7 +168,7 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
             Vector3.same(0),
             2 * projectile.radius,
         )
-        |> Comp.ModelTransform.add_with_scale(2 * projectile.radius)
+        |> Comp.ModelTransform.add_with_scale(projectile.radius)
         |> Comp.ReferenceFrame.add_unoriented(launch_position)
         |> Comp.Motion.add_linear(launch_velocity)
         |> Setup.DynamicRigidBodySubstance.add_new(
@@ -176,7 +176,7 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
         )
         |> Setup.SphericalCollidable.add_new(
             Dynamic,
-            Sphere.new(Point3.origin, 0.5),
+            Sphere.new(Point3.origin, 1.0),
             Physics.ContactResponseParameters.new(
                 projectile.restitution_coef,
                 projectile.static_friction_coef,
@@ -244,7 +244,7 @@ construct_entities = |entity_ids, parent|
             Vector3.scale(absorber.light_color, absorber.luminous_intensity),
             2 * absorber.visual_radius,
         )
-        |> Comp.ModelTransform.add_with_scale(2 * absorber.visual_radius)
+        |> Comp.ModelTransform.add_with_scale(absorber.visual_radius)
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.SceneEntityFlags.add(Comp.SceneEntityFlags.is_disabled)
 

@@ -59,13 +59,13 @@ construct_entities = |{ radius, mass_density, luminous_intensity, emissive_lumin
         |> Setup.SphereMesh.add_new(100)
         |> Setup.UniformColor.add(star.color)
         |> Setup.UniformEmissiveLuminance.add(emissive_luminance)
-        |> Comp.ModelTransform.add_with_scale(2 * radius)
+        |> Comp.ModelTransform.add_with_scale(radius)
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
         |> Comp.Motion.add_stationary
         |> Setup.DynamicRigidBodySubstance.add_new(mass_density)
         |> Setup.SphericalCollidable.add_new(
             Dynamic,
-            Sphere.new(Point3.origin, 0.5),
+            Sphere.new(Point3.origin, 1.0),
             Physics.ContactResponseParameters.new(
                 star.restitution_coef,
                 star.static_friction_coef,

@@ -135,7 +135,7 @@ laser =
 absorbing_sphere =
     Entity.new_component_data
     |> Comp.ParentEntity.add(entity_ids.player)
-    |> Comp.ModelTransform.add_with_scale(0.1)
+    |> Comp.ModelTransform.add_with_scale(0.05)
     |> Comp.ReferenceFrame.add_unoriented((0, 0, -3))
     |> Setup.SphereMesh.add_new(64)
     |> Setup.UniformColor.add((0.9, 0.05, 0.05))

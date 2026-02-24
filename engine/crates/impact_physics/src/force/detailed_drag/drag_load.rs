@@ -294,7 +294,7 @@ mod tests {
             // factor comes from using the projected triangle area. So the force
             // accumulation corresponds to integrating cos(theta)^2 over the
             // hemisphere, giving (2/3)*pi*r^2.
-            let correct_force = (1.0 / 3.0) * TWO_PI * 0.5_f32.powi(2);
+            let correct_force = (1.0 / 3.0) * TWO_PI * 1.0_f32.powi(2);
 
             prop_assert!(abs_diff_eq!(force_direction, -direction, epsilon = 1e-3));
             prop_assert!(abs_diff_eq!(force, correct_force, epsilon = 1e-3));

@@ -121,7 +121,7 @@ define_setup_type! {
 
 define_setup_type! {
     target = TriangleMeshID;
-    /// A mesh consisting of a unit diameter sphere centered on the origin.
+    /// A mesh consisting of a unit radius sphere centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
