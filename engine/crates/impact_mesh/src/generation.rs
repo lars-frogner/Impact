@@ -437,7 +437,7 @@ impl TriangleMesh {
         )
     }
 
-    /// Creates a mesh representing a sphere with diameter 1.0, centered at the
+    /// Creates a mesh representing a sphere with radius 1.0, centered at the
     /// origin. `n_rings` is the number of horizontal circular cross-sections
     /// that vertices will be generated around. The number of vertices that will
     /// be generated around each ring increases in proportion to `n_rings` to
@@ -450,7 +450,7 @@ impl TriangleMesh {
     pub fn create_sphere(n_rings: usize) -> Self {
         assert!(n_rings > 0, "Tried to create sphere mesh with no rings");
 
-        let radius = 0.5;
+        let radius = 1.0;
 
         let n_circumference_vertices = 2 * n_rings + 2;
 
@@ -750,9 +750,6 @@ impl TriangleMesh {
         // Normal vectors are not needed for light volumes
         mesh.remove_normal_vectors(&mut dirty_mask);
 
-        // Scale to unit radius
-        mesh.scale(2.0, &mut dirty_mask);
-
         // Flip triangle winding order to make the front faces point inward
         mesh.flip_triangle_winding_order(&mut dirty_mask);
 
@@ -828,7 +825,6 @@ impl TriangleMesh {
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         sphere.remove_normal_vectors(&mut dirty_mask);
-        sphere.scale(2.0, &mut dirty_mask);
         sphere.set_same_color(color, &mut dirty_mask);
 
         sphere

@@ -166,7 +166,7 @@ Entity.new_multi_component_data(List.len(positions))
         Same(100),
     )?
     |> Comp.ModelTransform.add_multiple_with_scale(
-        Same(Num.to_f32(2 * radius)),
+        Same(Num.to_f32(radius)),
     )?
     |> Comp.ReferenceFrame.add_multiple_unoriented(
         All(positions),
@@ -177,7 +177,7 @@ Entity.new_multi_component_data(List.len(positions))
     )?
     |> Setup.SphericalCollidable.add_multiple_new(
         Same(Dynamic),
-        Same(Sphere.new(Point3.origin, 0.5)),
+        Same(Sphere.new(Point3.origin, 1.0)),
         Same(Physics.ContactResponseParameters.new(0.7, 0.5, 0.3)),
     )?
     |> Setup.ConstantAcceleration.add_multiple_earth

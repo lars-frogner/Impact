@@ -43,7 +43,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
     attachment_point =
         Entity.new_component_data
         |> Setup.SphereMesh.add_new(15)
-        |> Comp.ModelTransform.add_with_scale(0.2)
+        |> Comp.ModelTransform.add_with_scale(0.1)
         |> Comp.ReferenceFrame.add_unoriented(attachment_position)
         |> Comp.Motion.add_stationary
         |> Setup.UniformColor.add((0.8, 0.1, 0.1))

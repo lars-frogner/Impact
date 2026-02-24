@@ -160,7 +160,7 @@ box =
 sphere =
     Entity.new_component_data
     |> Setup.SphereMesh.add_new(100)
-    |> Comp.ModelTransform.add_with_scale(4.0)
+    |> Comp.ModelTransform.add_with_scale(2.0)
     |> Comp.ReferenceFrame.add_unoriented((-9.0, 4.0, 5.0))
     |> Setup.UniformColor.add((0.3, 0.2, 0.7))
     |> Setup.UniformSpecularReflectance.add_in_range_of(
@@ -237,7 +237,7 @@ upper_z_wall =
 bulb_light =
     Entity.new_component_data
     |> Setup.SphereMesh.add_new(25)
-    |> Comp.ModelTransform.add_with_scale(0.7)
+    |> Comp.ModelTransform.add_with_scale(0.35)
     |> Comp.ReferenceFrame.add_unoriented((0.0, 17.0, 2.0))
     |> Setup.UniformColor.add((1.0, 1.0, 1.0))
     |> Setup.UniformEmissiveLuminance.add(1e6)

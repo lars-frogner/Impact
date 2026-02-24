@@ -42,9 +42,9 @@ spawn! = |bodies|
 construct_entities : List SolarSystem.Body -> Result Entity.MultiComponentData Str
 construct_entities = |bodies|
 
-    (positions, velocities, diameters) =
+    (positions, velocities, radii) =
         bodies
-        |> List.map(|{ position, velocity, size }| (position, velocity, size))
+        |> List.map(|{ position, velocity, size }| (position, velocity, 0.5 * size))
         |> ListUtil.unzip3
 
     Entity.new_multi_component_data(List.len(bodies))
@@ -62,7 +62,7 @@ construct_entities = |bodies|
         Same(body.roughness),
     )?
     |> Comp.ModelTransform.add_multiple_with_scale(
-        All(diameters),
+        All(radii),
     )?
     |> Comp.ReferenceFrame.add_multiple_unoriented(
         All(positions),
@@ -75,7 +75,7 @@ construct_entities = |bodies|
     )?
     |> Setup.SphericalCollidable.add_multiple_new(
         Same(Dynamic),
-        Same(Sphere.new(Point3.origin, 0.5)),
+        Same(Sphere.new(Point3.origin, 1.0)),
         Same(
             Physics.ContactResponseParameters.new(
                 body.restitution_coef,

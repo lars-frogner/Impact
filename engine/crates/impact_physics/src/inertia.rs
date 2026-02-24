@@ -150,7 +150,7 @@ impl InertialProperties {
     /// Computes the inertial properties of the uniformly dense sphere with
     /// the given diameter.
     ///
-    /// With `radius = 0.5`, the sphere corresponds to the one created by
+    /// With `radius = 1.0`, the sphere corresponds to the one created by
     /// calling `impact_mesh::TriangleMesh::create_sphere`.
     pub fn of_uniform_sphere(radius: f32, mass_density: f32) -> Self {
         let mass = compute_sphere_volume(radius) * mass_density;
