@@ -554,8 +554,8 @@ impl TriangleMesh {
         )
     }
 
-    /// Creates a mesh representing a hemisphere with diameter 1.0, with the
-    /// disk lying in the xz-plane and centered at the origin. `n_rings` is the
+    /// Creates a mesh representing a hemisphere with radius 1.0, with the disk
+    /// lying in the xz-plane and centered at the origin. `n_rings` is the
     /// number of horizontal circular cross-sections that vertices will be
     /// generated around. The number of vertices that will be generated around
     /// each ring increases in proportion to `n_rings` to maintain an
@@ -568,7 +568,7 @@ impl TriangleMesh {
     pub fn create_hemisphere(n_rings: usize) -> Self {
         assert!(n_rings > 0, "Tried to create hemisphere mesh with no rings");
 
-        let radius = 0.5;
+        let radius = 1.0;
 
         let n_circumference_vertices = 4 * n_rings + 2;
 
@@ -714,7 +714,7 @@ impl TriangleMesh {
         let n_rings = ((n_circumference_vertices - 2) / 4).max(4);
 
         let mut cap_mesh = Self::create_hemisphere(n_rings);
-        cap_mesh.scale(diameter, &mut dirty_mask);
+        cap_mesh.scale(radius, &mut dirty_mask);
         cap_mesh.translate(
             &Vector3::new(0.0, 0.5 * segment_length, 0.0),
             &mut dirty_mask,

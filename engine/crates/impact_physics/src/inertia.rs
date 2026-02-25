@@ -170,7 +170,7 @@ impl InertialProperties {
     /// Computes the inertial properties of a uniform hemisphere with the
     /// given radius, with the disk lying in the xz-plane.
     ///
-    /// With `radius = 0.5`, the hemisphere corresponds to the one created by
+    /// With `radius = 1.0`, the hemisphere corresponds to the one created by
     /// calling `impact_mesh::TriangleMesh::create_hemisphere`.
     pub fn of_uniform_hemisphere(radius: f32, mass_density: f32) -> Self {
         let mass = compute_hemisphere_volume(radius) * mass_density;
