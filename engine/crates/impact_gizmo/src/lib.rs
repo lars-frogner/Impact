@@ -256,6 +256,9 @@ pub struct GizmoVisibilities {
 )]
 #[derive(Clone, Debug)]
 pub struct GizmoParameters {
+    /// Hide bounding volumes bounding more than this number of primitives in
+    /// the hierarchy.
+    pub max_bvh_primitives: u32,
     /// The density used to calculate the size of the center of mass sphere from
     /// the mass of the body.
     pub center_of_mass_sphere_density: f32,
@@ -644,6 +647,7 @@ impl GizmoVisibilities {
 impl Default for GizmoParameters {
     fn default() -> Self {
         Self {
+            max_bvh_primitives: 1,
             center_of_mass_sphere_density: 1e3,
             linear_velocity_scale: 1.0,
             angular_velocity_scale: 1.0,
