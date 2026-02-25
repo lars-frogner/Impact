@@ -136,7 +136,7 @@ define_setup_type! {
 
 define_setup_type! {
     target = TriangleMeshID;
-    /// A mesh consisting of a unit diameter hemisphere whose disk lies in the
+    /// A mesh consisting of a unit radius hemisphere whose disk lies in the
     /// xz-plane and is centered on the origin.
     #[roc(parents = "Setup")]
     #[repr(C)]

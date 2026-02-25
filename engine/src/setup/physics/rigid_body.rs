@@ -283,7 +283,7 @@ pub fn setup_rigid_bodies_for_new_entities(
             let frame = frame.copied().unwrap_or_default();
             let motion = motion.copied().unwrap_or_default();
 
-            let radius = 0.5; // The hemisphere mesh has a diameter of 1.0
+            let radius = 1.0; // The hemisphere mesh has a radius of 1.0
 
             let inertial_properties = InertialProperties::of_uniform_hemisphere(
                 radius * model_transform.scale,
