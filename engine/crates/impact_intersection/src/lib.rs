@@ -7,8 +7,10 @@ pub mod bounding_volume;
 
 use anyhow::Result;
 use bounding_volume::{
-    BoundingVolumeID, BoundingVolumeManager, hierarchy::BoundingVolumeHierarchy,
+    BoundingVolumeID, BoundingVolumeManager,
+    hierarchy::{BVHNodeInfoIter, BoundingVolumeHierarchy},
 };
+use impact_alloc::Allocator;
 use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum};
 use impact_math::transform::Similarity3;
 
@@ -55,8 +57,15 @@ impl IntersectionManager {
         self.bvh.node_count()
     }
 
-    pub fn all_bounding_volumes_in_hierarchy(&self) -> impl Iterator<Item = &AxisAlignedBoxC> {
-        self.bvh.all_bounding_volumes()
+    /// Returns an iterator that yields a
+    /// [`BVHNodeInfo`](bounding_volume::hierarchy::BVHNodeInfoIter) value for
+    /// node in the bounding volume hierarchy. The iterator will allocate
+    /// temporary memory for traversal using the given allocator.
+    pub fn bounding_volume_hierarchy_node_info_iter<'a, A: Allocator>(
+        &'a self,
+        alloc: A,
+    ) -> BVHNodeInfoIter<'a, A> {
+        self.bvh.node_info_iter(alloc)
     }
 
     pub fn build_bounding_volume_hierarchy(&mut self) {

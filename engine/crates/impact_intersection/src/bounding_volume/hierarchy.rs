@@ -5,7 +5,7 @@ mod naive_bottom_up;
 
 use crate::bounding_volume::BoundingVolumeID;
 use anyhow::{Result, anyhow};
-use impact_alloc::{AVec, arena::ArenaPool};
+use impact_alloc::{AVec, Allocator, arena::ArenaPool, avec};
 use impact_containers::KeyIndexMapper;
 use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum};
 use std::mem;
@@ -23,6 +23,28 @@ pub enum BVHBuildMethod {
     NaiveBottomUp,
     #[default]
     FastBottomUp,
+}
+
+/// An iterator over [`BVHNodeInfo`] for the nodes in a
+/// [`BoundingVolumeHierarchy`].
+#[derive(Debug)]
+pub struct BVHNodeInfoIter<'a, A: Allocator> {
+    nodes: &'a [Node],
+    primitive_counts: AVec<usize, A>,
+    operation_stack: AVec<NodeMetadataOperation, A>,
+}
+
+#[derive(Debug)]
+pub struct BVHNodeInfo<'a> {
+    pub aabb: &'a AxisAlignedBoxC,
+    pub depth: u32,
+    pub primitive_count: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum NodeMetadataOperation {
+    Visit { node_id: NodeID, depth: u32 },
+    Emit { node_id: NodeID, depth: u32 },
 }
 
 #[derive(Debug)]
@@ -106,8 +128,11 @@ impl BoundingVolumeHierarchy {
         self.nodes.len()
     }
 
-    pub fn all_bounding_volumes(&self) -> impl Iterator<Item = &AxisAlignedBoxC> {
-        self.nodes.iter().map(|node| &node.aabb)
+    /// Returns an iterator that yields a [`BVHNodeInfo`] value for node in the
+    /// hierarchy. The iterator will allocate temporary memory for traversal
+    /// using the given allocator.
+    pub fn node_info_iter<'a, A: Allocator>(&'a self, alloc: A) -> BVHNodeInfoIter<'a, A> {
+        BVHNodeInfoIter::new(alloc, &self.nodes, self.root_node_id)
     }
 
     pub fn for_each_bounding_volume_in_axis_aligned_box(
@@ -445,6 +470,70 @@ impl PackedNodePayload {
         } else {
             NodePayload::Primitive {
                 idx: self.right_id_or_primitive_idx,
+            }
+        }
+    }
+}
+
+impl<'a, A: Allocator> BVHNodeInfoIter<'a, A> {
+    fn new(alloc: A, nodes: &'a [Node], root_node_id: Option<NodeID>) -> Self {
+        let mut operation_stack = AVec::new_in(alloc);
+        let primitive_counts = avec![in alloc; 1; nodes.len()];
+
+        if let Some(id) = root_node_id {
+            operation_stack.push(NodeMetadataOperation::Visit {
+                node_id: id,
+                depth: 0,
+            });
+        }
+
+        Self {
+            nodes,
+            primitive_counts,
+            operation_stack,
+        }
+    }
+}
+
+impl<'a, A: Allocator> Iterator for BVHNodeInfoIter<'a, A> {
+    type Item = BVHNodeInfo<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.operation_stack.pop()? {
+                NodeMetadataOperation::Visit { node_id, depth } => {
+                    self.operation_stack
+                        .push(NodeMetadataOperation::Emit { node_id, depth });
+
+                    let node = &self.nodes[node_id];
+
+                    if let NodePayload::Children { left_id, right_id } = node.payload() {
+                        self.operation_stack.push(NodeMetadataOperation::Visit {
+                            node_id: right_id,
+                            depth: depth + 1,
+                        });
+                        self.operation_stack.push(NodeMetadataOperation::Visit {
+                            node_id: left_id,
+                            depth: depth + 1,
+                        });
+                    }
+                }
+                NodeMetadataOperation::Emit { node_id, depth } => {
+                    let node = &self.nodes[node_id];
+
+                    if let NodePayload::Children { left_id, right_id } = node.payload() {
+                        self.primitive_counts[node_id] =
+                            self.primitive_counts[left_id] + self.primitive_counts[right_id];
+                    }
+
+                    let primitive_count = self.primitive_counts[node_id];
+
+                    return Some(BVHNodeInfo {
+                        aabb: &node.aabb,
+                        depth,
+                        primitive_count,
+                    });
+                }
             }
         }
     }

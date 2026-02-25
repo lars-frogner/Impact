@@ -1,8 +1,8 @@
 use super::{LabelAndHoverText, option_checkbox, option_group, option_panel, option_slider};
-use crate::UserInterfaceConfig;
+use crate::{UserInterfaceConfig, option_panels::option_drag_value};
 use impact::{
     command::{AdminCommand, gizmo::GizmoAdminCommand},
-    egui::{Context, Response, Slider, Ui},
+    egui::{Context, DragValue, Response, Slider, Ui},
     engine::Engine,
     impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
 };
@@ -13,6 +13,16 @@ fn gizmo_parameter_options(
     gizmo: GizmoType,
 ) -> Option<Response> {
     match gizmo {
+        GizmoType::BoundingVolumeHierarchy => Some(option_drag_value(
+            ui,
+            LabelAndHoverText {
+                label: "Max BVH primitives",
+                hover_text: "\
+                    Hide bounding volumes bounding more than this number of \
+                    primitives in the hierarchy.",
+            },
+            DragValue::new(&mut parameters.max_bvh_primitives),
+        )),
         GizmoType::CenterOfMass => Some(option_slider(
             ui,
             LabelAndHoverText {

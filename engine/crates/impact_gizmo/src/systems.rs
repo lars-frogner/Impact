@@ -122,6 +122,7 @@ pub fn buffer_transforms_for_gizmos(
         buffer_transforms_for_bounding_volume_hierarchy_gizmo(
             model_instance_manager,
             intersection_manager,
+            gizmo_manager.parameters(),
             camera,
         );
     }
@@ -477,6 +478,7 @@ fn compute_transform_for_bounding_volume_gizmo(
 fn buffer_transforms_for_bounding_volume_hierarchy_gizmo(
     model_instance_manager: &mut ModelInstanceManager,
     intersection_manager: &IntersectionManager,
+    parameters: &GizmoParameters,
     camera: &Camera,
 ) {
     let arena = ArenaPool::get_arena();
@@ -487,12 +489,16 @@ fn buffer_transforms_for_bounding_volume_hierarchy_gizmo(
 
     let view_transform = Similarity3::from_isometry(*camera.view_transform());
 
-    for aabb in intersection_manager.all_bounding_volumes_in_hierarchy() {
-        let scaling = aabb.extents();
+    for node in intersection_manager.bounding_volume_hierarchy_node_info_iter(&arena) {
+        if node.primitive_count > parameters.max_bvh_primitives as usize {
+            continue;
+        }
+
+        let scaling = node.aabb.extents();
 
         let world_space_aabb_from_unit_cube = GizmoInstanceModelViewTransform::new(
             UnitQuaternionC::identity(),
-            *aabb.center().as_vector(),
+            *node.aabb.center().as_vector(),
             scaling,
         );
 
