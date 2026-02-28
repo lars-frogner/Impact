@@ -250,20 +250,26 @@ define_task!(
 );
 
 // =============================================================================
-// ENTITY LIFETIMES
+// ENTITY RULES (based on state from previous frame)
 // =============================================================================
 
 define_task!(
     /// Stages entities failing their lifetime conditions for removal.
-    [pub] HandleEntityLifetimes,
+    [pub] HandleDistanceTriggeredEntityRules,
     depends_on = [CallApp, HandleInputEvents],
     execute_on = [UserInterfaceTag, PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_task!("Handling entity lifetimes", engine.task_timer(), {
+        instrument_task!("Handling distance triggered entity rules", engine.task_timer(), {
             let mut entity_stager = engine.entity_stager().olock();
             let ecs_world = engine.ecs_world().oread();
-            impact_scene::systems::stage_too_remote_entities_for_removal(&mut entity_stager, &ecs_world);
+            let scene = engine.scene().oread();
+            let mut scene_graph = scene.scene_graph().owrite();
+            impact_scene::systems::handle_distance_triggered_rules_for_entities(
+                &mut entity_stager,
+                &ecs_world,
+                &mut scene_graph,
+            );
             Ok(())
         })
     }
@@ -300,7 +306,7 @@ define_task!(
         CallApp,
         HandleInputEvents,
         ApplyEngineCommands,
-        HandleEntityLifetimes
+        HandleDistanceTriggeredEntityRules
     ],
     execute_on = [PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
@@ -1074,8 +1080,8 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(ApplyEngineCommands)?;
     task_scheduler.register_task(ApplyRenderCommands)?;
 
-    // ENTITY LIFETIMES (based on state from previous frame)
-    task_scheduler.register_task(HandleEntityLifetimes)?;
+    // ENTITY RULES (based on state from previous frame)
+    task_scheduler.register_task(HandleDistanceTriggeredEntityRules)?;
 
     // USER INTERFACE
     task_scheduler.register_task(ProcessUserInterface)?;
