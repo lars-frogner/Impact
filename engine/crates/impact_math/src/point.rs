@@ -64,6 +64,12 @@ impl Point2 {
         Self::wrap(glam::Vec2::new(x, y))
     }
 
+    /// Creates a new point with the same value for all components.
+    #[inline]
+    pub const fn same(value: f32) -> Self {
+        Self::new(value, value)
+    }
+
     /// Creates a point at the origin.
     #[inline]
     pub const fn origin() -> Self {
@@ -246,6 +252,12 @@ impl Point3 {
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self::wrap(glam::Vec3A::new(x, y, z))
+    }
+
+    /// Creates a new point with the same value for all components.
+    #[inline]
+    pub const fn same(value: f32) -> Self {
+        Self::new(value, value, value)
     }
 
     /// Creates a point at the origin.
@@ -453,6 +465,12 @@ impl Point3C {
     #[inline]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
+    }
+
+    /// Creates a new point with the same value for all components.
+    #[inline]
+    pub const fn same(value: f32) -> Self {
+        Self::new(value, value, value)
     }
 
     /// Creates a point at the origin.
