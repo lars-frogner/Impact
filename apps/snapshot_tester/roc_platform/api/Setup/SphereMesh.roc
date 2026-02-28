@@ -1,5 +1,5 @@
-# Hash: 8d4bf17c1972d8e3
-# Generated: 2025-12-29T23:55:22.755341756
+# Hash: 8ccc3d9201f9b05e
+# Generated: 2026-02-28T21:31:19.941256241
 # Rust type: impact_mesh::setup::SphereMesh
 # Type category: Component
 module [
@@ -17,7 +17,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## A mesh consisting of a unit diameter sphere centered on the origin.
+## A mesh consisting of a unit radius sphere centered on the origin.
 SphereMesh : {
     ## The number of horizontal circular cross-sections of vertices making up
     ## the sphere. The number of vertices comprising each ring is proportional

@@ -1,5 +1,5 @@
-# Hash: bb4d3d764bcb1ccc
-# Generated: 2026-01-01T09:41:16.584947407
+# Hash: 21ed7703b3e3cd73
+# Generated: 2026-02-28T21:29:35.669709239
 # Rust type: impact_mesh::setup::HemisphereMesh
 # Type category: Component
 module [
@@ -17,7 +17,7 @@ import Entity
 import Entity.Arg
 import core.Builtin
 
-## A mesh consisting of a unit diameter hemisphere whose disk lies in the
+## A mesh consisting of a unit radius hemisphere whose disk lies in the
 ## xz-plane and is centered on the origin.
 HemisphereMesh : {
     ## The number of horizontal circular cross-sections of vertices making up
