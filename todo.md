@@ -99,3 +99,27 @@
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
 - Fix surface-grazing chunked marked as empty after voxel absorption even though the surface protrudes slightly into the chunk and no voxels were absorbed in or near the chunk (run at commit #9f72fb5f to reproduce).
+
+
+# Shadow map bounding
+
+Query the BVH with camera view frustum and compute camera space AABB encompassing all visible models.
+
+For each omnidirectional light:
+Let the central axis of the negative z cubemap face point towards the center of the AABB for visible models. This defines light space.
+Compute/estimate the horizontal and vertical angular bounds as well as maximum depth of the visible models OBB in light space.
+Use this to define a frustum with zero near distance encompassing all visible models seen from the light.
+Query the BVH with this frustum and compute the shortest and longest distance to non-exterior models that are also shadowing.
+Keep a record of which shadowing models were found.
+This gives the shadow cubemap near and far distance.
+Use the angular bounds to determine which cubemap faces could see visible models, and query the BVH with each of these.
+For each face query, buffer model to light transforms for shadowing models that were recorded as found in the initial frustum query (others will not shadow any visible models).
+
+Partition depths for shadow map cascades can be computed once (per frame) from the min and max z-coordinate of the camera-space AABB for visible models.
+
+For each unidirectional light:
+Compute the light space cascade AABB encompassing each part (sub-frustum) of the partitioned view frustum, but extending to the outer bound of the scene in the direction against the light.
+For each cascade:
+Query the BVH with the (in world space) cascade OBB. Gather the IDs of encountered models that are also shadowing, and track the extremal coordinates of their light space bounds.
+Use the extremal light space bounds to define the cascade's orthographic transform.
+Go through the gathered model IDs and buffer their model to light transforms.
