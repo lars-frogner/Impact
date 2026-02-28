@@ -427,7 +427,7 @@ pub fn apply_absorption<C>(
 
         intersection_manager.for_each_bounding_volume_in_axis_aligned_box(
             &aabb,
-            |bounding_volume_id| {
+            |bounding_volume_id, _| {
                 let object_entity_id = bounding_volume_id.as_entity_id();
                 with_potential_voxel_object(
                     voxel_object_manager,
@@ -480,7 +480,7 @@ pub fn apply_absorption<C>(
 
         intersection_manager.for_each_bounding_volume_in_axis_aligned_box(
             &aabb,
-            |bounding_volume_id| {
+            |bounding_volume_id, _| {
                 let object_entity_id = bounding_volume_id.as_entity_id();
                 with_potential_voxel_object(
                     voxel_object_manager,

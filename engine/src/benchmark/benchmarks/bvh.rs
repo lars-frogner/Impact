@@ -31,7 +31,7 @@ pub fn query_many_external_intersections(benchmarker: impl Benchmarker) {
     let queries = generate_query_aabbs(&bvh, N_QUERIES);
     benchmarker.benchmark(&mut || {
         for query in &queries {
-            bvh.for_each_bounding_volume_in_axis_aligned_box(query, |id| {
+            bvh.for_each_bounding_volume_in_axis_aligned_box(query, |id, _| {
                 black_box(id);
             });
         }
