@@ -121,12 +121,15 @@ bitflags! {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
     pub struct ModelInstanceFlags: u8 {
         /// The model instance should not be rendered.
-        const IS_HIDDEN                       = 1 << 0;
-        /// The model instance should not participate in shadow maps.
-        const CASTS_NO_SHADOWS                = 1 << 1;
+        const IS_HIDDEN                            = 1 << 0;
+        /// The model instance should never participate in shadow maps.
+        const CASTS_NO_SHADOWS                     = 1 << 1;
         /// The model instance's material property values can be updated
         /// independently from those of other instances.
-        const HAS_INDEPENDENT_MATERIAL_VALUES = 1 << 2;
+        const HAS_INDEPENDENT_MATERIAL_VALUES      = 1 << 2;
+        /// The model instance exceeds its configured max distance from its
+        /// anchor for disabling shadowing.
+        const EXCEEDS_DIST_FOR_DISABLING_SHADOWING = 1 << 3;
     }
 }
 
@@ -432,6 +435,19 @@ impl SceneGraph {
                 node.flags()
                     .updated_from_scene_entity_flags(scene_entity_flags),
             );
+        }
+    }
+
+    /// Calls the given closure with a mutable reference to the
+    /// [`ModelInstanceFlags`] for the given model instance if present in the
+    /// scene graph.
+    pub fn with_model_instance_flags_mut(
+        &mut self,
+        model_instance_id: ModelInstanceID,
+        f: impl FnOnce(&mut ModelInstanceFlags),
+    ) {
+        if let Some(node) = self.model_instance_nodes.get_node_mut(model_instance_id) {
+            f(node.flags_mut());
         }
     }
 
@@ -977,7 +993,8 @@ impl<N: SceneGraphNode> NodeStorage<N> {
         self.get_node(node_id).expect("Tried to get missing node")
     }
 
-    fn get_node_mut(&mut self, node_id: N::ID) -> Option<&mut N> {
+    /// Returns a mutable reference to the node with the given ID.
+    pub fn get_node_mut(&mut self, node_id: N::ID) -> Option<&mut N> {
         self.nodes.get_mut(&node_id)
     }
 
@@ -1196,6 +1213,11 @@ impl ModelInstanceNode {
     /// Returns the flags for the model instance.
     pub fn flags(&self) -> ModelInstanceFlags {
         self.flags
+    }
+
+    /// Returns a mutable reference to the flags for the model instance.
+    pub fn flags_mut(&mut self) -> &mut ModelInstanceFlags {
+        &mut self.flags
     }
 
     /// Returns the frame number when the model instance was last visible.
