@@ -1,8 +1,8 @@
 //! ECS systems for scenes.
 
 use crate::{
-    CanBeParent, ParentEntity, RemovalBeyondDistance, SceneEntityFlags,
-    graph::{SceneGraph, SceneGroupID},
+    CanBeParent, DistanceTriggeredRules, ParentEntity, SceneEntityFlags,
+    graph::{ModelInstanceFlags, SceneGraph, SceneGroupID},
 };
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_camera::{CameraID, HasCamera};
@@ -75,16 +75,18 @@ pub fn sync_scene_object_transforms_and_flags(ecs_world: &ECSWorld, scene_graph:
     );
 }
 
-/// Finds entities with a max distance from an anchor and stages them for
-/// removal if the distance is exceeded.
-pub fn stage_too_remote_entities_for_removal(
+/// Applies the configured distance trigger rules for entities exceeding the
+/// specified distances from their anchor.
+pub fn handle_distance_triggered_rules_for_entities(
     entity_stager: &mut EntityStager,
     ecs_world: &ECSWorld,
+    scene_graph: &mut SceneGraph,
 ) {
     struct Candidate {
         entity_id: EntityID,
         position: Point3C,
-        max_dist_squared: f32,
+        no_shadowing_dist_squared: f32,
+        removal_dist_squared: f32,
     }
 
     let arena = ArenaPool::get_arena();
@@ -97,17 +99,18 @@ pub fn stage_too_remote_entities_for_removal(
         |entity_id: EntityID,
          flags: &SceneEntityFlags,
          frame: &ReferenceFrame,
-         removal_rule: &RemovalBeyondDistance| {
+         rules: &DistanceTriggeredRules| {
             if flags.is_disabled() {
                 return;
             }
             candidates_by_anchor
-                .entry(removal_rule.anchor_id)
+                .entry(rules.anchor_id)
                 .or_insert_with(|| AVec::new_in(&arena))
                 .push(Candidate {
                     entity_id,
                     position: frame.position,
-                    max_dist_squared: removal_rule.max_dist_squared(),
+                    no_shadowing_dist_squared: rules.no_shadowing_dist_squared(),
+                    removal_dist_squared: rules.removal_dist_squared(),
                 });
         }
     );
@@ -123,24 +126,65 @@ pub fn stage_too_remote_entities_for_removal(
             for Candidate {
                 entity_id,
                 position,
-                max_dist_squared,
+                no_shadowing_dist_squared,
+                removal_dist_squared,
             } in candidates
             {
                 let displacement = position - anchor_position;
-                if displacement.dot(&displacement) > max_dist_squared {
+                let dist_squared = displacement.dot(&displacement);
+
+                if dist_squared > removal_dist_squared {
                     log::debug!(
-                        "Removing entity {entity_id} exceeding max distance from entity {anchor_id}"
+                        "Removing entity {entity_id} exceeding distance limit from entity {anchor_id}"
                     );
                     entity_stager.stage_entity_for_removal(entity_id);
+                } else {
+                    let model_instance_id = ModelInstanceID::from_entity_id(entity_id);
+                    scene_graph.with_model_instance_flags_mut(model_instance_id, |flags| {
+                        if dist_squared > no_shadowing_dist_squared
+                            && !flags
+                                .contains(ModelInstanceFlags::EXCEEDS_DIST_FOR_DISABLING_SHADOWING)
+                        {
+                            log::debug!(
+                                "Disabling shadowing for entity {entity_id} exceeding distance limit from entity {anchor_id}"
+                            );
+                            flags.insert(ModelInstanceFlags::EXCEEDS_DIST_FOR_DISABLING_SHADOWING);
+                        } else if dist_squared <= no_shadowing_dist_squared
+                            && flags
+                                .contains(ModelInstanceFlags::EXCEEDS_DIST_FOR_DISABLING_SHADOWING)
+                        {
+                            log::debug!(
+                                "Enabling shadowing for entity {entity_id} no longer exceeding distance limit from entity {anchor_id}"
+                            );
+                            flags.remove(ModelInstanceFlags::EXCEEDS_DIST_FOR_DISABLING_SHADOWING);
+                        }
+                    });
                 }
             }
         } else {
-            // Anchor is gone, so remove all anchored entities
-            log::debug!(
-                "Removing all entities with a max distance from removed entity {anchor_id}"
-            );
-            for Candidate { entity_id, .. } in candidates {
-                entity_stager.stage_entity_for_removal(entity_id);
+            // Anchor is gone, so treat all anchored entities as beyond their
+            // max distances (unless infinity)
+            for Candidate {
+                entity_id,
+                no_shadowing_dist_squared,
+                removal_dist_squared,
+                ..
+            } in candidates
+            {
+                if removal_dist_squared.is_finite() {
+                    log::debug!(
+                        "Removing entity {entity_id} with a finite distance limit from removed entity {anchor_id}"
+                    );
+                    entity_stager.stage_entity_for_removal(entity_id);
+                } else if no_shadowing_dist_squared.is_finite() {
+                    log::debug!(
+                        "Disabling shadowing for entity {entity_id} with a finite distance limit from removed entity {anchor_id}"
+                    );
+                    let model_instance_id = ModelInstanceID::from_entity_id(entity_id);
+                    scene_graph.with_model_instance_flags_mut(model_instance_id, |flags| {
+                        flags.insert(ModelInstanceFlags::EXCEEDS_DIST_FOR_DISABLING_SHADOWING);
+                    });
+                }
             }
         }
     }

@@ -59,16 +59,19 @@ define_component_type! {
 }
 
 define_component_type! {
-    /// A maximum distance from an anchor entity that will remove this entity
-    /// when exceeded.
+    /// Rules defining entity behavior when it exceeds certain distances from an
+    /// anchor entity.
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct RemovalBeyondDistance {
+    pub struct DistanceTriggeredRules {
         /// The ID of the entity the distance is measured from.
         pub anchor_id: EntityID,
-        /// The square of the maximum distance.
-        pub max_dist_squared: f64
+        /// The square of the distance beyond which the entity will no longer
+        /// cast shadows.
+        pub no_shadowing_dist_squared: f64,
+        /// The square of the distance at which the entity will be removed.
+        pub removal_dist_squared: f64,
     }
 }
 
@@ -76,7 +79,7 @@ define_component_type! {
 impact_ecs::declare_component_flags! {
     SceneEntityFlags => impact_ecs::component::ComponentFlags::INHERITABLE,
     ParentEntity => impact_ecs::component::ComponentFlags::INHERITABLE,
-    RemovalBeyondDistance => impact_ecs::component::ComponentFlags::INHERITABLE,
+    DistanceTriggeredRules => impact_ecs::component::ComponentFlags::INHERITABLE,
 }
 
 impl SceneEntityFlags {
@@ -87,18 +90,60 @@ impl SceneEntityFlags {
 }
 
 #[roc]
-impl RemovalBeyondDistance {
-    /// Creates a new removal beyond distance rule with the given anchor entity
-    /// and distance.
-    #[roc(body = "{ anchor_id, max_dist_squared: Num.to_f64(max_distance * max_distance) }")]
-    pub fn new(anchor_id: EntityID, max_distance: f32) -> Self {
+impl DistanceTriggeredRules {
+    /// Creates new rules for disabling shadowing and removal beyond the given
+    /// distances from the given anchor entity.
+    #[roc(body = r#"{
+        anchor_id,
+        no_shadowing_dist_squared: Num.to_f64(no_shadowing_distance * no_shadowing_distance),
+        removal_dist_squared: Num.to_f64(removal_distance * removal_distance),
+    }
+    "#)]
+    pub fn new(anchor_id: EntityID, no_shadowing_distance: f32, removal_distance: f32) -> Self {
         Self {
             anchor_id,
-            max_dist_squared: f64::from(max_distance.powi(2)),
+            no_shadowing_dist_squared: f64::from(no_shadowing_distance.powi(2)),
+            removal_dist_squared: f64::from(removal_distance.powi(2)),
         }
     }
 
-    pub fn max_dist_squared(&self) -> f32 {
-        self.max_dist_squared as f32
+    /// Creates a new rule for removal beyond the given distance from the given
+    /// anchor entity.
+    #[roc(body = r#"{
+        anchor_id,
+        no_shadowing_dist_squared: Num.infinity_u64,
+        removal_dist_squared: Num.to_f64(removal_distance * removal_distance),
+    }
+    "#)]
+    pub fn removal(anchor_id: EntityID, removal_distance: f32) -> Self {
+        Self {
+            anchor_id,
+            no_shadowing_dist_squared: f64::INFINITY,
+            removal_dist_squared: f64::from(removal_distance.powi(2)),
+        }
+    }
+
+    /// Creates a new rule for disabling shadowing beyond the given distance
+    /// from the given anchor entity.
+    #[roc(body = r#"{
+        anchor_id,
+        no_shadowing_dist_squared: Num.to_f64(no_shadowing_distance * no_shadowing_distance),
+        removal_dist_squared: Num.infinity_u64,
+    }
+    "#)]
+    pub fn no_shadowing(anchor_id: EntityID, no_shadowing_distance: f32) -> Self {
+        Self {
+            anchor_id,
+            no_shadowing_dist_squared: f64::from(no_shadowing_distance.powi(2)),
+            removal_dist_squared: f64::INFINITY,
+        }
+    }
+
+    pub fn no_shadowing_dist_squared(&self) -> f32 {
+        self.no_shadowing_dist_squared as f32
+    }
+
+    pub fn removal_dist_squared(&self) -> f32 {
+        self.removal_dist_squared as f32
     }
 }

@@ -21,7 +21,7 @@ import core.Sphere
 import pf.Command
 import pf.Entity
 
-import pf.Comp.RemovalBeyondDistance
+import pf.Comp.DistanceTriggeredRules
 import pf.Comp.ParentEntity
 import pf.Comp.CanBeParent
 import pf.Setup.CylinderMesh
@@ -150,7 +150,7 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
 
     projectile_ent =
         Entity.new_component_data
-        |> Comp.RemovalBeyondDistance.add_new(parent, projectile.max_distance)
+        |> Comp.DistanceTriggeredRules.add_removal(parent, projectile.max_distance)
         |> Comp.BlackBody.add_sphere(
             projectile.radius,
             projectile.mass,
