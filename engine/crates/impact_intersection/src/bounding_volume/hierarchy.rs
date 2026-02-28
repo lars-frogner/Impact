@@ -7,7 +7,7 @@ use crate::bounding_volume::BoundingVolumeID;
 use anyhow::{Result, anyhow};
 use impact_alloc::{AVec, Allocator, arena::ArenaPool, avec};
 use impact_containers::KeyIndexMapper;
-use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum};
+use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum, Sphere};
 use std::mem;
 
 #[derive(Debug)]
@@ -135,10 +135,21 @@ impl BoundingVolumeHierarchy {
         BVHNodeInfoIter::new(alloc, &self.nodes, self.root_node_id)
     }
 
+    pub fn for_each_bounding_volume(&self, mut f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC)) {
+        for (id, aabb) in self
+            .primitives
+            .index_map
+            .key_at_each_idx()
+            .zip(&self.primitives.aabbs)
+        {
+            f(id, aabb);
+        }
+    }
+
     pub fn for_each_bounding_volume_in_axis_aligned_box(
         &self,
         axis_aligned_box: &AxisAlignedBox,
-        mut f: impl FnMut(BoundingVolumeID),
+        mut f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
     ) {
         self.for_each_intersecting_bounding_volume(
             |aabb| {
@@ -146,7 +157,29 @@ impl BoundingVolumeHierarchy {
                 !aabb.box_lies_outside(axis_aligned_box)
             },
             |primitive_idx| {
-                f(self.primitives.id_at_idx(primitive_idx));
+                f(
+                    self.primitives.id_at_idx(primitive_idx),
+                    self.primitives.aabb_at_idx(primitive_idx),
+                );
+            },
+        );
+    }
+
+    pub fn for_each_bounding_volume_in_sphere(
+        &self,
+        sphere: &Sphere,
+        mut f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
+    ) {
+        self.for_each_intersecting_bounding_volume(
+            |aabb| {
+                let aabb = aabb.aligned();
+                !sphere.is_outside_axis_aligned_box(&aabb)
+            },
+            |primitive_idx| {
+                f(
+                    self.primitives.id_at_idx(primitive_idx),
+                    self.primitives.aabb_at_idx(primitive_idx),
+                );
             },
         );
     }
@@ -154,7 +187,7 @@ impl BoundingVolumeHierarchy {
     pub fn for_each_bounding_volume_maybe_in_frustum(
         &self,
         frustum: &Frustum,
-        mut f: impl FnMut(BoundingVolumeID),
+        mut f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
     ) {
         self.for_each_intersecting_bounding_volume(
             |aabb| {
@@ -162,7 +195,10 @@ impl BoundingVolumeHierarchy {
                 frustum.could_contain_part_of_axis_aligned_box(&aabb)
             },
             |primitive_idx| {
-                f(self.primitives.id_at_idx(primitive_idx));
+                f(
+                    self.primitives.id_at_idx(primitive_idx),
+                    self.primitives.aabb_at_idx(primitive_idx),
+                );
             },
         );
     }
@@ -418,6 +454,11 @@ impl Primitives {
     }
 
     #[inline]
+    fn aabb_at_idx(&self, idx: usize) -> &AxisAlignedBoxC {
+        &self.aabbs[idx]
+    }
+
+    #[inline]
     fn id_at_idx(&self, idx: usize) -> BoundingVolumeID {
         self.index_map.key_at_idx(idx)
     }
@@ -587,7 +628,7 @@ pub mod fuzzing {
 
         let mut intersected_ids = Vec::new();
 
-        bvh.for_each_bounding_volume_in_axis_aligned_box(&test_aabb.0, |id| {
+        bvh.for_each_bounding_volume_in_axis_aligned_box(&test_aabb.0, |id, _| {
             intersected_ids.push(id);
         });
 
@@ -686,7 +727,7 @@ mod tests {
             AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(-1.0, -1.0, -1.0));
 
         let mut intersections = Vec::new();
-        bvh.for_each_bounding_volume_in_axis_aligned_box(&test_aab, |id| {
+        bvh.for_each_bounding_volume_in_axis_aligned_box(&test_aab, |id, _| {
             intersections.push(id);
         });
 

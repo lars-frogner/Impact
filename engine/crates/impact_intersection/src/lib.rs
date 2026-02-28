@@ -11,7 +11,7 @@ use bounding_volume::{
     hierarchy::{BVHNodeInfoIter, BoundingVolumeHierarchy},
 };
 use impact_alloc::Allocator;
-use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum};
+use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum, Sphere};
 use impact_math::transform::Similarity3;
 
 #[derive(Debug)]
@@ -76,19 +76,31 @@ impl IntersectionManager {
         self.bvh.root_bounding_volume()
     }
 
+    pub fn for_each_bounding_volume(&self, f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC)) {
+        self.bvh.for_each_bounding_volume(f);
+    }
+
     pub fn for_each_bounding_volume_in_axis_aligned_box(
         &self,
         axis_aligned_box: &AxisAlignedBox,
-        f: impl FnMut(BoundingVolumeID),
+        f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
     ) {
         self.bvh
             .for_each_bounding_volume_in_axis_aligned_box(axis_aligned_box, f);
     }
 
+    pub fn for_each_bounding_volume_in_sphere(
+        &self,
+        sphere: &Sphere,
+        f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
+    ) {
+        self.bvh.for_each_bounding_volume_in_sphere(sphere, f);
+    }
+
     pub fn for_each_bounding_volume_maybe_in_frustum(
         &self,
         frustum: &Frustum,
-        f: impl FnMut(BoundingVolumeID),
+        f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
     ) {
         self.bvh
             .for_each_bounding_volume_maybe_in_frustum(frustum, f);
