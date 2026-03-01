@@ -15,7 +15,8 @@ use impact_geometry::{
 use impact_id::EntityID;
 use impact_intersection::{IntersectionManager, bounding_volume::BoundingVolumeID};
 use impact_light::{
-    LightFlags, LightManager, ShadowableOmnidirectionalLight, shadow_map::CascadeIdx,
+    LightFlags, LightManager, ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
+    shadow_map::CascadeIdx,
 };
 use impact_math::{
     angle::{Angle, Radians},
@@ -139,6 +140,7 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                     register_primitive_in_omnidirectional_light_culling_frustum(
                         scene_graph,
                         world_to_camera_transform,
+                        light_id,
                         &world_space_light_position,
                         squared_max_reach,
                         &mut shadowing_models,
@@ -165,6 +167,7 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
                     register_primitive_in_omnidirectional_light_culling_frustum(
                         scene_graph,
                         world_to_camera_transform,
+                        light_id,
                         &world_space_light_position,
                         squared_max_reach,
                         &mut shadowing_models,
@@ -350,6 +353,7 @@ fn determine_perspective_transform_encompassing_box_in_negative_z_halfspace(
 fn register_primitive_in_omnidirectional_light_culling_frustum<A: Allocator>(
     scene_graph: &SceneGraph,
     world_to_camera_transform: &Isometry3,
+    light_id: ShadowableOmnidirectionalLightID,
     world_space_light_position: &Point3,
     squared_max_reach: f32,
     shadowing_models: &mut NoHashMap<ModelInstanceID, ShadowingModel, A>,
@@ -358,6 +362,11 @@ fn register_primitive_in_omnidirectional_light_culling_frustum<A: Allocator>(
     id: BoundingVolumeID,
     aabb: &AxisAlignedBoxC,
 ) {
+    if id.as_entity_id() == light_id.as_entity_id() {
+        // Ignore self-shadowing
+        return;
+    }
+
     let model_instance_id = ModelInstanceID::from_entity_id(id.as_entity_id());
     let Some(model_instance_node) = scene_graph
         .model_instance_nodes()
