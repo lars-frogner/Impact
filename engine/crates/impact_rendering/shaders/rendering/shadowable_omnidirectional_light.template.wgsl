@@ -269,6 +269,8 @@ fn computeOffsetFragmentDisplacement(
 }
 
 fn computePCSSLightAccessFactor(
+    nearDistance: f32,
+    lightInverseDistanceSpan: f32,
     emissiveRadius: f32,
     cameraFramebufferXYPosition: vec2f,
     lightSpaceFragmentDisplacement: vec3f,
@@ -280,6 +282,8 @@ fn computePCSSLightAccessFactor(
     let displacementBinormalDirection = normalize(cross(lightSpaceFragmentDisplacement, displacementNormalDirection));
 
     let shadowPenumbraExtent = computeShadowPenumbraExtent(
+        nearDistance,
+        lightInverseDistanceSpan,
         emissiveRadius,
         vogelDiskBaseAngle,
         lightSpaceFragmentDisplacement,
@@ -312,6 +316,8 @@ fn findPerpendicularVector(vector: vec3f) -> vec3f {
 const SHADOW_PENUMBRA_SAMPLE_COUNT: u32 = 8u;
 
 fn computeShadowPenumbraExtent(
+    nearDistance: f32,
+    lightInverseDistanceSpan: f32,
     emissiveRadius: f32,
     vogelDiskBaseAngle: f32,
     displacement: vec3f,
@@ -342,7 +348,18 @@ fn computeShadowPenumbraExtent(
 
     if occludingDepthCount > 0.0 {
         averageOccludingDepth /= occludingDepthCount;
-        return max(minPenumbraExtent, emissiveRadius * (referenceDepth - averageOccludingDepth) / averageOccludingDepth);
+
+        // The penumbra extent is proportional to the relative difference
+        // between the fragment depth and the average occluding depth in its
+        // neighborhood. Since the shadow map stores normalized, as opposed to
+        // physical, depths, we must undo the normalization, which can be done
+        // by adding the appropriate offset when taking the ratio of normalized
+        // depths.
+        let offsetForDepthRatio = nearDistance * lightInverseDistanceSpan;
+        let physicalDepthRatio = (referenceDepth + offsetForDepthRatio) / (averageOccludingDepth + offsetForDepthRatio);
+        let relativeDepthDiff = physicalDepthRatio - 1.0;
+
+        return max(minPenumbraExtent, emissiveRadius * relativeDepthDiff);
     } else {
         return -1.0;
     }
@@ -665,6 +682,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 #endif
 
     let lightAccessFactor = computePCSSLightAccessFactor(
+        lightNearDistance,
+        lightInverseDistanceSpan,
         lightEmissiveRadius,
         input.projectedPosition.xy,
         lightQuantities.lightSpaceFragmentDisplacement,
