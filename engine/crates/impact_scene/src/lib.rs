@@ -111,7 +111,7 @@ impl DistanceTriggeredRules {
     /// anchor entity.
     #[roc(body = r#"{
         anchor_id,
-        no_shadowing_dist_squared: Num.infinity_u64,
+        no_shadowing_dist_squared: Num.infinity_f64,
         removal_dist_squared: Num.to_f64(removal_distance * removal_distance),
     }
     "#)]
@@ -128,7 +128,7 @@ impl DistanceTriggeredRules {
     #[roc(body = r#"{
         anchor_id,
         no_shadowing_dist_squared: Num.to_f64(no_shadowing_distance * no_shadowing_distance),
-        removal_dist_squared: Num.infinity_u64,
+        removal_dist_squared: Num.infinity_f64,
     }
     "#)]
     pub fn no_shadowing(anchor_id: EntityID, no_shadowing_distance: f32) -> Self {

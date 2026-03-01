@@ -1,5 +1,5 @@
-# Hash: 1a5d2a1413d7520c
-# Generated: 2026-02-28T21:33:17.049506164
+# Hash: 825dc753608b8ba0
+# Generated: 2026-03-01T21:24:04.381393234
 # Rust type: impact_scene::DistanceTriggeredRules
 # Type category: Component
 module [
@@ -78,7 +78,7 @@ removal : Entity.Id, F32 -> DistanceTriggeredRules
 removal = |anchor_id, removal_distance|
     {
         anchor_id,
-        no_shadowing_dist_squared: Num.infinity_u64,
+        no_shadowing_dist_squared: Num.infinity_f64,
         removal_dist_squared: Num.to_f64(removal_distance * removal_distance),
     }
 
@@ -111,7 +111,7 @@ no_shadowing = |anchor_id, no_shadowing_distance|
     {
         anchor_id,
         no_shadowing_dist_squared: Num.to_f64(no_shadowing_distance * no_shadowing_distance),
-        removal_dist_squared: Num.infinity_u64,
+        removal_dist_squared: Num.infinity_f64,
     }
 
 ## Creates a new rule for disabling shadowing beyond the given distance
