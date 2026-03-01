@@ -1099,7 +1099,8 @@ impl OmnidirectionalLight {
 }
 
 impl ShadowableOmnidirectionalLight {
-    const MIN_NEAR_DISTANCE: f32 = 1e-2;
+    pub const MIN_NEAR_DISTANCE: f32 = 1e-2;
+    pub const MIN_SPAN: f32 = 1e-6;
 
     pub fn new(
         camera_space_position: Point3C,
@@ -1131,18 +1132,6 @@ impl ShadowableOmnidirectionalLight {
     /// Updates the light's flags.
     pub fn set_flags(&mut self, flags: LightFlags) {
         self.flags = flags;
-    }
-
-    /// Takes a transform into camera space and returns the corresponding
-    /// transform into the space of the positive z face for points lying in
-    /// front of the given face.
-    pub fn create_transform_to_positive_z_cubemap_face_space(
-        &self,
-        face: CubemapFace,
-        transform_to_camera_space: &Similarity3,
-    ) -> Similarity3 {
-        self.create_transform_from_camera_space_to_positive_z_cubemap_face_space(face)
-            * transform_to_camera_space
     }
 
     /// Computes the transform from camera space into the space of the positive
@@ -1197,27 +1186,17 @@ impl ShadowableOmnidirectionalLight {
         self.emissive_radius = 0.5 * emissive_extent;
     }
 
-    /// Updates the cubemap orientation and near and far distances to encompass
-    /// all shadow casting models without wasting depth resolution or causing
-    /// unnecessary draw calls.
-    pub fn orient_and_scale_cubemap_for_shadow_casting_models(
+    pub fn orient_cubemap_based_on_visible_models(
         &mut self,
-        world_to_camera_transform: &Isometry3,
-        camera_to_world_transform: &Isometry3,
-        world_space_scene_aabb: &AxisAlignedBox,
-        world_space_scene_aabb_for_visible_models: &AxisAlignedBox,
+        camera_space_aabb_for_visible_models: &AxisAlignedBox,
     ) {
-        let camera_space_position = self.camera_space_position.aligned();
-        let world_space_position =
-            camera_to_world_transform.transform_point(&camera_space_position);
+        let camera_space_light_position = self.camera_space_position.aligned();
 
-        let camera_space_scene_center =
-            world_to_camera_transform.transform_point(&world_space_scene_aabb.center());
-
-        // Let the orientation of cubemap space be so that the negative
-        // z-axis points towards the center of the scene bounding box
+        // Let the orientation of cubemap space be so that the negative z-axis
+        // points towards the center of the bounding box encompassing visible
+        // models
         let neg_z_axis_camera_space_direction = UnitVector3::normalized_from_if_above(
-            camera_space_scene_center - camera_space_position,
+            camera_space_aabb_for_visible_models.center() - camera_space_light_position,
             1e-6,
         )
         .unwrap_or_else(UnitVector3::neg_unit_z);
@@ -1225,29 +1204,15 @@ impl ShadowableOmnidirectionalLight {
         let camera_to_light_space_rotation =
             Self::compute_camera_to_light_space_rotation(&neg_z_axis_camera_space_direction);
 
-        // For the near distance, we must use the closest point of the full
-        // scene AABB, since there could be non-visible models in front casting
-        // shadows into the visible region
-        let near_distance = Point3::distance_between(
-            &world_space_scene_aabb.closest_interior_point_to(&world_space_position),
-            &world_space_position,
-        );
-
-        // For the far distance, we can use the farthest point on the visible
-        // part of the scene AABB, since models farther away can't cast shadows
-        // back into the visible region
-        let far_distance = Point3::distance_between(
-            &world_space_scene_aabb_for_visible_models.farthest_corner_from(&world_space_position),
-            &world_space_position,
-        );
-
         self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
+    }
 
+    pub fn update_near_and_far_distance(&mut self, near_distance: f32, far_distance: f32) {
         self.near_distance = near_distance.clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
 
         self.far_distance = far_distance.clamp(self.near_distance, self.max_reach);
 
-        self.near_distance = self.near_distance.min(self.far_distance - 1e-8);
+        self.near_distance = self.near_distance.min(self.far_distance - Self::MIN_SPAN);
 
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
     }

@@ -12,6 +12,7 @@ roc_codegen = ["dep:inventory", "roc_integration/roc_codegen"]
 [dependencies]
 anyhow = { workspace = true }
 approx = { workspace = true }
+bitflags = { workspace = true }
 bytemuck = { workspace = true }
 impact_ecs = { path = "../impact_ecs", optional = true }
 impact_math = { path = "../impact_math" }

@@ -14,7 +14,14 @@ pub mod systems;
 
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
+use graph::SceneGraph;
+use impact_camera::Camera;
 use impact_id::EntityID;
+use impact_intersection::IntersectionManager;
+use impact_light::LightManager;
+use impact_material::MaterialRegistry;
+use impact_profiling::{TaskTimer, instrument_task};
+use model::ModelInstanceManager;
 use roc_integration::roc;
 
 bitflags! {
@@ -146,4 +153,64 @@ impl DistanceTriggeredRules {
     pub fn removal_dist_squared(&self) -> f32 {
         self.removal_dist_squared as f32
     }
+}
+
+pub fn buffer_model_instances_and_bound_lights(
+    task_timer: &TaskTimer,
+    material_registry: &MaterialRegistry,
+    light_manager: &mut LightManager,
+    model_instance_manager: &mut ModelInstanceManager,
+    intersection_manager: &IntersectionManager,
+    scene_graph: &SceneGraph,
+    camera: &Camera,
+    current_frame_number: u32,
+    shadow_mapping_enabled: bool,
+) {
+    let camera_space_aabb_for_visible_models =
+        instrument_task!("Buffering model instances for rendering", task_timer, {
+            model::buffer_model_instances_for_rendering(
+                material_registry,
+                model_instance_manager,
+                intersection_manager,
+                scene_graph,
+                camera,
+                current_frame_number,
+            )
+        });
+
+    let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models else {
+        // No need to consider shadow mapping if no models are visible
+        return;
+    };
+
+    instrument_task!(
+        "Buffering model instances for omnidirectional shadow mapping",
+        task_timer,
+        {
+            light::bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
+                light_manager,
+                model_instance_manager,
+                intersection_manager,
+                scene_graph,
+                camera,
+                &camera_space_aabb_for_visible_models,
+                shadow_mapping_enabled,
+            );
+        }
+    );
+
+    instrument_task!(
+        "Buffering model instances for unidirectional shadow mapping",
+        task_timer,
+        {
+            light::bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
+                light_manager,
+                model_instance_manager,
+                intersection_manager,
+                scene_graph,
+                camera,
+                shadow_mapping_enabled,
+            );
+        }
+    );
 }
