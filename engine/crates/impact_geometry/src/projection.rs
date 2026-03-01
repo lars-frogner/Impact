@@ -2,6 +2,7 @@
 
 use crate::{AxisAlignedBoxC, Frustum};
 use approx::assert_abs_diff_ne;
+use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
@@ -49,6 +50,19 @@ pub enum CubemapFace {
     NegativeY = 3,
     PositiveZ = 4,
     NegativeZ = 5,
+}
+
+bitflags! {
+    /// A set of cubemap faces.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct CubemapFaces: u8 {
+        const POSITIVE_X = 1 << 0;
+        const NEGATIVE_X = 1 << 1;
+        const POSITIVE_Y = 1 << 2;
+        const NEGATIVE_Y = 1 << 3;
+        const POSITIVE_Z = 1 << 4;
+        const NEGATIVE_Z = 1 << 5;
+    }
 }
 
 impl PerspectiveTransform {
@@ -102,6 +116,12 @@ impl PerspectiveTransform {
     #[inline]
     pub fn vertical_field_of_view(&self) -> Radians {
         Radians(2.0 * (1.0 / self.matrix.element(1, 1)).atan())
+    }
+
+    /// Returns the horizontal field of view angle in radians.
+    #[inline]
+    pub fn horizontal_field_of_view(&self) -> Radians {
+        Radians(2.0 * (1.0 / self.matrix.element(0, 0)).atan())
     }
 
     /// Returns the near distance of the view frustum.
@@ -562,6 +582,13 @@ impl CubemapFace {
     #[inline]
     pub const fn as_idx_usize(&self) -> usize {
         *self as usize
+    }
+}
+
+impl From<CubemapFace> for CubemapFaces {
+    #[inline]
+    fn from(face: CubemapFace) -> Self {
+        Self::from_bits_retain(1 << face.as_idx_u32())
     }
 }
 

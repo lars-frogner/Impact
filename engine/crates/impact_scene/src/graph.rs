@@ -1,29 +1,17 @@
 //! Scene graph implementation.
 
-use crate::{
-    SceneEntityFlags,
-    light::light_entity_id_to_instance_feature_buffer_range_id,
-    model::{ModelID, ModelInstanceManager},
-};
+use crate::{SceneEntityFlags, model::ModelID};
 use anyhow::{Result, anyhow, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_camera::{Camera, CameraID};
 use impact_containers::{NoHashMap, nohash_hasher};
-use impact_geometry::projection::CubemapFace;
 use impact_id::define_entity_id_newtype;
-use impact_intersection::IntersectionManager;
-use impact_light::{LightFlags, LightManager, shadow_map::CascadeIdx};
-use impact_material::MaterialRegistry;
 use impact_math::transform::{Isometry3, Isometry3C, Similarity3, Similarity3C};
 use impact_model::{
-    InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureID, InstanceFeatureTypeID,
-    ModelInstanceID,
-    transform::{
-        InstanceModelLightTransform, InstanceModelViewTransform,
-        InstanceModelViewTransformWithPrevious,
-    },
+    InstanceFeature, InstanceFeatureID, InstanceFeatureTypeID, ModelInstanceID,
+    transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
 use std::{
     fmt,
@@ -495,68 +483,6 @@ impl SceneGraph {
         camera.set_view_transform(view_transform);
     }
 
-    /// Computes the model-to-camera space transforms of all the model instances
-    /// in the scene graph that are visible with the specified camera and adds
-    /// them to the given model instance manager.
-    ///
-    /// # Warning
-    /// Make sure to call [`Self::sync_camera_view_transform`] and build the
-    /// bounding volume hierarchy before calling this method.
-    pub fn buffer_model_instances_for_rendering(
-        &self,
-        material_registry: &MaterialRegistry,
-        model_instance_manager: &mut ModelInstanceManager,
-        intersection_manager: &IntersectionManager,
-        camera: &Camera,
-        current_frame_number: u32,
-    ) where
-        InstanceModelViewTransformWithPrevious: InstanceFeature,
-    {
-        let world_space_view_frustum = camera.compute_world_space_view_frustum();
-
-        let mut count = 0;
-
-        intersection_manager.for_each_bounding_volume_maybe_in_frustum(
-            &world_space_view_frustum,
-            |id| {
-                let model_instance_id = ModelInstanceID::from_entity_id(id.as_entity_id());
-                let Some(model_instance_node) =
-                    self.model_instance_nodes.get_node(model_instance_id)
-                else {
-                    return;
-                };
-
-                let model_to_parent_transform =
-                    model_instance_node.model_to_parent_transform().aligned();
-
-                let model_to_world_transform =
-                    if model_instance_node.parent_group_id() == self.root_node_id() {
-                        model_to_parent_transform
-                    } else {
-                        let parent_to_world_transform = self
-                            .group_nodes
-                            .node(model_instance_node.parent_group_id())
-                            .group_to_root_transform()
-                            .aligned();
-
-                        parent_to_world_transform * model_to_parent_transform
-                    };
-
-                let model_view_transform = camera.view_transform() * model_to_world_transform;
-
-                count += 1;
-
-                Self::buffer_model_instance_for_rendering(
-                    material_registry,
-                    model_instance_manager,
-                    current_frame_number,
-                    model_instance_node,
-                    &model_view_transform,
-                );
-            },
-        );
-    }
-
     /// Computes the transform from the scene graph's root node space to the
     /// space of the given camera node.
     fn compute_view_transform(&self, camera_node: &CameraNode) -> Isometry3 {
@@ -565,366 +491,6 @@ impl SceneGraph {
         } else {
             let parent_node = self.group_nodes.node(camera_node.parent_group_id());
             camera_node.parent_to_camera_transform() * parent_node.root_to_group_transform()
-        }
-    }
-
-    fn buffer_model_instance_for_rendering(
-        material_registry: &MaterialRegistry,
-        model_instance_manager: &mut ModelInstanceManager,
-        current_frame_number: u32,
-        model_instance_node: &ModelInstanceNode,
-        model_view_transform: &Similarity3,
-    ) where
-        InstanceModelViewTransformWithPrevious: InstanceFeature,
-    {
-        let instance_model_view_transform = InstanceModelViewTransform::from(model_view_transform);
-
-        model_instance_manager
-            .feature_mut::<InstanceModelViewTransformWithPrevious>(
-                model_instance_node
-                    .get_rendering_feature_id_of_type(
-                        InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
-                    )
-                    .unwrap(),
-            )
-            .set_transform_for_new_frame(instance_model_view_transform);
-
-        let model_id = model_instance_node.model_id();
-
-        model_instance_manager.buffer_instance_features_from_storages(
-            model_id,
-            model_instance_node.feature_ids_for_rendering(),
-        );
-
-        if !model_instance_node
-            .flags()
-            .contains(ModelInstanceFlags::HAS_INDEPENDENT_MATERIAL_VALUES)
-            && let Some(material) = material_registry.get(model_id.material_id())
-        {
-            material
-                .property_values
-                .buffer(model_instance_manager, model_id);
-        }
-
-        model_instance_node.declare_visible_this_frame(current_frame_number);
-    }
-
-    /// Goes through all omnidirectional lights in the given light manager and
-    /// updates their cubemap orientations and distance spans to encompass all
-    /// model instances that may cast visible shadows. Then the model to cubemap
-    /// face space transform of every such shadow casting model instance is
-    /// computed for the relevant cube faces of each light and copied to the
-    /// model's instance transform buffer in new ranges dedicated to the faces
-    /// of the cubemap of the particular light.
-    ///
-    /// # Warning
-    /// Make sure to call [`Self::buffer_model_instances_for_rendering`] before
-    /// calling this method, so that the ranges of model to cubemap face
-    /// transforms in the model instance buffers come after the initial range
-    /// containing model to camera transforms.
-    pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
-        &self,
-        light_manager: &mut LightManager,
-        model_instance_manager: &mut ModelInstanceManager,
-        intersection_manager: &IntersectionManager,
-        camera: &Camera,
-        shadow_mapping_enabled: bool,
-    ) {
-        let world_space_view_frustum = camera.compute_world_space_view_frustum();
-        let world_space_scene_aabb = intersection_manager.total_bounding_volume().aligned();
-
-        let Some(world_space_scene_aabb_for_visible_models) = world_space_view_frustum
-            .compute_aabb()
-            .compute_overlap_with(&world_space_scene_aabb)
-        else {
-            return;
-        };
-
-        let world_to_camera_transform = camera.view_transform();
-        let camera_to_world_transform = world_to_camera_transform.inverted();
-
-        for (light_id, omnidirectional_light) in
-            light_manager.shadowable_omnidirectional_lights_with_ids_mut()
-        {
-            if omnidirectional_light
-                .flags()
-                .contains(LightFlags::IS_DISABLED)
-            {
-                continue;
-            }
-
-            omnidirectional_light.orient_and_scale_cubemap_for_shadow_casting_models(
-                world_to_camera_transform,
-                &camera_to_world_transform,
-                &world_space_scene_aabb,
-                &world_space_scene_aabb_for_visible_models,
-            );
-
-            if !shadow_mapping_enabled {
-                // Even with disabled shadow mapping we had to scale the cubemap
-                // to get the appropriate near and far distances, but now that
-                // that is done we can skip the rest
-                continue;
-            }
-
-            for face in CubemapFace::all() {
-                let world_space_face_frustum = omnidirectional_light
-                    .compute_world_space_frustum_for_face(face, world_to_camera_transform);
-
-                // If the face doesn't overlap the visible region, no models in
-                // the face's view can cast visible shadows
-                if world_space_face_frustum
-                    .compute_aabb()
-                    .box_lies_outside(&world_space_scene_aabb_for_visible_models)
-                {
-                    continue;
-                }
-
-                // We will begin a new range dedicated for tranforms to the
-                // current cubemap face space for the current light at the end
-                // of each transform buffer, identified by the light's ID plus a
-                // face index offset
-                let range_id = light_entity_id_to_instance_feature_buffer_range_id(
-                    light_id.as_entity_id(),
-                    face.as_idx_u64(),
-                );
-
-                intersection_manager.for_each_bounding_volume_maybe_in_frustum(
-                    &world_space_face_frustum,
-                    |id| {
-                        let model_instance_id = ModelInstanceID::from_entity_id(id.as_entity_id());
-                        let Some(model_instance_node) =
-                            self.model_instance_nodes.get_node(model_instance_id)
-                        else {
-                            return;
-                        };
-
-                        if model_instance_node.flags().intersects(
-                            ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS,
-                        ) | model_instance_node
-                            .feature_ids_for_shadow_mapping()
-                            .is_empty()
-                        {
-                            return;
-                        }
-
-                        let model_to_parent_transform =
-                            model_instance_node.model_to_parent_transform().aligned();
-
-                        let model_to_world_transform =
-                            if model_instance_node.parent_group_id() == self.root_node_id() {
-                                model_to_parent_transform
-                            } else {
-                                let parent_to_world_transform = self
-                                    .group_nodes
-                                    .node(model_instance_node.parent_group_id())
-                                    .group_to_root_transform()
-                                    .aligned();
-
-                                parent_to_world_transform * model_to_parent_transform
-                            };
-
-                        let model_to_camera_transform =
-                            world_to_camera_transform * model_to_world_transform;
-
-                        let instance_model_light_transform = omnidirectional_light
-                            .create_transform_to_positive_z_cubemap_face_space(
-                                face,
-                                &model_to_camera_transform,
-                            );
-
-                        let instance_model_light_transform =
-                            InstanceModelLightTransform::from(&instance_model_light_transform);
-
-                        Self::buffer_model_instance_for_shadow_mapping(
-                            model_instance_manager,
-                            range_id,
-                            model_instance_node,
-                            &instance_model_light_transform,
-                        );
-                    },
-                );
-            }
-        }
-    }
-
-    /// Goes through all unidirectional lights in the given light manager and
-    /// updates their orthographic transforms to encompass model instances that
-    /// may cast visible shadows inside the corresponding cascades in the view
-    /// frustum. Then the model to light transform of every such shadow casting
-    /// model instance is computed for each light and copied to the model's
-    /// instance transform buffer in a new range dedicated to the particular
-    /// light and cascade.
-    ///
-    /// # Warning
-    /// Make sure to call [`Self::buffer_model_instances_for_rendering`] before
-    /// calling this method, so that the ranges of model to light transforms in
-    /// the model instance buffers come after the initial range containing model
-    /// to camera transforms.
-    pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
-        &self,
-        light_manager: &mut LightManager,
-        model_instance_manager: &mut ModelInstanceManager,
-        intersection_manager: &IntersectionManager,
-        camera: &Camera,
-        shadow_mapping_enabled: bool,
-    ) {
-        let world_space_view_frustum = camera.compute_world_space_view_frustum();
-        let world_space_scene_aabb = intersection_manager.total_bounding_volume().aligned();
-
-        let Some(world_space_scene_aabb_for_visible_models) = world_space_view_frustum
-            .compute_aabb()
-            .compute_overlap_with(&world_space_scene_aabb)
-        else {
-            return;
-        };
-
-        let camera_space_view_frustum = camera.projection().view_frustum();
-
-        let world_to_camera_transform = camera.view_transform();
-        let camera_to_world_transform = world_to_camera_transform.inverted();
-
-        let world_space_camera_position = camera.compute_world_space_position();
-        let camera_view_direction = camera.view_direction();
-
-        for (light_id, unidirectional_light) in
-            light_manager.shadowable_unidirectional_lights_with_ids_mut()
-        {
-            if unidirectional_light
-                .flags()
-                .contains(LightFlags::IS_DISABLED)
-            {
-                continue;
-            }
-
-            unidirectional_light.update_cascade_partition_depths(
-                camera_space_view_frustum,
-                &world_space_camera_position,
-                &camera_view_direction,
-                &world_space_scene_aabb_for_visible_models,
-            );
-
-            let cascade_may_have_models = unidirectional_light
-                .bound_orthographic_transforms_to_cascaded_view_frustum(
-                    world_to_camera_transform,
-                    camera_space_view_frustum,
-                    &world_space_scene_aabb,
-                );
-
-            if !shadow_mapping_enabled {
-                continue;
-            }
-
-            let light_to_world_transform = unidirectional_light
-                .create_light_to_world_space_transform(&camera_to_world_transform);
-
-            for cascade_idx in cascade_may_have_models
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, may_have_models)| may_have_models.then_some(idx as CascadeIdx))
-            {
-                // We will begin a new range dedicated for tranforms to the
-                // current light's space for instances casting shadows in he
-                // current cascade at the end of each transform buffer,
-                // identified by the light's ID plus a cascade index offset
-                let range_id = light_entity_id_to_instance_feature_buffer_range_id(
-                    light_id.as_entity_id(),
-                    u64::from(cascade_idx),
-                );
-
-                let light_space_orthographic_aabb = unidirectional_light
-                    .create_light_space_orthographic_aabb_for_cascade(cascade_idx);
-
-                let world_space_orthographic_aabb = light_space_orthographic_aabb
-                    .aabb_of_transformed(&light_to_world_transform.to_matrix());
-
-                intersection_manager.for_each_bounding_volume_in_axis_aligned_box(
-                    &world_space_orthographic_aabb,
-                    |id| {
-                        let model_instance_id = ModelInstanceID::from_entity_id(id.as_entity_id());
-                        let Some(model_instance_node) =
-                            self.model_instance_nodes.get_node(model_instance_id)
-                        else {
-                            return;
-                        };
-
-                        if model_instance_node.flags().intersects(
-                            ModelInstanceFlags::IS_HIDDEN | ModelInstanceFlags::CASTS_NO_SHADOWS,
-                        ) | model_instance_node
-                            .feature_ids_for_shadow_mapping()
-                            .is_empty()
-                        {
-                            return;
-                        }
-
-                        let model_to_parent_transform =
-                            model_instance_node.model_to_parent_transform().aligned();
-
-                        let model_to_world_transform =
-                            if model_instance_node.parent_group_id() == self.root_node_id() {
-                                model_to_parent_transform
-                            } else {
-                                let parent_to_world_transform = self
-                                    .group_nodes
-                                    .node(model_instance_node.parent_group_id())
-                                    .group_to_root_transform()
-                                    .aligned();
-
-                                parent_to_world_transform * model_to_parent_transform
-                            };
-
-                        let model_to_camera_transform =
-                            world_to_camera_transform * model_to_world_transform;
-
-                        let instance_model_light_transform = unidirectional_light
-                            .create_transform_to_light_space(&model_to_camera_transform);
-
-                        let instance_model_light_transform =
-                            InstanceModelLightTransform::from(&instance_model_light_transform);
-
-                        Self::buffer_model_instance_for_shadow_mapping(
-                            model_instance_manager,
-                            range_id,
-                            model_instance_node,
-                            &instance_model_light_transform,
-                        );
-                    },
-                );
-            }
-        }
-    }
-
-    fn buffer_model_instance_for_shadow_mapping(
-        model_instance_manager: &mut ModelInstanceManager,
-        range_id: InstanceFeatureBufferRangeID,
-        model_instance_node: &ModelInstanceNode,
-        instance_model_light_transform: &InstanceModelLightTransform,
-    ) where
-        InstanceModelLightTransform: InstanceFeature,
-    {
-        let feature_type_ids_for_shadow_mapping = model_instance_node
-            .feature_ids_for_shadow_mapping()
-            .iter()
-            .map(|feature_id| feature_id.feature_type_id());
-
-        model_instance_manager.ensure_ranges_in_feature_buffers_for_model(
-            model_instance_node.model_id(),
-            feature_type_ids_for_shadow_mapping,
-            range_id,
-        );
-
-        model_instance_manager.buffer_instance_feature(
-            model_instance_node.model_id(),
-            instance_model_light_transform,
-        );
-
-        let feature_ids_for_shadow_mapping = model_instance_node.feature_ids_for_shadow_mapping();
-
-        if feature_ids_for_shadow_mapping.len() > 1 {
-            model_instance_manager.buffer_instance_features_from_storages(
-                model_instance_node.model_id(),
-                &feature_ids_for_shadow_mapping[1..],
-            );
         }
     }
 
@@ -1168,7 +734,7 @@ impl ModelInstanceNode {
     }
 
     /// Returns the ID of the parent [`GroupNode`].
-    fn parent_group_id(&self) -> SceneGroupID {
+    pub fn parent_group_id(&self) -> SceneGroupID {
         self.parent_group_id
     }
 
@@ -1225,17 +791,19 @@ impl ModelInstanceNode {
         self.frame_number_when_last_visible.load(Ordering::Relaxed)
     }
 
+    /// Sets the frame number when the model instance was last visible to the
+    /// current frame number.
+    pub fn declare_visible_this_frame(&self, current_frame_number: u32) {
+        self.frame_number_when_last_visible
+            .store(current_frame_number, Ordering::Relaxed);
+    }
+
     fn set_model_to_parent_transform(&mut self, transform: Similarity3C) {
         self.model_to_parent_transform = transform;
     }
 
     fn set_flags(&mut self, flags: ModelInstanceFlags) {
         self.flags = flags;
-    }
-
-    fn declare_visible_this_frame(&self, current_frame_number: u32) {
-        self.frame_number_when_last_visible
-            .store(current_frame_number, Ordering::Relaxed);
     }
 }
 

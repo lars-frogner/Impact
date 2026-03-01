@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_profiling::instrument_task;
+use impact_scene::buffer_model_instances_and_bound_lights;
 use impact_scheduling::{define_execution_tag, define_task};
 
 // =============================================================================
@@ -474,28 +475,7 @@ define_task!(
 );
 
 // =============================================================================
-// INSTANCE BUFFER MANAGEMENT (for current frame)
-// =============================================================================
-
-define_task!(
-    /// Clears any previously buffered instance features in the
-    /// [`ModelInstanceManager`](crate::model::ModelInstanceManager).
-    [pub] ClearModelInstanceBuffers,
-    depends_on = [],
-    execute_on = [RenderingTag],
-    |ctx: &RuntimeContext| {
-        let engine = ctx.engine();
-        instrument_task!("Clearing model instance buffers", engine.task_timer(), {
-            let scene = engine.scene().oread();
-            let mut model_instance_manager = scene.model_instance_manager().owrite();
-            model_instance_manager.clear_buffer_contents();
-            Ok(())
-        })
-    }
-);
-
-// =============================================================================
-// SCENE GRAPH, TRANSFORMS AND CULLING (for current frame)
+// SCENE GRAPH UPDATES (for current frame)
 // =============================================================================
 
 define_task!(
@@ -557,6 +537,32 @@ define_task!(
 );
 
 define_task!(
+    /// Uses the [`SceneGraph`](crate::scene::SceneGraph) to update the view
+    /// transform of the scene camera.
+    [pub] SyncSceneCameraViewTransform,
+    depends_on = [
+        UpdateSceneGroupToWorldTransforms
+    ],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Synchronizing scene camera view transform", engine.task_timer(), {
+            let scene = engine.scene().oread();
+            let mut camera_manager = scene.camera_manager().owrite();
+            if let Some(camera) = camera_manager.active_camera_mut() {
+                let scene_graph = scene.scene_graph().oread();
+                scene_graph.sync_camera_view_transform(camera);
+            }
+            Ok(())
+        })
+    }
+);
+
+// =============================================================================
+// BOUNDING VOLUME HIERARCHY CONSTRUCTION (for current frame)
+// =============================================================================
+
+define_task!(
     /// Adds the world-space bounding volumes of the appropriate entities to the
     /// bounding volume hierarchy.
     [pub] AddBoundingVolumesToHierarchy,
@@ -603,71 +609,6 @@ define_task!(
     }
 );
 
-define_task!(
-    /// Uses the [`SceneGraph`](crate::scene::SceneGraph) to update the view
-    /// transform of the scene camera.
-    [pub] SyncSceneCameraViewTransform,
-    depends_on = [
-        UpdateSceneGroupToWorldTransforms
-    ],
-    execute_on = [RenderingTag],
-    |ctx: &RuntimeContext| {
-        let engine = ctx.engine();
-        instrument_task!("Synchronizing scene camera view transform", engine.task_timer(), {
-            let scene = engine.scene().oread();
-            let mut camera_manager = scene.camera_manager().owrite();
-            if let Some(camera) = camera_manager.active_camera_mut() {
-                let scene_graph = scene.scene_graph().oread();
-                scene_graph.sync_camera_view_transform(camera);
-            }
-            Ok(())
-        })
-    }
-);
-
-define_task!(
-    /// Uses the [`SceneGraph`](crate::scene::SceneGraph) to determine which
-    /// model instances are visible with the scene camera, update
-    /// their model-to-camera space transforms and buffer their
-    /// features for rendering.
-    [pub] BufferModelInstancesForRendering,
-    depends_on = [
-        // We need the current view transform to compute model-to-camera
-        // transforms.
-        SyncSceneCameraViewTransform,
-        // We need the BVH for view frustum culling.
-        BuildBoundingVolumeHierarchy,
-        // The buffers must have been cleared from the previous frame before we
-        // write into them.
-        ClearModelInstanceBuffers
-    ],
-    execute_on = [RenderingTag],
-    |ctx: &RuntimeContext| {
-        let engine = ctx.engine();
-        instrument_task!("Buffering model instances for rendering", engine.task_timer(), {
-            let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
-            let resource_manager = engine.resource_manager().oread();
-            let scene = engine.scene().oread();
-            let camera_manager = scene.camera_manager().oread();
-            if let Some(camera) = camera_manager.active_camera() {
-                let mut model_instance_manager = scene.model_instance_manager().owrite();
-                let intersection_manager = scene.intersection_manager().oread();
-                let scene_graph = scene.scene_graph().oread();
-
-                scene_graph.buffer_model_instances_for_rendering(
-                    &resource_manager.materials,
-                    &mut model_instance_manager,
-                    &intersection_manager,
-                    camera,
-                    current_frame_number,
-                );
-            }
-
-            Ok(())
-        })
-    }
-);
-
 // =============================================================================
 // LIGHT PROCESSING (for current frame)
 // =============================================================================
@@ -709,94 +650,75 @@ define_task!(
 );
 
 // =============================================================================
-// LIGHT CULLING AND SHADOW MAPPING (for current frame)
+// MODEL INSTANCE BUFFERING (for current frame)
 // =============================================================================
 
 define_task!(
-    /// Determines which model instances may cast a visible shadow for each
-    /// omnidirectional light, bounds the light's cubemap projections to
-    /// encompass these and buffer their model to cubemap face space transforms
-    /// for shadow mapping.
-    [pub] BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-    depends_on = [
-        // We need the up-to-date light state for this.
-        SyncLights,
-        // The current task begins new ranges in the instance feature buffers,
-        // so all tasks writing to the initial range have to be completed first.
-        BufferModelInstancesForRendering,
-        BuildBoundingVolumeHierarchy
-        // Since gizmo models can't cast shadows, we luckily don't need this
-        // dependency (which would create a cycle).
-        // BufferTransformsForGizmos
-    ],
+    /// Clears any previously buffered instance features in the
+    /// [`ModelInstanceManager`](crate::model::ModelInstanceManager).
+    [pub] ClearModelInstanceBuffers,
+    depends_on = [],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_task!("Bounding omnidirectional lights and buffering shadow casting model instances", engine.task_timer(), {
+        instrument_task!("Clearing model instance buffers", engine.task_timer(), {
             let scene = engine.scene().oread();
-            let camera_manager = scene.camera_manager().oread();
-            if let Some(camera) = camera_manager.active_camera() {
-                let mut light_manager = scene.light_manager().owrite();
-                let mut model_instance_manager = scene.model_instance_manager().owrite();
-                let intersection_manager = scene.intersection_manager().oread();
-                let scene_graph = scene.scene_graph().oread();
-                let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
-
-                scene_graph
-                    .bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
-                        &mut light_manager,
-                        &mut model_instance_manager,
-                        &intersection_manager,
-                        camera,
-                        shadow_mapping_enabled,
-                    );
-            }
+            let mut model_instance_manager = scene.model_instance_manager().owrite();
+            model_instance_manager.clear_buffer_contents();
             Ok(())
         })
     }
 );
 
 define_task!(
-    /// Determines which model instances may cast a visible shadow for each
-    /// unidirectional light, bounds the light's orthographic projection to
-    /// encompass these and buffer their model to light transforms for shadow
-    /// mapping.
-    [pub] BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
+    /// Determines which model instances are visible, updates their
+    /// model-to-camera space transforms and buffer their features for
+    /// rendering. Also determines which model instances may cast a visible
+    /// shadow for each light, bounds the light's shadow map projections to
+    /// encompass these and buffer their model to light space transforms for
+    /// shadow mapping.
+    [pub] BufferModelInstancesAndBoundLights,
     depends_on = [
-        // We need to up-to-date light state for this.
+        // We need the current view transform to compute model-to-camera
+        // transforms.
+        SyncSceneCameraViewTransform,
+        // We need the up-to-date light state for light bounding and buffering
+        // for shadow maps.
         SyncLights,
-        // The current task begins new ranges in the instance feature buffers,
-        // so all tasks writing to the initial range have to be completed first
-        BufferModelInstancesForRendering,
-        BuildBoundingVolumeHierarchy
-        // Since gizmo models can't cast shadows, we luckily don't need this
-        // dependency (which would create a cycle).
-        // BufferTransformsForGizmos
+        // We need the BVH for culling.
+        BuildBoundingVolumeHierarchy,
+        // The buffers must have been cleared from the previous frame before we
+        // write into them.
+        ClearModelInstanceBuffers
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_task!("Bounding unidirectional lights and buffering shadow casting model instances", engine.task_timer(), {
-            let scene = engine.scene().oread();
-            let camera_manager = scene.camera_manager().oread();
-            if let Some(camera) = camera_manager.active_camera() {
-                let mut light_manager = scene.light_manager().owrite();
-                let mut model_instance_manager = scene.model_instance_manager().owrite();
-                let intersection_manager = scene.intersection_manager().oread();
-                let scene_graph = scene.scene_graph().oread();
-                let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
+        let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
+        let resource_manager = engine.resource_manager().oread();
+        let scene = engine.scene().oread();
+        let camera_manager = scene.camera_manager().oread();
+        if let Some(camera) = camera_manager.active_camera() {
+            let mut light_manager = scene.light_manager().owrite();
+            let mut model_instance_manager = scene.model_instance_manager().owrite();
+            let intersection_manager = scene.intersection_manager().oread();
+            let scene_graph = scene.scene_graph().oread();
+            let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
 
-                scene_graph
-                    .bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
-                        &mut light_manager,
-                        &mut model_instance_manager,
-                        &intersection_manager,
-                        camera,
-                        shadow_mapping_enabled,
-                    );
-            }
-            Ok(())
-        })
+            buffer_model_instances_and_bound_lights(
+                engine.task_timer(),
+                &resource_manager.materials,
+                &mut light_manager,
+                &mut model_instance_manager,
+                &intersection_manager,
+                &scene_graph,
+                camera,
+                current_frame_number,
+                shadow_mapping_enabled,
+            );
+        }
+
+        Ok(())
     }
 );
 
@@ -831,20 +753,12 @@ define_task!(
         UpdateVisibilityFlagsForGizmos,
         // Certain gizmos need the current physics state.
         SyncRigidBodyComponents,
-        // Certain gizmos need the current model-view transforms of their
-        // associated model instances.
-        BufferModelInstancesForRendering,
         // Certain gizmos need the current light state.
         SyncLights,
-        // TODO: Certain gizmos need light properties that are modified when the
-        // lights are bound to the scene. But we have to buffer the gizmo
-        // transforms before buffering model-to-light transforms, since the
-        // former have to come before the latter in the buffers. Ideally, the
-        // bounding and buffering should be split into separate tasks, but since
-        // gizmos are only a dev tool we're fine with those visualizations
-        // lagging by one frame for now.
-        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances
+        // Certain gizmos need the current model-view transforms of their
+        // associated model instances, and certain gizmos need light properties
+        // that are modified when the lights are bound to the scene.
+        BufferModelInstancesAndBoundLights
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
@@ -969,14 +883,11 @@ define_task!(
         SyncLights,
         // The current voxel meshes must be synced with various GPU buffers.
         UpdateVoxelObjectMeshes,
-        // The current model instance feature buffers must be copied over to
-        // their GPU-side counterparts.
-        BufferModelInstancesForRendering,
+        // The light uniforms must be updated on the GPU and the current model
+        // instance feature buffers must be copied over to their GPU-side
+        // counterparts.
+        BufferModelInstancesAndBoundLights,
         BufferTransformsForGizmos,
-        // These task affect both the light uniforms and the instance feature
-        // buffers.
-        BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances,
-        BoundUnidirectionalLightsAndBufferShadowCastingModelInstances,
         // We need to have the up-to-date rendering configuration at this point.
         ApplyRenderCommands
     ],
@@ -1101,23 +1012,21 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(AdvanceSimulation)?;
     task_scheduler.register_task(SyncRigidBodyComponents)?;
 
-    // INSTANCE BUFFER MANAGEMENT (for current frame)
-    task_scheduler.register_task(ClearModelInstanceBuffers)?;
-
-    // SCENE GRAPH, TRANSFORMS AND CULLING (for current frame)
+    // SCENE GRAPH UPDATES (for current frame)
     task_scheduler.register_task(SyncSceneGraphNodeProperties)?;
     task_scheduler.register_task(UpdateSceneGroupToWorldTransforms)?;
+    task_scheduler.register_task(SyncSceneCameraViewTransform)?;
+
+    // BOUNDING VOLUME HIERARCHY CONSTRUCTION (for current frame)
     task_scheduler.register_task(AddBoundingVolumesToHierarchy)?;
     task_scheduler.register_task(BuildBoundingVolumeHierarchy)?;
-    task_scheduler.register_task(SyncSceneCameraViewTransform)?;
-    task_scheduler.register_task(BufferModelInstancesForRendering)?;
 
     // LIGHT PROCESSING (for current frame)
     task_scheduler.register_task(SyncLights)?;
 
-    // LIGHT CULLING AND SHADOW MAPPING (for current frame)
-    task_scheduler.register_task(BoundOmnidirectionalLightsAndBufferShadowCastingModelInstances)?;
-    task_scheduler.register_task(BoundUnidirectionalLightsAndBufferShadowCastingModelInstances)?;
+    // MODEL INSTANCE BUFFERING (for current frame)
+    task_scheduler.register_task(ClearModelInstanceBuffers)?;
+    task_scheduler.register_task(BufferModelInstancesAndBoundLights)?;
 
     // GIZMO PROCESSING (for current frame)
     task_scheduler.register_task(UpdateVisibilityFlagsForGizmos)?;
