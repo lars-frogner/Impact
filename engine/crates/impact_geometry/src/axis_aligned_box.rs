@@ -143,6 +143,18 @@ impl AxisAlignedBox {
         &self.upper_corner
     }
 
+    /// Returns a mutable reference to the lower corner of the box.
+    #[inline]
+    pub fn lower_corner_mut(&mut self) -> &mut Point3 {
+        &mut self.lower_corner
+    }
+
+    /// Returns a mutable reference to the upper corner of the box.
+    #[inline]
+    pub fn upper_corner_mut(&mut self) -> &mut Point3 {
+        &mut self.upper_corner
+    }
+
     /// Calculates and returns the center point of the box.
     #[inline]
     pub fn center(&self) -> Point3 {
@@ -207,12 +219,9 @@ impl AxisAlignedBox {
     /// surface of the box is considered inside.
     #[inline]
     pub fn contains_point(&self, point: &Point3) -> bool {
-        point.x() >= self.lower_corner().x()
-            && point.x() <= self.upper_corner().x()
-            && point.y() >= self.lower_corner().y()
-            && point.y() <= self.upper_corner().y()
-            && point.z() >= self.lower_corner().z()
-            && point.z() <= self.upper_corner().z()
+        (point - self.lower_corner()).is_negative_bitmask()
+            | (self.upper_corner() - point).is_negative_bitmask()
+            == 0
     }
 
     /// Returns the point inside or on the boundary of the axis-aligned box that
@@ -264,24 +273,18 @@ impl AxisAlignedBox {
     /// corner exactly touches the surface, it is still considered inside.
     #[inline]
     pub fn contains_box(&self, other: &Self) -> bool {
-        other.lower_corner().x() >= self.lower_corner().x()
-            && other.upper_corner().x() <= self.upper_corner().x()
-            && other.lower_corner().y() >= self.lower_corner().y()
-            && other.upper_corner().y() <= self.upper_corner().y()
-            && other.lower_corner().z() >= self.lower_corner().z()
-            && other.upper_corner().z() <= self.upper_corner().z()
+        (other.lower_corner() - self.lower_corner()).is_negative_bitmask()
+            | (self.upper_corner() - other.upper_corner()).is_negative_bitmask()
+            == 0
     }
 
     /// Whether all of the given axis-aligned box is outside this box. If the
     /// boundaries exactly touch each other, the box is considered inside.
     #[inline]
     pub fn box_lies_outside(&self, other: &Self) -> bool {
-        !((self.lower_corner().x() <= other.upper_corner().x()
-            && self.upper_corner().x() >= other.lower_corner().x())
-            && (self.lower_corner().y() <= other.upper_corner().y()
-                && self.upper_corner().y() >= other.lower_corner().y())
-            && (self.lower_corner().z() <= other.upper_corner().z()
-                && self.upper_corner().z() >= other.lower_corner().z()))
+        (other.upper_corner() - self.lower_corner()).is_negative_bitmask()
+            | (self.upper_corner() - other.lower_corner()).is_negative_bitmask()
+            != 0
     }
 
     /// Computes the axis-aligned bounding box enclosing only the volume
@@ -291,9 +294,8 @@ impl AxisAlignedBox {
     pub fn compute_overlap_with(&self, other: &Self) -> Option<Self> {
         let lower_corner = self.lower_corner().max_with(other.lower_corner());
         let upper_corner = self.upper_corner().min_with(other.upper_corner());
-        let diff = upper_corner - lower_corner;
 
-        if diff.x() < 0.0 || diff.y() < 0.0 || diff.z() < 0.0 {
+        if (upper_corner - lower_corner).has_negative_component() {
             None
         } else {
             Some(Self::new(lower_corner, upper_corner))
@@ -608,6 +610,55 @@ mod tests {
     use super::*;
     use crate::Plane;
     use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn contains_point_with_point_inside_box_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let point = Point3::new(1.0, 1.0, 1.0);
+        assert!(aabb.contains_point(&point));
+    }
+
+    #[test]
+    fn contains_point_with_point_on_boundary_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let point = Point3::new(0.0, 1.0, 2.0);
+        assert!(aabb.contains_point(&point));
+    }
+
+    #[test]
+    fn contains_point_with_point_outside_box_works() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(2.0, 2.0, 2.0));
+        let point = Point3::new(3.0, 1.0, 1.0);
+        assert!(!aabb.contains_point(&point));
+    }
+
+    #[test]
+    fn contains_box_with_box_fully_inside_works() {
+        let outer = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(4.0, 4.0, 4.0));
+        let inner = AxisAlignedBox::new(Point3::new(1.0, 1.0, 1.0), Point3::new(3.0, 3.0, 3.0));
+        assert!(outer.contains_box(&inner));
+    }
+
+    #[test]
+    fn contains_box_with_box_partially_outside_works() {
+        let outer = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(4.0, 4.0, 4.0));
+        let inner = AxisAlignedBox::new(Point3::new(3.0, 3.0, 3.0), Point3::new(5.0, 5.0, 5.0));
+        assert!(!outer.contains_box(&inner));
+    }
+
+    #[test]
+    fn contains_box_with_box_fully_outside_works() {
+        let outer = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(4.0, 4.0, 4.0));
+        let inner = AxisAlignedBox::new(Point3::new(5.0, 5.0, 5.0), Point3::new(6.0, 6.0, 6.0));
+        assert!(!outer.contains_box(&inner));
+    }
+
+    #[test]
+    fn contains_box_with_equal_box_works() {
+        let box1 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(4.0, 4.0, 4.0));
+        let box2 = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(4.0, 4.0, 4.0));
+        assert!(box1.contains_box(&box2));
+    }
 
     #[test]
     fn box_lies_outside_with_non_overlapping_boxes_works() {

@@ -130,6 +130,12 @@ impl Matrix3 {
         bytemuck::cast_ref(&self.inner.z_axis)
     }
 
+    /// The three column vectors of the matrix.
+    #[inline]
+    pub fn columns(&self) -> [Vector3; 3] {
+        [*self.column_1(), *self.column_2(), *self.column_3()]
+    }
+
     /// Sets the first column of the matrix to the given column.
     #[inline]
     pub fn set_column_1(&mut self, column: Vector3) {
@@ -189,6 +195,12 @@ impl Matrix3 {
     #[inline]
     pub fn transpose(&self) -> Self {
         Self::wrap(self.inner.transpose())
+    }
+
+    /// Returns a matrix with the absolute value of each element.
+    #[inline]
+    pub fn element_abs(&self) -> Self {
+        Self::wrap(self.inner.abs())
     }
 
     /// Returns a matrix with the given closure applied to each element.
