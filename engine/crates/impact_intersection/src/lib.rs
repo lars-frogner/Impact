@@ -11,7 +11,7 @@ use bounding_volume::{
     hierarchy::{BVHNodeInfoIter, BoundingVolumeHierarchy},
 };
 use impact_alloc::Allocator;
-use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum, Sphere};
+use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum, OrientedBox, Sphere};
 use impact_math::transform::Similarity3;
 
 #[derive(Debug)]
@@ -95,6 +95,15 @@ impl IntersectionManager {
         f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
     ) {
         self.bvh.for_each_bounding_volume_in_sphere(sphere, f);
+    }
+
+    pub fn for_each_bounding_volume_maybe_in_oriented_box(
+        &self,
+        oriented_box: &OrientedBox,
+        f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
+    ) {
+        self.bvh
+            .for_each_bounding_volume_maybe_in_oriented_box(oriented_box, f);
     }
 
     pub fn for_each_bounding_volume_maybe_in_frustum(

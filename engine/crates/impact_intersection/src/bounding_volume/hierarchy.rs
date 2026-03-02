@@ -7,7 +7,7 @@ use crate::bounding_volume::BoundingVolumeID;
 use anyhow::{Result, anyhow};
 use impact_alloc::{AVec, Allocator, arena::ArenaPool, avec};
 use impact_containers::KeyIndexMapper;
-use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum, Sphere};
+use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC, Frustum, OrientedBox, Sphere};
 use std::mem;
 
 #[derive(Debug)]
@@ -174,6 +174,25 @@ impl BoundingVolumeHierarchy {
             |aabb| {
                 let aabb = aabb.aligned();
                 !sphere.is_outside_axis_aligned_box(&aabb)
+            },
+            |primitive_idx| {
+                f(
+                    self.primitives.id_at_idx(primitive_idx),
+                    self.primitives.aabb_at_idx(primitive_idx),
+                );
+            },
+        );
+    }
+
+    pub fn for_each_bounding_volume_maybe_in_oriented_box(
+        &self,
+        oriented_box: &OrientedBox,
+        mut f: impl FnMut(BoundingVolumeID, &AxisAlignedBoxC),
+    ) {
+        self.for_each_intersecting_bounding_volume(
+            |aabb| {
+                let aabb = aabb.aligned();
+                oriented_box.could_contain_part_of_axis_aligned_box(&aabb)
             },
             |primitive_idx| {
                 f(
