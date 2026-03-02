@@ -103,15 +103,21 @@ impl OrientedBox {
         UnitVector3::unchecked_from(self.orientation.rotate_vector(&UnitVector3::unit_z()))
     }
 
+    /// Computes the unit vectors representing the width, height and depth axes
+    /// of the box.
+    #[inline]
+    pub fn compute_axes(&self) -> [UnitVector3; 3] {
+        let rotation_matrix = self.orientation.to_rotation_matrix();
+        rotation_matrix.columns().map(UnitVector3::unchecked_from)
+    }
+
     /// Whether the given point is inside this box. A point exactly on the
     /// surface of the box is considered inside.
     #[inline]
     pub fn contains_point(&self, point: &Point3) -> bool {
         let point_in_box_frame = self.transform_point_to_box_frame(point);
         let abs_point_in_box_frame = point_in_box_frame.as_vector().component_abs();
-        abs_point_in_box_frame.x() <= self.half_extents.x()
-            && abs_point_in_box_frame.y() <= self.half_extents.y()
-            && abs_point_in_box_frame.z() <= self.half_extents.z()
+        !(self.half_extents - abs_point_in_box_frame).has_negative_component()
     }
 
     /// Transforms the given point to the frame with origin at the center of the
@@ -169,9 +175,10 @@ impl OrientedBox {
     /// Computes the eight corners of the oriented box.
     #[inline]
     pub fn compute_corners(&self) -> [Point3; 8] {
-        let half_width_vector = self.half_extents.x() * self.compute_width_axis();
-        let half_height_vector = self.half_extents.y() * self.compute_height_axis();
-        let half_depth_vector = self.half_extents.z() * self.compute_depth_axis();
+        let [width_axis, height_axis, depth_axis] = self.compute_axes();
+        let half_width_vector = self.half_extents.x() * width_axis;
+        let half_height_vector = self.half_extents.y() * height_axis;
+        let half_depth_vector = self.half_extents.z() * depth_axis;
         [
             self.center - half_width_vector - half_height_vector - half_depth_vector,
             self.center - half_width_vector - half_height_vector + half_depth_vector,
@@ -190,19 +197,23 @@ impl OrientedBox {
     /// in a [`Frustum`](crate::Frustum).
     #[inline]
     pub fn compute_bounding_planes(&self) -> [Plane; 6] {
-        let width_axis = self.compute_width_axis();
-        let height_axis = self.compute_height_axis();
-        let depth_axis = self.compute_depth_axis();
-        let width_of_center = width_axis.dot(self.center.as_vector());
-        let height_of_center = height_axis.dot(self.center.as_vector());
-        let depth_of_center = depth_axis.dot(self.center.as_vector());
+        let [width_axis, height_axis, depth_axis] = self.compute_axes();
+
+        let center_coords_along_local_axes = self
+            .orientation
+            .inverse()
+            .rotate_vector(self.center.as_vector());
+
+        let upper_displacements = center_coords_along_local_axes - self.half_extents;
+        let lower_displacements = -(center_coords_along_local_axes + self.half_extents);
+
         [
-            Plane::new(width_axis, width_of_center - self.half_extents.x()),
-            Plane::new(-width_axis, -width_of_center - self.half_extents.x()),
-            Plane::new(height_axis, height_of_center - self.half_extents.y()),
-            Plane::new(-height_axis, -height_of_center - self.half_extents.y()),
-            Plane::new(depth_axis, depth_of_center - self.half_extents.z()),
-            Plane::new(-depth_axis, -depth_of_center - self.half_extents.z()),
+            Plane::new(width_axis, upper_displacements.x()),
+            Plane::new(-width_axis, lower_displacements.x()),
+            Plane::new(height_axis, upper_displacements.y()),
+            Plane::new(-height_axis, lower_displacements.y()),
+            Plane::new(depth_axis, upper_displacements.z()),
+            Plane::new(-depth_axis, lower_displacements.z()),
         ]
     }
 

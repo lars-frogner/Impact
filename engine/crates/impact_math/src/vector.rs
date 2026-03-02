@@ -531,6 +531,20 @@ impl Vector3 {
         Self::wrap(self.inner.max(other.inner))
     }
 
+    /// Returns a bitmask where the lowest three bits are set to the sign bits
+    /// of the vector's components (the lowest bit is for x, the next for y and
+    /// the next for z).
+    #[inline]
+    pub fn is_negative_bitmask(&self) -> u32 {
+        self.inner.is_negative_bitmask()
+    }
+
+    /// Whether any of the vector components are negative.
+    #[inline]
+    pub fn has_negative_component(&self) -> bool {
+        self.is_negative_bitmask() != 0
+    }
+
     /// Returns a vector with the given closure applied to each component.
     #[inline]
     pub fn mapped(&self, mut f: impl FnMut(f32) -> f32) -> Self {
