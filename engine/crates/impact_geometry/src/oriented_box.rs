@@ -120,6 +120,28 @@ impl OrientedBox {
         !(self.half_extents - abs_point_in_box_frame).has_negative_component()
     }
 
+    /// Whether any part of the given axis-aligned box could be inside the box.
+    /// If the AAB lies close to an edge or a corner, this method may return
+    /// `true` even if the AAB is really outside. However, this method is will
+    /// always return `true` if the AAB is really inside. If the boundaries
+    /// exactly touch each other, the AAB is considered inside.
+    #[inline]
+    pub fn could_contain_part_of_axis_aligned_box(
+        &self,
+        axis_aligned_box: &AxisAlignedBox,
+    ) -> bool {
+        let rotation_to_local = self.orientation.inverse().to_rotation_matrix();
+        let projected_aab_half_extents =
+            rotation_to_local.element_abs() * axis_aligned_box.half_extents();
+
+        let half_extent_sum = projected_aab_half_extents + self.half_extents;
+
+        let box_frame_aab_center = self.transform_point_to_box_frame(&axis_aligned_box.center());
+        let abs_box_frame_aab_center = box_frame_aab_center.as_vector().component_abs();
+
+        !(half_extent_sum - abs_box_frame_aab_center).has_negative_component()
+    }
+
     /// Transforms the given point to the frame with origin at the center of the
     /// box and with x-, y- and z-axes aligned with the width-, height- and
     /// depth-axes of the box, respectively.
@@ -866,5 +888,50 @@ mod tests {
         );
 
         assert!(compute_box_intersection_bounds(&box_a, &box_b).is_none());
+    }
+
+    #[test]
+    fn could_contain_part_of_axis_aligned_box_with_box_fully_inside_works() {
+        let oriented_box = OrientedBox::aligned_at_origin(Vector3::same(2.0));
+        let aabb = AxisAlignedBox::new(Point3::new(-1.0, -1.0, -1.0), Point3::new(1.0, 1.0, 1.0));
+        assert!(oriented_box.could_contain_part_of_axis_aligned_box(&aabb));
+    }
+
+    #[test]
+    fn could_contain_part_of_axis_aligned_box_with_overlapping_box_works() {
+        let oriented_box = OrientedBox::aligned_at_origin(Vector3::same(1.0));
+        let aabb = AxisAlignedBox::new(Point3::new(0.5, 0.5, 0.5), Point3::new(2.5, 2.5, 2.5));
+        assert!(oriented_box.could_contain_part_of_axis_aligned_box(&aabb));
+    }
+
+    #[test]
+    fn could_contain_part_of_axis_aligned_box_with_separated_box_works() {
+        let oriented_box = OrientedBox::aligned_at_origin(Vector3::same(1.0));
+        let aabb = AxisAlignedBox::new(Point3::new(3.0, 0.0, 0.0), Point3::new(4.0, 1.0, 1.0));
+        assert!(!oriented_box.could_contain_part_of_axis_aligned_box(&aabb));
+    }
+
+    #[test]
+    fn could_contain_part_of_axis_aligned_box_with_rotated_box_overlapping_works() {
+        let oriented_box = OrientedBox::new(
+            Point3::origin(),
+            UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_4),
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        // AABB at origin, should overlap
+        let aabb = AxisAlignedBox::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0.5, 0.5));
+        assert!(oriented_box.could_contain_part_of_axis_aligned_box(&aabb));
+    }
+
+    #[test]
+    fn could_contain_part_of_axis_aligned_box_with_rotated_box_separated_works() {
+        let oriented_box = OrientedBox::new(
+            Point3::origin(),
+            UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), FRAC_PI_4),
+            Vector3::new(1.0, 1.0, 1.0),
+        );
+        // AABB far away
+        let aabb = AxisAlignedBox::new(Point3::new(3.0, 3.0, 0.0), Point3::new(4.0, 4.0, 1.0));
+        assert!(!oriented_box.could_contain_part_of_axis_aligned_box(&aabb));
     }
 }
