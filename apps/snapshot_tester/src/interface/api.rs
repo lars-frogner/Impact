@@ -3,8 +3,8 @@
 pub mod ffi;
 
 use crate::{
-    interface::{access_app, engine::AppInterfaceForEngine, APP},
     App, AppConfig,
+    interface::{APP, access_app, engine::AppInterfaceForEngine},
 };
 use anyhow::Result;
 use impact::{

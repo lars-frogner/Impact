@@ -3,10 +3,10 @@
 pub mod ffi;
 
 use crate::{
-    editor::Editor,
-    interface::{access_app, engine::AppInterfaceForEngine, APP},
-    user_interface::{UserInterface, UI_COMMANDS},
     App, AppConfig,
+    editor::Editor,
+    interface::{APP, access_app, engine::AppInterfaceForEngine},
+    user_interface::{UI_COMMANDS, UserInterface},
 };
 use anyhow::Result;
 use impact::{
