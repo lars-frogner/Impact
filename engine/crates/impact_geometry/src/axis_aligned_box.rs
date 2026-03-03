@@ -287,6 +287,13 @@ impl AxisAlignedBox {
             != 0
     }
 
+    /// Expands the axis-aligned box to encompass another axis-aligned box.
+    #[inline]
+    pub fn merge_with(&mut self, other: &Self) {
+        self.lower_corner = self.lower_corner.min_with(other.lower_corner());
+        self.upper_corner = self.upper_corner.max_with(other.upper_corner());
+    }
+
     /// Computes the axis-aligned bounding box enclosing only the volume
     /// enclosed by both this and the given bounding box, or [`None`] if the two
     /// boxes do not overlap.

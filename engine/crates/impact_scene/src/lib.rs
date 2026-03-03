@@ -209,6 +209,7 @@ pub fn buffer_model_instances_and_bound_lights(
                 intersection_manager,
                 scene_graph,
                 camera,
+                &camera_space_aabb_for_visible_models,
                 shadow_mapping_enabled,
             );
         }
