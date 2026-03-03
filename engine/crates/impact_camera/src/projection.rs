@@ -167,7 +167,7 @@ impl OrthographicCameraProjection {
         let orthographic_transform = OrthographicTransform::with_field_of_view(
             aspect_ratio,
             vertical_field_of_view,
-            near_and_far_distance.clone(),
+            near_and_far_distance,
         );
 
         let view_frustum = Frustum::from_transform(orthographic_transform.as_projective());
@@ -202,7 +202,7 @@ impl OrthographicCameraProjection {
         self.orthographic_transform = OrthographicTransform::with_field_of_view(
             self.aspect_ratio,
             self.vertical_field_of_view,
-            self.near_and_far_distance.clone(),
+            self.near_and_far_distance,
         );
         self.view_frustum = Frustum::from_transform(self.orthographic_transform.as_projective());
         self.transform_version = self.transform_version.wrapping_add(1);

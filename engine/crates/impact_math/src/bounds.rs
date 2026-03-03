@@ -10,7 +10,7 @@ pub struct InclusiveBounds<T> {
 
 /// A lower inclusive and upper exlusive set of bounds.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct UpperExclusiveBounds<T> {
     lower: T,
     upper: T,
