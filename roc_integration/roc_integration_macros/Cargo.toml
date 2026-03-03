@@ -12,7 +12,6 @@ proc-macro = true
 roc_codegen = []
 
 [dependencies]
-lazy_static = "1.5"
 proc-macro2 = "1.0"
 proc-macro-crate = "3.2"
 quote = "1.0"
