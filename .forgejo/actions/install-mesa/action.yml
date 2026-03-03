@@ -1,0 +1,35 @@
+name: Install Mesa
+description: Install Mesa
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        MESA_VERSION: "24.3.4"
+        CI_BINARY_BUILD: "build20"
+      run: |
+        set -e
+
+        apt-get update -qq
+        apt-get install -y --no-install-recommends libvulkan1 libllvm18
+
+        curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
+        mkdir -p $GITHUB_WORKSPACE/mesa_install
+        tar xpf mesa.tar.xz -C $GITHUB_WORKSPACE/mesa_install
+
+        cat > $GITHUB_WORKSPACE/lavapipe_icd.json <<EOF
+        {
+          "ICD": {
+            "api_version": "1.1.255",
+            "library_path": "$GITHUB_WORKSPACE/mesa_install/lib/x86_64-linux-gnu/libvulkan_lvp.so"
+          },
+          "file_format_version": "1.0.0"
+        }
+        EOF
+
+        echo "VK_ICD_FILENAMES=$GITHUB_WORKSPACE/lavapipe_icd.json" >> "$GITHUB_ENV"
+        echo "VK_DRIVER_FILES=$GITHUB_WORKSPACE/lavapipe_icd.json" >> "$GITHUB_ENV"
+
+        MESA_LIB_PATH="$GITHUB_WORKSPACE/mesa_install/lib/x86_64-linux-gnu"
+        echo "LD_LIBRARY_PATH=$MESA_LIB_PATH:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+        echo "LIBGL_DRIVERS_PATH=$MESA_LIB_PATH/dri" >> "$GITHUB_ENV"
