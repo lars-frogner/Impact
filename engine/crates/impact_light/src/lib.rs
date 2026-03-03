@@ -25,14 +25,14 @@ use impact_math::{
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
     consts::f32::FRAC_1_PI,
-    point::{Point3, Point3C},
+    point::Point3C,
     quaternion::{UnitQuaternion, UnitQuaternionC},
     transform::{Isometry3, Similarity3},
     vector::{UnitVector3, UnitVector3C, Vector3, Vector3C},
 };
 use roc_integration::roc;
 use shadow_map::{CascadeIdx, ShadowMappingConfig};
-use std::iter;
+use std::array;
 
 /// The luminous intensity of a light source, which is the visible power
 /// (luminous flux) emitted per unit solid angle, represented as an RGB triplet.
@@ -311,6 +311,14 @@ pub struct ShadowableUnidirectionalLight {
     _padding_4: [f32; 7 - MAX_SHADOW_MAP_CASCADES_USIZE],
 }
 
+/// A partition of view frustum cascades for cascaded shadow mapping.
+#[derive(Clone, Debug)]
+pub struct CascadePartitionDepths {
+    near_partition_depth: f32,
+    partition_depths: [f32; MAX_SHADOW_MAP_CASCADES_USIZE - 1],
+    far_partition_depth: f32,
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct OrthographicTranslationAndScaling {
@@ -330,7 +338,7 @@ struct OrthographicTranslationAndScaling {
 /// Increasing this above 4 will require changes to the [`UnidirectionalLight`]
 /// struct and associated shader code to meet uniform padding requirements.
 pub const MAX_SHADOW_MAP_CASCADES: u32 = 4;
-const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
+pub const MAX_SHADOW_MAP_CASCADES_USIZE: usize = MAX_SHADOW_MAP_CASCADES as usize;
 
 bitflags! {
     /// Bitflags encoding a set of binary states or properties for a light.
@@ -1186,13 +1194,15 @@ impl ShadowableOmnidirectionalLight {
         self.emissive_radius = 0.5 * emissive_extent;
     }
 
-    pub fn orient_cubemap_based_on_visible_models(
+    /// Uses the AABB for visible models to determine and set an appropriate
+    /// orientation of the light's space relative to camera space.
+    pub fn orient_light_space_based_on_visible_models(
         &mut self,
         camera_space_aabb_for_visible_models: &AxisAlignedBox,
     ) {
         let camera_space_light_position = self.camera_space_position.aligned();
 
-        // Let the orientation of cubemap space be so that the negative z-axis
+        // Let the orientation of light space be so that the negative z-axis
         // points towards the center of the bounding box encompassing visible
         // models
         let neg_z_axis_camera_space_direction = UnitVector3::normalized_from_if_above(
@@ -1207,6 +1217,8 @@ impl ShadowableOmnidirectionalLight {
         self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
     }
 
+    /// Uses the given near and far distance for the light's perspective
+    /// transform.
     pub fn update_near_and_far_distance(&mut self, near_distance: f32, far_distance: f32) {
         self.near_distance = near_distance.clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
 
@@ -1215,16 +1227,6 @@ impl ShadowableOmnidirectionalLight {
         self.near_distance = self.near_distance.min(self.far_distance - Self::MIN_SPAN);
 
         self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
-    }
-
-    /// Computes the frustum for the given cubemap face in camera space.
-    pub fn compute_camera_space_frustum_for_face(&self, face: CubemapFace) -> Frustum {
-        CubeMapper::compute_transformed_frustum_for_face(
-            face,
-            &Similarity3::from_isometry(self.create_camera_to_light_space_transform()),
-            self.near_distance,
-            self.far_distance,
-        )
     }
 
     /// Computes the frustum for the given cubemap face in world space.
@@ -1380,33 +1382,22 @@ impl ShadowableUnidirectionalLight {
         &self.camera_to_light_space_rotation
     }
 
-    /// Takes a transform into camera space and returns the corresponding
-    /// transform into the light's space.
-    pub fn create_transform_to_light_space(
+    /// Takes a transform from world space to camera space and returns the
+    /// corresponding transform from world space to the light's space.
+    pub fn create_world_to_light_space_transform(
         &self,
-        transform_to_camera_space: &Similarity3,
-    ) -> Similarity3 {
-        transform_to_camera_space.rotated(&self.camera_to_light_space_rotation.aligned())
-    }
-
-    /// Takes a transform from camera space to world space and returns the
-    /// corresponding transform from the light's space to world space.
-    pub fn create_light_to_world_space_transform(
-        &self,
-        camera_to_world_transform: &Isometry3,
+        world_to_camera_transform: &Isometry3,
     ) -> Isometry3 {
-        camera_to_world_transform
-            .applied_to_rotation(&self.camera_to_light_space_rotation.aligned().inverse())
+        world_to_camera_transform.rotated(&self.camera_to_light_space_rotation.aligned())
     }
 
-    /// Creates an axis-aligned bounding box in the light's reference frame
-    /// containing all models that may cast visible shadows into the given
-    /// cascade.
-    pub fn create_light_space_orthographic_aabb_for_cascade(
+    /// Takes a transform from model space to camera space and returns the
+    /// corresponding transform from model space to the light's space.
+    pub fn create_model_to_light_space_transform(
         &self,
-        cascade_idx: CascadeIdx,
-    ) -> AxisAlignedBox {
-        self.orthographic_transforms[cascade_idx as usize].compute_aabb()
+        model_to_camera_transform: &Similarity3,
+    ) -> Similarity3 {
+        model_to_camera_transform.rotated(&self.camera_to_light_space_rotation.aligned())
     }
 
     /// Returns the array of linear depths (not the non-linear clip space
@@ -1447,177 +1438,77 @@ impl ShadowableUnidirectionalLight {
             UnidirectionalLight::tan_angular_radius_from_angular_extent(angular_extent);
     }
 
-    /// Updates the partition of view frustum cascades for the light based on
-    /// the near and far distance required for encompassing visible models.
-    pub fn update_cascade_partition_depths(
+    /// Sets the partition of view frustum cascades for the light.
+    pub fn set_cascade_partition_depths(
         &mut self,
-        camera_space_view_frustum: &Frustum,
-        world_space_camera_position: &Point3,
-        camera_view_direction: &UnitVector3,
-        world_space_scene_aabb_for_visible_models: &AxisAlignedBox,
+        cascade_partition_depths: &CascadePartitionDepths,
     ) {
-        const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
+        self.near_partition_depth = cascade_partition_depths.near_partition_depth;
+        self.partition_depths = cascade_partition_depths.partition_depths;
+        self.far_partition_depth = cascade_partition_depths.far_partition_depth;
+    }
 
-        // Find the tightest near and far distance that encompass visible models
+    /// Updates the orthographic transform for the given cascade so that its
+    /// projective frustum corresponds to the given axis-aligned bounding box.
+    pub fn set_light_space_orthographic_aabb_for_cascade(
+        &mut self,
+        cascade_idx: CascadeIdx,
+        light_space_orthographic_aabb: &AxisAlignedBox,
+    ) {
+        let low = light_space_orthographic_aabb.lower_corner();
+        let high = light_space_orthographic_aabb.upper_corner();
 
-        let (scene_near_distance_from_world_origin, scene_far_distance_from_world_origin) =
-            world_space_scene_aabb_for_visible_models
-                .displacement_range_along_axis(camera_view_direction);
-
-        let camera_displacement_along_view_direction = world_space_camera_position
-            .as_vector()
-            .dot(camera_view_direction);
-
-        let scene_near_distance =
-            scene_near_distance_from_world_origin - camera_displacement_along_view_direction;
-        let scene_far_distance =
-            scene_far_distance_from_world_origin - camera_displacement_along_view_direction;
-
-        let near_distance = f32::max(
-            scene_near_distance,
-            camera_space_view_frustum.near_distance(),
-        );
-
-        let far_distance = scene_far_distance.clamp(
-            near_distance.next_up(),
-            camera_space_view_frustum.far_distance(),
-        );
-
-        // Use a blend between exponential and linear increase in the span of
-        // cascades going from the near distance to the far distance
-
-        let distance_ratio =
-            (far_distance / near_distance).powf(1.0 / (MAX_SHADOW_MAP_CASCADES as f32));
-
-        let distance_difference = (far_distance - near_distance) / (MAX_SHADOW_MAP_CASCADES as f32);
-
-        let mut exponential_distance = near_distance;
-        let mut linear_distance = near_distance;
-
-        self.near_partition_depth =
-            camera_space_view_frustum.convert_view_distance_to_linear_depth(near_distance);
-
-        let mut previous_partition_depth = self.near_partition_depth;
-
-        for partition_depth in &mut self.partition_depths {
-            exponential_distance *= distance_ratio;
-            linear_distance += distance_difference;
-
-            let distance = EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT * exponential_distance
-                + (1.0 - EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT) * linear_distance;
-
-            *partition_depth = f32::max(
-                previous_partition_depth.next_up(),
-                camera_space_view_frustum.convert_view_distance_to_linear_depth(distance),
-            );
-            previous_partition_depth = *partition_depth;
-        }
-
-        self.far_partition_depth = f32::max(
-            previous_partition_depth.next_up(),
-            camera_space_view_frustum.convert_view_distance_to_linear_depth(far_distance),
+        self.orthographic_transforms[cascade_idx as usize].set_planes(
+            low.x(),
+            high.x(),
+            low.y(),
+            high.y(),
+            high.z(), // Higher z is closer
+            low.z(),  // Lower z is farther
         );
     }
 
-    /// Updates the light's orthographic transforms so that all objects in the
-    /// scene within or in front of each cascade in the camera view frustum with
-    /// respect to the light, i.e. all objects that may cast visible shadows
-    /// into each cascade, will be included in the clip space for that cascade.
-    ///
-    /// # Returns
-    /// A mask array indicating which cascades may have models included in their
-    /// clip space.
-    pub fn bound_orthographic_transforms_to_cascaded_view_frustum(
-        &mut self,
-        world_to_camera_transform: &Isometry3,
+    /// Partitions the given view frustum and returns an iterator over the
+    /// light-space AABBs of each sub-frustum.
+    pub fn compute_light_space_cascade_aabbs(
+        &self,
         camera_space_view_frustum: &Frustum,
-        world_space_scene_aabb: &AxisAlignedBox,
-    ) -> [bool; MAX_SHADOW_MAP_CASCADES_USIZE] {
-        let camera_to_light_space_rotation = self.camera_to_light_space_rotation.aligned();
-
-        let world_to_light_space_transform =
-            world_to_camera_transform.rotated(&camera_to_light_space_rotation);
-
-        // Use the scene bounding box in light space along with the view frustum
-        // to constrain limits for orthographic projection
-
-        let light_space_scene_aabb =
-            world_space_scene_aabb.aabb_of_transformed(&world_to_light_space_transform.to_matrix());
-
-        // For the near plane we use the point on the scene bounding box
-        // farthest towards the light source, as models between the light and
-        // the view frustum may cast shadows into the frustum
-        let near_coord = light_space_scene_aabb.upper_corner().z();
-
+    ) -> [AxisAlignedBox; MAX_SHADOW_MAP_CASCADES_USIZE] {
         let camera_space_view_frustum_corners = camera_space_view_frustum.compute_corners();
         let view_frustum_near_distance = camera_space_view_frustum.near_distance();
         let view_frustum_far_distance = camera_space_view_frustum.far_distance();
 
-        // Rotate view frustum to light space, where the light direction is -z
+        let camera_to_light_space_rotation = self.camera_to_light_space_rotation.aligned();
+
         let light_space_view_frustum_corners = camera_space_view_frustum_corners
             .map(|corner| camera_to_light_space_rotation.rotate_point(&corner));
 
-        let mut cascade_may_have_models = [true; MAX_SHADOW_MAP_CASCADES_USIZE];
+        self.partition_depth_limits_for_each_cascade()
+            .map(move |partition_depth_limits| {
+                let cascade_subfrustum_corners = Frustum::compute_corners_of_subfrustum(
+                    &light_space_view_frustum_corners,
+                    view_frustum_near_distance,
+                    view_frustum_far_distance,
+                    partition_depth_limits,
+                );
 
-        for (cascade_idx, (partition_depth_limits, orthographic_transform)) in
-            (iter::once(&self.near_partition_depth).chain(self.partition_depths.iter()))
-                .zip(
-                    self.partition_depths
-                        .iter()
-                        .chain(iter::once(&self.far_partition_depth)),
-                )
-                .map(|(&lower, &upper)| UpperExclusiveBounds::new(lower, upper))
-                .zip(self.orthographic_transforms.iter_mut())
-                .enumerate()
-        {
-            // Obtain view sub-frustum for current cascade
-            let cascade_subfrustum_corners = Frustum::compute_corners_of_subfrustum(
-                &light_space_view_frustum_corners,
-                view_frustum_near_distance,
-                view_frustum_far_distance,
-                partition_depth_limits,
-            );
-            let light_space_cascade_subfrustum_aabb =
-                AxisAlignedBox::aabb_for_point_array(&cascade_subfrustum_corners);
+                let light_space_cascade_subfrustum_aabb =
+                    AxisAlignedBox::aabb_for_point_array(&cascade_subfrustum_corners);
 
-            // Constrain limits using either the view frustum or the scene
-            // bounding box, depending on which gives the snuggest fit. Since
-            // the light is unidirectional, the shadows of any models to the
-            // side or above/below the cascade sub-frustum will not be visible.
-            let aabb_for_visible_cascade_models =
-                light_space_scene_aabb.compute_overlap_with(&light_space_cascade_subfrustum_aabb);
+                light_space_cascade_subfrustum_aabb
+            })
+    }
 
-            let Some(aabb_for_visible_cascade_models) = aabb_for_visible_cascade_models else {
-                cascade_may_have_models[cascade_idx] = false;
-                continue;
-            };
+    fn partition_depth_limits_for_each_cascade(
+        &self,
+    ) -> [UpperExclusiveBounds<f32>; MAX_SHADOW_MAP_CASCADES_USIZE] {
+        let mut partition_depths = [self.near_partition_depth; MAX_SHADOW_MAP_CASCADES_USIZE + 1];
+        partition_depths[1..MAX_SHADOW_MAP_CASCADES_USIZE].copy_from_slice(&self.partition_depths);
+        partition_depths[MAX_SHADOW_MAP_CASCADES_USIZE] = self.far_partition_depth;
 
-            let lower_corner_for_visible_cascade_models =
-                aabb_for_visible_cascade_models.lower_corner();
-            let upper_corner_for_visible_cascade_models =
-                aabb_for_visible_cascade_models.upper_corner();
-
-            let left_coord = lower_corner_for_visible_cascade_models.x();
-            let right_coord = upper_corner_for_visible_cascade_models.x();
-
-            let bottom_coord = lower_corner_for_visible_cascade_models.y();
-            let top_coord = upper_corner_for_visible_cascade_models.y();
-
-            // We use lower corner here because smaller (more negative) z is
-            // farther away
-            let far_coord = lower_corner_for_visible_cascade_models.z();
-
-            orthographic_transform.set_planes(
-                left_coord,
-                right_coord,
-                bottom_coord,
-                top_coord,
-                near_coord,
-                far_coord,
-            );
-        }
-
-        cascade_may_have_models
+        array::from_fn(|idx| {
+            UpperExclusiveBounds::new(partition_depths[idx], partition_depths[idx + 1])
+        })
     }
 
     fn compute_camera_to_light_space_rotation(
@@ -1642,6 +1533,69 @@ impl ShadowableUnidirectionalLight {
     }
 }
 
+impl CascadePartitionDepths {
+    /// Computes the partition of view frustum cascades based on the near and
+    /// far distance required for encompassing visible models.
+    pub fn compute(
+        camera_space_view_frustum: &Frustum,
+        camera_space_aabb_for_visible_models: &AxisAlignedBox,
+    ) -> Self {
+        const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
+
+        let mut partition_depths = [0.0; MAX_SHADOW_MAP_CASCADES_USIZE - 1];
+
+        let smallest_model_depth = -camera_space_aabb_for_visible_models.upper_corner().z();
+        let largest_model_depth = -camera_space_aabb_for_visible_models.lower_corner().z();
+
+        let near_distance = smallest_model_depth.max(camera_space_view_frustum.near_distance());
+        let far_distance = largest_model_depth.min(camera_space_view_frustum.far_distance());
+
+        assert!(near_distance > 0.0);
+        assert!(far_distance >= near_distance);
+
+        // Use a blend between exponential and linear increase in the span of
+        // cascades going from the near distance to the far distance
+
+        let distance_ratio =
+            (far_distance / near_distance).powf(1.0 / (MAX_SHADOW_MAP_CASCADES as f32));
+
+        let distance_difference = (far_distance - near_distance) / (MAX_SHADOW_MAP_CASCADES as f32);
+
+        let mut exponential_distance = near_distance;
+        let mut linear_distance = near_distance;
+
+        let near_partition_depth =
+            camera_space_view_frustum.convert_view_distance_to_linear_depth(near_distance);
+
+        let mut previous_partition_depth = near_partition_depth;
+
+        for partition_depth in &mut partition_depths {
+            exponential_distance *= distance_ratio;
+            linear_distance += distance_difference;
+
+            let distance = EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT * exponential_distance
+                + (1.0 - EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT) * linear_distance;
+
+            *partition_depth = f32::max(
+                previous_partition_depth.next_up(),
+                camera_space_view_frustum.convert_view_distance_to_linear_depth(distance),
+            );
+            previous_partition_depth = *partition_depth;
+        }
+
+        let far_partition_depth = f32::max(
+            previous_partition_depth.next_up(),
+            camera_space_view_frustum.convert_view_distance_to_linear_depth(far_distance),
+        );
+
+        Self {
+            near_partition_depth,
+            partition_depths,
+            far_partition_depth,
+        }
+    }
+}
+
 impl OrthographicTranslationAndScaling {
     fn set_planes(&mut self, left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) {
         let (translation, scaling) =
@@ -1659,10 +1613,6 @@ impl OrthographicTranslationAndScaling {
         } else {
             self.scaling[0] = self.scaling[1];
         }
-    }
-
-    fn compute_aabb(&self) -> AxisAlignedBox {
-        compute_orthographic_transform_aabb(&self.translation.aligned(), &self.scaling)
     }
 }
 

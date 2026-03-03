@@ -3,7 +3,7 @@
 use crate::graph::{ModelInstanceFlags, ModelInstanceNode, SceneGraph};
 use bytemuck::Zeroable;
 use impact_camera::Camera;
-use impact_geometry::{AxisAlignedBox, OrientedBox};
+use impact_geometry::AxisAlignedBox;
 use impact_intersection::IntersectionManager;
 use impact_material::{MaterialID, MaterialRegistry};
 use impact_math::{
@@ -171,9 +171,11 @@ pub fn buffer_model_instances_for_rendering(
     let world_space_view_frustum = camera.compute_world_space_view_frustum();
 
     let world_to_camera_transform = camera.view_transform();
+    let world_to_camera_transform_matrix = world_to_camera_transform.to_matrix();
 
-    let mut min_camera_space_coords = Point3::same(f32::INFINITY);
-    let mut max_camera_space_coords = Point3::same(f32::NEG_INFINITY);
+    let mut camera_space_aabb_for_visible_models =
+        AxisAlignedBox::new(Point3::same(f32::INFINITY), Point3::same(f32::NEG_INFINITY));
+
     let mut found_visible_instances = false;
 
     intersection_manager.for_each_bounding_volume_maybe_in_frustum(
@@ -187,14 +189,11 @@ pub fn buffer_model_instances_for_rendering(
                 return;
             };
 
-            let camera_space_obb = OrientedBox::from_axis_aligned_box(&aabb.aligned())
-                .iso_transformed(world_to_camera_transform);
+            let camera_space_aabb = aabb
+                .aligned()
+                .aabb_of_transformed(&world_to_camera_transform_matrix);
 
-            // TODO: Optimize with Jim Arvo method
-            for corner in camera_space_obb.compute_corners() {
-                min_camera_space_coords = min_camera_space_coords.min_with(&corner);
-                max_camera_space_coords = max_camera_space_coords.max_with(&corner);
-            }
+            camera_space_aabb_for_visible_models.merge_with(&camera_space_aabb);
 
             found_visible_instances = true;
 
@@ -210,10 +209,7 @@ pub fn buffer_model_instances_for_rendering(
     );
 
     if found_visible_instances {
-        Some(AxisAlignedBox::new(
-            min_camera_space_coords,
-            max_camera_space_coords,
-        ))
+        Some(camera_space_aabb_for_visible_models)
     } else {
         None
     }
