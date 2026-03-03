@@ -3,4 +3,4 @@
 #[macro_use]
 pub mod macros;
 
-pub use log::*;
+pub use log_::*;

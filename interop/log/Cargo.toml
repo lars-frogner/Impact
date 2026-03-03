@@ -6,7 +6,7 @@ edition = "2024"
 license = "Apache-2.0"
 
 [dependencies]
-log = "0.4"
+log_ = { package = "log", version = "0.4" }
 
 [lints.rust]
 future_incompatible = "warn"
