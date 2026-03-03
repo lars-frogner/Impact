@@ -99,3 +99,5 @@
 - Fix tiny gaps between chunk meshes due to numerical imprecision.
 
 - Fix surface-grazing chunked marked as empty after voxel absorption even though the surface protrudes slightly into the chunk and no voxels were absorbed in or near the chunk (run at commit #9f72fb5f to reproduce).
+
+- Fix acceleration stuck on non-zero in game.
