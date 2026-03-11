@@ -224,8 +224,8 @@ pub fn execute_rendering_admin_command(
             rendering::set_visualized_render_attachment_quantity(&engine.renderer().oread(), to)
                 .map(|_| ())
         }
-        RenderingAdminCommand::SetShadowMapping(to) => {
-            rendering::set_shadow_mapping(&mut engine.renderer().owrite(), to);
+        RenderingAdminCommand::SetShadowMappingConfig(to) => {
+            rendering::set_shadow_mapping_config(&mut engine.renderer().owrite(), to);
             Ok(())
         }
         RenderingAdminCommand::SetWireframeMode(to) => {

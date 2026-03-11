@@ -1198,21 +1198,26 @@ impl ShadowableOmnidirectionalLight {
     /// orientation of the light's space relative to camera space.
     pub fn orient_light_space_based_on_visible_models(
         &mut self,
-        camera_space_aabb_for_visible_models: &AxisAlignedBox,
+        world_to_camera_transform: &Isometry3,
+        world_space_aabb_for_visible_models: &AxisAlignedBox,
     ) {
         let camera_space_light_position = self.camera_space_position.aligned();
+        let world_space_light_position =
+            world_to_camera_transform.inverse_transform_point(&camera_space_light_position);
 
         // Let the orientation of light space be so that the negative z-axis
         // points towards the center of the bounding box encompassing visible
         // models
-        let neg_z_axis_camera_space_direction = UnitVector3::normalized_from_if_above(
-            camera_space_aabb_for_visible_models.center() - camera_space_light_position,
+        let neg_z_axis_world_space_direction = UnitVector3::normalized_from_if_above(
+            world_space_aabb_for_visible_models.center() - world_space_light_position,
             1e-6,
         )
         .unwrap_or_else(UnitVector3::neg_unit_z);
 
-        let camera_to_light_space_rotation =
-            Self::compute_camera_to_light_space_rotation(&neg_z_axis_camera_space_direction);
+        let camera_to_light_space_rotation = Self::compute_camera_to_light_space_rotation(
+            world_to_camera_transform,
+            &neg_z_axis_world_space_direction,
+        );
 
         self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
     }
@@ -1273,22 +1278,29 @@ impl ShadowableOmnidirectionalLight {
     }
 
     fn compute_camera_to_light_space_rotation(
-        camera_space_direction: &UnitVector3,
+        world_to_camera_transform: &Isometry3,
+        world_space_direction: &UnitVector3,
     ) -> UnitQuaternion {
         let direction_is_very_close_to_vertical =
-            f32::abs(camera_space_direction.y().abs() - 1.0) < 1e-3;
+            f32::abs(world_space_direction.y().abs() - 1.0) < 1e-3;
 
         // We orient the light's local coordinate system so that the light
-        // direction in camera space maps to the -z-direction in light space,
-        // and the y-direction in camera space maps to the y-direction in light
-        // space, unless the light direction is nearly vertical in camera space,
-        // in which case we map the -z-direction in camera space to the
-        // y-direction in light space
-        if direction_is_very_close_to_vertical {
-            UnitQuaternion::look_to_rh(camera_space_direction, &UnitVector3::neg_unit_z())
+        // direction maps to the -z-direction in light space, and the
+        // y-direction in world space maps to the y-direction in light space,
+        // unless the light direction is nearly vertical in world space, in
+        // which case we map the -z-direction in world space to the y-direction
+        // in light space.
+        //
+        // Note: The reason we go via world space rather than using the camera
+        // space direction is to keep the shadow map transforms as stable as
+        // possible in world space.
+        let world_to_light_space_rotation = if direction_is_very_close_to_vertical {
+            UnitQuaternion::look_to_rh(world_space_direction, &UnitVector3::neg_unit_z())
         } else {
-            UnitQuaternion::look_to_rh(camera_space_direction, &UnitVector3::unit_y())
-        }
+            UnitQuaternion::look_to_rh(world_space_direction, &UnitVector3::unit_y())
+        };
+
+        world_to_light_space_rotation * world_to_camera_transform.rotation().inverse()
     }
 }
 
@@ -1340,17 +1352,23 @@ impl UnidirectionalLight {
 
 impl ShadowableUnidirectionalLight {
     pub fn new(
-        camera_space_direction: UnitVector3C,
+        world_to_camera_transform: &Isometry3,
+        world_space_direction: &UnitVector3,
         illuminance: Illumninance,
         angular_extent: impl Angle,
         flags: LightFlags,
     ) -> Self {
+        let camera_space_direction =
+            world_to_camera_transform.transform_unit_vector(world_space_direction);
+
+        let camera_to_light_space_rotation = Self::compute_camera_to_light_space_rotation(
+            world_to_camera_transform,
+            world_space_direction,
+        );
+
         Self {
-            camera_to_light_space_rotation: Self::compute_camera_to_light_space_rotation(
-                &camera_space_direction,
-            )
-            .compact(),
-            camera_space_direction,
+            camera_to_light_space_rotation: camera_to_light_space_rotation.compact(),
+            camera_space_direction: camera_space_direction.compact(),
             near_partition_depth: 0.0,
             perpendicular_illuminance: illuminance,
             tan_angular_radius: UnidirectionalLight::tan_angular_radius_from_angular_extent(
@@ -1420,11 +1438,23 @@ impl ShadowableUnidirectionalLight {
         self.far_partition_depth
     }
 
-    /// Sets the camera space direction of the light to the given direction.
-    pub fn set_camera_space_direction(&mut self, camera_space_direction: UnitVector3C) {
-        self.camera_space_direction = camera_space_direction;
-        self.camera_to_light_space_rotation =
-            Self::compute_camera_to_light_space_rotation(&camera_space_direction).compact();
+    /// Updates the direction of the light in camera space using the given view
+    /// transform and world space direction.
+    pub fn update_camera_space_direction(
+        &mut self,
+        world_to_camera_transform: &Isometry3,
+        world_space_direction: &UnitVector3,
+    ) {
+        let camera_space_direction =
+            world_to_camera_transform.transform_unit_vector(world_space_direction);
+
+        let camera_to_light_space_rotation = Self::compute_camera_to_light_space_rotation(
+            world_to_camera_transform,
+            world_space_direction,
+        );
+
+        self.camera_space_direction = camera_space_direction.compact();
+        self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
     }
 
     /// Sets the perpendicular illuminance of the light to the given value.
@@ -1468,38 +1498,8 @@ impl ShadowableUnidirectionalLight {
         );
     }
 
-    /// Partitions the given view frustum and returns an iterator over the
-    /// light-space AABBs of each sub-frustum.
-    pub fn compute_light_space_cascade_aabbs(
-        &self,
-        camera_space_view_frustum: &Frustum,
-    ) -> [AxisAlignedBox; MAX_SHADOW_MAP_CASCADES_USIZE] {
-        let camera_space_view_frustum_corners = camera_space_view_frustum.compute_corners();
-        let view_frustum_near_distance = camera_space_view_frustum.near_distance();
-        let view_frustum_far_distance = camera_space_view_frustum.far_distance();
-
-        let camera_to_light_space_rotation = self.camera_to_light_space_rotation.aligned();
-
-        let light_space_view_frustum_corners = camera_space_view_frustum_corners
-            .map(|corner| camera_to_light_space_rotation.rotate_point(&corner));
-
-        self.partition_depth_limits_for_each_cascade()
-            .map(move |partition_depth_limits| {
-                let cascade_subfrustum_corners = Frustum::compute_corners_of_subfrustum(
-                    &light_space_view_frustum_corners,
-                    view_frustum_near_distance,
-                    view_frustum_far_distance,
-                    partition_depth_limits,
-                );
-
-                let light_space_cascade_subfrustum_aabb =
-                    AxisAlignedBox::aabb_for_point_array(&cascade_subfrustum_corners);
-
-                light_space_cascade_subfrustum_aabb
-            })
-    }
-
-    fn partition_depth_limits_for_each_cascade(
+    /// Returns the lower and upper linear depth of each frustum partition.
+    pub fn partition_depth_limits_for_each_cascade(
         &self,
     ) -> [UpperExclusiveBounds<f32>; MAX_SHADOW_MAP_CASCADES_USIZE] {
         let mut partition_depths = [self.near_partition_depth; MAX_SHADOW_MAP_CASCADES_USIZE + 1];
@@ -1512,46 +1512,74 @@ impl ShadowableUnidirectionalLight {
     }
 
     fn compute_camera_to_light_space_rotation(
-        camera_space_direction: &UnitVector3C,
+        world_to_camera_transform: &Isometry3,
+        world_space_direction: &UnitVector3,
     ) -> UnitQuaternion {
-        let camera_space_direction = camera_space_direction.aligned();
-
         let direction_is_very_close_to_vertical =
-            f32::abs(camera_space_direction.y().abs() - 1.0) < 1e-3;
+            f32::abs(world_space_direction.y().abs() - 1.0) < 1e-3;
 
         // We orient the light's local coordinate system so that the light
-        // direction in camera space maps to the -z-direction in light space,
-        // and the y-direction in camera space maps to the y-direction in light
-        // space, unless the light direction is nearly vertical in camera space,
-        // in which case we map the -z-direction in camera space to the
-        // y-direction in light space
-        if direction_is_very_close_to_vertical {
-            UnitQuaternion::look_to_rh(&camera_space_direction, &UnitVector3::neg_unit_z())
+        // direction maps to the -z-direction in light space, and the
+        // y-direction in world space maps to the y-direction in light space,
+        // unless the light direction is nearly vertical in world space, in
+        // which case we map the -z-direction in world space to the y-direction
+        // in light space.
+        //
+        // Note: The reason we go via world space rather than using the camera
+        // space direction is to keep the shadow map transforms as stable as
+        // possible in world space.
+        let world_to_light_space_rotation = if direction_is_very_close_to_vertical {
+            UnitQuaternion::look_to_rh(world_space_direction, &UnitVector3::neg_unit_z())
         } else {
-            UnitQuaternion::look_to_rh(&camera_space_direction, &UnitVector3::unit_y())
-        }
+            UnitQuaternion::look_to_rh(world_space_direction, &UnitVector3::unit_y())
+        };
+
+        world_to_light_space_rotation * world_to_camera_transform.rotation().inverse()
     }
 }
 
 impl CascadePartitionDepths {
     /// Computes the partition of view frustum cascades based on the near and
     /// far distance required for encompassing visible models.
-    pub fn compute(
+    pub fn compute_dynamic(
         camera_space_view_frustum: &Frustum,
         camera_space_aabb_for_visible_models: &AxisAlignedBox,
     ) -> Self {
-        const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
-
-        let mut partition_depths = [0.0; MAX_SHADOW_MAP_CASCADES_USIZE - 1];
-
         let smallest_model_depth = -camera_space_aabb_for_visible_models.upper_corner().z();
         let largest_model_depth = -camera_space_aabb_for_visible_models.lower_corner().z();
 
         let near_distance = smallest_model_depth.max(camera_space_view_frustum.near_distance());
         let far_distance = largest_model_depth.min(camera_space_view_frustum.far_distance());
 
+        Self::compute_with_near_and_far_distance(
+            camera_space_view_frustum,
+            near_distance,
+            far_distance,
+        )
+    }
+
+    /// Computes the partition of view frustum cascades based only on the
+    /// frustum itself, meaning the partitions will not change unless the
+    /// frustum does.
+    pub fn compute_stable(camera_space_view_frustum: &Frustum) -> Self {
+        Self::compute_with_near_and_far_distance(
+            camera_space_view_frustum,
+            camera_space_view_frustum.near_distance(),
+            camera_space_view_frustum.far_distance(),
+        )
+    }
+
+    fn compute_with_near_and_far_distance(
+        camera_space_view_frustum: &Frustum,
+        near_distance: f32,
+        far_distance: f32,
+    ) -> Self {
+        const EXPONENTIAL_VS_LINEAR_PARTITION_WEIGHT: f32 = 0.5;
+
         assert!(near_distance > 0.0);
         assert!(far_distance >= near_distance);
+
+        let mut partition_depths = [0.0; MAX_SHADOW_MAP_CASCADES_USIZE - 1];
 
         // Use a blend between exponential and linear increase in the span of
         // cascades going from the near distance to the far distance

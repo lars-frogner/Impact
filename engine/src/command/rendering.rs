@@ -9,6 +9,7 @@ use crate::{
     scene::Scene,
 };
 use anyhow::Result;
+use impact_light::shadow_map::ShadowMappingConfig;
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,
     postprocessing::{
@@ -40,7 +41,7 @@ pub enum RenderingAdminCommand {
     SetExposure(ToExposure),
     SetRenderAttachmentVisualization(ToActiveState),
     SetVisualizedRenderAttachmentQuantity(ToRenderAttachmentQuantity),
-    SetShadowMapping(ToActiveState),
+    SetShadowMappingConfig(ShadowMappingConfig),
     SetWireframeMode(ToActiveState),
     SetRenderPassTimings(ToActiveState),
 }
@@ -181,12 +182,26 @@ pub fn set_visualized_render_attachment_quantity(
     )
 }
 
-pub fn set_shadow_mapping(
-    renderer: &mut RenderingSystem,
-    to: ToActiveState,
-) -> ModifiedActiveState {
+pub fn set_shadow_mapping_config(renderer: &mut RenderingSystem, mut to: ShadowMappingConfig) {
     log::info!("Setting shadow mapping to {to:?}");
-    to.set(renderer.shadow_mapping_enabled_mut())
+    let config = renderer.shadow_mapping_config_mut();
+
+    if to.omnidirectional_light_shadow_map_resolution
+        != config.omnidirectional_light_shadow_map_resolution
+    {
+        log::warn!("Tried to change omnidirectional light shadow map resolution, ignoring");
+        to.omnidirectional_light_shadow_map_resolution =
+            config.omnidirectional_light_shadow_map_resolution;
+    }
+    if to.unidirectional_light_shadow_map_resolution
+        != config.unidirectional_light_shadow_map_resolution
+    {
+        log::warn!("Tried to change unidirectional light shadow map resolution, ignoring");
+        to.unidirectional_light_shadow_map_resolution =
+            config.unidirectional_light_shadow_map_resolution;
+    }
+
+    *config = to;
 }
 
 pub fn set_wireframe_mode(

@@ -703,7 +703,7 @@ define_task!(
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let intersection_manager = scene.intersection_manager().oread();
             let scene_graph = scene.scene_graph().oread();
-            let shadow_mapping_enabled = engine.renderer().oread().shadow_mapping_config().enabled;
+            let shadow_mapping_config = engine.renderer().oread().shadow_mapping_config().clone();
 
             buffer_model_instances_and_bound_lights(
                 engine.task_timer(),
@@ -714,7 +714,7 @@ define_task!(
                 &scene_graph,
                 camera,
                 current_frame_number,
-                shadow_mapping_enabled,
+                &shadow_mapping_config,
             );
         }
 

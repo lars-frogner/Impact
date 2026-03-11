@@ -2,12 +2,13 @@
 
 use approx::assert_abs_diff_ne;
 use impact_geometry::{
-    Frustum,
+    Frustum, Sphere,
     projection::{OrthographicTransform, PerspectiveTransform},
 };
 use impact_math::{
     angle::{Angle, Radians},
     bounds::{Bounds, UpperExclusiveBounds},
+    point::Point3,
     transform::Projective3,
 };
 use std::fmt::Debug;
@@ -34,6 +35,8 @@ pub trait CameraProjection: Debug + Send + Sync + 'static {
 
     /// Returns the height of the field of view at the given view distance.
     fn view_height_at_distance(&self, distance: f32) -> f32;
+
+    fn subfrustum_bounding_sphere(&self, near_distance: f32, far_distance: f32) -> Sphere;
 
     /// Sets the ratio of width to height of the view plane.
     ///
@@ -141,6 +144,37 @@ impl CameraProjection for PerspectiveCameraProjection {
         2.0 * distance * f32::tan(0.5 * self.vertical_field_of_view().radians())
     }
 
+    fn subfrustum_bounding_sphere(&self, near_distance: f32, far_distance: f32) -> Sphere {
+        let half_width_per_depth = self
+            .perspective_transform
+            .tan_half_horizontal_field_of_view();
+
+        let half_height_per_depth = self.perspective_transform.tan_half_vertical_field_of_view();
+
+        let squared_half_diagonal_per_depth =
+            half_width_per_depth.powi(2) + half_height_per_depth.powi(2);
+
+        // Use formula for the point that has the same distance from all
+        // subfrustum corners
+        let sphere_center_distance =
+            (0.5 * (near_distance + far_distance) * (1.0 + squared_half_diagonal_per_depth))
+                .min(far_distance);
+
+        let squared_center_to_far_plane_distance = (far_distance - sphere_center_distance).powi(2);
+
+        let squared_far_plane_center_to_corner_distance =
+            squared_half_diagonal_per_depth * far_distance.powi(2);
+
+        let sphere_radius = f32::sqrt(
+            squared_center_to_far_plane_distance + squared_far_plane_center_to_corner_distance,
+        );
+
+        Sphere::new(
+            Point3::new(0.0, 0.0, -sphere_center_distance),
+            sphere_radius,
+        )
+    }
+
     fn set_aspect_ratio(&mut self, aspect_ratio: f32) {
         self.perspective_transform.set_aspect_ratio(aspect_ratio);
         self.update_frustum_and_increment_version();
@@ -237,6 +271,13 @@ impl CameraProjection for OrthographicCameraProjection {
     fn view_height_at_distance(&self, _distance: f32) -> f32 {
         2.0 * self.near_and_far_distance.upper()
             * f32::tan(0.5 * self.vertical_field_of_view().radians())
+    }
+
+    fn subfrustum_bounding_sphere(&self, near_distance: f32, far_distance: f32) -> Sphere {
+        let mut aabb = self.orthographic_transform.to_axis_aligned_box();
+        *aabb.lower_corner_mut().z_mut() = -far_distance;
+        *aabb.upper_corner_mut().z_mut() = -near_distance;
+        Sphere::bounding_sphere_from_aabb(&aabb)
     }
 
     fn set_aspect_ratio(&mut self, aspect_ratio: f32) {

@@ -36,6 +36,14 @@ pub type ModelInstanceManagerState = impact_model::ModelInstanceManagerState<Mod
 
 pub type ModelInstanceGPUBufferMap = impact_model::gpu_resource::ModelInstanceGPUBufferMap<ModelID>;
 
+/// The world- and camera-space AABBs encompassing all model instances buffered
+/// for rendering.
+#[derive(Clone, Debug)]
+pub struct ModelInstanceBufferingResult {
+    pub world_space_aabb_for_visible_models: AxisAlignedBox,
+    pub camera_space_aabb_for_visible_models: AxisAlignedBox,
+}
+
 impl ModelID {
     /// Creates a new [`ModelID`] for the model comprised of the given triangle
     /// mesh and material.
@@ -154,8 +162,8 @@ impl Hash for ModelID {
 /// them to the model instance manager.
 ///
 /// # Returns
-/// The camera-space AABB encompassing all the buffered model instances, or
-/// [`None`] if there are no visible model instances.
+/// The world- and camera-space AABBs encompassing all the buffered model
+/// instances, or [`None`] if there are no visible model instances.
 ///
 /// # Warning
 /// Make sure to call [`SceneGraph::sync_camera_view_transform`] and build the
@@ -167,12 +175,14 @@ pub fn buffer_model_instances_for_rendering(
     scene_graph: &SceneGraph,
     camera: &Camera,
     current_frame_number: u32,
-) -> Option<AxisAlignedBox> {
+) -> Option<ModelInstanceBufferingResult> {
     let world_space_view_frustum = camera.compute_world_space_view_frustum();
 
     let world_to_camera_transform = camera.view_transform();
     let world_to_camera_transform_matrix = world_to_camera_transform.to_matrix();
 
+    let mut world_space_aabb_for_visible_models =
+        AxisAlignedBox::new(Point3::same(f32::INFINITY), Point3::same(f32::NEG_INFINITY));
     let mut camera_space_aabb_for_visible_models =
         AxisAlignedBox::new(Point3::same(f32::INFINITY), Point3::same(f32::NEG_INFINITY));
 
@@ -189,9 +199,11 @@ pub fn buffer_model_instances_for_rendering(
                 return;
             };
 
-            let camera_space_aabb = aabb
-                .aligned()
-                .aabb_of_transformed(&world_to_camera_transform_matrix);
+            let aabb = aabb.aligned();
+
+            world_space_aabb_for_visible_models.merge_with(&aabb);
+
+            let camera_space_aabb = aabb.aabb_of_transformed(&world_to_camera_transform_matrix);
 
             camera_space_aabb_for_visible_models.merge_with(&camera_space_aabb);
 
@@ -209,7 +221,10 @@ pub fn buffer_model_instances_for_rendering(
     );
 
     if found_visible_instances {
-        Some(camera_space_aabb_for_visible_models)
+        Some(ModelInstanceBufferingResult {
+            world_space_aabb_for_visible_models,
+            camera_space_aabb_for_visible_models,
+        })
     } else {
         None
     }

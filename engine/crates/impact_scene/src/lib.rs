@@ -18,11 +18,13 @@ use graph::SceneGraph;
 use impact_camera::Camera;
 use impact_id::EntityID;
 use impact_intersection::IntersectionManager;
-use impact_light::LightManager;
+use impact_light::{LightManager, shadow_map::ShadowMappingConfig};
 use impact_material::MaterialRegistry;
 use impact_profiling::{TaskTimer, instrument_task};
 use model::ModelInstanceManager;
 use roc_integration::roc;
+
+use crate::model::ModelInstanceBufferingResult;
 
 bitflags! {
     /// Bitflags encoding a set of binary states or properties for an entity in
@@ -164,21 +166,22 @@ pub fn buffer_model_instances_and_bound_lights(
     scene_graph: &SceneGraph,
     camera: &Camera,
     current_frame_number: u32,
-    shadow_mapping_enabled: bool,
+    shadow_mapping_config: &ShadowMappingConfig,
 ) {
-    let camera_space_aabb_for_visible_models =
-        instrument_task!("Buffering model instances for rendering", task_timer, {
-            model::buffer_model_instances_for_rendering(
-                material_registry,
-                model_instance_manager,
-                intersection_manager,
-                scene_graph,
-                camera,
-                current_frame_number,
-            )
-        });
-
-    let Some(camera_space_aabb_for_visible_models) = camera_space_aabb_for_visible_models else {
+    let Some(ModelInstanceBufferingResult {
+        world_space_aabb_for_visible_models,
+        camera_space_aabb_for_visible_models,
+    }) = instrument_task!("Buffering model instances for rendering", task_timer, {
+        model::buffer_model_instances_for_rendering(
+            material_registry,
+            model_instance_manager,
+            intersection_manager,
+            scene_graph,
+            camera,
+            current_frame_number,
+        )
+    })
+    else {
         // No need to consider shadow mapping if no models are visible
         return;
     };
@@ -193,8 +196,8 @@ pub fn buffer_model_instances_and_bound_lights(
                 intersection_manager,
                 scene_graph,
                 camera,
-                &camera_space_aabb_for_visible_models,
-                shadow_mapping_enabled,
+                &world_space_aabb_for_visible_models,
+                shadow_mapping_config,
             );
         }
     );
@@ -210,7 +213,7 @@ pub fn buffer_model_instances_and_bound_lights(
                 scene_graph,
                 camera,
                 &camera_space_aabb_for_visible_models,
-                shadow_mapping_enabled,
+                shadow_mapping_config,
             );
         }
     );

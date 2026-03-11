@@ -239,8 +239,8 @@ impl RenderingSystem {
         &self.shadow_mapping_config
     }
 
-    pub fn shadow_mapping_enabled_mut(&mut self) -> &mut bool {
-        &mut self.shadow_mapping_config.enabled
+    pub fn shadow_mapping_config_mut(&mut self) -> &mut ShadowMappingConfig {
+        &mut self.shadow_mapping_config
     }
 
     /// Presents the last surface texture that was rendered to. Does nothing if

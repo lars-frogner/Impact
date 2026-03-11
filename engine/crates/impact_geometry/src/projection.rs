@@ -1,6 +1,6 @@
 //! Projection transformations.
 
-use crate::{AxisAlignedBoxC, Frustum};
+use crate::{AxisAlignedBox, AxisAlignedBoxC, Frustum};
 use approx::assert_abs_diff_ne;
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
@@ -115,13 +115,25 @@ impl PerspectiveTransform {
     /// Returns the vertical field of view angle in radians.
     #[inline]
     pub fn vertical_field_of_view(&self) -> Radians {
-        Radians(2.0 * (1.0 / self.matrix.element(1, 1)).atan())
+        Radians(2.0 * self.tan_half_vertical_field_of_view().atan())
     }
 
     /// Returns the horizontal field of view angle in radians.
     #[inline]
     pub fn horizontal_field_of_view(&self) -> Radians {
-        Radians(2.0 * (1.0 / self.matrix.element(0, 0)).atan())
+        Radians(2.0 * self.tan_half_horizontal_field_of_view().atan())
+    }
+
+    /// Returns the tangent of half the vertical field of view angle.
+    #[inline]
+    pub fn tan_half_vertical_field_of_view(&self) -> f32 {
+        1.0 / self.matrix.element(1, 1)
+    }
+
+    /// Returns the tangent of half the horizontal field of view angle.
+    #[inline]
+    pub fn tan_half_horizontal_field_of_view(&self) -> f32 {
+        1.0 / self.matrix.element(0, 0)
     }
 
     /// Returns the near distance of the view frustum.
@@ -212,15 +224,15 @@ impl OrthographicTransform {
 
         let (near_distance, far_distance) = near_and_far_distance.bounds();
         let half_height = far_distance * (0.5 * vertical_field_of_view).tan();
-        let half_width = half_height / aspect_ratio;
+        let half_width = half_height * aspect_ratio;
 
         Self::new(
             -half_width,
             half_width,
             -half_height,
             half_height,
-            near_distance,
-            far_distance,
+            -near_distance,
+            -far_distance,
         )
     }
 
@@ -235,8 +247,8 @@ impl OrthographicTransform {
             upper.x(),
             lower.y(),
             upper.y(),
-            lower.z(),
             upper.z(),
+            lower.z(),
         )
     }
 
@@ -299,6 +311,50 @@ impl OrthographicTransform {
     #[inline]
     pub fn project_point(&self, point: &Point3) -> Point3 {
         self.matrix.project_point(point)
+    }
+
+    /// Computes the axis-aligned bounding box encompassing the orthographic
+    /// view frustum.
+    #[inline]
+    pub fn to_axis_aligned_box(&self) -> AxisAlignedBox {
+        let (translation_x, scaling_x) = self.translation_and_scaling_x();
+        let (translation_y, scaling_y) = self.translation_and_scaling_y();
+        let (translation_z, scaling_z) = self.translation_and_scaling_z();
+
+        let translation = Vector3::new(translation_x, translation_y, translation_z);
+        let scaling = [scaling_x, scaling_y, scaling_z];
+
+        let (orthographic_center, orthographic_half_extents) =
+            OrthographicTransform::compute_center_and_half_extents_from_translation_and_scaling(
+                &translation,
+                &scaling,
+            );
+
+        let orthographic_lower_corner = orthographic_center - orthographic_half_extents;
+        let orthographic_upper_corner = orthographic_center + orthographic_half_extents;
+
+        AxisAlignedBox::new(orthographic_lower_corner, orthographic_upper_corner)
+    }
+
+    #[inline]
+    fn translation_and_scaling_x(&self) -> (f32, f32) {
+        let scaling = self.matrix.element(0, 0);
+        let translation = self.matrix.element(0, 3) / scaling;
+        (translation, scaling)
+    }
+
+    #[inline]
+    fn translation_and_scaling_y(&self) -> (f32, f32) {
+        let scaling = self.matrix.element(1, 1);
+        let translation = self.matrix.element(1, 3) / scaling;
+        (translation, scaling)
+    }
+
+    #[inline]
+    fn translation_and_scaling_z(&self) -> (f32, f32) {
+        let scaling = self.matrix.element(2, 2);
+        let translation = self.matrix.element(2, 3) / scaling;
+        (translation, scaling)
     }
 
     #[inline]
