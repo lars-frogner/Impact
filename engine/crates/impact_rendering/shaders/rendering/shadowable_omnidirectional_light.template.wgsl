@@ -251,7 +251,7 @@ fn computeLightQuantities(
     output.dots.LDotN = LDotN;
     output.dots.LDotV = LDotV;
     output.dots.NDotH = NDotH;
-    output.dots.LDotH = LDotN;
+    output.dots.LDotH = LDotH;
 
     return output;
 }
@@ -432,7 +432,7 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
         // If so, tweak light direction to give maximal intensity (NDotH = 1)
         dots.NDotH = 1.0;
         dots.LDotN = VDotN;
-        dots.LDotH = LDotN;
+        dots.LDotH = VDotN;
         dots.LDotV = 2.0 * VDotN * VDotN - 1.0;
         return dots;
     }
@@ -457,7 +457,7 @@ fn determineRepresentativeDirectionForSphericalAreaLight(
     dots.LDotN = newLDotN;
     dots.LDotV = newLDotV;
     dots.NDotH = NDotH;
-    dots.LDotH = LDotN;
+    dots.LDotH = LDotH;
 
     return dots;
 }
