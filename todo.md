@@ -20,10 +20,6 @@
 
 - Look into mesh shading (could be useful for voxel rendering).
 
-- Consider Texel Snapping for shadow map cascades.
-
-- Ignore models with disabled shadown casting when determining shadow map bounds.
-
 ## Physics
 
 - Support disabling rigid bodies.
