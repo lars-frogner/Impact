@@ -7,12 +7,12 @@ use impact::{
     command::{
         AdminCommand,
         capture::{CaptureAdminCommand, SaveShadowMapsFor},
-        rendering::RenderingAdminCommand,
-        rendering::postprocessing::ToRenderAttachmentQuantity,
+        rendering::{RenderingAdminCommand, postprocessing::ToRenderAttachmentQuantity},
         uils::ToActiveState,
     },
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
+    impact_light::shadow_map::UnidirectionalLightShadowMapBoundingMode,
 };
 use impact_math::bounds::{Bounds, UpperExclusiveBounds};
 use impact_rendering::postprocessing::{
@@ -42,6 +42,14 @@ mod shadow_mapping {
         pub const ENABLED: LabelAndHoverText = LabelAndHoverText {
             label: "Shadow mapping",
             hover_text: "Whether shadow mapping is enabled.",
+        };
+        pub const CASCADE_BOUNDING: LabelAndHoverText = LabelAndHoverText {
+            label: "Shadow map cascade bounding",
+            hover_text: "\
+                Whether shadow maps for unidirectional lights should be fitted as closesly \
+                as possible to the visible scene (maximizing resolution) or fitted in a \
+                stable manner with texel snapping (leading to coarser resolution).\
+            ",
         };
     }
 }
@@ -327,10 +335,46 @@ impl RenderingOptionPanel {
 }
 
 fn shadow_mapping_options(ui: &mut Ui, engine: &Engine) {
-    let mut enabled = engine.shadow_mapping_enabled();
-    if option_checkbox(ui, &mut enabled, shadow_mapping::docs::ENABLED).changed() {
+    let mut config = engine.shadow_mapping_config();
+    let mut config_changed = false;
+
+    if option_checkbox(ui, &mut config.enabled, shadow_mapping::docs::ENABLED).changed() {
+        config_changed = true;
+    }
+
+    labeled_option(ui, shadow_mapping::docs::CASCADE_BOUNDING, |ui| {
+        ComboBox::from_id_salt(shadow_mapping::docs::CASCADE_BOUNDING.label)
+            .selected_text(format!(
+                "{:?}",
+                config.unidirectional_light_shadow_map_bounding_mode
+            ))
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_value(
+                        &mut config.unidirectional_light_shadow_map_bounding_mode,
+                        UnidirectionalLightShadowMapBoundingMode::Tight,
+                        "Tight",
+                    )
+                    .changed()
+                {
+                    config_changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut config.unidirectional_light_shadow_map_bounding_mode,
+                        UnidirectionalLightShadowMapBoundingMode::Stable,
+                        "Stable",
+                    )
+                    .changed()
+                {
+                    config_changed = true;
+                }
+            })
+    });
+
+    if config_changed {
         engine.enqueue_admin_command(AdminCommand::Rendering(
-            RenderingAdminCommand::SetShadowMapping(ToActiveState::from_enabled(enabled)),
+            RenderingAdminCommand::SetShadowMappingConfig(config),
         ));
     }
 }

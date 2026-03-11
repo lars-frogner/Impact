@@ -99,10 +99,10 @@ pub fn setup_shadowable_unidirectional_light(
     flags: LightFlags,
 ) -> Result<()> {
     let direction = unidirectional_emission.direction.aligned();
-    let camera_space_direction = view_transform.transform_unit_vector(&direction);
 
     let unidirectional_light = ShadowableUnidirectionalLight::new(
-        camera_space_direction.compact(),
+        view_transform,
+        &direction,
         unidirectional_emission.perpendicular_illuminance,
         Degrees(f32::max(
             unidirectional_emission.angular_source_extent.0,
@@ -197,10 +197,9 @@ pub fn sync_shadowable_unidirectional_light_in_storage(
     flags: LightFlags,
 ) {
     let direction = unidirectional_emission.direction.aligned();
-    let camera_space_direction = view_transform.transform_unit_vector(&direction);
     let light = light_manager.shadowable_unidirectional_light_mut(light_id);
 
-    light.set_camera_space_direction(camera_space_direction.compact());
+    light.update_camera_space_direction(view_transform, &direction);
     light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
     light.set_angular_extent(unidirectional_emission.angular_source_extent);
     light.set_flags(flags);
@@ -216,10 +215,9 @@ pub fn sync_shadowable_unidirectional_light_with_orientation_in_storage(
 ) {
     let direction = unidirectional_emission.direction.aligned();
     let world_direction = orientation.rotate_unit_vector(&direction);
-    let camera_space_direction = view_transform.transform_unit_vector(&world_direction);
 
     let light = light_manager.shadowable_unidirectional_light_mut(light_id);
-    light.set_camera_space_direction(camera_space_direction.compact());
+    light.update_camera_space_direction(view_transform, &world_direction);
     light.set_perpendicular_illuminance(unidirectional_emission.perpendicular_illuminance);
     light.set_angular_extent(unidirectional_emission.angular_source_extent);
     light.set_flags(flags);

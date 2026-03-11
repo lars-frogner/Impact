@@ -17,17 +17,18 @@ use impact_intersection::{IntersectionManager, bounding_volume::BoundingVolumeID
 use impact_light::{
     CascadePartitionDepths, LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES_USIZE,
     ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
-    ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID, shadow_map::CascadeIdx,
+    ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID,
+    shadow_map::{CascadeIdx, ShadowMappingConfig, UnidirectionalLightShadowMapBoundingMode},
 };
 use impact_math::{
     angle::{Angle, Radians},
-    bounds::UpperExclusiveBounds,
+    bounds::{Bounds, UpperExclusiveBounds},
     consts::f32::FRAC_PI_2,
     matrix::Matrix4,
     point::Point3,
     random::splitmix,
     transform::{Isometry3, Projective3, Similarity3, Similarity3C},
-    vector::UnitVector3,
+    vector::{UnitVector3, Vector3},
 };
 use impact_model::{
     InstanceFeatureBufferRangeID, ModelInstanceID, transform::InstanceModelLightTransform,
@@ -36,6 +37,13 @@ use impact_model::{
 #[derive(Debug, Clone)]
 struct ShadowingModel {
     model_to_camera_transform: Similarity3C,
+}
+
+#[derive(Clone, Debug)]
+struct CascadeVolumes {
+    light_space_culling_aabb: AxisAlignedBox,
+    world_space_culling_obb: OrientedBox,
+    light_space_bounding_sphere: Sphere,
 }
 
 /// Converts the given entity ID for a light along with an offset (for cascades
@@ -77,8 +85,8 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
     intersection_manager: &IntersectionManager,
     scene_graph: &SceneGraph,
     camera: &Camera,
-    camera_space_aabb_for_visible_models: &AxisAlignedBox,
-    shadow_mapping_enabled: bool,
+    world_space_aabb_for_visible_models: &AxisAlignedBox,
+    shadow_mapping_config: &ShadowMappingConfig,
 ) {
     let arena = ArenaPool::get_arena();
     let mut shadowing_models =
@@ -97,8 +105,10 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
             continue;
         }
 
-        omnidirectional_light
-            .orient_light_space_based_on_visible_models(camera_space_aabb_for_visible_models);
+        omnidirectional_light.orient_light_space_based_on_visible_models(
+            world_to_camera_transform,
+            world_space_aabb_for_visible_models,
+        );
 
         let camera_to_light_transform =
             omnidirectional_light.create_camera_to_light_space_transform();
@@ -129,8 +139,8 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
 
         if let Some(light_space_culling_frustum_transform) =
             determine_light_space_culling_frustum_perspective_transform(
-                &camera_to_light_transform,
-                camera_space_aabb_for_visible_models,
+                &world_to_light_transform,
+                world_space_aabb_for_visible_models,
             )
         {
             let world_space_culling_frustum =
@@ -199,7 +209,7 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
         let far_distance = max_squared_dist.sqrt();
         omnidirectional_light.update_near_and_far_distance(near_distance, far_distance);
 
-        if !shadow_mapping_enabled {
+        if !shadow_mapping_config.enabled {
             // Even with disabled shadow mapping we had to get the appropriate
             // near and far distances, but we can skip the buffering
             continue;
@@ -259,12 +269,12 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
 }
 
 fn determine_light_space_culling_frustum_perspective_transform(
-    camera_to_light_space_transform: &Isometry3,
-    camera_space_aabb_for_visible_models: &AxisAlignedBox,
+    world_to_light_space_transform: &Isometry3,
+    world_space_aabb_for_visible_models: &AxisAlignedBox,
 ) -> Option<PerspectiveTransform> {
     let light_space_obb_for_visible_models =
-        OrientedBox::from_axis_aligned_box(camera_space_aabb_for_visible_models)
-            .iso_transformed(camera_to_light_space_transform);
+        OrientedBox::from_axis_aligned_box(world_space_aabb_for_visible_models)
+            .iso_transformed(world_to_light_space_transform);
 
     determine_perspective_transform_encompassing_box_in_negative_z_halfspace(
         &light_space_obb_for_visible_models,
@@ -444,7 +454,7 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
     scene_graph: &SceneGraph,
     camera: &Camera,
     camera_space_aabb_for_visible_models: &AxisAlignedBox,
-    shadow_mapping_enabled: bool,
+    shadow_mapping_config: &ShadowMappingConfig,
 ) {
     if light_manager
         .shadowable_unidirectional_light_buffer()
@@ -462,10 +472,16 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
 
     let camera_space_view_frustum = camera.projection().view_frustum();
 
-    let partition_depths = CascadePartitionDepths::compute(
-        camera_space_view_frustum,
-        camera_space_aabb_for_visible_models,
-    );
+    let partition_depths = match shadow_mapping_config.unidirectional_light_shadow_map_bounding_mode
+    {
+        UnidirectionalLightShadowMapBoundingMode::Tight => CascadePartitionDepths::compute_dynamic(
+            camera_space_view_frustum,
+            camera_space_aabb_for_visible_models,
+        ),
+        UnidirectionalLightShadowMapBoundingMode::Stable => {
+            CascadePartitionDepths::compute_stable(camera_space_view_frustum)
+        }
+    };
 
     let world_space_scene_aabb = intersection_manager.total_bounding_volume().aligned();
 
@@ -486,15 +502,21 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
 
         let world_to_light_transform_matrix = world_to_light_transform.to_matrix();
 
-        for (cascade_idx, (light_space_culling_box, world_space_culling_box)) in
-            create_light_and_world_space_unidirectional_light_culling_boxes(
-                &camera_to_world_transform,
-                camera_space_view_frustum,
-                &world_space_scene_aabb,
-                unidirectional_light,
-            )
-            .into_iter()
-            .enumerate()
+        for (
+            cascade_idx,
+            CascadeVolumes {
+                light_space_culling_aabb,
+                world_space_culling_obb,
+                light_space_bounding_sphere,
+            },
+        ) in create_unidirectional_light_cascade_volumes(
+            camera,
+            &camera_to_world_transform,
+            &world_space_scene_aabb,
+            unidirectional_light,
+        )
+        .into_iter()
+        .enumerate()
         {
             let cascade_idx = cascade_idx as CascadeIdx;
 
@@ -504,7 +526,7 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                 AxisAlignedBox::new(Point3::same(f32::INFINITY), Point3::same(f32::NEG_INFINITY));
 
             intersection_manager.for_each_bounding_volume_maybe_in_oriented_box(
-                &world_space_culling_box,
+                &world_space_culling_obb,
                 |id, aabb| {
                     register_primitive_in_unidirectional_light_culling_box(
                         scene_graph,
@@ -518,28 +540,50 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                 },
             );
 
-            if shadowing_model_ids.is_empty() {
+            let tight_light_space_orthographic_aabb = if shadowing_model_ids.is_empty() {
                 // We have no models to bound the cascade, so we just use the
                 // original box
-                unidirectional_light.set_light_space_orthographic_aabb_for_cascade(
-                    cascade_idx,
-                    &light_space_culling_box,
-                );
-                continue;
-            }
+                light_space_culling_aabb
+            } else {
+                // We allow the orthographic AABB to shrink relative to the culling
+                // box if the AABB for shadowing models is smaller
+                light_space_aabb_for_shadowing_models
+                    .compute_overlap_with(&light_space_culling_aabb)
+                    .unwrap()
+            };
 
-            // We allow the orthographic AABB to shrink relative to the culling
-            // box if the AABB for shadowing models is smaller
-            let light_space_orthographic_aabb = light_space_aabb_for_shadowing_models
-                .compute_overlap_with(&light_space_culling_box)
-                .unwrap();
+            let light_space_orthographic_aabb =
+                match shadow_mapping_config.unidirectional_light_shadow_map_bounding_mode {
+                    UnidirectionalLightShadowMapBoundingMode::Tight => {
+                        tight_light_space_orthographic_aabb
+                    }
+                    UnidirectionalLightShadowMapBoundingMode::Stable => {
+                        let mut sphere_aabb = light_space_bounding_sphere.compute_aabb();
+
+                        // Keeping the orthographic transforms stable only requires
+                        // fixing the x- and y-bounds to the bounding sphere. The
+                        // z-bounds should match the tight AABB, both to make sure
+                        // all casters are included and to avoid wasting depth
+                        // resolution.
+                        *sphere_aabb.lower_corner_mut().z_mut() =
+                            tight_light_space_orthographic_aabb.lower_corner().z();
+                        *sphere_aabb.upper_corner_mut().z_mut() =
+                            tight_light_space_orthographic_aabb.upper_corner().z();
+
+                        snap_light_space_orthographic_aabb_extent_to_texels(
+                            &world_to_light_transform,
+                            &sphere_aabb,
+                            shadow_mapping_config,
+                        )
+                    }
+                };
 
             unidirectional_light.set_light_space_orthographic_aabb_for_cascade(
                 cascade_idx,
                 &light_space_orthographic_aabb,
             );
 
-            if !shadow_mapping_enabled {
+            if !shadow_mapping_config.enabled || shadowing_model_ids.is_empty() {
                 continue;
             }
 
@@ -581,12 +625,12 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
     }
 }
 
-fn create_light_and_world_space_unidirectional_light_culling_boxes(
+fn create_unidirectional_light_cascade_volumes(
+    camera: &Camera,
     camera_to_world_transform: &Isometry3,
-    camera_space_view_frustum: &Frustum,
     world_space_scene_aabb: &AxisAlignedBox,
     unidirectional_light: &ShadowableUnidirectionalLight,
-) -> [(AxisAlignedBox, OrientedBox); MAX_SHADOW_MAP_CASCADES_USIZE] {
+) -> [CascadeVolumes; MAX_SHADOW_MAP_CASCADES_USIZE] {
     let camera_to_light_space_rotation = unidirectional_light
         .camera_to_light_space_rotation()
         .aligned();
@@ -611,19 +655,77 @@ fn create_light_and_world_space_unidirectional_light_culling_boxes(
     let near_coord = world_space_camera_displacement_along_light_direction
         - world_space_min_scene_displacement_along_light_direction; // Negative sign because light direction is -z in light space
 
-    unidirectional_light
-        .compute_light_space_cascade_aabbs(camera_space_view_frustum)
-        .map(move |mut light_space_aabb| {
+    compute_light_space_cascade_aabbs_and_bounding_spheres(camera, unidirectional_light).map(
+        move |(mut light_space_culling_aabb, light_space_bounding_sphere)| {
             // The light points along -z in light space, so to include the full
             // scene against the light direction we expand the upper z-coordinate of
             // the box
-            *light_space_aabb.upper_corner_mut().z_mut() =
-                light_space_aabb.upper_corner().z().max(near_coord);
+            *light_space_culling_aabb.upper_corner_mut().z_mut() =
+                light_space_culling_aabb.upper_corner().z().max(near_coord);
 
-            let world_space_obb = OrientedBox::from_axis_aligned_box(&light_space_aabb)
-                .iso_transformed(&light_to_world_space_transform);
+            let world_space_culling_obb =
+                OrientedBox::from_axis_aligned_box(&light_space_culling_aabb)
+                    .iso_transformed(&light_to_world_space_transform);
 
-            (light_space_aabb, world_space_obb)
+            CascadeVolumes {
+                light_space_culling_aabb,
+                world_space_culling_obb,
+                light_space_bounding_sphere,
+            }
+        },
+    )
+}
+
+fn compute_light_space_cascade_aabbs_and_bounding_spheres(
+    camera: &Camera,
+    unidirectional_light: &ShadowableUnidirectionalLight,
+) -> [(AxisAlignedBox, Sphere); MAX_SHADOW_MAP_CASCADES_USIZE] {
+    let camera_projection = camera.projection();
+
+    let camera_space_view_frustum = camera_projection.view_frustum();
+    let camera_space_view_frustum_corners = camera_space_view_frustum.compute_corners();
+
+    let view_frustum_near_distance = camera_projection.near_distance();
+    let view_frustum_far_distance = camera_projection.far_distance();
+    let view_frustum_distance_span = view_frustum_far_distance - view_frustum_near_distance;
+
+    let camera_to_light_space_rotation = unidirectional_light
+        .camera_to_light_space_rotation()
+        .aligned();
+
+    let light_space_view_frustum_corners = camera_space_view_frustum_corners
+        .map(|corner| camera_to_light_space_rotation.rotate_point(&corner));
+
+    unidirectional_light
+        .partition_depth_limits_for_each_cascade()
+        .map(move |partition_depth_limits| {
+            let cascade_subfrustum_corners = Frustum::compute_corners_of_subfrustum(
+                &light_space_view_frustum_corners,
+                view_frustum_near_distance,
+                view_frustum_far_distance,
+                partition_depth_limits,
+            );
+
+            let light_space_cascade_subfrustum_aabb =
+                AxisAlignedBox::aabb_for_point_array(&cascade_subfrustum_corners);
+
+            let subfrustum_near_distance = view_frustum_near_distance
+                + partition_depth_limits.lower() * view_frustum_distance_span;
+
+            let subfrustum_far_distance = view_frustum_near_distance
+                + partition_depth_limits.upper() * view_frustum_distance_span;
+
+            let camera_space_cascade_subfrustum_bounding_sphere = camera_projection
+                .subfrustum_bounding_sphere(subfrustum_near_distance, subfrustum_far_distance);
+
+            let light_space_cascade_subfrustum_bounding_sphere =
+                camera_space_cascade_subfrustum_bounding_sphere
+                    .rotated(&camera_to_light_space_rotation);
+
+            (
+                light_space_cascade_subfrustum_aabb,
+                light_space_cascade_subfrustum_bounding_sphere,
+            )
         })
 }
 
@@ -667,6 +769,44 @@ fn register_primitive_in_unidirectional_light_culling_box<A: Allocator>(
     light_space_aabb_for_shadowing_models.merge_with(&light_space_aabb);
 
     shadowing_model_ids.push(model_instance_id);
+}
+
+fn snap_light_space_orthographic_aabb_extent_to_texels(
+    world_to_light_transform: &Isometry3,
+    aabb: &AxisAlignedBox,
+    shadow_mapping_config: &ShadowMappingConfig,
+) -> AxisAlignedBox {
+    let n_texels = shadow_mapping_config.unidirectional_light_shadow_map_resolution as f32;
+
+    let light_space_world_origin = world_to_light_transform.transform_point(&Point3::origin());
+
+    let lower_offset = aabb.lower_corner() - light_space_world_origin;
+    let upper_offset = aabb.upper_corner() - light_space_world_origin;
+
+    let x_min = lower_offset.x();
+    let x_max = upper_offset.x();
+    let y_min = lower_offset.y();
+    let y_max = upper_offset.y();
+
+    let extent_x = x_max - x_min;
+    let extent_y = y_max - y_min;
+
+    let texel_size_x = extent_x / n_texels;
+    let texel_size_y = extent_y / n_texels;
+
+    let snapped_x_min = (x_min / texel_size_x).floor() * texel_size_x;
+    let snapped_y_min = (y_min / texel_size_y).floor() * texel_size_y;
+
+    let snapped_x_max = snapped_x_min + extent_x;
+    let snapped_y_max = snapped_y_min + extent_y;
+
+    let snapped_lower_offset = Vector3::new(snapped_x_min, snapped_y_min, lower_offset.z());
+    let snapped_upper_offset = Vector3::new(snapped_x_max, snapped_y_max, upper_offset.z());
+
+    AxisAlignedBox::new(
+        light_space_world_origin + snapped_lower_offset,
+        light_space_world_origin + snapped_upper_offset,
+    )
 }
 
 fn compute_model_to_camera_transform(

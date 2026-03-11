@@ -19,6 +19,22 @@ pub struct ShadowMappingConfig {
     /// The width and height of the unidirectional light shadow map in number of
     /// texels.
     pub unidirectional_light_shadow_map_resolution: u32,
+    /// Whether shadow maps for unidirectional lights should be fitted as
+    /// closesly as possible to the visible scene (maximizing resolution) or
+    /// fitted in a stable manner with texel snapping (leading to coarser
+    /// resolution).
+    pub unidirectional_light_shadow_map_bounding_mode: UnidirectionalLightShadowMapBoundingMode,
+}
+
+/// Whether shadow maps for unidirectional lights should be fitted as closesly
+/// as possible to the visible scene (maximizing resolution) or fitted in a
+/// stable manner with texel snapping (leading to coarser resolution).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UnidirectionalLightShadowMapBoundingMode {
+    #[default]
+    Tight,
+    Stable,
 }
 
 /// Index representing a cascade in a cascaded shadow map.
@@ -63,6 +79,7 @@ impl Default for ShadowMappingConfig {
             enabled: true,
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
+            unidirectional_light_shadow_map_bounding_mode: Default::default(),
         }
     }
 }

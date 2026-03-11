@@ -18,6 +18,7 @@ use impact_ecs::{
 };
 use impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibilities, GizmoVisibility};
 use impact_id::EntityID;
+use impact_light::shadow_map::ShadowMappingConfig;
 use impact_material::values::UniformColorPhysicalMaterialValues;
 use impact_model::{InstanceFeature, ModelInstanceID};
 use impact_physics::{
@@ -347,9 +348,9 @@ impl Engine {
         self.renderer().oread().basic_config().clone()
     }
 
-    /// Returns whether shadow mapping is enabled.
-    pub fn shadow_mapping_enabled(&self) -> bool {
-        self.renderer().oread().shadow_mapping_config().enabled
+    /// Returns the current shadow mapping configuration.
+    pub fn shadow_mapping_config(&self) -> ShadowMappingConfig {
+        self.renderer().oread().shadow_mapping_config().clone()
     }
 
     /// Returns the current ambient occlusion configuration.
