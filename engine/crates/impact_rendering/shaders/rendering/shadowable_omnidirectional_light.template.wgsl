@@ -109,7 +109,13 @@ fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3f)
 }
 
 fn computeCameraSpaceViewDirection(cameraSpacePosition: vec3f) -> vec3f {
-    return normalize(-cameraSpacePosition);
+    // Guard against zero position caused by zero sampled depth (potential
+    // synchronization issue)
+    let len = length(cameraSpacePosition);
+    if len < 1e-7 {
+        return vec3f(0.0, 0.0, 1.0);
+    }
+    return -cameraSpacePosition / len;
 }
 
 // From [0, 1] to [-1, 1]
