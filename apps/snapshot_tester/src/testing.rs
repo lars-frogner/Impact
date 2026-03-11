@@ -5,7 +5,6 @@ use impact::{
     command::{
         AdminCommand,
         rendering::{RenderingAdminCommand, postprocessing::ToToneMappingMethod},
-        uils::ToActiveState,
     },
     engine::Engine,
     impact_rendering::postprocessing::capturing::dynamic_range_compression::ToneMappingMethod,
@@ -75,16 +74,26 @@ impl TestScene {
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
             | Self::SoftCascadedShadowMapping => {
+                let mut config = engine.shadow_mapping_config();
+                config.enabled = true;
                 engine.enqueue_admin_command(AdminCommand::Rendering(
-                    RenderingAdminCommand::SetShadowMapping(ToActiveState::Enabled),
+                    RenderingAdminCommand::SetShadowMappingConfig(config),
                 ));
             }
-            Self::AmbientOcclusion => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingAdminCommand::SetAmbientOcclusion(ToActiveState::Enabled),
-            )),
-            Self::Bloom => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingAdminCommand::SetBloom(ToActiveState::Enabled),
-            )),
+            Self::AmbientOcclusion => {
+                let mut config = engine.ambient_occlusion_config();
+                config.enabled = true;
+                engine.enqueue_admin_command(AdminCommand::Rendering(
+                    RenderingAdminCommand::SetAmbientOcclusionConfig(config),
+                ));
+            }
+            Self::Bloom => {
+                let mut config = engine.bloom_config();
+                config.enabled = true;
+                engine.enqueue_admin_command(AdminCommand::Rendering(
+                    RenderingAdminCommand::SetBloomConfig(config),
+                ));
+            }
             Self::ACESToneMapping => engine.enqueue_admin_command(AdminCommand::Rendering(
                 RenderingAdminCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(
                     ToneMappingMethod::ACES,
@@ -109,16 +118,26 @@ impl TestScene {
             | Self::SoftShadowCubeMapping
             | Self::CascadedShadowMapping
             | Self::SoftCascadedShadowMapping => {
+                let mut config = engine.shadow_mapping_config();
+                config.enabled = false;
                 engine.enqueue_admin_command(AdminCommand::Rendering(
-                    RenderingAdminCommand::SetShadowMapping(ToActiveState::Disabled),
+                    RenderingAdminCommand::SetShadowMappingConfig(config),
                 ));
             }
-            Self::AmbientOcclusion => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingAdminCommand::SetAmbientOcclusion(ToActiveState::Disabled),
-            )),
-            Self::Bloom => engine.enqueue_admin_command(AdminCommand::Rendering(
-                RenderingAdminCommand::SetBloom(ToActiveState::Disabled),
-            )),
+            Self::AmbientOcclusion => {
+                let mut config = engine.ambient_occlusion_config();
+                config.enabled = false;
+                engine.enqueue_admin_command(AdminCommand::Rendering(
+                    RenderingAdminCommand::SetAmbientOcclusionConfig(config),
+                ));
+            }
+            Self::Bloom => {
+                let mut config = engine.bloom_config();
+                config.enabled = false;
+                engine.enqueue_admin_command(AdminCommand::Rendering(
+                    RenderingAdminCommand::SetBloomConfig(config),
+                ));
+            }
             Self::ACESToneMapping | Self::KhronosPBRNeutralToneMapping => engine
                 .enqueue_admin_command(AdminCommand::Rendering(
                     RenderingAdminCommand::SetToneMappingMethod(ToToneMappingMethod::Specific(

@@ -196,18 +196,6 @@ pub fn execute_rendering_admin_command(
     command: RenderingAdminCommand,
 ) -> Result<()> {
     match command {
-        RenderingAdminCommand::SetAmbientOcclusion(to) => {
-            rendering::set_ambient_occlusion(&engine.renderer().oread(), to);
-            Ok(())
-        }
-        RenderingAdminCommand::SetTemporalAntiAliasing(to) => {
-            rendering::set_temporal_anti_aliasing(engine.scene(), engine.renderer(), to);
-            Ok(())
-        }
-        RenderingAdminCommand::SetBloom(to) => {
-            rendering::set_bloom(&engine.renderer().oread(), to);
-            Ok(())
-        }
         RenderingAdminCommand::SetToneMappingMethod(to) => {
             rendering::set_tone_mapping_method(&engine.renderer().oread(), to);
             Ok(())
@@ -241,7 +229,11 @@ pub fn execute_rendering_admin_command(
             Ok(())
         }
         RenderingAdminCommand::SetTemporalAntiAliasingConfig(config) => {
-            rendering::set_temporal_anti_aliasing_config(&engine.renderer().oread(), config);
+            rendering::set_temporal_anti_aliasing_config(
+                engine.scene(),
+                &engine.renderer().oread(),
+                config,
+            );
             Ok(())
         }
         RenderingAdminCommand::SetBloomConfig(config) => {

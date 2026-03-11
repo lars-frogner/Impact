@@ -28,11 +28,8 @@ use postprocessing::{ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod
 
 #[derive(Clone, Debug)]
 pub enum RenderingAdminCommand {
-    SetAmbientOcclusion(ToActiveState),
     SetAmbientOcclusionConfig(AmbientOcclusionConfig),
-    SetTemporalAntiAliasing(ToActiveState),
     SetTemporalAntiAliasingConfig(TemporalAntiAliasingConfig),
-    SetBloom(ToActiveState),
     SetBloomConfig(BloomConfig),
     SetCameraSettings(CameraSettings),
     SetAverageLuminanceComputationConfig(AverageLuminanceComputationConfig),
@@ -44,38 +41,6 @@ pub enum RenderingAdminCommand {
     SetShadowMappingConfig(ShadowMappingConfig),
     SetWireframeMode(ToActiveState),
     SetRenderPassTimings(ToActiveState),
-}
-
-pub fn set_ambient_occlusion(renderer: &RenderingSystem, to: ToActiveState) -> ModifiedActiveState {
-    log::info!("Setting ambient occlusion to {to:?}");
-    postprocessing::set_ambient_occlusion(&mut renderer.postprocessor().owrite(), to)
-}
-
-pub fn set_temporal_anti_aliasing(
-    scene: &RwLock<Scene>,
-    renderer: &RwLock<RenderingSystem>,
-    to: ToActiveState,
-) -> ModifiedActiveState {
-    log::info!("Setting temporal anti-aliasing to {to:?}");
-
-    let state = postprocessing::set_temporal_anti_aliasing(
-        &mut renderer.owrite().postprocessor().owrite(),
-        to,
-    );
-
-    if state.changed {
-        let scene = scene.oread();
-        scene
-            .camera_manager()
-            .owrite()
-            .set_jitter_enabled(state.state.is_enabled());
-    }
-    state
-}
-
-pub fn set_bloom(renderer: &RenderingSystem, to: ToActiveState) -> ModifiedActiveState {
-    log::info!("Setting bloom to {to:?}");
-    postprocessing::set_bloom(&mut renderer.postprocessor().owrite(), to)
 }
 
 pub fn set_ambient_occlusion_config(renderer: &RenderingSystem, config: AmbientOcclusionConfig) {
@@ -90,16 +55,28 @@ pub fn set_ambient_occlusion_config(renderer: &RenderingSystem, config: AmbientO
 }
 
 pub fn set_temporal_anti_aliasing_config(
+    scene: &RwLock<Scene>,
     renderer: &RenderingSystem,
-    config: TemporalAntiAliasingConfig,
+    to: TemporalAntiAliasingConfig,
 ) {
-    log::info!("Setting temporal anti-aliasing config to {config:?}");
+    log::info!("Setting temporal anti-aliasing config to {to:?}");
     let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
     let mut postprocessor = renderer.postprocessor().owrite();
+
+    let config = postprocessor.temporal_anti_aliasing_config();
+
+    if to.enabled != config.enabled {
+        let scene = scene.oread();
+        scene
+            .camera_manager()
+            .owrite()
+            .set_jitter_enabled(to.enabled);
+    }
+
     postprocessor.set_temporal_anti_aliasing_config(
         renderer.graphics_device(),
         &gpu_resource_group_manager,
-        config,
+        to,
     );
 }
 
