@@ -20,6 +20,8 @@
 
 - Look into mesh shading (could be useful for voxel rendering).
 
+- Investigate if there is a synchronization issue (wgpu bug?) that allows the lighting pass to read from the linear depth buffer before the geometry pass has written to it, leading to zero depth and subsequent NaNs.
+
 ## Physics
 
 - Support disabling rigid bodies.
@@ -87,8 +89,6 @@
 - Ray intersection queries.
 
 ## Misc
-
-- Fix black square flashes due to bloom filter propagating NaNs.
 
 - Fix intermittent black triangles for voxel objects.
 
