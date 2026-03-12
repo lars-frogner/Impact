@@ -157,14 +157,15 @@ impl VoxelAbsorbingSphere {
         SphereC::new(Point3C::from(self.offset), self.radius + 2.0 * voxel_extent)
     }
 
-    /// Computes the new signed distance for the given voxel inside the sphere
-    /// of influence.
+    /// Computes the new signed distance for the given voxel inside the sphere.
+    /// The sphere radius and distance from center should be specified in
+    /// voxels.
     pub fn compute_new_signed_distance(
-        &self,
+        sphere_radius: f32,
         voxel: &Voxel,
         squared_distance_from_center: f32,
     ) -> f32 {
-        let sphere_signed_distance = squared_distance_from_center.sqrt() - self.radius;
+        let sphere_signed_distance = squared_distance_from_center.sqrt() - sphere_radius;
 
         // SDF subtraction
         f32::max(voxel.signed_distance().to_f32(), -sphere_signed_distance)
@@ -216,14 +217,15 @@ impl VoxelAbsorbingCapsule {
         )
     }
 
-    /// Computes the new signed distance for the given voxel inside the capsule
-    /// of influence.
+    /// Computes the new signed distance for the given voxel inside the capsule.
+    /// The capsule radius and distance from segment should be specified in
+    /// voxels.
     pub fn compute_new_signed_distance(
-        &self,
+        capsule_radius: f32,
         voxel: &Voxel,
         squared_distance_from_segment: f32,
     ) -> f32 {
-        let capsule_signed_distance = squared_distance_from_segment.sqrt() - self.radius;
+        let capsule_signed_distance = squared_distance_from_segment.sqrt() - capsule_radius;
 
         // SDF subtraction
         f32::max(voxel.signed_distance().to_f32(), -capsule_signed_distance)
@@ -656,17 +658,23 @@ fn apply_sphere_absorption(
         .influence_sphere(voxel_object.voxel_extent())
         .aligned();
 
-    let influence_sphere_in_voxel_object_space = influence_sphere
+    let influence_sphere_in_norm_voxel_object_space = influence_sphere
         .iso_transformed(sphere_to_world_transform)
-        .iso_transformed(world_to_voxel_object_transform);
+        .iso_transformed(world_to_voxel_object_transform)
+        .scaled(voxel_object.inverse_voxel_extent());
+
+    let sphere_radius_in_voxels = absorbing_sphere.radius * voxel_object.inverse_voxel_extent();
 
     voxel_object.modify_voxels_within_sphere(
-        &influence_sphere_in_voxel_object_space,
-        &mut |object_voxel_indices, squared_distance_from_center, voxel| {
+        &influence_sphere_in_norm_voxel_object_space,
+        &mut |object_voxel_indices, squared_distance_from_center_in_voxels, voxel| {
             let was_empty = voxel.is_empty();
 
-            let new_signed_distance =
-                absorbing_sphere.compute_new_signed_distance(voxel, squared_distance_from_center);
+            let new_signed_distance = VoxelAbsorbingSphere::compute_new_signed_distance(
+                sphere_radius_in_voxels,
+                voxel,
+                squared_distance_from_center_in_voxels,
+            );
 
             voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
@@ -694,17 +702,23 @@ fn apply_capsule_absorption(
         .influence_capsule(voxel_object.voxel_extent())
         .aligned();
 
-    let influence_capsule_in_voxel_object_space = influence_capsule
+    let influence_capsule_in_norm_voxel_object_space = influence_capsule
         .iso_transformed(capsule_to_world_transform)
-        .iso_transformed(world_to_voxel_object_transform);
+        .iso_transformed(world_to_voxel_object_transform)
+        .scaled(voxel_object.inverse_voxel_extent());
+
+    let capsule_radius_in_voxels = absorbing_capsule.radius * voxel_object.inverse_voxel_extent();
 
     voxel_object.modify_voxels_within_capsule(
-        &influence_capsule_in_voxel_object_space,
-        &mut |object_voxel_indices, squared_distance_from_segment, voxel| {
+        &influence_capsule_in_norm_voxel_object_space,
+        &mut |object_voxel_indices, squared_distance_from_segment_in_voxels, voxel| {
             let was_empty = voxel.is_empty();
 
-            let new_signed_distance =
-                absorbing_capsule.compute_new_signed_distance(voxel, squared_distance_from_segment);
+            let new_signed_distance = VoxelAbsorbingCapsule::compute_new_signed_distance(
+                capsule_radius_in_voxels,
+                voxel,
+                squared_distance_from_segment_in_voxels,
+            );
 
             voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
