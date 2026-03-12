@@ -132,13 +132,13 @@ impl ChunkedVoxelObject {
     }
 
     /// Finds all non-empty voxels whose center fall within the given sphere and
-    /// calls the given closure with the voxel's indices, squared distance
-    /// between the voxel center and the center of the sphere and a mutable
-    /// reference to the voxel itself.
+    /// calls the given closure with the voxel's indices, the square of the
+    /// distance (in voxels) between the voxel center and the center of the
+    /// sphere and a mutable reference to the voxel itself.
     ///
-    /// The sphere should be specified in the model space of the voxel object,
-    /// where the lower corner of the grid is at the origin and the cartesian
-    /// axes are aligned with the grid.
+    /// The sphere should be specified in the normalized model space of the
+    /// voxel object, where distances are in voxels, the lower corner of the
+    /// grid is at the origin and the cartesian axes are aligned with the grid.
     ///
     /// Since it is assumed that the given closure will modify the voxels, the
     /// adjacency information will be updated for all voxels within the sphere,
@@ -153,12 +153,10 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_sphere(
         &mut self,
-        sphere: &Sphere,
+        normalized_sphere: &Sphere,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
-        let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
-
-        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_sphere(&normalized_sphere);
+        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_sphere(normalized_sphere);
 
         if touched_voxel_ranges.iter().any(Range::is_empty) {
             return;
@@ -168,7 +166,6 @@ impl ChunkedVoxelObject {
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        let voxel_extent_squared = self.voxel_extent.powi(2);
         let normalized_sphere_radius_squared = normalized_sphere.radius_squared();
 
         let mut removed_chunks = false;
@@ -232,9 +229,7 @@ impl ChunkedVoxelObject {
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
-                                    let distance_squared =
-                                        normalized_distance_squared * voxel_extent_squared;
-                                    modify_voxel([i, j, k], distance_squared, voxel);
+                                    modify_voxel([i, j, k], normalized_distance_squared, voxel);
                                     chunk_touched = true;
                                 }
                             }
@@ -269,14 +264,14 @@ impl ChunkedVoxelObject {
     }
 
     /// Finds all non-empty voxels whose center fall within the given capsule
-    /// and calls the given closure with the voxel's indices, squared minimum
-    /// distance between the voxel center and the line segment representing the
-    /// central axis of the capsule's cylinder and a mutable reference to
-    /// the voxel itself.
+    /// and calls the given closure with the voxel's indices, the square of the
+    /// minimum distance (in voxels) between the voxel center and the line
+    /// segment representing the central axis of the capsule's cylinder and a
+    /// mutable reference to the voxel itself.
     ///
-    /// The capsule should be specified in the model space of the voxel object,
-    /// where the lower corner of the grid is at the origin and the cartesian
-    /// axes are aligned with the grid.
+    /// The capsule should be specified in the normalized model space of the
+    /// voxel object, where distances are in voxels, the lower corner of the
+    /// grid is at the origin and the cartesian axes are aligned with the grid.
     ///
     /// Since it is assumed that the given closure will modify the voxels, the
     /// adjacency information will be updated for all voxels within the capsule,
@@ -291,11 +286,9 @@ impl ChunkedVoxelObject {
     /// call it once all modifications have been made.
     pub fn modify_voxels_within_capsule(
         &mut self,
-        capsule: &Capsule,
+        normalized_capsule: &Capsule,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
-        let normalized_capsule = capsule.scaled(self.inverse_voxel_extent);
-
         let touched_voxel_ranges =
             self.voxel_ranges_in_object_touching_aab(&normalized_capsule.compute_aabb());
 
@@ -306,8 +299,6 @@ impl ChunkedVoxelObject {
         let touched_chunk_ranges = touched_voxel_ranges
             .clone()
             .map(chunk_range_encompassing_voxel_range);
-
-        let voxel_extent_squared = self.voxel_extent.powi(2);
 
         let containment_tester = normalized_capsule.create_point_containment_tester();
 
@@ -381,8 +372,7 @@ impl ChunkedVoxelObject {
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
-                                    let shortest_distance_squared = shortest_normalized_distance_squared * voxel_extent_squared;
-                                    modify_voxel([i, j, k], shortest_distance_squared, voxel);
+                                    modify_voxel([i, j, k], shortest_normalized_distance_squared, voxel);
                                     chunk_touched = true;
                                 }
                             }
