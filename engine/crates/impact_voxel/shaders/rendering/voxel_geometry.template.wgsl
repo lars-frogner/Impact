@@ -316,19 +316,6 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
 
     var modelSpaceNormalVector = normalize(fragment.modelSpaceNormalVector);
 
-    let modelSpaceFaceNormalVector = computeFaceNormal(fragment.offsetModelSpacePosition);
-
-    // If the normal vector deviates significantly from the face normal (which
-    // can happen if adjacent triangles have very different face normals), we
-    // should transition to using the face normal to avoid artifacts.
-    let alignment = dot(modelSpaceNormalVector, modelSpaceFaceNormalVector);
-    if (alignment < FACE_NORMAL_TRANSITION_START_ALIGNMENT) {
-        // Create a smooth transition between the normals depending on how
-        // aligned they are
-        let weight = (FACE_NORMAL_TRANSITION_START_ALIGNMENT - alignment) * FACE_NORMAL_TRANSITION_NORM;
-        modelSpaceNormalVector = normalize(mix(modelSpaceNormalVector, modelSpaceFaceNormalVector, weight));
-    }
-
     var triplanarWeights = abs(modelSpaceNormalVector);
     triplanarWeights *= triplanarWeights * triplanarWeights; // Raise to 3rd power
     triplanarWeights /= triplanarWeights.x + triplanarWeights.y + triplanarWeights.z;
