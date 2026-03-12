@@ -44,13 +44,9 @@
 
 ## Voxels
 
-- Add smoothing pass after Surface Nets.
-
 - Per surface voxel state (e.g. temperature).
 
 - Make voxels carry ID for region association? Would enable detection of disconnected regions without empty voxels between, useful for e.g. Voronoi fracturing. Optionally, implement dedicated disconnected region detection with explicit region labels that could be sourced directly from Voronoi computation.
-
-- Define empty voxels as having signed distance larger than voxel radius, rather than just having positive signed distance.
 
 ## Generation
 
@@ -89,11 +85,5 @@
 - Ray intersection queries.
 
 ## Misc
-
-- Fix intermittent black triangles for voxel objects.
-
-- Fix tiny gaps between chunk meshes due to numerical imprecision.
-
-- Fix surface-grazing chunked marked as empty after voxel absorption even though the surface protrudes slightly into the chunk and no voxels were absorbed in or near the chunk (run at commit #9f72fb5f to reproduce).
 
 - Fix acceleration stuck on non-zero in game.
