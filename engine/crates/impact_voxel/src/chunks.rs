@@ -6,7 +6,7 @@ pub mod intersection;
 pub mod sdf;
 
 use crate::{
-    Voxel, VoxelFlags,
+    Voxel, VoxelFlags, VoxelSignedDistance,
     generation::ChunkedVoxelGenerator,
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::{VoxelType, VoxelTypeRegistry},
@@ -33,9 +33,9 @@ use tinyvec::TinyVec;
 /// across. The full grid for the object spans a whole number of chunks along
 /// each axis.
 ///
-/// Uniform voxel information is pulled up to the chunk level. An empty chunk
-/// does not store any information on the voxel level, and a chunk where all
-/// voxels contain the exact same information only stores that single voxel.
+/// Uniform voxel information is pulled up to the chunk level. A void chunk does
+/// not store any information on the voxel level, and a chunk where all voxels
+/// contain the exact same information only stores that single voxel.
 #[derive(Clone, Debug)]
 pub struct ChunkedVoxelObject {
     voxel_extent: f32,
@@ -60,7 +60,10 @@ pub struct ExposedVoxelChunk {
 
 /// A chunk representing a cubic grid of voxels. It has three representations:
 ///
-/// - Empty: The chunk contains no voxels.
+/// - Void: The chunk contains no voxel that could influence the voxel object in
+///   any way. Note that a chunk with only empty voxels will not necessarily be
+///   void, since empty voxels can carry signed distances that affect the
+///   location of the surface.
 ///
 /// - Uniform: The chunk is fully packed with voxels carrying the exact same
 ///   information. Only the single representative voxel is stored. Since voxels
@@ -77,7 +80,7 @@ pub struct ExposedVoxelChunk {
 ///   additional information about the state of the chunk.
 #[derive(Clone, Copy, Debug)]
 pub enum VoxelChunk {
-    Empty,
+    Void,
     Uniform(UniformVoxelChunk),
     NonUniform(NonUniformVoxelChunk),
 }
@@ -110,6 +113,15 @@ pub struct NonUniformVoxelChunk {
 }
 
 #[derive(Clone, Debug)]
+pub struct ChunkSparseness {
+    // Whether all voxels in the chunk are empty.
+    pub has_only_empty_voxels: bool,
+    // Whether all voxels in the chunk too far outside the surface to influence
+    // it.
+    pub is_void: bool,
+}
+
+#[derive(Clone, Debug)]
 struct ChunkAnalysisResults {
     uniform_chunk_count: usize,
     non_uniform_chunk_count: usize,
@@ -138,24 +150,24 @@ bitflags! {
     pub struct VoxelChunkFlags: u8 {
         /// The face on the negative x-side of the chunk is fully obscured by
         /// adjacent voxels.
-        const IS_OBSCURED_X_DN = 1 << 0;
+        const IS_OBSCURED_X_DN      = 1 << 0;
         /// The face on the negative y-side of the chunk is fully obscured by
         /// adjacent voxels.
-        const IS_OBSCURED_Y_DN = 1 << 1;
+        const IS_OBSCURED_Y_DN      = 1 << 1;
         /// The face on the negative z-side of the chunk is fully obscured by
         /// adjacent voxels.
-        const IS_OBSCURED_Z_DN = 1 << 2;
+        const IS_OBSCURED_Z_DN      = 1 << 2;
         /// The face on the positive x-side of the chunk is fully obscured by
         /// adjacent voxels.
-        const IS_OBSCURED_X_UP = 1 << 3;
+        const IS_OBSCURED_X_UP      = 1 << 3;
         /// The face on the positive y-side of the chunk is fully obscured by
         /// adjacent voxels.
-        const IS_OBSCURED_Y_UP = 1 << 4;
+        const IS_OBSCURED_Y_UP      = 1 << 4;
         /// The face on the positive z-side of the chunk is fully obscured by
         /// adjacent voxels.
-        const IS_OBSCURED_Z_UP = 1 << 5;
+        const IS_OBSCURED_Z_UP      = 1 << 5;
         /// The chunk contains only empty voxels.
-        const IS_EMPTY         = 1 << 6;
+        const HAS_ONLY_EMPTY_VOXELS = 1 << 6;
     }
 }
 
@@ -272,7 +284,7 @@ impl ChunkedVoxelObject {
         let chunk_counts = grid_shape.map(|size| size.div_ceil(CHUNK_SIZE));
         let total_chunk_count = chunk_counts.iter().product();
 
-        let mut chunks = vec![VoxelChunk::Empty; total_chunk_count];
+        let mut chunks = vec![VoxelChunk::Void; total_chunk_count];
 
         let voxels = generate_voxels_for_chunks(chunk_counts, &mut chunks);
 
@@ -337,11 +349,12 @@ impl ChunkedVoxelObject {
 
             let chunk_voxels = &mut voxels[old_voxel_count..];
 
-            generator.generate_chunk(&mut generation_buffers, chunk_voxels, &origin);
+            let chunk_sparseness =
+                generator.generate_chunk(&mut generation_buffers, chunk_voxels, &origin);
 
-            *chunk = VoxelChunk::for_voxels(chunk_voxels);
+            *chunk = VoxelChunk::create_for_generated_voxels(chunk_voxels, chunk_sparseness);
 
-            if matches!(chunk, VoxelChunk::Empty | VoxelChunk::Uniform(_)) {
+            if matches!(chunk, VoxelChunk::Void | VoxelChunk::Uniform(_)) {
                 voxels.truncate(old_voxel_count);
             }
         }
@@ -435,20 +448,23 @@ impl ChunkedVoxelObject {
 
                                         let chunk_voxels = &mut voxels[old_voxel_count..];
 
-                                        generator.generate_chunk(
+                                        let chunk_sparseness = generator.generate_chunk(
                                             &mut generation_buffers,
                                             chunk_voxels,
                                             &origin,
                                         );
 
-                                        *chunk = VoxelChunk::for_voxels(chunk_voxels);
+                                        *chunk = VoxelChunk::create_for_generated_voxels(
+                                            chunk_voxels,
+                                            chunk_sparseness,
+                                        );
 
-                                        // If the chunk turned out to be empty
+                                        // If the chunk turned out to be void
                                         // or uniform, we must truncate away the
                                         // generated voxels
                                         if matches!(
                                             chunk,
-                                            VoxelChunk::Empty | VoxelChunk::Uniform(_)
+                                            VoxelChunk::Void | VoxelChunk::Uniform(_)
                                         ) {
                                             voxels.truncate(old_voxel_count);
                                         }
@@ -523,7 +539,7 @@ impl ChunkedVoxelObject {
                     non_uniform_chunk.data_offset = non_uniform_chunk_count as u32;
                     non_uniform_chunk_count += 1;
                 }
-                VoxelChunk::Empty => {}
+                VoxelChunk::Void => {}
             }
 
             if !chunk.contains_only_empty_voxels() {
@@ -609,7 +625,7 @@ impl ChunkedVoxelObject {
         &self.chunk_counts
     }
 
-    /// Returns the total number of chunks, incuding empty ones, contained in
+    /// Returns the total number of chunks, incuding void ones, contained in
     /// the object's chunk grid.
     #[inline]
     pub fn total_chunk_count(&self) -> usize {
@@ -635,7 +651,7 @@ impl ChunkedVoxelObject {
     }
 
     /// Returns the range of indices along each axis of the object's chunk
-    /// grid that may contain non-empty chunks.
+    /// grid that may contain non-void chunks.
     #[inline]
     pub fn occupied_chunk_ranges(&self) -> &[Range<usize>; 3] {
         &self.occupied_chunk_ranges
@@ -767,7 +783,7 @@ impl ChunkedVoxelObject {
                     let chunk_indices = [chunk_i, chunk_j, chunk_k];
                     let chunk_idx = self.linear_chunk_idx(&chunk_indices);
                     let non_empty_voxel_count = match &self.chunks[chunk_idx] {
-                        VoxelChunk::Empty => 0,
+                        VoxelChunk::Void => 0,
                         VoxelChunk::Uniform(_) => CHUNK_VOXEL_COUNT,
                         VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
                             let chunk_voxels = chunk_voxels(&self.voxels, *data_offset);
@@ -931,7 +947,7 @@ impl ChunkedVoxelObject {
         let chunk_idx = self.linear_chunk_idx_from_object_voxel_indices(i, j, k);
         let chunk = &self.chunks[chunk_idx];
         match &chunk {
-            VoxelChunk::Empty => None,
+            VoxelChunk::Void => None,
             VoxelChunk::Uniform(UniformVoxelChunk { voxel, .. }) => Some(voxel),
             VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
                 let voxel_idx = chunk_start_voxel_idx(*data_offset)
@@ -943,14 +959,14 @@ impl ChunkedVoxelObject {
     }
 
     /// Returns the [`VoxelChunk`] at the given indices in the object's chunk
-    /// grid. If the indices are out of bounds, an empty chunk is returned.
+    /// grid. If the indices are out of bounds, a void chunk is returned.
     #[inline]
     pub fn get_chunk(&self, chunk_i: usize, chunk_j: usize, chunk_k: usize) -> VoxelChunk {
         if chunk_i >= self.chunk_counts[0]
             || chunk_j >= self.chunk_counts[1]
             || chunk_k >= self.chunk_counts[2]
         {
-            return VoxelChunk::Empty;
+            return VoxelChunk::Void;
         }
 
         let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
@@ -1059,7 +1075,7 @@ impl ChunkedVoxelObject {
                 let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
                 match &self.chunks[chunk_idx] {
-                    VoxelChunk::Empty => {}
+                    VoxelChunk::Void => {}
                     VoxelChunk::Uniform(_) => {
                         return match side {
                             Side::Lower => chunk_start_voxel,
@@ -1148,7 +1164,7 @@ impl ChunkedVoxelObject {
                         let chunk_idx = self.linear_chunk_idx(&chunk_indices);
 
                         match &self.chunks[chunk_idx] {
-                            VoxelChunk::Empty => {}
+                            VoxelChunk::Void => {}
                             VoxelChunk::Uniform(_) => {
                                 // Entire chunk is occupied
                                 let chunk_start = [
@@ -1341,7 +1357,7 @@ impl ChunkedVoxelObject {
             for chunk_j in 0..self.chunk_counts[1] {
                 for chunk_k in 0..self.chunk_counts[2] {
                     let mut assert_has_flag = |chunk: &VoxelChunk, flag| match chunk {
-                        VoxelChunk::Empty | VoxelChunk::Uniform(_) => {}
+                        VoxelChunk::Void | VoxelChunk::Uniform(_) => {}
                         VoxelChunk::NonUniform(NonUniformVoxelChunk { flags, .. }) => {
                             if !flags.contains(flag) {
                                 invalid_missing_flags.push(([chunk_i, chunk_j, chunk_k], flag));
@@ -1349,7 +1365,7 @@ impl ChunkedVoxelObject {
                         }
                     };
                     let mut assert_missing_flag = |chunk: &VoxelChunk, flag| match chunk {
-                        VoxelChunk::Empty => {}
+                        VoxelChunk::Void => {}
                         VoxelChunk::Uniform(_) => {
                             // Uniform chunks implicitly have all obscuredness flags set
                             invalid_uniform.push([chunk_i, chunk_j, chunk_k]);
@@ -1426,7 +1442,7 @@ impl ChunkedVoxelObject {
         for chunk_j in 0..self.chunk_counts[1] {
             for chunk_k in 0..self.chunk_counts[2] {
                 match self.get_chunk(0, chunk_j, chunk_k) {
-                    VoxelChunk::Empty => {}
+                    VoxelChunk::Void => {}
                     VoxelChunk::Uniform(_) => {
                         invalid_uniform.push([0, chunk_j, chunk_k]);
                     }
@@ -1442,7 +1458,7 @@ impl ChunkedVoxelObject {
         for chunk_i in 0..self.chunk_counts[0] {
             for chunk_k in 0..self.chunk_counts[2] {
                 match self.get_chunk(chunk_i, 0, chunk_k) {
-                    VoxelChunk::Empty => {}
+                    VoxelChunk::Void => {}
                     VoxelChunk::Uniform(_) => {
                         invalid_uniform.push([chunk_i, 0, chunk_k]);
                     }
@@ -1458,7 +1474,7 @@ impl ChunkedVoxelObject {
         for chunk_i in 0..self.chunk_counts[0] {
             for chunk_j in 0..self.chunk_counts[1] {
                 match self.get_chunk(chunk_i, chunk_j, 0) {
-                    VoxelChunk::Empty => {}
+                    VoxelChunk::Void => {}
                     VoxelChunk::Uniform(_) => {
                         invalid_uniform.push([chunk_i, chunk_j, 0]);
                     }
@@ -1602,12 +1618,24 @@ impl ChunkedVoxelObject {
 }
 
 impl VoxelChunk {
-    fn for_voxels(chunk_voxels: &[Voxel]) -> Self {
+    fn create_for_generated_voxels(chunk_voxels: &[Voxel], sparseness: ChunkSparseness) -> Self {
         assert_eq!(chunk_voxels.len(), CHUNK_VOXEL_COUNT);
+
+        if sparseness.is_void {
+            return Self::Void;
+        }
+
+        if sparseness.has_only_empty_voxels {
+            return Self::NonUniform(NonUniformVoxelChunk {
+                face_distributions: FaceVoxelDistribution::all_empty(),
+                flags: VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS,
+                // Remaining fields will be determined later
+                ..Default::default()
+            });
+        }
 
         let mut first_voxel = chunk_voxels[0];
         let mut is_uniform = true;
-        let mut has_non_empty_voxels = false;
 
         let mut face_empty_counts = FaceEmptyCounts::zero();
 
@@ -1615,7 +1643,7 @@ impl VoxelChunk {
             &mut |&[i_in_chunk, j_in_chunk, k_in_chunk], voxel| {
                 if is_uniform
                     && (!voxel.matches_type_and_flags(first_voxel)
-                        || !voxel.signed_distance().is_maximally_inside_or_outside())
+                        || !voxel.signed_distance().is_maximally_inside())
                 {
                     is_uniform = false;
                 }
@@ -1636,41 +1664,30 @@ impl VoxelChunk {
                     } else if k_in_chunk == CHUNK_SIZE - 1 {
                         face_empty_counts.increment_z_up();
                     }
-                } else {
-                    has_non_empty_voxels = true;
                 }
             },
         );
 
         if is_uniform {
-            if has_non_empty_voxels {
-                // If the chunk has truly uniform information, even the boundary voxels must be
-                // fully surrounded by neighbors. We don't know if this is the case yet, but we
-                // assume it to be true and fix it by making the chunk non-uniform later if it
-                // turns out not to be the case
-                first_voxel.add_flags(VoxelFlags::full_adjacency());
+            // If the chunk has truly uniform information, even the boundary voxels must be
+            // fully surrounded by neighbors. We don't know if this is the case yet, but we
+            // assume it to be true and fix it by making the chunk non-uniform later if it
+            // turns out not to be the case
+            first_voxel.add_flags(VoxelFlags::full_adjacency());
 
-                let chunk = UniformVoxelChunk {
-                    voxel: first_voxel,
-                    // Remaining fields will be determined later
-                    ..Default::default()
-                };
+            let chunk = UniformVoxelChunk {
+                voxel: first_voxel,
+                // Remaining fields will be determined later
+                ..Default::default()
+            };
 
-                Self::Uniform(chunk)
-            } else {
-                Self::Empty
-            }
+            Self::Uniform(chunk)
         } else {
             let face_distributions = face_empty_counts.to_chunk_face_distributions();
 
-            let mut flags = VoxelChunkFlags::empty();
-            if !has_non_empty_voxels {
-                flags |= VoxelChunkFlags::IS_EMPTY;
-            }
-
             Self::NonUniform(NonUniformVoxelChunk {
                 face_distributions,
-                flags,
+                flags: VoxelChunkFlags::empty(),
                 // Remaining fields will be determined later
                 ..Default::default()
             })
@@ -1679,7 +1696,7 @@ impl VoxelChunk {
 
     #[inline]
     const fn contains_only_empty_voxels(&self) -> bool {
-        matches!(self, Self::Empty)
+        matches!(self, Self::Void)
             || matches!(self, Self::NonUniform(chunk) if chunk.contains_only_empty_voxels())
     }
 
@@ -1702,7 +1719,7 @@ impl VoxelChunk {
     #[inline]
     const fn stored_voxel_count(&self) -> usize {
         match self {
-            Self::Empty => 0,
+            Self::Void => 0,
             Self::Uniform(_) => 1,
             Self::NonUniform(_) => CHUNK_VOXEL_COUNT,
         }
@@ -1711,7 +1728,7 @@ impl VoxelChunk {
     #[cfg(any(test, feature = "fuzzing"))]
     fn upper_face_voxel_distribution(&self, dim: Dimension) -> FaceVoxelDistribution {
         match self {
-            Self::Empty => FaceVoxelDistribution::Empty,
+            Self::Void => FaceVoxelDistribution::Empty,
             Self::Uniform(_) => FaceVoxelDistribution::Full,
             Self::NonUniform(NonUniformVoxelChunk {
                 face_distributions, ..
@@ -1722,7 +1739,7 @@ impl VoxelChunk {
     #[cfg(any(test, feature = "fuzzing"))]
     fn lower_face_voxel_distribution(&self, dim: Dimension) -> FaceVoxelDistribution {
         match self {
-            Self::Empty => FaceVoxelDistribution::Empty,
+            Self::Void => FaceVoxelDistribution::Empty,
             Self::Uniform(_) => FaceVoxelDistribution::Full,
             Self::NonUniform(NonUniformVoxelChunk {
                 face_distributions, ..
@@ -1741,7 +1758,7 @@ impl VoxelChunk {
     #[inline]
     fn mark_lower_face_as_obscured(&mut self, dim: Dimension) {
         let flags = match self {
-            Self::Empty | Self::Uniform(_) => {
+            Self::Void | Self::Uniform(_) => {
                 return;
             }
             Self::NonUniform(NonUniformVoxelChunk { flags, .. }) => flags,
@@ -1752,7 +1769,7 @@ impl VoxelChunk {
     #[inline]
     fn mark_upper_face_as_obscured(&mut self, dim: Dimension) {
         let flags = match self {
-            Self::Empty | Self::Uniform(_) => {
+            Self::Void | Self::Uniform(_) => {
                 return;
             }
             Self::NonUniform(NonUniformVoxelChunk { flags, .. }) => flags,
@@ -1763,7 +1780,7 @@ impl VoxelChunk {
     #[inline]
     fn mark_lower_face_as_unobscured(&mut self, dim: Dimension) {
         let flags = match self {
-            Self::Empty => {
+            Self::Void => {
                 return;
             }
             Self::Uniform(_) => {
@@ -1777,7 +1794,7 @@ impl VoxelChunk {
     #[inline]
     fn mark_upper_face_as_unobscured(&mut self, dim: Dimension) {
         let flags = match self {
-            Self::Empty => {
+            Self::Void => {
                 return;
             }
             Self::Uniform(_) => {
@@ -1797,13 +1814,13 @@ impl VoxelChunk {
         dim: Dimension,
     ) {
         let lower_chunk =
-            lower_chunk_idx.map_or_else(|| VoxelChunk::Empty, |chunk_idx| chunks[chunk_idx]);
+            lower_chunk_idx.map_or_else(|| VoxelChunk::Void, |chunk_idx| chunks[chunk_idx]);
         let upper_chunk =
-            upper_chunk_idx.map_or_else(|| VoxelChunk::Empty, |chunk_idx| chunks[chunk_idx]);
+            upper_chunk_idx.map_or_else(|| VoxelChunk::Void, |chunk_idx| chunks[chunk_idx]);
 
         match (lower_chunk, upper_chunk) {
-            // If both chunks are empty, there is nothing to do
-            (Self::Empty, Self::Empty) => {}
+            // If both chunks are void, there is nothing to do
+            (Self::Void, Self::Void) => {}
             // If both chunks are uniform, we don't have to update their obscuredness (uniform
             // chunks are always marked as fully obscured upon creation), but the split detector
             // still needs to perform an update
@@ -1823,11 +1840,11 @@ impl VoxelChunk {
                     dim,
                 );
             }
-            // If one is uniform and the other is empty, we need to convert the
+            // If one is uniform and the other is void, we need to convert the
             // uniform chunk to non-uniform and clear its adjacencies to the
-            // empty chunk, as well as mark the adjoining face of the uniform
+            // void chunk, as well as mark the adjoining face of the uniform
             // chunk as unobscured
-            (Self::Uniform(_), Self::Empty) => {
+            (Self::Uniform(_), Self::Void) => {
                 let lower_chunk = &mut chunks[lower_chunk_idx.unwrap()];
                 lower_chunk.convert_to_non_uniform_if_uniform(voxels, split_detector);
 
@@ -1851,7 +1868,7 @@ impl VoxelChunk {
 
                 lower_chunk.mark_upper_face_as_unobscured(dim);
             }
-            (Self::Empty, Self::Uniform(_)) => {
+            (Self::Void, Self::Uniform(_)) => {
                 let upper_chunk = &mut chunks[upper_chunk_idx.unwrap()];
                 upper_chunk.convert_to_non_uniform_if_uniform(voxels, split_detector);
 
@@ -1875,8 +1892,8 @@ impl VoxelChunk {
 
                 upper_chunk.mark_lower_face_as_unobscured(dim);
             }
-            // If one is non-uniform and the other is empty, we need to clear
-            // the adjacencies of the non-uniform chunk with the empty chunk, as
+            // If one is non-uniform and the other is void, we need to clear
+            // the adjacencies of the non-uniform chunk with the void chunk, as
             // well as mark the adjoining face of the non-uniform chunk as
             // unobscured
             (
@@ -1886,7 +1903,7 @@ impl VoxelChunk {
                     split_detection: lower_chunk_split_detection,
                     ..
                 }),
-                Self::Empty,
+                Self::Void,
             ) => {
                 // We can skip this update if there are no voxels on the face
                 if lower_chunk_face_distributions[dim.idx()][1] != FaceVoxelDistribution::Empty {
@@ -1908,7 +1925,7 @@ impl VoxelChunk {
                 chunks[lower_chunk_idx.unwrap()].mark_upper_face_as_unobscured(dim);
             }
             (
-                Self::Empty,
+                Self::Void,
                 Self::NonUniform(NonUniformVoxelChunk {
                     data_offset: upper_chunk_data_offset,
                     face_distributions: upper_chunk_face_distributions,
@@ -2370,7 +2387,7 @@ impl VoxelChunk {
 impl NonUniformVoxelChunk {
     #[inline]
     const fn contains_only_empty_voxels(&self) -> bool {
-        self.flags.contains(VoxelChunkFlags::IS_EMPTY)
+        self.flags.contains(VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS)
     }
 
     fn update_internal_adjacencies(&self, voxels: &mut [Voxel]) {
@@ -2446,16 +2463,20 @@ impl NonUniformVoxelChunk {
         }
     }
 
-    fn update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
+    /// Updates the internal adjacencies, face distributions and flags for the
+    /// chunk to be consistent when the current voxels and returns updated
+    /// sparseness information.
+    fn update_all_internal_state_and_determine_sparseness(
         &mut self,
         voxels: &mut [Voxel],
-    ) -> usize {
+    ) -> ChunkSparseness {
         // Extract the sub-slice of voxels for this chunk so that we get
         // out-of-bounds if trying to access voxels outside the chunk
         let chunk_voxels = chunk_voxels_mut(voxels, self.data_offset);
 
         let mut face_empty_counts = FaceEmptyCounts::zero();
-        let mut non_empty_voxel_count = 0;
+        let mut chunk_has_only_empty_voxels = true;
+        let mut chunk_is_void = true;
 
         for i in 0..CHUNK_SIZE {
             for j in 0..CHUNK_SIZE {
@@ -2497,6 +2518,10 @@ impl NonUniformVoxelChunk {
                                 adjacent_voxel.remove_flags(flag_for_adjacent);
                             }
                         }
+
+                        if !VoxelSignedDistance::is_void(voxel.signed_distance.to_f32()) {
+                            chunk_is_void = false;
+                        }
                     } else {
                         let mut flags = voxel.flags();
 
@@ -2534,7 +2559,9 @@ impl NonUniformVoxelChunk {
                         }
 
                         chunk_voxels[idx].update_flags(flags);
-                        non_empty_voxel_count += 1;
+
+                        chunk_has_only_empty_voxels = false;
+                        chunk_is_void = false;
                     }
                 }
             }
@@ -2542,7 +2569,16 @@ impl NonUniformVoxelChunk {
 
         self.face_distributions = face_empty_counts.to_chunk_face_distributions();
 
-        non_empty_voxel_count
+        if chunk_has_only_empty_voxels {
+            self.flags |= VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS;
+        } else {
+            self.flags.remove(VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS);
+        }
+
+        ChunkSparseness {
+            has_only_empty_voxels: chunk_has_only_empty_voxels,
+            is_void: chunk_is_void,
+        }
     }
 
     #[cfg(not(feature = "unchecked"))]
@@ -2555,6 +2591,13 @@ impl NonUniformVoxelChunk {
     #[inline(always)]
     fn get_adjacent_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
         unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) }
+    }
+}
+
+impl FaceVoxelDistribution {
+    #[inline]
+    fn all_empty() -> [[FaceVoxelDistribution; 2]; 3] {
+        [[FaceVoxelDistribution::Empty; 2]; 3]
     }
 }
 
@@ -2737,7 +2780,7 @@ fn determine_occupied_voxel_ranges(
                             &voxel_index_offsets.map(|offset| offset + (CHUNK_SIZE - 1)),
                         );
                     }
-                    VoxelChunk::Empty => {}
+                    VoxelChunk::Void => {}
                 }
                 chunk_idx += 1;
             }
@@ -2980,8 +3023,9 @@ mod tests {
             _buffers: &mut Self::ChunkGenerationBuffers<AB>,
             voxels: &mut [Voxel],
             chunk_origin: &[usize; 3],
-        ) {
+        ) -> ChunkSparseness {
             assert_eq!(voxels.len(), CHUNK_VOXEL_COUNT);
+            let mut is_void = true;
             let mut idx = 0;
             for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
                 for j in chunk_origin[1]..chunk_origin[1] + CHUNK_SIZE {
@@ -2993,6 +3037,7 @@ mod tests {
                             && k >= self.offset[2]
                             && k < self.offset[2] + self.shape[2]
                         {
+                            is_void = false;
                             self.voxel
                         } else {
                             Voxel::maximally_outside()
@@ -3001,6 +3046,10 @@ mod tests {
                         idx += 1;
                     }
                 }
+            }
+            ChunkSparseness {
+                has_only_empty_voxels: is_void,
+                is_void,
             }
         }
     }
@@ -3028,8 +3077,9 @@ mod tests {
             _buffers: &mut Self::ChunkGenerationBuffers<AB>,
             voxels: &mut [Voxel],
             chunk_origin: &[usize; 3],
-        ) {
+        ) -> ChunkSparseness {
             assert_eq!(voxels.len(), CHUNK_VOXEL_COUNT);
+            let mut is_void = true;
             let mut idx = 0;
             for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
                 for j in chunk_origin[1]..chunk_origin[1] + CHUNK_SIZE {
@@ -3044,6 +3094,7 @@ mod tests {
                                 [k - self.offset[2]]
                                 != 0
                         {
+                            is_void = false;
                             Voxel::maximally_inside(VoxelType::default())
                         } else {
                             Voxel::maximally_outside()
@@ -3052,6 +3103,10 @@ mod tests {
                         idx += 1;
                     }
                 }
+            }
+            ChunkSparseness {
+                has_only_empty_voxels: is_void,
+                is_void,
             }
         }
     }

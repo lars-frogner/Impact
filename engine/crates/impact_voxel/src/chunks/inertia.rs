@@ -94,7 +94,7 @@ impl VoxelChunk {
                 *moments_of_inertia += chunk_moments_of_inertia;
                 *products_of_inertia += chunk_products_of_inertia;
             }
-            Self::Empty => {}
+            Self::Void => {}
         }
     }
 }

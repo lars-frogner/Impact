@@ -182,7 +182,7 @@ impl ChunkedVoxelObject {
                     let chunk = &mut self.chunks[chunk_idx];
 
                     let data_offset = match chunk {
-                        VoxelChunk::Empty => {
+                        VoxelChunk::Void => {
                             continue;
                         }
                         VoxelChunk::Uniform(_) => {
@@ -342,7 +342,7 @@ impl ChunkedVoxelObject {
                     let chunk = &mut self.chunks[chunk_idx];
 
                     let data_offset = match chunk {
-                        VoxelChunk::Empty => {
+                        VoxelChunk::Void => {
                             continue;
                         }
                         VoxelChunk::Uniform(_) => {
@@ -452,23 +452,19 @@ impl ChunkedVoxelObject {
         invalidated_mesh_chunk_indices: &mut HashSet<[usize; 3]>,
         removed_chunks: &mut bool,
     ) {
-        // We need to update the face distributions and internal adjacencies of the
-        // touched chunk
-        let non_empty_voxel_count = if let VoxelChunk::NonUniform(chunk) = chunk {
-            chunk.update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
-                voxels,
-            )
+        // We need to update all the internal state of the touched chunk
+        let sparseness = if let VoxelChunk::NonUniform(chunk) = chunk {
+            chunk.update_all_internal_state_and_determine_sparseness(voxels)
         } else {
             unreachable!()
         };
 
-        // Mark the chunk as empty if no non-empty voxels remain in the chunk
-        if non_empty_voxel_count == 0 {
-            *chunk = VoxelChunk::Empty;
+        if sparseness.is_void {
+            *chunk = VoxelChunk::Void;
             *removed_chunks = true;
         }
 
-        // If the chunk has not been emptied, we also need to update the local
+        // If the chunk has not been made void, we also need to update the local
         // connected regions
         if let VoxelChunk::NonUniform(chunk) = chunk {
             split_detector.update_local_connected_regions_for_chunk(
