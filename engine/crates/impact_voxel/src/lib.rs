@@ -221,10 +221,11 @@ impl VoxelSignedDistance {
         self.encoded == i8::MAX
     }
 
-    /// Whether the signed distance is maximally inside or outside the object.
+    /// Whether the given signed distance is far enough outside the surface to
+    /// influence it.
     #[inline]
-    pub const fn is_maximally_inside_or_outside(self) -> bool {
-        self.is_maximally_inside() || self.is_maximally_outside()
+    pub const fn is_void(signed_distance: f32) -> bool {
+        signed_distance > 2.0
     }
 }
 

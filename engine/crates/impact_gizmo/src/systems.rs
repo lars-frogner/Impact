@@ -1080,7 +1080,7 @@ fn buffer_transforms_for_voxel_chunks_gizmo(
             let model_id = match chunk {
                 VoxelChunk::Uniform(_) => uniform_chunk_model_id,
                 VoxelChunk::NonUniform(_) => non_uniform_chunk_model_id,
-                VoxelChunk::Empty => empty_chunk_model_id,
+                VoxelChunk::Void => empty_chunk_model_id,
             };
 
             let chunk_offset_in_voxels =

@@ -345,7 +345,7 @@ impl ChunkedVoxelObject {
                                 &chunk_indices,
                             );
                         }
-                        VoxelChunk::Empty => {}
+                        VoxelChunk::Void => {}
                     }
                 }
             }
@@ -358,7 +358,7 @@ impl ChunkedVoxelObject {
                 Ordering::Less => 0,
                 Ordering::Greater => 1,
                 Ordering::Equal => {
-                    // Use total non-empty chunk counts to break tie
+                    // Use total non-void chunk counts to break tie
                     match region_linear_chunk_indices[0]
                         .len()
                         .cmp(&region_linear_chunk_indices[1].len())
@@ -520,7 +520,7 @@ impl ChunkedVoxelObject {
                                     // go ahead and compute the face distributions and internal
                                     // adjacencies for the chunk
                                     region_chunk
-                                        .update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
+                                        .update_all_internal_state_and_determine_sparseness(
                                             &mut region_voxels,
                                         );
 
@@ -543,7 +543,7 @@ impl ChunkedVoxelObject {
                                     // like aggregations, so it is still important that we make them
                                     // empty)
                                     chunk_voxels.fill(Voxel::maximally_outside());
-                                    self.chunks[chunk_idx] = VoxelChunk::Empty;
+                                    self.chunks[chunk_idx] = VoxelChunk::Void;
 
                                     // Since the chunk has just changed owner, the face
                                     // distributions are still valid
@@ -567,7 +567,7 @@ impl ChunkedVoxelObject {
                                     // If the original chunk still contains data, its face
                                     // distributions, internal adjacencies and connected regions
                                     // data are invalidated, so we recompute it all
-                                    chunk.update_face_distributions_and_internal_adjacencies_and_count_non_empty_voxels(
+                                    chunk.update_all_internal_state_and_determine_sparseness(
                                         &mut self.voxels,
                                     );
 
@@ -596,7 +596,7 @@ impl ChunkedVoxelObject {
                             }
                             VoxelChunk::Uniform(mut chunk) => {
                                 // If the chunk to split off is uniform, we can just move it over
-                                // and replace it with an empty chunk, after making sure to
+                                // and replace it with a void chunk, after making sure to
                                 // overwrite the data offset with the correct value for the
                                 // disconnected object
 
@@ -608,17 +608,17 @@ impl ChunkedVoxelObject {
                                 region_uniform_chunk_data_offset += 1;
 
                                 region_chunks.push(VoxelChunk::Uniform(chunk));
-                                self.chunks[chunk_idx] = VoxelChunk::Empty;
+                                self.chunks[chunk_idx] = VoxelChunk::Void;
                             }
-                            VoxelChunk::Empty => {
+                            VoxelChunk::Void => {
                                 unreachable!()
                             }
                         }
                         cursor += 1;
                     } else {
-                        // We need to pad with empty chunks to fill up the whole chunk grid of the
+                        // We need to pad with void chunks to fill up the whole chunk grid of the
                         // splitted of object
-                        region_chunks.push(VoxelChunk::Empty);
+                        region_chunks.push(VoxelChunk::Void);
                     }
                 }
             }
@@ -778,7 +778,7 @@ impl ChunkedVoxelObject {
                                         }
                                     }
                                 }
-                                VoxelChunk::Empty => {}
+                                VoxelChunk::Void => {}
                                 VoxelChunk::Uniform(_) => unreachable!(),
                             }
                             chunk_idx += 1;
@@ -948,7 +948,7 @@ impl ChunkedVoxelObject {
                                 }
                             }
                         }
-                        VoxelChunk::Empty => {}
+                        VoxelChunk::Void => {}
                     }
                 }
             }
@@ -1001,7 +1001,7 @@ impl ChunkedVoxelObject {
                                 region_count += 1;
                             }
                         }
-                        VoxelChunk::Empty => {}
+                        VoxelChunk::Void => {}
                     }
                 }
             }
@@ -1070,7 +1070,7 @@ impl ChunkedVoxelObject {
                             region.parent_label =
                                 GlobalRegionLabel::new(chunk_idx as u32, region_idx);
                         }
-                        VoxelChunk::Empty => {}
+                        VoxelChunk::Void => {}
                     }
                 }
             }
@@ -1189,7 +1189,7 @@ impl ChunkedVoxelObject {
                                 );
                             }
                         }
-                        VoxelChunk::Empty => {}
+                        VoxelChunk::Void => {}
                     }
                 }
             }
@@ -1341,6 +1341,8 @@ impl SplitDetector {
             chunk.data_offset,
         );
 
+        let chunk_contains_only_empty_voxels = chunk.contains_only_empty_voxels();
+
         let chunk = &mut chunk.split_detection;
 
         // The entry at a given index contains the index to the parent entry, which is
@@ -1357,38 +1359,40 @@ impl SplitDetector {
 
         // For each non-empty voxel, check which of its neighbors are also non-empty,
         // and make them part of the same local region if they are
-        for i in 0..CHUNK_SIZE {
-            for j in 0..CHUNK_SIZE {
-                for k in 0..CHUNK_SIZE {
-                    let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
-                    let voxel = voxels[idx];
-                    if !voxel.is_empty() {
-                        if i < CHUNK_SIZE - 1
-                            && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_UP)
-                        {
-                            give_voxels_same_root(
-                                &mut parents,
-                                idx,
-                                linear_voxel_idx_within_chunk(&[i + 1, j, k]),
-                            );
-                        }
-                        if j < CHUNK_SIZE - 1
-                            && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_UP)
-                        {
-                            give_voxels_same_root(
-                                &mut parents,
-                                idx,
-                                linear_voxel_idx_within_chunk(&[i, j + 1, k]),
-                            );
-                        }
-                        if k < CHUNK_SIZE - 1
-                            && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_UP)
-                        {
-                            give_voxels_same_root(
-                                &mut parents,
-                                idx,
-                                linear_voxel_idx_within_chunk(&[i, j, k + 1]),
-                            );
+        if !chunk_contains_only_empty_voxels {
+            for i in 0..CHUNK_SIZE {
+                for j in 0..CHUNK_SIZE {
+                    for k in 0..CHUNK_SIZE {
+                        let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
+                        let voxel = voxels[idx];
+                        if !voxel.is_empty() {
+                            if i < CHUNK_SIZE - 1
+                                && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_UP)
+                            {
+                                give_voxels_same_root(
+                                    &mut parents,
+                                    idx,
+                                    linear_voxel_idx_within_chunk(&[i + 1, j, k]),
+                                );
+                            }
+                            if j < CHUNK_SIZE - 1
+                                && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_UP)
+                            {
+                                give_voxels_same_root(
+                                    &mut parents,
+                                    idx,
+                                    linear_voxel_idx_within_chunk(&[i, j + 1, k]),
+                                );
+                            }
+                            if k < CHUNK_SIZE - 1
+                                && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_UP)
+                            {
+                                give_voxels_same_root(
+                                    &mut parents,
+                                    idx,
+                                    linear_voxel_idx_within_chunk(&[i, j, k + 1]),
+                                );
+                            }
                         }
                     }
                 }
@@ -2693,7 +2697,7 @@ fn object_region_idx_for_region_in_chunk(
             assert_eq!(region_idx, 0);
             *data_offset as usize
         }
-        VoxelChunk::Empty => panic!("Got empty chunk in connected region resolution"),
+        VoxelChunk::Void => panic!("Got void chunk in connected region resolution"),
     }
 }
 
@@ -2713,7 +2717,7 @@ fn object_region_idx_for_region_in_chunk(
             split_detection: UniformChunkSplitDetectionData { data_offset },
             ..
         }) => *data_offset as usize,
-        VoxelChunk::Empty => unsafe { std::hint::unreachable_unchecked() },
+        VoxelChunk::Void => unsafe { std::hint::unreachable_unchecked() },
     }
 }
 

@@ -6,7 +6,7 @@ pub mod voxel_type;
 
 use crate::{
     Voxel, VoxelSignedDistance,
-    chunks::{ChunkedVoxelObject, LoopForChunkVoxels},
+    chunks::{ChunkSparseness, ChunkedVoxelObject, LoopForChunkVoxels},
     generation::sdf::meta::MetaSDFGraph,
     voxel_types::VoxelType,
 };
@@ -63,7 +63,7 @@ pub trait ChunkedVoxelGenerator {
         buffers: &mut Self::ChunkGenerationBuffers<AB>,
         voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
-    );
+    ) -> ChunkSparseness;
 }
 
 /// Generator for a voxel object from a signed distance field.
@@ -295,7 +295,7 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
         buffers: &mut Self::ChunkGenerationBuffers<AB>,
         voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
-    ) {
+    ) -> ChunkSparseness {
         assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
 
         if self.sdf_generator.is_empty()
@@ -305,7 +305,10 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
                 .any(|(&origin, size)| origin >= size)
         {
             voxels.fill(Voxel::maximally_outside());
-            return;
+            return ChunkSparseness {
+                has_only_empty_voxels: true,
+                is_void: true,
+            };
         }
 
         let chunk_origin_in_root_space =
@@ -321,7 +324,8 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
 
         let signed_distances = buffers.sdf.final_signed_distances();
 
-        let mut chunk_is_empty = true;
+        let mut chunk_has_only_empty_voxels = true;
+        let mut chunk_is_void = true;
 
         LoopForChunkVoxels::over_all().execute_with_linear_idx(
             &mut |&[i_in_chunk, j_in_chunk, k_in_chunk], idx| {
@@ -335,24 +339,34 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
                 {
                     Voxel::maximally_outside()
                 } else {
-                    let signed_distance = VoxelSignedDistance::from_f32(signed_distances[idx]);
+                    let signed_distance = signed_distances[idx];
+                    let voxel_signed_distance = VoxelSignedDistance::from_f32(signed_distance);
 
-                    if signed_distance.is_negative() {
-                        chunk_is_empty = false;
-                        Voxel::non_empty(VoxelType::dummy(), signed_distance)
+                    if voxel_signed_distance.is_negative() {
+                        chunk_has_only_empty_voxels = false;
+                        chunk_is_void = false;
+                        Voxel::non_empty(VoxelType::dummy(), voxel_signed_distance)
                     } else {
-                        Voxel::empty(signed_distance)
+                        if !VoxelSignedDistance::is_void(signed_distance) {
+                            chunk_is_void = false;
+                        }
+                        Voxel::empty(voxel_signed_distance)
                     }
                 };
             },
         );
 
-        if !chunk_is_empty {
+        if !chunk_has_only_empty_voxels {
             self.voxel_type_generator.set_voxel_types_for_chunk(
                 voxels,
                 &mut buffers.voxel_type,
                 &chunk_origin_in_root_space,
             );
+        }
+
+        ChunkSparseness {
+            has_only_empty_voxels: chunk_has_only_empty_voxels,
+            is_void: chunk_is_void,
         }
     }
 }

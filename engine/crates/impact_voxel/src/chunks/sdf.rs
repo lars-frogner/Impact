@@ -342,7 +342,7 @@ impl ChunkedVoxelObject {
             let j = chunk_j + dj;
             let k = chunk_k + dk;
             let adjacent_chunk = if i < 0 || j < 0 || k < 0 {
-                VoxelChunk::Empty
+                VoxelChunk::Void
             } else {
                 self.get_chunk(i as usize, j as usize, k as usize)
             };
@@ -354,7 +354,7 @@ impl ChunkedVoxelObject {
             let j = chunk_j + dj;
             let k = chunk_k + dk;
             let adjacent_chunk = if i < 0 || j < 0 || k < 0 {
-                VoxelChunk::Empty
+                VoxelChunk::Void
             } else {
                 self.get_chunk(i as usize, j as usize, k as usize)
             };
@@ -372,7 +372,7 @@ impl ChunkedVoxelObject {
             let j = chunk_j + dj;
             let k = chunk_k + dk;
             let adjacent_chunk = if i < 0 || j < 0 || k < 0 {
-                VoxelChunk::Empty
+                VoxelChunk::Void
             } else {
                 self.get_chunk(i as usize, j as usize, k as usize)
             };
@@ -479,7 +479,7 @@ impl ChunkedVoxelObject {
         non_uniform_chunk_loop: &LoopForChunkVoxels,
     ) -> bool {
         match adjacent_chunk {
-            VoxelChunk::Empty => {
+            VoxelChunk::Void => {
                 sdf_values_loop
                     .fill_data_with_value(VoxelSignedDistance::maximally_outside().to_f32());
                 false
