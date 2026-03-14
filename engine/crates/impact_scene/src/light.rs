@@ -549,7 +549,7 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                 // box if the AABB for shadowing models is smaller
                 light_space_aabb_for_shadowing_models
                     .compute_overlap_with(&light_space_culling_aabb)
-                    .unwrap()
+                    .unwrap_or(light_space_culling_aabb)
             };
 
             let light_space_orthographic_aabb =
