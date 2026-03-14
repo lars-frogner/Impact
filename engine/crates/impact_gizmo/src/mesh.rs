@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use impact_light::MAX_SHADOW_MAP_CASCADES;
+use impact_math::vector::Vector4C;
 use impact_mesh::{LineSegmentMesh, LineSegmentMeshDirtyMask, TriangleMesh, VertexColor};
 use impact_rendering::resource::BasicResourceRegistries;
 use impact_voxel::chunks::CHUNK_SIZE;
@@ -213,6 +214,15 @@ impl GizmoType {
                         .triangle_mesh_mut()
                         .insert(self.models()[idx].triangle_mesh_id(), empty_chunk_mesh);
                 }
+            }
+            Self::VoxelSignedDistances => {
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
+                    8,
+                    VertexColor(Vector4C::same(1.0)), // Makes the per-instance color pass through unaffected
+                );
+                resource_registries
+                    .triangle_mesh_mut()
+                    .insert(self.only_triangle_mesh_id(), mesh);
             }
             Self::VoxelIntersections => {
                 let mesh = TriangleMesh::create_unit_sphere_with_color(

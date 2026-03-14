@@ -2,7 +2,7 @@
 
 use crate::{
     GizmoDepthClipping, GizmoObscurability,
-    model::{GizmoInstanceModelViewTransform, GizmoModel},
+    model::{GizmoInstanceFeatures, GizmoModel},
     shader_templates::gizmo::GizmoShaderTemplate,
 };
 use anyhow::{Result, anyhow};
@@ -103,7 +103,7 @@ impl GizmoPasses {
 
     const fn vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 3] {
         [
-            GizmoInstanceModelViewTransform::BUFFER_LAYOUT.unwrap(),
+            GizmoInstanceFeatures::BUFFER_LAYOUT.unwrap(),
             VertexPosition::BUFFER_LAYOUT,
             VertexColor::BUFFER_LAYOUT,
         ]
@@ -398,26 +398,26 @@ impl GizmoPassPipeline {
         render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         for model in models {
-            let transform_buffer = gpu_resources
+            let feature_buffer = gpu_resources
                 .model_instance_buffer()
-                .get_model_buffer_for_feature_feature_type::<GizmoInstanceModelViewTransform>(
+                .get_model_buffer_for_feature_feature_type::<GizmoInstanceFeatures>(
                     model.model_id(),
                 )
                 .ok_or_else(|| {
                     anyhow!(
-                        "Missing model-view transform GPU buffer for gizmo mesh {}",
+                        "Missing instance feature GPU buffer for gizmo mesh {}",
                         model.triangle_mesh_id()
                     )
                 })?;
 
-            let instance_range = transform_buffer.initial_feature_range();
+            let instance_range = feature_buffer.initial_feature_range();
 
             if instance_range.is_empty() {
                 continue;
             }
 
             render_pass
-                .set_vertex_buffer(0, transform_buffer.vertex_gpu_buffer().valid_buffer_slice());
+                .set_vertex_buffer(0, feature_buffer.vertex_gpu_buffer().valid_buffer_slice());
 
             let mut vertex_buffer_slot = 1;
 
@@ -466,26 +466,26 @@ impl GizmoPassPipeline {
         render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 
         for model in models {
-            let transform_buffer = gpu_resources
+            let feature_buffer = gpu_resources
                 .model_instance_buffer()
-                .get_model_buffer_for_feature_feature_type::<GizmoInstanceModelViewTransform>(
+                .get_model_buffer_for_feature_feature_type::<GizmoInstanceFeatures>(
                     model.model_id(),
                 )
                 .ok_or_else(|| {
                     anyhow!(
-                        "Missing model-view transform GPU buffer for gizmo mesh {}",
+                        "Missing instance feature GPU buffer for gizmo mesh {}",
                         model.line_segment_mesh_id()
                     )
                 })?;
 
-            let instance_range = transform_buffer.initial_feature_range();
+            let instance_range = feature_buffer.initial_feature_range();
 
             if instance_range.is_empty() {
                 continue;
             }
 
             render_pass
-                .set_vertex_buffer(0, transform_buffer.vertex_gpu_buffer().valid_buffer_slice());
+                .set_vertex_buffer(0, feature_buffer.vertex_gpu_buffer().valid_buffer_slice());
 
             let mut vertex_buffer_slot = 1;
 

@@ -3,7 +3,12 @@
 use crate::{GizmoDepthClipping, GizmoObscurability, GizmoType};
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{vertex_attribute_ranges::INSTANCE_START, wgpu};
-use impact_math::{hash64, quaternion::UnitQuaternionC, transform::Similarity3, vector::Vector3C};
+use impact_math::{
+    hash64,
+    quaternion::UnitQuaternionC,
+    transform::Similarity3,
+    vector::{Vector3C, Vector4C},
+};
 use impact_mesh::{LineSegmentMeshID, MeshID, MeshPrimitive, TriangleMeshID};
 use impact_model::{impl_InstanceFeatureForGPU, transform::InstanceModelViewTransform};
 use impact_scene::model::ModelID;
@@ -26,6 +31,18 @@ pub struct GizmoModel {
     /// Whether this gizmo should be clipped against the camera's near and far
     /// plane.
     pub depth_clipping: GizmoDepthClipping,
+}
+
+/// The transform and RGBA color of a gizmo instance.
+///
+/// This struct is intended to be passed to the GPU in a vertex buffer. The
+/// order of the fields is assumed in the shaders.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
+pub struct GizmoInstanceFeatures {
+    pub transform: GizmoInstanceModelViewTransform,
+    /// Per-instance color. Will be multiplied with the vertex color.
+    pub color: Vector4C,
 }
 
 /// A model-to-camera transform for a specific instance of a gizmo model. Unlike
@@ -70,7 +87,7 @@ impl GizmoModel {
     }
 }
 
-impl GizmoInstanceModelViewTransform {
+impl GizmoInstanceFeatures {
     /// Returns the binding location of the transform's rotation quaternion in
     /// the instance buffer.
     pub const fn rotation_location() -> u32 {
@@ -89,6 +106,21 @@ impl GizmoInstanceModelViewTransform {
         INSTANCE_START + 2
     }
 
+    /// Returns the binding location of the gizmo instance's color in the
+    /// instance buffer.
+    pub const fn color_location() -> u32 {
+        INSTANCE_START + 3
+    }
+
+    pub fn with_transform(transform: GizmoInstanceModelViewTransform) -> Self {
+        Self {
+            transform,
+            color: Vector4C::same(1.0), // Makes vertex color pass through unaffected
+        }
+    }
+}
+
+impl GizmoInstanceModelViewTransform {
     pub fn new(rotation: UnitQuaternionC, translation: Vector3C, scaling: Vector3C) -> Self {
         Self {
             rotation,
@@ -154,11 +186,12 @@ impl Default for GizmoInstanceModelViewTransform {
 }
 
 impl_InstanceFeatureForGPU!(
-    GizmoInstanceModelViewTransform,
+    GizmoInstanceFeatures,
     wgpu::vertex_attr_array![
         INSTANCE_START => Float32x4,
         INSTANCE_START + 1 => Float32x3,
         INSTANCE_START + 2 => Float32x3,
+        INSTANCE_START + 3 => Float32x4,
     ]
 );
 
@@ -202,7 +235,10 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
                 gizmo.label(),
             )]
         }
-        GizmoType::CenterOfMass | GizmoType::Anchors | GizmoType::VoxelIntersections => {
+        GizmoType::CenterOfMass
+        | GizmoType::Anchors
+        | GizmoType::VoxelIntersections
+        | GizmoType::VoxelSignedDistances => {
             vec![define_non_obscurable_triangle_model(gizmo.label())]
         }
         GizmoType::DynamicCollider | GizmoType::StaticCollider | GizmoType::PhantomCollider => {

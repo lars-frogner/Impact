@@ -18,7 +18,8 @@ use bytemuck::{Pod, Zeroable};
 use impact_mesh::{LineSegmentMeshID, MeshID, TriangleMeshID};
 use impact_model::InstanceFeature;
 use impact_scene::model::{ModelID, ModelInstanceManager};
-use model::{GizmoInstanceModelViewTransform, GizmoModel, gizmo_models};
+use impact_voxel::VoxelSignedDistance;
+use model::{GizmoInstanceFeatures, GizmoModel, gizmo_models};
 
 define_component_type! {
     /// Marks that an entity supports one or more gizmos.
@@ -53,7 +54,8 @@ pub enum GizmoType {
     StaticCollider = 14,
     PhantomCollider = 15,
     VoxelChunks = 16,
-    VoxelIntersections = 17,
+    VoxelSignedDistances = 17,
+    VoxelIntersections = 18,
 }
 
 bitflags! {
@@ -82,6 +84,7 @@ bitflags! {
         const PHANTOM_COLLIDER          = 1 << 15;
         const VOXEL_CHUNKS              = 1 << 16;
         const VOXEL_INTERSECTIONS       = 1 << 17;
+        const VOXEL_SIGNED_DISTANCES    = 1 << 18;
     }
 }
 
@@ -240,11 +243,20 @@ pub struct GizmoVisibilities {
     /// (for uniform chunks) or blue (for void chunks) cube is rendered for each
     /// chunk in voxel objects, outlining the chunk boundaries.
     pub voxel_chunks: GizmoVisibility,
+    /// The visibility of the gizmos showing a sphere for each voxel indicating
+    /// its signed distance.
+    ///
+    /// When visible, a semitransparent sphere will be rendered for each voxel
+    /// with a signed distance in a configured range. The color varies linearly
+    /// between red and white when the signed distance is negative and between
+    /// white and blue if it is positive.
+    pub voxel_signed_distances: GizmoVisibility,
     /// The visibility of the gizmos showing voxels intersecting other voxel
     /// objects.
     ///
     /// When visible, a collection of yellow semitransparent voxel-sized spheres
-    /// will be rendered for all voxels intersecting another voxel object.
+    /// will be rendered for all surface voxels intersecting another voxel
+    /// object.
     pub voxel_intersections: GizmoVisibility,
 }
 
@@ -280,6 +292,14 @@ pub struct GizmoParameters {
     /// Whether the cubes outlining voxel chunks should show through obscuring
     /// geometry, making the interior chunks visible.
     pub show_interior_chunks: bool,
+    /// The minimum signed distance (in voxels) to show voxels for.
+    pub min_signed_distance: f32,
+    /// The maximum signed distance (in voxels) to show voxels for.
+    pub max_signed_distance: f32,
+    /// Scaling factor to apply to the radius of signed distance voxel spheres.
+    pub sdf_radius_scale: f32,
+    /// The alpha to use for signed distance voxel spheres.
+    pub sdf_alpha: f32,
 }
 
 /// The scope of visibility for a gizmo.
@@ -328,7 +348,7 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 18] {
+    pub const fn all() -> [Self; 19] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingVolume,
@@ -347,6 +367,7 @@ impl GizmoType {
             Self::StaticCollider,
             Self::PhantomCollider,
             Self::VoxelChunks,
+            Self::VoxelSignedDistances,
             Self::VoxelIntersections,
         ]
     }
@@ -378,6 +399,7 @@ impl GizmoType {
             Self::StaticCollider => GizmoSet::STATIC_COLLIDER,
             Self::PhantomCollider => GizmoSet::PHANTOM_COLLIDER,
             Self::VoxelChunks => GizmoSet::VOXEL_CHUNKS,
+            Self::VoxelSignedDistances => GizmoSet::VOXEL_SIGNED_DISTANCES,
             Self::VoxelIntersections => GizmoSet::VOXEL_INTERSECTIONS,
         }
     }
@@ -402,6 +424,7 @@ impl GizmoType {
             Self::StaticCollider => "Static colliders",
             Self::PhantomCollider => "Phantom colliders",
             Self::VoxelChunks => "Voxel chunks",
+            Self::VoxelSignedDistances => "Voxel signed distances",
             Self::VoxelIntersections => "Voxel intersections",
         }
     }
@@ -532,11 +555,17 @@ impl GizmoType {
                 (for uniform chunks) or blue (for void chunks) cube is rendered for each \
                 chunk in voxel objects, outlining the chunk boundaries."
             }
+            Self::VoxelSignedDistances => {
+                "\
+                When enabled, a semitransparent sphere will be rendered for each voxel \
+                with a signed distance in a configured range. The color varies linearly \
+                between red and white when the signed distance is negative and between \
+                white and blue if it is positive."
+            }
             Self::VoxelIntersections => {
                 "\
                 When enabled, a collection of yellow semitransparent voxel-sized spheres \
-                will be rendered for all voxels intersecting another voxel object.
-            "
+                will be rendered for all surface voxels intersecting another voxel object."
             }
         }
     }
@@ -615,6 +644,7 @@ impl GizmoVisibilities {
             GizmoType::StaticCollider => self.static_collider,
             GizmoType::PhantomCollider => self.phantom_collider,
             GizmoType::VoxelChunks => self.voxel_chunks,
+            GizmoType::VoxelSignedDistances => self.voxel_signed_distances,
             GizmoType::VoxelIntersections => self.voxel_intersections,
         }
     }
@@ -639,6 +669,7 @@ impl GizmoVisibilities {
             GizmoType::StaticCollider => &mut self.static_collider,
             GizmoType::PhantomCollider => &mut self.phantom_collider,
             GizmoType::VoxelChunks => &mut self.voxel_chunks,
+            GizmoType::VoxelSignedDistances => &mut self.voxel_signed_distances,
             GizmoType::VoxelIntersections => &mut self.voxel_intersections,
         }
     }
@@ -655,6 +686,10 @@ impl Default for GizmoParameters {
             force_scale: 1.0,
             torque_scale: 1.0,
             show_interior_chunks: false,
+            min_signed_distance: VoxelSignedDistance::min_f32(),
+            max_signed_distance: VoxelSignedDistance::max_f32(),
+            sdf_radius_scale: 1.0,
+            sdf_alpha: 0.1,
         }
     }
 }
@@ -727,12 +762,10 @@ impl GizmoManager {
 /// Initializes the instance buffers used for the model-view transforms of the
 /// gizmo instances.
 pub fn initialize_buffers_for_gizmo_models(model_instance_manager: &mut ModelInstanceManager) {
-    model_instance_manager.register_feature_type::<GizmoInstanceModelViewTransform>();
+    model_instance_manager.register_feature_type::<GizmoInstanceFeatures>();
 
     for model_id in gizmo_models().iter().flatten().map(|model| model.model_id) {
-        model_instance_manager.initialize_instance_buffer(
-            model_id,
-            &[GizmoInstanceModelViewTransform::FEATURE_TYPE_ID],
-        );
+        model_instance_manager
+            .initialize_instance_buffer(model_id, &[GizmoInstanceFeatures::FEATURE_TYPE_ID]);
     }
 }

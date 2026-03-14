@@ -2,10 +2,11 @@ struct ProjectionUniform {
     projection: mat4x4f,
 }
 
-struct ModelViewTransform {
+struct InstanceFeatures {
     @location({{model_view_transform_rotation_location}}) rotationQuaternion: vec4f,
     @location({{model_view_transform_translation_location}}) translation: vec3f,
     @location({{model_view_transform_scaling_location}}) scaling: vec3f,
+    @location({{instance_color_location}}) color: vec4f,
 }
 
 struct VertexInput {
@@ -42,21 +43,21 @@ fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<
 @vertex
 fn mainVS(
     vertex: VertexInput,
-    modelViewTransform: ModelViewTransform,
+    instanceFeatures: InstanceFeatures,
 ) -> VertexOutput {
     var output: VertexOutput;
 
     let projectionMatrix = projectionUniform.projection;
 
     let cameraSpacePosition = transformPosition(
-        modelViewTransform.rotationQuaternion,
-        modelViewTransform.translation,
-        modelViewTransform.scaling,
+        instanceFeatures.rotationQuaternion,
+        instanceFeatures.translation,
+        instanceFeatures.scaling,
         vertex.modelSpacePosition,
     );
     output.clipSpacePosition = projectionMatrix * vec4f(cameraSpacePosition, 1.0);
 
-    output.color = vertex.color;
+    output.color = vertex.color * instanceFeatures.color;
 
     return output;
 }
