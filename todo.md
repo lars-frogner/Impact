@@ -36,11 +36,7 @@
 
 - Improve physics stability (avoid crash when small pieces explode with NaN).
 
-- Continuous collision detection.
-
 - Capsule collider shape.
-
-- Prevent colliders from being pushed towards voxel object interior when colliding with voxels.
 
 ## Voxels
 
@@ -62,11 +58,7 @@
 
 - Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
 
-- Consider using Welzl's algorithm to compute better bounding spheres.
-
 - Investigate where arena allocation could be beneficial.
-
-- Add acceleration structure for broad phase collision detection.
 
 - Add custom allocator support for `AlignedByteVec`.
 
