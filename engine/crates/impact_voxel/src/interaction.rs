@@ -438,7 +438,7 @@ fn handle_anchors_for_original_voxel_object_after_removing_voxels(
             let local_anchor = anchor_point + original_local_center_of_mass;
 
             if voxel_object
-                .get_voxel_at_coords(local_anchor.x(), local_anchor.y(), local_anchor.z())
+                .get_voxel_at_coords_if_occupied(local_anchor.as_vector())
                 .is_some()
             {
                 // The anchor is still attached to the original object,
@@ -493,7 +493,7 @@ fn handle_anchors_for_disconnected_voxel_object(
         let local_anchor = anchor_point + original_local_center_of_mass_relative_to_new_origin;
 
         if disconnected_object
-            .get_voxel_at_coords(local_anchor.x(), local_anchor.y(), local_anchor.z())
+            .get_voxel_at_coords_if_occupied(local_anchor.as_vector())
             .is_some()
         {
             // The anchor is attached to the disconnected object, so we must

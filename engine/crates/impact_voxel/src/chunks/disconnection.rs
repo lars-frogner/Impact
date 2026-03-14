@@ -484,14 +484,15 @@ impl ChunkedVoxelObject {
                                         for j in voxel_object_index_ranges[1].clone() {
                                             for k in voxel_object_index_ranges[2].clone() {
                                                 let voxel = &mut chunk_voxels[voxel_idx];
-                                                let label = labels[voxel_idx];
 
                                                 let region_voxel = if voxel.is_empty() {
                                                     // Since the signed distances of empty voxels
                                                     // adjacent to non-empty ones affect meshing, we
                                                     // copy over empty voxels unconditionally
                                                     *voxel
-                                                } else if split_off_voxel_at_label[label as usize] {
+                                                } else if split_off_voxel_at_label
+                                                    [labels[voxel_idx] as usize]
+                                                {
                                                     // The voxel belongs to the region we are
                                                     // splitting off, so we grab it and replace it
                                                     // with an empty voxel in the original object
@@ -538,7 +539,7 @@ impl ChunkedVoxelObject {
                                     region_voxels.extend_from_slice(chunk_voxels);
 
                                     // We replace them with empty voxels and mark the original chunk
-                                    // as empty (although the voxels now lose their owner, we might
+                                    // as void (although the voxels now lose their owner, we might
                                     // still encounter them when looping over all voxels for things
                                     // like aggregations, so it is still important that we make them
                                     // empty)
@@ -1220,22 +1221,28 @@ impl ChunkedVoxelObject {
         for i in self.occupied_voxel_ranges()[0].clone() {
             for j in self.occupied_voxel_ranges()[1].clone() {
                 for k in self.occupied_voxel_ranges()[2].clone() {
-                    if self.get_voxel(i, j, k).is_some() {
-                        if i < voxel_counts[0] - 1 && self.get_voxel(i + 1, j, k).is_some() {
+                    if self.get_voxel_if_occupied(i, j, k).is_some() {
+                        if i < voxel_counts[0] - 1
+                            && self.get_voxel_if_occupied(i + 1, j, k).is_some()
+                        {
                             give_voxels_same_root_usize(
                                 &mut parents,
                                 linear_idx(i, j, k),
                                 linear_idx(i + 1, j, k),
                             );
                         }
-                        if j < voxel_counts[1] - 1 && self.get_voxel(i, j + 1, k).is_some() {
+                        if j < voxel_counts[1] - 1
+                            && self.get_voxel_if_occupied(i, j + 1, k).is_some()
+                        {
                             give_voxels_same_root_usize(
                                 &mut parents,
                                 linear_idx(i, j, k),
                                 linear_idx(i, j + 1, k),
                             );
                         }
-                        if k < voxel_counts[2] - 1 && self.get_voxel(i, j, k + 1).is_some() {
+                        if k < voxel_counts[2] - 1
+                            && self.get_voxel_if_occupied(i, j, k + 1).is_some()
+                        {
                             give_voxels_same_root_usize(
                                 &mut parents,
                                 linear_idx(i, j, k),
@@ -1252,7 +1259,7 @@ impl ChunkedVoxelObject {
         for i in self.occupied_voxel_ranges()[0].clone() {
             for j in self.occupied_voxel_ranges()[1].clone() {
                 for k in self.occupied_voxel_ranges()[2].clone() {
-                    if self.get_voxel(i, j, k).is_some() {
+                    if self.get_voxel_if_occupied(i, j, k).is_some() {
                         let idx = linear_idx(i, j, k);
                         if parents[idx] == idx {
                             region_count += 1;

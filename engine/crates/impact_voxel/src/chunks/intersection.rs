@@ -418,6 +418,23 @@ impl ChunkedVoxelObject {
         voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
+    /// Returns the object space position of the center of the chunk at the
+    /// given object chunk indices.
+    #[inline]
+    pub fn chunk_center_position_from_chunk_indices(
+        &self,
+        chunk_i: usize,
+        chunk_j: usize,
+        chunk_k: usize,
+    ) -> Point3 {
+        voxel_center_position_from_object_voxel_indices(
+            self.chunk_extent(),
+            chunk_i,
+            chunk_j,
+            chunk_k,
+        )
+    }
+
     /// Returns the object space axis aligned bounding box of the voxel at the
     /// given object voxel indices.
     #[inline]
@@ -505,10 +522,10 @@ impl ChunkedVoxelObject {
                         .all_corners()
                         .iter()
                         .any(|corner| !plane.point_lies_in_positive_halfspace(corner))
-                        && let Some(voxel) = self.get_voxel(i, j, k)
+                        && let Some(voxel) = self.get_voxel_if_occupied(i, j, k)
                         && let Some(VoxelPlacement::Surface(_)) = voxel.placement()
                     {
-                        f([i, j, k], voxel);
+                        f([i, j, k], &voxel);
                     }
                 }
             }
@@ -528,10 +545,10 @@ impl ChunkedVoxelObject {
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
                     if Point3::distance_between(&voxel_center_position, sphere.center())
                         <= 0.5 * self.voxel_extent + sphere.radius()
-                        && let Some(voxel) = self.get_voxel(i, j, k)
+                        && let Some(voxel) = self.get_voxel_if_occupied(i, j, k)
                         && let Some(VoxelPlacement::Surface(_)) = voxel.placement()
                     {
-                        f([i, j, k], voxel);
+                        f([i, j, k], &voxel);
                     }
                 }
             }
@@ -550,9 +567,9 @@ impl ChunkedVoxelObject {
                     let voxel_center_position =
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
                     if sphere.contains_point(&voxel_center_position)
-                        && let Some(voxel) = self.get_voxel(i, j, k)
+                        && let Some(voxel) = self.get_voxel_if_occupied(i, j, k)
                     {
-                        f([i, j, k], voxel);
+                        f([i, j, k], &voxel);
                     }
                 }
             }
@@ -572,9 +589,9 @@ impl ChunkedVoxelObject {
                     let voxel_center_position =
                         self.voxel_center_position_from_object_voxel_indices(i, j, k);
                     if containment_tester.contains_point(&voxel_center_position)
-                        && let Some(voxel) = self.get_voxel(i, j, k)
+                        && let Some(voxel) = self.get_voxel_if_occupied(i, j, k)
                     {
-                        f([i, j, k], voxel);
+                        f([i, j, k], &voxel);
                     }
                 }
             }
