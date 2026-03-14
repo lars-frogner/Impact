@@ -746,8 +746,9 @@ define_task!(
 
 define_task!(
     /// Finds entities for which gizmos should be displayed and writes their
-    /// model-view transforms to the dedicated buffers for the gizmos.
-    [pub] BufferTransformsForGizmos,
+    /// model-view transforms along with a per-instance color to the dedicated
+    /// buffers for the gizmos.
+    [pub] BufferGizmoInstances,
     depends_on = [
         // This is where we use the visibility flags.
         UpdateVisibilityFlagsForGizmos,
@@ -763,7 +764,7 @@ define_task!(
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
-        instrument_task!("Buffering transforms for gizmos", engine.task_timer(), {
+        instrument_task!("Buffering gizmo instances", engine.task_timer(), {
             let current_frame_number = engine.game_loop_controller().oread().iteration() as u32;
             let ecs_world = engine.ecs_world().oread();
             let scene = engine.scene().oread();
@@ -779,7 +780,7 @@ define_task!(
             let collision_world = simulator.collision_world().oread();
             let gizmo_manager = engine.gizmo_manager().oread();
 
-            impact_gizmo::systems::buffer_transforms_for_gizmos(
+            impact_gizmo::systems::buffer_gizmo_instances(
                 &mut model_instance_manager,
                 &ecs_world,
                 &camera_manager,
@@ -887,7 +888,7 @@ define_task!(
         // instance feature buffers must be copied over to their GPU-side
         // counterparts.
         BufferModelInstancesAndBoundLights,
-        BufferTransformsForGizmos,
+        BufferGizmoInstances,
         // We need to have the up-to-date rendering configuration at this point.
         ApplyRenderCommands
     ],
@@ -1030,7 +1031,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
 
     // GIZMO PROCESSING (for current frame)
     task_scheduler.register_task(UpdateVisibilityFlagsForGizmos)?;
-    task_scheduler.register_task(BufferTransformsForGizmos)?;
+    task_scheduler.register_task(BufferGizmoInstances)?;
 
     // GPU RESOURCE SYNCHRONIZATION (of updates from current frame, rendered next frame)
     task_scheduler.register_task(SyncTextureGPUResources)?;

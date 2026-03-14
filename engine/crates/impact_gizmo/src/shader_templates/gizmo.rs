@@ -1,6 +1,6 @@
 //! Shader template for rendering basic gizmos.
 
-use crate::{model::GizmoInstanceModelViewTransform, rendering_template_source};
+use crate::{model::GizmoInstanceFeatures, rendering_template_source};
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
@@ -29,9 +29,10 @@ impl SpecificShaderTemplate for GizmoShaderTemplate {
             .resolve(
                 &[],
                 shader_template_replacements!(
-                    "model_view_transform_rotation_location" => GizmoInstanceModelViewTransform::rotation_location(),
-                    "model_view_transform_translation_location" => GizmoInstanceModelViewTransform::translation_location(),
-                    "model_view_transform_scaling_location" => GizmoInstanceModelViewTransform::scaling_location(),
+                    "model_view_transform_rotation_location" => GizmoInstanceFeatures::rotation_location(),
+                    "model_view_transform_translation_location" => GizmoInstanceFeatures::translation_location(),
+                    "model_view_transform_scaling_location" => GizmoInstanceFeatures::scaling_location(),
+                    "instance_color_location" => GizmoInstanceFeatures::color_location(),
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
                     "position_location" => MeshVertexAttributeLocation::Position as u32,

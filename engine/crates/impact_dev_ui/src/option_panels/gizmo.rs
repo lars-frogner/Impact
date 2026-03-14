@@ -5,6 +5,7 @@ use impact::{
     egui::{Context, DragValue, Response, Slider, Ui},
     engine::Engine,
     impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
+    impact_voxel::VoxelSignedDistance,
 };
 
 fn gizmo_parameter_options(
@@ -97,6 +98,48 @@ fn gizmo_parameter_options(
                     geometry, making the interior chunks visible.",
             },
         )),
+        GizmoType::VoxelSignedDistances => Some(
+            option_slider(
+                ui,
+                LabelAndHoverText {
+                    label: "Min signed distance",
+                    hover_text: "The minimum signed distance (in voxels) to show voxels for.",
+                },
+                Slider::new(
+                    &mut parameters.min_signed_distance,
+                    VoxelSignedDistance::min_f32()..=parameters.max_signed_distance,
+                ),
+            )
+            .union(option_slider(
+                ui,
+                LabelAndHoverText {
+                    label: "Max signed distance",
+                    hover_text: "The maximum signed distance (in voxels) to show voxels for.",
+                },
+                Slider::new(
+                    &mut parameters.max_signed_distance,
+                    parameters.min_signed_distance..=VoxelSignedDistance::max_f32(),
+                ),
+            ))
+            .union(option_slider(
+                ui,
+                LabelAndHoverText {
+                    label: "SDF radius scale",
+                    hover_text: "\
+                        Scaling factor to apply to the radius of signed distance voxel \
+                        spheres.",
+                },
+                Slider::new(&mut parameters.sdf_radius_scale, 0.0..=1.0),
+            ))
+            .union(option_slider(
+                ui,
+                LabelAndHoverText {
+                    label: "SDF alpha",
+                    hover_text: "The alpha to use for signed distance voxel spheres.",
+                },
+                Slider::new(&mut parameters.sdf_alpha, 0.0..=1.0),
+            )),
+        ),
         _ => None,
     }
 }
