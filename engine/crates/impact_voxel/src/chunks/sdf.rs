@@ -11,6 +11,7 @@ use crate::{
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
 };
+use impact_math::vector::Vector3;
 
 /// A signed distance field for a voxel chunk in a [`ChunkedVoxelObject`].
 #[derive(Clone, Debug)]
@@ -525,7 +526,7 @@ impl ChunkedVoxelObject {
                         None
                     } else {
                         let voxel_indices = voxel_indices.map(|voxel_index| voxel_index as usize);
-                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2])
+                        self.get_voxel_if_occupied(voxel_indices[0], voxel_indices[1], voxel_indices[2])
                     };
 
                     if signed_dist.is_sign_negative() && voxel.is_none_or(|voxel| voxel.is_empty()) {
@@ -552,7 +553,7 @@ impl ChunkedVoxelObject {
                         None
                     } else {
                         let voxel_indices = voxel_indices.map(|voxel_index| voxel_index as usize);
-                        self.get_voxel(voxel_indices[0], voxel_indices[1], voxel_indices[2])
+                        self.get_voxel_if_occupied(voxel_indices[0], voxel_indices[1], voxel_indices[2])
                     };
 
                     if matches!(voxel, Some(v) if v.voxel_type() != voxel_type) {
@@ -565,6 +566,67 @@ impl ChunkedVoxelObject {
             );
         });
     }
+}
+
+/// Evaluates the signed distance at the given fractional offset within a unit
+/// cube by trilinear interpolation of the signed distances at the cube corners.
+/// The distances are assumed to be laid out such that z varies fastest, then y,
+/// then x.
+#[inline]
+pub fn evaluate_sdf_from_corner_samples(dists: &[f32; 8], fractional_offset: &Vector3) -> f32 {
+    let o = fractional_offset;
+    let rev_o = Vector3::same(1.0) - o;
+
+    let d00 = dists[0b000] * rev_o.x() + dists[0b100] * o.x();
+    let d01 = dists[0b001] * rev_o.x() + dists[0b101] * o.x();
+    let d10 = dists[0b010] * rev_o.x() + dists[0b110] * o.x();
+    let d11 = dists[0b011] * rev_o.x() + dists[0b111] * o.x();
+
+    let d0 = d00 * rev_o.y() + d10 * o.y();
+    let d1 = d01 * rev_o.y() + d11 * o.y();
+
+    d0 * rev_o.z() + d1 * o.z()
+}
+
+/// Calculates the gradient of the distance field at the given fractional offset
+/// within a unit cube given the signed distance at each cube corner. The
+/// distances are assumed to be laid out such that z varies fastest, then y,
+/// then x.
+///
+/// For each dimension, there are 4 cube edges along that axis. This will do
+/// bilinear interpolation between the differences along those edges based on
+/// the fractional offset.
+#[inline]
+pub fn compute_sdf_gradient_from_corner_samples(
+    dists: &[f32; 8],
+    fractional_offset: &Vector3,
+) -> Vector3 {
+    let p00 = Vector3::new(dists[0b100], dists[0b010], dists[0b001]);
+    let n00 = Vector3::new(dists[0b000], dists[0b000], dists[0b000]);
+
+    let p01 = Vector3::new(dists[0b101], dists[0b110], dists[0b011]);
+    let n01 = Vector3::new(dists[0b001], dists[0b100], dists[0b010]);
+
+    let p10 = Vector3::new(dists[0b110], dists[0b011], dists[0b101]);
+    let n10 = Vector3::new(dists[0b010], dists[0b001], dists[0b100]);
+
+    let p11 = Vector3::new(dists[0b111], dists[0b111], dists[0b111]);
+    let n11 = Vector3::new(dists[0b011], dists[0b101], dists[0b110]);
+
+    // Each dimension encodes an edge delta, giving 12 in total
+    let d00 = p00 - n00; // Edges (0bx00, 0b0y0, 0b00z)
+    let d01 = p01 - n01; // Edges (0bx01, 0b1y0, 0b01z)
+    let d10 = p10 - n10; // Edges (0bx10, 0b0y1, 0b10z)
+    let d11 = p11 - n11; // Edges (0bx11, 0b1y1, 0b11z)
+
+    let o = fractional_offset;
+    let rev_o = Vector3::same(1.0) - o;
+
+    // Do bilinear interpolation between 4 edges in each dimension
+    rev_o.yzx().component_mul(&rev_o.zxy()).component_mul(&d00)
+        + rev_o.yzx().component_mul(&o.zxy()).component_mul(&d01)
+        + o.yzx().component_mul(&rev_o.zxy()).component_mul(&d10)
+        + o.yzx().component_mul(&o.zxy()).component_mul(&d11)
 }
 
 #[cfg(not(miri))]

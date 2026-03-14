@@ -19,7 +19,10 @@ use disconnection::{
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
-use impact_math::point::{Point3, Point3C};
+use impact_math::{
+    point::{Point3, Point3C},
+    vector::Vector3,
+};
 use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
@@ -896,30 +899,32 @@ impl ChunkedVoxelObject {
         chunk_voxels(&self.voxels, chunk.data_offset)
     }
 
-    /// Returns a reference to the voxel containing the given model space
-    /// coordinates (fractional indices scaled by the voxel extent) in the
-    /// object's voxel grid, or [`None`] if the voxel is empty or the
-    /// coordinates are out of bounds.
+    /// Returns the voxel at the given given model space coordinates (fractional
+    /// indices scaled by the voxel extent) in the object's voxel grid, or
+    /// `None` if the voxel is empty or the indices are out of bounds.
     #[inline]
-    pub fn get_voxel_at_coords(&self, x: f32, y: f32, z: f32) -> Option<&Voxel> {
-        if x.is_sign_negative() || y.is_sign_negative() || z.is_sign_negative() {
-            return None;
-        }
-        let i = (x * self.inverse_voxel_extent) as usize;
-        let j = (y * self.inverse_voxel_extent) as usize;
-        let k = (z * self.inverse_voxel_extent) as usize;
-        self.get_voxel(i, j, k)
+    pub fn get_voxel_at_coords_if_occupied(&self, coords: &Vector3) -> Option<Voxel> {
+        self.get_voxel_at_grid_coords_if_occupied(&(coords * self.inverse_voxel_extent))
     }
 
-    /// Returns a reference to the voxel at the given indices in the object's
-    /// voxel grid, or [`None`] if the voxel is empty or the indices are out of
-    /// bounds.
-    ///
-    /// Despite the organization of voxels into chunks, this lookup is
-    /// relatively efficient because we can perform simple bit manipulations
-    /// to determine the chunk containing the voxel.
+    /// Returns the voxel at the given given grid coordinates (fractional
+    /// indices) in the object's voxel grid, or `None` if the voxel is empty or
+    /// the indices are out of bounds.
     #[inline]
-    pub fn get_voxel(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
+    pub fn get_voxel_at_grid_coords_if_occupied(&self, grid_coords: &Vector3) -> Option<Voxel> {
+        if grid_coords.has_negative_component() {
+            return None;
+        }
+        let i = grid_coords.x() as usize;
+        let j = grid_coords.y() as usize;
+        let k = grid_coords.z() as usize;
+        self.get_voxel_if_occupied(i, j, k)
+    }
+
+    /// Returns the voxel at the given indices in the object's voxel grid, or
+    /// `None` if the voxel is empty or the indices are out of bounds.
+    #[inline]
+    pub fn get_voxel_if_occupied(&self, i: usize, j: usize, k: usize) -> Option<Voxel> {
         if i < self.occupied_voxel_ranges[0].start
             || j < self.occupied_voxel_ranges[1].start
             || k < self.occupied_voxel_ranges[2].start
@@ -930,11 +935,11 @@ impl ChunkedVoxelObject {
             return None;
         }
 
-        self.get_voxel_inside(i, j, k)
+        let voxel = self.voxel(i, j, k);
+        (!voxel.is_empty()).then_some(voxel)
     }
 
-    /// Returns a reference to the voxel at the given indices in the object's
-    /// voxel grid, or [`None`] if the voxel is empty.
+    /// Returns the voxel at the given indices in the object's voxel grid.
     ///
     /// Despite the organization of voxels into chunks, this lookup is
     /// relatively efficient because we can perform simple bit manipulations
@@ -943,17 +948,16 @@ impl ChunkedVoxelObject {
     /// # Panics
     /// If the indices are outside the object's voxel grid.
     #[inline]
-    pub fn get_voxel_inside(&self, i: usize, j: usize, k: usize) -> Option<&Voxel> {
+    pub fn voxel(&self, i: usize, j: usize, k: usize) -> Voxel {
         let chunk_idx = self.linear_chunk_idx_from_object_voxel_indices(i, j, k);
         let chunk = &self.chunks[chunk_idx];
         match &chunk {
-            VoxelChunk::Void => None,
-            VoxelChunk::Uniform(UniformVoxelChunk { voxel, .. }) => Some(voxel),
+            VoxelChunk::Void => Voxel::maximally_outside(),
+            VoxelChunk::Uniform(UniformVoxelChunk { voxel, .. }) => *voxel,
             VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
                 let voxel_idx = chunk_start_voxel_idx(*data_offset)
                     + linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
-                let voxel = &self.voxels[voxel_idx];
-                if voxel.is_empty() { None } else { Some(voxel) }
+                self.voxels[voxel_idx]
             }
         }
     }
@@ -1260,21 +1264,17 @@ impl ChunkedVoxelObject {
                     };
 
                     let voxel = self
-                        .get_voxel(i, j, k)
-                        .copied()
+                        .get_voxel_if_occupied(i, j, k)
                         .unwrap_or(Voxel::maximally_outside());
 
                     let adjacent_voxel_x_up = self
-                        .get_voxel(i + 1, j, k)
-                        .copied()
+                        .get_voxel_if_occupied(i + 1, j, k)
                         .unwrap_or(Voxel::maximally_outside());
                     let adjacent_voxel_y_up = self
-                        .get_voxel(i, j + 1, k)
-                        .copied()
+                        .get_voxel_if_occupied(i, j + 1, k)
                         .unwrap_or(Voxel::maximally_outside());
                     let adjacent_voxel_z_up = self
-                        .get_voxel(i, j, k + 1)
-                        .copied()
+                        .get_voxel_if_occupied(i, j, k + 1)
                         .unwrap_or(Voxel::maximally_outside());
 
                     if voxel.is_empty() {
@@ -1308,7 +1308,7 @@ impl ChunkedVoxelObject {
 
         for j in self.occupied_voxel_ranges[1].clone() {
             for k in self.occupied_voxel_ranges[2].clone() {
-                if let Some(voxel) = self.get_voxel(0, j, k)
+                if let Some(voxel) = self.get_voxel_if_occupied(0, j, k)
                     && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_DN)
                 {
                     invalid_present_flags.push(([0, j, k], VoxelFlags::HAS_ADJACENT_X_DN));
@@ -1317,7 +1317,7 @@ impl ChunkedVoxelObject {
         }
         for i in self.occupied_voxel_ranges[0].clone() {
             for k in self.occupied_voxel_ranges[2].clone() {
-                if let Some(voxel) = self.get_voxel(i, 0, k)
+                if let Some(voxel) = self.get_voxel_if_occupied(i, 0, k)
                     && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Y_DN)
                 {
                     invalid_present_flags.push(([i, 0, k], VoxelFlags::HAS_ADJACENT_Y_DN));
@@ -1326,7 +1326,7 @@ impl ChunkedVoxelObject {
         }
         for i in self.occupied_voxel_ranges[0].clone() {
             for j in self.occupied_voxel_ranges[1].clone() {
-                if let Some(voxel) = self.get_voxel(i, j, 0)
+                if let Some(voxel) = self.get_voxel_if_occupied(i, j, 0)
                     && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_Z_DN)
                 {
                     invalid_present_flags.push(([i, j, 0], VoxelFlags::HAS_ADJACENT_Z_DN));
@@ -2384,6 +2384,13 @@ impl VoxelChunk {
     }
 }
 
+impl UniformVoxelChunk {
+    #[inline]
+    pub fn voxel(&self) -> &Voxel {
+        &self.voxel
+    }
+}
+
 impl NonUniformVoxelChunk {
     #[inline]
     const fn contains_only_empty_voxels(&self) -> bool {
@@ -3193,7 +3200,7 @@ mod tests {
             for j in 0..3 {
                 for k in 0..3 {
                     assert_eq!(
-                        object.get_voxel(i, j, k).map_or(0, |_| 1),
+                        object.get_voxel_if_occupied(i, j, k).map_or(0, |_| 1),
                         generator.voxels[i][j][k]
                     );
                 }
@@ -3218,7 +3225,7 @@ mod tests {
                 for k in 0..3 {
                     assert_eq!(
                         object
-                            .get_voxel(offset[0] + i, offset[1] + j, offset[2] + k)
+                            .get_voxel_if_occupied(offset[0] + i, offset[1] + j, offset[2] + k)
                             .map_or(0, |_| 1),
                         generator.voxels[i][j][k]
                     );
@@ -3238,31 +3245,31 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator);
 
         assert_eq!(
-            object.get_voxel(1, 1, 1).unwrap().flags(),
+            object.get_voxel_if_occupied(1, 1, 1).unwrap().flags(),
             VoxelFlags::full_adjacency()
         );
         assert_eq!(
-            object.get_voxel(0, 1, 1).unwrap().flags(),
+            object.get_voxel_if_occupied(0, 1, 1).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_X_UP
         );
         assert_eq!(
-            object.get_voxel(2, 1, 1).unwrap().flags(),
+            object.get_voxel_if_occupied(2, 1, 1).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_X_DN
         );
         assert_eq!(
-            object.get_voxel(1, 0, 1).unwrap().flags(),
+            object.get_voxel_if_occupied(1, 0, 1).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_Y_UP
         );
         assert_eq!(
-            object.get_voxel(1, 2, 1).unwrap().flags(),
+            object.get_voxel_if_occupied(1, 2, 1).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_Y_DN
         );
         assert_eq!(
-            object.get_voxel(1, 1, 0).unwrap().flags(),
+            object.get_voxel_if_occupied(1, 1, 0).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_Z_UP
         );
         assert_eq!(
-            object.get_voxel(1, 1, 2).unwrap().flags(),
+            object.get_voxel_if_occupied(1, 1, 2).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_Z_DN
         );
     }
@@ -3278,21 +3285,21 @@ mod tests {
         let object = ChunkedVoxelObject::generate(&generator);
 
         assert_eq!(
-            object.get_voxel(0, 0, 0).unwrap().flags(),
+            object.get_voxel_if_occupied(0, 0, 0).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_X_UP
                 | VoxelFlags::HAS_ADJACENT_Y_UP
                 | VoxelFlags::HAS_ADJACENT_Z_UP
         );
         assert_eq!(
-            object.get_voxel(0, 0, 1).unwrap().flags(),
+            object.get_voxel_if_occupied(0, 0, 1).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_Z_DN
         );
         assert_eq!(
-            object.get_voxel(0, 1, 0).unwrap().flags(),
+            object.get_voxel_if_occupied(0, 1, 0).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_Y_DN
         );
         assert_eq!(
-            object.get_voxel(1, 0, 0).unwrap().flags(),
+            object.get_voxel_if_occupied(1, 0, 0).unwrap().flags(),
             VoxelFlags::HAS_ADJACENT_X_DN
         );
     }
@@ -3313,7 +3320,7 @@ mod tests {
 
         assert_eq!(
             object
-                .get_voxel(CHUNK_SIZE - 1, CHUNK_SIZE - 1, CHUNK_SIZE - 1)
+                .get_voxel_if_occupied(CHUNK_SIZE - 1, CHUNK_SIZE - 1, CHUNK_SIZE - 1)
                 .unwrap()
                 .flags(),
             VoxelFlags::HAS_ADJACENT_X_DN
@@ -3322,21 +3329,21 @@ mod tests {
         );
         assert_eq!(
             object
-                .get_voxel(CHUNK_SIZE - 1, CHUNK_SIZE - 1, CHUNK_SIZE - 2)
+                .get_voxel_if_occupied(CHUNK_SIZE - 1, CHUNK_SIZE - 1, CHUNK_SIZE - 2)
                 .unwrap()
                 .flags(),
             VoxelFlags::HAS_ADJACENT_Z_UP
         );
         assert_eq!(
             object
-                .get_voxel(CHUNK_SIZE - 1, CHUNK_SIZE - 2, CHUNK_SIZE - 1)
+                .get_voxel_if_occupied(CHUNK_SIZE - 1, CHUNK_SIZE - 2, CHUNK_SIZE - 1)
                 .unwrap()
                 .flags(),
             VoxelFlags::HAS_ADJACENT_Y_UP
         );
         assert_eq!(
             object
-                .get_voxel(CHUNK_SIZE - 2, CHUNK_SIZE - 1, CHUNK_SIZE - 1)
+                .get_voxel_if_occupied(CHUNK_SIZE - 2, CHUNK_SIZE - 1, CHUNK_SIZE - 1)
                 .unwrap()
                 .flags(),
             VoxelFlags::HAS_ADJACENT_X_UP

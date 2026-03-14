@@ -214,7 +214,8 @@ impl VoxelChunkSignedDistanceField {
         }
 
         let centroid = centroid_of_edge_intersections(&corner_dists);
-        let normal = sdf_gradient(&corner_dists, centroid);
+        let normal =
+            super::compute_sdf_gradient_from_corner_samples(&corner_dists, centroid.as_vector());
         let vertex_materials =
             SurfaceNetsVertexMaterials::compute(corner_has_voxel, corner_material_indices);
 
@@ -393,43 +394,6 @@ fn estimate_surface_edge_intersection(
 
     interp2 * CUBE_CORNER_POINTS[corner1 as usize]
         + interp1 * CUBE_CORNER_POINTS[corner2 as usize].as_vector()
-}
-
-/// Calculates an unnormalized surface normal vector as the gradient of the
-/// distance field.
-///
-/// For each dimension, there are 4 cube edges along that axis. This will do
-/// bilinear interpolation between the differences along those edges based on
-/// the position of the surface (s).
-#[inline]
-fn sdf_gradient(dists: &[f32; 8], s: Point3) -> Vector3 {
-    let s = s.as_vector();
-
-    let p00 = Vector3::new(dists[0b100], dists[0b010], dists[0b001]);
-    let n00 = Vector3::new(dists[0b000], dists[0b000], dists[0b000]);
-
-    let p01 = Vector3::new(dists[0b101], dists[0b110], dists[0b011]);
-    let n01 = Vector3::new(dists[0b001], dists[0b100], dists[0b010]);
-
-    let p10 = Vector3::new(dists[0b110], dists[0b011], dists[0b101]);
-    let n10 = Vector3::new(dists[0b010], dists[0b001], dists[0b100]);
-
-    let p11 = Vector3::new(dists[0b111], dists[0b111], dists[0b111]);
-    let n11 = Vector3::new(dists[0b011], dists[0b101], dists[0b110]);
-
-    // Each dimension encodes an edge delta, giving 12 in total.
-    let d00 = p00 - n00; // Edges (0bx00, 0b0y0, 0b00z)
-    let d01 = p01 - n01; // Edges (0bx01, 0b1y0, 0b01z)
-    let d10 = p10 - n10; // Edges (0bx10, 0b0y1, 0b10z)
-    let d11 = p11 - n11; // Edges (0bx11, 0b1y1, 0b11z)
-
-    let neg = Vector3::same(1.0) - s;
-
-    // Do bilinear interpolation between 4 edges in each dimension.
-    neg.yzx().component_mul(&neg.zxy()).component_mul(&d00)
-        + neg.yzx().component_mul(&s.zxy()).component_mul(&d01)
-        + s.yzx().component_mul(&neg.zxy()).component_mul(&d10)
-        + s.yzx().component_mul(&s.zxy()).component_mul(&d11)
 }
 
 macro_rules! sorting_network {

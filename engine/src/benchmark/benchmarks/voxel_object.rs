@@ -114,7 +114,7 @@ pub fn get_each_voxel(benchmarker: impl Benchmarker) {
         for i in ranges[0].clone() {
             for j in ranges[1].clone() {
                 for k in ranges[2].clone() {
-                    let _ = black_box(object.get_voxel(i, j, k));
+                    let _ = black_box(object.get_voxel_if_occupied(i, j, k));
                 }
             }
         }
@@ -346,8 +346,8 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
             &object_b,
             &transform_to_object_a_space,
             &transform_to_object_b_space,
-            &mut |indices_a, indices_b, geometry| {
-                black_box((indices_a, indices_b, geometry));
+            &mut |indices, geometry| {
+                black_box((indices, geometry));
             },
         );
     });
