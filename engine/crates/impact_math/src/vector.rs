@@ -494,6 +494,24 @@ impl Vector3 {
         Self::wrap(self.inner.abs())
     }
 
+    /// Returns a vector with the integer part of each component.
+    #[inline]
+    pub fn component_trunc(&self) -> Self {
+        Self::wrap(self.inner.trunc())
+    }
+
+    /// Returns a vector with each component rounded down.
+    #[inline]
+    pub fn component_floor(&self) -> Self {
+        Self::wrap(self.inner.floor())
+    }
+
+    /// Returns a vector with each component rounded down.
+    #[inline]
+    pub fn component_ceil(&self) -> Self {
+        Self::wrap(self.inner.ceil())
+    }
+
     /// Returns a vector with the reciprocal value of each component.
     #[inline]
     pub fn component_recip(&self) -> Self {
