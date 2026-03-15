@@ -11,7 +11,7 @@ use impact_id::EntityID;
 use impact_physics::{
     collision::{
         self, CollidableID, HasCollidable,
-        setup::{PlanarCollidable, SphericalCollidable},
+        setup::{CapsularCollidable, PlanarCollidable, SphericalCollidable},
     },
     rigid_body::{HasDynamicRigidBody, HasKinematicRigidBody, RigidBodyType},
 };
@@ -116,6 +116,54 @@ pub fn setup_collidables_for_new_entities(
                 RigidBodyType::Kinematic,
                 planar_collidable,
                 LocalCollidable::Plane,
+                model_transform,
+            )?;
+            Ok(HasCollidable)
+        },
+        [HasKinematicRigidBody],
+        ![HasCollidable]
+    )?;
+
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
+        },
+        entities,
+        |entity_id: EntityID,
+         capsular_collidable: &CapsularCollidable,
+         model_transform: Option<&ModelTransform>|
+         -> Result<HasCollidable> {
+            collision::setup::setup_capsular_collidable(
+                &mut collision_world,
+                entity_id,
+                RigidBodyType::Dynamic,
+                capsular_collidable,
+                LocalCollidable::Capsule,
+                model_transform,
+            )?;
+            Ok(HasCollidable)
+        },
+        [HasDynamicRigidBody],
+        ![HasCollidable]
+    )?;
+
+    setup!(
+        {
+            let simulator = simulator.oread();
+            let mut collision_world = simulator.collision_world().owrite();
+        },
+        entities,
+        |entity_id: EntityID,
+         capsular_collidable: &CapsularCollidable,
+         model_transform: Option<&ModelTransform>|
+         -> Result<HasCollidable> {
+            collision::setup::setup_capsular_collidable(
+                &mut collision_world,
+                entity_id,
+                RigidBodyType::Kinematic,
+                capsular_collidable,
+                LocalCollidable::Capsule,
                 model_transform,
             )?;
             Ok(HasCollidable)

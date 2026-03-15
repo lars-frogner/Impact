@@ -106,6 +106,8 @@ pub fn determine_sphere_sphere_contact_geometry(
     sphere_a: &Sphere,
     sphere_b: &Sphere,
 ) -> Option<ContactGeometry> {
+    const EPSILON: f32 = 1e-8;
+
     let center_displacement = sphere_a.center() - sphere_b.center();
     let squared_center_distance = center_displacement.norm_squared();
     let max_center_distance = sphere_a.radius() + sphere_b.radius();
@@ -116,7 +118,7 @@ pub fn determine_sphere_sphere_contact_geometry(
 
     let center_distance = squared_center_distance.sqrt();
 
-    let surface_normal = if center_distance > 1e-8 {
+    let surface_normal = if center_distance > EPSILON {
         UnitVector3::unchecked_from(center_displacement / center_distance)
     } else {
         UnitVector3::unit_z()
@@ -124,10 +126,7 @@ pub fn determine_sphere_sphere_contact_geometry(
 
     let position = sphere_b.center() + sphere_b.radius() * surface_normal;
 
-    let penetration_depth = f32::max(
-        0.0,
-        (sphere_a.radius() + sphere_b.radius()) - center_distance,
-    );
+    let penetration_depth = f32::max(0.0, max_center_distance - center_distance);
 
     Some(ContactGeometry {
         position,

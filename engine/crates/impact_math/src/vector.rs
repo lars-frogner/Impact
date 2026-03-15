@@ -581,6 +581,12 @@ impl Vector3 {
         self.inner.max_element()
     }
 
+    /// Returns a vector that is orthogonal to this one.
+    #[inline]
+    pub fn any_orthogonal_vector(&self) -> Self {
+        Self::wrap(self.inner.any_orthogonal_vector())
+    }
+
     /// Converts the vector to the 4-byte aligned cache-friendly [`Vector3C`].
     #[inline]
     pub fn compact(&self) -> Vector3C {

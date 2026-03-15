@@ -321,6 +321,11 @@ impl AbsDiffEq for CapsuleC {
     }
 }
 
+roc_integration::impl_roc_for_library_provided_primitives! {
+//  Type        Pkg   Parents  Module   Roc name  Postfix  Precision
+    CapsuleC => core, None,   Capsule, Capsule,  None,    PrecisionIrrelevant,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

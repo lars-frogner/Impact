@@ -1,6 +1,7 @@
 //! Collidable implementations.
 
 pub mod basic;
+pub mod capsule;
 pub mod plane;
 pub mod sphere;
 

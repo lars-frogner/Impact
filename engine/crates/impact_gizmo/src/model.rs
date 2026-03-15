@@ -245,6 +245,8 @@ fn define_models_for_gizmo(gizmo: GizmoType) -> Vec<GizmoModel> {
             vec![
                 define_non_obscurable_triangle_model(format!("{} sphere", gizmo.label())),
                 define_non_obscurable_triangle_model(format!("{} plane", gizmo.label())),
+                define_non_obscurable_triangle_model(format!("{} cylinder", gizmo.label())),
+                define_non_obscurable_triangle_model(format!("{} hemisphere", gizmo.label())),
                 define_obscurable_triangle_model(format!("{} voxel sphere", gizmo.label())),
             ]
         }
@@ -313,7 +315,9 @@ pub const SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX: usize = 1;
 
 pub const COLLIDER_GIZMO_SPHERE_MODEL_IDX: usize = 0;
 pub const COLLIDER_GIZMO_PLANE_MODEL_IDX: usize = 1;
-pub const COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX: usize = 2;
+pub const COLLIDER_GIZMO_CYLINDER_MODEL_IDX: usize = 2;
+pub const COLLIDER_GIZMO_HEMISPHERE_MODEL_IDX: usize = 3;
+pub const COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX: usize = 4;
 
 pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX: usize = 0;
 pub const VOXEL_CHUNKS_GIZMO_OBSCURABLE_NON_UNIFORM_MODEL_IDX: usize = 1;

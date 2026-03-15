@@ -261,6 +261,22 @@ impl TriangleMesh {
         top_diameter: f32,
         n_circumference_vertices: usize,
     ) -> Self {
+        Self::create_circular_frustum_with_options(
+            length,
+            bottom_diameter,
+            top_diameter,
+            n_circumference_vertices,
+            true,
+        )
+    }
+
+    fn create_circular_frustum_with_options(
+        length: f32,
+        bottom_diameter: f32,
+        top_diameter: f32,
+        n_circumference_vertices: usize,
+        include_top_and_bottom: bool,
+    ) -> Self {
         assert!(
             length >= 0.0,
             "Tried to create circular frustum mesh with negative length"
@@ -281,9 +297,23 @@ impl TriangleMesh {
         let bottom_radius = bottom_diameter * 0.5;
         let top_radius = top_diameter * 0.5;
 
-        let mut positions = Vec::with_capacity(4 * n_circumference_vertices + 2);
-        let mut normal_vectors = Vec::with_capacity(positions.capacity());
-        let mut indices = Vec::with_capacity(12 * n_circumference_vertices);
+        let mut position_capacity = 2 * n_circumference_vertices;
+        let mut index_capacity = 6 * n_circumference_vertices;
+
+        if include_top_and_bottom {
+            if abs_diff_ne!(bottom_diameter, 0.0) {
+                position_capacity += n_circumference_vertices + 1;
+                index_capacity += 3 * n_circumference_vertices;
+            }
+            if abs_diff_ne!(top_diameter, 0.0) {
+                position_capacity += n_circumference_vertices + 1;
+                index_capacity += 3 * n_circumference_vertices;
+            }
+        }
+
+        let mut positions = Vec::with_capacity(position_capacity);
+        let mut normal_vectors = Vec::with_capacity(position_capacity);
+        let mut indices = Vec::with_capacity(index_capacity);
 
         let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
 
@@ -419,11 +449,11 @@ impl TriangleMesh {
             ]);
         };
 
-        if abs_diff_ne!(bottom_diameter, 0.0) {
+        if include_top_and_bottom && abs_diff_ne!(bottom_diameter, 0.0) {
             create_horizontal_disk(bottom_radius, 0.0, false);
         }
 
-        if abs_diff_ne!(top_diameter, 0.0) {
+        if include_top_and_bottom && abs_diff_ne!(top_diameter, 0.0) {
             create_horizontal_disk(top_radius, length, true);
         }
 
@@ -680,10 +710,118 @@ impl TriangleMesh {
         )
     }
 
+    /// Creates a mesh representing a hemisphere with radius 1.0, with the disk
+    /// lying in the xz-plane and centered at the origin. The disk is not
+    /// included in the mesh. `n_rings` is the number of horizontal circular
+    /// cross-sections that vertices will be generated around. The number of
+    /// vertices that will be generated around each ring increases in proportion
+    /// to `n_rings` to maintain an approximately uniform resolution.
+    ///
+    /// The generated mesh will contain positions and normal vectors.
+    ///
+    /// # Panics
+    /// - If `n_rings` is zero.
+    pub fn create_open_hemisphere(n_rings: usize) -> Self {
+        assert!(
+            n_rings > 0,
+            "Tried to create open hemisphere mesh with no rings"
+        );
+
+        let radius = 1.0;
+
+        let n_circumference_vertices = 4 * n_rings + 2;
+
+        let mut positions = Vec::with_capacity(n_circumference_vertices * n_rings + 1);
+        let mut normal_vectors = Vec::with_capacity(positions.capacity());
+        let mut indices = Vec::with_capacity(6 * n_circumference_vertices * n_rings);
+
+        let n_rings = u32::try_from(n_rings).unwrap();
+        let n_circumference_vertices = u32::try_from(n_circumference_vertices).unwrap();
+
+        let delta_phi = TWO_PI / n_circumference_vertices as f32;
+        let delta_theta = FRAC_PI_2 / n_rings as f32;
+
+        // Top vertex
+        positions.push(pos![0.0, radius, 0.0]);
+        normal_vectors.push(normal!(UnitVector3C::unit_y()));
+
+        let mut theta = delta_theta;
+
+        for _ in 0..n_rings {
+            let sin_theta = f32::sin(theta);
+            let cos_theta = f32::cos(theta);
+            let y = radius * cos_theta;
+
+            let mut phi = 0.0;
+
+            for _ in 0..n_circumference_vertices {
+                let cos_phi_sin_theta = f32::cos(phi) * sin_theta;
+                let sin_phi_sin_theta = f32::sin(phi) * sin_theta;
+
+                positions.push(pos![
+                    radius * cos_phi_sin_theta,
+                    y,
+                    radius * sin_phi_sin_theta
+                ]);
+                normal_vectors.push(normal!(UnitVector3C::unchecked_from(Vector3C::new(
+                    cos_phi_sin_theta,
+                    cos_theta,
+                    sin_phi_sin_theta
+                ))));
+
+                phi += delta_phi;
+            }
+
+            theta += delta_theta;
+        }
+
+        let mut idx = 1;
+
+        // Top cap
+        for _ in 0..n_circumference_vertices - 1 {
+            indices.extend_from_slice(&[idx, 0, idx + 1]);
+            idx += 1;
+        }
+        indices.extend_from_slice(&[idx, 0, idx - n_circumference_vertices + 1]);
+        idx += 1;
+
+        for _ in 1..n_rings {
+            for _ in 0..n_circumference_vertices - 1 {
+                indices.extend_from_slice(&[
+                    idx,
+                    idx - n_circumference_vertices,
+                    idx + 1,
+                    idx - n_circumference_vertices,
+                    idx - n_circumference_vertices + 1,
+                    idx + 1,
+                ]);
+                idx += 1;
+            }
+            indices.extend_from_slice(&[
+                idx,
+                idx - n_circumference_vertices,
+                idx - n_circumference_vertices + 1,
+                idx - n_circumference_vertices,
+                idx - 2 * n_circumference_vertices + 1,
+                idx - n_circumference_vertices + 1,
+            ]);
+            idx += 1;
+        }
+
+        Self::new(
+            positions,
+            normal_vectors,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            indices,
+        )
+    }
+
     /// Creates a mesh representing a capsule with the given segment length
     /// (distance between cap sphere centers) and radius, with the axis aligned
-    /// with the y-axis and centered on the origin. diameter 1.0, with the disk
-    /// lying in the xz-plane and centered at the origin.
+    /// with the y-axis and centered on the origin.
+    ///
     /// `n_circumference_vertices` is the number of vertices to use for
     /// representing a circular cross-section of the capsule's cylinder. The
     /// number of horizontal circular cross-sections that vertices will be
@@ -703,7 +841,13 @@ impl TriangleMesh {
     ) -> Self {
         let diameter = 2.0 * radius;
 
-        let mut mesh = Self::create_cylinder(segment_length, diameter, n_circumference_vertices);
+        let mut mesh = Self::create_circular_frustum_with_options(
+            segment_length,
+            diameter,
+            diameter,
+            n_circumference_vertices,
+            false,
+        );
         let mut dirty_mask = TriangleMeshDirtyMask::empty();
 
         mesh.translate(
@@ -713,7 +857,7 @@ impl TriangleMesh {
 
         let n_rings = ((n_circumference_vertices - 2) / 4).max(4);
 
-        let mut cap_mesh = Self::create_hemisphere(n_rings);
+        let mut cap_mesh = Self::create_open_hemisphere(n_rings);
         cap_mesh.scale(radius, &mut dirty_mask);
         cap_mesh.translate(
             &Vector3::new(0.0, 0.5 * segment_length, 0.0),
@@ -828,6 +972,63 @@ impl TriangleMesh {
         sphere.set_same_color(color, &mut dirty_mask);
 
         sphere
+    }
+
+    /// Creates a mesh representing a hemisphere with radius 1.0, with the disk
+    /// lying in the xz-plane and centered at the origin, and with all vertices
+    /// having the given color. The disk is not included in the mesh.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    ///
+    /// See [`Self::create_hemisphere`] for an explanation of the `n_rings`
+    /// argument.
+    ///
+    /// # Panics
+    /// - If `n_rings` is zero.
+    pub fn create_unit_open_hemisphere_with_color(n_rings: usize, color: VertexColor) -> Self {
+        let mut hemisphere = Self::create_open_hemisphere(n_rings);
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        hemisphere.remove_normal_vectors(&mut dirty_mask);
+        hemisphere.set_same_color(color, &mut dirty_mask);
+
+        hemisphere
+    }
+
+    /// Creates a mesh representing a cylinder with the given length and
+    /// diameter, with the length axis aligned with the y-axis, with the
+    /// center at the origin and with all vertices having the given color.
+    /// The top and bottom disks are not included in the mesh.
+    ///
+    /// See [`Self::create_cylinder`] for an explanation of the
+    /// `n_circumference_vertices` argument.
+    ///
+    /// The generated mesh will only contain positions and colors.
+    ///
+    /// # Panics
+    /// - If any of the given extents are negative.
+    /// - If `n_circumference_vertices` is smaller than 2.
+    pub fn create_centered_open_cylinder_with_color(
+        length: f32,
+        diameter: f32,
+        n_circumference_vertices: usize,
+        color: VertexColor,
+    ) -> Self {
+        let mut cylinder = Self::create_circular_frustum_with_options(
+            length,
+            diameter,
+            diameter,
+            n_circumference_vertices,
+            false,
+        );
+        let mut dirty_mask = TriangleMeshDirtyMask::empty();
+
+        cylinder.translate(&Vector3::new(0.0, -0.5 * length, 0.0), &mut dirty_mask);
+
+        cylinder.remove_normal_vectors(&mut dirty_mask);
+        cylinder.set_same_color(color, &mut dirty_mask);
+
+        cylinder
     }
 
     /// Creates a mesh representing the boundary of a cubic voxel chunk with the

@@ -13,7 +13,7 @@ import core.UnitVector3
 import core.Vector3 exposing [Vector3]
 import core.Matrix3
 import core.Point3 exposing [Point3]
-import core.Sphere
+import core.Capsule
 
 import pf.Entity
 
@@ -33,7 +33,7 @@ import pf.Setup.UniformColor
 import pf.Comp.Motion
 import pf.Physics.ContactResponseParameters
 import pf.Setup.LocalForce
-import pf.Setup.SphericalCollidable
+import pf.Setup.CapsularCollidable
 import pf.Comp.DynamicGravity
 import pf.Setup.FixedDirectionAlignmentTorque
 import pf.Lookup.InventoryMass
@@ -186,9 +186,13 @@ construct_entities = |position, orientation, velocity|
                 ),
             ),
         )
-        |> Setup.SphericalCollidable.add_new(
+        |> Setup.CapsularCollidable.add_new(
             Dynamic,
-            Sphere.new(Point3.origin, player.body_radius),
+            Capsule.new(
+                (0, -0.5 * player.body_segment_length, 0),
+                (0, player.head_elevation + player.body_segment_length, 0),
+                1.1 * (1.0 + player.head_forward_shift) * player.body_radius,
+            ),
             Physics.ContactResponseParameters.new(
                 player.restitution_coef,
                 player.static_friction_coef,

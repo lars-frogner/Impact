@@ -36,8 +36,6 @@
 
 - Improve physics stability (avoid crash when small pieces explode with NaN).
 
-- Capsule collider shape.
-
 ## Voxels
 
 - Per surface voxel state (e.g. temperature).

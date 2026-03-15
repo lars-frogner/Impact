@@ -6,6 +6,7 @@ mod macros;
 pub mod axis_aligned_box;
 pub mod capsule;
 pub mod frustum;
+pub mod line;
 pub mod model_transform;
 pub mod oriented_box;
 pub mod plane;
