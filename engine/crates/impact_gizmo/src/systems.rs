@@ -3,6 +3,7 @@
 use crate::{
     GizmoManager, GizmoParameters, GizmoSet, GizmoType, GizmoVisibility, Gizmos,
     model::{
+        COLLIDER_GIZMO_CYLINDER_MODEL_IDX, COLLIDER_GIZMO_HEMISPHERE_MODEL_IDX,
         COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
         COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, GizmoInstanceFeatures,
         GizmoInstanceModelViewTransform, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
@@ -15,7 +16,7 @@ use crate::{
         VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,
     },
 };
-use approx::abs_diff_ne;
+use approx::{abs_diff_eq, abs_diff_ne};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_camera::{Camera, CameraManager};
 use impact_ecs::{query, world::World as ECSWorld};
@@ -1008,6 +1009,88 @@ fn buffer_instance_features_for_collider_gizmos(
                     &model_to_camera_transform,
                 )),
             );
+        }
+        Collidable::Capsule(capsule_collidable) => {
+            let capsule = capsule_collidable.capsule().aligned();
+
+            let (segment_direction, segment_length) =
+                UnitVector3::normalized_from_and_norm(*capsule.segment_vector());
+
+            if abs_diff_eq!(segment_length, 0.0) {
+                let unit_sphere_to_sphere_collider_transform = Similarity3::from_parts(
+                    *capsule.segment_start().as_vector(),
+                    UnitQuaternion::identity(),
+                    capsule.radius(),
+                );
+
+                let model_to_camera_transform =
+                    camera.view_transform() * unit_sphere_to_sphere_collider_transform;
+
+                model_instance_manager.buffer_instance_feature(
+                    &models[COLLIDER_GIZMO_SPHERE_MODEL_IDX].model_id,
+                    &GizmoInstanceFeatures::with_transform(GizmoInstanceModelViewTransform::from(
+                        &model_to_camera_transform,
+                    )),
+                );
+            } else {
+                let segment_center =
+                    *(capsule.segment_start() + 0.5 * capsule.segment_vector()).as_vector();
+
+                let rotation = UnitQuaternion::rotation_between_axes(
+                    &UnitVector3::unit_y(),
+                    &segment_direction,
+                );
+
+                let cylinder_mesh_to_collider_transform = GizmoInstanceModelViewTransform::new(
+                    rotation.compact(),
+                    segment_center.compact(),
+                    Vector3C::new(capsule.radius(), segment_length, capsule.radius()),
+                );
+
+                let top_cap_mesh_to_collider_transform =
+                    Similarity3::from_parts(segment_center, rotation, 1.0)
+                        * Similarity3::from_parts(
+                            Vector3::new(0.0, 0.5 * segment_length, 0.0),
+                            UnitQuaternion::identity(),
+                            capsule.radius(),
+                        );
+
+                let bottom_cap_mesh_to_collider_transform =
+                    Similarity3::from_parts(segment_center, rotation, 1.0)
+                        * Similarity3::from_parts(
+                            Vector3::new(0.0, -0.5 * segment_length, 0.0),
+                            UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI),
+                            capsule.radius(),
+                        );
+
+                let view_transform = Similarity3::from_isometry(*camera.view_transform());
+
+                let cylinder_model_to_camera_transform =
+                    cylinder_mesh_to_collider_transform.applied_before_transform(&view_transform);
+
+                let top_cap_model_to_camera_transform =
+                    &view_transform * top_cap_mesh_to_collider_transform;
+
+                let bottom_cap_model_to_camera_transform =
+                    &view_transform * bottom_cap_mesh_to_collider_transform;
+
+                model_instance_manager.buffer_instance_feature(
+                    &models[COLLIDER_GIZMO_CYLINDER_MODEL_IDX].model_id,
+                    &GizmoInstanceFeatures::with_transform(cylinder_model_to_camera_transform),
+                );
+                model_instance_manager.buffer_instance_feature_slice(
+                    &models[COLLIDER_GIZMO_HEMISPHERE_MODEL_IDX].model_id,
+                    &[
+                        top_cap_model_to_camera_transform,
+                        bottom_cap_model_to_camera_transform,
+                    ]
+                    .map(|transform| {
+                        GizmoInstanceFeatures::with_transform(
+                            GizmoInstanceModelViewTransform::from(&transform),
+                        )
+                    }),
+                );
+            }
         }
         Collidable::VoxelObject(voxel_object_collidable) => {
             let voxel_object_id =

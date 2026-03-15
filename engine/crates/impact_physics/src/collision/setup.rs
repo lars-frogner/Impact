@@ -3,14 +3,16 @@
 use crate::{
     collision::{
         Collidable, CollidableID, CollidableKind, CollisionWorld,
-        collidable::{plane::PlaneCollidable, sphere::SphereCollidable},
+        collidable::{
+            capsule::CapsuleCollidable, plane::PlaneCollidable, sphere::SphereCollidable,
+        },
     },
     material::ContactResponseParameters,
     rigid_body::{RigidBodyType, TypedRigidBodyID},
 };
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
-use impact_geometry::{AxisAlignedBoxC, ModelTransform, PlaneC, SphereC};
+use impact_geometry::{AxisAlignedBoxC, CapsuleC, ModelTransform, PlaneC, SphereC};
 use impact_id::EntityID;
 use impact_intersection::bounding_volume::{BoundingVolumeID, BoundingVolumeManager};
 use roc_integration::roc;
@@ -37,6 +39,19 @@ define_setup_type! {
     pub struct PlanarCollidable {
         kind: u32,
         plane: PlaneC,
+        response_params: ContactResponseParameters,
+    }
+}
+
+define_setup_type! {
+    target = CollidableID;
+    /// A capsule-shaped collidable. The capsule is defined in model space.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct CapsularCollidable {
+        kind: u32,
+        capsule: CapsuleC,
         response_params: ContactResponseParameters,
     }
 }
@@ -115,6 +130,43 @@ impl PlanarCollidable {
     }
 }
 
+#[roc(dependencies=[CollidableKind])]
+impl CapsularCollidable {
+    #[roc(body = r#"
+    {
+        kind:
+        when kind is
+            Dynamic -> 0
+            Static -> 1
+            Phantom -> 2,
+        capsule,
+        response_params,
+    }"#)]
+    pub fn new(
+        kind: CollidableKind,
+        capsule: CapsuleC,
+        response_params: ContactResponseParameters,
+    ) -> Self {
+        Self {
+            kind: kind.to_u32(),
+            capsule,
+            response_params,
+        }
+    }
+
+    pub fn kind(&self) -> CollidableKind {
+        CollidableKind::from_u32(self.kind).unwrap()
+    }
+
+    pub fn capsule(&self) -> &CapsuleC {
+        &self.capsule
+    }
+
+    pub fn response_params(&self) -> &ContactResponseParameters {
+        &self.response_params
+    }
+}
+
 pub fn setup_spherical_collidable<C: Collidable>(
     collision_world: &mut CollisionWorld<C>,
     entity_id: EntityID,
@@ -165,12 +217,59 @@ pub fn setup_planar_collidable<C: Collidable>(
     )
 }
 
+pub fn setup_capsular_collidable<C: Collidable>(
+    collision_world: &mut CollisionWorld<C>,
+    entity_id: EntityID,
+    rigid_body_type: RigidBodyType,
+    collidable: &CapsularCollidable,
+    get_local: impl FnOnce(CapsuleCollidable) -> C::Local,
+    model_transform: Option<&ModelTransform>,
+) -> Result<()> {
+    let mut capsule = *collidable.capsule();
+
+    if let Some(transform) = model_transform.map(ModelTransform::create_transform_to_entity_space) {
+        // Transform capsule from model to body frame
+        capsule = capsule.aligned().transformed(&transform).compact();
+    }
+
+    let collidable_id = CollidableID::from_entity_id(entity_id);
+    let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
+    collision_world.add_collidable(
+        collidable_id,
+        rigid_body_id,
+        collidable.kind(),
+        get_local(CapsuleCollidable::new(
+            capsule,
+            *collidable.response_params(),
+        )),
+    )
+}
+
 pub fn setup_bounding_volume_for_spherical_collidable(
     bounding_volume_manager: &mut BoundingVolumeManager,
     entity_id: EntityID,
     collidable: &SphericalCollidable,
 ) {
     let aabb = collidable.sphere().aligned().compute_aabb().compact();
+
+    let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+
+    if let Some(existing_aabb) = bounding_volume_manager.get_bounding_volume_mut(bounding_volume_id)
+    {
+        *existing_aabb = AxisAlignedBoxC::aabb_from_pair(existing_aabb, &aabb);
+    } else {
+        bounding_volume_manager
+            .insert_bounding_volume(bounding_volume_id, aabb)
+            .unwrap();
+    }
+}
+
+pub fn setup_bounding_volume_for_capsular_collidable(
+    bounding_volume_manager: &mut BoundingVolumeManager,
+    entity_id: EntityID,
+    collidable: &CapsularCollidable,
+) {
+    let aabb = collidable.capsule().aligned().compute_aabb().compact();
 
     let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
 

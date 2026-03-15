@@ -7,7 +7,7 @@ import core.ListUtil
 import core.Plane
 import core.Point3
 import core.Radians
-import core.Sphere
+import core.Capsule
 import core.UnitQuaternion
 import core.UnitVector3 exposing [unit_x, unit_y, unit_z]
 import core.Vector3
@@ -26,8 +26,8 @@ import pf.Comp.ReferenceFrame
 import pf.Comp.ModelTransform
 import pf.Comp.CanBeParent
 import pf.Comp.ShadowableUnidirectionalEmission
-import pf.Setup.SphericalCollidable
-import pf.Setup.SphereMesh
+import pf.Setup.CapsularCollidable
+import pf.Setup.CapsuleMesh
 import pf.Setup.TexturedColor
 import pf.Setup.TexturedRoughness
 import pf.Physics.ContactResponseParameters
@@ -51,15 +51,17 @@ setup! = |_|
     Entity.create_with_id!(sun_light, entity_ids.sun_light)?
     Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
 
-    sphere_radius = 0.5
+    capsule_radius = 0.5
+    capsule_segment_length = 0.0
     n_y = 5
     room_extent = 16.0
-    n_spheres_y = 2 * n_y + 1
+    n_capsules_y = 2 * n_y + 1
 
-    create_spheres!(
-        sphere_radius,
+    create_capsules!(
+        capsule_radius,
+        capsule_segment_length,
         (3, n_y, 3),
-        (0, (n_spheres_y - 1) * sphere_radius - 4, 0),
+        (0, (n_capsules_y - 1) * capsule_radius - 4, 0),
         create_texture_ids("plastic"),
     )?
 
@@ -100,9 +102,9 @@ create_texture_ids = |texture_name| {
     normal: TextureID.from_name("${texture_name}_normal_texture"),
 }
 
-create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
+create_capsules! = |radius, segment_length, (nx, ny, nz), center, texture_ids|
     half_extent_x = 2 * radius * Num.to_frac(nx)
-    half_extent_y = 2 * radius * Num.to_frac(ny)
+    half_extent_y = (2 * radius + segment_length) * Num.to_frac(ny)
     half_extent_z = 2 * radius * Num.to_frac(nz)
 
     xs = ListUtil.linspace(center.0 - half_extent_x, center.0 + half_extent_x, 2 * nx + 1)
@@ -113,11 +115,10 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
 
     _ =
         Entity.new_multi_component_data(List.len(positions))
-        |> Setup.SphereMesh.add_multiple_new(
+        |> Setup.CapsuleMesh.add_multiple_new(
+            Same(segment_length),
+            Same(radius),
             Same(100),
-        )?
-        |> Comp.ModelTransform.add_multiple_with_scale(
-            Same(Num.to_f32(radius)),
         )?
         |> Comp.ReferenceFrame.add_multiple_unoriented(
             All(positions),
@@ -126,9 +127,9 @@ create_spheres! = |radius, (nx, ny, nz), center, texture_ids|
         |> Setup.DynamicRigidBodySubstance.add_multiple(
             Same({ mass_density: 1.0 }),
         )?
-        |> Setup.SphericalCollidable.add_multiple_new(
+        |> Setup.CapsularCollidable.add_multiple_new(
             Same(Dynamic),
-            Same(Sphere.new(Point3.origin, 1.0)),
+            Same(Capsule.new((0, -0.5 * segment_length, 0), (0, segment_length, 0), radius)),
             Same(Physics.ContactResponseParameters.new(0.7, 0.5, 0.3)),
         )?
         |> Setup.ConstantAcceleration.add_multiple_earth

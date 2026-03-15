@@ -58,7 +58,30 @@ impl ChunkedVoxelObject {
         f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
     ) {
         let normalized_sphere = sphere.scaled(self.inverse_voxel_extent);
-        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_sphere(&normalized_sphere);
+        let touched_voxel_ranges =
+            self.voxel_ranges_in_object_touching_aab(&normalized_sphere.compute_aabb());
+        self.for_each_surface_voxel_in_voxel_ranges(touched_voxel_ranges, f);
+    }
+
+    /// Finds non-empty voxels with at least one exposed face that are not
+    /// fully outside the given capsule and calls the given closure with
+    /// their indices, the voxels themselves and their placement on the
+    /// surface.
+    ///
+    /// The capsule should be specified in the model space of the voxel object,
+    /// where the lower corner of the grid is at the origin and the cartesian
+    /// axes are aligned with the grid.
+    ///
+    /// For efficiency, the closure may also be called with voxels
+    /// that are fully outside the capsule.
+    pub fn for_each_surface_voxel_maybe_intersecting_capsule(
+        &self,
+        capsule: &Capsule,
+        f: &mut impl FnMut([usize; 3], &Voxel, VoxelSurfacePlacement),
+    ) {
+        let normalized_capsule = capsule.scaled(self.inverse_voxel_extent);
+        let touched_voxel_ranges =
+            self.voxel_ranges_in_object_touching_aab(&normalized_capsule.compute_aabb());
         self.for_each_surface_voxel_in_voxel_ranges(touched_voxel_ranges, f);
     }
 
@@ -156,7 +179,8 @@ impl ChunkedVoxelObject {
         normalized_sphere: &Sphere,
         modify_voxel: &mut impl FnMut([usize; 3], f32, &mut Voxel),
     ) {
-        let touched_voxel_ranges = self.voxel_ranges_in_object_touching_sphere(normalized_sphere);
+        let touched_voxel_ranges =
+            self.voxel_ranges_in_object_touching_aab(&normalized_sphere.compute_aabb());
 
         if touched_voxel_ranges.iter().any(Range::is_empty) {
             return;
@@ -608,16 +632,6 @@ impl ChunkedVoxelObject {
         voxel_ranges_touching_aab(self.occupied_voxel_ranges.clone(), normalized_aab)
     }
 
-    /// The sphere should be in normalized voxel object space (where voxel
-    /// extent is 1.0).
-    #[inline]
-    pub fn voxel_ranges_in_object_touching_sphere(
-        &self,
-        normalized_sphere: &Sphere,
-    ) -> VoxelRanges {
-        voxel_ranges_touching_sphere(self.occupied_voxel_ranges.clone(), normalized_sphere)
-    }
-
     /// The plane should be in normalized voxel object space (where voxel extent
     /// is 1.0).
     #[inline]
@@ -705,16 +719,6 @@ fn voxel_ranges_touching_aab(
     }
 
     touched_voxel_ranges
-}
-
-/// The sphere should be in normalized voxel object space (where voxel extent is
-/// 1.0).
-#[inline]
-fn voxel_ranges_touching_sphere(
-    max_voxel_ranges: VoxelRanges,
-    normalized_sphere: &Sphere,
-) -> VoxelRanges {
-    voxel_ranges_touching_aab(max_voxel_ranges, &normalized_sphere.compute_aabb())
 }
 
 #[inline]

@@ -3,6 +3,7 @@
 use crate::{
     GizmoType,
     model::{
+        COLLIDER_GIZMO_CYLINDER_MODEL_IDX, COLLIDER_GIZMO_HEMISPHERE_MODEL_IDX,
         COLLIDER_GIZMO_PLANE_MODEL_IDX, COLLIDER_GIZMO_SPHERE_MODEL_IDX,
         COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX, SHADOW_CUBEMAP_FACES_GIZMO_OUTLINES_MODEL_IDX,
         SHADOW_CUBEMAP_FACES_GIZMO_PLANES_MODEL_IDX,
@@ -166,6 +167,20 @@ impl GizmoType {
                 resource_registries.triangle_mesh_mut().insert(
                     self.models()[COLLIDER_GIZMO_PLANE_MODEL_IDX].triangle_mesh_id(),
                     plane_mesh,
+                );
+
+                let cylinder_mesh =
+                    TriangleMesh::create_centered_open_cylinder_with_color(1.0, 2.0, 128, color);
+                resource_registries.triangle_mesh_mut().insert(
+                    self.models()[COLLIDER_GIZMO_CYLINDER_MODEL_IDX].triangle_mesh_id(),
+                    cylinder_mesh,
+                );
+
+                let hemisphere_mesh =
+                    TriangleMesh::create_unit_open_hemisphere_with_color(32, color);
+                resource_registries.triangle_mesh_mut().insert(
+                    self.models()[COLLIDER_GIZMO_HEMISPHERE_MODEL_IDX].triangle_mesh_id(),
+                    hemisphere_mesh,
                 );
 
                 let voxel_sphere_mesh = TriangleMesh::create_unit_sphere_with_color(8, color);

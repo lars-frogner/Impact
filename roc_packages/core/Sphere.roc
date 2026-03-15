@@ -15,9 +15,6 @@ Sphere : {
 }
 
 ## Creates a new sphere with the given center and radius.
-##
-## # Panics
-## If `radius` is negative.
 new : Point3, F32 -> Sphere
 new = |center, radius|
     # This can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed

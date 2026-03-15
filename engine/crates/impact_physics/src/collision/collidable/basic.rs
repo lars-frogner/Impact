@@ -4,6 +4,10 @@ use crate::{
     collision::{
         self, CollidableDescriptor, CollidableOrder, CollidableWithId,
         collidable::{
+            capsule::{
+                CapsuleCollidable, generate_capsule_capsule_contact_manifold,
+                generate_capsule_plane_contact_manifold, generate_capsule_sphere_contact_manifold,
+            },
             plane::PlaneCollidable,
             sphere::{
                 SphereCollidable, generate_sphere_plane_contact_manifold,
@@ -21,12 +25,14 @@ pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 pub enum Collidable {
     Sphere(SphereCollidable),
     Plane(PlaneCollidable),
+    Capsule(CapsuleCollidable),
 }
 
 #[derive(Clone, Debug)]
 pub enum LocalCollidable {
     Sphere(SphereCollidable),
     Plane(PlaneCollidable),
+    Capsule(CapsuleCollidable),
 }
 
 impl collision::Collidable for Collidable {
@@ -42,6 +48,9 @@ impl collision::Collidable for Collidable {
                 Self::Sphere(sphere.transformed(transform_to_world_space))
             }
             Self::Local::Plane(plane) => Self::Plane(plane.transformed(transform_to_world_space)),
+            Self::Local::Capsule(capsule) => {
+                Self::Capsule(capsule.transformed(transform_to_world_space))
+            }
         }
     }
 
@@ -51,9 +60,59 @@ impl collision::Collidable for Collidable {
         collidable_b: &CollidableWithId<Self>,
         contact_manifold: &mut ContactManifold,
     ) -> CollidableOrder {
-        use Collidable::{Plane, Sphere};
+        use Collidable::{Capsule, Plane, Sphere};
 
         match (collidable_a.collidable(), collidable_b.collidable()) {
+            (Capsule(capsule_a), Capsule(capsule_b)) => {
+                generate_capsule_capsule_contact_manifold(
+                    capsule_a,
+                    capsule_b,
+                    collidable_a.id(),
+                    collidable_b.id(),
+                    contact_manifold,
+                );
+                CollidableOrder::Original
+            }
+            (Capsule(capsule), Sphere(sphere)) => {
+                generate_capsule_sphere_contact_manifold(
+                    capsule,
+                    sphere,
+                    collidable_a.id(),
+                    collidable_b.id(),
+                    contact_manifold,
+                );
+                CollidableOrder::Original
+            }
+            (Sphere(sphere), Capsule(capsule)) => {
+                generate_capsule_sphere_contact_manifold(
+                    capsule,
+                    sphere,
+                    collidable_b.id(),
+                    collidable_a.id(),
+                    contact_manifold,
+                );
+                CollidableOrder::Swapped
+            }
+            (Capsule(capsule), Plane(plane)) => {
+                generate_capsule_plane_contact_manifold(
+                    capsule,
+                    plane,
+                    collidable_a.id(),
+                    collidable_b.id(),
+                    contact_manifold,
+                );
+                CollidableOrder::Original
+            }
+            (Plane(plane), Capsule(capsule)) => {
+                generate_capsule_plane_contact_manifold(
+                    capsule,
+                    plane,
+                    collidable_b.id(),
+                    collidable_a.id(),
+                    contact_manifold,
+                );
+                CollidableOrder::Swapped
+            }
             (Sphere(sphere_a), Sphere(sphere_b)) => {
                 generate_sphere_sphere_contact_manifold(
                     sphere_a,
