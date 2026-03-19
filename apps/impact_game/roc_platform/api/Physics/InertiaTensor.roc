@@ -1,6 +1,6 @@
 # Hash: 151d5c597e19758f
 # Generated: 2026-01-16T09:36:43.815025425
-# Rust type: impact_physics::inertia::InertiaTensorP
+# Rust type: impact_physics::inertia::InertiaTensorC
 # Type category: POD
 module [
     InertiaTensor,

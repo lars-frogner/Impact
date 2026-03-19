@@ -26,7 +26,7 @@ pub struct InertialProperties {
 /// The columns of the matrix and its inverse are stored in 128-bit SIMD
 /// registers for efficient computation. That leads to an extra 24 bytes in size
 /// (4 for each column) and 16-byte alignment. For cache-friendly storage,
-/// prefer the compact 4-byte aligned [`InertiaTensorP`].
+/// prefer the compact 4-byte aligned [`InertiaTensorC`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct InertiaTensor {
     matrix: Matrix3,
@@ -41,7 +41,7 @@ pub struct InertiaTensor {
 #[roc(name = "InertiaTensor", parents = "Physics")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
-pub struct InertiaTensorP {
+pub struct InertiaTensorC {
     matrix: Matrix3C,
     inverse_matrix: Matrix3C,
 }
@@ -587,10 +587,10 @@ impl InertiaTensor {
     }
 
     /// Converts the tensor to the 4-byte aligned cache-friendly
-    /// [`InertiaTensorP`].
+    /// [`InertiaTensorC`].
     #[inline]
-    pub fn compact(&self) -> InertiaTensorP {
-        InertiaTensorP::from_matrix_and_inverse(
+    pub fn compact(&self) -> InertiaTensorC {
+        InertiaTensorC::from_matrix_and_inverse(
             self.matrix.compact(),
             self.inverse_matrix.compact(),
         )
@@ -629,7 +629,7 @@ impl RelativeEq for InertiaTensor {
     }
 }
 
-impl InertiaTensorP {
+impl InertiaTensorC {
     /// Creates a new identity inertia tensor.
     #[inline]
     pub const fn identity() -> Self {
@@ -692,7 +692,7 @@ impl InertiaTensorP {
     }
 }
 
-impl AbsDiffEq for InertiaTensorP {
+impl AbsDiffEq for InertiaTensorC {
     type Epsilon = <f32 as AbsDiffEq>::Epsilon;
 
     fn default_epsilon() -> Self::Epsilon {
@@ -704,7 +704,7 @@ impl AbsDiffEq for InertiaTensorP {
     }
 }
 
-impl RelativeEq for InertiaTensorP {
+impl RelativeEq for InertiaTensorC {
     fn default_max_relative() -> Self::Epsilon {
         f32::default_max_relative()
     }
