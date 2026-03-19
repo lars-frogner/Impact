@@ -554,6 +554,11 @@ impl DynamicRigidBody {
         self.total_torque = total_torque.compact();
     }
 
+    /// Applies the given torque around the body's center of mass.
+    pub fn apply_torque_compact(&mut self, torque: &TorqueC) {
+        self.total_torque += torque;
+    }
+
     /// Applies the given impulse at the body's center of mass.
     pub fn apply_impulse_at_center_of_mass(&mut self, impulse: &Impulse) {
         let mut momentum = self.momentum.aligned();

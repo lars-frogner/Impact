@@ -147,13 +147,12 @@ impl AlignmentTorqueGenerator {
         let alignment_direction = match self.alignment_direction {
             AlignmentDirection::Fixed(alignment_direction) => alignment_direction,
             AlignmentDirection::GravityForce => {
-                let Some(gravity_force) =
-                    dynamic_gravity_manager.get_force_on_body(self.rigid_body_id)
+                let Some(load) = dynamic_gravity_manager.get_load_on_body(self.rigid_body_id)
                 else {
                     return;
                 };
                 let Some(gravity_direction) =
-                    UnitVector3C::normalized_from_if_above(gravity_force, 1e-9)
+                    UnitVector3C::normalized_from_if_above(load.force, 1e-9)
                 else {
                     return;
                 };

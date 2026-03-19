@@ -470,6 +470,12 @@ impl Vector3 {
         self.inner.length_squared()
     }
 
+    /// Computes the sum of the three vector components.
+    #[inline]
+    pub fn component_sum(&self) -> f32 {
+        self.inner.element_sum()
+    }
+
     /// Computes the product of the three vector components.
     #[inline]
     pub fn component_product(&self) -> f32 {
