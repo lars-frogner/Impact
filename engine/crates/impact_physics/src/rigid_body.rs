@@ -3,7 +3,7 @@
 pub mod setup;
 
 use crate::{
-    inertia::InertiaTensorP,
+    inertia::InertiaTensorC,
     quantities::{
         self, AngularImpulse, AngularMomentumC, AngularVelocity, AngularVelocityC, Direction,
         Force, ForceC, Impulse, MomentumC, Motion, Orientation, OrientationC, Position, PositionC,
@@ -93,7 +93,7 @@ pub struct RigidBodyManager {
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct DynamicRigidBody {
     mass: f32,
-    inertia_tensor: InertiaTensorP,
+    inertia_tensor: InertiaTensorC,
     position: PositionC,
     orientation: OrientationC,
     momentum: MomentumC,
@@ -379,7 +379,7 @@ impl DynamicRigidBody {
     /// Creates a new dynamic rigid body with the given properties.
     pub fn new(
         mass: f32,
-        inertia_tensor: InertiaTensorP,
+        inertia_tensor: InertiaTensorC,
         position: PositionC,
         orientation: OrientationC,
         velocity: VelocityC,
@@ -413,7 +413,7 @@ impl DynamicRigidBody {
     }
 
     /// Returns the inertia tensor of the body.
-    pub fn inertia_tensor(&self) -> &InertiaTensorP {
+    pub fn inertia_tensor(&self) -> &InertiaTensorC {
         &self.inertia_tensor
     }
 
@@ -597,7 +597,7 @@ impl DynamicRigidBody {
     }
 
     /// Sets the given inertial properties for the body.
-    pub fn set_inertial_properties(&mut self, mass: f32, inertia_tensor: InertiaTensorP) {
+    pub fn set_inertial_properties(&mut self, mass: f32, inertia_tensor: InertiaTensorC) {
         self.mass = mass;
         self.inertia_tensor = inertia_tensor;
     }
@@ -692,7 +692,7 @@ impl AbsDiffEq for DynamicRigidBody {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         f32::abs_diff_eq(&self.mass, &other.mass, epsilon)
-            && InertiaTensorP::abs_diff_eq(&self.inertia_tensor, &other.inertia_tensor, epsilon)
+            && InertiaTensorC::abs_diff_eq(&self.inertia_tensor, &other.inertia_tensor, epsilon)
             && PositionC::abs_diff_eq(&self.position, &other.position, epsilon)
             && OrientationC::abs_diff_eq(&self.orientation, &other.orientation, epsilon)
             && MomentumC::abs_diff_eq(&self.momentum, &other.momentum, epsilon)
@@ -985,7 +985,7 @@ mod tests {
     fn dummy_dynamic_rigid_body() -> DynamicRigidBody {
         DynamicRigidBody::new(
             1.0,
-            InertiaTensorP::identity(),
+            InertiaTensorC::identity(),
             PositionC::origin(),
             OrientationC::identity(),
             VelocityC::zeros(),
@@ -1063,7 +1063,7 @@ mod tests {
 
         let mut body = DynamicRigidBody::new(
             1.0,
-            InertiaTensorP::identity(),
+            InertiaTensorC::identity(),
             PositionC::origin(),
             OrientationC::identity(),
             velocity,
@@ -1090,7 +1090,7 @@ mod tests {
 
         let mut body = DynamicRigidBody::new(
             1.0,
-            InertiaTensorP::identity(),
+            InertiaTensorC::identity(),
             PositionC::origin(),
             OrientationC::identity(),
             velocity,
@@ -1117,7 +1117,7 @@ mod tests {
 
         let mut body = DynamicRigidBody::new(
             1.0,
-            InertiaTensorP::identity(),
+            InertiaTensorC::identity(),
             position,
             orientation,
             velocity,
