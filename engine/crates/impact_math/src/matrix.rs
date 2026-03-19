@@ -229,6 +229,12 @@ impl Matrix3 {
         self.inner.determinant()
     }
 
+    /// Returns the trace of the matrix.
+    #[inline]
+    pub fn trace(&self) -> f32 {
+        self.diagonal().component_sum()
+    }
+
     /// Returns the smallest element in the matrix.
     #[inline]
     pub fn min_element(&self) -> f32 {
