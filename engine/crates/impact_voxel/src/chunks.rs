@@ -3032,6 +3032,7 @@ mod tests {
             chunk_origin: &[usize; 3],
         ) -> ChunkSparseness {
             assert_eq!(voxels.len(), CHUNK_VOXEL_COUNT);
+            let mut has_only_empty_voxels = true;
             let mut is_void = true;
             let mut idx = 0;
             for i in chunk_origin[0]..chunk_origin[0] + CHUNK_SIZE {
@@ -3044,7 +3045,12 @@ mod tests {
                             && k >= self.offset[2]
                             && k < self.offset[2] + self.shape[2]
                         {
-                            is_void = false;
+                            if !self.voxel.is_empty() {
+                                has_only_empty_voxels = false;
+                            }
+                            if !self.voxel.signed_distance.is_maximally_outside() {
+                                is_void = false;
+                            }
                             self.voxel
                         } else {
                             Voxel::maximally_outside()
@@ -3055,7 +3061,7 @@ mod tests {
                 }
             }
             ChunkSparseness {
-                has_only_empty_voxels: is_void,
+                has_only_empty_voxels,
                 is_void,
             }
         }
