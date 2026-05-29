@@ -949,7 +949,8 @@ pub mod fuzzing {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
-        object.modify_voxels_within_sphere(&sphere.0, &mut |indices, _, voxel| {
+        let normalized_sphere = sphere.0.scaled(object.inverse_voxel_extent());
+        object.modify_voxels_within_sphere(&normalized_sphere, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = indices_of_inside_voxels.insert(indices);
                 assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
@@ -977,7 +978,8 @@ pub mod fuzzing {
         let mut object = ChunkedVoxelObject::generate(&generator);
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
-        object.modify_voxels_within_capsule(&capsule.0, &mut |indices, _, voxel| {
+        let normalized_capsule = capsule.0.scaled(object.inverse_voxel_extent());
+        object.modify_voxels_within_capsule(&normalized_capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = indices_of_inside_voxels.insert(indices);
                 assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
@@ -1011,8 +1013,9 @@ pub mod fuzzing {
         let mut inertial_property_updater =
             inertial_property_manager.begin_update(object.voxel_extent(), &voxel_type_densities);
 
+        let normalized_sphere = sphere.0.scaled(object.inverse_voxel_extent());
         object.modify_voxels_within_sphere(
-            &sphere.0,
+            &normalized_sphere,
             &mut |object_voxel_indices, squared_distance, voxel| {
                 let was_empty = voxel.is_empty();
 
@@ -1054,8 +1057,9 @@ pub mod fuzzing {
         let mut mesh = ChunkedVoxelObjectMesh::create(&object);
 
         for capsule in capsules {
+            let normalized_capsule = capsule.0.scaled(object.inverse_voxel_extent());
             object.modify_voxels_within_capsule(
-                &capsule.0,
+                &normalized_capsule,
                 &mut |object_voxel_indices, squared_distance, voxel| {
                     let was_empty = voxel.is_empty();
 
@@ -1236,7 +1240,8 @@ mod tests {
 
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
-        object.modify_voxels_within_sphere(&sphere, &mut |indices, _, voxel| {
+        let normalized_sphere = sphere.scaled(object.inverse_voxel_extent());
+        object.modify_voxels_within_sphere(&normalized_sphere, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = indices_of_inside_voxels.insert(indices);
                 assert!(was_absent, "Voxel in sphere found twice: {indices:?}");
@@ -1282,7 +1287,8 @@ mod tests {
         let mut found = HashSet::<[_; 3]>::default();
         let mut present = HashSet::<[_; 3]>::default();
 
-        object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
+        let normalized_capsule = capsule.scaled(object.inverse_voxel_extent());
+        object.modify_voxels_within_capsule(&normalized_capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = found.insert(indices);
                 assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
@@ -1330,7 +1336,8 @@ mod tests {
         let mut found = HashSet::<[_; 3]>::default();
         let mut present = HashSet::<[_; 3]>::default();
 
-        object.modify_voxels_within_capsule(&capsule, &mut |indices, _, voxel| {
+        let normalized_capsule = capsule.scaled(object.inverse_voxel_extent());
+        object.modify_voxels_within_capsule(&normalized_capsule, &mut |indices, _, voxel| {
             if !voxel.is_empty() {
                 let was_absent = found.insert(indices);
                 assert!(was_absent, "Voxel in capsule found twice: {indices:?}");
