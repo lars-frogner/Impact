@@ -766,7 +766,7 @@ mod tests {
     }
 
     #[test]
-    fn extending_point2_to_point3p_works() {
+    fn extending_point2_to_point3c_works() {
         let p2 = Point2::new(1.0, 2.0);
         let p3 = p2.extended(3.0);
         assert_eq!(p3, Point3C::new(1.0, 2.0, 3.0));
@@ -1003,14 +1003,14 @@ mod tests {
     // === Point3C Tests (compact) ===
 
     #[test]
-    fn extracting_xy_from_point3p_works() {
+    fn extracting_xy_from_point3c_works() {
         let p3 = Point3C::new(1.0, 2.0, 3.0);
         let xy = p3.xy();
         assert_eq!(xy, Point2::new(1.0, 2.0));
     }
 
     #[test]
-    fn converting_point3p_to_vector_and_back_preserves_data() {
+    fn converting_point3c_to_vector_and_back_preserves_data() {
         let p = Point3C::new(3.0, 4.0, 5.0);
         let v = p.as_vector();
         let p_back = Point3C::from(*v);
@@ -1018,7 +1018,7 @@ mod tests {
     }
 
     #[test]
-    fn point3p_indexing_works() {
+    fn point3c_indexing_works() {
         let mut p = Point3C::new(1.0, 2.0, 3.0);
         assert_eq!(p[0], 1.0);
         assert_eq!(p[1], 2.0);
@@ -1032,7 +1032,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn indexing_point3p_out_of_bounds_panics() {
+    fn indexing_point3c_out_of_bounds_panics() {
         let p = Point3C::new(1.0, 2.0, 3.0);
         let _ = p[3];
     }

@@ -1198,7 +1198,7 @@ mod tests {
     // === Matrix3C Tests (compact) ===
 
     #[test]
-    fn matrix3p_column_accessors_work() {
+    fn matrix3c_column_accessors_work() {
         let col1 = Vector3C::new(1.0, 2.0, 3.0);
         let col2 = Vector3C::new(4.0, 5.0, 6.0);
         let col3 = Vector3C::new(7.0, 8.0, 9.0);
@@ -1210,7 +1210,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix3p_column_setters_work() {
+    fn matrix3c_column_setters_work() {
         let mut matrix = Matrix3C::zeros();
         let col1 = Vector3C::new(1.0, 2.0, 3.0);
         let col2 = Vector3C::new(4.0, 5.0, 6.0);
@@ -1224,7 +1224,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix3p_from_array_conversion_works() {
+    fn matrix3c_from_array_conversion_works() {
         let arr = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
         let matrix = Matrix3C::from(arr);
         assert_eq!(
@@ -1238,7 +1238,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix3p_to_array_conversion_works() {
+    fn matrix3c_to_array_conversion_works() {
         let matrix = Matrix3C::from_columns(
             Vector3C::new(1.0, 2.0, 3.0),
             Vector3C::new(4.0, 5.0, 6.0),
@@ -1249,7 +1249,7 @@ mod tests {
     }
 
     #[test]
-    fn converting_matrix3p_to_aligned_and_back_preserves_data() {
+    fn converting_matrix3c_to_aligned_and_back_preserves_data() {
         let matrix = Matrix3C::from_diagonal(&Vector3C::new(1.0, 2.0, 3.0));
         let aligned = matrix.aligned();
         assert_eq!(aligned.compact(), matrix);
@@ -1360,7 +1360,7 @@ mod tests {
     // === Matrix4C Tests (compact) ===
 
     #[test]
-    fn matrix4p_column_accessors_work() {
+    fn matrix4c_column_accessors_work() {
         let col1 = Vector4C::new(1.0, 2.0, 3.0, 4.0);
         let col2 = Vector4C::new(5.0, 6.0, 7.0, 8.0);
         let col3 = Vector4C::new(9.0, 10.0, 11.0, 12.0);
@@ -1374,7 +1374,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix4p_column_setters_work() {
+    fn matrix4c_column_setters_work() {
         let mut matrix = Matrix4C::zeros();
         let col1 = Vector4C::new(1.0, 2.0, 3.0, 4.0);
         let col2 = Vector4C::new(5.0, 6.0, 7.0, 8.0);
@@ -1390,7 +1390,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix4p_from_array_conversion_works() {
+    fn matrix4c_from_array_conversion_works() {
         let arr = [
             1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
         ];
@@ -1407,7 +1407,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix4p_to_array_conversion_works() {
+    fn matrix4c_to_array_conversion_works() {
         let matrix = Matrix4C::from_columns(
             Vector4C::new(1.0, 2.0, 3.0, 4.0),
             Vector4C::new(5.0, 6.0, 7.0, 8.0),
@@ -1425,7 +1425,7 @@ mod tests {
     }
 
     #[test]
-    fn converting_matrix4p_to_aligned_and_back_preserves_data() {
+    fn converting_matrix4c_to_aligned_and_back_preserves_data() {
         let matrix = Matrix4C::from_diagonal(&Vector4C::new(1.0, 2.0, 3.0, 4.0));
         let aligned = matrix.aligned();
         assert_eq!(aligned.compact(), matrix);

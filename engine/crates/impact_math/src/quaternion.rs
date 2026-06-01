@@ -1067,7 +1067,7 @@ mod tests {
     // === QuaternionC Tests (compact) ===
 
     #[test]
-    fn converting_quaternionp_to_aligned_and_back_preserves_data() {
+    fn converting_quaternionc_to_aligned_and_back_preserves_data() {
         let quat = QuaternionC::from_parts(Vector3C::new(1.0, 2.0, 3.0), 4.0);
         let aligned = quat.aligned();
         assert_eq!(aligned.compact(), quat);
@@ -1076,7 +1076,7 @@ mod tests {
     // === UnitQuaternionC Tests (compact) ===
 
     #[test]
-    fn converting_unit_quaternionp_to_aligned_and_back_preserves_data() {
+    fn converting_unit_quaternionc_to_aligned_and_back_preserves_data() {
         let unit = UnitQuaternionC::identity();
         let aligned = unit.aligned();
         assert_eq!(aligned.real(), unit.real());
