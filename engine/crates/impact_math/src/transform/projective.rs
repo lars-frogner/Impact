@@ -239,7 +239,7 @@ mod tests {
     // === Projective3C Tests (compact) ===
 
     #[test]
-    fn converting_projective3p_to_aligned_and_back_preserves_data() {
+    fn converting_projective3c_to_aligned_and_back_preserves_data() {
         let matrix = test_scale_matrix_unaligned();
         let proj = Projective3C::from_matrix_unchecked(matrix);
         let roundtrip = proj.aligned().compact();

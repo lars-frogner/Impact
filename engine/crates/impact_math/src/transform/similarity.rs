@@ -723,34 +723,34 @@ mod tests {
     // === Similarity3C Tests (compact) ===
 
     #[test]
-    fn converting_similarity3p_to_aligned_and_back_preserves_data() {
+    fn converting_similarity3c_to_aligned_and_back_preserves_data() {
         let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), PI / 2.0).compact();
-        let sim3 = Similarity3C::from_parts(Vector3C::new(7.0, 8.0, 9.0), rotation, 3.0);
-        let sim3a = sim3.aligned();
+        let sim3c = Similarity3C::from_parts(Vector3C::new(7.0, 8.0, 9.0), rotation, 3.0);
+        let sim3 = sim3c.aligned();
 
         assert_abs_diff_eq!(
-            *sim3a.translation(),
+            *sim3.translation(),
             Vector3::new(7.0, 8.0, 9.0),
             epsilon = EPSILON
         );
-        assert_abs_diff_eq!(sim3a.scaling(), 3.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(sim3.scaling(), 3.0, epsilon = EPSILON);
     }
 
     #[test]
-    fn converting_similarity3a_to_similarity3_preserves_components() {
-        let sim3a = Similarity3::from_parts(
+    fn converting_similarity3_to_similarity3c_preserves_components() {
+        let sim3 = Similarity3::from_parts(
             Vector3::new(10.0, 11.0, 12.0),
             UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), PI / 6.0),
             0.5,
         );
-        let sim3 = sim3a.compact();
+        let sim3c = sim3.compact();
 
         assert_abs_diff_eq!(
-            *sim3.translation(),
+            *sim3c.translation(),
             Vector3C::new(10.0, 11.0, 12.0),
             epsilon = EPSILON
         );
-        assert_abs_diff_eq!(sim3.scaling(), 0.5, epsilon = EPSILON);
+        assert_abs_diff_eq!(sim3c.scaling(), 0.5, epsilon = EPSILON);
     }
 
     #[test]

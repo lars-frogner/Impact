@@ -1951,7 +1951,7 @@ mod tests {
     }
 
     #[test]
-    fn extending_vector2_to_vector3p_works() {
+    fn extending_vector2_to_vector3c_works() {
         let v2 = Vector2::new(1.0, 2.0);
         let v3 = v2.extended(3.0);
         assert_eq!(v3, Vector3C::new(1.0, 2.0, 3.0));
@@ -2143,14 +2143,14 @@ mod tests {
     // === Vector3C Tests (compact) ===
 
     #[test]
-    fn computing_vector3p_norm_works() {
+    fn computing_vector3c_norm_works() {
         let v = Vector3C::new(3.0, 4.0, 0.0);
         assert_abs_diff_eq!(v.norm(), 5.0, epsilon = EPSILON);
         assert_abs_diff_eq!(v.norm_squared(), 25.0, epsilon = EPSILON);
     }
 
     #[test]
-    fn normalizing_vector3p_gives_unit_vector() {
+    fn normalizing_vector3c_gives_unit_vector() {
         let v = Vector3C::new(3.0, 4.0, 0.0);
         let normalized = v.normalized();
         assert_abs_diff_eq!(normalized.norm(), 1.0, epsilon = EPSILON);
@@ -2158,14 +2158,14 @@ mod tests {
     }
 
     #[test]
-    fn vector3p_dot_product_works() {
+    fn vector3c_dot_product_works() {
         let v1 = Vector3C::new(1.0, 2.0, 3.0);
         let v2 = Vector3C::new(4.0, 5.0, 6.0);
         assert_abs_diff_eq!(v1.dot(&v2), 32.0, epsilon = EPSILON);
     }
 
     #[test]
-    fn vector3p_cross_product_works() {
+    fn vector3c_cross_product_works() {
         let v1 = Vector3C::new(1.0, 0.0, 0.0);
         let v2 = Vector3C::new(0.0, 1.0, 0.0);
         let cross = v1.cross(&v2);
@@ -2173,7 +2173,7 @@ mod tests {
     }
 
     #[test]
-    fn vector3p_cross_product_is_perpendicular() {
+    fn vector3c_cross_product_is_perpendicular() {
         let v1 = Vector3C::new(1.0, 2.0, 3.0);
         let v2 = Vector3C::new(4.0, 5.0, 6.0);
         let cross = v1.cross(&v2);
@@ -2183,7 +2183,7 @@ mod tests {
     }
 
     #[test]
-    fn vector3p_cross_product_is_anticommutative() {
+    fn vector3c_cross_product_is_anticommutative() {
         let v1 = Vector3C::new(1.0, 2.0, 3.0);
         let v2 = Vector3C::new(4.0, 5.0, 6.0);
         let cross1 = v1.cross(&v2);
@@ -2193,7 +2193,7 @@ mod tests {
     }
 
     #[test]
-    fn vector3p_cross_product_of_parallel_vectors_is_zero() {
+    fn vector3c_cross_product_of_parallel_vectors_is_zero() {
         let v1 = Vector3C::new(1.0, 2.0, 3.0);
         let v2 = Vector3C::new(2.0, 4.0, 6.0);
         let cross = v1.cross(&v2);
@@ -2202,7 +2202,7 @@ mod tests {
     }
 
     #[test]
-    fn vector3p_component_operations_work() {
+    fn vector3c_component_operations_work() {
         let v1 = Vector3C::new(-1.0, 2.0, -3.0);
         let v2 = Vector3C::new(4.0, -5.0, 6.0);
 
@@ -2215,21 +2215,21 @@ mod tests {
     }
 
     #[test]
-    fn mapping_vector3p_components_works() {
+    fn mapping_vector3c_components_works() {
         let v = Vector3C::new(1.0, -2.0, 3.0);
         let mapped = v.mapped(|x| x * 2.0);
         assert_eq!(mapped, Vector3C::new(2.0, -4.0, 6.0));
     }
 
     #[test]
-    fn extending_vector3p_to_vector4p_works() {
+    fn extending_vector3c_to_vector4p_works() {
         let v3 = Vector3C::new(1.0, 2.0, 3.0);
         let v4 = v3.extended(4.0);
         assert_eq!(v4, Vector4C::new(1.0, 2.0, 3.0, 4.0));
     }
 
     #[test]
-    fn vector3p_indexing_works() {
+    fn vector3c_indexing_works() {
         let mut v = Vector3C::new(1.0, 2.0, 3.0);
         assert_eq!(v[0], 1.0);
         assert_eq!(v[1], 2.0);
@@ -2243,7 +2243,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn indexing_vector3p_out_of_bounds_panics() {
+    fn indexing_vector3c_out_of_bounds_panics() {
         let v = Vector3C::new(1.0, 2.0, 3.0);
         let _ = v[3];
     }
@@ -2468,7 +2468,7 @@ mod tests {
     // === UnitVector3C Tests (compact) ===
 
     #[test]
-    fn normalizing_vector3p_creates_unitvector3p() {
+    fn normalizing_vector3c_creates_unitvector3c() {
         let v = Vector3C::new(3.0, 4.0, 0.0);
         let unit = UnitVector3C::normalized_from(v);
 
@@ -2480,7 +2480,7 @@ mod tests {
     }
 
     #[test]
-    fn unitvector3p_can_be_used_as_vector3p_through_deref() {
+    fn unitvector3c_can_be_used_as_vector3c_through_deref() {
         let unit = UnitVector3C::unit_x();
         // These methods are available through Deref
         assert_eq!(unit.x(), 1.0);
@@ -2489,7 +2489,7 @@ mod tests {
     }
 
     #[test]
-    fn unitvector3p_indexing_works() {
+    fn unitvector3c_indexing_works() {
         let unit = UnitVector3C::unit_y();
         assert_eq!(unit[0], 0.0);
         assert_eq!(unit[1], 1.0);

@@ -543,7 +543,7 @@ mod tests {
     // === Isometry3C Tests (compact) ===
 
     #[test]
-    fn converting_isometry3p_to_aligned_and_back_preserves_data() {
+    fn converting_isometry3c_to_aligned_and_back_preserves_data() {
         let translation = TRANSLATION_3;
         let rotation = rotation_90_z_unaligned();
         let iso = Isometry3C::from_parts(translation, rotation);
