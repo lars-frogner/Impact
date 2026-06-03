@@ -76,21 +76,14 @@ impl AxisAlignedBox {
             "Tried to create AABB for empty point slice"
         );
 
-        let first_point = points[0].aligned();
+        let mut lower_corner = points[0].aligned();
+        let mut upper_corner = lower_corner;
 
-        let lower_corner = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |lower_corner, point| {
-                lower_corner.min_with(&point.aligned())
-            });
-
-        let upper_corner = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |upper_corner, point| {
-                upper_corner.max_with(&point.aligned())
-            });
+        for point in &points[1..] {
+            let point = point.aligned();
+            lower_corner = lower_corner.min_with(&point);
+            upper_corner = upper_corner.max_with(&point);
+        }
 
         Self::new(lower_corner, upper_corner)
     }
@@ -103,21 +96,13 @@ impl AxisAlignedBox {
     pub fn aabb_for_point_array<const N: usize>(points: &[Point3; N]) -> Self {
         assert!(N > 0, "Tried to create AABB for empty point array");
 
-        let first_point = points[0];
+        let mut lower_corner = points[0];
+        let mut upper_corner = lower_corner;
 
-        let lower_corner = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |lower_corner, point| {
-                lower_corner.min_with(point)
-            });
-
-        let upper_corner = points
-            .iter()
-            .skip(1)
-            .fold(first_point, |upper_corner, point| {
-                upper_corner.max_with(point)
-            });
+        for point in &points[1..] {
+            lower_corner = lower_corner.min_with(point);
+            upper_corner = upper_corner.max_with(point);
+        }
 
         Self::new(lower_corner, upper_corner)
     }
