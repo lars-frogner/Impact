@@ -144,6 +144,46 @@ pub fn parameters_of_closest_points_on_line_segments(
     (segment_a_param, segment_b_param)
 }
 
+/// Given two points P and Q on an infinite line, returns whether the line
+/// passes through the triangle with vertices A, B and C, assuming that the
+/// vertices are ordered so that applying the right-hand rule to them points the
+/// thumb in the opposite direction as the vector from P to Q.
+///
+/// Follows "Real-Time Collision Detection" (Ericson 2005).
+#[inline]
+pub fn infinite_line_intersects_triangle_one_sided(
+    line_point_p: &Point3,
+    line_point_q: &Point3,
+    vertex_a: &Point3,
+    vertex_b: &Point3,
+    vertex_c: &Point3,
+) -> bool {
+    let pq = line_point_q - line_point_p;
+    let pa = vertex_a - line_point_p;
+    let pb = vertex_b - line_point_p;
+    let pc = vertex_c - line_point_p;
+
+    // Check if PQ is inside each of the edges AB, BC and CA by evaluating the
+    // signs of the appropriate scalar triple products
+
+    let m = pq.cross(&pc);
+    let u = pb.dot(&m);
+    if u < 0.0 {
+        return false;
+    }
+    let v = -pa.dot(&m);
+    if v < 0.0 {
+        return false;
+    }
+    let n = pb.cross(&pa);
+    let w = pq.dot(&n);
+    if w < 0.0 {
+        return false;
+    }
+
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,5 +357,125 @@ mod tests {
 
         assert_abs_diff_eq!(pa, Point3::new(0.0, 0.0, 0.0), epsilon = 1e-6);
         assert_abs_diff_eq!(pb, Point3::new(0.0, 1.0, 0.0), epsilon = 1e-6);
+    }
+
+    #[test]
+    fn line_through_interior_intersects_triangle() {
+        // Triangle in the z=0 plane with vertices counterclockwise when
+        // viewed from above. P above and Q below gives the one-sided
+        // orientation that matches this winding order.
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        let p = Point3::new(1.0 / 3.0, 1.0 / 3.0, 1.0);
+        let q = Point3::new(1.0 / 3.0, 1.0 / 3.0, -1.0);
+
+        assert!(infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn reversed_line_direction_does_not_intersect_one_sided() {
+        // Same geometry as the interior test but P and Q are swapped.
+        // The one-sided test rejects intersections from the wrong side.
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        let p = Point3::new(1.0 / 3.0, 1.0 / 3.0, -1.0);
+        let q = Point3::new(1.0 / 3.0, 1.0 / 3.0, 1.0);
+
+        assert!(!infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn line_outside_triangle_does_not_intersect() {
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        // Line is at x = 2, past edge AB.
+        let p = Point3::new(2.0, 0.0, 1.0);
+        let q = Point3::new(2.0, 0.0, -1.0);
+
+        assert!(!infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn line_through_vertex_intersects_triangle() {
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        // Line passes exactly through vertex A.
+        let p = Point3::new(0.0, 0.0, 1.0);
+        let q = Point3::new(0.0, 0.0, -1.0);
+
+        assert!(infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn line_through_edge_midpoint_intersects_triangle() {
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        // Line passes through the midpoint of edge BC at (0.5, 0.5, 0).
+        let p = Point3::new(0.5, 0.5, 1.0);
+        let q = Point3::new(0.5, 0.5, -1.0);
+
+        assert!(infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn non_axis_aligned_line_through_interior_intersects() {
+        // Triangle on the plane x+y+z=1; its normal is (1,1,1). P sits on
+        // the normal side of the plane, Q on the opposite side.
+        let a = Point3::new(1.0, 0.0, 0.0);
+        let b = Point3::new(0.0, 1.0, 0.0);
+        let c = Point3::new(0.0, 0.0, 1.0);
+        // Line along (1,1,1) through the centroid (1/3, 1/3, 1/3).
+        let p = Point3::new(4.0, 4.0, 4.0);
+        let q = Point3::new(-2.0, -2.0, -2.0);
+
+        assert!(infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn coplanar_line_through_interior_intersects() {
+        // Triangle in the z=0 plane.
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        // Line lies in the same z=0 plane, passing through the interior
+        // at y=0.25.
+        let p = Point3::new(-1.0, 0.25, 0.0);
+        let q = Point3::new(2.0, 0.25, 0.0);
+
+        assert!(infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
+    }
+
+    #[test]
+    fn coplanar_line_outside_triangle_does_not_intersect() {
+        // Triangle in the z=0 plane.
+        let a = Point3::origin();
+        let b = Point3::new(1.0, 0.0, 0.0);
+        let c = Point3::new(0.0, 1.0, 0.0);
+        // Line lies in the z=0 plane but outside the triangle (y = -1).
+        let p = Point3::new(0.0, -1.0, 0.0);
+        let q = Point3::new(1.0, -1.0, 0.0);
+
+        assert!(!infinite_line_intersects_triangle_one_sided(
+            &p, &q, &a, &b, &c
+        ));
     }
 }
