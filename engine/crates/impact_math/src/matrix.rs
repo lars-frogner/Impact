@@ -608,6 +608,12 @@ impl Matrix4 {
         ))
     }
 
+    /// Returns the determinant of the matrix.
+    #[inline]
+    pub fn determinant(&self) -> f32 {
+        self.inner.determinant()
+    }
+
     /// Returns the smallest element in the matrix.
     #[inline]
     pub fn min_element(&self) -> f32 {
