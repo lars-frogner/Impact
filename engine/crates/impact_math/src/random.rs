@@ -42,6 +42,12 @@ impl Rng {
         self.0.u64(range)
     }
 
+    /// Shuffles the given slice randomly.
+    #[inline]
+    pub fn shuffle<T>(&mut self, slice: &mut [T]) {
+        self.0.shuffle(slice);
+    }
+
     /// Copies a uniformly random subset of the items in a source slice over to
     /// a destination slice, overwriting the existing items. If the source slice
     /// is smaller than the destination slice, only the first `source.len()`
