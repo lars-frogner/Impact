@@ -553,6 +553,18 @@ impl Point3C {
         Point2::new(self.x(), self.y())
     }
 
+    /// Computes the distance between two points.
+    #[inline]
+    pub fn distance_between(point_a: &Self, point_b: &Self) -> f32 {
+        Self::squared_distance_between(point_a, point_b).sqrt()
+    }
+
+    /// Computes the square of the distance between two points.
+    #[inline]
+    pub fn squared_distance_between(point_a: &Self, point_b: &Self) -> f32 {
+        (Vector3C::from(*point_b) - Vector3C::from(*point_a)).norm_squared()
+    }
+
     /// This point as a [`Vector3C`].
     #[inline]
     pub fn as_vector(&self) -> &Vector3C {
@@ -1035,6 +1047,19 @@ mod tests {
     fn indexing_point3c_out_of_bounds_panics() {
         let p = Point3C::new(1.0, 2.0, 3.0);
         let _ = p[3];
+    }
+
+    #[test]
+    fn calculating_point3c_distance_works() {
+        let p1 = Point3C::new(0.0, 0.0, 0.0);
+        let p2 = Point3C::new(1.0, 2.0, 2.0);
+
+        assert_abs_diff_eq!(Point3C::distance_between(&p1, &p2), 3.0, epsilon = EPSILON);
+        assert_abs_diff_eq!(
+            Point3C::squared_distance_between(&p1, &p2),
+            9.0,
+            epsilon = EPSILON
+        );
     }
 
     // === General Point Tests ===
