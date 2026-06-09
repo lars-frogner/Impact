@@ -1230,10 +1230,39 @@ enum LineTriangleIntersection {
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
+    use arbitrary::{Arbitrary, Result, Unstructured};
+    use bytemuck::{Pod, Zeroable};
+    use std::mem;
 
-    pub fn fuzz_test_delaunay_tetrahedralization(points: Vec<Point3C>) {
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
-        tetrahedra.validate_brute_force(&points);
+    const FLOAT_RESOLUTION: u32 = 10000;
+    const DOMAIN_EXTENT: f32 = 100.0;
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Zeroable, Pod)]
+    pub struct DelaunayPoint(Point3C);
+
+    impl Arbitrary<'_> for DelaunayPoint {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let x = DOMAIN_EXTENT * arbitrary_norm_f32(u)? - (0.5 * DOMAIN_EXTENT);
+            let y = DOMAIN_EXTENT * arbitrary_norm_f32(u)? - (0.5 * DOMAIN_EXTENT);
+            let z = DOMAIN_EXTENT * arbitrary_norm_f32(u)? - (0.5 * DOMAIN_EXTENT);
+            Ok(Self(Point3C::new(x, y, z)))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 3 * mem::size_of::<u32>();
+            (size, Some(size))
+        }
+    }
+
+    pub fn fuzz_test_delaunay_tetrahedralization(input: Vec<DelaunayPoint>) {
+        let points = bytemuck::cast_slice(&input);
+        let tetrahedra = DelaunayTetrahedralization::construct(points).unwrap();
+        tetrahedra.validate_brute_force(points);
+    }
+
+    fn arbitrary_norm_f32(u: &mut Unstructured<'_>) -> Result<f32> {
+        Ok((f64::from(u.int_in_range(0..=FLOAT_RESOLUTION)?) / f64::from(FLOAT_RESOLUTION)) as f32)
     }
 }
 
