@@ -1141,6 +1141,7 @@ dependencies = [
  "impact_resource",
  "impact_scene",
  "impact_scheduling",
+ "impact_tesselation",
  "impact_texture",
  "impact_thread",
  "impact_voxel",
@@ -1596,6 +1597,19 @@ dependencies = [
  "log 0.1.0",
  "parking_lot",
  "tinyvec",
+]
+
+[[package]]
+name = "impact_tesselation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "bytemuck",
+ "impact_alloc",
+ "impact_containers",
+ "impact_geometry",
+ "impact_math",
 ]
 
 [[package]]
