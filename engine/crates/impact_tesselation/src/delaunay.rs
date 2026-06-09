@@ -1084,20 +1084,16 @@ fn evaluate_side_of_triangle_plane_for_point(
     vertex_c: &Point3C,
     point: &Point3C,
 ) -> PointTrianglePlaneSide {
-    let a: [f64; 3] = (*vertex_a).into();
-    let b: [f64; 3] = (*vertex_b).into();
-    let c: [f64; 3] = (*vertex_c).into();
-    let p: [f64; 3] = (*point).into();
+    let factor = robust::orient3d(
+        point_to_robust_coord(vertex_a),
+        point_to_robust_coord(vertex_b),
+        point_to_robust_coord(vertex_c),
+        point_to_robust_coord(point),
+    );
 
-    let ab = sub(b, a);
-    let ac = sub(c, a);
-    let ap = sub(p, a);
-
-    let factor = dot(ap, cross(ab, ac));
-
-    if factor > 0.0 {
+    if factor < 0.0 {
         PointTrianglePlaneSide::Positive
-    } else if factor < 0.0 {
+    } else if factor > 0.0 {
         PointTrianglePlaneSide::Negative
     } else {
         PointTrianglePlaneSide::InPlane
@@ -1136,30 +1132,25 @@ fn point_lies_strictly_inside_circumsphere(
     vertex_d: &Point3C,
     point: &Point3C,
 ) -> bool {
-    let a: [f64; 3] = (*vertex_a).into();
-    let b: [f64; 3] = (*vertex_b).into();
-    let c: [f64; 3] = (*vertex_c).into();
-    let d: [f64; 3] = (*vertex_d).into();
-    let p: [f64; 3] = (*point).into();
-
-    let pa = sub(a, p);
-    let pb = sub(b, p);
-    let pc = sub(c, p);
-    let pd = sub(d, p);
-
-    let pa2 = dot(pa, pa);
-    let pb2 = dot(pb, pb);
-    let pc2 = dot(pc, pc);
-    let pd2 = dot(pd, pd);
-
-    let det = determinant4x4(
-        extend(pa, pa2),
-        extend(pb, pb2),
-        extend(pc, pc2),
-        extend(pd, pd2),
+    let factor = robust::insphere(
+        // Swap order to satisfy `robust`'s definition of positive orientation
+        point_to_robust_coord(vertex_b),
+        point_to_robust_coord(vertex_a),
+        point_to_robust_coord(vertex_c),
+        point_to_robust_coord(vertex_d),
+        point_to_robust_coord(point),
     );
 
-    det < 0.0
+    factor > 0.0
+}
+
+#[inline]
+fn point_to_robust_coord(point: &Point3C) -> robust::Coord3D<f32> {
+    robust::Coord3D {
+        x: point.x(),
+        y: point.y(),
+        z: point.z(),
+    }
 }
 
 /// Given two points P and Q on an infinite line, returns whether the line
@@ -1213,54 +1204,6 @@ enum LineTriangleIntersection {
     Inside,
     Outside { ab: bool, bc: bool, ca: bool },
     Edges { ab: bool, bc: bool, ca: bool },
-}
-
-#[inline]
-fn sub([ax, ay, az]: [f64; 3], [bx, by, bz]: [f64; 3]) -> [f64; 3] {
-    [ax - bx, ay - by, az - bz]
-}
-
-#[inline]
-fn dot([ax, ay, az]: [f64; 3], [bx, by, bz]: [f64; 3]) -> f64 {
-    ax * bx + ay * by + az * bz
-}
-
-#[inline]
-fn cross([ax, ay, az]: [f64; 3], [bx, by, bz]: [f64; 3]) -> [f64; 3] {
-    [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx]
-}
-
-#[inline]
-fn extend([x, y, z]: [f64; 3], w: f64) -> [f64; 4] {
-    [x, y, z, w]
-}
-
-#[inline]
-fn determinant4x4(
-    [c11, c21, c31, c41]: [f64; 4],
-    [c12, c22, c32, c42]: [f64; 4],
-    [c13, c23, c33, c43]: [f64; 4],
-    [c14, c24, c34, c44]: [f64; 4],
-) -> f64 {
-    c11 * determinant3x3([c22, c32, c42], [c23, c33, c43], [c24, c34, c44])
-        - c12 * determinant3x3([c21, c31, c41], [c23, c33, c43], [c24, c34, c44])
-        + c13 * determinant3x3([c21, c31, c41], [c22, c32, c42], [c24, c34, c44])
-        - c14 * determinant3x3([c21, c31, c41], [c22, c32, c42], [c23, c33, c43])
-}
-
-#[inline]
-fn determinant3x3(
-    [c11, c21, c31]: [f64; 3],
-    [c12, c22, c32]: [f64; 3],
-    [c13, c23, c33]: [f64; 3],
-) -> f64 {
-    c11 * determinant2x2([c22, c32], [c23, c33]) - c12 * determinant2x2([c21, c31], [c23, c33])
-        + c13 * determinant2x2([c21, c31], [c22, c32])
-}
-
-#[inline]
-fn determinant2x2([c11, c21]: [f64; 2], [c12, c22]: [f64; 2]) -> f64 {
-    c11 * c22 - c21 * c12
 }
 
 #[cfg(feature = "fuzzing")]
