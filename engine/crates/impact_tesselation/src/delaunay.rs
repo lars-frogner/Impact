@@ -381,6 +381,7 @@ impl DelaunayTetrahedralization {
         self.tetrahedra.n_tetrahedra()
     }
 
+    #[cfg(any(test, feature = "fuzzing"))]
     fn validate_brute_force(&self, vertices: &[Point3C]) {
         for (&tetra_id, tetra) in self.tetrahedra.tetrahedra() {
             let [a, b, c, d] = tetra.vertices(vertices);
@@ -475,10 +476,12 @@ impl TetrahedronMap {
         self.get_tetrahedron(id).unwrap()
     }
 
+    #[allow(dead_code)]
     fn has_tetrahedron(&self, id: TetrahedronID) -> bool {
         self.tetrahedra.contains_key(&id)
     }
 
+    #[allow(dead_code)]
     fn tetrahedra(&self) -> impl Iterator<Item = (&TetrahedronID, &Tetrahedron)> {
         self.tetrahedra.iter()
     }
@@ -896,6 +899,7 @@ impl Tetrahedron {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn face(&self, neighbor_idx: usize) -> [VertexIdx; 3] {
         let [a, b, c, d] = self.vertices;
         match neighbor_idx {
