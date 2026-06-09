@@ -374,3 +374,8 @@ required-features = ["criterion"]
 name = "bvh"
 harness = false
 required-features = ["criterion"]
+
+[[bench]]
+name = "delaunay"
+harness = false
+required-features = ["criterion"]

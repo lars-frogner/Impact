@@ -108,6 +108,10 @@ impact_profiling::define_target_enum! {
         query_with_brute_force_many_external_intersections,
         query_with_brute_force_all_internal_intersections,
     },
+    delaunay => {
+        construct_from_randomized_grid_points,
+        construct_from_regular_grid_points,
+    },
 }
 
 pub fn benchmark(target: Target, duration: f64, delay: f64) {
