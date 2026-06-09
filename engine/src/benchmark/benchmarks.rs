@@ -2,6 +2,7 @@
 
 pub mod bvh;
 pub mod constraint;
+pub mod delaunay;
 pub mod generation;
 pub mod isometry;
 pub mod lookup_table;
