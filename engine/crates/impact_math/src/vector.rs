@@ -270,6 +270,20 @@ impl From<Vector2> for [f32; 2] {
     }
 }
 
+impl From<[f64; 2]> for Vector2 {
+    #[inline]
+    fn from([x, y]: [f64; 2]) -> Self {
+        Self::new(x as f32, y as f32)
+    }
+}
+
+impl From<Vector2> for [f64; 2] {
+    #[inline]
+    fn from(point: Vector2) -> Self {
+        [f64::from(point.x()), f64::from(point.y())]
+    }
+}
+
 impl_binop!(Add, add, Vector2, Vector2, Vector2, |a, b| {
     Vector2::wrap(a.inner.add(b.inner))
 });
@@ -624,6 +638,24 @@ impl From<Vector3> for [f32; 3] {
     }
 }
 
+impl From<[f64; 3]> for Vector3 {
+    #[inline]
+    fn from([x, y, z]: [f64; 3]) -> Self {
+        Self::new(x as f32, y as f32, z as f32)
+    }
+}
+
+impl From<Vector3> for [f64; 3] {
+    #[inline]
+    fn from(point: Vector3) -> Self {
+        [
+            f64::from(point.x()),
+            f64::from(point.y()),
+            f64::from(point.z()),
+        ]
+    }
+}
+
 impl_binop!(Add, add, Vector3, Vector3, Vector3, |a, b| {
     Vector3::wrap(a.inner.add(b.inner))
 });
@@ -912,6 +944,24 @@ impl From<Vector3C> for [f32; 3] {
     #[inline]
     fn from(vector: Vector3C) -> Self {
         [vector.x(), vector.y(), vector.z()]
+    }
+}
+
+impl From<[f64; 3]> for Vector3C {
+    #[inline]
+    fn from([x, y, z]: [f64; 3]) -> Self {
+        Self::new(x as f32, y as f32, z as f32)
+    }
+}
+
+impl From<Vector3C> for [f64; 3] {
+    #[inline]
+    fn from(point: Vector3C) -> Self {
+        [
+            f64::from(point.x()),
+            f64::from(point.y()),
+            f64::from(point.z()),
+        ]
     }
 }
 

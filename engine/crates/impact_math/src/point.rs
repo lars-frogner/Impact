@@ -178,6 +178,20 @@ impl From<Point2> for [f32; 2] {
     }
 }
 
+impl From<[f64; 2]> for Point2 {
+    #[inline]
+    fn from([x, y]: [f64; 2]) -> Self {
+        Self::new(x as f32, y as f32)
+    }
+}
+
+impl From<Point2> for [f64; 2] {
+    #[inline]
+    fn from(point: Point2) -> Self {
+        [f64::from(point.x()), f64::from(point.y())]
+    }
+}
+
 impl_binop!(Add, add, Point2, Vector2, Point2, |a, b| {
     Point2::wrap(a.inner.add(b.unwrap()))
 });
@@ -388,6 +402,24 @@ impl From<Point3> for [f32; 3] {
     #[inline]
     fn from(point: Point3) -> Self {
         [point.x(), point.y(), point.z()]
+    }
+}
+
+impl From<[f64; 3]> for Point3 {
+    #[inline]
+    fn from([x, y, z]: [f64; 3]) -> Self {
+        Self::new(x as f32, y as f32, z as f32)
+    }
+}
+
+impl From<Point3> for [f64; 3] {
+    #[inline]
+    fn from(point: Point3) -> Self {
+        [
+            f64::from(point.x()),
+            f64::from(point.y()),
+            f64::from(point.z()),
+        ]
     }
 }
 
@@ -603,6 +635,24 @@ impl From<Point3C> for [f32; 3] {
     #[inline]
     fn from(point: Point3C) -> Self {
         [point.x(), point.y(), point.z()]
+    }
+}
+
+impl From<[f64; 3]> for Point3C {
+    #[inline]
+    fn from([x, y, z]: [f64; 3]) -> Self {
+        Self::new(x as f32, y as f32, z as f32)
+    }
+}
+
+impl From<Point3C> for [f64; 3] {
+    #[inline]
+    fn from(point: Point3C) -> Self {
+        [
+            f64::from(point.x()),
+            f64::from(point.y()),
+            f64::from(point.z()),
+        ]
     }
 }
 
