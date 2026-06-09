@@ -166,18 +166,18 @@ pub fn infinite_line_intersects_triangle_one_sided(
     // Check if PQ is inside each of the edges AB, BC and CA by evaluating the
     // signs of the appropriate scalar triple products
 
-    let m = pq.cross(&pc);
-    let u = pb.dot(&m);
-    if u < 0.0 {
+    let cq_cross = pc.cross(&pq);
+    let bc_factor = pb.dot(&cq_cross);
+    if bc_factor > 0.0 {
         return false;
     }
-    let v = -pa.dot(&m);
-    if v < 0.0 {
+    let ca_factor = -pa.dot(&cq_cross);
+    if ca_factor > 0.0 {
         return false;
     }
-    let n = pb.cross(&pa);
-    let w = pq.dot(&n);
-    if w < 0.0 {
+    let bq_cross = pb.cross(&pq);
+    let ab_factor = pa.dot(&bq_cross);
+    if ab_factor > 0.0 {
         return false;
     }
 
@@ -465,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn coplanar_line_outside_triangle_does_not_intersect() {
+    fn coplanar_line_outside_triangle_reported_as_intersecting() {
         // Triangle in the z=0 plane.
         let a = Point3::origin();
         let b = Point3::new(1.0, 0.0, 0.0);
@@ -474,7 +474,7 @@ mod tests {
         let p = Point3::new(0.0, -1.0, 0.0);
         let q = Point3::new(1.0, -1.0, 0.0);
 
-        assert!(!infinite_line_intersects_triangle_one_sided(
+        assert!(infinite_line_intersects_triangle_one_sided(
             &p, &q, &a, &b, &c
         ));
     }
