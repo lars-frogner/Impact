@@ -212,7 +212,7 @@ impl<A: Allocator> SDFVoxelGenerator<A> {
         assert!(voxel_extent > 0.0);
 
         let sdf_domain = sdf_generator.domain();
-        let sdf_domain_extents: [_; 3] = sdf_domain.extents().into();
+        let sdf_domain_extents: [f32; 3] = sdf_domain.extents().into();
 
         if sdf_domain_extents.contains(&0.0) {
             return Self {
