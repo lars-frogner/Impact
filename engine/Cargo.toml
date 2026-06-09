@@ -24,6 +24,7 @@ members = [
     "crates/impact_resource",
     "crates/impact_scene",
     "crates/impact_scheduling",
+    "crates/impact_tesselation",
     "crates/impact_texture",
     "crates/impact_thread",
     "crates/impact_voxel",
@@ -208,6 +209,7 @@ arbitrary = [
     "impact_math/arbitrary",
     "impact_physics/arbitrary",
     "impact_rendering/arbitrary",
+    "impact_tesselation/arbitrary",
     "impact_texture/arbitrary",
     "impact_voxel/arbitrary",
 ]
@@ -280,6 +282,7 @@ impact_rendering = { path = "crates/impact_rendering", features = ["serde"] }
 impact_resource = { path = "crates/impact_resource" }
 impact_scene = { path = "crates/impact_scene", features = ["ecs"] }
 impact_scheduling = { path = "crates/impact_scheduling" }
+impact_tesselation = { path = "crates/impact_tesselation" }
 impact_texture = { path = "crates/impact_texture", features = [
     "postcard",
     "serde",
