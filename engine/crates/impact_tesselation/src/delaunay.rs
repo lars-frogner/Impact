@@ -277,14 +277,46 @@ impl DelaunayTetrahedralization {
                             ) == PointTrianglePlaneSide::InPlane
                             {
                                 // ABCD is flat, and the new vertex A lies
-                                // directly on an edge of triangle BDC. We can
+                                // directly on an edge of triangle BDC. If there
+                                // exists a third tetrahedron AXYE sharing that
+                                // edge, we can reconnect the three into two
+                                // tetrahedra AXZE and AZYE. Otherwise, we can
                                 // reconnect ABCD and BCDE into three tetrahedra
-                                // ABCE, ACDE and ADBE. One of the (depending on
-                                // the intersected edge) will still be flat, but
-                                // it will be deleted by a later reconnection.
-                                let new_tetra_ids =
-                                    tetrahedra.reconnect_two_to_three(abcd_id, bcde_id);
-                                stack.extend_from_slice(&new_tetra_ids);
+                                // ABCE, ACDE and ADBE. One of them (depending
+                                // on the intersected edge) will still be flat,
+                                // but it will be deleted by a later
+                                // reconnection.
+                                let (axye_nb_of_abcd, axye_nb_of_bcde) = if intersects_bd {
+                                    (
+                                        abcd.neighbors[2],
+                                        bcde.id_of_neighbor_adjoining_face([e, b, d]),
+                                    )
+                                } else if intersects_dc {
+                                    (
+                                        abcd.neighbors[1],
+                                        bcde.id_of_neighbor_adjoining_face([e, d, c]),
+                                    )
+                                } else {
+                                    (
+                                        abcd.neighbors[0],
+                                        bcde.id_of_neighbor_adjoining_face([e, c, b]),
+                                    )
+                                };
+
+                                if axye_nb_of_abcd == axye_nb_of_bcde
+                                    && axye_nb_of_abcd != NO_TETRAHEDRON_ID
+                                {
+                                    let new_tetra_ids = tetrahedra.reconnect_three_to_two(
+                                        abcd_id,
+                                        bcde_id,
+                                        axye_nb_of_abcd,
+                                    );
+                                    stack.extend_from_slice(&new_tetra_ids);
+                                } else {
+                                    let new_tetra_ids =
+                                        tetrahedra.reconnect_two_to_three(abcd_id, bcde_id);
+                                    stack.extend_from_slice(&new_tetra_ids);
+                                }
                             } else {
                                 // ABCD is not flat. We can perform a
                                 // four-to-four reconnection if we can find two
