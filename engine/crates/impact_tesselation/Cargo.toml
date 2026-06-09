@@ -18,6 +18,7 @@ impact_alloc = { path = "../impact_alloc" }
 impact_containers = { path = "../impact_containers" }
 impact_geometry = { path = "../impact_geometry" }
 impact_math = { path = "../impact_math" }
+robust = { version = "1.2.0" }
 
 [lints]
 workspace = true
