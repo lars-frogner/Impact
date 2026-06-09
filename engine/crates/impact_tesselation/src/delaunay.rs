@@ -289,8 +289,7 @@ impl DelaunayTetrahedralization {
                                 // ABCD is not flat. We can perform a
                                 // four-to-four reconnection if we can find two
                                 // other tetrahedra connected to the intersected
-                                // edge with a fifth vertex F that is co-planar
-                                // with BDC.
+                                // edge with a commin fifth vertex F.
                                 let (
                                     tetra_3_id,
                                     tetra_3_non_f_face,
@@ -339,16 +338,6 @@ impl DelaunayTetrahedralization {
 
                                 // The neighbors must have a common fifth vertex F
                                 if f_t3 != f_t4 {
-                                    continue;
-                                }
-
-                                let vertex_f = tetra_3.vertex(&vertices, f_corner_t3);
-
-                                // F must be co-planar with BDC
-                                if evaluate_side_of_triangle_plane_for_point(
-                                    vertex_b, vertex_d, vertex_c, vertex_f,
-                                ) != PointTrianglePlaneSide::InPlane
-                                {
                                     continue;
                                 }
 
