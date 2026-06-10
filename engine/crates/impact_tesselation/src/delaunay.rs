@@ -39,8 +39,9 @@ struct Tetrahedralization {
 struct Tetrahedron {
     /// The index of vertex A, B, C and D, respectively.
     vertices: [VertexIdx; 4],
-    /// The ID of the tetrahedron adjoining face ABC, ACD, ADB and BDC,
-    /// respectively. The ID has value [`NO_TETRAHEDRON_ID`] when there is no
+    /// The ID of the tetrahedron adjoining face BCD, ACD, ADB and ABC,
+    /// respectively (i.e. the face opposite the vertex at the same position in
+    /// `vertices`). The ID has value [`NO_TETRAHEDRON_ID`] when there is no
     /// neighbor.
     neighbors: [TetrahedronID; 4],
 }
@@ -130,7 +131,7 @@ impl DelaunayTetrahedralization {
                 assert_eq!(a, new_vertex_idx);
 
                 // Find neighbor tetrahedron BCDE adjoining the BDC face
-                let bcde_id = abcd.neighbors[3];
+                let bcde_id = abcd.neighbors[0];
                 if bcde_id == NO_TETRAHEDRON_ID {
                     continue;
                 }
@@ -202,7 +203,7 @@ impl DelaunayTetrahedralization {
                                     )
                                 } else if beyond_cb && !beyond_bd && !beyond_dc {
                                     (
-                                        abcd.neighbors[0],
+                                        abcd.neighbors[3],
                                         bcde.id_of_neighbor_adjoining_face([e, c, b]),
                                     )
                                 } else {
@@ -256,7 +257,7 @@ impl DelaunayTetrahedralization {
                                     )
                                 } else {
                                     (
-                                        abcd.neighbors[0],
+                                        abcd.neighbors[3],
                                         bcde.id_of_neighbor_adjoining_face([e, c, b]),
                                     )
                                 };
@@ -302,7 +303,7 @@ impl DelaunayTetrahedralization {
 
                                     (adcf_id, adcf_non_f_face, dcfe_id, dcfe_non_f_face)
                                 } else if intersects_cb {
-                                    let acbf_id = abcd.neighbors[0];
+                                    let acbf_id = abcd.neighbors[3];
                                     let acbf_non_f_face = [a, c, b];
 
                                     let cbfe_id = bcde.id_of_neighbor_adjoining_face([e, c, b]);
@@ -628,29 +629,29 @@ impl Tetrahedralization {
 
         let tetra = self.tetrahedra.get_mut(&inside_tetra_id).unwrap();
         let [b, c, d, e] = tetra.vertices;
-        let [bcd_nb_id, bde_nb_id, bec_nb_id, ced_nb_id] = tetra.neighbors;
+        let [ced_nb_id, bde_nb_id, bec_nb_id, bcd_nb_id] = tetra.neighbors;
 
         let abce = tetra;
         *abce = Tetrahedron {
             vertices: [a, b, c, e],
-            neighbors: [acbd_id, acde_id, adbe_id, bec_nb_id],
+            neighbors: [bec_nb_id, acde_id, adbe_id, acbd_id],
         };
 
         let acde = Tetrahedron {
             vertices: [a, c, d, e],
-            neighbors: [acbd_id, adbe_id, abce_id, ced_nb_id],
+            neighbors: [ced_nb_id, adbe_id, abce_id, acbd_id],
         };
         self.tetrahedra.insert(acde_id, acde);
 
         let adbe = Tetrahedron {
             vertices: [a, d, b, e],
-            neighbors: [acbd_id, abce_id, acde_id, bde_nb_id],
+            neighbors: [bde_nb_id, abce_id, acde_id, acbd_id],
         };
         self.tetrahedra.insert(adbe_id, adbe);
 
         let acbd = Tetrahedron {
             vertices: [a, c, b, d],
-            neighbors: [abce_id, adbe_id, acde_id, bcd_nb_id],
+            neighbors: [bcd_nb_id, adbe_id, acde_id, abce_id],
         };
         self.tetrahedra.insert(acbd_id, acbd);
 
@@ -706,7 +707,7 @@ impl Tetrahedralization {
         let e_corner = bcde.corner_not_on_face([b, c, d]);
         let e = bcde.vertices[e_corner];
 
-        let [abc_nb_id, acd_nb_id, adb_nb_id, bdc_nb_id] = abcd.neighbors;
+        let [bdc_nb_id, acd_nb_id, adb_nb_id, abc_nb_id] = abcd.neighbors;
         assert_eq!(bdc_nb_id, bcde_id);
 
         let ecb_nb_id = bcde.id_of_neighbor_adjoining_face([e, c, b]);
@@ -719,19 +720,19 @@ impl Tetrahedralization {
 
         let abce = Tetrahedron {
             vertices: [a, b, c, e],
-            neighbors: [abc_nb_id, acde_id, adbe_id, ecb_nb_id],
+            neighbors: [ecb_nb_id, acde_id, adbe_id, abc_nb_id],
         };
         self.tetrahedra.insert(abce_id, abce);
 
         let acde = Tetrahedron {
             vertices: [a, c, d, e],
-            neighbors: [acd_nb_id, adbe_id, abce_id, edc_nb_id],
+            neighbors: [edc_nb_id, adbe_id, abce_id, acd_nb_id],
         };
         self.tetrahedra.insert(acde_id, acde);
 
         let adbe = Tetrahedron {
             vertices: [a, d, b, e],
-            neighbors: [adb_nb_id, abce_id, acde_id, ebd_nb_id],
+            neighbors: [ebd_nb_id, abce_id, acde_id, adb_nb_id],
         };
         self.tetrahedra.insert(adbe_id, adbe);
 
@@ -789,12 +790,12 @@ impl Tetrahedralization {
 
         let [a, b, c, d] = abcd.vertices;
 
-        let [x, y, z] = if axye_id == abcd.neighbors[0] {
-            [c, b, d]
-        } else if axye_id == abcd.neighbors[1] {
+        let [x, y, z] = if axye_id == abcd.neighbors[1] {
             [d, c, b]
         } else if axye_id == abcd.neighbors[2] {
             [b, d, c]
+        } else if axye_id == abcd.neighbors[3] {
+            [c, b, d]
         } else {
             panic!("AXYE {axye_id} does not adjoin a non-shared face of ABCD {abcd_id}");
         };
@@ -820,13 +821,13 @@ impl Tetrahedralization {
 
         let axze = Tetrahedron {
             vertices: [a, x, z, e],
-            neighbors: [axz_nb_id, azye_id, xae_nb_id, ezx_nb_id],
+            neighbors: [ezx_nb_id, azye_id, xae_nb_id, axz_nb_id],
         };
         self.tetrahedra.insert(axze_id, axze);
 
         let azye = Tetrahedron {
             vertices: [a, z, y, e],
-            neighbors: [azy_nb_id, yea_nb_id, axze_id, eyz_nb_id],
+            neighbors: [eyz_nb_id, yea_nb_id, axze_id, azy_nb_id],
         };
         self.tetrahedra.insert(azye_id, azye);
 
@@ -889,12 +890,12 @@ impl Tetrahedralization {
 
         let [a, b, c, d] = abcd.vertices;
 
-        let [x, y, z] = if axyf_id == abcd.neighbors[0] {
-            [c, b, d]
-        } else if axyf_id == abcd.neighbors[1] {
+        let [x, y, z] = if axyf_id == abcd.neighbors[1] {
             [d, c, b]
         } else if axyf_id == abcd.neighbors[2] {
             [b, d, c]
+        } else if axyf_id == abcd.neighbors[3] {
+            [c, b, d]
         } else {
             panic!("AXYF {axyf_id} does not adjoin a non-shared face of ABCD {abcd_id}");
         };
@@ -930,25 +931,25 @@ impl Tetrahedralization {
 
         let axze = Tetrahedron {
             vertices: [a, x, z, e],
-            neighbors: [axz_nb_id, azye_id, afxe_id, ezx_nb_id],
+            neighbors: [ezx_nb_id, azye_id, afxe_id, axz_nb_id],
         };
         self.tetrahedra.insert(axze_id, axze);
 
         let azye = Tetrahedron {
             vertices: [a, z, y, e],
-            neighbors: [azy_nb_id, ayfe_id, axze_id, eyz_nb_id],
+            neighbors: [eyz_nb_id, ayfe_id, axze_id, azy_nb_id],
         };
         self.tetrahedra.insert(azye_id, azye);
 
         let afxe = Tetrahedron {
             vertices: [a, f, x, e],
-            neighbors: [afx_nb_id, axze_id, ayfe_id, exf_nb_id],
+            neighbors: [exf_nb_id, axze_id, ayfe_id, afx_nb_id],
         };
         self.tetrahedra.insert(afxe_id, afxe);
 
         let ayfe = Tetrahedron {
             vertices: [a, y, f, e],
-            neighbors: [ayf_nb_id, afxe_id, azye_id, efy_nb_id],
+            neighbors: [efy_nb_id, afxe_id, azye_id, ayf_nb_id],
         };
         self.tetrahedra.insert(ayfe_id, ayfe);
 
@@ -1052,7 +1053,7 @@ impl Tetrahedron {
     fn id_of_neighbor_adjoining_face(&self, face: [VertexIdx; 3]) -> TetrahedronID {
         let [a, b, c, d] = self.vertices;
 
-        if face == [a, b, c] || face == [c, a, b] || face == [b, c, a] {
+        if face == [b, d, c] || face == [c, b, d] || face == [d, c, b] {
             return self.neighbors[0];
         }
         if face == [a, c, d] || face == [d, a, c] || face == [c, d, a] {
@@ -1061,7 +1062,7 @@ impl Tetrahedron {
         if face == [a, d, b] || face == [b, a, d] || face == [d, b, a] {
             return self.neighbors[2];
         }
-        if face == [b, d, c] || face == [c, b, d] || face == [d, c, b] {
+        if face == [a, b, c] || face == [c, a, b] || face == [b, c, a] {
             return self.neighbors[3];
         }
 
@@ -1075,13 +1076,13 @@ impl Tetrahedron {
             .expect("Tried to find neighbors with missing vertex");
 
         if corner == 0 {
-            [self.neighbors[0], self.neighbors[1], self.neighbors[2]]
+            [self.neighbors[1], self.neighbors[2], self.neighbors[3]]
         } else if corner == 1 {
             [self.neighbors[0], self.neighbors[2], self.neighbors[3]]
         } else if corner == 2 {
             [self.neighbors[0], self.neighbors[1], self.neighbors[3]]
         } else {
-            [self.neighbors[1], self.neighbors[2], self.neighbors[3]]
+            [self.neighbors[0], self.neighbors[1], self.neighbors[2]]
         }
     }
 
@@ -1090,10 +1091,10 @@ impl Tetrahedron {
     fn face_for_neighbor(&self, neighbor_idx: usize) -> [VertexIdx; 3] {
         let [a, b, c, d] = self.vertices;
         match neighbor_idx {
-            0 => [a, b, c],
+            0 => [b, d, c],
             1 => [a, c, d],
             2 => [a, d, b],
-            3 => [b, d, c],
+            3 => [a, b, c],
             _ => panic!("Invalid neighbor index {neighbor_idx}"),
         }
     }
@@ -1110,7 +1111,7 @@ impl Tetrahedron {
         let vc = self.vertex(vertices, 2);
         let vd = self.vertex(vertices, 3);
 
-        let triangles = [[va, vb, vc], [va, vc, vd], [va, vd, vb], [vb, vd, vc]];
+        let triangles = [[vb, vd, vc], [va, vc, vd], [va, vd, vb], [va, vb, vc]];
 
         let mut neighbor_indices = [0, 1, 2, 3];
         rng.shuffle(&mut neighbor_indices);
