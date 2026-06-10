@@ -192,20 +192,11 @@ impl DelaunayTetrahedralization {
                             // and we leave the face for a later reconnection.
                             let (axye_nb_of_abcd, axye_nb_of_bcde) =
                                 if beyond_bd && !beyond_dc && !beyond_cb {
-                                    (
-                                        abcd.neighbors[2],
-                                        bcde.id_of_neighbor_adjoining_face([e, b, d]),
-                                    )
+                                    (abcd.neighbors[2], bcde.id_of_neighbor_opposite_vertex(c))
                                 } else if beyond_dc && !beyond_bd && !beyond_cb {
-                                    (
-                                        abcd.neighbors[1],
-                                        bcde.id_of_neighbor_adjoining_face([e, d, c]),
-                                    )
+                                    (abcd.neighbors[1], bcde.id_of_neighbor_opposite_vertex(b))
                                 } else if beyond_cb && !beyond_bd && !beyond_dc {
-                                    (
-                                        abcd.neighbors[3],
-                                        bcde.id_of_neighbor_adjoining_face([e, c, b]),
-                                    )
+                                    (abcd.neighbors[3], bcde.id_of_neighbor_opposite_vertex(d))
                                 } else {
                                     continue;
                                 };
@@ -246,20 +237,11 @@ impl DelaunayTetrahedralization {
                                 // but it will be deleted by a later
                                 // reconnection.
                                 let (axye_nb_of_abcd, axye_nb_of_bcde) = if intersects_bd {
-                                    (
-                                        abcd.neighbors[2],
-                                        bcde.id_of_neighbor_adjoining_face([e, b, d]),
-                                    )
+                                    (abcd.neighbors[2], bcde.id_of_neighbor_opposite_vertex(c))
                                 } else if intersects_dc {
-                                    (
-                                        abcd.neighbors[1],
-                                        bcde.id_of_neighbor_adjoining_face([e, d, c]),
-                                    )
+                                    (abcd.neighbors[1], bcde.id_of_neighbor_opposite_vertex(b))
                                 } else {
-                                    (
-                                        abcd.neighbors[3],
-                                        bcde.id_of_neighbor_adjoining_face([e, c, b]),
-                                    )
+                                    (abcd.neighbors[3], bcde.id_of_neighbor_opposite_vertex(d))
                                 };
 
                                 if axye_nb_of_abcd == axye_nb_of_bcde
@@ -290,7 +272,7 @@ impl DelaunayTetrahedralization {
                                     let abdf_id = abcd.neighbors[2];
                                     let abdf_non_f_face = [a, b, d];
 
-                                    let bdfe_id = bcde.id_of_neighbor_adjoining_face([e, b, d]);
+                                    let bdfe_id = bcde.id_of_neighbor_opposite_vertex(c);
                                     let bdfe_non_f_face = [e, d, b];
 
                                     (abdf_id, abdf_non_f_face, bdfe_id, bdfe_non_f_face)
@@ -298,7 +280,7 @@ impl DelaunayTetrahedralization {
                                     let adcf_id = abcd.neighbors[1];
                                     let adcf_non_f_face = [a, d, c];
 
-                                    let dcfe_id = bcde.id_of_neighbor_adjoining_face([e, d, c]);
+                                    let dcfe_id = bcde.id_of_neighbor_opposite_vertex(b);
                                     let dcfe_non_f_face = [e, c, d];
 
                                     (adcf_id, adcf_non_f_face, dcfe_id, dcfe_non_f_face)
@@ -306,7 +288,7 @@ impl DelaunayTetrahedralization {
                                     let acbf_id = abcd.neighbors[3];
                                     let acbf_non_f_face = [a, c, b];
 
-                                    let cbfe_id = bcde.id_of_neighbor_adjoining_face([e, c, b]);
+                                    let cbfe_id = bcde.id_of_neighbor_opposite_vertex(d);
                                     let cbfe_non_f_face = [e, b, c];
 
                                     (acbf_id, acbf_non_f_face, cbfe_id, cbfe_non_f_face)
@@ -708,11 +690,11 @@ impl Tetrahedralization {
         let e = bcde.vertices[e_corner];
 
         let [bdc_nb_id, acd_nb_id, adb_nb_id, abc_nb_id] = abcd.neighbors;
-        assert_eq!(bdc_nb_id, bcde_id);
+        debug_assert_eq!(bdc_nb_id, bcde_id);
 
-        let ecb_nb_id = bcde.id_of_neighbor_adjoining_face([e, c, b]);
-        let edc_nb_id = bcde.id_of_neighbor_adjoining_face([e, d, c]);
-        let ebd_nb_id = bcde.id_of_neighbor_adjoining_face([e, b, d]);
+        let edc_nb_id = bcde.id_of_neighbor_opposite_vertex(b);
+        let ebd_nb_id = bcde.id_of_neighbor_opposite_vertex(c);
+        let ecb_nb_id = bcde.id_of_neighbor_opposite_vertex(d);
 
         let abce_id = abcd_id;
         let acde_id = bcde_id;
@@ -803,18 +785,17 @@ impl Tetrahedralization {
         let e_corner = bcde.corner_not_on_face([b, c, d]);
         let e = bcde.vertices[e_corner];
 
-        let e_corner_axye = axye.corner_not_on_face([a, x, y]);
-        assert_eq!(axye.vertices[e_corner_axye], e);
+        debug_assert_eq!(axye.vertices[axye.corner_not_on_face([a, x, y])], e);
 
-        let axz_nb_id = abcd.id_of_neighbor_adjoining_face([a, x, z]);
-        let azy_nb_id = abcd.id_of_neighbor_adjoining_face([a, z, y]);
-        assert_eq!(abcd.id_of_neighbor_adjoining_face([a, y, x]), axye_id);
-        assert_eq!(abcd.id_of_neighbor_adjoining_face([b, d, c]), bcde_id);
+        let azy_nb_id = abcd.id_of_neighbor_opposite_vertex(x);
+        let axz_nb_id = abcd.id_of_neighbor_opposite_vertex(y);
+        debug_assert_eq!(abcd.id_of_neighbor_opposite_vertex(z), axye_id);
+        debug_assert_eq!(abcd.id_of_neighbor_opposite_vertex(a), bcde_id);
 
-        let ezx_nb_id = bcde.id_of_neighbor_adjoining_face([e, z, x]);
-        let eyz_nb_id = bcde.id_of_neighbor_adjoining_face([e, y, z]);
-        let xae_nb_id = axye.id_of_neighbor_adjoining_face([x, a, e]);
-        let yea_nb_id = axye.id_of_neighbor_adjoining_face([y, e, a]);
+        let eyz_nb_id = bcde.id_of_neighbor_opposite_vertex(x);
+        let ezx_nb_id = bcde.id_of_neighbor_opposite_vertex(y);
+        let yea_nb_id = axye.id_of_neighbor_opposite_vertex(x);
+        let xae_nb_id = axye.id_of_neighbor_opposite_vertex(y);
 
         let axze_id = abcd_id;
         let azye_id = bcde_id;
@@ -906,23 +887,20 @@ impl Tetrahedralization {
         let f_corner = axyf.corner_not_on_face([a, x, y]);
         let f = axyf.vertices[f_corner];
 
-        let e_corner_xyfe = xyfe.corner_not_on_face([y, f, x]);
-        assert_eq!(xyfe.vertices[e_corner_xyfe], e);
+        debug_assert_eq!(xyfe.vertices[xyfe.corner_not_on_face([y, f, x])], e);
+        debug_assert_eq!(xyfe.vertices[xyfe.corner_not_on_face([e, y, x])], f);
 
-        let f_corner_xyfe = xyfe.corner_not_on_face([e, y, x]);
-        assert_eq!(xyfe.vertices[f_corner_xyfe], f);
+        let azy_nb_id = abcd.id_of_neighbor_opposite_vertex(x);
+        let axz_nb_id = abcd.id_of_neighbor_opposite_vertex(y);
+        debug_assert_eq!(abcd.id_of_neighbor_opposite_vertex(z), axyf_id);
+        debug_assert_eq!(abcd.id_of_neighbor_opposite_vertex(a), bcde_id);
 
-        let axz_nb_id = abcd.id_of_neighbor_adjoining_face([a, x, z]);
-        let azy_nb_id = abcd.id_of_neighbor_adjoining_face([a, z, y]);
-        assert_eq!(abcd.id_of_neighbor_adjoining_face([a, y, x]), axyf_id);
-        assert_eq!(abcd.id_of_neighbor_adjoining_face([b, d, c]), bcde_id);
-
-        let ezx_nb_id = bcde.id_of_neighbor_adjoining_face([e, z, x]);
-        let eyz_nb_id = bcde.id_of_neighbor_adjoining_face([e, y, z]);
-        let afx_nb_id = axyf.id_of_neighbor_adjoining_face([a, f, x]);
-        let ayf_nb_id = axyf.id_of_neighbor_adjoining_face([a, y, f]);
-        let exf_nb_id = xyfe.id_of_neighbor_adjoining_face([e, x, f]);
-        let efy_nb_id = xyfe.id_of_neighbor_adjoining_face([e, f, y]);
+        let eyz_nb_id = bcde.id_of_neighbor_opposite_vertex(x);
+        let ezx_nb_id = bcde.id_of_neighbor_opposite_vertex(y);
+        let ayf_nb_id = axyf.id_of_neighbor_opposite_vertex(x);
+        let afx_nb_id = axyf.id_of_neighbor_opposite_vertex(y);
+        let efy_nb_id = xyfe.id_of_neighbor_opposite_vertex(x);
+        let exf_nb_id = xyfe.id_of_neighbor_opposite_vertex(y);
 
         let axze_id = abcd_id;
         let azye_id = bcde_id;
@@ -1009,22 +987,24 @@ impl Tetrahedron {
     }
 
     #[inline]
-    fn corner_of_vertex(&self, vertex: VertexIdx) -> Option<usize> {
+    fn corner_of_vertex(&self, vertex: VertexIdx) -> usize {
         let [a, b, c, d] = self.vertices;
-        let mut corner = None;
+        let mut corner = usize::MAX;
 
         if vertex == a {
-            corner = Some(0);
+            corner = 0;
         }
         if vertex == b {
-            corner = Some(1);
+            corner = 1;
         }
         if vertex == c {
-            corner = Some(2);
+            corner = 2;
         }
         if vertex == d {
-            corner = Some(3);
+            corner = 3;
         }
+
+        assert_ne!(corner, usize::MAX, "Tried to find corner of missing vertex");
 
         corner
     }
@@ -1050,30 +1030,14 @@ impl Tetrahedron {
     }
 
     #[inline]
-    fn id_of_neighbor_adjoining_face(&self, face: [VertexIdx; 3]) -> TetrahedronID {
-        let [a, b, c, d] = self.vertices;
-
-        if face == [b, d, c] || face == [c, b, d] || face == [d, c, b] {
-            return self.neighbors[0];
-        }
-        if face == [a, c, d] || face == [d, a, c] || face == [c, d, a] {
-            return self.neighbors[1];
-        }
-        if face == [a, d, b] || face == [b, a, d] || face == [d, b, a] {
-            return self.neighbors[2];
-        }
-        if face == [a, b, c] || face == [c, a, b] || face == [b, c, a] {
-            return self.neighbors[3];
-        }
-
-        panic!("Tried to find ID of neighbor adjoining missing face");
+    fn id_of_neighbor_opposite_vertex(&self, vertex: VertexIdx) -> TetrahedronID {
+        let corner = self.corner_of_vertex(vertex);
+        self.neighbors[corner]
     }
 
     #[inline]
     fn neighbors_with_vertex(&self, vertex: VertexIdx) -> [TetrahedronID; 3] {
-        let corner = self
-            .corner_of_vertex(vertex)
-            .expect("Tried to find neighbors with missing vertex");
+        let corner = self.corner_of_vertex(vertex);
 
         if corner == 0 {
             [self.neighbors[1], self.neighbors[2], self.neighbors[3]]
