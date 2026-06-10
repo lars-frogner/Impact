@@ -25,11 +25,12 @@ const MIN_RELATIVE_POINT_SEPARATION: f32 = 1e-9;
 
 #[derive(Clone, Debug)]
 pub struct DelaunayTetrahedralization {
-    tetrahedra: TetrahedronMap,
+    inner: Tetrahedralization,
 }
 
 #[derive(Clone, Debug)]
-struct TetrahedronMap {
+struct Tetrahedralization {
+    vertices: Vec<Vertex>,
     tetrahedra: NoHashMap<TetrahedronID, Tetrahedron>,
     id_counter: TetrahedronID,
 }
@@ -44,15 +45,16 @@ struct Tetrahedron {
     neighbors: [TetrahedronID; 4],
 }
 
-#[derive(Debug)]
-struct TetrahedronPointLocator {
-    rng: Rng,
+#[derive(Clone, Copy, Debug)]
+struct Vertex {
+    point: Point3C,
+    /// The ID of an arbitrary tetrahedron connected to the vertex.
+    tetra_id: TetrahedronID,
 }
 
 #[derive(Debug)]
-struct TetrahedronPointLocatorScratch<'a, A: Allocator> {
-    available_tetrahedron_ids: &'a mut AVec<TetrahedronID, A>,
-    candidate_tetrahedron_ids: &'a mut AVec<TetrahedronID, A>,
+struct TetrahedronPointLocator {
+    rng: Rng,
 }
 
 impl DelaunayTetrahedralization {
@@ -64,53 +66,25 @@ impl DelaunayTetrahedralization {
     pub fn construct(points: &[Point3C]) -> Result<Self> {
         let n_points = points.len();
 
-        if n_points < 4 {
-            return Ok(Self {
-                tetrahedra: TetrahedronMap::new(),
-            });
-        }
-
         if n_points > VertexIdx::MAX as usize - 4 {
             bail!("Number of points {n_points} is higher than supported");
         }
 
-        let mut tetrahedra = TetrahedronMap::with_capacity(n_points);
+        let mut tetras = Tetrahedralization::with_vertex_capacity(n_points + 4);
 
-        let arena = ArenaPool::get_arena();
-
-        // Array for looking up vertex coordinates with vertex indices. The
-        // first part will contain all the points we are tetrahedralizing, the
-        // last part will contain the four vertices of the bounding tetrahedron.
-        let mut vertices = AVec::with_capacity_in(n_points + 4, &arena);
-        vertices.extend_from_slice(points);
+        if n_points < 4 {
+            return Ok(Self { inner: tetras });
+        }
 
         let aabb = AxisAlignedBox::aabb_for_points(points);
         let bounding_sphere = Sphere::bounding_sphere_from_aabb(&aabb);
 
-        // Initialize with a single big tetrahedron encompassing all points.
-        // This ensures points will always be inserted into an existing
-        // tetrahedron.
-        let bounding_tetra_vertices = find_tetrahedron_encompassing_sphere(
-            bounding_sphere.center(),
-            bounding_sphere.radius() * BOUNDING_TETRA_MARGIN_FACTOR,
-        );
-
-        vertices.extend_from_slice(&bounding_tetra_vertices);
-
-        let first_bounding_vertex_idx = n_points as VertexIdx;
-
-        tetrahedra.add_tetrahedron(Tetrahedron {
-            vertices: [
-                first_bounding_vertex_idx,
-                first_bounding_vertex_idx + 1,
-                first_bounding_vertex_idx + 2,
-                first_bounding_vertex_idx + 3,
-            ],
-            neighbors: [NO_TETRAHEDRON_ID; 4],
-        });
+        tetras.add_bounding_tetrahedron(&bounding_sphere);
 
         let min_squared_point_separation =
             (MIN_RELATIVE_POINT_SEPARATION * bounding_sphere.radius()).powi(2);
+
+        let arena = ArenaPool::get_arena();
 
         // When inserting a new vertex, we will push all new tetrahedra created
         // as result to the stack. For each tetrahedron popped off the stack, we
@@ -121,48 +95,32 @@ impl DelaunayTetrahedralization {
         // vertex.
         let mut stack = AVec::with_capacity_in(64, &arena);
 
-        let mut tetrahedron_ids_scratch = AVec::with_capacity_in(vertices.len(), &arena);
-        let mut candidate_tetrahedron_ids = AVec::with_capacity_in(
-            TetrahedronPointLocator::n_candidates_for_vertices(vertices.len()),
-            &arena,
-        );
-
         let mut locator = TetrahedronPointLocator::new(0);
-        let mut current_vertex_count = 4;
 
-        'insertion: for (new_vertex_idx, new_vertex) in vertices[..n_points].iter().enumerate() {
-            let new_vertex_idx = new_vertex_idx as VertexIdx;
-
-            let inside_tetra_id = locator.find_tetrahedron_containing_point(
-                TetrahedronPointLocatorScratch {
-                    available_tetrahedron_ids: &mut tetrahedron_ids_scratch,
-                    candidate_tetrahedron_ids: &mut candidate_tetrahedron_ids,
-                },
-                &vertices,
-                &tetrahedra,
-                current_vertex_count,
-                new_vertex,
-            );
+        'insertion: for new_vertex in points {
+            let inside_tetra_id = locator.find_tetrahedron_containing_point(&tetras, new_vertex);
             assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
 
+            let inside_tetra = tetras.tetrahedron(inside_tetra_id);
+
             // Skip the new vertex if it coincides with an existing vertex
-            for vertex in tetrahedra.tetrahedron(inside_tetra_id).vertices(&vertices) {
-                if Point3C::squared_distance_between(new_vertex, vertex)
+            for vertex in inside_tetra.vertices(tetras.vertices()) {
+                if Point3C::squared_distance_between(new_vertex, &vertex)
                     < min_squared_point_separation
                 {
                     continue 'insertion;
                 }
             }
 
-            let new_tetra_ids =
-                tetrahedra.insert_and_connect_vertex(new_vertex_idx, inside_tetra_id);
+            let new_vertex_idx = tetras.n_vertices() as VertexIdx;
+            let new_tetra_ids = tetras.insert_and_connect_vertex(*new_vertex, inside_tetra_id);
 
             stack.extend_from_slice(&new_tetra_ids);
 
             while let Some(abcd_id) = stack.pop() {
                 // Let the current tetrahedron be ABCD. The inserted vertex is A
                 // (the reconnection operations never move A).
-                let Some(abcd) = tetrahedra.get_tetrahedron(abcd_id) else {
+                let Some(abcd) = tetras.get_tetrahedron(abcd_id) else {
                     // The tetrahedron may have been deleted by a reconnection
                     // after being pushed on the stack
                     continue;
@@ -176,18 +134,18 @@ impl DelaunayTetrahedralization {
                 if bcde_id == NO_TETRAHEDRON_ID {
                     continue;
                 }
-                let bcde = tetrahedra.tetrahedron(bcde_id);
+                let bcde = tetras.tetrahedron(bcde_id);
 
                 // The neighbor shares the BDC face (in vertex order BCD).
                 // Find the fourth vertex E not on that face.
                 let e_corner = bcde.corner_not_on_face([b, c, d]);
                 let e = bcde.vertices[e_corner];
 
-                let vertex_a = abcd.vertex(&vertices, 0);
-                let vertex_b = abcd.vertex(&vertices, 1);
-                let vertex_c = abcd.vertex(&vertices, 2);
-                let vertex_d = abcd.vertex(&vertices, 3);
-                let vertex_e = bcde.vertex(&vertices, e_corner);
+                let vertex_a = abcd.vertex(tetras.vertices(), 0);
+                let vertex_b = abcd.vertex(tetras.vertices(), 1);
+                let vertex_c = abcd.vertex(tetras.vertices(), 2);
+                let vertex_d = abcd.vertex(tetras.vertices(), 3);
+                let vertex_e = bcde.vertex(tetras.vertices(), e_corner);
 
                 // If E lies inside the circumsphere of ABCD, ABCD does not
                 // satisfy the Delaunay criterion, so we divide the hull of ABCD
@@ -214,7 +172,7 @@ impl DelaunayTetrahedralization {
                             // The hull of ABCD and BCDE is convex. They can be
                             // reconnected into three tetrahedra ABCE, ACDE and
                             // ADBE.
-                            let new_tetra_ids = tetrahedra.reconnect_two_to_three(abcd_id, bcde_id);
+                            let new_tetra_ids = tetras.reconnect_two_to_three(abcd_id, bcde_id);
                             stack.extend_from_slice(&new_tetra_ids);
                         }
                         LineTriangleIntersection::Outside {
@@ -260,7 +218,7 @@ impl DelaunayTetrahedralization {
                             }
                             // Reconnect into two tetrahedra AXZE and AZYE
                             let new_tetra_ids =
-                                tetrahedra.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
+                                tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
                             stack.extend_from_slice(&new_tetra_ids);
                         }
                         LineTriangleIntersection::Edges {
@@ -306,7 +264,7 @@ impl DelaunayTetrahedralization {
                                 if axye_nb_of_abcd == axye_nb_of_bcde
                                     && axye_nb_of_abcd != NO_TETRAHEDRON_ID
                                 {
-                                    let new_tetra_ids = tetrahedra.reconnect_three_to_two(
+                                    let new_tetra_ids = tetras.reconnect_three_to_two(
                                         abcd_id,
                                         bcde_id,
                                         axye_nb_of_abcd,
@@ -314,7 +272,7 @@ impl DelaunayTetrahedralization {
                                     stack.extend_from_slice(&new_tetra_ids);
                                 } else {
                                     let new_tetra_ids =
-                                        tetrahedra.reconnect_two_to_three(abcd_id, bcde_id);
+                                        tetras.reconnect_two_to_three(abcd_id, bcde_id);
                                     stack.extend_from_slice(&new_tetra_ids);
                                 }
                             } else {
@@ -360,8 +318,8 @@ impl DelaunayTetrahedralization {
                                 {
                                     continue;
                                 }
-                                let tetra_3 = tetrahedra.tetrahedron(tetra_3_id);
-                                let tetra_4 = tetrahedra.tetrahedron(tetra_4_id);
+                                let tetra_3 = tetras.tetrahedron(tetra_3_id);
+                                let tetra_4 = tetras.tetrahedron(tetra_4_id);
 
                                 let f_corner_t3 = tetra_3.corner_not_on_face(tetra_3_non_f_face);
                                 let f_corner_t4 = tetra_4.corner_not_on_face(tetra_4_non_f_face);
@@ -373,7 +331,7 @@ impl DelaunayTetrahedralization {
                                     continue;
                                 }
 
-                                let new_tetra_ids = tetrahedra.reconnect_four_to_four(
+                                let new_tetra_ids = tetras.reconnect_four_to_four(
                                     abcd_id, bcde_id, tetra_3_id, tetra_4_id,
                                 );
                                 stack.extend_from_slice(&new_tetra_ids);
@@ -382,42 +340,46 @@ impl DelaunayTetrahedralization {
                     }
                 }
             }
-
-            current_vertex_count += 1;
         }
 
-        // Remove all tetrahedra connected to the ad-hoc bounding vertices
-        tetrahedra.retain(&mut tetrahedron_ids_scratch, |tetra| {
-            tetra
-                .vertices
-                .iter()
-                .all(|&vertex| vertex < first_bounding_vertex_idx)
-        });
+        tetras.remove_boundary_tetrahedra(&arena);
 
-        Ok(Self { tetrahedra })
+        Ok(Self { inner: tetras })
     }
 
     /// Returns the number of tetrahedra in the tetrahedralization.
     pub fn n_tetrahedra(&self) -> usize {
-        self.tetrahedra.n_tetrahedra()
+        self.inner.n_tetrahedra()
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
-    fn validate_brute_force(&self, vertices: &[Point3C]) {
-        for (&tetra_id, tetra) in self.tetrahedra.tetrahedra() {
-            let [a, b, c, d] = tetra.vertices(vertices);
+    fn validate_brute_force(&self) {
+        for (&tetra_id, tetra) in self.inner.tetrahedra() {
+            for vertex_idx in tetra.vertices {
+                assert!(
+                    vertex_idx >= 4,
+                    "Tetrahedron {tetra_id} contains boundary vertex {vertex_idx}"
+                );
+                let vertex = &self.inner.vertices()[vertex_idx as usize];
+                assert_ne!(
+                    vertex.tetra_id, NO_TETRAHEDRON_ID,
+                    "Vertex {vertex_idx} points to no tetrahedron despite being used in tetrahedron {tetra_id}"
+                );
+            }
+
+            let [a, b, c, d] = tetra.vertices(self.inner.vertices());
 
             for (nb_idx, &nb_id) in tetra.neighbors.iter().enumerate() {
                 if nb_id == NO_TETRAHEDRON_ID {
                     continue;
                 }
                 assert!(
-                    self.tetrahedra.has_tetrahedron(nb_id),
+                    self.inner.has_tetrahedron(nb_id),
                     "Tetrahedron {tetra_id} is missing neighbor {nb_id} at slot {nb_idx}"
                 );
 
-                let face = tetra.face(nb_idx);
-                let neighbor = self.tetrahedra.tetrahedron(nb_id);
+                let face = tetra.face_for_neighbor(nb_idx);
+                let neighbor = self.inner.tetrahedron(nb_id);
 
                 let mut back_idx = None;
                 for (i, &id) in neighbor.neighbors.iter().enumerate() {
@@ -437,7 +399,7 @@ impl DelaunayTetrahedralization {
                     )
                 });
 
-                let back_face = neighbor.face(back_idx);
+                let back_face = neighbor.face_for_neighbor(back_idx);
                 let reversed_face = [face[0], face[2], face[1]];
                 assert!(
                     back_face == reversed_face
@@ -449,14 +411,14 @@ impl DelaunayTetrahedralization {
                 );
             }
 
-            if evaluate_side_of_triangle_plane_for_point(a, b, c, d)
+            if evaluate_side_of_triangle_plane_for_point(&a, &b, &c, &d)
                 == PointTrianglePlaneSide::Negative
             {
                 panic!("Tetrahedron {tetra_id} has a negative signed volume");
             }
 
-            for (v_idx, v) in vertices.iter().enumerate() {
-                if point_lies_strictly_inside_circumsphere(a, b, c, d, v) {
+            for (v_idx, v) in self.inner.vertices().iter().enumerate() {
+                if point_lies_strictly_inside_circumsphere(&a, &b, &c, &d, &v.point) {
                     let [a_idx, b_idx, c_idx, d_idx] = tetra.vertices;
                     panic!(
                         "Circumsphere of tetrahedron {tetra_id} with vertices \
@@ -466,69 +428,169 @@ impl DelaunayTetrahedralization {
                 }
             }
         }
+
+        for (vertex_idx, vertex) in self.inner.vertices().iter().enumerate().skip(4) {
+            let vertex_idx = vertex_idx as VertexIdx;
+            if vertex.tetra_id == NO_TETRAHEDRON_ID {
+                continue;
+            }
+            let Some(tetra) = self.inner.get_tetrahedron(vertex.tetra_id) else {
+                panic!(
+                    "Vertex {vertex_idx} points to missing tetrahedron {}",
+                    vertex.tetra_id
+                );
+            };
+            assert!(
+                tetra.vertices.contains(&vertex_idx),
+                "Vertex {vertex_idx} points to tetrahedron {} without that vertex",
+                vertex.tetra_id
+            );
+        }
     }
 }
 
-impl TetrahedronMap {
-    fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
-    fn with_capacity(capacity: usize) -> Self {
+impl Tetrahedralization {
+    fn with_vertex_capacity(vertex_capacity: usize) -> Self {
+        let vertices = Vec::with_capacity(vertex_capacity);
+        let tetra_capacity = estimated_tetrahedron_count(vertex_capacity);
+        let tetrahedra = NoHashMap::with_capacity_and_hasher(tetra_capacity, Default::default());
         Self {
-            tetrahedra: NoHashMap::with_capacity_and_hasher(capacity, Default::default()),
+            vertices,
+            tetrahedra,
             id_counter: NO_TETRAHEDRON_ID + 1,
         }
     }
 
+    #[inline]
+    fn vertices(&self) -> &[Vertex] {
+        &self.vertices
+    }
+
+    #[inline]
+    fn n_vertices(&self) -> usize {
+        self.vertices.len()
+    }
+
+    #[inline]
     fn n_tetrahedra(&self) -> usize {
         self.tetrahedra.len()
     }
 
-    fn ids(&self) -> impl Iterator<Item = TetrahedronID> {
-        self.tetrahedra.keys().copied()
-    }
-
+    #[inline]
     fn get_tetrahedron(&self, id: TetrahedronID) -> Option<&Tetrahedron> {
         self.tetrahedra.get(&id)
     }
 
+    #[inline]
     fn tetrahedron(&self, id: TetrahedronID) -> &Tetrahedron {
         self.get_tetrahedron(id).unwrap()
     }
 
     #[allow(dead_code)]
+    #[inline]
     fn has_tetrahedron(&self, id: TetrahedronID) -> bool {
         self.tetrahedra.contains_key(&id)
     }
 
     #[allow(dead_code)]
+    #[inline]
     fn tetrahedra(&self) -> impl Iterator<Item = (&TetrahedronID, &Tetrahedron)> {
         self.tetrahedra.iter()
     }
 
-    fn add_tetrahedron(&mut self, tetra: Tetrahedron) -> TetrahedronID {
-        let id = self.create_new_id();
-        self.tetrahedra.insert(id, tetra);
-        id
+    /// Adds a tetrahedron bounding the given sphere as the first tetrahedron.
+    fn add_bounding_tetrahedron(&mut self, bounding_sphere: &Sphere) {
+        assert!(self.vertices.is_empty());
+        assert!(self.tetrahedra.is_empty());
+
+        // Initialize with a single big tetrahedron encompassing all points.
+        // This ensures points will always be inserted into an existing
+        // tetrahedron.
+        let bounding_tetra_vertices = find_tetrahedron_encompassing_sphere(
+            bounding_sphere.center(),
+            bounding_sphere.radius() * BOUNDING_TETRA_MARGIN_FACTOR,
+        );
+
+        let bounding_tetra_id = self.create_new_id();
+
+        self.vertices.extend(
+            bounding_tetra_vertices
+                .into_iter()
+                .map(|vertex| Vertex::new(vertex, bounding_tetra_id)),
+        );
+
+        self.tetrahedra.insert(
+            bounding_tetra_id,
+            Tetrahedron {
+                vertices: [0, 1, 2, 3],
+                neighbors: [NO_TETRAHEDRON_ID; 4],
+            },
+        );
     }
 
-    fn retain<A: Allocator>(
-        &mut self,
-        id_scratch: &mut AVec<TetrahedronID, A>,
-        should_keep: impl Fn(&Tetrahedron) -> bool,
-    ) {
-        id_scratch.clear();
-        id_scratch.extend(self.ids());
+    /// Removes all tetrahedra connected to the ad-hoc bounding vertices.
+    fn remove_boundary_tetrahedra<A: Allocator>(&mut self, arena: A) {
+        let mut tetras_to_remove = AVec::new_in(arena);
+        let mut visited_neighbors = AVec::new_in(arena);
+        let mut neighbors_to_check = AVec::new_in(arena);
 
-        for &id in &*id_scratch {
-            let Some(tetra) = self.tetrahedra.get(&id) else {
-                continue;
-            };
-            if should_keep(tetra) {
+        for (&id, tetra) in &self.tetrahedra {
+            let has_boundary_vertex = tetra.vertices.iter().any(|&vertex| vertex < 4);
+
+            if !has_boundary_vertex {
                 continue;
             }
-            // Clear the ID from the neighbor ID lists of the neighbors
+
+            tetras_to_remove.push(id);
+
+            // Each non-boundary vertex pointing to the boundary tetrahedron
+            // that will be removed must be re-pointed to another non-boundary
+            // tetrahedron with that vertex.
+            for vertex_idx in tetra.vertices {
+                if vertex_idx < 4 {
+                    continue;
+                }
+                let internal_vertex = &mut self.vertices[vertex_idx as usize];
+
+                if internal_vertex.tetra_id != id {
+                    continue;
+                }
+
+                visited_neighbors.clear();
+                neighbors_to_check.clear();
+
+                visited_neighbors.push(id);
+                neighbors_to_check.extend_from_slice(&tetra.neighbors_with_vertex(vertex_idx));
+
+                while let Some(nb_id) = neighbors_to_check.pop() {
+                    if nb_id == NO_TETRAHEDRON_ID {
+                        continue;
+                    }
+                    let nb_tetra = self.tetrahedra.get(&nb_id).unwrap();
+                    let nb_has_boundary_vertex = nb_tetra.vertices.iter().any(|&vertex| vertex < 4);
+
+                    if nb_has_boundary_vertex {
+                        visited_neighbors.push(nb_id);
+
+                        for nb_nb_id in nb_tetra.neighbors_with_vertex(vertex_idx) {
+                            if !visited_neighbors.contains(&nb_nb_id) {
+                                neighbors_to_check.push(nb_nb_id);
+                            }
+                        }
+                    } else {
+                        internal_vertex.tetra_id = nb_id;
+                        break;
+                    }
+                }
+
+                if internal_vertex.tetra_id == id {
+                    internal_vertex.tetra_id = NO_TETRAHEDRON_ID;
+                }
+            }
+        }
+
+        for id in tetras_to_remove {
+            let tetra = self.tetrahedra.get(&id).unwrap();
             for nb_id in tetra.neighbors {
                 if nb_id != NO_TETRAHEDRON_ID
                     && let Some(tetra_nb) = self.tetrahedra.get_mut(&nb_id)
@@ -536,7 +598,12 @@ impl TetrahedronMap {
                     tetra_nb.replace_neighbor_id(id, NO_TETRAHEDRON_ID);
                 }
             }
+
             self.tetrahedra.remove(&id);
+        }
+
+        for bounding_vertex in self.vertices[..4].iter_mut() {
+            bounding_vertex.tetra_id = NO_TETRAHEDRON_ID;
         }
     }
 
@@ -547,10 +614,12 @@ impl TetrahedronMap {
     /// names.
     fn insert_and_connect_vertex(
         &mut self,
-        vertex: VertexIdx,
+        vertex: Point3C,
         inside_tetra_id: TetrahedronID,
     ) -> [TetrahedronID; 4] {
         assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
+
+        let a = self.vertices.len() as VertexIdx;
 
         let abce_id = inside_tetra_id;
         let acde_id = self.create_new_id();
@@ -558,7 +627,6 @@ impl TetrahedronMap {
         let acbd_id = self.create_new_id();
 
         let tetra = self.tetrahedra.get_mut(&inside_tetra_id).unwrap();
-        let a = vertex;
         let [b, c, d, e] = tetra.vertices;
         let [bcd_nb_id, bde_nb_id, bec_nb_id, ced_nb_id] = tetra.neighbors;
 
@@ -599,6 +667,12 @@ impl TetrahedronMap {
             let bcd_nb = self.tetrahedra.get_mut(&bcd_nb_id).unwrap();
             bcd_nb.replace_neighbor_id(inside_tetra_id, acbd_id);
         }
+
+        // Add new vertex A
+        self.vertices.push(Vertex::new(vertex, abce_id));
+
+        // Update potentially invalidated tetrahedron ID for vertex D
+        self.vertices[d as usize].tetra_id = acde_id;
 
         [abce_id, acde_id, adbe_id, acbd_id]
     }
@@ -678,6 +752,10 @@ impl TetrahedronMap {
             let ebd_nb = self.tetrahedra.get_mut(&ebd_nb_id).unwrap();
             ebd_nb.replace_neighbor_id(bcde_id, adbe_id);
         }
+
+        // Update potentially invalidated tetrahedron ID for applicable vertices
+        self.vertices[b as usize].tetra_id = abce_id;
+        self.vertices[d as usize].tetra_id = acde_id;
 
         [abce_id, acde_id, adbe_id]
     }
@@ -771,6 +849,12 @@ impl TetrahedronMap {
             let yea_nb = self.tetrahedra.get_mut(&yea_nb_id).unwrap();
             yea_nb.replace_neighbor_id(axye_id, azye_id);
         }
+
+        // Update potentially invalidated tetrahedron ID for applicable vertices
+        self.vertices[a as usize].tetra_id = axze_id;
+        self.vertices[x as usize].tetra_id = axze_id;
+        self.vertices[y as usize].tetra_id = azye_id;
+        self.vertices[e as usize].tetra_id = axze_id;
 
         [axze_id, azye_id]
     }
@@ -886,6 +970,10 @@ impl TetrahedronMap {
             exf_nb.replace_neighbor_id(xyfe_id, afxe_id);
         }
 
+        // Update potentially invalidated tetrahedron ID for applicable vertices
+        self.vertices[x as usize].tetra_id = axze_id;
+        self.vertices[y as usize].tetra_id = azye_id;
+
         [axze_id, azye_id, afxe_id, ayfe_id]
     }
 
@@ -901,13 +989,13 @@ impl TetrahedronMap {
 
 impl Tetrahedron {
     #[inline]
-    fn vertex<'a>(&self, vertices: &'a [Point3C], corner: usize) -> &'a Point3C {
-        &vertices[self.vertices[corner] as usize]
+    fn vertex<'a>(&self, vertices: &'a [Vertex], corner: usize) -> &'a Point3C {
+        &vertices[self.vertices[corner] as usize].point
     }
 
     #[inline]
-    fn vertices<'a>(&self, vertices: &'a [Point3C]) -> [&'a Point3C; 4] {
-        self.vertices.map(|idx| &vertices[idx as usize])
+    fn vertices(&self, vertices: &[Vertex]) -> [Point3C; 4] {
+        self.vertices.map(|idx| vertices[idx as usize].point)
     }
 
     #[inline]
@@ -920,16 +1008,24 @@ impl Tetrahedron {
     }
 
     #[inline]
-    #[allow(dead_code)]
-    fn face(&self, neighbor_idx: usize) -> [VertexIdx; 3] {
+    fn corner_of_vertex(&self, vertex: VertexIdx) -> Option<usize> {
         let [a, b, c, d] = self.vertices;
-        match neighbor_idx {
-            0 => [a, b, c],
-            1 => [a, c, d],
-            2 => [a, d, b],
-            3 => [b, d, c],
-            _ => panic!("Invalid neighbor index {neighbor_idx}"),
+        let mut corner = None;
+
+        if vertex == a {
+            corner = Some(0);
         }
+        if vertex == b {
+            corner = Some(1);
+        }
+        if vertex == c {
+            corner = Some(2);
+        }
+        if vertex == d {
+            corner = Some(3);
+        }
+
+        corner
     }
 
     #[inline]
@@ -973,9 +1069,39 @@ impl Tetrahedron {
     }
 
     #[inline]
+    fn neighbors_with_vertex(&self, vertex: VertexIdx) -> [TetrahedronID; 3] {
+        let corner = self
+            .corner_of_vertex(vertex)
+            .expect("Tried to find neighbors with missing vertex");
+
+        if corner == 0 {
+            [self.neighbors[0], self.neighbors[1], self.neighbors[2]]
+        } else if corner == 1 {
+            [self.neighbors[0], self.neighbors[2], self.neighbors[3]]
+        } else if corner == 2 {
+            [self.neighbors[0], self.neighbors[1], self.neighbors[3]]
+        } else {
+            [self.neighbors[1], self.neighbors[2], self.neighbors[3]]
+        }
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    fn face_for_neighbor(&self, neighbor_idx: usize) -> [VertexIdx; 3] {
+        let [a, b, c, d] = self.vertices;
+        match neighbor_idx {
+            0 => [a, b, c],
+            1 => [a, c, d],
+            2 => [a, d, b],
+            3 => [b, d, c],
+            _ => panic!("Invalid neighbor index {neighbor_idx}"),
+        }
+    }
+
+    #[inline]
     fn next_neighbor_towards_point(
         &self,
-        vertices: &[Point3C],
+        vertices: &[Vertex],
         point: &Point3C,
         rng: &mut Rng,
     ) -> Option<TetrahedronID> {
@@ -984,12 +1110,7 @@ impl Tetrahedron {
         let vc = self.vertex(vertices, 2);
         let vd = self.vertex(vertices, 3);
 
-        let triangles = [
-            [&va, &vb, &vc],
-            [&va, &vc, &vd],
-            [&va, &vd, &vb],
-            [&vb, &vd, &vc],
-        ];
+        let triangles = [[va, vb, vc], [va, vc, vd], [va, vd, vb], [vb, vd, vc]];
 
         let mut neighbor_indices = [0, 1, 2, 3];
         rng.shuffle(&mut neighbor_indices);
@@ -1007,6 +1128,18 @@ impl Tetrahedron {
     }
 }
 
+impl Vertex {
+    fn new(point: Point3C, tetra_id: TetrahedronID) -> Self {
+        Self { point, tetra_id }
+    }
+}
+
+impl From<Point3C> for Vertex {
+    fn from(point: Point3C) -> Self {
+        Self::new(point, NO_TETRAHEDRON_ID)
+    }
+}
+
 impl TetrahedronPointLocator {
     fn new(seed: u64) -> Self {
         let rng = Rng::with_seed(seed);
@@ -1016,51 +1149,39 @@ impl TetrahedronPointLocator {
     fn n_candidates_for_vertices(n_vertices: usize) -> usize {
         // From Mücke et al. (1999)
         let n_candidates = 7.0 * (n_vertices as f32).sqrt().sqrt();
-        n_candidates.ceil().max(1.0) as usize
+        (n_candidates.ceil().max(1.0) as usize).min(n_vertices)
     }
 
-    fn find_tetrahedron_containing_point<A: Allocator>(
+    fn find_tetrahedron_containing_point(
         &mut self,
-        scratch: TetrahedronPointLocatorScratch<'_, A>,
-        vertices: &[Point3C],
-        tetrahedra: &TetrahedronMap,
-        current_vertex_count: usize,
+        tetras: &Tetrahedralization,
         point: &Point3C,
     ) -> TetrahedronID {
-        if tetrahedra.n_tetrahedra() == 0 {
+        if tetras.n_tetrahedra() == 0 {
             return NO_TETRAHEDRON_ID;
         }
 
-        let n_candidates =
-            Self::n_candidates_for_vertices(current_vertex_count).min(tetrahedra.n_tetrahedra());
+        let vertices = tetras.vertices();
 
-        scratch.available_tetrahedron_ids.clear();
-        scratch.available_tetrahedron_ids.extend(tetrahedra.ids());
+        let n_candidates = Self::n_candidates_for_vertices(vertices.len());
 
-        scratch
-            .candidate_tetrahedron_ids
-            .resize(n_candidates, NO_TETRAHEDRON_ID);
-
-        self.rng.clone_random_subset_from_slice(
-            scratch.candidate_tetrahedron_ids,
-            scratch.available_tetrahedron_ids,
-        );
-
-        let mut current_tetra_id = NO_TETRAHEDRON_ID;
         let mut closest_dist_sq = f32::INFINITY;
+        let mut current_tetra_id = NO_TETRAHEDRON_ID;
 
-        for &id in &*scratch.candidate_tetrahedron_ids {
-            let tetra = tetrahedra.tetrahedron(id);
-            let vertex = tetra.vertex(vertices, 0);
-            let dist_sq = Point3C::squared_distance_between(vertex, point);
+        for _ in 0..n_candidates {
+            let idx = self.rng.random_u32_in_range(0..vertices.len() as u32);
+            let vertex = vertices[idx as usize];
+            let dist_sq = Point3C::squared_distance_between(&vertex.point, point);
             if dist_sq < closest_dist_sq {
-                current_tetra_id = id;
                 closest_dist_sq = dist_sq;
+                current_tetra_id = vertex.tetra_id;
             }
         }
 
+        assert_ne!(current_tetra_id, NO_TETRAHEDRON_ID);
+
         loop {
-            let tetra = tetrahedra.tetrahedron(current_tetra_id);
+            let tetra = tetras.tetrahedron(current_tetra_id);
             if let Some(neighbor_id) =
                 tetra.next_neighbor_towards_point(vertices, point, &mut self.rng)
             {
@@ -1073,6 +1194,14 @@ impl TetrahedronPointLocator {
 
         current_tetra_id
     }
+}
+
+#[inline]
+fn estimated_tetrahedron_count(n_vertices: usize) -> usize {
+    // For many uniformly random points, we expect ~6n tetrahedra for n
+    // vertices. For more clustered points, we expect O(n²). We conservatively
+    // use 6n.
+    6 * n_vertices
 }
 
 #[inline]
@@ -1258,7 +1387,7 @@ pub mod fuzzing {
     pub fn fuzz_test_delaunay_tetrahedralization(input: Vec<DelaunayPoint>) {
         let points = bytemuck::cast_slice(&input);
         let tetrahedra = DelaunayTetrahedralization::construct(points).unwrap();
-        tetrahedra.validate_brute_force(points);
+        tetrahedra.validate_brute_force();
     }
 
     fn arbitrary_norm_f32(u: &mut Unstructured<'_>) -> Result<f32> {
@@ -1306,7 +1435,7 @@ mod tests {
 
         let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 1);
-        tetrahedra.validate_brute_force(&points);
+        tetrahedra.validate_brute_force();
     }
 
     #[test]
@@ -1322,7 +1451,7 @@ mod tests {
 
         let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 2);
-        tetrahedra.validate_brute_force(&points);
+        tetrahedra.validate_brute_force();
     }
 
     #[test]
@@ -1341,7 +1470,7 @@ mod tests {
 
         let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 1);
-        tetrahedra.validate_brute_force(&points);
+        tetrahedra.validate_brute_force();
     }
 
     #[test]
@@ -1362,7 +1491,7 @@ mod tests {
 
         let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
-        tetrahedra.validate_brute_force(&points);
+        tetrahedra.validate_brute_force();
     }
 
     #[test]
@@ -1378,7 +1507,7 @@ mod tests {
 
         let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
-        tetrahedra.validate_brute_force(&points);
+        tetrahedra.validate_brute_force();
     }
 
     #[test]
