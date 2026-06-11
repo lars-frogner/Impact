@@ -1063,23 +1063,35 @@ impl Tetrahedron {
         self.vertices.map(|idx| vertices[idx as usize].point)
     }
 
+    /// Assumes that `old_id` is present.
     #[inline]
     fn replace_neighbor_id(&mut self, old_id: TetrahedronID, new_id: TetrahedronID) {
-        for id in &mut self.neighbors {
-            if *id == old_id {
-                *id = new_id;
-            }
+        debug_assert!(self.neighbors.contains(&old_id));
+
+        let [_, acd, adb, abc] = self.neighbors;
+        let mut neighbor = 0;
+
+        if old_id == acd {
+            neighbor = 1;
         }
+        if old_id == adb {
+            neighbor = 2;
+        }
+        if old_id == abc {
+            neighbor = 3;
+        }
+
+        self.neighbors[neighbor] = new_id;
     }
 
+    /// Assumes that `vertex` is present.
     #[inline]
     fn corner_of_vertex(&self, vertex: VertexIdx) -> usize {
-        let [a, b, c, d] = self.vertices;
-        let mut corner = usize::MAX;
+        debug_assert!(self.vertices.contains(&vertex));
 
-        if vertex == a {
-            corner = 0;
-        }
+        let [_, b, c, d] = self.vertices;
+        let mut corner = 0;
+
         if vertex == b {
             corner = 1;
         }
@@ -1090,29 +1102,34 @@ impl Tetrahedron {
             corner = 3;
         }
 
-        assert_ne!(corner, usize::MAX, "Tried to find corner of missing vertex");
-
         corner
     }
 
+    /// Assumes that all vertices in `face` are present.
     #[inline]
     fn corner_not_on_face(&self, face: [VertexIdx; 3]) -> usize {
-        let [a, b, c, d] = self.vertices;
+        let [v1, v2, v3] = face;
+        debug_assert!(
+            self.vertices.contains(&v1)
+                && self.vertices.contains(&v2)
+                && self.vertices.contains(&v3)
+        );
 
-        if face == [a, b, c] || face == [c, a, b] || face == [b, c, a] {
-            return 3;
+        let [_, b, c, d] = self.vertices;
+        let mut corner = 0;
+
+        // Use bitwise AND to avoid introducing branches
+        if (v1 != b) & (v2 != b) & (v3 != b) {
+            corner = 1;
         }
-        if face == [a, c, d] || face == [d, a, c] || face == [c, d, a] {
-            return 1;
+        if (v1 != c) & (v2 != c) & (v3 != c) {
+            corner = 2;
         }
-        if face == [a, d, b] || face == [b, a, d] || face == [d, b, a] {
-            return 2;
-        }
-        if face == [b, d, c] || face == [c, b, d] || face == [d, c, b] {
-            return 0;
+        if (v1 != d) & (v2 != d) & (v3 != d) {
+            corner = 3;
         }
 
-        panic!("Tried to find corner not on missing face");
+        corner
     }
 
     #[inline]
