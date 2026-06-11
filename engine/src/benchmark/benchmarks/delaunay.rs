@@ -1,5 +1,6 @@
 //! Benchmarks for Delaunay tetrahedralization.
 
+use impact_alloc::Global;
 use impact_math::{point::Point3C, random::Rng};
 use impact_profiling::benchmark::Benchmarker;
 use impact_tesselation::delaunay::DelaunayTetrahedralization;
@@ -21,7 +22,7 @@ pub fn construct_from_randomized_grid_points(benchmarker: impl Benchmarker) {
         }
     }
 
-    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(&points).unwrap());
+    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(Global, &points).unwrap());
 }
 
 pub fn construct_from_regular_grid_points(benchmarker: impl Benchmarker) {
@@ -34,5 +35,5 @@ pub fn construct_from_regular_grid_points(benchmarker: impl Benchmarker) {
         }
     }
 
-    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(&points).unwrap());
+    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(Global, &points).unwrap());
 }
