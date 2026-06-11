@@ -119,16 +119,18 @@ impl DelaunayTetrahedralization {
             stack.extend_from_slice(&new_tetra_ids);
 
             while let Some(abcd_id) = stack.pop() {
+                // The ID could have been cleared due to being invalidated by a
+                // reconnection
+                if abcd_id == NO_TETRAHEDRON_ID {
+                    continue;
+                }
+
                 // Let the current tetrahedron be ABCD. The inserted vertex is A
                 // (the reconnection operations never move A).
-                let Some(abcd) = tetras.get_tetrahedron(abcd_id) else {
-                    // The tetrahedron may have been deleted by a reconnection
-                    // after being pushed on the stack
-                    continue;
-                };
+                let abcd = tetras.tetrahedron(abcd_id);
 
                 let [a, b, c, d] = abcd.vertices;
-                assert_eq!(a, new_vertex_idx);
+                debug_assert_eq!(a, new_vertex_idx);
 
                 // Find neighbor tetrahedron BCDE adjoining the BDC face
                 let bcde_id = abcd.neighbors[0];
@@ -174,6 +176,7 @@ impl DelaunayTetrahedralization {
                             // reconnected into three tetrahedra ABCE, ACDE and
                             // ADBE.
                             let new_tetra_ids = tetras.reconnect_two_to_three(abcd_id, bcde_id);
+
                             stack.extend_from_slice(&new_tetra_ids);
                         }
                         LineTriangleIntersection::Outside {
@@ -211,6 +214,21 @@ impl DelaunayTetrahedralization {
                             // Reconnect into two tetrahedra AXZE and AZYE
                             let new_tetra_ids =
                                 tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
+
+                            // The old tetrahedra ABCD, BCDE and AXYE are now
+                            // removed and their IDs no longer point to them, so
+                            // if they are present on the stack, they must be
+                            // cleared. BCDE will never be on the stack as it
+                            // doesn't contain A. ABCD will also not be on the
+                            // stack so long as we clear AXYE (which is what
+                            // would become ABCD in a later iteration) and
+                            // perform corresponding clearing for the other
+                            // reconnections.
+                            for id in &mut stack {
+                                if *id == axye_id {
+                                    *id = NO_TETRAHEDRON_ID;
+                                }
+                            }
                             stack.extend_from_slice(&new_tetra_ids);
                         }
                         LineTriangleIntersection::Edges {
@@ -247,15 +265,20 @@ impl DelaunayTetrahedralization {
                                 if axye_nb_of_abcd == axye_nb_of_bcde
                                     && axye_nb_of_abcd != NO_TETRAHEDRON_ID
                                 {
-                                    let new_tetra_ids = tetras.reconnect_three_to_two(
-                                        abcd_id,
-                                        bcde_id,
-                                        axye_nb_of_abcd,
-                                    );
+                                    let axye_id = axye_nb_of_abcd;
+                                    let new_tetra_ids =
+                                        tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
+
+                                    for id in &mut stack {
+                                        if *id == axye_id {
+                                            *id = NO_TETRAHEDRON_ID;
+                                        }
+                                    }
                                     stack.extend_from_slice(&new_tetra_ids);
                                 } else {
                                     let new_tetra_ids =
                                         tetras.reconnect_two_to_three(abcd_id, bcde_id);
+
                                     stack.extend_from_slice(&new_tetra_ids);
                                 }
                             } else {
@@ -317,6 +340,12 @@ impl DelaunayTetrahedralization {
                                 let new_tetra_ids = tetras.reconnect_four_to_four(
                                     abcd_id, bcde_id, tetra_3_id, tetra_4_id,
                                 );
+
+                                for id in &mut stack {
+                                    if *id == tetra_3_id {
+                                        *id = NO_TETRAHEDRON_ID;
+                                    }
+                                }
                                 stack.extend_from_slice(&new_tetra_ids);
                             }
                         }
@@ -600,7 +629,7 @@ impl Tetrahedralization {
         vertex: Point3C,
         inside_tetra_id: TetrahedronID,
     ) -> [TetrahedronID; 4] {
-        assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
 
         let a = self.vertices.len() as VertexIdx;
 
@@ -678,8 +707,8 @@ impl Tetrahedralization {
         abcd_id: TetrahedronID,
         bcde_id: TetrahedronID,
     ) -> [TetrahedronID; 3] {
-        assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
-        assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
 
         let abcd = self.tetrahedra.get(&abcd_id).unwrap();
         let bcde = self.tetrahedra.get(&bcde_id).unwrap();
@@ -762,9 +791,9 @@ impl Tetrahedralization {
         bcde_id: TetrahedronID,
         axye_id: TetrahedronID,
     ) -> [TetrahedronID; 2] {
-        assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
-        assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
-        assert_ne!(axye_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(axye_id, NO_TETRAHEDRON_ID);
 
         let abcd = self.tetrahedra.get(&abcd_id).unwrap();
         let bcde = self.tetrahedra.get(&bcde_id).unwrap();
@@ -859,10 +888,10 @@ impl Tetrahedralization {
         axyf_id: TetrahedronID,
         xyfe_id: TetrahedronID,
     ) -> [TetrahedronID; 4] {
-        assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
-        assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
-        assert_ne!(axyf_id, NO_TETRAHEDRON_ID);
-        assert_ne!(xyfe_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(axyf_id, NO_TETRAHEDRON_ID);
+        debug_assert_ne!(xyfe_id, NO_TETRAHEDRON_ID);
 
         let abcd = self.tetrahedra.get(&abcd_id).unwrap();
         let bcde = self.tetrahedra.get(&bcde_id).unwrap();
@@ -1150,7 +1179,7 @@ impl TetrahedronPointLocator {
             if let Some(neighbor_id) =
                 tetra.next_neighbor_towards_point(vertices, point, &mut self.rng)
             {
-                assert_ne!(neighbor_id, NO_TETRAHEDRON_ID);
+                debug_assert_ne!(neighbor_id, NO_TETRAHEDRON_ID);
                 current_tetra_id = neighbor_id;
             } else {
                 break;
