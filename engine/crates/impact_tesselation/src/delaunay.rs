@@ -2,7 +2,6 @@
 
 use anyhow::{Result, bail};
 use impact_alloc::{AVec, Allocator, arena::ArenaPool};
-use impact_containers::NoHashMap;
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::{
     consts::f32::{FRAC_1_SQRT_6, SQRT_3, SQRT_6},
@@ -13,7 +12,7 @@ use impact_math::{
 type VertexIdx = u32;
 type TetrahedronID = u32;
 
-const NO_TETRAHEDRON_ID: TetrahedronID = 0;
+const NO_TETRAHEDRON_ID: TetrahedronID = u32::MAX;
 
 // How much to expand the bounding tetrahedron relative to the bounding sphere
 // of the point cloud.
@@ -24,15 +23,14 @@ const BOUNDING_TETRA_MARGIN_FACTOR: f32 = 1.1;
 const MIN_RELATIVE_POINT_SEPARATION: f32 = 1e-9;
 
 #[derive(Clone, Debug)]
-pub struct DelaunayTetrahedralization {
-    inner: Tetrahedralization,
+pub struct DelaunayTetrahedralization<A: Allocator> {
+    inner: Tetrahedralization<A>,
 }
 
 #[derive(Clone, Debug)]
-struct Tetrahedralization {
-    vertices: Vec<Vertex>,
-    tetrahedra: NoHashMap<TetrahedronID, Tetrahedron>,
-    id_counter: TetrahedronID,
+struct Tetrahedralization<A: Allocator> {
+    vertices: AVec<Vertex, A>,
+    tetrahedra: AVec<Tetrahedron, A>,
 }
 
 #[derive(Clone, Debug)]
@@ -58,20 +56,26 @@ struct TetrahedronPointLocator {
     rng: Rng,
 }
 
-impl DelaunayTetrahedralization {
+#[derive(Clone, Debug)]
+struct TetrahedronIDChange {
+    old: TetrahedronID,
+    new: TetrahedronID,
+}
+
+impl<A: Allocator> DelaunayTetrahedralization<A> {
     /// Subdivides the convex hull of the given set of points into tetrahedra
     /// that satisfy the Delaunay criterion.
     ///
     /// Uses an incremental insertion algorithm described in Ledoux (2007),
     /// "Computing the 3D Voronoi Diagram Robustly: An Easy Explanation".
-    pub fn construct(points: &[Point3C]) -> Result<Self> {
+    pub fn construct(alloc: A, points: &[Point3C]) -> Result<Self> {
         let n_points = points.len();
 
         if n_points > VertexIdx::MAX as usize - 4 {
             bail!("Number of points {n_points} is higher than supported");
         }
 
-        let mut tetras = Tetrahedralization::with_vertex_capacity(n_points + 4);
+        let mut tetras = Tetrahedralization::with_vertex_capacity(alloc, n_points + 4);
 
         if n_points < 4 {
             return Ok(Self { inner: tetras });
@@ -212,7 +216,7 @@ impl DelaunayTetrahedralization {
                                 continue;
                             }
                             // Reconnect into two tetrahedra AXZE and AZYE
-                            let new_tetra_ids =
+                            let (new_tetra_ids, id_change) =
                                 tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
 
                             // The old tetrahedra ABCD, BCDE and AXYE are now
@@ -227,6 +231,9 @@ impl DelaunayTetrahedralization {
                             for id in &mut stack {
                                 if *id == axye_id {
                                     *id = NO_TETRAHEDRON_ID;
+                                } else if *id == id_change.old {
+                                    // Also apply the ID remapping caused by the reconnection
+                                    *id = id_change.new;
                                 }
                             }
                             stack.extend_from_slice(&new_tetra_ids);
@@ -266,12 +273,14 @@ impl DelaunayTetrahedralization {
                                     && axye_nb_of_abcd != NO_TETRAHEDRON_ID
                                 {
                                     let axye_id = axye_nb_of_abcd;
-                                    let new_tetra_ids =
+                                    let (new_tetra_ids, id_change) =
                                         tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
 
                                     for id in &mut stack {
                                         if *id == axye_id {
                                             *id = NO_TETRAHEDRON_ID;
+                                        } else if *id == id_change.old {
+                                            *id = id_change.new;
                                         }
                                     }
                                     stack.extend_from_slice(&new_tetra_ids);
@@ -366,7 +375,7 @@ impl DelaunayTetrahedralization {
 
     #[cfg(any(test, feature = "fuzzing"))]
     fn validate_brute_force(&self) {
-        for (&tetra_id, tetra) in self.inner.tetrahedra() {
+        for (tetra_id, tetra) in self.inner.tetrahedra() {
             for vertex_idx in tetra.vertices {
                 assert!(
                     vertex_idx >= 4,
@@ -461,15 +470,14 @@ impl DelaunayTetrahedralization {
     }
 }
 
-impl Tetrahedralization {
-    fn with_vertex_capacity(vertex_capacity: usize) -> Self {
-        let vertices = Vec::with_capacity(vertex_capacity);
+impl<A: Allocator> Tetrahedralization<A> {
+    fn with_vertex_capacity(alloc: A, vertex_capacity: usize) -> Self {
+        let vertices = AVec::with_capacity_in(vertex_capacity, alloc);
         let tetra_capacity = estimated_tetrahedron_count(vertex_capacity);
-        let tetrahedra = NoHashMap::with_capacity_and_hasher(tetra_capacity, Default::default());
+        let tetrahedra = AVec::with_capacity_in(tetra_capacity, alloc);
         Self {
             vertices,
             tetrahedra,
-            id_counter: NO_TETRAHEDRON_ID + 1,
         }
     }
 
@@ -489,25 +497,64 @@ impl Tetrahedralization {
     }
 
     #[inline]
-    fn get_tetrahedron(&self, id: TetrahedronID) -> Option<&Tetrahedron> {
-        self.tetrahedra.get(&id)
+    fn tetrahedron(&self, id: TetrahedronID) -> &Tetrahedron {
+        &self.tetrahedra[id as usize]
     }
 
+    #[allow(dead_code)]
     #[inline]
-    fn tetrahedron(&self, id: TetrahedronID) -> &Tetrahedron {
-        self.get_tetrahedron(id).unwrap()
+    fn get_tetrahedron(&self, id: TetrahedronID) -> Option<&Tetrahedron> {
+        self.tetrahedra.get(id as usize)
     }
 
     #[allow(dead_code)]
     #[inline]
     fn has_tetrahedron(&self, id: TetrahedronID) -> bool {
-        self.tetrahedra.contains_key(&id)
+        (id as usize) < self.tetrahedra.len()
     }
 
     #[allow(dead_code)]
     #[inline]
-    fn tetrahedra(&self) -> impl Iterator<Item = (&TetrahedronID, &Tetrahedron)> {
-        self.tetrahedra.iter()
+    fn tetrahedra(&self) -> impl Iterator<Item = (TetrahedronID, &Tetrahedron)> {
+        self.tetrahedra
+            .iter()
+            .enumerate()
+            .map(|(id, tetra)| (id as TetrahedronID, tetra))
+    }
+
+    /// Removes the given tetrahedron by replacing it with the last tetrahedron
+    /// in the backing array, which then inherits the ID of the removed
+    /// tetrahedron. Returns the corresponding [`TetrahedronIDChange`].
+    #[inline]
+    fn remove_tetrahedron(&mut self, tetra_id: TetrahedronID) -> TetrahedronIDChange {
+        debug_assert_ne!(tetra_id, NO_TETRAHEDRON_ID);
+
+        self.tetrahedra.swap_remove(tetra_id as usize);
+
+        let old_swapped_tetra_id = self.tetrahedra.len() as TetrahedronID;
+        let new_swapped_tetra_id = tetra_id;
+
+        if new_swapped_tetra_id != old_swapped_tetra_id {
+            let swapped_tetra = &self.tetrahedra[new_swapped_tetra_id as usize];
+
+            for vertex_idx in swapped_tetra.vertices {
+                let vertex = &mut self.vertices[vertex_idx as usize];
+                if vertex.tetra_id == old_swapped_tetra_id {
+                    vertex.tetra_id = new_swapped_tetra_id;
+                }
+            }
+            for nb_id in swapped_tetra.neighbors {
+                if nb_id != NO_TETRAHEDRON_ID {
+                    let tetra_nb = &mut self.tetrahedra[nb_id as usize];
+                    tetra_nb.replace_neighbor_id(old_swapped_tetra_id, new_swapped_tetra_id);
+                }
+            }
+        }
+
+        TetrahedronIDChange {
+            old: old_swapped_tetra_id,
+            new: new_swapped_tetra_id,
+        }
     }
 
     /// Adds a tetrahedron bounding the given sphere as the first tetrahedron.
@@ -523,7 +570,7 @@ impl Tetrahedralization {
             bounding_sphere.radius() * BOUNDING_TETRA_MARGIN_FACTOR,
         );
 
-        let bounding_tetra_id = self.create_new_id();
+        let bounding_tetra_id = 0;
 
         self.vertices.extend(
             bounding_tetra_vertices
@@ -531,22 +578,21 @@ impl Tetrahedralization {
                 .map(|vertex| Vertex::new(vertex, bounding_tetra_id)),
         );
 
-        self.tetrahedra.insert(
-            bounding_tetra_id,
-            Tetrahedron {
-                vertices: [0, 1, 2, 3],
-                neighbors: [NO_TETRAHEDRON_ID; 4],
-            },
-        );
+        self.tetrahedra.push(Tetrahedron {
+            vertices: [0, 1, 2, 3],
+            neighbors: [NO_TETRAHEDRON_ID; 4],
+        });
     }
 
     /// Removes all tetrahedra connected to the ad-hoc bounding vertices.
-    fn remove_boundary_tetrahedra<A: Allocator>(&mut self, arena: A) {
+    fn remove_boundary_tetrahedra<AR: Allocator>(&mut self, arena: AR) {
         let mut tetras_to_remove = AVec::new_in(arena);
         let mut visited_neighbors = AVec::new_in(arena);
         let mut neighbors_to_check = AVec::new_in(arena);
 
-        for (&id, tetra) in &self.tetrahedra {
+        for (tetra_idx, tetra) in self.tetrahedra.iter().enumerate() {
+            let id = tetra_idx as TetrahedronID;
+
             let has_boundary_vertex = tetra.vertices.iter().any(|&vertex| vertex < 4);
 
             if !has_boundary_vertex {
@@ -578,7 +624,7 @@ impl Tetrahedralization {
                     if nb_id == NO_TETRAHEDRON_ID {
                         continue;
                     }
-                    let nb_tetra = self.tetrahedra.get(&nb_id).unwrap();
+                    let nb_tetra = &self.tetrahedra[nb_id as usize];
                     let nb_has_boundary_vertex = nb_tetra.vertices.iter().any(|&vertex| vertex < 4);
 
                     if nb_has_boundary_vertex {
@@ -601,17 +647,20 @@ impl Tetrahedralization {
             }
         }
 
-        for id in tetras_to_remove {
-            let tetra = self.tetrahedra.get(&id).unwrap();
+        for id in tetras_to_remove.into_iter().rev() {
+            let tetra = &self.tetrahedra[id as usize];
+
             for nb_id in tetra.neighbors {
-                if nb_id != NO_TETRAHEDRON_ID
-                    && let Some(tetra_nb) = self.tetrahedra.get_mut(&nb_id)
-                {
+                if nb_id != NO_TETRAHEDRON_ID {
+                    let tetra_nb = &mut self.tetrahedra[nb_id as usize];
                     tetra_nb.replace_neighbor_id(id, NO_TETRAHEDRON_ID);
                 }
             }
 
-            self.tetrahedra.remove(&id);
+            // Since the ID change occurs for the last tetrahedron and we are
+            // removing tetrahedra in descending order of IDs, the change does
+            // not invalidate any of the remaining IDs in `tetras_to_remove`
+            self.remove_tetrahedron(id);
         }
 
         for bounding_vertex in self.vertices[..4].iter_mut() {
@@ -631,14 +680,14 @@ impl Tetrahedralization {
     ) -> [TetrahedronID; 4] {
         debug_assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
 
+        let abce_id = inside_tetra_id;
+        let acde_id = self.tetrahedra.len() as TetrahedronID;
+        let adbe_id = (self.tetrahedra.len() + 1) as TetrahedronID;
+        let acbd_id = (self.tetrahedra.len() + 2) as TetrahedronID;
+
         let a = self.vertices.len() as VertexIdx;
 
-        let abce_id = inside_tetra_id;
-        let acde_id = self.create_new_id();
-        let adbe_id = self.create_new_id();
-        let acbd_id = self.create_new_id();
-
-        let tetra = self.tetrahedra.get_mut(&inside_tetra_id).unwrap();
+        let tetra = &mut self.tetrahedra[inside_tetra_id as usize];
         let [b, c, d, e] = tetra.vertices;
         let [ced_nb_id, bde_nb_id, bec_nb_id, bcd_nb_id] = tetra.neighbors;
 
@@ -652,31 +701,30 @@ impl Tetrahedralization {
             vertices: [a, c, d, e],
             neighbors: [ced_nb_id, adbe_id, abce_id, acbd_id],
         };
-        self.tetrahedra.insert(acde_id, acde);
-
         let adbe = Tetrahedron {
             vertices: [a, d, b, e],
             neighbors: [bde_nb_id, abce_id, acde_id, acbd_id],
         };
-        self.tetrahedra.insert(adbe_id, adbe);
-
         let acbd = Tetrahedron {
             vertices: [a, c, b, d],
             neighbors: [bcd_nb_id, adbe_id, acde_id, abce_id],
         };
-        self.tetrahedra.insert(acbd_id, acbd);
+
+        self.tetrahedra.push(acde);
+        self.tetrahedra.push(adbe);
+        self.tetrahedra.push(acbd);
 
         // Update invalidated neighbor IDs for affected neighbors
         if ced_nb_id != NO_TETRAHEDRON_ID {
-            let ced_nb = self.tetrahedra.get_mut(&ced_nb_id).unwrap();
+            let ced_nb = &mut self.tetrahedra[ced_nb_id as usize];
             ced_nb.replace_neighbor_id(inside_tetra_id, acde_id);
         }
         if bde_nb_id != NO_TETRAHEDRON_ID {
-            let bde_nb = self.tetrahedra.get_mut(&bde_nb_id).unwrap();
+            let bde_nb = &mut self.tetrahedra[bde_nb_id as usize];
             bde_nb.replace_neighbor_id(inside_tetra_id, adbe_id);
         }
         if bcd_nb_id != NO_TETRAHEDRON_ID {
-            let bcd_nb = self.tetrahedra.get_mut(&bcd_nb_id).unwrap();
+            let bcd_nb = &mut self.tetrahedra[bcd_nb_id as usize];
             bcd_nb.replace_neighbor_id(inside_tetra_id, acbd_id);
         }
 
@@ -710,8 +758,14 @@ impl Tetrahedralization {
         debug_assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
         debug_assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
 
-        let abcd = self.tetrahedra.get(&abcd_id).unwrap();
-        let bcde = self.tetrahedra.get(&bcde_id).unwrap();
+        let abce_id = abcd_id;
+        let acde_id = bcde_id;
+        let adbe_id = self.tetrahedra.len() as TetrahedronID;
+
+        let [abcd, bcde] = self
+            .tetrahedra
+            .get_disjoint_mut([abcd_id as usize, bcde_id as usize])
+            .unwrap();
 
         let [a, b, c, d] = abcd.vertices;
 
@@ -725,43 +779,40 @@ impl Tetrahedralization {
         let ebd_nb_id = bcde.id_of_neighbor_opposite_vertex(c);
         let ecb_nb_id = bcde.id_of_neighbor_opposite_vertex(d);
 
-        let abce_id = abcd_id;
-        let acde_id = bcde_id;
-        let adbe_id = self.create_new_id();
-
-        let abce = Tetrahedron {
+        let abce = abcd;
+        *abce = Tetrahedron {
             vertices: [a, b, c, e],
             neighbors: [ecb_nb_id, acde_id, adbe_id, abc_nb_id],
         };
-        self.tetrahedra.insert(abce_id, abce);
 
-        let acde = Tetrahedron {
+        let acde = bcde;
+        *acde = Tetrahedron {
             vertices: [a, c, d, e],
             neighbors: [edc_nb_id, adbe_id, abce_id, acd_nb_id],
         };
-        self.tetrahedra.insert(acde_id, acde);
 
         let adbe = Tetrahedron {
             vertices: [a, d, b, e],
             neighbors: [ebd_nb_id, abce_id, acde_id, adb_nb_id],
         };
-        self.tetrahedra.insert(adbe_id, adbe);
+
+        self.tetrahedra.push(adbe);
 
         // Update invalidated neighbor IDs for affected neighbors
         if acd_nb_id != NO_TETRAHEDRON_ID {
-            let acd_nb = self.tetrahedra.get_mut(&acd_nb_id).unwrap();
+            let acd_nb = &mut self.tetrahedra[acd_nb_id as usize];
             acd_nb.replace_neighbor_id(abcd_id, acde_id);
         }
         if adb_nb_id != NO_TETRAHEDRON_ID {
-            let adb_nb = self.tetrahedra.get_mut(&adb_nb_id).unwrap();
+            let adb_nb = &mut self.tetrahedra[adb_nb_id as usize];
             adb_nb.replace_neighbor_id(abcd_id, adbe_id);
         }
         if ecb_nb_id != NO_TETRAHEDRON_ID {
-            let ecb_nb = self.tetrahedra.get_mut(&ecb_nb_id).unwrap();
+            let ecb_nb = &mut self.tetrahedra[ecb_nb_id as usize];
             ecb_nb.replace_neighbor_id(bcde_id, abce_id);
         }
         if ebd_nb_id != NO_TETRAHEDRON_ID {
-            let ebd_nb = self.tetrahedra.get_mut(&ebd_nb_id).unwrap();
+            let ebd_nb = &mut self.tetrahedra[ebd_nb_id as usize];
             ebd_nb.replace_neighbor_id(bcde_id, adbe_id);
         }
 
@@ -772,12 +823,14 @@ impl Tetrahedralization {
         [abce_id, acde_id, adbe_id]
     }
 
-    /// Takes the IDs of three adjacent tetrahedra ABCD, BCDE and AXYE sharing an
-    /// edge XY = [CB, DC, BD] and reconfigures them into two adjacent tetrahedra
-    /// AXZE and AZYE sharing the face AZE (where Z is the third vertex of the
-    /// face BDC containing the shared edge XY). Returns the respective IDs of
-    /// the two reconfigured tetrahedra. The vertices in the new tetrahedra will
-    /// be in the order implied by their names.
+    /// Takes the IDs of three adjacent tetrahedra ABCD, BCDE and AXYE sharing
+    /// an edge XY = [CB, DC, BD] and reconfigures them into two adjacent
+    /// tetrahedra AXZE and AZYE sharing the face AZE (where Z is the third
+    /// vertex of the face BDC containing the shared edge XY). Returns the
+    /// respective IDs of the two reconfigured tetrahedra, along with the ID
+    /// change caused by the removal of the last of the input tetrahedra. The
+    /// vertices in the new tetrahedra will be in the order implied by their
+    /// names.
     ///
     /// Which vertex is assigned which label is determined by taking the first
     /// vertex of the first input tetrahedron as A and using the relationships
@@ -790,14 +843,18 @@ impl Tetrahedralization {
         abcd_id: TetrahedronID,
         bcde_id: TetrahedronID,
         axye_id: TetrahedronID,
-    ) -> [TetrahedronID; 2] {
+    ) -> ([TetrahedronID; 2], TetrahedronIDChange) {
         debug_assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
         debug_assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
         debug_assert_ne!(axye_id, NO_TETRAHEDRON_ID);
 
-        let abcd = self.tetrahedra.get(&abcd_id).unwrap();
-        let bcde = self.tetrahedra.get(&bcde_id).unwrap();
-        let axye = self.tetrahedra.get(&axye_id).unwrap();
+        let mut axze_id = abcd_id;
+        let mut azye_id = bcde_id;
+
+        let [abcd, bcde, axye] = self
+            .tetrahedra
+            .get_disjoint_mut([abcd_id as usize, bcde_id as usize, axye_id as usize])
+            .unwrap();
 
         let [a, b, c, d] = abcd.vertices;
 
@@ -826,38 +883,33 @@ impl Tetrahedralization {
         let yea_nb_id = axye.id_of_neighbor_opposite_vertex(x);
         let xae_nb_id = axye.id_of_neighbor_opposite_vertex(y);
 
-        let axze_id = abcd_id;
-        let azye_id = bcde_id;
-
-        let axze = Tetrahedron {
+        let axze = abcd;
+        *axze = Tetrahedron {
             vertices: [a, x, z, e],
             neighbors: [ezx_nb_id, azye_id, xae_nb_id, axz_nb_id],
         };
-        self.tetrahedra.insert(axze_id, axze);
 
-        let azye = Tetrahedron {
+        let azye = bcde;
+        *azye = Tetrahedron {
             vertices: [a, z, y, e],
             neighbors: [eyz_nb_id, yea_nb_id, axze_id, azy_nb_id],
         };
-        self.tetrahedra.insert(azye_id, azye);
-
-        self.tetrahedra.remove(&axye_id);
 
         // Update invalidated neighbor IDs for affected neighbors
         if azy_nb_id != NO_TETRAHEDRON_ID {
-            let azy_nb = self.tetrahedra.get_mut(&azy_nb_id).unwrap();
+            let azy_nb = &mut self.tetrahedra[azy_nb_id as usize];
             azy_nb.replace_neighbor_id(abcd_id, azye_id);
         }
         if ezx_nb_id != NO_TETRAHEDRON_ID {
-            let ezx_nb = self.tetrahedra.get_mut(&ezx_nb_id).unwrap();
+            let ezx_nb = &mut self.tetrahedra[ezx_nb_id as usize];
             ezx_nb.replace_neighbor_id(bcde_id, axze_id);
         }
         if xae_nb_id != NO_TETRAHEDRON_ID {
-            let xae_nb = self.tetrahedra.get_mut(&xae_nb_id).unwrap();
+            let xae_nb = &mut self.tetrahedra[xae_nb_id as usize];
             xae_nb.replace_neighbor_id(axye_id, axze_id);
         }
         if yea_nb_id != NO_TETRAHEDRON_ID {
-            let yea_nb = self.tetrahedra.get_mut(&yea_nb_id).unwrap();
+            let yea_nb = &mut self.tetrahedra[yea_nb_id as usize];
             yea_nb.replace_neighbor_id(axye_id, azye_id);
         }
 
@@ -867,7 +919,16 @@ impl Tetrahedralization {
         self.vertices[y as usize].tetra_id = azye_id;
         self.vertices[e as usize].tetra_id = axze_id;
 
-        [axze_id, azye_id]
+        // Remove AXYE
+        let id_change = self.remove_tetrahedron(axye_id);
+
+        if id_change.old == axze_id {
+            axze_id = id_change.new;
+        } else if id_change.old == azye_id {
+            azye_id = id_change.new;
+        }
+
+        ([axze_id, azye_id], id_change)
     }
 
     /// Takes the IDs of four adjacent tetrahedra ABCD, BCDE, AXYF and XYFE
@@ -893,10 +954,20 @@ impl Tetrahedralization {
         debug_assert_ne!(axyf_id, NO_TETRAHEDRON_ID);
         debug_assert_ne!(xyfe_id, NO_TETRAHEDRON_ID);
 
-        let abcd = self.tetrahedra.get(&abcd_id).unwrap();
-        let bcde = self.tetrahedra.get(&bcde_id).unwrap();
-        let axyf = self.tetrahedra.get(&axyf_id).unwrap();
-        let xyfe = self.tetrahedra.get(&xyfe_id).unwrap();
+        let axze_id = abcd_id;
+        let azye_id = bcde_id;
+        let afxe_id = axyf_id;
+        let ayfe_id = xyfe_id;
+
+        let [abcd, bcde, axyf, xyfe] = self
+            .tetrahedra
+            .get_disjoint_mut([
+                abcd_id as usize,
+                bcde_id as usize,
+                axyf_id as usize,
+                xyfe_id as usize,
+            ])
+            .unwrap();
 
         let [a, b, c, d] = abcd.vertices;
 
@@ -931,50 +1002,45 @@ impl Tetrahedralization {
         let efy_nb_id = xyfe.id_of_neighbor_opposite_vertex(x);
         let exf_nb_id = xyfe.id_of_neighbor_opposite_vertex(y);
 
-        let axze_id = abcd_id;
-        let azye_id = bcde_id;
-        let afxe_id = axyf_id;
-        let ayfe_id = xyfe_id;
-
-        let axze = Tetrahedron {
+        let axze = abcd;
+        *axze = Tetrahedron {
             vertices: [a, x, z, e],
             neighbors: [ezx_nb_id, azye_id, afxe_id, axz_nb_id],
         };
-        self.tetrahedra.insert(axze_id, axze);
 
-        let azye = Tetrahedron {
+        let azye = bcde;
+        *azye = Tetrahedron {
             vertices: [a, z, y, e],
             neighbors: [eyz_nb_id, ayfe_id, axze_id, azy_nb_id],
         };
-        self.tetrahedra.insert(azye_id, azye);
 
-        let afxe = Tetrahedron {
+        let afxe = axyf;
+        *afxe = Tetrahedron {
             vertices: [a, f, x, e],
             neighbors: [exf_nb_id, axze_id, ayfe_id, afx_nb_id],
         };
-        self.tetrahedra.insert(afxe_id, afxe);
 
-        let ayfe = Tetrahedron {
+        let ayfe = xyfe;
+        *ayfe = Tetrahedron {
             vertices: [a, y, f, e],
             neighbors: [efy_nb_id, afxe_id, azye_id, ayf_nb_id],
         };
-        self.tetrahedra.insert(ayfe_id, ayfe);
 
         // Update invalidated neighbor IDs for affected neighbors
         if azy_nb_id != NO_TETRAHEDRON_ID {
-            let azy_nb = self.tetrahedra.get_mut(&azy_nb_id).unwrap();
+            let azy_nb = &mut self.tetrahedra[azy_nb_id as usize];
             azy_nb.replace_neighbor_id(abcd_id, azye_id);
         }
         if ezx_nb_id != NO_TETRAHEDRON_ID {
-            let ezx_nb = self.tetrahedra.get_mut(&ezx_nb_id).unwrap();
+            let ezx_nb = &mut self.tetrahedra[ezx_nb_id as usize];
             ezx_nb.replace_neighbor_id(bcde_id, axze_id);
         }
         if ayf_nb_id != NO_TETRAHEDRON_ID {
-            let ayf_nb = self.tetrahedra.get_mut(&ayf_nb_id).unwrap();
+            let ayf_nb = &mut self.tetrahedra[ayf_nb_id as usize];
             ayf_nb.replace_neighbor_id(axyf_id, ayfe_id);
         }
         if exf_nb_id != NO_TETRAHEDRON_ID {
-            let exf_nb = self.tetrahedra.get_mut(&exf_nb_id).unwrap();
+            let exf_nb = &mut self.tetrahedra[exf_nb_id as usize];
             exf_nb.replace_neighbor_id(xyfe_id, afxe_id);
         }
 
@@ -983,15 +1049,6 @@ impl Tetrahedralization {
         self.vertices[y as usize].tetra_id = azye_id;
 
         [axze_id, azye_id, afxe_id, ayfe_id]
-    }
-
-    fn create_new_id(&mut self) -> TetrahedronID {
-        let id = self.id_counter;
-        self.id_counter = self
-            .id_counter
-            .checked_add(1)
-            .expect("Exceeded max tetrahedron count");
-        id
     }
 }
 
@@ -1146,9 +1203,9 @@ impl TetrahedronPointLocator {
         (n_candidates.ceil().max(1.0) as usize).min(n_vertices)
     }
 
-    fn find_tetrahedron_containing_point(
+    fn find_tetrahedron_containing_point<A: Allocator>(
         &mut self,
-        tetras: &Tetrahedralization,
+        tetras: &Tetrahedralization<A>,
         point: &Point3C,
     ) -> TetrahedronID {
         if tetras.n_tetrahedra() == 0 {
@@ -1355,6 +1412,7 @@ pub mod fuzzing {
     use super::*;
     use arbitrary::{Arbitrary, Result, Unstructured};
     use bytemuck::{Pod, Zeroable};
+    use impact_alloc::Global;
     use std::mem;
 
     const FLOAT_RESOLUTION: u32 = 10000;
@@ -1380,7 +1438,7 @@ pub mod fuzzing {
 
     pub fn fuzz_test_delaunay_tetrahedralization(input: Vec<DelaunayPoint>) {
         let points = bytemuck::cast_slice(&input);
-        let tetrahedra = DelaunayTetrahedralization::construct(points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, points).unwrap();
         tetrahedra.validate_brute_force();
     }
 
@@ -1393,13 +1451,14 @@ pub mod fuzzing {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use impact_alloc::Global;
     use impact_geometry::Plane;
     use impact_math::vector::UnitVector3;
 
     #[test]
     fn delaunay_tetrahedralization_of_less_than_four_points_is_empty() {
         let points = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].map(Point3C::from);
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 0);
     }
 
@@ -1413,7 +1472,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 0);
     }
 
@@ -1427,7 +1486,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 1);
         tetrahedra.validate_brute_force();
     }
@@ -1443,7 +1502,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 2);
         tetrahedra.validate_brute_force();
     }
@@ -1462,7 +1521,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 1);
         tetrahedra.validate_brute_force();
     }
@@ -1483,7 +1542,7 @@ mod tests {
             }
         }
 
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
         tetrahedra.validate_brute_force();
     }
@@ -1499,7 +1558,7 @@ mod tests {
             }
         }
 
-        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
         tetrahedra.validate_brute_force();
     }
