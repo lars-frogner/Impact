@@ -276,6 +276,13 @@ impl PlaneC {
         self.unit_normal().dot(point.as_vector()) - self.displacement
     }
 
+    /// Points the normal vector in the opposite direction.
+    #[inline]
+    pub fn flip_normal(&mut self) {
+        self.unit_normal = -self.unit_normal;
+        self.displacement = -self.displacement;
+    }
+
     /// Deconstructs the plane into its unit normal and displacement.
     #[inline]
     pub const fn into_normal_and_displacement(self) -> (UnitVector3C, f32) {
