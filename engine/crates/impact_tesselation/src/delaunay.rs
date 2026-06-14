@@ -80,6 +80,10 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
     ///
     /// Uses an incremental insertion algorithm described in Ledoux (2007),
     /// "Computing the 3D Voronoi Diagram Robustly: An Easy Explanation".
+    ///
+    /// # Errors
+    /// Returns an error if the number of points or the resulting number of
+    /// tetra exceeds a max limit.
     pub fn construct(alloc: A, points: &[Point3C]) -> Result<Self> {
         let n_points = points.len();
 
@@ -130,7 +134,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
             }
 
             let new_vertex_idx = tetras.n_vertices() as VertexIdx;
-            let new_tetra_ids = tetras.insert_and_connect_vertex(*new_vertex, inside_tetra_id);
+            let new_tetra_ids = tetras.insert_and_connect_vertex(*new_vertex, inside_tetra_id)?;
 
             stack.extend_from_slice(&new_tetra_ids);
 
@@ -191,7 +195,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                             // The hull of ABCD and BCDE is convex. They can be
                             // reconnected into three tetrahedra ABCE, ACDE and
                             // ADBE.
-                            let new_tetra_ids = tetras.reconnect_two_to_three(abcd_id, bcde_id);
+                            let new_tetra_ids = tetras.reconnect_two_to_three(abcd_id, bcde_id)?;
 
                             stack.extend_from_slice(&new_tetra_ids);
                         }
@@ -298,7 +302,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                                     stack.extend_from_slice(&new_tetra_ids);
                                 } else {
                                     let new_tetra_ids =
-                                        tetras.reconnect_two_to_three(abcd_id, bcde_id);
+                                        tetras.reconnect_two_to_three(abcd_id, bcde_id)?;
 
                                     stack.extend_from_slice(&new_tetra_ids);
                                 }
@@ -733,12 +737,20 @@ impl<A: Allocator> Tetrahedralization<A> {
     /// connected to A. Returns the respective IDs of the four new tetrahedra.
     /// The vertices in the new tetrahedra will be in the order implied by their
     /// names.
+    ///
+    /// # Errors
+    /// Returns an error if the resulting total number of tetrahedra would
+    /// exceed the max limit.
     fn insert_and_connect_vertex(
         &mut self,
         vertex: Point3C,
         inside_tetra_id: TetrahedronID,
-    ) -> [TetrahedronID; 4] {
+    ) -> Result<[TetrahedronID; 4]> {
         debug_assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
+
+        if self.tetrahedra.len() + 2 >= TetrahedronID::MAX as usize {
+            bail!("Number of tetrahedra exceeded max limit");
+        }
 
         let abce_id = inside_tetra_id;
         let acde_id = self.tetrahedra.len() as TetrahedronID;
@@ -794,7 +806,7 @@ impl<A: Allocator> Tetrahedralization<A> {
         // Update potentially invalidated tetrahedron ID for vertex D
         self.vertices[d as usize].tetra_id = acde_id;
 
-        [abce_id, acde_id, adbe_id, acbd_id]
+        Ok([abce_id, acde_id, adbe_id, acbd_id])
     }
 
     /// Takes the IDs of two adjacent tetrahedra ABCD and BCDE sharing the face
@@ -810,13 +822,21 @@ impl<A: Allocator> Tetrahedralization<A> {
     ///
     /// This is the inverse of
     /// [`reconnect_three_to_two`](Self::reconnect_three_to_two).
+    ///
+    /// # Errors
+    /// Returns an error if the resulting total number of tetrahedra would
+    /// exceed the max limit.
     fn reconnect_two_to_three(
         &mut self,
         abcd_id: TetrahedronID,
         bcde_id: TetrahedronID,
-    ) -> [TetrahedronID; 3] {
+    ) -> Result<[TetrahedronID; 3]> {
         debug_assert_ne!(abcd_id, NO_TETRAHEDRON_ID);
         debug_assert_ne!(bcde_id, NO_TETRAHEDRON_ID);
+
+        if self.tetrahedra.len() >= TetrahedronID::MAX as usize {
+            bail!("Number of tetrahedra exceeded max limit");
+        }
 
         let abce_id = abcd_id;
         let acde_id = bcde_id;
@@ -880,7 +900,7 @@ impl<A: Allocator> Tetrahedralization<A> {
         self.vertices[b as usize].tetra_id = abce_id;
         self.vertices[d as usize].tetra_id = acde_id;
 
-        [abce_id, acde_id, adbe_id]
+        Ok([abce_id, acde_id, adbe_id])
     }
 
     /// Takes the IDs of three adjacent tetrahedra ABCD, BCDE and AXYE sharing
