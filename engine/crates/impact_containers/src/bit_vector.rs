@@ -11,16 +11,19 @@ pub struct BitVector<A: Allocator = Global> {
 
 impl BitVector {
     /// Creates a new empty bit vector.
+    #[inline]
     pub fn new() -> Self {
         Self::new_in(Global)
     }
 
     /// Creates a new empty bit vector with the specified bit capacity.
+    #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         Self::with_capacity_in(capacity, Global)
     }
 
     /// Creates a new bit vector with the specified length and all bits unset.
+    #[inline]
     pub fn zeroed(len: usize) -> Self {
         Self::zeroed_in(len, Global)
     }
@@ -28,6 +31,7 @@ impl BitVector {
 
 impl<A: Allocator> BitVector<A> {
     /// Creates a new empty bit vector with the specified allocator.
+    #[inline]
     pub fn new_in(alloc: A) -> Self {
         Self {
             words: AVec::new_in(alloc),
@@ -37,6 +41,7 @@ impl<A: Allocator> BitVector<A> {
 
     /// Creates a new empty bit vector with the specified bit capacity and
     /// allocator.
+    #[inline]
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
         Self {
             words: AVec::with_capacity_in(capacity.div_ceil(64), alloc),
@@ -46,6 +51,7 @@ impl<A: Allocator> BitVector<A> {
 
     /// Creates a new bit vector with the specified length, allocator, and all
     /// bits unset.
+    #[inline]
     pub fn zeroed_in(len: usize, alloc: A) -> Self {
         let mut words = AVec::new_in(alloc);
         words.resize(len.div_ceil(64), 0);
@@ -53,11 +59,13 @@ impl<A: Allocator> BitVector<A> {
     }
 
     /// Returns whether the bit vector contains no bits.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Returns the number of bits in the bit vector.
+    #[inline]
     pub fn len(&self) -> usize {
         self.len
     }
@@ -66,6 +74,7 @@ impl<A: Allocator> BitVector<A> {
     ///
     /// # Panics
     /// If `bit_idx` is greater than or equal to the bit vector length.
+    #[inline]
     pub fn bit_is_set(&self, bit_idx: usize) -> bool {
         self.bounds_check(bit_idx);
         let word = &self.words[get_word_idx(bit_idx)];
@@ -80,6 +89,7 @@ impl<A: Allocator> BitVector<A> {
     ///
     /// # Panics
     /// If `bit_idx` is greater than or equal to the bit vector length.
+    #[inline]
     pub fn set_bit(&mut self, bit_idx: usize) -> bool {
         self.bounds_check(bit_idx);
         let word = &mut self.words[get_word_idx(bit_idx)];
@@ -96,6 +106,7 @@ impl<A: Allocator> BitVector<A> {
     ///
     /// # Panics
     /// If `bit_idx` is greater than or equal to the bit vector length.
+    #[inline]
     pub fn unset_bit(&mut self, bit_idx: usize) -> bool {
         self.bounds_check(bit_idx);
         let word = &mut self.words[get_word_idx(bit_idx)];
@@ -106,12 +117,14 @@ impl<A: Allocator> BitVector<A> {
     }
 
     /// Resizes the vector to the specified length, with all bits unset.
+    #[inline]
     pub fn resize_and_unset_all(&mut self, len: usize) {
         self.words.clear();
         self.words.resize(len.div_ceil(64), 0);
         self.len = len;
     }
 
+    #[inline]
     fn bounds_check(&self, bit_idx: usize) {
         if bit_idx >= self.len {
             panic!(
@@ -128,10 +141,12 @@ impl Default for BitVector {
     }
 }
 
+#[inline]
 fn get_word_idx(bit_idx: usize) -> usize {
     bit_idx / 64
 }
 
+#[inline]
 fn get_bit_mask(bit_idx: usize) -> u64 {
     1 << (bit_idx & 0b111111)
 }
