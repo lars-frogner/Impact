@@ -5,8 +5,10 @@ use impact_alloc::{AVec, Allocator, arena::ArenaPool};
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::{
     consts::f32::{FRAC_1_SQRT_6, SQRT_3, SQRT_6},
+    matrix::Matrix3,
     point::{Point3, Point3C},
     random::Rng,
+    vector::Vector3,
 };
 use std::ops::Range;
 
@@ -1537,6 +1539,56 @@ fn evaluate_infinite_line_triangle_intersection_one_sided(
     }
 }
 
+#[inline]
+fn compute_circumcenter(
+    vertex_a: &Point3C,
+    vertex_b: &Point3C,
+    vertex_c: &Point3C,
+    vertex_d: &Point3C,
+) -> Point3C {
+    let a = vertex_a.aligned();
+    let b = vertex_b.aligned();
+    let c = vertex_c.aligned();
+    let d = vertex_d.aligned();
+
+    let da = a - d;
+    let db = b - d;
+    let dc = c - d;
+
+    let da2 = da.norm_squared();
+    let db2 = db.norm_squared();
+    let dc2 = dc.norm_squared();
+
+    let det_r = Matrix3::from_columns(da, db, dc).determinant();
+
+    let det_x = Matrix3::from_columns(
+        Vector3::new(da2, da.y(), da.z()),
+        Vector3::new(db2, db.y(), db.z()),
+        Vector3::new(dc2, dc.y(), dc.z()),
+    )
+    .determinant();
+
+    let det_y = Matrix3::from_columns(
+        Vector3::new(da2, da.x(), da.z()),
+        Vector3::new(db2, db.x(), db.z()),
+        Vector3::new(dc2, dc.x(), dc.z()),
+    )
+    .determinant();
+
+    let det_z = Matrix3::from_columns(
+        Vector3::new(da2, da.x(), da.y()),
+        Vector3::new(db2, db.x(), db.y()),
+        Vector3::new(dc2, dc.x(), dc.y()),
+    )
+    .determinant();
+
+    let scale = (2.0 * det_r).recip();
+
+    let center = d + Vector3::new(scale * det_x, -scale * det_y, scale * det_z);
+
+    center.compact()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum LineTriangleIntersection {
     Inside,
@@ -1590,7 +1642,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use impact_alloc::Global;
     use impact_geometry::Plane;
-    use impact_math::vector::UnitVector3;
+    use impact_math::vector::{UnitVector3, Vector3C};
 
     #[test]
     fn delaunay_tetrahedralization_of_less_than_four_points_is_empty() {
@@ -2000,5 +2052,32 @@ mod tests {
                 ca: true
             }
         ));
+    }
+
+    #[test]
+    fn circumcenter_is_correct_for_simple_points() {
+        let computed_center = compute_circumcenter(
+            &Point3C::new(-1.0, 0.0, 0.0),
+            &Point3C::new(0.0, 0.0, 1.0),
+            &Point3C::new(1.0, 0.0, 0.0),
+            &Point3C::new(0.0, 1.0, 0.0),
+        );
+        assert_abs_diff_eq!(computed_center, Point3C::origin());
+    }
+
+    #[test]
+    fn circumcenter_is_correct_for_close_points() {
+        let center = Point3C::new(1.0, 2.0, 3.0);
+        let radius = 4.0;
+
+        let offset = 0.2;
+
+        let computed_center = compute_circumcenter(
+            &(center + radius * Vector3C::new(1.0 - offset, 1.0, 1.0).normalized()),
+            &(center + radius * Vector3C::new(1.0, 1.0, 1.0 + offset).normalized()),
+            &(center + radius * Vector3C::new(1.0 + offset, 1.0, 1.0).normalized()),
+            &(center + radius * Vector3C::new(1.0, 1.0 + offset, 1.0).normalized()),
+        );
+        assert_abs_diff_eq!(computed_center, center, epsilon = 1e-3);
     }
 }

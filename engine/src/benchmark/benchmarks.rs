@@ -2,7 +2,6 @@
 
 pub mod bvh;
 pub mod constraint;
-pub mod delaunay;
 pub mod generation;
 pub mod isometry;
 pub mod lookup_table;
@@ -10,6 +9,7 @@ pub mod matrix;
 pub mod model;
 pub mod quaternion;
 pub mod sorting;
+pub mod tesselation;
 pub mod vector;
 pub mod voxel_object;
 
