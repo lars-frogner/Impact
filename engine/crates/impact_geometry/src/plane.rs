@@ -1,7 +1,7 @@
 //! Representation of planes.
 
 use crate::Sphere;
-use approx::AbsDiffEq;
+use approx::{AbsDiffEq, RelativeEq};
 use bytemuck::{Pod, Zeroable};
 use impact_math::{
     point::{Point3, Point3C},
@@ -233,6 +233,25 @@ impl AbsDiffEq for Plane {
     }
 }
 
+impl RelativeEq for Plane {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.unit_normal
+            .relative_eq(&other.unit_normal, epsilon, max_relative)
+            && self
+                .displacement
+                .relative_eq(&other.displacement, epsilon, max_relative)
+    }
+}
+
 impl PlaneC {
     /// The xy-coordinate plane, with the positive halfspace being the space of
     /// positive z-coordinates.
@@ -306,6 +325,25 @@ impl AbsDiffEq for PlaneC {
     fn abs_diff_eq(&self, other: &Self, epsilon: f32) -> bool {
         self.unit_normal.abs_diff_eq(&other.unit_normal, epsilon)
             && self.displacement.abs_diff_eq(&other.displacement, epsilon)
+    }
+}
+
+impl RelativeEq for PlaneC {
+    fn default_max_relative() -> Self::Epsilon {
+        f32::default_max_relative()
+    }
+
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: Self::Epsilon,
+        max_relative: Self::Epsilon,
+    ) -> bool {
+        self.unit_normal
+            .relative_eq(&other.unit_normal, epsilon, max_relative)
+            && self
+                .displacement
+                .relative_eq(&other.displacement, epsilon, max_relative)
     }
 }
 
