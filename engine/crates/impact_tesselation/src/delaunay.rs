@@ -1243,27 +1243,63 @@ impl Tetrahedron {
     /// given corner with this tetrahedron.
     #[inline]
     pub fn neighbors_with_corner(&self, corner: usize) -> [TetrahedronID; 3] {
-        if corner == 0 {
-            [self.neighbors[1], self.neighbors[2], self.neighbors[3]]
-        } else if corner == 1 {
-            [self.neighbors[0], self.neighbors[2], self.neighbors[3]]
-        } else if corner == 2 {
-            [self.neighbors[0], self.neighbors[1], self.neighbors[3]]
-        } else {
-            [self.neighbors[0], self.neighbors[1], self.neighbors[2]]
+        match corner {
+            0 => [self.neighbors[1], self.neighbors[2], self.neighbors[3]],
+            1 => [self.neighbors[0], self.neighbors[2], self.neighbors[3]],
+            2 => [self.neighbors[0], self.neighbors[1], self.neighbors[3]],
+            _ => {
+                debug_assert_eq!(corner, 3);
+                [self.neighbors[0], self.neighbors[1], self.neighbors[2]]
+            }
         }
     }
 
+    /// Returns the IDs of the neighbor tetrahedra sharing the vertex at the
+    /// given corner with this tetrahedron.
     #[inline]
+    pub fn neighbor_indices_with_corner(&self, corner: usize) -> [usize; 3] {
+        match corner {
+            0 => [1, 2, 3],
+            1 => [0, 2, 3],
+            2 => [0, 1, 3],
+            _ => {
+                debug_assert_eq!(corner, 3);
+                [0, 1, 2]
+            }
+        }
+    }
+
+    /// For each face containing the vertex at the given corner, returns an
+    /// array `[id, v1, v2]` with the ID of the neighbor sharing the face and
+    /// the indices of the two other face vertices. The latter are given in
+    /// anti-clockwise order as seen from the interior.
+    #[inline]
+    pub fn neighbor_and_edges_for_faces_with_corner(&self, corner: usize) -> [[u32; 3]; 3] {
+        let [a, b, c, d] = self.vertices;
+        let [na, nb, nc, nd] = self.neighbors;
+        match corner {
+            0 => [[nb, c, d], [nc, d, b], [nd, b, c]],
+            1 => [[na, d, c], [nc, a, d], [nd, c, a]],
+            2 => [[na, b, d], [nb, d, a], [nd, a, b]],
+            _ => {
+                debug_assert_eq!(corner, 3);
+                [[na, c, b], [nb, a, c], [nc, b, a]]
+            }
+        }
+    }
+
     #[allow(dead_code)]
+    #[inline]
     fn face_opposite_neighbor(&self, neighbor_idx: usize) -> [VertexIdx; 3] {
         let [a, b, c, d] = self.vertices;
         match neighbor_idx {
             0 => [b, d, c],
             1 => [a, c, d],
             2 => [a, d, b],
-            3 => [a, b, c],
-            _ => panic!("Invalid neighbor index {neighbor_idx}"),
+            _ => {
+                debug_assert_eq!(neighbor_idx, 3);
+                [a, b, c]
+            }
         }
     }
 
