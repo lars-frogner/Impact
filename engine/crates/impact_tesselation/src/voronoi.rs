@@ -4,7 +4,7 @@ use crate::delaunay::{DelaunayTetrahedralization, NO_TETRAHEDRON_ID, VertexIdx};
 use approx::relative_eq;
 use impact_alloc::{AVec, Allocator, arena::ArenaPool};
 use impact_containers::BitVector;
-use impact_geometry::PlaneC;
+use impact_geometry::{AxisAlignedBox, PlaneC};
 use impact_math::{
     point::Point3C,
     vector::{UnitVector3, UnitVector3C},
@@ -15,10 +15,19 @@ use impact_math::{
 pub struct VoronoiPolyhedron<A: Allocator> {
     /// The vertices of the polyhedron.
     pub vertices: AVec<Point3C, A>,
-    /// The directions in which the polyhedron has infinite extent.
-    pub rays: AVec<UnitVector3C, A>,
+    /// The rays along which the polyhedron has infinite extent.
+    pub rays: AVec<PolyhedronRay, A>,
     /// The planes representing the faces of the polyhedron.
     pub face_planes: AVec<PlaneC, A>,
+}
+
+/// A ray along which a polyhedron has infinite extent.
+#[derive(Clone, Debug)]
+pub struct PolyhedronRay {
+    /// The position of the vertex where the ray originates.
+    pub vertex: Point3C,
+    /// The direction of the ray.
+    pub direction: UnitVector3C,
 }
 
 /// A yet-to-be determined plane for a Voronoi polyhedron face dual to a
@@ -137,8 +146,11 @@ impl<A: Allocator> VoronoiPolyhedron<A> {
                     let edge_1 = end_vertex_point_1 - start_vertex_point;
                     let edge_2 = end_vertex_point_2 - start_vertex_point;
 
-                    let ray = UnitVector3::normalized_from(edge_2.cross(&edge_1));
-                    self.rays.push(ray.compact());
+                    let ray_direction = UnitVector3::normalized_from(edge_2.cross(&edge_1));
+                    self.rays.push(PolyhedronRay {
+                        vertex: circumcenter,
+                        direction: ray_direction.compact(),
+                    });
 
                     for (edge, edge_end_vertex_idx) in
                         [(edge_1, end_vertex_idx_1), (edge_2, end_vertex_idx_2)]
@@ -222,14 +234,75 @@ impl<A: Allocator> VoronoiPolyhedron<A> {
         orient_face_planes_outward(&mut self.face_planes, &dual_vertex.point);
     }
 
+    /// Computes the AABB of the polyhedron, bounded by the given AABB. Returns
+    /// [`None`] if the polyhedron is empty or outside the bounding AABB.
+    pub fn compute_bounded_aabb(&self, bounding_aabb: &AxisAlignedBox) -> Option<AxisAlignedBox> {
+        if self.vertices.is_empty() {
+            assert!(self.rays.is_empty());
+            return None;
+        }
+
+        let mut poly_aabb = AxisAlignedBox::aabb_for_points(&self.vertices);
+
+        for PolyhedronRay { vertex, direction } in &self.rays {
+            let vertex = vertex.aligned();
+            let direction = direction.aligned();
+
+            // Compute the intersection point with the closest boundary AABB far
+            // plane (a plane whose inside faces the ray origin) and make the
+            // polyhedron AABB encompass this point. Doing this for all rays
+            // ensures that all parts of the inifinte regions of the polyhedron
+            // inside the boundary AABB are encompassed by the polyhedron AABB.
+
+            let lower_offset = vertex - bounding_aabb.lower_corner();
+            let upper_offset = bounding_aabb.upper_corner() - vertex;
+
+            let direction_recip = direction.component_recip();
+            let lower_plane_dists = -lower_offset.component_mul(&direction_recip);
+            let upper_plane_dists = upper_offset.component_mul(&direction_recip);
+
+            let mut intersection_dist = f32::INFINITY;
+
+            let mut update_dist = |new_dist| {
+                if new_dist >= 0.0 {
+                    intersection_dist = intersection_dist.min(new_dist);
+                }
+            };
+
+            if direction.x() > 0.0 {
+                update_dist(upper_plane_dists.x());
+            } else if direction.x() < 0.0 {
+                update_dist(lower_plane_dists.x());
+            }
+            if direction.y() > 0.0 {
+                update_dist(upper_plane_dists.y());
+            } else if direction.y() < 0.0 {
+                update_dist(lower_plane_dists.y());
+            }
+            if direction.z() > 0.0 {
+                update_dist(upper_plane_dists.z());
+            } else if direction.z() < 0.0 {
+                update_dist(lower_plane_dists.z());
+            }
+
+            if intersection_dist.is_finite() {
+                let intersection_point = vertex + intersection_dist * direction;
+                poly_aabb.expand_to_point(&intersection_point);
+            }
+        }
+
+        poly_aabb.compute_overlap_with(bounding_aabb)
+    }
+
     #[inline]
-    pub fn deduplicate(&mut self) {
+    pub fn deduplicate_vertices(&mut self) {
         deduplicate_vec_by(&mut self.vertices, |a, b| {
             relative_eq!(a, b, epsilon = 1e-5, max_relative = 1e-5)
         });
-        deduplicate_vec_by(&mut self.rays, |a, b| {
-            relative_eq!(a, b, epsilon = 1e-5, max_relative = 1e-5)
-        });
+    }
+
+    #[inline]
+    pub fn deduplicate_face_planes(&mut self) {
         deduplicate_vec_by(&mut self.face_planes, |a, b| {
             relative_eq!(a, b, epsilon = 1e-5, max_relative = 1e-5)
         });
@@ -306,6 +379,24 @@ mod tests {
     use super::*;
     use approx::{abs_diff_eq, assert_abs_diff_eq};
     use impact_alloc::Global;
+    use impact_math::{point::Point3, vector::Vector3C};
+
+    fn make_polyhedron(
+        vertices: &[Point3C],
+        rays: &[(Point3C, UnitVector3C)],
+    ) -> VoronoiPolyhedron<Global> {
+        let mut poly = VoronoiPolyhedron::empty_in(Global);
+        for &v in vertices {
+            poly.vertices.push(v);
+        }
+        for &(v, d) in rays {
+            poly.rays.push(PolyhedronRay {
+                vertex: v,
+                direction: d,
+            });
+        }
+        poly
+    }
 
     #[test]
     fn voronoi_polyhedra_for_four_points_have_appropriate_structure() {
@@ -354,7 +445,6 @@ mod tests {
 
         for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
             polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
-            polyhedron.deduplicate();
 
             let n_vertices = polyhedron.vertices.len();
             let n_rays = polyhedron.rays.len();
@@ -422,31 +512,39 @@ mod tests {
             .zip(point_locations)
         {
             polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
-            polyhedron.deduplicate();
+            polyhedron.deduplicate_vertices();
+            polyhedron.deduplicate_face_planes();
 
             let n_vertices = polyhedron.vertices.len();
             let n_faces = polyhedron.face_planes.len();
-            let n_rays = polyhedron.rays.len();
+
+            let mut ray_directions: AVec<_, Global> =
+                polyhedron.rays.iter().map(|ray| ray.direction).collect();
+
+            deduplicate_vec_by(&mut ray_directions, |a, b| {
+                relative_eq!(a, b, epsilon = 1e-5, max_relative = 1e-5)
+            });
+            let n_ray_directions = ray_directions.len();
 
             match location {
                 PointLocation::Corner => {
                     assert_eq!(n_vertices, 1);
-                    assert_eq!(n_rays, 3);
+                    assert_eq!(n_ray_directions, 3);
                     assert!(n_faces == 3 || n_faces == 5);
                 }
                 PointLocation::Edge => {
                     assert_eq!(n_vertices, 2);
-                    assert_eq!(n_rays, 2);
+                    assert_eq!(n_ray_directions, 2);
                     assert!(n_faces == 4 || n_faces == 6);
                 }
                 PointLocation::Face => {
                     assert_eq!(n_vertices, 4);
-                    assert_eq!(n_rays, 1);
+                    assert_eq!(n_ray_directions, 1);
                     assert!(n_faces == 5 || n_faces == 7);
                 }
                 PointLocation::Interior => {
                     assert_eq!(n_vertices, 8);
-                    assert_eq!(n_rays, 0);
+                    assert_eq!(n_ray_directions, 0);
                     assert_eq!(n_faces, 6);
                 }
             }
@@ -483,5 +581,93 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn computing_bounded_aabb_with_interior_vertex_gives_point_aabb() {
+        let polyhedron = make_polyhedron(&[Point3C::new(5.0, 5.0, 5.0)], &[]);
+        let bounding_aabb =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 10.0, 10.0));
+        assert_abs_diff_eq!(
+            polyhedron.compute_bounded_aabb(&bounding_aabb).unwrap(),
+            AxisAlignedBox::new(Point3::new(5.0, 5.0, 5.0), Point3::new(5.0, 5.0, 5.0)),
+            epsilon = 1e-5
+        );
+    }
+
+    #[test]
+    fn computing_bounded_aabb_with_exterior_vertex_gives_none() {
+        let polyhedron = make_polyhedron(&[Point3C::new(15.0, 5.0, 5.0)], &[]);
+        let bounding_aabb =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 10.0, 10.0));
+        assert!(polyhedron.compute_bounded_aabb(&bounding_aabb).is_none());
+    }
+
+    #[test]
+    fn computing_bounded_aabb_with_straddling_vertices_gives_truncated_aabb() {
+        let polyhedron = make_polyhedron(
+            &[
+                Point3C::new(-1.0, 5.0, 5.0),
+                Point3C::new(5.0, 12.0, 5.0),
+                Point3C::new(5.0, 2.0, 5.0),
+                Point3C::new(5.0, 5.0, 11.0),
+            ],
+            &[],
+        );
+        let bounding_aabb =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 10.0, 10.0));
+        assert_abs_diff_eq!(
+            polyhedron.compute_bounded_aabb(&bounding_aabb).unwrap(),
+            AxisAlignedBox::new(Point3::new(0.0, 2.0, 5.0), Point3::new(5.0, 10.0, 10.0)),
+            epsilon = 1e-5
+        );
+    }
+
+    #[test]
+    fn computing_bounded_aabb_with_interior_ray_origin_gives_aabb_extended_to_exit_face() {
+        // Ray points along y, exits at y = 10.
+        let vertex = Point3C::new(5.0, 3.0, 5.0);
+        let polyhedron = make_polyhedron(&[vertex], &[(vertex, UnitVector3C::unit_y())]);
+        let bounding_aabb =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 10.0, 10.0));
+        assert_abs_diff_eq!(
+            polyhedron.compute_bounded_aabb(&bounding_aabb).unwrap(),
+            AxisAlignedBox::new(Point3::new(5.0, 3.0, 5.0), Point3::new(5.0, 10.0, 5.0)),
+            epsilon = 1e-5
+        );
+    }
+
+    #[test]
+    fn computing_bounded_aabb_with_exterior_ray_origin_aabb_extended_to_exit_face() {
+        // Ray vertex is outside the bounding AABB (below y=0). The ray points
+        // along y, entering the AABB at y=0 and exiting at y=10.
+        let vertex = Point3C::new(5.0, -5.0, 5.0);
+        let polyhedron = make_polyhedron(&[vertex], &[(vertex, UnitVector3C::unit_y())]);
+        let bounding_aabb =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 10.0, 10.0));
+        assert_abs_diff_eq!(
+            polyhedron.compute_bounded_aabb(&bounding_aabb).unwrap(),
+            AxisAlignedBox::new(Point3::new(5.0, 0.0, 5.0), Point3::new(5.0, 10.0, 5.0)),
+            epsilon = 1e-5
+        );
+    }
+
+    #[test]
+    fn computing_bounded_aabb_with_exterior_rays_covering_bounding_aabb_gives_full_aabb() {
+        // Both rays miss on opposite sides of the bounding AABB
+        let vertex_1 = Point3C::new(8.0, 15.0, 2.0);
+        let vertex_2 = Point3C::new(15.0, 3.0, 8.0);
+        let direction = UnitVector3C::normalized_from(Vector3C::new(-1.0, -0.5, 0.0));
+        let polyhedron = make_polyhedron(
+            &[vertex_1, vertex_2],
+            &[(vertex_1, direction), (vertex_2, direction)],
+        );
+        let bounding_aabb =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(10.0, 10.0, 10.0));
+        assert_abs_diff_eq!(
+            polyhedron.compute_bounded_aabb(&bounding_aabb).unwrap(),
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 2.0), Point3::new(10.0, 10.0, 8.0)),
+            epsilon = 1e-5
+        );
     }
 }
