@@ -272,6 +272,13 @@ impl AxisAlignedBox {
             != 0
     }
 
+    /// Expands the axis-aligned box to encompass the given point.
+    #[inline]
+    pub fn expand_to_point(&mut self, point: &Point3) {
+        self.lower_corner = self.lower_corner.min_with(point);
+        self.upper_corner = self.upper_corner.max_with(point);
+    }
+
     /// Expands the axis-aligned box to encompass another axis-aligned box.
     #[inline]
     pub fn merge_with(&mut self, other: &Self) {

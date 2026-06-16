@@ -113,6 +113,7 @@ impact_profiling::define_target_enum! {
         delaunay_tetrahedralize_regular_grid_points,
         voronoi_diagram_from_randomized_delaunay_tetrahedralization,
         voronoi_diagram_from_regular_delaunay_tetrahedralization,
+        voronoi_diagram_with_aabbs_from_delaunay_tetrahedralization,
     },
 }
 
