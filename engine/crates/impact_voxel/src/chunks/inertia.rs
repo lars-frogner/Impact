@@ -46,6 +46,17 @@ pub struct VoxelObjectInertialPropertyTransferrer<'a, 'b> {
     voxel_extent_pow_3: f32,
 }
 
+/// Helper for computing the inertial properties of a destination voxel object
+/// when voxels are copied from a source object.
+#[derive(Debug)]
+pub struct VoxelObjectInertialPropertyComputer<'a, 'b> {
+    destination: &'a mut VoxelObjectInertialPropertyManager,
+    voxel_type_densities: &'b [f32],
+    voxel_extent: f32,
+    voxel_extent_pow_2: f32,
+    voxel_extent_pow_3: f32,
+}
+
 impl VoxelChunk {
     fn accumulate_moments(
         &self,
@@ -198,6 +209,29 @@ impl VoxelObjectInertialPropertyManager {
         VoxelObjectInertialPropertyTransferrer {
             source: self,
             destination: other,
+            voxel_type_densities,
+            voxel_extent,
+            voxel_extent_pow_2,
+            voxel_extent_pow_3,
+        }
+    }
+
+    /// Returns a [`VoxelObjectInertialPropertyComputer`] that can be used to
+    /// incrementally compute inertial properties into this manager. The
+    /// inertial properties are assumed to be defined with respect to the origin
+    /// of the same voxel grid.
+    ///
+    /// The mass density of each voxel type will be looked up in the given
+    /// slice.
+    pub fn begin_computation<'a, 'b>(
+        &'a mut self,
+        voxel_extent: f32,
+        voxel_type_densities: &'b [f32],
+    ) -> VoxelObjectInertialPropertyComputer<'a, 'b> {
+        let voxel_extent_pow_2 = voxel_extent.powi(2);
+        let voxel_extent_pow_3 = voxel_extent_pow_2 * voxel_extent;
+        VoxelObjectInertialPropertyComputer {
+            destination: self,
             voxel_type_densities,
             voxel_extent,
             voxel_extent_pow_2,
@@ -442,6 +476,90 @@ impl extraction::PropertyTransferrer for VoxelObjectInertialPropertyTransferrer<
     #[inline]
     fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
         self.transfer_uniform_chunk(chunk_indices, chunk_voxel);
+    }
+}
+
+impl VoxelObjectInertialPropertyComputer<'_, '_> {
+    /// Computes and applies the change in inertial properties for the
+    /// destination object to account for the given voxel being copied from a
+    /// source to the destination.
+    #[inline]
+    pub fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
+        let (voxel_mass, voxel_moments, voxel_moments_of_inertia, voxel_products_of_inertia) =
+            compute_moments_for_voxel(
+                self.voxel_extent,
+                self.voxel_extent_pow_2,
+                self.voxel_extent_pow_3,
+                self.voxel_type_densities,
+                object_voxel_indices,
+                voxel,
+            );
+
+        self.destination.mass += voxel_mass;
+        self.destination.moments += voxel_moments;
+        self.destination.moments_of_inertia += voxel_moments_of_inertia;
+        self.destination.products_of_inertia += voxel_products_of_inertia;
+    }
+
+    /// Computes and applies the change in inertial properties for the
+    /// destination object to account for the given whole non-uniform chunk
+    /// being copied from a source to the destination.
+    pub fn compute_for_non_uniform_chunk(
+        &mut self,
+        chunk_indices: &[usize; 3],
+        chunk_voxels: &[Voxel],
+    ) {
+        let (chunk_mass, chunk_moments, chunk_moments_of_inertia, chunk_products_of_inertia) =
+            compute_moments_for_non_uniform_chunk(
+                self.voxel_extent,
+                chunk_voxels,
+                self.voxel_type_densities,
+                chunk_indices,
+            );
+
+        self.destination.mass += chunk_mass;
+        self.destination.moments += chunk_moments;
+        self.destination.moments_of_inertia += chunk_moments_of_inertia;
+        self.destination.products_of_inertia += chunk_products_of_inertia;
+    }
+
+    /// Computes and applies the change in inertial properties for the
+    /// destination object to account for the given whole uniform chunk being
+    /// copied from the a to the destination.
+    pub fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
+        let (chunk_mass, chunk_moments, chunk_moments_of_inertia, chunk_products_of_inertia) =
+            compute_moments_for_uniform_chunk(
+                self.voxel_extent,
+                self.voxel_type_densities,
+                chunk_voxel,
+                chunk_indices,
+            );
+
+        self.destination.mass += chunk_mass;
+        self.destination.moments += chunk_moments;
+        self.destination.moments_of_inertia += chunk_moments_of_inertia;
+        self.destination.products_of_inertia += chunk_products_of_inertia;
+    }
+}
+
+impl extraction::PropertyComputer for VoxelObjectInertialPropertyComputer<'_, '_> {
+    #[inline]
+    fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
+        self.compute_for_voxel(object_voxel_indices, voxel);
+    }
+
+    #[inline]
+    fn compute_for_non_uniform_chunk(
+        &mut self,
+        chunk_indices: &[usize; 3],
+        chunk_voxels: &[Voxel],
+    ) {
+        self.compute_for_non_uniform_chunk(chunk_indices, chunk_voxels);
+    }
+
+    #[inline]
+    fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
+        self.compute_for_uniform_chunk(chunk_indices, chunk_voxel);
     }
 }
 

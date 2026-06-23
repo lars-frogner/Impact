@@ -1,19 +1,27 @@
 //! Extraction of regions of voxel objects.
 
 use crate::{
-    Voxel,
+    Voxel, VoxelFlags, VoxelSignedDistance,
     chunks::{
-        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkedVoxelObject, FaceVoxelDistribution,
-        NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, VoxelChunk, VoxelChunkFlags, chunk_voxels,
-        chunk_voxels_mut, determine_occupied_voxel_ranges, linear_voxel_idx_within_chunk,
+        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkedVoxelObject, FaceEmptyCounts, FaceVoxelDistribution,
+        NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
+        VoxelChunkFlags, chunk_range_encompassing_voxel_range, chunk_voxels, chunk_voxels_mut,
+        determine_occupied_voxel_ranges, linear_voxel_idx_within_chunk,
         split_detection::{
             CHUNK_MAX_REGIONS, GlobalRegionLabel, NonUniformChunkSplitDetectionData, SplitDetector,
-            chunk_voxel_region_labels, find_root_for_region, non_uniform_chunk_regions,
-            non_uniform_chunk_start_region_idx,
+            UniformChunkSplitDetectionData, chunk_voxel_region_labels, find_root_for_region,
+            non_uniform_chunk_regions, non_uniform_chunk_start_region_idx,
         },
     },
+    utils::{Dimension, Faces},
 };
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
+use impact_geometry::{AxisAlignedBox, Plane, PlaneC};
+use impact_math::{
+    point::Point3C,
+    vector::{Vector3, Vector3C},
+};
 use std::{array, cmp::Ordering, mem, ops::Range};
 
 /// Represents a helper for keeping track of the transferral of some aggregate
@@ -49,6 +57,8 @@ pub struct ExtractedVoxelObject {
 }
 
 struct NoPropertyTransferrer;
+
+struct NoPropertyComputer;
 
 impl ChunkedVoxelObject {
     /// Checks if the object consists of more than one disconnected region, and
@@ -519,6 +529,870 @@ impl ChunkedVoxelObject {
         Some(extracted)
     }
 
+    /// The AABB and planes should be specified in the normalized model space of
+    /// the voxel object, where distances are in voxels, the lower corner of the
+    /// grid is at the origin and the cartesian axes are aligned with the grid.
+    pub fn extract_polyhedron(
+        &mut self,
+        normalized_aabb: &AxisAlignedBox,
+        normalized_face_planes: &[PlaneC],
+    ) -> Option<ExtractedVoxelObject> {
+        self.extract_polyhedron_with_property_transferrer(
+            normalized_aabb,
+            normalized_face_planes,
+            &mut NoPropertyTransferrer,
+        )
+    }
+
+    /// The AABB and planes should be specified in the normalized model space of
+    /// the voxel object, where distances are in voxels, the lower corner of the
+    /// grid is at the origin and the cartesian axes are aligned with the grid.
+    pub fn extract_polyhedron_with_property_transferrer(
+        &mut self,
+        normalized_aabb: &AxisAlignedBox,
+        normalized_face_planes: &[PlaneC],
+        property_transferrer: &mut impl PropertyTransferrer,
+    ) -> Option<ExtractedVoxelObject> {
+        const EXTERIOR_MARGIN: f32 = VoxelSignedDistance::MAX_F32;
+        const INTERIOR_MARGIN: f32 = -VoxelSignedDistance::MIN_F32;
+
+        let expanded_aabb = normalized_aabb.expanded_about_center(EXTERIOR_MARGIN);
+
+        let poly_voxel_ranges = self.voxel_ranges_in_object_touching_aab(&expanded_aabb);
+
+        if poly_voxel_ranges.iter().any(Range::is_empty) {
+            return None;
+        }
+
+        let poly_chunk_ranges = poly_voxel_ranges
+            .clone()
+            .map(chunk_range_encompassing_voxel_range);
+
+        let poly_chunk_counts = poly_chunk_ranges.clone().map(|range| range.len());
+        let total_poly_chunk_count: usize = poly_chunk_counts.iter().product();
+
+        let mut touched_non_uniform_chunk_count = 0;
+
+        for chunk_i in poly_chunk_ranges[0].clone() {
+            for chunk_j in poly_chunk_ranges[1].clone() {
+                for chunk_k in poly_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    let chunk = &self.chunks[chunk_idx];
+
+                    if let VoxelChunk::NonUniform(_) = chunk {
+                        touched_non_uniform_chunk_count += 1;
+                    }
+                }
+            }
+        }
+
+        let arena = ArenaPool::get_arena();
+
+        let n_faces = normalized_face_planes.len();
+        let mut inner_planes = AVec::with_capacity_in(n_faces, &arena);
+        let mut outer_planes = AVec::with_capacity_in(n_faces, &arena);
+        let mut intersecting_planes = AVec::with_capacity_in(n_faces, &arena);
+
+        for plane in normalized_face_planes {
+            let plane = plane.aligned();
+            inner_planes.push(Plane::new(
+                *plane.unit_normal(),
+                plane.displacement() - INTERIOR_MARGIN,
+            ));
+            outer_planes.push(Plane::new(
+                *plane.unit_normal(),
+                plane.displacement() + EXTERIOR_MARGIN,
+            ));
+        }
+
+        let mut poly_voxels =
+            Vec::with_capacity(touched_non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+
+        let mut poly_chunks = Vec::with_capacity(total_poly_chunk_count);
+
+        let mut non_uniform_chunks_inside =
+            AVec::with_capacity_in(touched_non_uniform_chunk_count, &arena);
+        let mut non_uniform_chunks_intersecting =
+            AVec::with_capacity_in(touched_non_uniform_chunk_count, &arena);
+
+        let mut invalidated_upper_face_chunks = HashSet::with_capacity_and_hasher_in(
+            touched_non_uniform_chunk_count,
+            Default::default(),
+            &arena,
+        );
+
+        let mut poly_uniform_chunk_count = 0;
+        let mut poly_non_uniform_chunk_count = 0;
+
+        for chunk_i in poly_chunk_ranges[0].clone() {
+            for chunk_j in poly_chunk_ranges[1].clone() {
+                for chunk_k in poly_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    let chunk = self.chunks[chunk_idx];
+
+                    if let VoxelChunk::Void = chunk {
+                        poly_chunks.push(VoxelChunk::Void);
+                        continue;
+                    }
+
+                    let chunk_aabb = Self::compute_normalized_chunk_bounds(chunk_indices);
+
+                    if outer_planes.iter().any(|outer_plane| {
+                        chunk_aabb.lies_in_positive_halfspace_of_plane(outer_plane)
+                    }) {
+                        poly_chunks.push(VoxelChunk::Void);
+                        continue;
+                    }
+
+                    intersecting_planes.clear();
+                    for (plane_idx, inner_plane) in inner_planes.iter().enumerate() {
+                        if !chunk_aabb.lies_in_negative_halfspace_of_plane(inner_plane) {
+                            intersecting_planes.push(normalized_face_planes[plane_idx].aligned());
+                        }
+                    }
+
+                    let is_fully_inside = intersecting_planes.is_empty();
+
+                    let mut invalidated_faces = Faces::empty();
+
+                    if is_fully_inside {
+                        match chunk {
+                            VoxelChunk::NonUniform(chunk) => {
+                                let chunk_voxels =
+                                    chunk_voxels_mut(&mut self.voxels, chunk.data_offset);
+
+                                property_transferrer
+                                    .transfer_non_uniform_chunk(&chunk_indices, chunk_voxels);
+
+                                // If the chunk only contains voxels belonging to the region we
+                                // are extracting, we can copy over all the voxels in one go
+                                poly_voxels.extend_from_slice(chunk_voxels);
+
+                                // We replace them with empty voxels and mark the original chunk
+                                // as void (although the voxels now lose their owner, we might
+                                // still encounter them when looping over all voxels for things
+                                // like aggregations, so it is still important that we make them
+                                // empty)
+                                chunk_voxels.fill(Voxel::maximally_outside());
+                                self.chunks[chunk_idx] = VoxelChunk::Void;
+
+                                let face_distributions = chunk.face_distributions;
+
+                                let poly_chunk = NonUniformVoxelChunk {
+                                    data_offset: poly_non_uniform_chunk_count as u32,
+                                    // Since the chunk has just changed owner, the face
+                                    // distributions are still valid
+                                    face_distributions,
+                                    flags: VoxelChunkFlags::empty(),
+                                    split_detection: NonUniformChunkSplitDetectionData::new(),
+                                };
+
+                                non_uniform_chunks_inside.push((chunk, poly_chunks.len()));
+
+                                poly_chunks.push(VoxelChunk::NonUniform(poly_chunk));
+                                poly_non_uniform_chunk_count += 1;
+
+                                for (dim, distributions) in
+                                    face_distributions.into_iter().enumerate()
+                                {
+                                    if !distributions[0].is_empty() {
+                                        invalidated_faces |= Faces::all_lower()[dim];
+                                    }
+                                    if !distributions[1].is_empty() {
+                                        invalidated_faces |= Faces::all_upper()[dim];
+                                    }
+                                }
+                            }
+                            VoxelChunk::Uniform(mut chunk) => {
+                                // If the chunk to extract is uniform, we can
+                                // just move it over and replace it with a void
+                                // chunk, after making sure to overwrite the
+                                // data offset with the correct value for the
+                                // polyhedron object
+
+                                property_transferrer
+                                    .transfer_uniform_chunk(&chunk_indices, chunk.voxel);
+
+                                chunk.split_detection.data_offset = poly_uniform_chunk_count as u32;
+                                poly_uniform_chunk_count += 1;
+
+                                poly_chunks.push(VoxelChunk::Uniform(chunk));
+                                self.chunks[chunk_idx] = VoxelChunk::Void;
+
+                                invalidated_faces = Faces::all();
+                            }
+                            VoxelChunk::Void => unreachable!(),
+                        }
+                    } else {
+                        self.chunks[chunk_idx].convert_to_non_uniform_if_uniform(
+                            &mut self.voxels,
+                            &mut self.split_detector,
+                        );
+
+                        let VoxelChunk::NonUniform(chunk) = &mut self.chunks[chunk_idx] else {
+                            unreachable!();
+                        };
+
+                        let chunk_voxels = chunk_voxels_mut(&mut self.voxels, chunk.data_offset);
+
+                        let chunk_start_voxel_indices = chunk_indices.map(|idx| idx * CHUNK_SIZE);
+
+                        let lower_voxel_pos = chunk_aabb.lower_corner() + Vector3::same(0.5);
+
+                        let mut voxel_idx = 0;
+
+                        for i in 0..CHUNK_SIZE {
+                            let obj_i = chunk_start_voxel_indices[0] + i;
+
+                            for j in 0..CHUNK_SIZE {
+                                let obj_j = chunk_start_voxel_indices[1] + j;
+
+                                for k in 0..CHUNK_SIZE {
+                                    let obj_k = chunk_start_voxel_indices[2] + k;
+
+                                    let voxel = &mut chunk_voxels[voxel_idx];
+                                    let mut poly_voxel = *voxel;
+
+                                    let position = lower_voxel_pos
+                                        + Vector3::new(i as f32, j as f32, k as f32);
+
+                                    let mut planes_signed_distance =
+                                        intersecting_planes[0].compute_signed_distance(&position);
+
+                                    for plane in &intersecting_planes[1..] {
+                                        planes_signed_distance = planes_signed_distance
+                                            .max(plane.compute_signed_distance(&position));
+                                    }
+
+                                    let planes_signed_distance =
+                                        VoxelSignedDistance::from_f32(planes_signed_distance);
+
+                                    if voxel.signed_distance.is_negative()
+                                        && planes_signed_distance.is_negative()
+                                    {
+                                        property_transferrer
+                                            .transfer_voxel(&[obj_i, obj_j, obj_k], *voxel);
+                                    }
+
+                                    voxel.signed_distance =
+                                        voxel.signed_distance.max(-planes_signed_distance);
+
+                                    poly_voxel.signed_distance =
+                                        poly_voxel.signed_distance.max(planes_signed_distance);
+
+                                    let voxel_is_non_empty = voxel.signed_distance.is_negative();
+                                    let poly_voxel_is_non_empty =
+                                        poly_voxel.signed_distance.is_negative();
+
+                                    voxel.flags.set(VoxelFlags::IS_EMPTY, !voxel_is_non_empty);
+
+                                    poly_voxel
+                                        .flags
+                                        .set(VoxelFlags::IS_EMPTY, !poly_voxel_is_non_empty);
+
+                                    poly_voxels.push(poly_voxel);
+
+                                    voxel_idx += 1;
+                                }
+                            }
+                        }
+
+                        invalidated_faces = Faces::all();
+
+                        // The original chunk's face distributions, internal
+                        // adjacencies and connected regions data are
+                        // invalidated, so we recompute it all
+                        chunk.update_all_internal_state_and_determine_sparseness(&mut self.voxels);
+
+                        self.split_detector
+                            .update_local_connected_regions_for_chunk(
+                                &self.voxels,
+                                chunk,
+                                chunk_idx as u32,
+                            );
+
+                        let mut poly_chunk = NonUniformVoxelChunk {
+                            data_offset: poly_non_uniform_chunk_count as u32,
+                            ..Default::default()
+                        };
+
+                        // We have filled this chunk of the extracted object, so we
+                        // go ahead and compute the face distributions and internal
+                        // adjacencies for the chunk
+                        poly_chunk
+                            .update_all_internal_state_and_determine_sparseness(&mut poly_voxels);
+
+                        non_uniform_chunks_intersecting.push(poly_chunks.len());
+
+                        poly_chunks.push(VoxelChunk::NonUniform(poly_chunk));
+                        poly_non_uniform_chunk_count += 1;
+                    }
+
+                    if !invalidated_faces.is_empty() {
+                        for dim in Dimension::all() {
+                            if invalidated_faces.contains(Faces::all_lower()[dim.idx()])
+                                && chunk_indices[dim.idx()]
+                                    > self.occupied_chunk_ranges[dim.idx()].start
+                            {
+                                let mut lower_chunk_indices = chunk_indices;
+                                lower_chunk_indices[dim.idx()] -= 1;
+                                let lower_chunk_idx = self.linear_chunk_idx(&lower_chunk_indices);
+                                invalidated_upper_face_chunks.insert((lower_chunk_idx, dim));
+                            }
+                            if invalidated_faces.contains(Faces::all_upper()[dim.idx()])
+                                && chunk_indices[dim.idx()]
+                                    < self.occupied_chunk_ranges[dim.idx()].end - 1
+                            {
+                                invalidated_upper_face_chunks.insert((chunk_idx, dim));
+                            }
+                        }
+                    }
+
+                    // The original chunk's mesh will also have to be updated,
+                    // as well as the meshes of its adjacent chunks
+                    self.invalidated_mesh_chunk_indices.insert(chunk_indices);
+
+                    for dim in 0..3 {
+                        if chunk_indices[dim] > 0 {
+                            let mut neighbor_chunk_indices = chunk_indices;
+                            neighbor_chunk_indices[dim] -= 1;
+                            self.invalidated_mesh_chunk_indices
+                                .insert(neighbor_chunk_indices);
+                        }
+                        if chunk_indices[dim] < self.chunk_counts[dim] - 1 {
+                            let mut neighbor_chunk_indices = chunk_indices;
+                            neighbor_chunk_indices[dim] += 1;
+                            self.invalidated_mesh_chunk_indices
+                                .insert(neighbor_chunk_indices);
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut poly_split_detector =
+            SplitDetector::new(poly_uniform_chunk_count, poly_non_uniform_chunk_count);
+
+        for (chunk, poly_chunk_idx) in non_uniform_chunks_inside {
+            // The internal connected region information can be copied over
+            // directly
+            let poly_chunk = &mut poly_chunks[poly_chunk_idx];
+            if let VoxelChunk::NonUniform(poly_chunk) = poly_chunk {
+                poly_split_detector.copy_local_connected_regions_from_chunk_in_other(
+                    poly_chunk,
+                    poly_chunk_idx as u32,
+                    &self.split_detector,
+                    &chunk,
+                );
+            }
+        }
+
+        for poly_chunk_idx in non_uniform_chunks_intersecting {
+            let poly_chunk = &mut poly_chunks[poly_chunk_idx];
+            if let VoxelChunk::NonUniform(poly_chunk) = poly_chunk {
+                poly_split_detector.update_local_connected_regions_for_chunk(
+                    &poly_voxels,
+                    poly_chunk,
+                    poly_chunk_idx as u32,
+                );
+            }
+        }
+
+        // Now that we have removed part of the original object, we may be able
+        // to shrink the recorded occupied chunk and voxel ranges
+        self.update_occupied_ranges();
+
+        self.update_upper_boundary_adjacencies_along_dim_for_chunks(invalidated_upper_face_chunks);
+
+        // We also have to resolve the globally connected regions now that the
+        // original object has been modified
+        self.resolve_connected_regions_between_all_chunks();
+
+        let mut extracted = Self::complete_extracted_voxel_object(
+            self.voxel_extent,
+            &self.origin_offset_in_root,
+            poly_chunk_counts,
+            poly_chunk_ranges,
+            poly_uniform_chunk_count,
+            poly_non_uniform_chunk_count,
+            poly_voxels,
+            poly_chunks,
+            poly_split_detector,
+        )?;
+
+        // We have already computed the internal adjacencies and local region
+        // connectivity in the extracted object, but all derived state between
+        // chunks must be computed from scratch
+
+        extracted
+            .voxel_object
+            .update_all_chunk_boundary_adjacencies();
+
+        extracted
+            .voxel_object
+            .resolve_connected_regions_between_all_chunks();
+
+        // Also make sure to tighten the voxel ranges
+        extracted.voxel_object.update_occupied_voxel_ranges();
+
+        Some(extracted)
+    }
+
+    /// The AABB and planes should be specified in the normalized model space of
+    /// the voxel object, where distances are in voxels, the lower corner of the
+    /// grid is at the origin and the cartesian axes are aligned with the grid.
+    pub fn copy_polyhedron(
+        &self,
+        normalized_aabb: &AxisAlignedBox,
+        normalized_face_planes: &[PlaneC],
+    ) -> Option<ExtractedVoxelObject> {
+        self.copy_polyhedron_with_property_computer(
+            normalized_aabb,
+            normalized_face_planes,
+            &mut NoPropertyComputer,
+        )
+    }
+
+    /// The AABB and planes should be specified in the normalized model space of
+    /// the voxel object, where distances are in voxels, the lower corner of the
+    /// grid is at the origin and the cartesian axes are aligned with the grid.
+    pub fn copy_polyhedron_with_property_computer(
+        &self,
+        normalized_aabb: &AxisAlignedBox,
+        normalized_face_planes: &[PlaneC],
+        property_computer: &mut impl PropertyComputer,
+    ) -> Option<ExtractedVoxelObject> {
+        #![allow(clippy::needless_range_loop)]
+
+        const EXTERIOR_MARGIN: f32 = VoxelSignedDistance::MAX_F32;
+        const INTERIOR_MARGIN: f32 = -VoxelSignedDistance::MIN_F32;
+
+        let expanded_aabb = normalized_aabb.expanded_about_center(EXTERIOR_MARGIN);
+
+        let poly_voxel_ranges = self.voxel_ranges_in_object_touching_aab(&expanded_aabb);
+
+        if poly_voxel_ranges.iter().any(Range::is_empty) {
+            return None;
+        }
+
+        let poly_chunk_ranges = poly_voxel_ranges
+            .clone()
+            .map(chunk_range_encompassing_voxel_range);
+
+        let poly_chunk_counts = poly_chunk_ranges.clone().map(|range| range.len());
+        let total_poly_chunk_count: usize = poly_chunk_counts.iter().product();
+
+        let mut touched_non_uniform_chunk_count = 0;
+
+        for chunk_i in poly_chunk_ranges[0].clone() {
+            for chunk_j in poly_chunk_ranges[1].clone() {
+                for chunk_k in poly_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    let chunk = &self.chunks[chunk_idx];
+
+                    if let VoxelChunk::NonUniform(_) = chunk {
+                        touched_non_uniform_chunk_count += 1;
+                    }
+                }
+            }
+        }
+
+        let arena = ArenaPool::get_arena();
+
+        let n_faces = normalized_face_planes.len();
+        let mut inner_planes = AVec::with_capacity_in(n_faces, &arena);
+        let mut outer_planes = AVec::with_capacity_in(n_faces, &arena);
+        let mut intersecting_planes = AVec::with_capacity_in(n_faces, &arena);
+
+        for plane in normalized_face_planes {
+            let plane = plane.aligned();
+            inner_planes.push(Plane::new(
+                *plane.unit_normal(),
+                plane.displacement() - INTERIOR_MARGIN,
+            ));
+            outer_planes.push(Plane::new(
+                *plane.unit_normal(),
+                plane.displacement() + EXTERIOR_MARGIN,
+            ));
+        }
+
+        let mut poly_voxels =
+            Vec::with_capacity(touched_non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+
+        let mut poly_chunks = Vec::with_capacity(total_poly_chunk_count);
+
+        let mut non_uniform_chunks_inside =
+            AVec::with_capacity_in(touched_non_uniform_chunk_count, &arena);
+        let mut non_uniform_chunks_intersecting =
+            AVec::with_capacity_in(touched_non_uniform_chunk_count, &arena);
+        let mut non_uniform_chunks_intersecting_with_single_region =
+            AVec::with_capacity_in(touched_non_uniform_chunk_count, &arena);
+
+        let mut poly_uniform_chunk_count = 0;
+        let mut poly_non_uniform_chunk_count = 0;
+
+        for chunk_i in poly_chunk_ranges[0].clone() {
+            for chunk_j in poly_chunk_ranges[1].clone() {
+                for chunk_k in poly_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    let chunk = &self.chunks[chunk_idx];
+
+                    if let VoxelChunk::Void = chunk {
+                        poly_chunks.push(VoxelChunk::Void);
+                        continue;
+                    }
+
+                    let chunk_aabb = Self::compute_normalized_chunk_bounds(chunk_indices);
+
+                    if outer_planes.iter().any(|outer_plane| {
+                        chunk_aabb.lies_in_positive_halfspace_of_plane(outer_plane)
+                    }) {
+                        poly_chunks.push(VoxelChunk::Void);
+                        continue;
+                    }
+
+                    intersecting_planes.clear();
+                    for (plane_idx, inner_plane) in inner_planes.iter().enumerate() {
+                        if !chunk_aabb.lies_in_negative_halfspace_of_plane(inner_plane) {
+                            intersecting_planes.push(normalized_face_planes[plane_idx]);
+                        }
+                    }
+
+                    let is_fully_inside = intersecting_planes.is_empty();
+
+                    if is_fully_inside {
+                        match chunk {
+                            VoxelChunk::NonUniform(chunk) => {
+                                let chunk_voxels = chunk_voxels(&self.voxels, chunk.data_offset);
+
+                                property_computer
+                                    .compute_for_non_uniform_chunk(&chunk_indices, chunk_voxels);
+
+                                // If the chunk only contains voxels belonging to the region we
+                                // are extracting, we can copy over all the voxels in one go
+                                poly_voxels.extend_from_slice(chunk_voxels);
+
+                                let poly_chunk = NonUniformVoxelChunk {
+                                    data_offset: poly_non_uniform_chunk_count as u32,
+                                    // Since the chunk has just changed owner, the face
+                                    // distributions are still valid
+                                    face_distributions: chunk.face_distributions,
+                                    flags: VoxelChunkFlags::empty(),
+                                    split_detection: NonUniformChunkSplitDetectionData::new(),
+                                };
+
+                                non_uniform_chunks_inside.push((chunk, poly_chunks.len()));
+
+                                poly_chunks.push(VoxelChunk::NonUniform(poly_chunk));
+                                poly_non_uniform_chunk_count += 1;
+                            }
+                            VoxelChunk::Uniform(chunk) => {
+                                // If the chunk to extract is uniform, we copy
+                                // it over, replacing the split detection data
+                                // offset with the correct value for the
+                                // polyhedron object
+
+                                property_computer
+                                    .compute_for_uniform_chunk(&chunk_indices, chunk.voxel);
+
+                                let poly_chunk = UniformVoxelChunk {
+                                    voxel: chunk.voxel,
+                                    split_detection: UniformChunkSplitDetectionData {
+                                        data_offset: poly_uniform_chunk_count as u32,
+                                    },
+                                };
+
+                                poly_chunks.push(VoxelChunk::Uniform(poly_chunk));
+                                poly_uniform_chunk_count += 1;
+                            }
+                            VoxelChunk::Void => unreachable!(),
+                        }
+                    } else {
+                        let start_voxel_idx = poly_voxels.len();
+
+                        match chunk {
+                            VoxelChunk::Uniform(chunk) => {
+                                poly_voxels
+                                    .resize(start_voxel_idx + CHUNK_VOXEL_COUNT, chunk.voxel);
+                            }
+                            VoxelChunk::NonUniform(chunk) => {
+                                poly_voxels.extend_from_slice(chunk_voxels(
+                                    &self.voxels,
+                                    chunk.data_offset,
+                                ));
+                            }
+                            VoxelChunk::Void => unreachable!(),
+                        }
+
+                        let poly_data_offset = poly_non_uniform_chunk_count as u32;
+
+                        let poly_chunk_voxels =
+                            chunk_voxels_mut(&mut poly_voxels, poly_data_offset);
+
+                        let chunk_start_voxel_indices = chunk_indices.map(|idx| idx * CHUNK_SIZE);
+
+                        let lower_voxel_pos =
+                            chunk_aabb.lower_corner().compact() + Vector3C::same(0.5);
+
+                        let mut face_empty_counts = FaceEmptyCounts::zero();
+                        let mut chunk_has_only_empty_voxels = true;
+                        let mut chunk_is_void = true;
+                        let mut poly_in_chunk_has_empty_voxels = false;
+
+                        let mut voxel_idx = 0;
+
+                        let mut max_signed_dists_for_row =
+                            [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
+
+                        for i in 0..CHUNK_SIZE {
+                            let obj_i = i + chunk_start_voxel_indices[0];
+
+                            let on_lower_x_face = i == 0;
+                            let on_upper_x_face = i == CHUNK_SIZE - 1;
+
+                            for j in 0..CHUNK_SIZE {
+                                let obj_j = j + chunk_start_voxel_indices[1];
+
+                                let on_lower_y_face = j == 0;
+                                let on_upper_y_face = j == CHUNK_SIZE - 1;
+
+                                Self::compute_max_plane_signed_dists_for_row(
+                                    &mut max_signed_dists_for_row,
+                                    &intersecting_planes,
+                                    &lower_voxel_pos,
+                                    i,
+                                    j,
+                                );
+
+                                let mut row_empty_count = 0;
+
+                                for k in 0..CHUNK_SIZE {
+                                    let obj_k = k + chunk_start_voxel_indices[2];
+
+                                    let poly_voxel = NonUniformVoxelChunk::get_voxel_mut(
+                                        poly_chunk_voxels,
+                                        voxel_idx,
+                                    );
+
+                                    let planes_signed_distance = max_signed_dists_for_row[k];
+
+                                    if planes_signed_distance > poly_voxel.signed_distance {
+                                        poly_voxel.signed_distance = planes_signed_distance;
+                                    }
+
+                                    let poly_voxel_is_non_empty =
+                                        poly_voxel.signed_distance.is_negative();
+
+                                    if poly_voxel_is_non_empty {
+                                        poly_voxel.flags -= VoxelFlags::IS_EMPTY;
+                                        chunk_has_only_empty_voxels = false;
+                                        chunk_is_void = false;
+
+                                        property_computer
+                                            .compute_for_voxel(&[obj_i, obj_j, obj_k], *poly_voxel);
+                                    } else {
+                                        poly_voxel.flags |= VoxelFlags::IS_EMPTY;
+
+                                        row_empty_count += 1;
+
+                                        if k == 0 {
+                                            face_empty_counts.increment_z_dn();
+                                        } else if k == CHUNK_SIZE - 1 {
+                                            face_empty_counts.increment_z_up();
+                                        }
+
+                                        if !poly_voxel.signed_distance.is_void() {
+                                            chunk_is_void = false;
+                                        }
+                                    }
+
+                                    if planes_signed_distance.is_negative() {
+                                        if !poly_voxel_is_non_empty {
+                                            poly_in_chunk_has_empty_voxels = true;
+                                        }
+
+                                        if !planes_signed_distance.is_maximally_inside() {
+                                            if poly_voxel_is_non_empty {
+                                                let mut poly_voxel = *poly_voxel;
+
+                                                update_lower_adjacencies_for_non_empty_voxel(
+                                                    poly_chunk_voxels,
+                                                    &mut poly_voxel,
+                                                    [i, j, k],
+                                                );
+
+                                                *NonUniformVoxelChunk::get_voxel_mut(
+                                                    poly_chunk_voxels,
+                                                    voxel_idx,
+                                                ) = poly_voxel;
+                                            } else {
+                                                update_lower_adjacencies_for_empty_voxel(
+                                                    poly_chunk_voxels,
+                                                    [i, j, k],
+                                                );
+                                            }
+                                        }
+                                    }
+
+                                    voxel_idx += 1;
+                                }
+
+                                if on_lower_x_face {
+                                    face_empty_counts.add_x_dn(row_empty_count);
+                                } else if on_upper_x_face {
+                                    face_empty_counts.add_x_up(row_empty_count);
+                                }
+                                if on_lower_y_face {
+                                    face_empty_counts.add_y_dn(row_empty_count);
+                                } else if on_upper_y_face {
+                                    face_empty_counts.add_y_up(row_empty_count);
+                                }
+                            }
+                        }
+
+                        if chunk_is_void {
+                            poly_voxels.truncate(start_voxel_idx);
+                            poly_chunks.push(VoxelChunk::Void);
+                        } else {
+                            let poly_chunk = NonUniformVoxelChunk {
+                                data_offset: poly_data_offset,
+                                face_distributions: face_empty_counts.to_chunk_face_distributions(),
+                                flags: if chunk_has_only_empty_voxels {
+                                    VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS
+                                } else {
+                                    VoxelChunkFlags::empty()
+                                },
+                                ..Default::default()
+                            };
+
+                            if poly_in_chunk_has_empty_voxels {
+                                non_uniform_chunks_intersecting.push(poly_chunks.len());
+                            } else {
+                                non_uniform_chunks_intersecting_with_single_region
+                                    .push(poly_chunks.len());
+                            }
+
+                            poly_chunks.push(VoxelChunk::NonUniform(poly_chunk));
+                            poly_non_uniform_chunk_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut poly_split_detector =
+            SplitDetector::new(poly_uniform_chunk_count, poly_non_uniform_chunk_count);
+
+        for (chunk, poly_chunk_idx) in non_uniform_chunks_inside {
+            // The internal connected region information can be copied over
+            // directly
+            let poly_chunk = &mut poly_chunks[poly_chunk_idx];
+            if let VoxelChunk::NonUniform(poly_chunk) = poly_chunk {
+                poly_split_detector.copy_local_connected_regions_from_chunk_in_other(
+                    poly_chunk,
+                    poly_chunk_idx as u32,
+                    &self.split_detector,
+                    chunk,
+                );
+            }
+        }
+
+        for poly_chunk_idx in non_uniform_chunks_intersecting {
+            let poly_chunk = &mut poly_chunks[poly_chunk_idx];
+            if let VoxelChunk::NonUniform(poly_chunk) = poly_chunk {
+                poly_split_detector.update_local_connected_regions_for_chunk(
+                    &poly_voxels,
+                    poly_chunk,
+                    poly_chunk_idx as u32,
+                );
+            }
+        }
+
+        for poly_chunk_idx in non_uniform_chunks_intersecting_with_single_region {
+            let poly_chunk = &mut poly_chunks[poly_chunk_idx];
+            if let VoxelChunk::NonUniform(poly_chunk) = poly_chunk {
+                poly_split_detector.update_local_connected_regions_for_chunk_with_single_region(
+                    &poly_voxels,
+                    poly_chunk,
+                    poly_chunk_idx as u32,
+                );
+            }
+        }
+
+        let mut extracted = Self::complete_extracted_voxel_object(
+            self.voxel_extent,
+            &self.origin_offset_in_root,
+            poly_chunk_counts,
+            poly_chunk_ranges,
+            poly_uniform_chunk_count,
+            poly_non_uniform_chunk_count,
+            poly_voxels,
+            poly_chunks,
+            poly_split_detector,
+        )?;
+
+        // We have already computed the internal adjacencies and local region
+        // connectivity in the extracted object, but all derived state between
+        // chunks must be computed from scratch
+
+        extracted
+            .voxel_object
+            .update_all_chunk_boundary_adjacencies();
+
+        extracted
+            .voxel_object
+            .resolve_connected_regions_between_all_chunks();
+
+        // Also make sure to tighten the voxel ranges
+        extracted.voxel_object.update_occupied_voxel_ranges();
+
+        Some(extracted)
+    }
+
+    #[inline]
+    fn compute_max_plane_signed_dists_for_row(
+        max_signed_dists_for_row: &mut [VoxelSignedDistance; CHUNK_SIZE],
+        planes: &[PlaneC],
+        lower_voxel_pos: &Point3C,
+        i: usize,
+        j: usize,
+    ) {
+        #![allow(clippy::needless_range_loop)]
+
+        let row_start_pos = lower_voxel_pos + Vector3C::new(i as f32, j as f32, 0.0);
+
+        // The following loops are designed to be easily vectorizable by the
+        // compiler
+
+        let mut max_signed_dists = [0.0; CHUNK_SIZE];
+
+        // Initialize with the signed distances from the first plane
+        let base = planes[0].compute_signed_distance(&row_start_pos);
+        let step = planes[0].unit_normal().z();
+        for k in 0..CHUNK_SIZE {
+            max_signed_dists[k] = base + step * k as f32;
+        }
+
+        // Fold in the signed distances of the remaining planes with a max
+        for plane in &planes[1..] {
+            let base = plane.compute_signed_distance(&row_start_pos);
+            let step = plane.unit_normal().z();
+            for k in 0..CHUNK_SIZE {
+                max_signed_dists[k] = max_signed_dists[k].max(base + step * k as f32);
+            }
+        }
+
+        VoxelSignedDistance::from_f32_array(&max_signed_dists, max_signed_dists_for_row);
+    }
+
     #[inline]
     fn complete_extracted_voxel_object(
         voxel_extent: f32,
@@ -785,6 +1659,80 @@ impl PropertyTransferrer for NoPropertyTransferrer {
     fn transfer_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxel: Voxel) {}
 }
 
+impl PropertyComputer for NoPropertyComputer {
+    fn compute_for_voxel(&mut self, _object_voxel_indices: &[usize; 3], _voxel: Voxel) {}
+
+    fn compute_for_non_uniform_chunk(
+        &mut self,
+        _chunk_indices: &[usize; 3],
+        _chunk_voxels: &[Voxel],
+    ) {
+    }
+
+    fn compute_for_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxel: Voxel) {}
+}
+
+#[inline]
+fn update_lower_adjacencies_for_non_empty_voxel(
+    chunk_voxels: &mut [Voxel],
+    voxel: &mut Voxel,
+    [i, j, k]: [usize; 3],
+) {
+    let mut update_adjacencies = |adjacent_indices, flag_for_current, flag_for_adjacent| {
+        let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+        let adjacent_voxel = NonUniformVoxelChunk::get_voxel_mut(chunk_voxels, adjacent_idx);
+
+        if adjacent_voxel.signed_distance.is_negative() {
+            voxel.flags |= flag_for_current;
+            adjacent_voxel.flags |= flag_for_adjacent;
+        } else {
+            voxel.flags -= flag_for_current;
+        }
+    };
+
+    if i > 0 {
+        update_adjacencies(
+            [i - 1, j, k],
+            VoxelFlags::HAS_ADJACENT_X_DN,
+            VoxelFlags::HAS_ADJACENT_X_UP,
+        );
+    }
+    if j > 0 {
+        update_adjacencies(
+            [i, j - 1, k],
+            VoxelFlags::HAS_ADJACENT_Y_DN,
+            VoxelFlags::HAS_ADJACENT_Y_UP,
+        );
+    }
+    if k > 0 {
+        update_adjacencies(
+            [i, j, k - 1],
+            VoxelFlags::HAS_ADJACENT_Z_DN,
+            VoxelFlags::HAS_ADJACENT_Z_UP,
+        );
+    }
+}
+
+#[inline]
+fn update_lower_adjacencies_for_empty_voxel(chunk_voxels: &mut [Voxel], [i, j, k]: [usize; 3]) {
+    let mut update_adjacencies = |adjacent_indices, flag_for_adjacent| {
+        let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+        let adjacent_voxel = NonUniformVoxelChunk::get_voxel_mut(chunk_voxels, adjacent_idx);
+
+        adjacent_voxel.remove_flags(flag_for_adjacent);
+    };
+
+    if i > 0 {
+        update_adjacencies([i - 1, j, k], VoxelFlags::HAS_ADJACENT_X_UP);
+    }
+    if j > 0 {
+        update_adjacencies([i, j - 1, k], VoxelFlags::HAS_ADJACENT_Y_UP);
+    }
+    if k > 0 {
+        update_adjacencies([i, j, k - 1], VoxelFlags::HAS_ADJACENT_Z_UP);
+    }
+}
+
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
@@ -792,8 +1740,41 @@ pub mod fuzzing {
         chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
     };
     use approx::assert_relative_eq;
+    use arbitrary::{Arbitrary, Result, Unstructured};
+    use bytemuck::{Pod, Zeroable};
     use impact_alloc::Global;
     use impact_math::vector::Vector3;
+    use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
+
+    const FLOAT_RESOLUTION: u32 = 10000;
+    const DELAUNAY_DOMAIN_EXTENT: f32 = 200.0;
+
+    #[derive(Clone, Debug, Arbitrary)]
+    pub struct CopyPolyhedronInput {
+        generator: SDFVoxelGenerator<Global>,
+        points: Vec<DelaunayPoint>,
+    }
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Zeroable, Pod)]
+    struct DelaunayPoint(Point3C);
+
+    impl Arbitrary<'_> for DelaunayPoint {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let x =
+                DELAUNAY_DOMAIN_EXTENT * arbitrary_norm_f32(u)? - (0.5 * DELAUNAY_DOMAIN_EXTENT);
+            let y =
+                DELAUNAY_DOMAIN_EXTENT * arbitrary_norm_f32(u)? - (0.5 * DELAUNAY_DOMAIN_EXTENT);
+            let z =
+                DELAUNAY_DOMAIN_EXTENT * arbitrary_norm_f32(u)? - (0.5 * DELAUNAY_DOMAIN_EXTENT);
+            Ok(Self(Point3C::new(x, y, z)))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 3 * mem::size_of::<u32>();
+            (size, Some(size))
+        }
+    }
 
     pub fn fuzz_test_voxel_object_split_off_disconnected_region(
         generator: SDFVoxelGenerator<Global>,
@@ -856,6 +1837,58 @@ pub mod fuzzing {
         }
 
         inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
+    }
+
+    pub fn fuzz_test_voxel_object_copy_polyhedron(input: CopyPolyhedronInput) {
+        let object = ChunkedVoxelObject::generate(&input.generator);
+        let voxel_type_densities = [1.0; 256];
+
+        let aabb = object.compute_normalized_chunk_grid_bounds();
+
+        let points = bytemuck::cast_slice(&input.points);
+        let tetrahedralization = DelaunayTetrahedralization::construct(Global, points).unwrap();
+
+        let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+            let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
+                continue;
+            };
+
+            let mut poly_inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
+            let mut inertial_property_copier = poly_inertial_property_manager
+                .begin_computation(object.voxel_extent(), &voxel_type_densities);
+
+            let Some(copied_object) = object.copy_polyhedron_with_property_computer(
+                &polyhedron_aabb,
+                &polyhedron.face_planes,
+                &mut inertial_property_copier,
+            ) else {
+                continue;
+            };
+
+            let ExtractedVoxelObject {
+                voxel_object: poly_object,
+                origin_offset_in_parent: origin_offset,
+            } = copied_object;
+
+            assert!(!poly_object.is_effectively_empty());
+            poly_object.validate_adjacencies();
+            poly_object.validate_chunk_obscuredness();
+            poly_object.validate_sdf();
+            poly_object.validate_region_count();
+
+            poly_inertial_property_manager.offset_reference_point_by(&Vector3::from(
+                origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
+            ));
+
+            poly_inertial_property_manager.validate_for_object(&poly_object, &voxel_type_densities);
+        }
+    }
+
+    fn arbitrary_norm_f32(u: &mut Unstructured<'_>) -> Result<f32> {
+        Ok((f64::from(u.int_in_range(0..=FLOAT_RESOLUTION)?) / f64::from(FLOAT_RESOLUTION)) as f32)
     }
 }
 

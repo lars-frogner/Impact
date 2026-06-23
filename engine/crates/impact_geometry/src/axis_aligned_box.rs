@@ -272,6 +272,22 @@ impl AxisAlignedBox {
             != 0
     }
 
+    /// Whether the box is strictly in the positive halfspace of the given
+    /// plane.
+    #[inline]
+    pub fn lies_in_positive_halfspace_of_plane(&self, plane: &Plane) -> bool {
+        plane.point_lies_in_positive_halfspace(self.lower_corner())
+            && plane.point_lies_in_positive_halfspace(self.upper_corner())
+    }
+
+    /// Whether the box is strictly in the negative halfspace of the given
+    /// plane.
+    #[inline]
+    pub fn lies_in_negative_halfspace_of_plane(&self, plane: &Plane) -> bool {
+        plane.point_lies_in_negative_halfspace(self.lower_corner())
+            && plane.point_lies_in_negative_halfspace(self.upper_corner())
+    }
+
     /// Expands the axis-aligned box to encompass the given point.
     #[inline]
     pub fn expand_to_point(&mut self, point: &Point3) {

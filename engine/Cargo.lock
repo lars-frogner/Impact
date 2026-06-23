@@ -1772,6 +1772,7 @@ dependencies = [
  "impact_rendering",
  "impact_resource",
  "impact_scene",
+ "impact_tesselation",
  "impact_texture",
  "impact_thread",
  "inventory",

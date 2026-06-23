@@ -809,23 +809,64 @@ impl ChunkedVoxelObject {
         true
     }
 
+    /// Computes the axis-aligned box enclosing the full chunk grid, with
+    /// distances in voxels.
+    #[inline]
+    pub fn compute_normalized_chunk_grid_bounds(&self) -> AxisAlignedBox {
+        let lower_corner = Point3::origin();
+
+        let upper_corner = Point3::new(
+            (self.chunk_counts[0] * CHUNK_SIZE) as f32,
+            (self.chunk_counts[1] * CHUNK_SIZE) as f32,
+            (self.chunk_counts[2] * CHUNK_SIZE) as f32,
+        );
+
+        AxisAlignedBox::new(lower_corner, upper_corner)
+    }
+
+    /// Computes the axis-aligned box enclosing the chunk with the given indices
+    /// in the chunk grid, with distances in voxels.
+    #[inline]
+    pub fn compute_normalized_chunk_bounds(chunk_indices: [usize; 3]) -> AxisAlignedBox {
+        let [chunk_i, chunk_j, chunk_k] = chunk_indices;
+        AxisAlignedBox::new(
+            Point3::new(
+                (chunk_i * CHUNK_SIZE) as f32,
+                (chunk_j * CHUNK_SIZE) as f32,
+                (chunk_k * CHUNK_SIZE) as f32,
+            ),
+            Point3::new(
+                ((chunk_i + 1) * CHUNK_SIZE) as f32,
+                ((chunk_j + 1) * CHUNK_SIZE) as f32,
+                ((chunk_k + 1) * CHUNK_SIZE) as f32,
+            ),
+        )
+    }
+
+    /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
+    /// the object, with distances in voxels.
+    #[inline]
+    pub fn compute_normalized_aabb(&self) -> AxisAlignedBox {
+        let lower_corner = Point3::new(
+            self.occupied_voxel_ranges[0].start as f32,
+            self.occupied_voxel_ranges[1].start as f32,
+            self.occupied_voxel_ranges[2].start as f32,
+        );
+
+        let upper_corner = Point3::new(
+            self.occupied_voxel_ranges[0].end as f32,
+            self.occupied_voxel_ranges[1].end as f32,
+            self.occupied_voxel_ranges[2].end as f32,
+        );
+
+        AxisAlignedBox::new(lower_corner, upper_corner)
+    }
+
     /// Computes the axis-aligned bounding box enclosing all non-empty voxels in
     /// the object.
     #[inline]
     pub fn compute_aabb(&self) -> AxisAlignedBox {
-        let lower_corner = Point3::new(
-            self.occupied_voxel_ranges[0].start as f32 * self.voxel_extent,
-            self.occupied_voxel_ranges[1].start as f32 * self.voxel_extent,
-            self.occupied_voxel_ranges[2].start as f32 * self.voxel_extent,
-        );
-
-        let upper_corner = Point3::new(
-            self.occupied_voxel_ranges[0].end as f32 * self.voxel_extent,
-            self.occupied_voxel_ranges[1].end as f32 * self.voxel_extent,
-            self.occupied_voxel_ranges[2].end as f32 * self.voxel_extent,
-        );
-
-        AxisAlignedBox::new(lower_corner, upper_corner)
+        self.compute_normalized_aabb().scaled(self.voxel_extent)
     }
 
     /// Computes a sphere enclosing all non-empty voxels in the object.
@@ -1521,6 +1562,82 @@ impl ChunkedVoxelObject {
 
         // Handle lower faces of the full object, since these are not included
         // in the loop above
+        self.update_all_lower_edge_boundary_adjacencies();
+    }
+
+    fn update_upper_boundary_adjacencies_for_chunks_in_ranges(
+        &mut self,
+        chunk_ranges: [Range<usize>; 3],
+    ) {
+        for chunk_i in chunk_ranges[0].clone() {
+            for chunk_j in chunk_ranges[1].clone() {
+                for chunk_k in chunk_ranges[2].clone() {
+                    let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
+
+                    for (adjacent_chunk_indices, dim) in [
+                        ([chunk_i + 1, chunk_j, chunk_k], Dimension::X),
+                        ([chunk_i, chunk_j + 1, chunk_k], Dimension::Y),
+                        ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
+                    ] {
+                        let upper_chunk_idx = if adjacent_chunk_indices[dim.idx()]
+                            < self.occupied_chunk_ranges[dim.idx()].end
+                        {
+                            let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
+
+                            Some(adjacent_chunk_idx)
+                        } else {
+                            None
+                        };
+
+                        VoxelChunk::update_mutual_face_adjacencies(
+                            &mut self.chunks,
+                            &mut self.voxels,
+                            &mut self.split_detector,
+                            Some(chunk_idx),
+                            upper_chunk_idx,
+                            dim,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn update_upper_boundary_adjacencies_along_dim_for_chunks(
+        &mut self,
+        chunk_indices_and_dims: impl IntoIterator<Item = (usize, Dimension)>,
+    ) {
+        for (chunk_idx, dim) in chunk_indices_and_dims {
+            let [chunk_i, chunk_j, chunk_k] =
+                chunk_indices_from_linear_idx(&self.chunk_counts, chunk_idx);
+
+            let adjacent_chunk_indices = [
+                [chunk_i + 1, chunk_j, chunk_k],
+                [chunk_i, chunk_j + 1, chunk_k],
+                [chunk_i, chunk_j, chunk_k + 1],
+            ][dim.idx()];
+
+            let upper_chunk_idx =
+                if adjacent_chunk_indices[dim.idx()] < self.occupied_chunk_ranges[dim.idx()].end {
+                    let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
+
+                    Some(adjacent_chunk_idx)
+                } else {
+                    None
+                };
+
+            VoxelChunk::update_mutual_face_adjacencies(
+                &mut self.chunks,
+                &mut self.voxels,
+                &mut self.split_detector,
+                Some(chunk_idx),
+                upper_chunk_idx,
+                dim,
+            );
+        }
+    }
+
+    fn update_all_lower_edge_boundary_adjacencies(&mut self) {
         for chunk_j in 0..self.chunk_counts[1] {
             for chunk_k in 0..self.chunk_counts[2] {
                 let chunk_idx = self.linear_chunk_idx(&[0, chunk_j, chunk_k]);
@@ -1558,44 +1675,6 @@ impl ChunkedVoxelObject {
                     Some(chunk_idx),
                     Dimension::Z,
                 );
-            }
-        }
-    }
-
-    fn update_upper_boundary_adjacencies_for_chunks_in_ranges(
-        &mut self,
-        chunk_ranges: [Range<usize>; 3],
-    ) {
-        for chunk_i in chunk_ranges[0].clone() {
-            for chunk_j in chunk_ranges[1].clone() {
-                for chunk_k in chunk_ranges[2].clone() {
-                    let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
-
-                    for (adjacent_chunk_indices, dim) in [
-                        ([chunk_i + 1, chunk_j, chunk_k], Dimension::X),
-                        ([chunk_i, chunk_j + 1, chunk_k], Dimension::Y),
-                        ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
-                    ] {
-                        let upper_chunk_idx = if adjacent_chunk_indices[dim.idx()]
-                            < self.occupied_chunk_ranges[dim.idx()].end
-                        {
-                            let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
-
-                            Some(adjacent_chunk_idx)
-                        } else {
-                            None
-                        };
-
-                        VoxelChunk::update_mutual_face_adjacencies(
-                            &mut self.chunks,
-                            &mut self.voxels,
-                            &mut self.split_detector,
-                            Some(chunk_idx),
-                            upper_chunk_idx,
-                            dim,
-                        );
-                    }
-                }
             }
         }
     }
@@ -2606,6 +2685,11 @@ impl FaceVoxelDistribution {
     fn all_empty() -> [[FaceVoxelDistribution; 2]; 3] {
         [[FaceVoxelDistribution::Empty; 2]; 3]
     }
+
+    #[inline]
+    fn is_empty(self) -> bool {
+        self == FaceVoxelDistribution::Empty
+    }
 }
 
 impl FaceEmptyCounts {
@@ -2637,6 +2721,23 @@ impl FaceEmptyCounts {
     #[inline]
     fn increment_z_up(&mut self) {
         self.0[2][1] += 1;
+    }
+
+    #[inline]
+    fn add_x_dn(&mut self, count: usize) {
+        self.0[0][0] += count;
+    }
+    #[inline]
+    fn add_x_up(&mut self, count: usize) {
+        self.0[0][1] += count;
+    }
+    #[inline]
+    fn add_y_dn(&mut self, count: usize) {
+        self.0[1][0] += count;
+    }
+    #[inline]
+    fn add_y_up(&mut self, count: usize) {
+        self.0[1][1] += count;
     }
 
     #[inline]
@@ -2891,6 +2992,13 @@ const fn voxel_indices_within_chunk_from_object_voxel_indices(
         j & VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
         k & VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK,
     ]
+}
+
+#[inline]
+fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usize> {
+    let start = voxel_range.start / CHUNK_SIZE;
+    let end = voxel_range.end.div_ceil(CHUNK_SIZE);
+    start..end
 }
 
 fn extract_slice_segments_mut<T>(
