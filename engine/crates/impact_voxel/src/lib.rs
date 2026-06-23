@@ -157,6 +157,8 @@ impl VoxelSignedDistance {
     const MAX_F32: f32 = Self::QUANTIZATION_STEP_SIZE * i8::MAX as f32;
     const MIN_F32: f32 = Self::QUANTIZATION_STEP_SIZE * i8::MIN as f32;
 
+    const VOID_LIMIT: i8 = (2.0 * Self::INVERSE_QUANTIZATION_STEP_SIZE) as i8;
+
     /// The maximum signed distance that can be represented by a
     /// [`VoxelSignedDistance`].
     #[inline]
@@ -221,11 +223,17 @@ impl VoxelSignedDistance {
         self.encoded == i8::MAX
     }
 
-    /// Whether the given signed distance is far enough outside the surface to
+    /// Whether the signed distance is far enough outside the surface to
     /// influence it.
     #[inline]
-    pub const fn is_void(signed_distance: f32) -> bool {
-        signed_distance > 2.0
+    pub const fn is_void(self) -> bool {
+        self.encoded > Self::VOID_LIMIT
+    }
+
+    /// Compares and returns the maximum of two signed distances.
+    #[inline]
+    pub fn max(self, other: Self) -> Self {
+        Self::from_encoded(self.encoded.max(other.encoded))
     }
 }
 

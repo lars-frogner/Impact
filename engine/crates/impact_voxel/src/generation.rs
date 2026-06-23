@@ -347,7 +347,7 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
                         chunk_is_void = false;
                         Voxel::non_empty(VoxelType::dummy(), voxel_signed_distance)
                     } else {
-                        if !VoxelSignedDistance::is_void(signed_distance) {
+                        if !voxel_signed_distance.is_void() {
                             chunk_is_void = false;
                         }
                         Voxel::empty(voxel_signed_distance)
