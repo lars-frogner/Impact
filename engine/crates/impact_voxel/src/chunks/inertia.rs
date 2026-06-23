@@ -3,7 +3,7 @@
 use super::chunk_voxels;
 use crate::{
     Voxel,
-    chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection},
+    chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, extraction},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::{matrix::Matrix3, point::Point3, vector::Vector3};
@@ -428,7 +428,7 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
     }
 }
 
-impl disconnection::PropertyTransferrer for VoxelObjectInertialPropertyTransferrer<'_, '_> {
+impl extraction::PropertyTransferrer for VoxelObjectInertialPropertyTransferrer<'_, '_> {
     #[inline]
     fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
         self.transfer_voxel(object_voxel_indices, voxel);

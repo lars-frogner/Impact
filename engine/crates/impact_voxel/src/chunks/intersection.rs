@@ -1,11 +1,11 @@
 //! Intersection of shapes with chunked voxel objects.
 
-use super::{chunk_voxels, chunk_voxels_mut};
 use crate::{
     Voxel, VoxelPlacement, VoxelSurfacePlacement,
     chunks::{
-        CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, disconnection::SplitDetector,
-        linear_voxel_idx_within_chunk_from_object_voxel_indices,
+        CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, chunk_range_encompassing_voxel_range,
+        chunk_voxels, chunk_voxels_mut, linear_voxel_idx_within_chunk_from_object_voxel_indices,
+        split_detection::SplitDetector,
     },
 };
 use impact_containers::HashSet;

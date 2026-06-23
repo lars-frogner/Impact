@@ -209,7 +209,7 @@ pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
     let object = ChunkedVoxelObject::generate(&generator);
-    benchmarker.benchmark(&mut || object.clone().split_off_any_disconnected_region().unwrap());
+    benchmarker.benchmark(&mut || object.clone().extract_any_disconnected_region().unwrap());
 }
 
 pub fn split_off_disconnected_region_with_inertial_property_transfer(
@@ -230,22 +230,27 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    let voxel_type_densities = [1.0; 256];
     let object = ChunkedVoxelObject::generate(&generator);
+
+    let voxel_type_densities = [1.0; 256];
     let inertial_property_manager =
         VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
+
     benchmarker.benchmark(&mut || {
+        let mut object = object.clone();
         let mut inertial_property_manager = inertial_property_manager.clone();
+
         let mut disconnected_inertial_property_manager =
             VoxelObjectInertialPropertyManager::zeroed();
+
         let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
             &mut disconnected_inertial_property_manager,
             object.voxel_extent(),
             &voxel_type_densities,
         );
+
         let disconnected_object = object
-            .clone()
-            .split_off_any_disconnected_region_with_property_transferrer(
+            .extract_any_disconnected_region_with_property_transferrer(
                 &mut inertial_property_transferrer,
             )
             .unwrap();
