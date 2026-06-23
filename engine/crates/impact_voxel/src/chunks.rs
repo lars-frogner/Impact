@@ -7,7 +7,7 @@ pub mod sdf;
 pub mod split_detection;
 
 use crate::{
-    Voxel, VoxelFlags, VoxelSignedDistance,
+    Voxel, VoxelFlags,
     generation::ChunkedVoxelGenerator,
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::{VoxelType, VoxelTypeRegistry},
@@ -2270,8 +2270,7 @@ impl VoxelChunk {
         }) = self
         {
             let start_voxel_idx = voxels.len();
-            voxels.reserve(CHUNK_VOXEL_COUNT);
-            voxels.extend(iter::repeat_n(voxel, CHUNK_VOXEL_COUNT));
+            voxels.resize(voxels.len() + CHUNK_VOXEL_COUNT, voxel);
             *self = Self::NonUniform(NonUniformVoxelChunk {
                 data_offset: chunk_data_offset_from_start_voxel_idx(start_voxel_idx),
                 face_distributions: [[FaceVoxelDistribution::Full; 2]; 3],
@@ -2423,7 +2422,7 @@ impl NonUniformVoxelChunk {
                             if adjacent_indices[dim.idx()] < CHUNK_SIZE {
                                 let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
                                 let adjacent_voxel =
-                                    Self::get_adjacent_voxel_mut(chunk_voxels, adjacent_idx);
+                                    Self::get_voxel_mut(chunk_voxels, adjacent_idx);
                                 adjacent_voxel.remove_flags(flag_for_adjacent);
                             }
                         }
@@ -2453,7 +2452,7 @@ impl NonUniformVoxelChunk {
                             if adjacent_indices[dim.idx()] < CHUNK_SIZE {
                                 let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
                                 let adjacent_voxel =
-                                    Self::get_adjacent_voxel_mut(chunk_voxels, adjacent_idx);
+                                    Self::get_voxel_mut(chunk_voxels, adjacent_idx);
 
                                 if adjacent_voxel.is_empty() {
                                     flags -= flag_for_current;
@@ -2522,12 +2521,12 @@ impl NonUniformVoxelChunk {
                             if adjacent_indices[dim.idx()] < CHUNK_SIZE {
                                 let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
                                 let adjacent_voxel =
-                                    Self::get_adjacent_voxel_mut(chunk_voxels, adjacent_idx);
+                                    Self::get_voxel_mut(chunk_voxels, adjacent_idx);
                                 adjacent_voxel.remove_flags(flag_for_adjacent);
                             }
                         }
 
-                        if !VoxelSignedDistance::is_void(voxel.signed_distance.to_f32()) {
+                        if !voxel.signed_distance.is_void() {
                             chunk_is_void = false;
                         }
                     } else {
@@ -2556,7 +2555,7 @@ impl NonUniformVoxelChunk {
                             if adjacent_indices[dim.idx()] < CHUNK_SIZE {
                                 let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
                                 let adjacent_voxel =
-                                    Self::get_adjacent_voxel_mut(chunk_voxels, adjacent_idx);
+                                    Self::get_voxel_mut(chunk_voxels, adjacent_idx);
                                 if adjacent_voxel.is_empty() {
                                     flags -= flag_for_current;
                                 } else {
@@ -2591,13 +2590,13 @@ impl NonUniformVoxelChunk {
 
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
-    fn get_adjacent_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
+    fn get_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
         &mut chunk_voxels[adjacent_idx]
     }
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    fn get_adjacent_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
+    fn get_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
         unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) }
     }
 }
