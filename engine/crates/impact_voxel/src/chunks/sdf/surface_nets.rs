@@ -190,17 +190,15 @@ impl VoxelChunkSignedDistanceField {
     ) -> Option<(Point3, Vector3, SurfaceNetsVertexMaterials)> {
         let mut corner_dists = [0.0; 8];
         let mut corner_has_voxel = [false; 8];
-        let mut corner_material_indices = [0; 8];
 
         let mut num_negative = 0;
 
-        // Get the signed distance and material index at each corner of this cube
+        // Get the signed distance at each corner of this cube
         for idx in 0..8 {
             let corner_linear_idx =
                 min_corner_linear_idx + Self::linear_idx_u32(&CUBE_CORNERS[idx]);
 
             corner_dists[idx] = self.values[corner_linear_idx as usize];
-            corner_material_indices[idx] = self.voxel_types[corner_linear_idx as usize].idx_u8();
 
             if corner_dists[idx].is_sign_negative() {
                 corner_has_voxel[idx] = true;
@@ -211,6 +209,14 @@ impl VoxelChunkSignedDistanceField {
         if num_negative == 0 || num_negative == 8 {
             // No crossings.
             return None;
+        }
+
+        // Get the material index at each corner of this cube
+        let mut corner_material_indices = [0; 8];
+        for idx in 0..8 {
+            let corner_linear_idx =
+                min_corner_linear_idx + Self::linear_idx_u32(&CUBE_CORNERS[idx]);
+            corner_material_indices[idx] = self.voxel_types[corner_linear_idx as usize].idx_u8();
         }
 
         let centroid = centroid_of_edge_intersections(&corner_dists);
