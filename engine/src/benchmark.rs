@@ -86,6 +86,10 @@ impact_profiling::define_target_enum! {
         obtain_sphere_voxel_object_contacts,
         obtain_plane_voxel_object_contacts,
         obtain_mutual_voxel_object_contacts,
+        extract_voronoi_regions,
+        extract_voronoi_regions_with_inertial_property_transfer,
+        copy_voronoi_regions,
+        copy_voronoi_regions_with_inertial_property_transfer,
     },
     model => {
         add_feature_to_dynamic_instance_buffer_from_storage,

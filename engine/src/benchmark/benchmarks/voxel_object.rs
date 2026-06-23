@@ -1,5 +1,6 @@
 //! Benchmarks for chunked voxel object functionality.
 
+use super::tesselation::create_randomized_grid_points;
 use impact_alloc::Global;
 use impact_geometry::{Plane, Sphere};
 use impact_math::{
@@ -9,6 +10,7 @@ use impact_math::{
 };
 use impact_physics::quantities::Position;
 use impact_profiling::benchmark::Benchmarker;
+use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
 use impact_voxel::{
     chunks::{
         ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
@@ -355,6 +357,142 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
                 black_box((indices, geometry));
             },
         );
+    });
+}
+
+pub fn extract_voronoi_regions(benchmarker: impl Benchmarker) {
+    let object_radius = 100.0;
+    let points_per_dim = 4;
+
+    let generator = create_sphere_generator(object_radius);
+    let object = ChunkedVoxelObject::generate(&generator);
+
+    let aabb = object.compute_normalized_chunk_grid_bounds();
+
+    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
+    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+
+    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+    benchmarker.benchmark(&mut || {
+        let mut object = object.clone();
+
+        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+            let polyhedron_aabb = polyhedron.compute_bounded_aabb(&aabb).unwrap();
+
+            let extracted_object =
+                object.extract_polyhedron(&polyhedron_aabb, &polyhedron.face_planes);
+
+            black_box(extracted_object);
+        }
+    });
+}
+
+pub fn extract_voronoi_regions_with_inertial_property_transfer(benchmarker: impl Benchmarker) {
+    let object_radius = 100.0;
+    let points_per_dim = 4;
+
+    let generator = create_sphere_generator(object_radius);
+    let object = ChunkedVoxelObject::generate(&generator);
+
+    let voxel_type_densities = [1.0; 256];
+    let inertial_property_manager =
+        VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
+
+    let aabb = object.compute_normalized_chunk_grid_bounds();
+
+    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
+    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+
+    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+    benchmarker.benchmark(&mut || {
+        let mut object = object.clone();
+        let mut inertial_property_manager = inertial_property_manager.clone();
+
+        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+            let polyhedron_aabb = polyhedron.compute_bounded_aabb(&aabb).unwrap();
+
+            let mut poly_inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
+
+            let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
+                &mut poly_inertial_property_manager,
+                object.voxel_extent(),
+                &voxel_type_densities,
+            );
+
+            let extracted_object = object.extract_polyhedron_with_property_transferrer(
+                &polyhedron_aabb,
+                &polyhedron.face_planes,
+                &mut inertial_property_transferrer,
+            );
+
+            black_box(extracted_object);
+        }
+    });
+}
+
+pub fn copy_voronoi_regions(benchmarker: impl Benchmarker) {
+    let object_radius = 100.0;
+    let points_per_dim = 4;
+
+    let generator = create_sphere_generator(object_radius);
+    let object = ChunkedVoxelObject::generate(&generator);
+
+    let aabb = object.compute_normalized_chunk_grid_bounds();
+
+    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
+    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+
+    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+    benchmarker.benchmark(&mut || {
+        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+            let polyhedron_aabb = polyhedron.compute_bounded_aabb(&aabb).unwrap();
+
+            let copied_object = object.copy_polyhedron(&polyhedron_aabb, &polyhedron.face_planes);
+
+            black_box(copied_object);
+        }
+    });
+}
+
+pub fn copy_voronoi_regions_with_inertial_property_transfer(benchmarker: impl Benchmarker) {
+    let object_radius = 100.0;
+    let points_per_dim = 4;
+
+    let generator = create_sphere_generator(object_radius);
+    let object = ChunkedVoxelObject::generate(&generator);
+
+    let voxel_type_densities = [1.0; 256];
+
+    let aabb = object.compute_normalized_chunk_grid_bounds();
+
+    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
+    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+
+    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+    benchmarker.benchmark(&mut || {
+        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+            let polyhedron_aabb = polyhedron.compute_bounded_aabb(&aabb).unwrap();
+
+            let mut poly_inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
+            let mut inertial_property_copier = poly_inertial_property_manager
+                .begin_computation(object.voxel_extent(), &voxel_type_densities);
+
+            let copied_object = object.copy_polyhedron_with_property_computer(
+                &polyhedron_aabb,
+                &polyhedron.face_planes,
+                &mut inertial_property_copier,
+            );
+
+            black_box(copied_object);
+        }
     });
 }
 

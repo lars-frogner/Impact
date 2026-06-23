@@ -1,9 +1,10 @@
 //! Utilities for working with voxels.
 
+use bitflags::bitflags;
 use std::ops::Range;
 
 /// A 3D spatial dimension.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Dimension {
     X = 0,
     Y = 1,
@@ -15,6 +16,19 @@ pub enum Dimension {
 pub enum Side {
     Lower,
     Upper,
+}
+
+bitflags! {
+    /// Bitflags encoding a set of faces of a box..
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Faces: u8 {
+        const LOWER_X = 1 << 0;
+        const LOWER_Y = 1 << 1;
+        const LOWER_Z = 1 << 2;
+        const UPPER_X = 1 << 3;
+        const UPPER_Y = 1 << 4;
+        const UPPER_Z = 1 << 5;
+    }
 }
 
 /// The dimensions and sides of each face of box.
@@ -97,6 +111,20 @@ impl Side {
             Self::Lower => 0..1,
             Self::Upper => N - 1..N,
         }
+    }
+}
+
+impl Faces {
+    /// Returns the lower face flag for each dimension.
+    #[inline]
+    pub const fn all_lower() -> [Self; 3] {
+        [Self::LOWER_X, Self::LOWER_Y, Self::LOWER_Z]
+    }
+
+    /// Returns the upper face flag for each dimension.
+    #[inline]
+    pub const fn all_upper() -> [Self; 3] {
+        [Self::UPPER_X, Self::UPPER_Y, Self::UPPER_Z]
     }
 }
 

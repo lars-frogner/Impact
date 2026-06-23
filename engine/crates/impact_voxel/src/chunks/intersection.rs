@@ -678,13 +678,6 @@ impl ChunkedVoxelObject {
     }
 }
 
-#[inline]
-fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usize> {
-    let start = voxel_range.start / CHUNK_SIZE;
-    let end = voxel_range.end.div_ceil(CHUNK_SIZE);
-    start..end
-}
-
 /// The plane should be in normalized voxel object space (where voxel extent
 /// is 1.0).
 #[inline]

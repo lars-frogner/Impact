@@ -31,6 +31,7 @@ use std::{
     fmt,
     hash::Hash,
     num::NonZeroU32,
+    ops::Neg,
     path::{Path, PathBuf},
 };
 use utils::{Dimension, Side};
@@ -199,6 +200,21 @@ impl VoxelSignedDistance {
         Self::from_encoded((value * Self::INVERSE_QUANTIZATION_STEP_SIZE) as i8)
     }
 
+    /// Encodes a whole array of `f32` signed distances at once. This is faster
+    /// than calling [`Self::from_f32`] for each element because the compiler
+    /// can vectorize it.
+    #[inline]
+    pub fn from_f32_array<const N: usize>(values: &[f32; N], out: &mut [Self; N]) {
+        const MIN: f32 = i8::MIN as f32;
+        const MAX: f32 = i8::MAX as f32;
+        for k in 0..N {
+            let scaled = (values[k] * Self::INVERSE_QUANTIZATION_STEP_SIZE).clamp(MIN, MAX);
+            // SAFETY: `scaled` is finite and clamped into `[i8::MIN, i8::MAX]`,
+            // so its truncation toward zero is always a representable `i8`.
+            out[k] = Self::from_encoded(unsafe { scaled.to_int_unchecked::<i8>() });
+        }
+    }
+
     /// Decodes the `VoxelSignedDistance` to an `f32` signed distance.
     #[inline]
     pub const fn to_f32(self) -> f32 {
@@ -248,6 +264,15 @@ impl From<VoxelSignedDistance> for f32 {
     #[inline]
     fn from(value: VoxelSignedDistance) -> Self {
         value.to_f32()
+    }
+}
+
+impl Neg for VoxelSignedDistance {
+    type Output = Self;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        Self::from_encoded(-self.encoded)
     }
 }
 

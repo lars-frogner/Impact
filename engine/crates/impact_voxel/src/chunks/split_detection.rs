@@ -808,6 +808,78 @@ impl SplitDetector {
         }
     }
 
+    /// Updates the connected region information for the given chunk assuming
+    /// that the chunk contains no more than one connected region.
+    pub fn update_local_connected_regions_for_chunk_with_single_region(
+        &mut self,
+        voxels: &[Voxel],
+        chunk: &mut NonUniformVoxelChunk,
+        chunk_idx: u32,
+    ) {
+        let voxels = chunk_voxels(voxels, chunk.data_offset);
+
+        let region_labels =
+            chunk_voxel_region_labels_mut(&mut self.voxel_region_labels, chunk.data_offset);
+
+        let regions = non_uniform_chunk_regions_mut(
+            &mut self.regions,
+            self.original_uniform_chunk_count,
+            chunk.data_offset,
+        );
+
+        let contains_only_empty_voxels = chunk.contains_only_empty_voxels();
+
+        let chunk = &mut chunk.split_detection;
+
+        chunk.region_count = 0;
+        chunk.boundary_region_count = 0;
+
+        if contains_only_empty_voxels {
+            region_labels.fill(EMPTY_VOXEL_LABEL);
+            return;
+        }
+
+        let only_region_label = 0;
+
+        chunk.region_count = 1;
+
+        for i in 0..CHUNK_SIZE {
+            for j in 0..CHUNK_SIZE {
+                for k in 0..CHUNK_SIZE {
+                    let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
+                    let voxel = voxels[idx];
+                    if voxel.is_empty() {
+                        region_labels[idx] = EMPTY_VOXEL_LABEL;
+                    } else {
+                        if i == 0
+                            || i == CHUNK_SIZE - 1
+                            || j == 0
+                            || j == CHUNK_SIZE - 1
+                            || k == 0
+                            || k == CHUNK_SIZE - 1
+                        {
+                            chunk.boundary_region_count = 1;
+                        }
+                        region_labels[idx] = only_region_label;
+                    }
+                }
+            }
+        }
+
+        let only_region = &mut regions[0];
+
+        // Old adjacent region connections are now invalidated
+        only_region.adjacent_region_connection_start_idx = 0;
+        only_region.adjacent_region_connection_count = 0;
+
+        // If the region is interior, we mark it as such by pointing its global
+        // region label to itself. No need to involve it in the global region
+        // resolution pass.
+        if chunk.region_count > chunk.boundary_region_count {
+            only_region.parent_label = GlobalRegionLabel::new(chunk_idx, 0);
+        }
+    }
+
     pub(crate) fn copy_local_connected_regions_from_chunk_in_other(
         &mut self,
         this_chunk: &mut NonUniformVoxelChunk,

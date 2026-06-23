@@ -66,6 +66,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "copy_polyhedron_from_voxel_object"
+path = "fuzz_targets/copy_polyhedron_from_voxel_object.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "absorbing_voxels_within_sphere"
 path = "fuzz_targets/absorbing_voxels_within_sphere.rs"
 test = false
