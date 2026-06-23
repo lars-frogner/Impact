@@ -186,24 +186,25 @@ impl ConstraintManager {
         // required for the constraints of this frame.
         self.solver.clear_prepared_bodies();
 
-        collision_world.for_each_non_phantom_collision_involving_dynamic_collidable(
-            collidable_context,
-            intersection_manager,
-            &mut |Collision {
-                      collider_a,
-                      collider_b,
-                      contact_manifold,
-                  }| {
-                for contact in contact_manifold.contacts() {
-                    self.solver.prepare_contact(
-                        rigid_body_manager,
-                        collider_a.rigid_body_id(),
-                        collider_b.rigid_body_id(),
-                        contact,
-                    );
-                }
-            },
-        );
+        collision_world
+            .for_each_potentially_cached_non_phantom_collision_involving_dynamic_collidable(
+                collidable_context,
+                intersection_manager,
+                &mut |Collision {
+                          collidable_a,
+                          collidable_b,
+                          contact_manifold,
+                      }| {
+                    for contact in contact_manifold.contacts() {
+                        self.solver.prepare_contact(
+                            rigid_body_manager,
+                            collidable_a.rigid_body_id(),
+                            collidable_b.rigid_body_id(),
+                            contact,
+                        );
+                    }
+                },
+            );
 
         for (id, joint) in &self.spherical_joints {
             self.solver

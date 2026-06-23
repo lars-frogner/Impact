@@ -45,7 +45,11 @@ pub fn perform_physics_step<C: Collidable>(
     let new_simulation_time = current_simulation_time + step_duration;
 
     instrument_task!("Synchronizing collidables with rigid bodies", task_timer, {
-        collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
+        // If collisions have been cached, collidables will already have been
+        // synchronized
+        if !collision_world.has_cached_collisions() {
+            collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
+        }
     });
 
     instrument_task!("Preparing constraints", task_timer, {
@@ -56,6 +60,8 @@ pub fn perform_physics_step<C: Collidable>(
             collision_world,
             collidable_context,
         );
+        // Since we will update positions, cached collisions are now invalidated
+        collision_world.clear_cached_collisions();
     });
 
     instrument_task!("Advancing dynamic rigid body momenta", task_timer, {

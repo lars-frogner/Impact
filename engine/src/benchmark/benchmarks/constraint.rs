@@ -35,14 +35,14 @@ pub fn prepare_contacts(benchmarker: impl Benchmarker) {
         &(),
         &intersection_manager,
         &mut |Collision {
-                  collider_a,
-                  collider_b,
+                  collidable_a,
+                  collidable_b,
                   contact_manifold,
               }| {
             for contact in contact_manifold.contacts() {
                 contacts.push((
-                    collider_a.rigid_body_id(),
-                    collider_b.rigid_body_id(),
+                    collidable_a.rigid_body_id(),
+                    collidable_b.rigid_body_id(),
                     contact.clone(),
                 ));
             }

@@ -39,6 +39,8 @@ pub trait Collidable: Sized + fmt::Debug {
 pub struct CollisionWorld<C: Collidable> {
     collidable_descriptors: NoHashMap<CollidableID, CollidableDescriptor<C>>,
     collidables: [Vec<CollidableWithId<C>>; 3],
+    cached_collisions: Vec<CachedCollision>,
+    has_cached_collisions: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -81,9 +83,16 @@ define_component_type! {
 
 #[derive(Clone, Debug)]
 pub struct Collision<'a, C: Collidable> {
-    pub collider_a: &'a CollidableDescriptor<C>,
-    pub collider_b: &'a CollidableDescriptor<C>,
+    pub collidable_a: &'a CollidableDescriptor<C>,
+    pub collidable_b: &'a CollidableDescriptor<C>,
     pub contact_manifold: &'a ContactManifold,
+}
+
+#[derive(Clone, Debug)]
+pub struct CachedCollision {
+    pub collidable_a_id: CollidableID,
+    pub collidable_b_id: CollidableID,
+    pub contact_manifold: ContactManifold,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -97,7 +106,13 @@ impl<C: Collidable> CollisionWorld<C> {
         Self {
             collidable_descriptors: NoHashMap::default(),
             collidables: [Vec::new(), Vec::new(), Vec::new()],
+            cached_collisions: Vec::new(),
+            has_cached_collisions: false,
         }
+    }
+
+    pub fn has_cached_collisions(&self) -> bool {
+        self.has_cached_collisions
     }
 
     pub fn get_collidable_descriptor(
@@ -186,6 +201,108 @@ impl<C: Collidable> CollisionWorld<C> {
         self.collidable_descriptors.remove(&collidable_id);
     }
 
+    pub fn cache_all_collisions(
+        &mut self,
+        context: &C::Context,
+        intersection_manager: &IntersectionManager,
+    ) {
+        self.cached_collisions.clear();
+        self.has_cached_collisions = true;
+
+        let mut contact_manifold = ContactManifold::new();
+
+        intersection_manager.for_each_intersecting_bounding_volume_pair(|id_a, id_b| {
+            let collidable_a_id = CollidableID::from_entity_id(id_a.as_entity_id());
+
+            let Some(descriptor_a) = self.get_collidable_descriptor(collidable_a_id) else {
+                return;
+            };
+
+            let collidable_b_id = CollidableID::from_entity_id(id_b.as_entity_id());
+
+            let Some(descriptor_b) = self.get_collidable_descriptor(collidable_b_id) else {
+                return;
+            };
+
+            let collidable_a = self.collidable_with_descriptor(descriptor_a);
+            let collidable_b = self.collidable_with_descriptor(descriptor_b);
+
+            let order = C::generate_contact_manifold(
+                context,
+                collidable_a,
+                collidable_b,
+                &mut contact_manifold,
+            );
+
+            if !contact_manifold.is_empty() {
+                let (collidable_a_id, collidable_b_id) =
+                    order.swap_if_required(collidable_a_id, collidable_b_id);
+
+                self.cached_collisions.push(CachedCollision {
+                    collidable_a_id,
+                    collidable_b_id,
+                    contact_manifold: contact_manifold.clone(),
+                });
+
+                contact_manifold.clear();
+            }
+        });
+    }
+
+    pub fn clear_cached_collisions(&mut self) {
+        self.cached_collisions.clear();
+        self.has_cached_collisions = false;
+    }
+
+    pub fn for_each_potentially_cached_non_phantom_collision_involving_dynamic_collidable(
+        &self,
+        context: &C::Context,
+        intersection_manager: &IntersectionManager,
+        f: &mut impl FnMut(Collision<'_, C>),
+    ) {
+        if !self.has_cached_collisions {
+            self.for_each_non_phantom_collision_involving_dynamic_collidable(
+                context,
+                intersection_manager,
+                f,
+            );
+            return;
+        }
+
+        for CachedCollision {
+            collidable_a_id,
+            collidable_b_id,
+            contact_manifold,
+        } in &self.cached_collisions
+        {
+            let Some(descriptor_a) = self.get_collidable_descriptor(*collidable_a_id) else {
+                continue;
+            };
+            if descriptor_a.kind == CollidableKind::Phantom {
+                continue;
+            }
+
+            let Some(descriptor_b) = self.get_collidable_descriptor(*collidable_b_id) else {
+                continue;
+            };
+            if descriptor_b.kind == CollidableKind::Phantom {
+                continue;
+            }
+
+            if descriptor_a.kind != CollidableKind::Dynamic
+                && descriptor_b.kind != CollidableKind::Dynamic
+            {
+                continue;
+            }
+
+            f(Collision {
+                collidable_a: descriptor_a,
+                collidable_b: descriptor_b,
+                contact_manifold,
+            });
+        }
+    }
+
     pub fn for_each_non_phantom_collision_involving_dynamic_collidable(
         &self,
         context: &C::Context,
@@ -230,13 +347,12 @@ impl<C: Collidable> CollisionWorld<C> {
             );
 
             if !contact_manifold.is_empty() {
-                let descriptor_b = self.collidable_descriptor(collidable_b.id);
-
-                let (collider_a, collider_b) = order.swap_if_required(descriptor_a, descriptor_b);
+                let (descriptor_a, descriptor_b) =
+                    order.swap_if_required(descriptor_a, descriptor_b);
 
                 f(Collision {
-                    collider_a,
-                    collider_b,
+                    collidable_a: descriptor_a,
+                    collidable_b: descriptor_b,
                     contact_manifold: &contact_manifold,
                 });
 
@@ -249,15 +365,11 @@ impl<C: Collidable> CollisionWorld<C> {
     pub fn clear(&mut self) {
         self.collidable_descriptors.clear();
         self.clear_spatial_state();
+        self.clear_cached_collisions();
     }
 
     fn collidables(&self, kind: CollidableKind) -> &[CollidableWithId<C>] {
         &self.collidables[kind as usize]
-    }
-
-    fn collidable_descriptor(&self, collidable_id: CollidableID) -> &CollidableDescriptor<C> {
-        self.get_collidable_descriptor(collidable_id)
-            .expect("Missing descriptor for collidable")
     }
 
     fn collidable_with_descriptor(
