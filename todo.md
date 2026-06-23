@@ -40,8 +40,6 @@
 
 - Per surface voxel state (e.g. temperature).
 
-- Make voxels carry ID for region association? Would enable detection of disconnected regions without empty voxels between, useful for e.g. Voronoi fracturing. Optionally, implement dedicated disconnected region detection with explicit region labels that could be sourced directly from Voronoi computation.
-
 ## Generation
 
 - Implement graph based system for generating voxel types (probably integrated with SDF graph).
