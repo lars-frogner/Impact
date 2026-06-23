@@ -8,7 +8,7 @@ pub mod systems;
 use crate::{
     VoxelObjectID, VoxelObjectManager,
     chunks::{
-        ChunkedVoxelObject, disconnection::DisconnectedVoxelObject,
+        ChunkedVoxelObject, extraction::ExtractedVoxelObject,
         inertia::VoxelObjectInertialPropertyManager,
     },
     voxel_types::VoxelTypeRegistry,
@@ -192,7 +192,7 @@ fn handle_voxel_object_after_removing_voxels(
     );
 
     if let Some(disconnected_voxel_object) = voxel_object
-        .split_off_any_disconnected_region_with_property_transferrer(
+        .extract_any_disconnected_region_with_property_transferrer(
             &mut inertial_property_transferrer,
         )
     {
@@ -331,7 +331,7 @@ fn handle_voxel_object_after_removing_voxels(
 
 fn handle_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
-    disconnected_object: DisconnectedVoxelObject,
+    disconnected_object: ExtractedVoxelObject,
     mut inertial_property_manager: VoxelObjectInertialPropertyManager,
     original_local_center_of_mass: Vector3,
     original_position: Position,
@@ -371,7 +371,7 @@ fn handle_disconnected_voxel_object(
         .as_vector()
         .cross(&world_center_of_mass_displacement);
 
-    let DisconnectedVoxelObject {
+    let ExtractedVoxelObject {
         voxel_object,
         origin_offset_in_parent,
     } = disconnected_object;

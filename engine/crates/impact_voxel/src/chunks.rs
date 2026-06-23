@@ -1,9 +1,10 @@
 //! Chunked representation of voxel objects.
 
-pub mod disconnection;
+pub mod extraction;
 pub mod inertia;
 pub mod intersection;
 pub mod sdf;
+pub mod split_detection;
 
 use crate::{
     Voxel, VoxelFlags, VoxelSignedDistance,
@@ -13,9 +14,6 @@ use crate::{
 };
 use bitflags::bitflags;
 use bytemuck::Zeroable;
-use disconnection::{
-    NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
-};
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Sphere};
@@ -27,7 +25,10 @@ use impact_thread::{
     channel::{self, Sender},
     pool::{DynamicTask, DynamicThreadPool},
 };
-use std::{array, iter, mem, ops::Range};
+use split_detection::{
+    NonUniformChunkSplitDetectionData, SplitDetector, UniformChunkSplitDetectionData,
+};
+use std::{array, mem, ops::Range};
 use tinyvec::TinyVec;
 
 /// An object represented by a grid of voxels.
