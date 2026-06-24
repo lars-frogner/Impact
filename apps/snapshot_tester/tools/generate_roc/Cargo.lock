@@ -672,6 +672,7 @@ dependencies = [
  "impact_resource",
  "impact_scene",
  "impact_scheduling",
+ "impact_tesselation",
  "impact_texture",
  "impact_thread",
  "impact_voxel",
@@ -1099,6 +1100,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "impact_tesselation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "approx",
+ "bytemuck",
+ "impact_alloc",
+ "impact_containers",
+ "impact_geometry",
+ "impact_math",
+ "robust",
+]
+
+[[package]]
 name = "impact_texture"
 version = "0.1.0"
 dependencies = [
@@ -1153,6 +1168,7 @@ dependencies = [
  "impact_rendering",
  "impact_resource",
  "impact_scene",
+ "impact_tesselation",
  "impact_texture",
  "impact_thread",
  "inventory",
@@ -1643,6 +1659,12 @@ name = "renderdoc-sys"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
+
+[[package]]
+name = "robust"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "roc_integration"
