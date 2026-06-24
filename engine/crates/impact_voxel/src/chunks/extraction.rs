@@ -524,7 +524,7 @@ impl ChunkedVoxelObject {
             .resolve_connected_regions_between_all_chunks();
 
         // Also make sure to tighten the voxel ranges
-        extracted.voxel_object.update_occupied_voxel_ranges();
+        extracted.voxel_object.update_occupied_ranges();
 
         Some(extracted)
     }
@@ -937,7 +937,7 @@ impl ChunkedVoxelObject {
             .resolve_connected_regions_between_all_chunks();
 
         // Also make sure to tighten the voxel ranges
-        extracted.voxel_object.update_occupied_voxel_ranges();
+        extracted.voxel_object.update_occupied_ranges();
 
         Some(extracted)
     }
@@ -1352,7 +1352,7 @@ impl ChunkedVoxelObject {
             .resolve_connected_regions_between_all_chunks();
 
         // Also make sure to tighten the voxel ranges
-        extracted.voxel_object.update_occupied_voxel_ranges();
+        extracted.voxel_object.update_occupied_ranges();
 
         Some(extracted)
     }
@@ -1411,10 +1411,10 @@ impl ChunkedVoxelObject {
         // If the extracted object only contains a few non-empty voxels, we
         // discard it to avoid creating a lot of tiny voxel objects
         if uniform_chunk_count == 0 && non_uniform_chunk_count <= 8 {
-            let disconnected_non_empty_voxel_count =
+            let extracted_non_empty_voxel_count =
                 voxels.iter().filter(|voxel| !voxel.is_empty()).count();
 
-            if disconnected_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD {
+            if extracted_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD {
                 return None;
             }
         }
