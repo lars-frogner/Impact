@@ -170,5 +170,8 @@ $RECYCLE.BIN/
 *.data.old
 *.perf
 
+# Samply
+profile.json.gz
+
 # Zed
 .zed
