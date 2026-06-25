@@ -1521,9 +1521,12 @@ impl ChunkedVoxelObject {
 
         // If the extracted object only contains a few non-empty voxels, we
         // discard it to avoid creating a lot of tiny voxel objects
-        if uniform_chunk_count == 0 && non_uniform_chunk_count <= 8 {
-            let extracted_non_empty_voxel_count =
-                voxels.iter().filter(|voxel| !voxel.is_empty()).count();
+        if uniform_chunk_count == 0 {
+            let extracted_non_empty_voxel_count = voxels
+                .iter()
+                .filter(|voxel| !voxel.is_empty())
+                .take(NON_EMPTY_VOXEL_THRESHOLD)
+                .count();
 
             if extracted_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD {
                 return None;
