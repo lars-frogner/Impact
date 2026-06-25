@@ -618,6 +618,29 @@ impl SplitDetector {
         chunk: &mut NonUniformVoxelChunk,
         chunk_idx: u32,
     ) {
+        self.update_local_connected_regions_within_occupied_ranges_for_chunk(
+            voxels,
+            chunk,
+            chunk_idx,
+            &[0..CHUNK_SIZE, 0..CHUNK_SIZE, 0..CHUNK_SIZE],
+        );
+    }
+
+    /// Analyzes the given non-uniform chunk to determine all regions of
+    /// connected voxels within the chunk, assuming all voxels outside the given
+    /// occupied ranges are empty. This should be called whenever any voxels in
+    /// the chunk have changed state between present and empty.
+    pub fn update_local_connected_regions_within_occupied_ranges_for_chunk(
+        &mut self,
+        voxels: &[Voxel],
+        chunk: &mut NonUniformVoxelChunk,
+        chunk_idx: u32,
+        occupied_voxel_ranges: &[Range<usize>; 3],
+    ) {
+        for range in occupied_voxel_ranges {
+            assert!(range.end <= CHUNK_SIZE);
+        }
+
         let voxels = chunk_voxels(voxels, chunk.data_offset);
 
         let region_labels =
@@ -648,11 +671,11 @@ impl SplitDetector {
         // For each non-empty voxel, check which of its neighbors are also non-empty,
         // and make them part of the same local region if they are
         if !chunk_contains_only_empty_voxels {
-            for i in 0..CHUNK_SIZE {
-                for j in 0..CHUNK_SIZE {
-                    for k in 0..CHUNK_SIZE {
+            for i in occupied_voxel_ranges[0].clone() {
+                for j in occupied_voxel_ranges[1].clone() {
+                    for k in occupied_voxel_ranges[2].clone() {
                         let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
-                        let voxel = voxels[idx];
+                        let voxel = get_maybe_unchecked(voxels, idx);
                         if !voxel.is_empty() {
                             let root_idx = find_root_for_voxel(&mut parents, idx);
 
@@ -706,7 +729,18 @@ impl SplitDetector {
             (CHUNK_MAX_BOUNDARY_REGIONS - 1) as LocalRegionLabel;
 
         #[allow(clippy::unnecessary_min_or_max)]
-        for lp in LoopForChunkVoxels::over_full_boundary() {
+        for (lp, dim, side) in LoopForChunkVoxels::over_full_boundary() {
+            let face_is_empty = match (dim, side) {
+                (Dimension::X, Side::Lower) => occupied_voxel_ranges[0].start > 0,
+                (Dimension::X, Side::Upper) => occupied_voxel_ranges[0].end < CHUNK_SIZE - 1,
+                (Dimension::Y, Side::Lower) => occupied_voxel_ranges[1].start > 0,
+                (Dimension::Y, Side::Upper) => occupied_voxel_ranges[1].end < CHUNK_SIZE - 1,
+                (Dimension::Z, Side::Lower) => occupied_voxel_ranges[2].start > 0,
+                (Dimension::Z, Side::Upper) => occupied_voxel_ranges[2].end < CHUNK_SIZE - 1,
+            };
+            if face_is_empty {
+                continue;
+            }
             DataLoop3::new(&lp, voxels).execute(&mut |voxel_indices, voxel| {
                 let idx = linear_voxel_idx_within_chunk(voxel_indices);
 
@@ -714,7 +748,7 @@ impl SplitDetector {
                     let set_id = find_root_for_voxel(&mut parents, idx);
                     if set_id == idx {
                         // If this is the representative voxel for its set, we give it a label
-                        region_labels[idx] = current_label;
+                        set_maybe_unchecked(region_labels, idx, current_label);
                         current_label = current_label.saturating_add(1).min(MAX_BOUNDARY_LABEL);
                     } else if chunk_voxel_indices_from_linear_idx(set_id)
                         .iter()
@@ -723,7 +757,7 @@ impl SplitDetector {
                         // If the representative voxel is in the interior, make this (face)
                         // voxel representative instead, and give it a label
                         make_voxel_root(&mut parents, idx, set_id);
-                        region_labels[idx] = current_label;
+                        set_maybe_unchecked(region_labels, idx, current_label);
                         current_label = current_label.saturating_add(1).min(MAX_BOUNDARY_LABEL);
                     } else {
                         // Otherwise, the representative voxel is on the
@@ -732,7 +766,7 @@ impl SplitDetector {
                         // upcoming iteration
                     }
                 } else {
-                    region_labels[idx] = EMPTY_VOXEL_LABEL;
+                    set_maybe_unchecked(region_labels, idx, EMPTY_VOXEL_LABEL);
                 }
             });
         }
@@ -744,36 +778,55 @@ impl SplitDetector {
 
         const MAX_LABEL: LocalRegionLabel = (CHUNK_MAX_REGIONS - 1) as LocalRegionLabel;
 
+        let occupied_interior_ranges = occupied_voxel_ranges
+            .clone()
+            .map(|range| range.start.max(1)..range.end.min(CHUNK_SIZE - 1));
+
         #[allow(clippy::unnecessary_min_or_max)]
-        for i in 1..CHUNK_SIZE - 1 {
-            for j in 1..CHUNK_SIZE - 1 {
-                for k in 1..CHUNK_SIZE - 1 {
+        for i in occupied_interior_ranges[0].clone() {
+            for j in occupied_interior_ranges[1].clone() {
+                for k in occupied_interior_ranges[2].clone() {
                     let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
-                    if parents[idx] as usize == idx {
-                        if !voxels[idx].is_empty() {
-                            region_labels[idx] = current_label;
+                    let parent = *get_maybe_unchecked(&parents, idx) as usize;
+                    if parent == idx {
+                        let voxel = get_maybe_unchecked(voxels, idx);
+                        if !voxel.is_empty() {
+                            set_maybe_unchecked(region_labels, idx, current_label);
                             current_label = current_label.saturating_add(1).min(MAX_LABEL);
                         } else {
-                            region_labels[idx] = EMPTY_VOXEL_LABEL;
+                            set_maybe_unchecked(region_labels, idx, EMPTY_VOXEL_LABEL);
                         }
                     }
                 }
             }
         }
 
+        // Label empty voxels outside the occupied ranges
+        for_chunk_voxel_indices_outside_ranges(occupied_voxel_ranges, |[i, j, k]| {
+            let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
+            set_maybe_unchecked(region_labels, idx, EMPTY_VOXEL_LABEL);
+        });
+
         assert!(current_label < MAX_LABEL);
         chunk.region_count = LocalRegionCount::from(current_label);
 
         // Label all non-representative voxels with the label of their region
 
-        for (idx, voxel) in voxels.iter().enumerate() {
-            if !voxel.is_empty() {
-                let set_id = find_root_for_voxel_without_compression(&parents, idx);
-                if set_id != idx {
-                    region_labels[idx] = region_labels[set_id];
+        for i in occupied_voxel_ranges[0].clone() {
+            for j in occupied_voxel_ranges[1].clone() {
+                for k in occupied_voxel_ranges[2].clone() {
+                    let idx = linear_voxel_idx_within_chunk(&[i, j, k]);
+                    let voxel = get_maybe_unchecked(voxels, idx);
+                    if !voxel.is_empty() {
+                        let set_id = find_root_for_voxel_without_compression(&parents, idx);
+                        if set_id != idx {
+                            let set_label = *get_maybe_unchecked(region_labels, set_id);
+                            set_maybe_unchecked(region_labels, idx, set_label);
+                        }
+                        #[cfg(not(feature = "unchecked"))]
+                        assert_ne!(region_labels[idx], EMPTY_VOXEL_LABEL);
+                    }
                 }
-                #[cfg(not(feature = "unchecked"))]
-                assert_ne!(region_labels[idx], EMPTY_VOXEL_LABEL);
             }
         }
 
@@ -1650,21 +1703,7 @@ fn assign_parent_to_voxel(parents: &mut [u16], voxel_idx: usize, parent_idx: usi
     let voxel_root_idx = find_root_for_voxel(parents, voxel_idx);
 
     if voxel_root_idx != parent_idx {
-        set_parent(parents, voxel_root_idx, parent_idx as u16);
-    }
-}
-
-#[cfg(not(feature = "unchecked"))]
-#[inline(always)]
-fn set_parent(parents: &mut [u16], idx: usize, value: u16) {
-    parents[idx] = value;
-}
-
-#[cfg(feature = "unchecked")]
-#[inline(always)]
-fn set_parent(parents: &mut [u16], idx: usize, value: u16) {
-    unsafe {
-        *parents.get_unchecked_mut(idx) = value;
+        set_maybe_unchecked(parents, voxel_root_idx, parent_idx as u16);
     }
 }
 
@@ -1742,10 +1781,9 @@ fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) 
     root_idx
 }
 
-#[cfg(not(feature = "unchecked"))]
 #[inline]
 fn find_root_for_voxel_without_compression(parents: &[u16], idx: usize) -> usize {
-    let parent_idx = parents[idx] as usize;
+    let parent_idx = *get_maybe_unchecked(parents, idx) as usize;
 
     // If the parent is the same entry, this is a root
     if parent_idx == idx {
@@ -1753,7 +1791,7 @@ fn find_root_for_voxel_without_compression(parents: &[u16], idx: usize) -> usize
     }
 
     // Unroll the recursion once to reduce call overhead
-    let grandparent_idx = parents[parent_idx] as usize;
+    let grandparent_idx = *get_maybe_unchecked(parents, parent_idx) as usize;
     if grandparent_idx == parent_idx {
         grandparent_idx
     } else {
@@ -1761,43 +1799,12 @@ fn find_root_for_voxel_without_compression(parents: &[u16], idx: usize) -> usize
     }
 }
 
-#[cfg(feature = "unchecked")]
-#[inline]
-fn find_root_for_voxel_without_compression(parents: &[u16], idx: usize) -> usize {
-    let parent_idx = unsafe { *parents.get_unchecked(idx) as usize };
-
-    // If the parent is the same entry, this is a root
-    if parent_idx == idx {
-        return parent_idx;
-    }
-
-    // Unroll the recursion once to reduce call overhead
-    let grandparent_idx = unsafe { *parents.get_unchecked(parent_idx) as usize };
-    if grandparent_idx == parent_idx {
-        grandparent_idx
-    } else {
-        find_root_for_voxel_without_compression(parents, grandparent_idx)
-    }
-}
-
-#[cfg(not(feature = "unchecked"))]
 #[inline]
 fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
     // Set the new root voxel as the parent of the old root voxel
-    parents[root_idx] = idx as u16;
+    set_maybe_unchecked(parents, root_idx, idx as u16);
     // Make the new root voxel its own parent, marking it as a root
-    parents[idx] = idx as u16;
-}
-
-#[cfg(feature = "unchecked")]
-#[inline]
-fn make_voxel_root(parents: &mut [u16], idx: usize, root_idx: usize) {
-    unsafe {
-        // Set the new root voxel as the parent of the old root voxel
-        *parents.get_unchecked_mut(root_idx) = idx as u16;
-        // Make the new root voxel its own parent, marking it as a root
-        *parents.get_unchecked_mut(idx) = idx as u16;
-    }
+    set_maybe_unchecked(parents, idx, idx as u16);
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -1829,7 +1836,6 @@ fn find_root_for_voxel_usize(parents: &mut [usize], idx: usize) -> usize {
 /// Walks the tree of parent regions for the given region to find its
 /// root and merges the tree with the tree with the given target root by
 /// assigning the target root as the parent of the current root.
-#[cfg(not(feature = "unchecked"))]
 #[inline]
 fn set_root_for_region(
     chunks: &[VoxelChunk],
@@ -1845,7 +1851,7 @@ fn set_root_for_region(
         region_chunk_idx,
         region_idx,
     );
-    let region = &regions[global_region_idx];
+    let region = get_maybe_unchecked(regions, global_region_idx);
 
     let region_root_label = find_root_for_region_and_compress_path(
         chunks,
@@ -1857,43 +1863,7 @@ fn set_root_for_region(
     if region_root_label != root_label {
         let global_root_region_idx =
             object_region_idx_for_region_label(chunks, uniform_chunk_count, region_root_label);
-        regions[global_root_region_idx].parent_label = root_label;
-    }
-}
-
-#[cfg(feature = "unchecked")]
-#[inline]
-fn set_root_for_region(
-    chunks: &[VoxelChunk],
-    regions: &mut [LocalRegion],
-    uniform_chunk_count: usize,
-    region_chunk_idx: usize,
-    region_idx: usize,
-    root_label: GlobalRegionLabel,
-) {
-    let global_region_idx = object_region_idx_for_region_in_chunk(
-        chunks,
-        uniform_chunk_count,
-        region_chunk_idx,
-        region_idx,
-    );
-    let region = unsafe { regions.get_unchecked(global_region_idx) };
-
-    let region_root_label = find_root_for_region_and_compress_path(
-        chunks,
-        regions,
-        uniform_chunk_count,
-        region.parent_label,
-    );
-
-    if region_root_label != root_label {
-        let global_root_region_idx =
-            object_region_idx_for_region_label(chunks, uniform_chunk_count, region_root_label);
-        unsafe {
-            regions
-                .get_unchecked_mut(global_root_region_idx)
-                .parent_label = root_label;
-        }
+        get_maybe_unchecked_mut(regions, global_root_region_idx).parent_label = root_label;
     }
 }
 
@@ -2151,6 +2121,86 @@ fn add_adjacent_connection_for_region(
     chunk_adjacent_region_connections
         [region.push_adjacent_region_connection_idx(max_adjacent_region_connections)] =
         AdjacentRegionConnection::new(adjacent_region_idx, face_dim, face_side);
+}
+
+fn for_chunk_voxel_indices_outside_ranges(
+    ranges: &[Range<usize>; 3],
+    mut f: impl FnMut([usize; 3]),
+) {
+    let lower = [
+        ranges[0].start.min(CHUNK_SIZE),
+        ranges[1].start.min(CHUNK_SIZE),
+        ranges[2].start.min(CHUNK_SIZE),
+    ];
+    let upper = [
+        ranges[0].end.clamp(lower[0], CHUNK_SIZE),
+        ranges[1].end.clamp(lower[1], CHUNK_SIZE),
+        ranges[2].end.clamp(lower[2], CHUNK_SIZE),
+    ];
+
+    for i in 0..lower[0] {
+        for j in 0..CHUNK_SIZE {
+            for k in 0..CHUNK_SIZE {
+                f([i, j, k]);
+            }
+        }
+    }
+    for i in upper[0]..CHUNK_SIZE {
+        for j in 0..CHUNK_SIZE {
+            for k in 0..CHUNK_SIZE {
+                f([i, j, k]);
+            }
+        }
+    }
+    for i in lower[0]..upper[0] {
+        for j in 0..lower[1] {
+            for k in 0..CHUNK_SIZE {
+                f([i, j, k]);
+            }
+        }
+        for j in upper[1]..CHUNK_SIZE {
+            for k in 0..CHUNK_SIZE {
+                f([i, j, k]);
+            }
+        }
+        for j in lower[1]..upper[1] {
+            for k in 0..lower[2] {
+                f([i, j, k]);
+            }
+            for k in upper[2]..CHUNK_SIZE {
+                f([i, j, k]);
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "unchecked"))]
+#[inline(always)]
+fn get_maybe_unchecked<T>(values: &[T], idx: usize) -> &T {
+    &values[idx]
+}
+
+#[cfg(feature = "unchecked")]
+#[inline(always)]
+fn get_maybe_unchecked<T>(values: &[T], idx: usize) -> &T {
+    unsafe { values.get_unchecked(idx) }
+}
+
+#[cfg(not(feature = "unchecked"))]
+#[inline(always)]
+fn get_maybe_unchecked_mut<T>(values: &mut [T], idx: usize) -> &mut T {
+    &mut values[idx]
+}
+
+#[cfg(feature = "unchecked")]
+#[inline(always)]
+fn get_maybe_unchecked_mut<T>(values: &mut [T], idx: usize) -> &mut T {
+    unsafe { values.get_unchecked_mut(idx) }
+}
+
+#[inline(always)]
+fn set_maybe_unchecked<T>(values: &mut [T], idx: usize, value: T) {
+    *get_maybe_unchecked_mut(values, idx) = value;
 }
 
 #[cfg(feature = "fuzzing")]
