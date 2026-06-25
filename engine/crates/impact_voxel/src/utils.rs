@@ -244,56 +244,80 @@ impl<const N: usize> Loop3<N> {
     /// Creates 6 loops together covering the full boundary of the grid (no
     /// locations are iterated over more than once).
     #[inline]
-    pub const fn over_full_boundary() -> [Self; 6] {
+    pub const fn over_full_boundary() -> [(Self, Dimension, Side); 6] {
         [
-            Self {
-                i_range: Side::Lower.as_range::<N>(),
-                j_range: Self::full_range(),
-                k_range: Self::full_range(),
-                move_j_loop_out: false,
-                move_k_loop_out: false,
-                reverse_primary_axis: false,
-            },
-            Self {
-                i_range: Side::Upper.as_range::<N>(),
-                j_range: Self::full_range(),
-                k_range: Self::full_range(),
-                move_j_loop_out: false,
-                move_k_loop_out: false,
-                reverse_primary_axis: false,
-            },
-            Self {
-                i_range: Self::interior_range(),
-                j_range: Side::Lower.as_range::<N>(),
-                k_range: Self::full_range(),
-                move_j_loop_out: true,
-                move_k_loop_out: false,
-                reverse_primary_axis: false,
-            },
-            Self {
-                i_range: Self::interior_range(),
-                j_range: Side::Upper.as_range::<N>(),
-                k_range: Self::full_range(),
-                move_j_loop_out: true,
-                move_k_loop_out: false,
-                reverse_primary_axis: false,
-            },
-            Self {
-                i_range: Self::interior_range(),
-                j_range: Self::interior_range(),
-                k_range: Side::Lower.as_range::<N>(),
-                move_j_loop_out: false,
-                move_k_loop_out: true,
-                reverse_primary_axis: false,
-            },
-            Self {
-                i_range: Self::interior_range(),
-                j_range: Self::interior_range(),
-                k_range: Side::Upper.as_range::<N>(),
-                move_j_loop_out: false,
-                move_k_loop_out: true,
-                reverse_primary_axis: false,
-            },
+            (
+                Self {
+                    i_range: Side::Lower.as_range::<N>(),
+                    j_range: Self::full_range(),
+                    k_range: Self::full_range(),
+                    move_j_loop_out: false,
+                    move_k_loop_out: false,
+                    reverse_primary_axis: false,
+                },
+                Dimension::X,
+                Side::Lower,
+            ),
+            (
+                Self {
+                    i_range: Side::Upper.as_range::<N>(),
+                    j_range: Self::full_range(),
+                    k_range: Self::full_range(),
+                    move_j_loop_out: false,
+                    move_k_loop_out: false,
+                    reverse_primary_axis: false,
+                },
+                Dimension::X,
+                Side::Upper,
+            ),
+            (
+                Self {
+                    i_range: Self::interior_range(),
+                    j_range: Side::Lower.as_range::<N>(),
+                    k_range: Self::full_range(),
+                    move_j_loop_out: true,
+                    move_k_loop_out: false,
+                    reverse_primary_axis: false,
+                },
+                Dimension::Y,
+                Side::Lower,
+            ),
+            (
+                Self {
+                    i_range: Self::interior_range(),
+                    j_range: Side::Upper.as_range::<N>(),
+                    k_range: Self::full_range(),
+                    move_j_loop_out: true,
+                    move_k_loop_out: false,
+                    reverse_primary_axis: false,
+                },
+                Dimension::Y,
+                Side::Upper,
+            ),
+            (
+                Self {
+                    i_range: Self::interior_range(),
+                    j_range: Self::interior_range(),
+                    k_range: Side::Lower.as_range::<N>(),
+                    move_j_loop_out: false,
+                    move_k_loop_out: true,
+                    reverse_primary_axis: false,
+                },
+                Dimension::Z,
+                Side::Lower,
+            ),
+            (
+                Self {
+                    i_range: Self::interior_range(),
+                    j_range: Self::interior_range(),
+                    k_range: Side::Upper.as_range::<N>(),
+                    move_j_loop_out: false,
+                    move_k_loop_out: true,
+                    reverse_primary_axis: false,
+                },
+                Dimension::Z,
+                Side::Upper,
+            ),
         ]
     }
 

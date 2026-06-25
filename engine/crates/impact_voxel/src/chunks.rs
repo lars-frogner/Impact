@@ -2669,14 +2669,14 @@ impl NonUniformVoxelChunk {
 
     #[cfg(not(feature = "unchecked"))]
     #[inline(always)]
-    fn get_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
-        &mut chunk_voxels[adjacent_idx]
+    fn get_voxel_mut(chunk_voxels: &mut [Voxel], idx: usize) -> &mut Voxel {
+        &mut chunk_voxels[idx]
     }
 
     #[cfg(feature = "unchecked")]
     #[inline(always)]
-    fn get_voxel_mut(chunk_voxels: &mut [Voxel], adjacent_idx: usize) -> &mut Voxel {
-        unsafe { chunk_voxels.get_unchecked_mut(adjacent_idx) }
+    fn get_voxel_mut(chunk_voxels: &mut [Voxel], idx: usize) -> &mut Voxel {
+        unsafe { chunk_voxels.get_unchecked_mut(idx) }
     }
 }
 
