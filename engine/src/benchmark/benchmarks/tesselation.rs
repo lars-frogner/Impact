@@ -18,7 +18,7 @@ pub fn delaunay_tetrahedralize_randomized_grid_points(benchmarker: impl Benchmar
         N_POINTS_PER_DIM,
         &AxisAlignedBoxC::new(Point3C::origin(), Point3C::same(10.0)),
     );
-    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(Global, &points).unwrap());
+    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(&points).unwrap());
 }
 
 pub fn delaunay_tetrahedralize_regular_grid_points(benchmarker: impl Benchmarker) {
@@ -26,7 +26,7 @@ pub fn delaunay_tetrahedralize_regular_grid_points(benchmarker: impl Benchmarker
         N_POINTS_PER_DIM,
         &AxisAlignedBoxC::new(Point3C::origin(), Point3C::same(10.0)),
     );
-    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(Global, &points).unwrap());
+    benchmarker.benchmark(&mut || DelaunayTetrahedralization::construct(&points).unwrap());
 }
 
 pub fn voronoi_diagram_from_randomized_delaunay_tetrahedralization(benchmarker: impl Benchmarker) {
@@ -34,7 +34,7 @@ pub fn voronoi_diagram_from_randomized_delaunay_tetrahedralization(benchmarker: 
         N_POINTS_PER_DIM,
         &AxisAlignedBoxC::new(Point3C::origin(), Point3C::same(10.0)),
     );
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -50,7 +50,7 @@ pub fn voronoi_diagram_from_regular_delaunay_tetrahedralization(benchmarker: imp
         N_POINTS_PER_DIM,
         &AxisAlignedBoxC::new(Point3C::origin(), Point3C::same(10.0)),
     );
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -66,7 +66,7 @@ pub fn voronoi_diagram_with_aabbs_from_delaunay_tetrahedralization(benchmarker: 
         N_POINTS_PER_DIM,
         &AxisAlignedBoxC::new(Point3C::origin(), Point3C::same(10.0)),
     );
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 

@@ -1904,7 +1904,7 @@ pub mod fuzzing {
         let aabb = object.compute_normalized_chunk_grid_bounds();
 
         let points = bytemuck::cast_slice(&input.points);
-        let tetrahedralization = DelaunayTetrahedralization::construct(Global, points).unwrap();
+        let tetrahedralization = DelaunayTetrahedralization::construct(points).unwrap();
 
         let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 

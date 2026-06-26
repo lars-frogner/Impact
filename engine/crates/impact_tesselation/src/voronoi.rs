@@ -408,7 +408,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
         let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -436,7 +436,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
         let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -503,7 +503,7 @@ mod tests {
             }
         }
 
-        let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
         let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 

@@ -370,7 +370,7 @@ pub fn extract_voronoi_regions(benchmarker: impl Benchmarker) {
     let aabb = object.compute_normalized_chunk_grid_bounds();
 
     let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -403,7 +403,7 @@ pub fn extract_voronoi_regions_with_inertial_property_transfer(benchmarker: impl
     let aabb = object.compute_normalized_chunk_grid_bounds();
 
     let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -444,7 +444,7 @@ pub fn copy_voronoi_regions(benchmarker: impl Benchmarker) {
     let aabb = object.compute_normalized_chunk_grid_bounds();
 
     let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
@@ -472,7 +472,7 @@ pub fn copy_voronoi_regions_with_inertial_property_transfer(benchmarker: impl Be
     let aabb = object.compute_normalized_chunk_grid_bounds();
 
     let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
-    let tetrahedralization = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
 
     let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
 
