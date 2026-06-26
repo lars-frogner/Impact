@@ -1,7 +1,7 @@
 //! Delaunay tetrahedralization.
 
 use anyhow::{Result, bail};
-use impact_alloc::{AVec, Allocator, arena::ArenaPool};
+use impact_alloc::{AVec, Allocator, Global, arena::ArenaPool};
 use impact_geometry::{AxisAlignedBox, Sphere};
 use impact_math::{
     consts::f32::{FRAC_1_SQRT_6, SQRT_3, SQRT_6},
@@ -33,7 +33,7 @@ const MIN_RELATIVE_POINT_SEPARATION: f32 = 1e-9;
 /// meaning that the circumsphere of every tetrahedron contains no other
 /// vertices.
 #[derive(Clone, Debug)]
-pub struct DelaunayTetrahedralization<A: Allocator> {
+pub struct DelaunayTetrahedralization<A: Allocator = Global> {
     inner: Tetrahedralization<A>,
 }
 
@@ -76,6 +76,21 @@ struct TetrahedronIDChange {
     new: TetrahedronID,
 }
 
+impl DelaunayTetrahedralization<Global> {
+    /// Subdivides the convex hull of the given set of points into tetrahedra
+    /// that satisfy the Delaunay criterion.
+    ///
+    /// Uses an incremental insertion algorithm described in Ledoux (2007),
+    /// "Computing the 3D Voronoi Diagram Robustly: An Easy Explanation".
+    ///
+    /// # Errors
+    /// Returns an error if the number of points or the resulting number of
+    /// tetra exceeds a max limit.
+    pub fn construct(points: &[Point3C]) -> Result<Self> {
+        Self::construct_in(Global, points)
+    }
+}
+
 impl<A: Allocator> DelaunayTetrahedralization<A> {
     /// Subdivides the convex hull of the given set of points into tetrahedra
     /// that satisfy the Delaunay criterion.
@@ -86,18 +101,20 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
     /// # Errors
     /// Returns an error if the number of points or the resulting number of
     /// tetra exceeds a max limit.
-    pub fn construct(alloc: A, points: &[Point3C]) -> Result<Self> {
+    pub fn construct_in(alloc: A, points: &[Point3C]) -> Result<Self> {
         let n_points = points.len();
 
         if n_points + 4 > VertexIdx::MAX as usize {
             bail!("Number of points {n_points} is higher than supported");
         }
 
-        let mut tetras = Tetrahedralization::with_vertex_capacity(alloc, n_points + 4);
-
         if n_points < 4 {
-            return Ok(Self { inner: tetras });
+            return Ok(Self {
+                inner: Tetrahedralization::new(alloc),
+            });
         }
+
+        let mut tetras = Tetrahedralization::with_vertex_capacity(alloc, n_points + 4);
 
         let aabb = AxisAlignedBox::aabb_for_points(points);
         let bounding_sphere = Sphere::bounding_sphere_from_aabb(&aabb);
@@ -522,6 +539,10 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
 }
 
 impl<A: Allocator> Tetrahedralization<A> {
+    fn new(alloc: A) -> Self {
+        Self::with_vertex_capacity(alloc, 0)
+    }
+
     fn with_vertex_capacity(alloc: A, vertex_capacity: usize) -> Self {
         let vertices = AVec::with_capacity_in(vertex_capacity, alloc);
         let tetra_capacity = estimated_tetrahedron_count(vertex_capacity);
@@ -1637,7 +1658,6 @@ pub mod fuzzing {
     use super::*;
     use arbitrary::{Arbitrary, Result, Unstructured};
     use bytemuck::{Pod, Zeroable};
-    use impact_alloc::Global;
     use std::mem;
 
     const FLOAT_RESOLUTION: u32 = 10000;
@@ -1663,7 +1683,7 @@ pub mod fuzzing {
 
     pub fn fuzz_test_delaunay_tetrahedralization(input: Vec<DelaunayPoint>) {
         let points = bytemuck::cast_slice(&input);
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(points).unwrap();
         tetrahedra.validate_brute_force();
     }
 
@@ -1676,14 +1696,13 @@ pub mod fuzzing {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use impact_alloc::Global;
     use impact_geometry::Plane;
     use impact_math::vector::{UnitVector3, Vector3C};
 
     #[test]
     fn delaunay_tetrahedralization_of_less_than_four_points_is_empty() {
         let points = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].map(Point3C::from);
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 0);
     }
 
@@ -1697,7 +1716,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 0);
     }
 
@@ -1711,7 +1730,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 1);
         tetrahedra.validate_brute_force();
     }
@@ -1727,7 +1746,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 2);
         tetrahedra.validate_brute_force();
     }
@@ -1746,7 +1765,7 @@ mod tests {
         ]
         .map(Point3C::from);
 
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert_eq!(tetrahedra.n_tetrahedra(), 1);
         tetrahedra.validate_brute_force();
     }
@@ -1767,7 +1786,7 @@ mod tests {
             }
         }
 
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
         tetrahedra.validate_brute_force();
     }
@@ -1783,7 +1802,7 @@ mod tests {
             }
         }
 
-        let tetrahedra = DelaunayTetrahedralization::construct(Global, &points).unwrap();
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
         tetrahedra.validate_brute_force();
     }
