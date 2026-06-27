@@ -268,16 +268,16 @@ impl AxisAlignedBox {
     /// plane.
     #[inline]
     pub fn lies_in_positive_halfspace_of_plane(&self, plane: &Plane) -> bool {
-        plane.point_lies_in_positive_halfspace(self.lower_corner())
-            && plane.point_lies_in_positive_halfspace(self.upper_corner())
+        let min_corner = Self::minimum_corner_idx_along_direction(plane.unit_normal());
+        plane.point_lies_in_positive_halfspace(&self.corner(min_corner))
     }
 
     /// Whether the box is strictly in the negative halfspace of the given
     /// plane.
     #[inline]
     pub fn lies_in_negative_halfspace_of_plane(&self, plane: &Plane) -> bool {
-        plane.point_lies_in_negative_halfspace(self.lower_corner())
-            && plane.point_lies_in_negative_halfspace(self.upper_corner())
+        let max_corner = Self::maximum_corner_idx_along_direction(plane.unit_normal());
+        plane.point_lies_in_negative_halfspace(&self.corner(max_corner))
     }
 
     /// Expands the axis-aligned box to encompass the given point.
@@ -1216,5 +1216,72 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn box_fully_in_positive_halfspace_is_detected() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 2.0), Point3::new(1.0, 1.0, 3.0));
+        let plane =
+            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+        assert!(aabb.lies_in_positive_halfspace_of_plane(&plane));
+        assert!(!aabb.lies_in_negative_halfspace_of_plane(&plane));
+    }
+
+    #[test]
+    fn box_fully_in_negative_halfspace_is_detected() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, -2.0), Point3::new(1.0, 1.0, 0.0));
+        let plane =
+            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+        assert!(aabb.lies_in_negative_halfspace_of_plane(&plane));
+        assert!(!aabb.lies_in_positive_halfspace_of_plane(&plane));
+    }
+
+    #[test]
+    fn box_straddling_plane_lies_in_neither_halfspace() {
+        let aabb = AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 2.0));
+        let plane =
+            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+        assert!(!aabb.lies_in_positive_halfspace_of_plane(&plane));
+        assert!(!aabb.lies_in_negative_halfspace_of_plane(&plane));
+    }
+
+    #[test]
+    fn box_touching_plane_lies_in_neither_halfspace() {
+        // The checks are strict, so a box with a face on the plane counts as
+        // being in neither halfspace.
+        let plane =
+            Plane::from_normal_and_point(UnitVector3::unit_z(), &Point3::new(0.0, 0.0, 1.0));
+        let touching_from_above =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 1.0), Point3::new(1.0, 1.0, 2.0));
+        let touching_from_below =
+            AxisAlignedBox::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        assert!(!touching_from_above.lies_in_positive_halfspace_of_plane(&plane));
+        assert!(!touching_from_below.lies_in_negative_halfspace_of_plane(&plane));
+    }
+
+    #[test]
+    fn halfspace_checks_work_with_diagonal_plane() {
+        let plane = Plane::from_normal_and_point(
+            UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 1.0)),
+            &Point3::new(0.0, 0.0, 0.0),
+        );
+        let positive = AxisAlignedBox::new(Point3::new(1.0, 1.0, 1.0), Point3::new(2.0, 2.0, 2.0));
+        let negative =
+            AxisAlignedBox::new(Point3::new(-2.0, -2.0, -2.0), Point3::new(-1.0, -1.0, -1.0));
+        assert!(positive.lies_in_positive_halfspace_of_plane(&plane));
+        assert!(negative.lies_in_negative_halfspace_of_plane(&plane));
+    }
+
+    #[test]
+    fn halfspace_checks_work_with_negative_plane_normal() {
+        // The normal points along -z, so the positive halfspace is z < 1.
+        let plane = Plane::from_normal_and_point(
+            UnitVector3::unchecked_from(Vector3::new(0.0, 0.0, -1.0)),
+            &Point3::new(0.0, 0.0, 1.0),
+        );
+        let above = AxisAlignedBox::new(Point3::new(0.0, 0.0, 2.0), Point3::new(1.0, 1.0, 3.0));
+        let below = AxisAlignedBox::new(Point3::new(0.0, 0.0, -1.0), Point3::new(1.0, 1.0, 0.0));
+        assert!(above.lies_in_negative_halfspace_of_plane(&plane));
+        assert!(below.lies_in_positive_halfspace_of_plane(&plane));
     }
 }
