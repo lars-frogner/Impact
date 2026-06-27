@@ -1,7 +1,6 @@
 //! Representation of axis-aligned boxes.
 
 use crate::Plane;
-use Corner::{Lower, Upper};
 use approx::AbsDiffEq;
 use impact_math::{
     matrix::Matrix4,
@@ -35,25 +34,6 @@ pub struct AxisAlignedBoxC {
     lower_corner: Point3C,
     upper_corner: Point3C,
 }
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Corner {
-    Lower = 0,
-    Upper = 1,
-}
-
-const ALL_CORNER_COMPONENTS: [[Corner; 3]; 8] = [
-    [Lower, Lower, Lower],
-    [Lower, Lower, Upper],
-    [Lower, Upper, Lower],
-    [Lower, Upper, Upper],
-    [Upper, Lower, Lower],
-    [Upper, Lower, Upper],
-    [Upper, Upper, Lower],
-    [Upper, Upper, Upper],
-];
-
-const OPPOSITE_CORNER_INDICES: [usize; 8] = [7, 6, 5, 4, 3, 2, 1, 0];
 
 impl AxisAlignedBox {
     /// Creates a new box with the given lower and upper corner points.
@@ -176,16 +156,29 @@ impl AxisAlignedBox {
     /// from smaller to larger coordinates, with the z-component varying
     /// fastest.
     ///
-    /// # Panics
-    /// If the given index exceeds 7.
+    /// If the index exceeds 7, the upper bits are ignored.
     #[inline]
     pub fn corner(&self, corner_idx: usize) -> Point3 {
-        let corners = [self.lower_corner(), self.upper_corner()];
-        let corner_components = &ALL_CORNER_COMPONENTS[corner_idx];
+        let is_lower_x = (corner_idx >> 2) & 0b001 == 0;
+        let is_lower_y = (corner_idx >> 1) & 0b001 == 0;
+        let is_lower_z = corner_idx & 0b001 == 0;
+
         Point3::new(
-            corners[corner_components[0] as usize].x(),
-            corners[corner_components[1] as usize].y(),
-            corners[corner_components[2] as usize].z(),
+            if is_lower_x {
+                self.lower_corner().x()
+            } else {
+                self.upper_corner().x()
+            },
+            if is_lower_y {
+                self.lower_corner().y()
+            } else {
+                self.upper_corner().y()
+            },
+            if is_lower_z {
+                self.lower_corner().z()
+            } else {
+                self.upper_corner().z()
+            },
         )
     }
 
@@ -193,11 +186,10 @@ impl AxisAlignedBox {
     /// corners are ordered from smaller to larger coordinates, with the
     /// z-component varying fastest.
     ///
-    /// # Panics
-    /// If the given index exceeds 7.
+    /// If the index exceeds 7, the upper bits are ignored.
     #[inline]
     pub fn opposite_corner(&self, corner_idx: usize) -> Point3 {
-        self.corner(OPPOSITE_CORNER_INDICES[corner_idx])
+        self.corner(!corner_idx & 0b111)
     }
 
     /// Whether the given point is inside this axis-aligned box. A point exactly on the
@@ -494,6 +486,25 @@ impl AxisAlignedBox {
         fitted
     }
 
+    /// Determines the corner of any axis-aligned bounding box that will have
+    /// the highest projected displacement along the given direction. The corner
+    /// is represented by an index following the convention of [`Self::corner`].
+    #[inline]
+    pub fn maximum_corner_idx_along_direction(direction: &UnitVector3) -> usize {
+        let min_corner = Self::minimum_corner_idx_along_direction(direction);
+        !min_corner & 0b111
+    }
+
+    /// Determines the corner of any axis-aligned bounding box that will have
+    /// the lowest projected displacement along the given direction. The corner
+    /// is represented by an index following the convention of [`Self::corner`].
+    #[inline]
+    pub fn minimum_corner_idx_along_direction(direction: &UnitVector3) -> usize {
+        let negative_bitmask_zyx = direction.is_negative_bitmask();
+        let negative_bitmask_xyz = swap_first_and_third_bit(negative_bitmask_zyx);
+        negative_bitmask_xyz as usize
+    }
+
     /// Converts the box to the 4-byte aligned cache-friendly
     /// [`AxisAlignedBoxC`].
     #[inline]
@@ -578,12 +589,26 @@ impl AxisAlignedBoxC {
     /// If the given index exceeds 7.
     #[inline]
     pub fn corner(&self, corner_idx: usize) -> Point3C {
-        let corners = [self.lower_corner(), self.upper_corner()];
-        let corner_components = &ALL_CORNER_COMPONENTS[corner_idx];
+        let is_lower_x = (corner_idx >> 2) & 0b001 == 0;
+        let is_lower_y = (corner_idx >> 1) & 0b001 == 0;
+        let is_lower_z = corner_idx & 0b001 == 0;
+
         Point3C::new(
-            corners[corner_components[0] as usize].x(),
-            corners[corner_components[1] as usize].y(),
-            corners[corner_components[2] as usize].z(),
+            if is_lower_x {
+                self.lower_corner().x()
+            } else {
+                self.upper_corner().x()
+            },
+            if is_lower_y {
+                self.lower_corner().y()
+            } else {
+                self.upper_corner().y()
+            },
+            if is_lower_z {
+                self.lower_corner().z()
+            } else {
+                self.upper_corner().z()
+            },
         )
     }
 
@@ -591,12 +616,9 @@ impl AxisAlignedBoxC {
     /// boundaries exactly touch each other, the box is considered inside.
     #[inline]
     pub fn box_lies_outside(&self, other: &Self) -> bool {
-        !((self.lower_corner().x() <= other.upper_corner().x()
-            && self.upper_corner().x() >= other.lower_corner().x())
-            && (self.lower_corner().y() <= other.upper_corner().y()
-                && self.upper_corner().y() >= other.lower_corner().y())
-            && (self.lower_corner().z() <= other.upper_corner().z()
-                && self.upper_corner().z() >= other.lower_corner().z()))
+        (other.upper_corner() - self.lower_corner()).is_negative_bitmask()
+            | (self.upper_corner() - other.lower_corner()).is_negative_bitmask()
+            != 0
     }
 
     /// Converts the box to the 16-byte aligned SIMD-friendly
@@ -618,6 +640,11 @@ impl AbsDiffEq for AxisAlignedBoxC {
         Point3C::abs_diff_eq(self.lower_corner(), other.lower_corner(), epsilon)
             && Point3C::abs_diff_eq(self.upper_corner(), other.upper_corner(), epsilon)
     }
+}
+
+#[inline]
+fn swap_first_and_third_bit(x: u32) -> u32 {
+    (x & 0b010) | ((x & 0b001) << 2) | ((x & 0b100) >> 2)
 }
 
 #[cfg(test)]
@@ -1139,5 +1166,55 @@ mod tests {
         // Exit at x=11 -> t = (11 - 8) / 4 = 0.75
         assert_abs_diff_eq!(t_min, 0.25, epsilon = 1e-6);
         assert_abs_diff_eq!(t_max, 0.75, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn maximum_corner_idx_along_direction_matches_brute_force_argmax() {
+        let aabb = AxisAlignedBox::new(Point3::new(-1.0, -2.0, -3.0), Point3::new(4.0, 5.0, 6.0));
+
+        for &nx in &[-1.0_f32, 1.0] {
+            for &ny in &[-1.0_f32, 1.0] {
+                for &nz in &[-1.0_f32, 1.0] {
+                    let direction = UnitVector3::normalized_from(Vector3::new(nx, ny, nz));
+
+                    let index = AxisAlignedBox::maximum_corner_idx_along_direction(&direction);
+
+                    let expected = (0..8)
+                        .max_by(|&a, &b| {
+                            let da = direction.dot(aabb.corner(a).as_vector());
+                            let db = direction.dot(aabb.corner(b).as_vector());
+                            da.partial_cmp(&db).unwrap()
+                        })
+                        .unwrap();
+
+                    assert_eq!(index, expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn minimum_corner_idx_along_direction_matches_brute_force_argmin() {
+        let aabb = AxisAlignedBox::new(Point3::new(-1.0, -2.0, -3.0), Point3::new(4.0, 5.0, 6.0));
+
+        for &nx in &[-1.0_f32, 1.0] {
+            for &ny in &[-1.0_f32, 1.0] {
+                for &nz in &[-1.0_f32, 1.0] {
+                    let direction = UnitVector3::normalized_from(Vector3::new(nx, ny, nz));
+
+                    let index = AxisAlignedBox::minimum_corner_idx_along_direction(&direction);
+
+                    let expected = (0..8)
+                        .min_by(|&a, &b| {
+                            let da = direction.dot(aabb.corner(a).as_vector());
+                            let db = direction.dot(aabb.corner(b).as_vector());
+                            da.partial_cmp(&db).unwrap()
+                        })
+                        .unwrap();
+
+                    assert_eq!(index, expected);
+                }
+            }
+        }
     }
 }
