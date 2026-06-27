@@ -357,40 +357,17 @@ impl Frustum {
         Plane::new(unit_normal, displacement / norm)
     }
 
-    /// Determines the corner of any axis-aligned bounding box that will have
-    /// the largest signed distance in the space of the given plane. The corner
-    /// is represented by an index following the convention of
-    /// [`AxisAlignedBox::corner`].
-    #[inline]
-    pub fn determine_largest_signed_dist_aab_corner_index_for_plane(plane: &Plane) -> u8 {
-        let normal = plane.unit_normal();
-        match (
-            normal.x().is_sign_negative(),
-            normal.y().is_sign_negative(),
-            normal.z().is_sign_negative(),
-        ) {
-            (true, true, true) => 0,
-            (true, true, false) => 1,
-            (true, false, true) => 2,
-            (true, false, false) => 3,
-            (false, true, true) => 4,
-            (false, true, false) => 5,
-            (false, false, true) => 6,
-            (false, false, false) => 7,
-        }
-    }
-
     #[inline]
     fn determine_largest_signed_dist_aab_corner_indices_for_all_planes(
         planes: &[Plane; 6],
     ) -> [u8; 6] {
         [
-            Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[0]),
-            Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[1]),
-            Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[2]),
-            Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[3]),
-            Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[4]),
-            Self::determine_largest_signed_dist_aab_corner_index_for_plane(&planes[5]),
+            AxisAlignedBox::maximum_corner_idx_along_direction(planes[0].unit_normal()) as u8,
+            AxisAlignedBox::maximum_corner_idx_along_direction(planes[1].unit_normal()) as u8,
+            AxisAlignedBox::maximum_corner_idx_along_direction(planes[2].unit_normal()) as u8,
+            AxisAlignedBox::maximum_corner_idx_along_direction(planes[3].unit_normal()) as u8,
+            AxisAlignedBox::maximum_corner_idx_along_direction(planes[4].unit_normal()) as u8,
+            AxisAlignedBox::maximum_corner_idx_along_direction(planes[5].unit_normal()) as u8,
         ]
     }
 }

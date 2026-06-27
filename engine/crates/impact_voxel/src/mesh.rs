@@ -6,7 +6,7 @@ use crate::chunks::{
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
-use impact_geometry::{Frustum, OrientedBox, Plane};
+use impact_geometry::{AxisAlignedBox, Frustum, OrientedBox, Plane};
 use impact_math::{
     point::{Point3, Point3C},
     transform::Similarity3,
@@ -504,7 +504,7 @@ impl CullingFrustum {
     /// `CullingFrustum`.
     pub fn from_planes_and_apex_position(planes: [Plane; 6], apex_position: Point3C) -> Self {
         let largest_signed_dist_aab_corner_indices_for_planes = planes.clone().map(|plane| {
-            u32::from(Frustum::determine_largest_signed_dist_aab_corner_index_for_plane(&plane))
+            AxisAlignedBox::maximum_corner_idx_along_direction(plane.unit_normal()) as u32
         });
         let planes = planes.map(|plane| {
             let (unit_normal, displacement) = plane.into_normal_and_displacement();

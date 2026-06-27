@@ -903,6 +903,17 @@ impl Vector3C {
         )
     }
 
+    /// Returns a bitmask where the lowest three bits are set to the sign bits
+    /// of the vector's components (the lowest bit is for x, the next for y and
+    /// the next for z).
+    #[inline]
+    pub fn is_negative_bitmask(&self) -> u32 {
+        let x_is_neg = u32::from(self.x.is_sign_negative());
+        let y_is_neg = u32::from(self.y.is_sign_negative());
+        let z_is_neg = u32::from(self.z.is_sign_negative());
+        (z_is_neg << 2) | (y_is_neg << 1) | x_is_neg
+    }
+
     /// Returns a vector with the given closure applied to each component.
     #[inline]
     pub fn mapped(&self, mut f: impl FnMut(f32) -> f32) -> Self {
