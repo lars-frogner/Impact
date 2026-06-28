@@ -11,7 +11,7 @@ use crate::{
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
 };
-use impact_math::vector::Vector3;
+use impact_math::{point::Point3, vector::Vector3};
 
 /// A signed distance field for a voxel chunk in a [`ChunkedVoxelObject`].
 #[derive(Clone, Debug)]
@@ -627,6 +627,48 @@ pub fn compute_sdf_gradient_from_corner_samples(
         + rev_o.yzx().component_mul(&o.zxy()).component_mul(&d01)
         + o.yzx().component_mul(&rev_o.zxy()).component_mul(&d10)
         + o.yzx().component_mul(&o.zxy()).component_mul(&d11)
+}
+
+#[inline]
+pub fn sample_voxel_object_sdf(
+    object: &ChunkedVoxelObject,
+    grid_dimensions: &[usize; 3],
+    position: &Point3,
+) -> f32 {
+    let lower_corner_position = position - Vector3::same(0.5);
+
+    let lower_indices = lower_corner_position.as_vector().component_floor();
+    let fractional_offset = lower_corner_position.as_vector() - lower_indices;
+
+    if lower_indices.has_negative_component() {
+        // Avoid sampling outside the lower bounds of the SDF grid
+        return VoxelSignedDistance::MAX_F32;
+    }
+
+    let [sdf_i, sdf_j, sdf_k] = <[f32; 3]>::from(lower_indices).map(|idx| idx as usize);
+
+    if sdf_i + 1 >= grid_dimensions[0]
+        || sdf_j + 1 >= grid_dimensions[1]
+        || sdf_k + 1 >= grid_dimensions[2]
+    {
+        // Avoid sampling outside the upper bounds of the SDF grid
+        return VoxelSignedDistance::MAX_F32;
+    }
+
+    let sample_dist = |i, j, k| object.voxel(i, j, k).signed_distance().to_f32();
+
+    let dists = [
+        sample_dist(sdf_i, sdf_j, sdf_k),
+        sample_dist(sdf_i, sdf_j, sdf_k + 1),
+        sample_dist(sdf_i, sdf_j + 1, sdf_k),
+        sample_dist(sdf_i, sdf_j + 1, sdf_k + 1),
+        sample_dist(sdf_i + 1, sdf_j, sdf_k),
+        sample_dist(sdf_i + 1, sdf_j, sdf_k + 1),
+        sample_dist(sdf_i + 1, sdf_j + 1, sdf_k),
+        sample_dist(sdf_i + 1, sdf_j + 1, sdf_k + 1),
+    ];
+
+    evaluate_sdf_from_corner_samples(&dists, &fractional_offset)
 }
 
 #[cfg(not(miri))]

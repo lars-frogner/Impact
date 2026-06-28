@@ -5,7 +5,7 @@ use crate::{
     chunks::{
         CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, chunk_range_encompassing_voxel_range,
         chunk_voxels, chunk_voxels_mut, linear_voxel_idx_within_chunk_from_object_voxel_indices,
-        split_detection::SplitDetector,
+        sdf, split_detection::SplitDetector,
     },
 };
 use impact_containers::HashSet;
@@ -152,6 +152,116 @@ impl ChunkedVoxelObject {
                 }
             }
         }
+    }
+
+    /// Finds voxels in the given voxel ranges and calls the given closure with
+    /// the voxel's indices and mutable reference to the voxel itself. The
+    /// closure should return whether the voxel was modified.
+    ///
+    /// For voxels that were modified, their adjacency information will be
+    /// updated and any chunk whose mesh data would be invalidated by changes to
+    /// these voxels will be registered. The invalidated chunks can be obtained
+    /// by calling [`Self::invalidated_mesh_chunk_indices`].
+    ///
+    /// Even though modifying the object will invalidate the connected region
+    /// information, this method does not call
+    /// [`Self::resolve_connected_regions_between_all_chunks`] to avoid
+    /// duplicating work when this method is called multiple times. Make sure to
+    /// call it once all modifications have been made.
+    pub fn modify_voxels_within_ranges(
+        &mut self,
+        included_voxel_ranges: VoxelRanges,
+        modify_voxel: &mut impl FnMut([usize; 3], &mut Voxel) -> bool,
+    ) {
+        if included_voxel_ranges.iter().any(Range::is_empty) {
+            return;
+        }
+
+        let included_chunk_ranges = included_voxel_ranges
+            .clone()
+            .map(chunk_range_encompassing_voxel_range);
+
+        let mut removed_chunks = false;
+
+        for chunk_i in included_chunk_ranges[0].clone() {
+            for chunk_j in included_chunk_ranges[1].clone() {
+                for chunk_k in included_chunk_ranges[2].clone() {
+                    let chunk_indices = [chunk_i, chunk_j, chunk_k];
+                    let chunk_idx = self.linear_chunk_idx(&chunk_indices);
+
+                    let chunk = &mut self.chunks[chunk_idx];
+
+                    let data_offset = match chunk {
+                        VoxelChunk::Void => {
+                            continue;
+                        }
+                        VoxelChunk::Uniform(_) => {
+                            chunk.convert_to_non_uniform_if_uniform(
+                                &mut self.voxels,
+                                &mut self.split_detector,
+                            );
+                            if let VoxelChunk::NonUniform(chunk) = chunk {
+                                chunk.data_offset
+                            } else {
+                                unreachable!()
+                            }
+                        }
+                        VoxelChunk::NonUniform(chunk) => chunk.data_offset,
+                    };
+
+                    let object_voxel_ranges_in_chunk =
+                        chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
+
+                    let included_voxel_ranges_in_chunk: [_; 3] = array::from_fn(|dim| {
+                        let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
+                        let included_range = &included_chunk_ranges[dim];
+                        usize::max(range_in_chunk.start, included_range.start)
+                            ..usize::min(range_in_chunk.end, included_range.end)
+                    });
+
+                    let voxels = chunk_voxels_mut(&mut self.voxels, data_offset);
+
+                    let mut chunk_touched = false;
+
+                    for i in included_voxel_ranges_in_chunk[0].clone() {
+                        for j in included_voxel_ranges_in_chunk[1].clone() {
+                            for k in included_voxel_ranges_in_chunk[2].clone() {
+                                let voxel_idx =
+                                    linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                        i, j, k,
+                                    );
+                                let voxel = &mut voxels[voxel_idx];
+
+                                chunk_touched |= modify_voxel([i, j, k], voxel);
+                            }
+                        }
+                    }
+
+                    if chunk_touched {
+                        Self::handle_chunk_voxels_modified(
+                            &mut self.voxels,
+                            &mut self.split_detector,
+                            &self.chunk_counts,
+                            chunk,
+                            chunk_indices,
+                            chunk_idx,
+                            object_voxel_ranges_in_chunk,
+                            included_voxel_ranges_in_chunk,
+                            &mut self.invalidated_mesh_chunk_indices,
+                            &mut removed_chunks,
+                        );
+                    }
+                }
+            }
+        }
+
+        if removed_chunks {
+            self.update_occupied_ranges();
+        }
+
+        self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
+            included_chunk_ranges.map(|range| range.start.saturating_sub(1)..range.end),
+        );
     }
 
     /// Finds all non-empty voxels whose center fall within the given sphere and
@@ -427,6 +537,105 @@ impl ChunkedVoxelObject {
 
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
             touched_chunk_ranges.map(|range| range.start.saturating_sub(1)..range.end),
+        );
+    }
+
+    pub fn modify_intersecting_voxels(
+        voxel_object_a: &mut ChunkedVoxelObject,
+        voxel_object_b: &mut ChunkedVoxelObject,
+        transform_from_world_to_a: &Isometry3,
+        transform_from_world_to_b: &Isometry3,
+        mut should_check: impl FnMut(&Voxel) -> bool,
+        modify_a: &mut impl FnMut([usize; 3], &mut Voxel, f32),
+        modify_b: &mut impl FnMut([usize; 3], &mut Voxel, f32),
+    ) {
+        let transform_from_b_to_a =
+            transform_from_world_to_a * transform_from_world_to_b.inverted();
+
+        let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
+            ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
+                voxel_object_a,
+                voxel_object_b,
+                &transform_from_b_to_a,
+            )
+        else {
+            return;
+        };
+
+        let voxel_extent_a = voxel_object_a.voxel_extent();
+        let voxel_extent_b = voxel_object_b.voxel_extent();
+
+        let b_dist_to_a = voxel_object_b.voxel_extent() * voxel_object_a.inverse_voxel_extent();
+        let a_dist_to_b = voxel_object_a.voxel_extent() * voxel_object_b.inverse_voxel_extent();
+
+        let grid_dimensions_for_a = voxel_object_a
+            .chunk_counts()
+            .map(|count| count * CHUNK_SIZE);
+
+        let grid_dimensions_for_b = voxel_object_b
+            .chunk_counts()
+            .map(|count| count * CHUNK_SIZE);
+
+        voxel_object_a.modify_voxels_within_ranges(
+            intersection_voxel_ranges_in_a,
+            &mut |[i, j, k], voxel| {
+                if !should_check(voxel) {
+                    return false;
+                }
+
+                let center =
+                    voxel_center_position_from_object_voxel_indices(voxel_extent_a, i, j, k);
+
+                let center_in_b = voxel_object_b.inverse_voxel_extent()
+                    * transform_from_b_to_a.inverse_transform_point(&center);
+
+                let signed_distance_inside_b_in_b = sdf::sample_voxel_object_sdf(
+                    voxel_object_b,
+                    &grid_dimensions_for_b,
+                    &center_in_b,
+                );
+
+                if signed_distance_inside_b_in_b.is_sign_positive() {
+                    return false;
+                }
+
+                let signed_distance_inside_b = signed_distance_inside_b_in_b * b_dist_to_a;
+
+                modify_a([i, j, k], voxel, signed_distance_inside_b);
+
+                true
+            },
+        );
+
+        voxel_object_b.modify_voxels_within_ranges(
+            intersection_voxel_ranges_in_b,
+            &mut |[i, j, k], voxel| {
+                if !should_check(voxel) {
+                    return false;
+                }
+
+                let center =
+                    voxel_center_position_from_object_voxel_indices(voxel_extent_b, i, j, k);
+
+                let center_in_a = voxel_object_a.inverse_voxel_extent()
+                    * transform_from_b_to_a.transform_point(&center);
+
+                let signed_distance_inside_a_in_a = sdf::sample_voxel_object_sdf(
+                    voxel_object_a,
+                    &grid_dimensions_for_a,
+                    &center_in_a,
+                );
+
+                if signed_distance_inside_a_in_a.is_sign_positive() {
+                    return false;
+                }
+
+                let signed_distance_inside_a = signed_distance_inside_a_in_a * a_dist_to_b;
+
+                modify_b([i, j, k], voxel, signed_distance_inside_a);
+
+                true
+            },
         );
     }
 

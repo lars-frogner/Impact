@@ -695,3 +695,54 @@ fn apply_capsule_absorption(
         },
     );
 }
+
+pub fn apply_symmetric_mutual_absorption(
+    inertial_property_updater_a: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
+    inertial_property_updater_b: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
+    voxel_object_a: &mut ChunkedVoxelObject,
+    voxel_object_b: &mut ChunkedVoxelObject,
+    transform_from_world_to_a: &Isometry3,
+    transform_from_world_to_b: &Isometry3,
+) {
+    ChunkedVoxelObject::modify_intersecting_voxels(
+        voxel_object_a,
+        voxel_object_b,
+        transform_from_world_to_a,
+        transform_from_world_to_b,
+        |voxel| !voxel.signed_distance().is_maximally_outside(),
+        &mut |object_voxel_indices, voxel, signed_distance_inside_b| {
+            let was_empty = voxel.is_empty();
+
+            let new_signed_distance =
+                compute_subtracted_signed_distance(voxel, signed_distance_inside_b);
+
+            voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
+                if !was_empty {
+                    inertial_property_updater_a.remove_voxel(&object_voxel_indices, *voxel);
+                }
+            });
+        },
+        &mut |object_voxel_indices, voxel, signed_distance_inside_a| {
+            let was_empty = voxel.is_empty();
+
+            let new_signed_distance =
+                compute_subtracted_signed_distance(voxel, signed_distance_inside_a);
+
+            voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
+                if !was_empty {
+                    inertial_property_updater_b.remove_voxel(&object_voxel_indices, *voxel);
+                }
+            });
+        },
+    );
+}
+
+fn compute_subtracted_signed_distance(voxel: &Voxel, signed_distance_inside_other: f32) -> f32 {
+    let signed_distance = voxel.signed_distance().to_f32();
+
+    let intersection_signed_distance = signed_distance.max(signed_distance_inside_other);
+
+    let subtracted_signed_distance = signed_distance.max(-intersection_signed_distance);
+
+    subtracted_signed_distance
+}
