@@ -967,6 +967,60 @@ define_task!(
     }
 );
 
+define_task!(
+    /// Executes initiated fracturing processes.
+    ///
+    /// For any fracturing process that is completed now, the changes will be
+    /// visible when the next frame is rendered, not the current one.
+    [pub] ExecuteVoxelObjectFracturing,
+    depends_on = [
+        // Modifications due to absorption should be reflected in the fractured
+        // parts.
+        ApplyVoxelAbsorption,
+        // For completed fracturing processes, we want to operate on the rigid
+        // body states for the current frame, which is after the simulation
+        // step.
+        SyncRigidBodyComponents,
+        // Newly added or removed voxel object entities should be included.
+        // (This is in practice covered by the other dependencies).
+        HandleStagedEntities
+    ],
+    execute_on = [PhysicsTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Executing voxel object fracturing", engine.task_timer(), {
+            let mut entity_id_manager = engine.entity_id_manager().olock();
+            let mut entity_stager = engine.entity_stager().olock();
+            let ecs_world = engine.ecs_world().oread();
+            let resource_manager = engine.resource_manager().oread();
+            let scene = engine.scene().oread();
+            let mut voxel_manager = scene.voxel_manager().owrite();
+            let scene_graph = scene.scene_graph().oread();
+            let simulator = engine.simulator().oread();
+            let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
+            let mut anchor_manager = simulator.anchor_manager().owrite();
+            let force_generator_manager = simulator.force_generator_manager().oread();
+            let collision_world = simulator.collision_world().oread();
+
+            impact_voxel::interaction::systems::execute_fracturing_processes(
+                engine.component_metadata_registry(),
+                &mut entity_id_manager,
+                &mut entity_stager,
+                &ecs_world,
+                &scene_graph,
+                &mut voxel_manager,
+                &resource_manager.voxel_types,
+                &mut rigid_body_manager,
+                &mut anchor_manager,
+                &force_generator_manager,
+                &collision_world,
+            );
+
+            Ok(())
+        })
+    }
+);
+
 // =============================================================================
 // TASK REGISTRATION
 // =============================================================================
@@ -1041,5 +1095,6 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncDynamicGPUResources)?;
 
     // VOXEL PROCESSING (for next frame)
-    task_scheduler.register_task(ApplyVoxelAbsorption)
+    task_scheduler.register_task(ApplyVoxelAbsorption)?;
+    task_scheduler.register_task(ExecuteVoxelObjectFracturing)
 }

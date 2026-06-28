@@ -8,6 +8,7 @@ use crate::{
     setup,
 };
 use anyhow::{Result, anyhow};
+use impact_alloc::arena::ArenaPool;
 use impact_ecs::{
     archetype::ArchetypeComponents,
     component::{
@@ -41,7 +42,10 @@ use impact_rendering::{
 };
 use impact_voxel::{
     VoxelObjectID,
-    interaction::absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
+    interaction::{
+        absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
+        fracturing::FracturePointGenerator,
+    },
     mesh::MeshedChunkedVoxelObject,
 };
 use std::sync::atomic::Ordering;
@@ -661,6 +665,38 @@ impl Engine {
             .owrite()
             .object_manager_mut()
             .remove_voxel_object(voxel_object_id);
+    }
+
+    pub fn fracture_voxel_object(
+        &self,
+        entity_id: EntityID,
+        fracture_point_generator: &FracturePointGenerator,
+        seed: u64,
+    ) -> Result<()> {
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+
+        let scene = self.scene().oread();
+        let voxel_manager = &mut **scene.voxel_manager().owrite();
+        let voxel_object_manager = &voxel_manager.object_manager;
+        let interaction_manager = &mut voxel_manager.interaction_manager;
+        let fracturing_manager = interaction_manager.fracturing_manager_mut();
+
+        let voxel_object = voxel_object_manager
+            .get_voxel_object(voxel_object_id)
+            .ok_or_else(|| {
+                anyhow!("Tried to initiate fracturing for missing voxel object {voxel_object_id}")
+            })?;
+
+        let aabb = voxel_object.object().compute_normalized_aabb().compact();
+
+        let arena = ArenaPool::get_arena();
+        let seed_points = fracture_point_generator.generate_fracture_points(&arena, &aabb, seed);
+
+        fracturing_manager.initiate_fracturing_process(
+            voxel_object_manager,
+            voxel_object_id,
+            &seed_points,
+        )
     }
 
     pub fn with_absorbed_voxels_for_sphere<R>(

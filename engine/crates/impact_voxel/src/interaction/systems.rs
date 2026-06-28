@@ -157,7 +157,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
         entities
     }
 
-    fn on_new_disconnected_voxel_object_entity(
+    fn create_extracted_voxel_object_entity(
         &mut self,
         new_entity_id: EntityID,
         parent_entity_id: EntityID,
@@ -226,7 +226,7 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
             .expect("Failed to stage voxel object entity for creation");
     }
 
-    fn on_empty_voxel_object_entity(&mut self, entity_id: EntityID) {
+    fn remove_voxel_object_entity(&mut self, entity_id: EntityID) {
         self.entity_stager.stage_entity_for_removal(entity_id);
     }
 }
@@ -300,6 +300,43 @@ pub fn apply_absorption(
         voxel_manager,
         voxel_type_registry,
         intersection_manager,
+        rigid_body_manager,
+        anchor_manager,
+    );
+}
+
+/// Executes initiated fracturing processes.
+pub fn execute_fracturing_processes(
+    component_metadata_registry: &ComponentMetadataRegistry,
+    entity_id_manager: &mut EntityIDManager,
+    entity_stager: &mut EntityStager,
+    ecs_world: &ECSWorld,
+    scene_graph: &SceneGraph,
+    voxel_manager: &mut VoxelManager,
+    voxel_type_registry: &VoxelTypeRegistry,
+    rigid_body_manager: &mut RigidBodyManager,
+    anchor_manager: &mut AnchorManager,
+    force_generator_manager: &ForceGeneratorManager,
+    collision_world: &CollisionWorld,
+) {
+    let mut interaction_context = ECSVoxelObjectInteractionContext {
+        component_metadata_registry,
+        entity_stager,
+        ecs_world,
+        scene_graph,
+        force_generator_manager,
+        collision_world,
+    };
+
+    let voxel_object_manager = &mut voxel_manager.object_manager;
+    let interaction_manager = &mut voxel_manager.interaction_manager;
+    let fracturing_manager = interaction_manager.fracturing_manager_mut();
+
+    fracturing_manager.execute_fracturing_processes(
+        &mut interaction_context,
+        entity_id_manager,
+        voxel_type_registry,
+        voxel_object_manager,
         rigid_body_manager,
         anchor_manager,
     );

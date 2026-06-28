@@ -1,27 +1,34 @@
 //! Interactions with voxel objects.
 
 pub mod absorption;
+pub mod fracturing;
 
 #[cfg(feature = "ecs")]
 pub mod systems;
 
 use crate::{
-    VoxelObjectID, VoxelObjectManager,
+    VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     chunks::{
         ChunkedVoxelObject, extraction::ExtractedVoxelObject,
         inertia::VoxelObjectInertialPropertyManager,
     },
+    mesh::MeshedChunkedVoxelObject,
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::VoxelAbsorptionManager;
+use fracturing::VoxelObjectFracturingManager;
 use impact_geometry::{AxisAlignedBoxC, ModelTransform};
-use impact_id::EntityID;
+use impact_id::{EntityID, EntityIDManager};
 use impact_intersection::bounding_volume::{BoundingVolumeID, BoundingVolumeManager};
-use impact_math::{point::Point3C, transform::Isometry3, vector::Vector3};
+use impact_math::{
+    point::{Point3, Point3C},
+    transform::Isometry3,
+    vector::Vector3,
+};
 use impact_physics::{
-    anchor::{AnchorManager, DynamicRigidBodyAnchorID},
+    anchor::{AnchorManager, DynamicRigidBodyAnchor, DynamicRigidBodyAnchorID},
     quantities::{AngularVelocity, Orientation, Position, Velocity},
-    rigid_body::{DynamicRigidBody, DynamicRigidBodyID},
+    rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use tinyvec::TinyVec;
 
@@ -41,22 +48,23 @@ pub trait VoxelObjectInteractionContext {
         &mut self,
     ) -> TinyVec<[VoxelAbsorbingCapsuleEntity; 4]>;
 
-    /// Called when a new voxel object entity should be created due to
-    /// disconnection.
-    fn on_new_disconnected_voxel_object_entity(
+    /// Called when a new voxel object entity should be created for an extracted
+    /// voxel object.
+    fn create_extracted_voxel_object_entity(
         &mut self,
         new_entity_id: EntityID,
         parent_entity_id: EntityID,
     );
 
-    /// Called when a voxel object becomes empty.
-    fn on_empty_voxel_object_entity(&mut self, entity_id: EntityID);
+    /// Called when a voxel object should be removed.
+    fn remove_voxel_object_entity(&mut self, entity_id: EntityID);
 }
 
 /// Manages voxel interaction processes and state.
 #[derive(Debug)]
 pub struct VoxelInteractionManager {
     absorption_manager: VoxelAbsorptionManager,
+    fracturing_manager: VoxelObjectFracturingManager,
 }
 
 #[derive(Debug, Default)]
@@ -74,15 +82,31 @@ pub struct VoxelAbsorbingCapsuleEntity {
 #[derive(Debug)]
 struct VoxelRemovalOutcome {
     original_object_empty: bool,
-    disconnected_object: Option<DynamicDisconnectedVoxelObject>,
+    disconnected_components: Option<ExtractedComponents>,
 }
 
 #[derive(Debug)]
-struct DynamicDisconnectedVoxelObject {
+struct ExtractedComponents {
+    object: DynamicExtractedVoxelObject,
+    anchors: Anchors,
+}
+
+#[derive(Debug)]
+struct DynamicExtractedVoxelObject {
     pub voxel_object: ChunkedVoxelObject,
     pub inertial_property_manager: VoxelObjectInertialPropertyManager,
     pub rigid_body: DynamicRigidBody,
-    pub anchors: Anchors,
+    pub coordinate_changes: ExtractedVoxelObjectCoordinateChanges,
+}
+
+#[derive(Clone, Debug)]
+struct ExtractedVoxelObjectCoordinateChanges {
+    /// The center of mass of the extracted object relative to its origin (in
+    /// model space, not world space).
+    new_local_center_of_mass: Vector3,
+    /// The center of mass of the original object relative to the origin of the
+    /// extracted object (in model space, not world space).
+    original_local_center_of_mass_relative_to_new_origin: Vector3,
 }
 
 type Anchors = TinyVec<[(DynamicRigidBodyAnchorID, Position); 4]>;
@@ -91,6 +115,7 @@ impl VoxelInteractionManager {
     pub fn new() -> Self {
         Self {
             absorption_manager: VoxelAbsorptionManager::new(),
+            fracturing_manager: VoxelObjectFracturingManager::new(),
         }
     }
 
@@ -102,6 +127,16 @@ impl VoxelInteractionManager {
     /// Returns a mutable reference to the [`VoxelAbsorptionManager`].
     pub fn absorption_manager_mut(&mut self) -> &mut VoxelAbsorptionManager {
         &mut self.absorption_manager
+    }
+
+    /// Returns a reference to the [`VoxelObjectFracturingManager`].
+    pub fn fracturing_manager(&self) -> &VoxelObjectFracturingManager {
+        &self.fracturing_manager
+    }
+
+    /// Returns a mutable reference to the [`VoxelObjectFracturingManager`].
+    pub fn fracturing_manager_mut(&mut self) -> &mut VoxelObjectFracturingManager {
+        &mut self.fracturing_manager
     }
 
     /// Removes all voxel interaction entities.
@@ -167,7 +202,7 @@ fn handle_voxel_object_after_removing_voxels(
     if voxel_object.is_effectively_empty() {
         return VoxelRemovalOutcome {
             original_object_empty: true,
-            disconnected_object: None,
+            disconnected_components: None,
         };
     }
 
@@ -208,10 +243,8 @@ fn handle_voxel_object_after_removing_voxels(
         let original_object_empty = voxel_object.is_effectively_empty();
 
         let lost_anchors = if original_object_empty {
-            handle_anchors_for_empty_original_voxel_object_after_removing_voxels(
-                anchor_manager,
-                rigid_body_id,
-            )
+            // All anchors for the body are lost
+            get_all_rigid_body_anchors(anchor_manager, rigid_body_id)
         } else {
             let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
             let new_local_center_of_mass = new_inertial_properties.center_of_mass().as_vector();
@@ -262,9 +295,8 @@ fn handle_voxel_object_after_removing_voxels(
             )
         };
 
-        // We also need to handle the part that was disconnected
-        let dynamic_disconnected_object = handle_disconnected_voxel_object(
-            anchor_manager,
+        // We also need to handle the physics for the part that was disconnected
+        let dynamic_disconnected_object = determine_extracted_voxel_object_dynamics(
             disconnected_voxel_object,
             disconnected_object_inertial_property_manager,
             original_local_center_of_mass,
@@ -272,12 +304,21 @@ fn handle_voxel_object_after_removing_voxels(
             orientation,
             original_linear_velocity,
             angular_velocity,
+        );
+
+        let anchors = handle_anchors_for_disconnected_voxel_object(
+            anchor_manager,
             lost_anchors,
+            &dynamic_disconnected_object.voxel_object,
+            &dynamic_disconnected_object.coordinate_changes,
         );
 
         VoxelRemovalOutcome {
             original_object_empty,
-            disconnected_object: Some(dynamic_disconnected_object),
+            disconnected_components: Some(ExtractedComponents {
+                object: dynamic_disconnected_object,
+                anchors,
+            }),
         }
     } else {
         // Even though the splitting attempt did not produce a new object, that could
@@ -324,37 +365,86 @@ fn handle_voxel_object_after_removing_voxels(
 
         VoxelRemovalOutcome {
             original_object_empty: false,
-            disconnected_object: None,
+            disconnected_components: None,
         }
     }
 }
 
-fn handle_disconnected_voxel_object(
+fn spawn_extracted_voxel_object<C>(
+    context: &mut C,
+    entity_id_manager: &mut EntityIDManager,
+    voxel_object_manager: &mut VoxelObjectManager,
+    rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
-    disconnected_object: ExtractedVoxelObject,
+    extracted_components: ExtractedComponents,
+    parent_entity_id: EntityID,
+) where
+    C: VoxelObjectInteractionContext,
+{
+    let object = extracted_components.object;
+
+    let meshed_voxel_object = MeshedChunkedVoxelObject::create(object.voxel_object);
+
+    let entity_id = entity_id_manager.provide_id();
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+
+    voxel_object_manager
+        .add_voxel_object(voxel_object_id, meshed_voxel_object)
+        .unwrap();
+
+    rigid_body_manager
+        .add_dynamic_rigid_body(rigid_body_id, object.rigid_body)
+        .unwrap();
+
+    let physics_context = VoxelObjectPhysicsContext {
+        inertial_property_manager: object.inertial_property_manager,
+    };
+
+    voxel_object_manager
+        .add_physics_context_for_voxel_object(voxel_object_id, physics_context)
+        .unwrap();
+
+    // Update the anchors that have moved from the original object
+    // to the extracted object
+    for (anchor_id, point) in extracted_components.anchors {
+        anchor_manager.dynamic_mut().replace(
+            anchor_id,
+            DynamicRigidBodyAnchor {
+                rigid_body_id,
+                point: point.compact(),
+            },
+        );
+    }
+
+    context.create_extracted_voxel_object_entity(entity_id, parent_entity_id);
+}
+
+fn determine_extracted_voxel_object_dynamics(
+    extracted_object: ExtractedVoxelObject,
     mut inertial_property_manager: VoxelObjectInertialPropertyManager,
     original_local_center_of_mass: Vector3,
     original_position: Position,
     orientation: Orientation,
     original_linear_velocity: Velocity,
     angular_velocity: AngularVelocity,
-    lost_anchors: Anchors,
-) -> DynamicDisconnectedVoxelObject {
-    // The disconnection is really just a partitioning of the mass, inertia
-    // tensor and linear and angular momentum of the original object into two
-    // parts. Since these quantities are additive, any such partitioning of the
-    // object is valid regardless of whether the two parts are connected. What
-    // happens during a disconnection is that we change the frames of reference
-    // for the two parts. Instead of expressing the partitioned quantities with
-    // respect to the center of mass of the original object, we express them
-    // with respect to the parts' own centers of mass. We also remove the
-    // constraint that the parts must behave as being part of the same rigid
-    // body, but this doesn't affect anything at the moment of disconnection,
-    // only the future evolution. In practice, all we need to do for a part is
-    // to assign the properly partitioned mass and inertia tensor properties to
-    // its rigid body state, update its position to use its own center of mass,
-    // and update its linear velocity to be the velocity of its own center of
-    // mass rather than that of the original center of mass.
+) -> DynamicExtractedVoxelObject {
+    // In terms of physics, extracting part of a voxel object is really just a
+    // partitioning of the mass, inertia tensor and linear and angular momentum
+    // of the original object into two parts. Since these quantities are
+    // additive, any such partitioning of the object is valid regardless of
+    // whether the two parts are connected. What happens during extraction is
+    // that we change the frame of reference for the extracted part. Instead of
+    // expressing the extracted quantities with respect to the center of mass of
+    // the original object, we express them with respect to the parts' own
+    // centers of mass. We also remove the constraint that the parts must behave
+    // as being part of the same rigid body, but this doesn't affect anything at
+    // the moment of extraction, only the future evolution. In practice, all we
+    // need to do for a part is to assign the properly partitioned mass and
+    // inertia tensor properties to its rigid body state, update its position to
+    // use its own center of mass, and update its linear velocity to be the
+    // velocity of its own center of mass rather than that of the original
+    // center of mass.
 
     // We must compute the center of mass displacement *before* offsetting the
     // origin for `inertial_property_manager`, because after that the new center
@@ -374,7 +464,7 @@ fn handle_disconnected_voxel_object(
     let ExtractedVoxelObject {
         voxel_object,
         origin_offset_in_parent,
-    } = disconnected_object;
+    } = extracted_object;
 
     let origin_offset_in_voxel_object_space = Vector3::from(
         origin_offset_in_parent.map(|offset| offset as f32 * voxel_object.voxel_extent()),
@@ -382,7 +472,7 @@ fn handle_disconnected_voxel_object(
 
     // The inertial properties are assumed defined with respect to the lower
     // corner of the voxel object's voxel grid, so we must offset them from the
-    // origin of the original object to the origin of the disconnected object
+    // origin of the original object to the origin of the extracted object
     inertial_property_manager.offset_reference_point_by(&origin_offset_in_voxel_object_space);
 
     let new_inertial_properties = inertial_property_manager.derive_inertial_properties();
@@ -401,21 +491,56 @@ fn handle_disconnected_voxel_object(
         angular_velocity.compact(),
     );
 
-    let anchors = handle_anchors_for_disconnected_voxel_object(
-        anchor_manager,
-        lost_anchors,
-        &voxel_object,
-        &original_local_center_of_mass,
-        &origin_offset_in_voxel_object_space,
-        new_local_center_of_mass,
+    let coordinate_changes = ExtractedVoxelObjectCoordinateChanges::new(
+        original_local_center_of_mass,
+        origin_offset_in_voxel_object_space,
+        *new_local_center_of_mass,
     );
 
-    DynamicDisconnectedVoxelObject {
+    DynamicExtractedVoxelObject {
         voxel_object,
         inertial_property_manager,
         rigid_body,
-        anchors,
+        coordinate_changes,
     }
+}
+
+impl ExtractedVoxelObjectCoordinateChanges {
+    fn new(
+        original_local_center_of_mass: Vector3,
+        origin_offset_in_voxel_object_space: Vector3,
+        new_local_center_of_mass: Vector3,
+    ) -> Self {
+        let original_local_center_of_mass_relative_to_new_origin =
+            original_local_center_of_mass - origin_offset_in_voxel_object_space;
+        Self {
+            original_local_center_of_mass_relative_to_new_origin,
+            new_local_center_of_mass,
+        }
+    }
+
+    /// Transforms a vector given relative to the center of mass of the original
+    /// object to be relative to the origin of the new object.
+    fn change_from_original_com_frame_to_new_origin_frame(&self, point: &Point3) -> Point3 {
+        point + self.original_local_center_of_mass_relative_to_new_origin
+    }
+
+    /// Transforms a vector given relative to the center of mass of the original
+    /// object to be relative to the origin of the new object.
+    fn change_from_new_origin_frame_to_new_com_frame(&self, point: &Point3) -> Point3 {
+        point - self.new_local_center_of_mass
+    }
+}
+
+fn get_all_rigid_body_anchors(
+    anchor_manager: &AnchorManager,
+    rigid_body_id: DynamicRigidBodyID,
+) -> Anchors {
+    anchor_manager
+        .dynamic()
+        .anchors_for_body(rigid_body_id)
+        .map(|(id, point)| (id, point.aligned()))
+        .collect()
 }
 
 fn handle_anchors_for_original_voxel_object_after_removing_voxels(
@@ -458,55 +583,68 @@ fn handle_anchors_for_original_voxel_object_after_removing_voxels(
     lost_anchors
 }
 
-fn handle_anchors_for_empty_original_voxel_object_after_removing_voxels(
-    anchor_manager: &AnchorManager,
-    rigid_body_id: DynamicRigidBodyID,
-) -> Anchors {
-    // All anchors for the body are lost
-    anchor_manager
-        .dynamic()
-        .anchors_for_body(rigid_body_id)
-        .map(|(id, point)| (id, point.aligned()))
-        .collect()
-}
-
 fn handle_anchors_for_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
     lost_anchors: Anchors,
     disconnected_object: &ChunkedVoxelObject,
-    original_local_center_of_mass: &Vector3,
-    origin_offset_in_voxel_object_space: &Vector3,
-    new_local_center_of_mass: &Vector3,
+    coordinate_changes: &ExtractedVoxelObjectCoordinateChanges,
 ) -> Anchors {
-    // Determine the coordinates of the original center of mass of the original
-    // object relative to the origin of the disconnected object (in model space,
-    // not world space)
-    let original_local_center_of_mass_relative_to_new_origin =
-        original_local_center_of_mass - origin_offset_in_voxel_object_space;
-
     let mut disconnected_body_anchors = Anchors::new();
 
     for (anchor_id, anchor_point) in lost_anchors {
-        // The anchor point is relative to the original center of mass of the
-        // original voxel object, so this gives it relative to the origin of the
-        // disconnected object
-        let local_anchor = anchor_point + original_local_center_of_mass_relative_to_new_origin;
+        // Make anchor point relative to the origin of the disconnected object
+        // for querying which voxel it sits on
+        let local_anchor =
+            coordinate_changes.change_from_original_com_frame_to_new_origin_frame(&anchor_point);
 
         if disconnected_object
             .get_voxel_at_coords_if_occupied(local_anchor.as_vector())
             .is_some()
         {
-            // The anchor is attached to the disconnected object, so we must
-            // specify it relative to this object's center of mass
-            let new_anchor_point = local_anchor - new_local_center_of_mass;
+            // The anchor is attached to the disconnected object, so we specify
+            // the point relative to the the center of mass so it can be
+            // assigned to the object
+            let new_anchor_point =
+                coordinate_changes.change_from_new_origin_frame_to_new_com_frame(&local_anchor);
 
             disconnected_body_anchors.push((anchor_id, new_anchor_point));
         } else {
-            // The anchor is not attached to the disconnected object either, so
-            // we remove it
+            // The anchor is not attached to the disconnected object, so we
+            // remove it
             anchor_manager.dynamic_mut().remove(anchor_id);
         }
     }
 
     disconnected_body_anchors
+}
+
+fn get_anchors_on_extracted_voxel_object(
+    anchor_manager: &AnchorManager,
+    rigid_body_id: DynamicRigidBodyID,
+    extracted_object: &ChunkedVoxelObject,
+    coordinate_changes: &ExtractedVoxelObjectCoordinateChanges,
+) -> Anchors {
+    let mut anchors = Anchors::new();
+
+    for (anchor_id, anchor_point) in anchor_manager.dynamic().anchors_for_body(rigid_body_id) {
+        // Make anchor point relative to the origin of the extracted object for
+        // querying which voxel it sits on
+        let local_anchor = coordinate_changes
+            .change_from_original_com_frame_to_new_origin_frame(&anchor_point.aligned());
+
+        if extracted_object
+            .get_voxel_at_coords_if_occupied(local_anchor.as_vector())
+            .is_some()
+        {
+            // The anchor is attached to the extracted object, so we specify the
+            // point relative to the the center of mass so it can be assigned to
+            // the object
+            let new_anchor_point =
+                coordinate_changes.change_from_new_origin_frame_to_new_com_frame(&local_anchor);
+
+            anchors.push((anchor_id, new_anchor_point));
+        }
+    }
+
+    anchors
 }

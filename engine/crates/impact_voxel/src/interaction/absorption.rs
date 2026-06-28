@@ -1,12 +1,9 @@
 //! Voxel absorption.
 
 use crate::{
-    Voxel, VoxelManager, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
+    Voxel, VoxelManager, VoxelObjectID, VoxelObjectManager,
     chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
-    interaction::{
-        self, DynamicDisconnectedVoxelObject, VoxelObjectInteractionContext, VoxelRemovalOutcome,
-    },
-    mesh::MeshedChunkedVoxelObject,
+    interaction::{self, VoxelObjectInteractionContext, VoxelRemovalOutcome},
     voxel_types::VoxelTypeRegistry,
 };
 use anyhow::{Result, bail};
@@ -21,7 +18,7 @@ use impact_math::{
     vector::{Vector3, Vector3C},
 };
 use impact_physics::{
-    anchor::{AnchorManager, DynamicRigidBodyAnchor},
+    anchor::AnchorManager,
     rigid_body::{DynamicRigidBodyID, RigidBodyManager},
 };
 use roc_integration::roc;
@@ -529,7 +526,7 @@ pub fn apply_absorption<C>(
 
             let VoxelRemovalOutcome {
                 original_object_empty,
-                disconnected_object,
+                disconnected_components,
             } = interaction::handle_voxel_object_after_removing_voxels(
                 anchor_manager,
                 voxel_type_registry,
@@ -541,50 +538,19 @@ pub fn apply_absorption<C>(
             );
 
             if original_object_empty {
-                context.on_empty_voxel_object_entity(entity_id);
+                context.remove_voxel_object_entity(entity_id);
             }
-            if let Some(DynamicDisconnectedVoxelObject {
-                voxel_object: new_voxel_object,
-                inertial_property_manager,
-                rigid_body: new_rigid_body,
-                anchors,
-            }) = disconnected_object
-            {
-                let new_meshed_voxel_object = MeshedChunkedVoxelObject::create(new_voxel_object);
 
-                let new_entity_id = entity_id_manager.provide_id();
-                let new_voxel_object_id = VoxelObjectID::from_entity_id(new_entity_id);
-                let new_rigid_body_id = DynamicRigidBodyID::from_entity_id(new_entity_id);
-
-                voxel_object_manager
-                    .add_voxel_object(new_voxel_object_id, new_meshed_voxel_object)
-                    .unwrap();
-
-                rigid_body_manager
-                    .add_dynamic_rigid_body(new_rigid_body_id, new_rigid_body)
-                    .unwrap();
-
-                let physics_context = VoxelObjectPhysicsContext {
-                    inertial_property_manager,
-                };
-
-                voxel_object_manager
-                    .add_physics_context_for_voxel_object(new_voxel_object_id, physics_context)
-                    .unwrap();
-
-                // Update the anchors that have moved from the original object
-                // to the disconnected object
-                for (anchor_id, point) in anchors {
-                    anchor_manager.dynamic_mut().replace(
-                        anchor_id,
-                        DynamicRigidBodyAnchor {
-                            rigid_body_id: new_rigid_body_id,
-                            point: point.compact(),
-                        },
-                    );
-                }
-
-                context.on_new_disconnected_voxel_object_entity(new_entity_id, entity_id);
+            if let Some(disconnected_components) = disconnected_components {
+                interaction::spawn_extracted_voxel_object(
+                    context,
+                    entity_id_manager,
+                    voxel_object_manager,
+                    rigid_body_manager,
+                    anchor_manager,
+                    disconnected_components,
+                    entity_id,
+                );
             }
         }
     }

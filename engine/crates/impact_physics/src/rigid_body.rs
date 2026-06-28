@@ -184,6 +184,12 @@ impl RigidBodyManager {
         self.dynamic_bodies.get_disjoint_mut([idx_1, idx_2]).ok()
     }
 
+    /// Whether the [`DynamicRigidBody`] with the given ID exists.
+    #[inline]
+    pub fn has_dynamic_rigid_body(&self, id: DynamicRigidBodyID) -> bool {
+        self.dynamic_body_indices_by_id.contains_key(id)
+    }
+
     /// Returns a reference to the [`KinematicRigidBody`] with the given
     /// ID, or [`None`] if it does not exist.
     #[inline]
@@ -204,6 +210,12 @@ impl RigidBodyManager {
     ) -> Option<&mut KinematicRigidBody> {
         let idx = self.kinematic_body_indices_by_id.get(id)?;
         Some(&mut self.kinematic_bodies[idx])
+    }
+
+    /// Whether the [`KinematicRigidBody`] with the given ID exists.
+    #[inline]
+    pub fn has_kinematic_rigid_body(&self, id: KinematicRigidBodyID) -> bool {
+        self.kinematic_body_indices_by_id.contains_key(id)
     }
 
     /// Returns a mutable reference to the specified dynamic rigid body along
