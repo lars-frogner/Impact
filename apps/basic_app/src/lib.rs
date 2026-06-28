@@ -1,5 +1,6 @@
 //! A basic Impact application.
 
+pub mod command;
 pub mod interface;
 pub mod user_interface;
 

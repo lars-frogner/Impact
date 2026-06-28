@@ -5,13 +5,19 @@ module [
 
 import Command.EngineCommand as EngineCommand exposing [EngineCommand]
 import Command.UICommand as UICommand exposing [UICommand]
+import Command.AppCommand as AppCommand exposing [AppCommand]
 import Platform
 
-Command : [UI UICommand, Engine EngineCommand]
+Command : [App AppCommand, UI UICommand, Engine EngineCommand]
 
 execute! : Command => Result {} Str
 execute! = |command|
     when command is
+        App(app_command) ->
+            []
+            |> AppCommand.write_bytes(app_command)
+            |> Platform.execute_app_command!
+
         UI(ui_command) ->
             []
             |> UICommand.write_bytes(ui_command)

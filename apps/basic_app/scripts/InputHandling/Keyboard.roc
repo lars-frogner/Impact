@@ -1,4 +1,7 @@
-module [handle_event!]
+module [
+    handle_event!,
+    on_released,
+]
 
 import pf.Command
 import pf.Input.KeyboardEvent exposing [KeyboardEvent]

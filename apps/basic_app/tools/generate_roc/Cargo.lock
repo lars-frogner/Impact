@@ -215,6 +215,7 @@ dependencies = [
  "inventory",
  "log 0.1.0",
  "parking_lot",
+ "roc_integration",
  "roc_platform_core",
  "serde",
 ]
