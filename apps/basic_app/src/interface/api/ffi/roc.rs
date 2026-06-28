@@ -12,6 +12,13 @@ pub extern "C" fn roc_execute_ui_command(command_bytes: &RocList<u8>) -> RocResu
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn roc_execute_app_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
+    to_roc_result(
+        api::execute_app_command(command_bytes.as_slice()).context("Failed executing app command"),
+    )
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn roc_execute_engine_command(command_bytes: &RocList<u8>) -> RocResult<(), RocStr> {
     to_roc_result(
         api::execute_engine_command(command_bytes.as_slice())

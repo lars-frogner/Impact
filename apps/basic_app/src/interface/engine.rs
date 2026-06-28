@@ -41,7 +41,9 @@ impl ApplicationInterface for AppInterfaceForEngine {
         app.setup_ui();
 
         log::debug!("Setting up scene");
-        _ = with_dropped_write_guard(app, scripting::setup_scene)?;
+        app = with_dropped_write_guard(app, scripting::setup_scene)?;
+
+        app.execute_app_commands();
 
         Ok(())
     }
@@ -54,8 +56,10 @@ impl ApplicationInterface for AppInterfaceForEngine {
 
             log::debug!("Resetting scene");
             app.reset_world()?;
-            _ = with_dropped_write_guard(app, scripting::setup_scene)?;
+            app = with_dropped_write_guard(app, scripting::setup_scene)?;
         }
+
+        app.execute_app_commands();
 
         Ok(())
     }

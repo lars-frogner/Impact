@@ -4,6 +4,7 @@ pub mod ffi;
 
 use crate::{
     App, AppConfig, RunMode,
+    command::{APP_COMMANDS, AppCommand},
     interface::{APP, access_app, engine::AppInterfaceForEngine},
     user_interface::{UI_COMMANDS, UserInterface},
 };
@@ -59,6 +60,13 @@ pub fn execute_ui_command(command_bytes: &[u8]) -> Result<()> {
     log::trace!("Executing UI command");
     let command = UICommand::from_roc_bytes(command_bytes)?;
     UI_COMMANDS.enqueue_command(command);
+    Ok(())
+}
+
+pub fn execute_app_command(command_bytes: &[u8]) -> Result<()> {
+    log::trace!("Executing app command");
+    let command = AppCommand::from_roc_bytes(command_bytes)?;
+    APP_COMMANDS.enqueue_command(command);
     Ok(())
 }
 
