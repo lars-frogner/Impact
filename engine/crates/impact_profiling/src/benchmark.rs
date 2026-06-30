@@ -71,7 +71,7 @@ macro_rules! define_target_enum {
 ) => {
     ::pastey::paste! {
         #[allow(clippy::enum_variant_names)]
-        #[cfg_attr(feature = "cli", derive(::clap::ValueEnum))]
+        #[cfg_attr(feature = "cli", derive(::clap::ValueEnum), clap(rename_all = "snake"))]
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
         pub enum $name {
             $(
