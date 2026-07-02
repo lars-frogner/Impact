@@ -420,7 +420,9 @@ define_task!(
             let voxel_manager = scene.voxel_manager().oread();
             let intersection_manager = scene.intersection_manager().oread();
             let simulator = engine.simulator().oread();
+            let rigid_body_manager = &mut **simulator.rigid_body_manager().owrite();
             let mut collision_world = simulator.collision_world().owrite();
+            collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
             collision_world.cache_all_collisions(voxel_manager.object_manager(), &intersection_manager);
             Ok(())
         })
