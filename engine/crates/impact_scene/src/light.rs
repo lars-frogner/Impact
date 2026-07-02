@@ -18,7 +18,10 @@ use impact_light::{
     CascadePartitionDepths, LightFlags, LightManager, MAX_SHADOW_MAP_CASCADES_USIZE,
     ShadowableOmnidirectionalLight, ShadowableOmnidirectionalLightID,
     ShadowableUnidirectionalLight, ShadowableUnidirectionalLightID,
-    shadow_map::{CascadeIdx, ShadowMappingConfig, UnidirectionalLightShadowMapBoundingMode},
+    shadow_map::{
+        CascadeIdx, OmnidirectionalLightShadowMapAlignment, ShadowMappingConfig,
+        UnidirectionalLightShadowMapBoundingMode,
+    },
 };
 use impact_math::{
     angle::{Angle, Radians},
@@ -112,10 +115,17 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
             continue;
         }
 
-        omnidirectional_light.orient_light_space_based_on_visible_models(
-            world_to_camera_transform,
-            world_space_aabb_for_visible_models,
-        );
+        match shadow_mapping_config.omnidirectional_light_shadow_map_alignment {
+            OmnidirectionalLightShadowMapAlignment::World => {
+                omnidirectional_light.orient_light_space_to_world_axes(world_to_camera_transform);
+            }
+            OmnidirectionalLightShadowMapAlignment::Adaptive => {
+                omnidirectional_light.orient_light_space_based_on_visible_models(
+                    world_to_camera_transform,
+                    world_space_aabb_for_visible_models,
+                );
+            }
+        }
 
         let camera_to_light_transform =
             omnidirectional_light.create_camera_to_light_space_transform();
@@ -134,21 +144,24 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
 
         let cubemap_faces_to_include;
 
-        // Light space is oriented so that the negative z-axis points towards
-        // the center of the AABB for visible models. If all of the AABB is in
-        // the negative z half-space in light space, the light is definitely
-        // outside the AABB. In that case, we can create a frustum with apex at
-        // the light position that encompasses the AABB and know that all models
-        // casting shadows onto visible models will be contained in it. If part
+        // If configured to be adaptive, light space is oriented so that the
+        // negative z-axis points towards the center of the AABB for visible
+        // models. If all of the AABB is in the negative z half-space in light
+        // space, the light is definitely outside the AABB. In that case, we can
+        // create a frustum with apex at the light position that encompasses the
+        // AABB and know that all models casting shadows onto visible models
+        // will be contained in it. If light space is world-aligned or if part
         // of the AABB is not in the negative z half-space, we do not attempt to
         // create a culling frustum, but instead use the light's max reach to
         // create a sphere guaranteed to contain all shadow casting models.
 
-        if let Some(light_space_culling_frustum_transform) =
-            determine_light_space_culling_frustum_perspective_transform(
-                &world_to_light_transform,
-                world_space_aabb_for_visible_models,
-            )
+        if shadow_mapping_config.omnidirectional_light_shadow_map_alignment
+            == OmnidirectionalLightShadowMapAlignment::Adaptive
+            && let Some(light_space_culling_frustum_transform) =
+                determine_light_space_culling_frustum_perspective_transform(
+                    &world_to_light_transform,
+                    world_space_aabb_for_visible_models,
+                )
         {
             let world_space_culling_frustum =
                 create_world_space_omnidirectional_light_culling_frustum(

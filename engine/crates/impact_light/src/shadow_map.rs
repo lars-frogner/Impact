@@ -19,11 +19,26 @@ pub struct ShadowMappingConfig {
     /// The width and height of the unidirectional light shadow map in number of
     /// texels.
     pub unidirectional_light_shadow_map_resolution: u32,
+    /// Whether shadow maps for omnidirectional lights should be aligned with the
+    /// world axes or adjusted adaptively based on the scene. The former gives more
+    /// stable shadows, while the latter allows for optimizing texture usage.
+    pub omnidirectional_light_shadow_map_alignment: OmnidirectionalLightShadowMapAlignment,
     /// Whether shadow maps for unidirectional lights should be fitted as
     /// closesly as possible to the visible scene (maximizing resolution) or
     /// fitted in a stable manner with texel snapping (leading to coarser
     /// resolution).
     pub unidirectional_light_shadow_map_bounding_mode: UnidirectionalLightShadowMapBoundingMode,
+}
+
+/// Whether shadow maps for omnidirectional lights should be aligned with the
+/// world axes or adjusted adaptively based on the scene. The former gives more
+/// stable shadows, while the latter allows for optimizing texture usage.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OmnidirectionalLightShadowMapAlignment {
+    #[default]
+    World,
+    Adaptive,
 }
 
 /// Whether shadow maps for unidirectional lights should be fitted as closesly
@@ -79,6 +94,7 @@ impl Default for ShadowMappingConfig {
             enabled: true,
             omnidirectional_light_shadow_map_resolution: 1024,
             unidirectional_light_shadow_map_resolution: 1024,
+            omnidirectional_light_shadow_map_alignment: Default::default(),
             unidirectional_light_shadow_map_bounding_mode: Default::default(),
         }
     }

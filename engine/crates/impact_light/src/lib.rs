@@ -1239,6 +1239,13 @@ impl ShadowableOmnidirectionalLight {
         self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
     }
 
+    /// Set the orientation of the light's space relative to camera space such
+    /// that light space is aligned with the world space axes.
+    pub fn orient_light_space_to_world_axes(&mut self, world_to_camera_transform: &Isometry3) {
+        self.camera_to_light_space_rotation =
+            world_to_camera_transform.rotation().inverse().compact();
+    }
+
     /// Uses the given inner and outer radius for the light's shadow shell.
     pub fn update_shadow_shell(&mut self, inner_radius: f32, outer_radius: f32) {
         self.inner_shadow_shell_radius =
