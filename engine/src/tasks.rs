@@ -398,6 +398,36 @@ define_task!(
 );
 
 // =============================================================================
+// COLLISION DETECTION (based on state from previous frame)
+// =============================================================================
+
+define_task!(
+    /// Performs collision detection and caches the resulting contacts.
+    [pub] DetectCollisions,
+    depends_on = [
+        // We need to include the newly created entities.
+        HandleStagedEntities,
+        // We need the up-to-date collidables.
+        SyncVoxelObjectCollidables,
+        // Voxel object meshes are used for collision detection.
+        UpdateVoxelObjectMeshes
+    ],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Detecting collisions", engine.task_timer(), {
+            let scene = engine.scene().oread();
+            let voxel_manager = scene.voxel_manager().oread();
+            let intersection_manager = scene.intersection_manager().oread();
+            let simulator = engine.simulator().oread();
+            let mut collision_world = simulator.collision_world().owrite();
+            collision_world.cache_all_collisions(voxel_manager.object_manager(), &intersection_manager);
+            Ok(())
+        })
+    }
+);
+
+// =============================================================================
 // CONTROLLED ENTITIES (updates to state for current frame)
 // =============================================================================
 
@@ -435,7 +465,11 @@ define_task!(
         // simulation step.
         UpdateControlledEntityMotion,
         // We need the up-to-date collidables.
-        SyncVoxelObjectCollidables
+        SyncVoxelObjectCollidables,
+        // Voxel object meshes are used for collision detection.
+        UpdateVoxelObjectMeshes,
+        // We use cached collisions in the first substep.
+        DetectCollisions
     ],
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
@@ -1059,6 +1093,9 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     task_scheduler.register_task(SyncVoxelObjectModelTransforms)?;
     task_scheduler.register_task(SyncVoxelObjectCollidables)?;
     task_scheduler.register_task(UpdateVoxelObjectMeshes)?;
+
+    // COLLISION DETECTION (based on state from previous frame)
+    task_scheduler.register_task(DetectCollisions)?;
 
     // CONTROLLED ENTITIES (updates to state for current frame)
     task_scheduler.register_task(UpdateControlledEntityMotion)?;
