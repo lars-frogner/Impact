@@ -52,7 +52,15 @@ pub struct UnidirectionalLightShadowMapUpdatePasses {
 }
 
 impl OmnidirectionalLightShadowMapUpdatePasses {
-    const CLEAR_COLOR: wgpu::Color = wgpu::Color::WHITE;
+    const CLEAR_COLOR: wgpu::Color = wgpu::Color {
+        // By clearing to infinity, we ensure that (non-shadow casting) objects
+        // outside the shadow shell are not artifically shadowed due to having a
+        // larger normalized depth than unity
+        r: f64::INFINITY,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
 
     pub fn new(
         graphics_device: &GraphicsDevice,
