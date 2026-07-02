@@ -283,11 +283,6 @@ fn computePCSSLightAccessFactor(
     lightSpaceFragmentDisplacement: vec3f,
     referenceDepth: f32,
 ) -> f32 {
-    // If the fragment is outside the shadow shell, it should not be shadowed
-    if referenceDepth < 0.0 || referenceDepth > 1.0 {
-        return 1.0;
-    }
-
     let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferXYPosition);
 
     let displacementNormalDirection = normalize(findPerpendicularVector(lightSpaceFragmentDisplacement));
