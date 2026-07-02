@@ -53,9 +53,10 @@ pub enum GizmoType {
     DynamicCollider = 13,
     StaticCollider = 14,
     PhantomCollider = 15,
-    VoxelChunks = 16,
-    VoxelSignedDistances = 17,
-    VoxelIntersections = 18,
+    Contacts = 16,
+    VoxelChunks = 17,
+    VoxelSignedDistances = 18,
+    VoxelIntersections = 19,
 }
 
 bitflags! {
@@ -82,9 +83,10 @@ bitflags! {
         const DYNAMIC_COLLIDER          = 1 << 13;
         const STATIC_COLLIDER           = 1 << 14;
         const PHANTOM_COLLIDER          = 1 << 15;
-        const VOXEL_CHUNKS              = 1 << 16;
-        const VOXEL_INTERSECTIONS       = 1 << 17;
-        const VOXEL_SIGNED_DISTANCES    = 1 << 18;
+        const CONTACTS                  = 1 << 16;
+        const VOXEL_CHUNKS              = 1 << 17;
+        const VOXEL_INTERSECTIONS       = 1 << 18;
+        const VOXEL_SIGNED_DISTANCES    = 1 << 19;
     }
 }
 
@@ -237,6 +239,12 @@ pub struct GizmoVisibilities {
     /// spheres (for voxel collidables) will be rendered for each entity with a
     /// phantom collidable, showing the shape used for collision detection.
     pub phantom_collider: GizmoVisibility,
+    /// The visibility of the gizmos contact points from collision detection.
+    ///
+    /// When visible, a small semitransparent sphere will be rendered at each
+    /// contact position, colored based on which pair of colliding objects the
+    /// contact belongs to.
+    pub contacts: GizmoVisibility,
     /// The visibility of the gizmos showing chunk boundaries for voxel objects.
     ///
     /// When visible, a semitransparent green (for non-uniform chunks), red
@@ -289,6 +297,10 @@ pub struct GizmoParameters {
     /// The scale factor used to calculate the length of the torque arrow based
     /// on the magnitude of the torque on the body.
     pub torque_scale: f32,
+    /// The radius to use for anchor spheres.
+    pub anchor_radius: f32,
+    /// The radius to use for contact spheres.
+    pub contact_radius: f32,
     /// Whether the cubes outlining voxel chunks should show through obscuring
     /// geometry, making the interior chunks visible.
     pub show_interior_chunks: bool,
@@ -348,7 +360,7 @@ impl GizmoType {
     }
 
     /// The array containing each gizmo type.
-    pub const fn all() -> [Self; 19] {
+    pub const fn all() -> [Self; 20] {
         [
             Self::ReferenceFrameAxes,
             Self::BoundingVolume,
@@ -366,6 +378,7 @@ impl GizmoType {
             Self::DynamicCollider,
             Self::StaticCollider,
             Self::PhantomCollider,
+            Self::Contacts,
             Self::VoxelChunks,
             Self::VoxelSignedDistances,
             Self::VoxelIntersections,
@@ -398,6 +411,7 @@ impl GizmoType {
             Self::DynamicCollider => GizmoSet::DYNAMIC_COLLIDER,
             Self::StaticCollider => GizmoSet::STATIC_COLLIDER,
             Self::PhantomCollider => GizmoSet::PHANTOM_COLLIDER,
+            Self::Contacts => GizmoSet::CONTACTS,
             Self::VoxelChunks => GizmoSet::VOXEL_CHUNKS,
             Self::VoxelSignedDistances => GizmoSet::VOXEL_SIGNED_DISTANCES,
             Self::VoxelIntersections => GizmoSet::VOXEL_INTERSECTIONS,
@@ -423,6 +437,7 @@ impl GizmoType {
             Self::DynamicCollider => "Dynamic colliders",
             Self::StaticCollider => "Static colliders",
             Self::PhantomCollider => "Phantom colliders",
+            Self::Contacts => "Contacts",
             Self::VoxelChunks => "Voxel chunks",
             Self::VoxelSignedDistances => "Voxel signed distances",
             Self::VoxelIntersections => "Voxel intersections",
@@ -549,6 +564,12 @@ impl GizmoType {
                 The shape's position and orientation will be delayed by one simulation \
                 step compared to the entity's visible mesh."
             }
+            Self::Contacts => {
+                "\
+                When enabled, a small semitransparent sphere will be rendered at each \
+                contact position from collision detection, colored based on which \
+                pair of colliding objects the contact belongs to."
+            }
             Self::VoxelChunks => {
                 "\
                 When enabled, a semitransparent green (for non-uniform chunks), red \
@@ -643,6 +664,7 @@ impl GizmoVisibilities {
             GizmoType::DynamicCollider => self.dynamic_collider,
             GizmoType::StaticCollider => self.static_collider,
             GizmoType::PhantomCollider => self.phantom_collider,
+            GizmoType::Contacts => self.contacts,
             GizmoType::VoxelChunks => self.voxel_chunks,
             GizmoType::VoxelSignedDistances => self.voxel_signed_distances,
             GizmoType::VoxelIntersections => self.voxel_intersections,
@@ -668,6 +690,7 @@ impl GizmoVisibilities {
             GizmoType::DynamicCollider => &mut self.dynamic_collider,
             GizmoType::StaticCollider => &mut self.static_collider,
             GizmoType::PhantomCollider => &mut self.phantom_collider,
+            GizmoType::Contacts => &mut self.contacts,
             GizmoType::VoxelChunks => &mut self.voxel_chunks,
             GizmoType::VoxelSignedDistances => &mut self.voxel_signed_distances,
             GizmoType::VoxelIntersections => &mut self.voxel_intersections,
@@ -685,6 +708,8 @@ impl Default for GizmoParameters {
             angular_momentum_scale: 1.0,
             force_scale: 1.0,
             torque_scale: 1.0,
+            anchor_radius: 0.1,
+            contact_radius: 0.1,
             show_interior_chunks: false,
             min_signed_distance: VoxelSignedDistance::min_f32(),
             max_signed_distance: VoxelSignedDistance::max_f32(),

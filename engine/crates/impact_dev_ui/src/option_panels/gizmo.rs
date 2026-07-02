@@ -88,6 +88,22 @@ fn gizmo_parameter_options(
             },
             Slider::new(&mut parameters.torque_scale, 0.0..=1e3).logarithmic(true),
         )),
+        GizmoType::Anchors => Some(option_slider(
+            ui,
+            LabelAndHoverText {
+                label: "Anchor radius",
+                hover_text: "The radius to use for anchor spheres.",
+            },
+            Slider::new(&mut parameters.anchor_radius, 0.01..=1.0).logarithmic(true),
+        )),
+        GizmoType::Contacts => Some(option_slider(
+            ui,
+            LabelAndHoverText {
+                label: "Contact radius",
+                hover_text: "The radius to use for contact spheres.",
+            },
+            Slider::new(&mut parameters.contact_radius, 0.01..=1.0).logarithmic(true),
+        )),
         GizmoType::VoxelChunks => Some(option_checkbox(
             ui,
             &mut parameters.show_interior_chunks,

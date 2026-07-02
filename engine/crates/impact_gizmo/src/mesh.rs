@@ -189,6 +189,15 @@ impl GizmoType {
                     voxel_sphere_mesh,
                 );
             }
+            Self::Contacts => {
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
+                    16,
+                    VertexColor(Vector4C::same(1.0)), // Makes the per-instance color pass through unaffected
+                );
+                resource_registries
+                    .triangle_mesh_mut()
+                    .insert(self.only_triangle_mesh_id(), mesh);
+            }
             Self::VoxelChunks => {
                 for idx in [
                     VOXEL_CHUNKS_GIZMO_OBSCURABLE_UNIFORM_MODEL_IDX,

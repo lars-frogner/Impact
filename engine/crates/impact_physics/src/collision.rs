@@ -121,6 +121,11 @@ impl<C: Collidable> CollisionWorld<C> {
         self.has_cached_collisions
     }
 
+    pub fn cached_collisions(&self) -> Option<&[CachedCollision]> {
+        self.has_cached_collisions
+            .then_some(&self.cached_collisions)
+    }
+
     pub fn get_collidable_descriptor(
         &self,
         collidable_id: CollidableID,

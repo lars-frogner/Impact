@@ -34,6 +34,7 @@ use impact_light::{
 use impact_math::{
     angle::Angle,
     consts::f32::PI,
+    hash::{self, Hash64},
     point::Point3,
     quaternion::{UnitQuaternion, UnitQuaternionC},
     transform::{Isometry3, Similarity3},
@@ -237,6 +238,7 @@ pub fn buffer_gizmo_instances(
             buffer_instance_features_for_anchor_gizmos(
                 anchor_manager,
                 model_instance_manager,
+                gizmo_manager.parameters(),
                 camera,
                 frame,
                 entity_id,
@@ -255,6 +257,7 @@ pub fn buffer_gizmo_instances(
             buffer_instance_features_for_anchor_gizmos(
                 anchor_manager,
                 model_instance_manager,
+                gizmo_manager.parameters(),
                 camera,
                 frame,
                 entity_id,
@@ -335,6 +338,19 @@ pub fn buffer_gizmo_instances(
         },
         [HasCollidable]
     );
+
+    if gizmo_manager
+        .visibilities()
+        .get_for(GizmoType::Contacts)
+        .is_visible_for_all()
+    {
+        buffer_instance_features_for_contacts_gizmo(
+            model_instance_manager,
+            collision_world,
+            gizmo_manager.parameters(),
+            camera,
+        );
+    }
 
     query!(
         ecs_world,
@@ -672,13 +688,12 @@ fn buffer_instance_features_for_shadow_map_cascades_gizmo(
 fn buffer_instance_features_for_anchor_gizmos(
     anchor_manager: &AnchorManager,
     model_instance_manager: &mut ModelInstanceManager,
+    parameters: &GizmoParameters,
     camera: &Camera,
     frame: &ReferenceFrame,
     entity_id: EntityID,
     rigid_body_type: RigidBodyType,
 ) {
-    const RADIUS: f32 = 0.1;
-
     let rigid_body_id = TypedRigidBodyID::from_entity_id_and_type(entity_id, rigid_body_type);
 
     let anchor_points: TinyVec<[_; 8]> = match rigid_body_id {
@@ -701,7 +716,7 @@ fn buffer_instance_features_for_anchor_gizmos(
             * Similarity3::from_parts(
                 *anchor_point.as_vector(),
                 UnitQuaternion::identity(),
-                RADIUS,
+                parameters.anchor_radius,
             );
 
         let view_sphere_from_unit_sphere_transform =
@@ -1142,6 +1157,56 @@ fn buffer_instance_features_for_collider_gizmos(
             );
         }
     }
+}
+
+fn buffer_instance_features_for_contacts_gizmo(
+    model_instance_manager: &mut ModelInstanceManager,
+    collision_world: &CollisionWorld,
+    parameters: &GizmoParameters,
+    camera: &Camera,
+) {
+    const ALPHA: f32 = 0.4;
+
+    let Some(collisions) = collision_world.cached_collisions() else {
+        return;
+    };
+
+    let mut instance_features = Vec::with_capacity(collisions.len());
+
+    let color_from_hash = |h: u64| {
+        let red = ((h >> (2 * 8)) & 0xff) as f32 / 255.0;
+        let green = ((h >> 8) & 0xff) as f32 / 255.0;
+        let blue = (h & 0xff) as f32 / 255.0;
+        Vector4C::new(red, green, blue, ALPHA)
+    };
+
+    for collision in collisions {
+        let hash_a = Hash64::from_raw_u64(collision.collidable_a_id.as_u64());
+        let hash_b = Hash64::from_raw_u64(collision.collidable_b_id.as_u64());
+        let pair_hash = hash::compute_hash_64_of_two_hash_64(hash_a, hash_b).to_u64();
+        let color = color_from_hash(pair_hash);
+
+        for contact in collision.contact_manifold.contacts() {
+            let geometry = &contact.contact.geometry;
+
+            let unit_sphere_to_contact_transform = Similarity3::from_parts(
+                *geometry.position.as_vector(),
+                UnitQuaternion::identity(),
+                parameters.contact_radius,
+            );
+
+            let model_to_camera_transform =
+                camera.view_transform() * unit_sphere_to_contact_transform;
+
+            instance_features.push(GizmoInstanceFeatures {
+                transform: GizmoInstanceModelViewTransform::from(&model_to_camera_transform),
+                color,
+            });
+        }
+    }
+
+    model_instance_manager
+        .buffer_instance_feature_slice(GizmoType::Contacts.only_model_id(), &instance_features);
 }
 
 fn buffer_instance_features_for_voxel_chunks_gizmo(

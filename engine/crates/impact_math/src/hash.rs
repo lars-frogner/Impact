@@ -98,6 +98,11 @@ impl Hash32 {
         Self(hashing::hash_str_to_u32(string))
     }
 
+    /// Wraps the given 32-bit hash.
+    pub const fn from_raw_u32(hash: u32) -> Self {
+        Self(hash)
+    }
+
     /// Returns the hash as a `u32`.
     pub const fn to_u32(&self) -> u32 {
         self.0
@@ -133,6 +138,11 @@ impl Hash64 {
     /// Computes a 64-bit hash of the given string literal.
     pub const fn from_str(string: &str) -> Self {
         Self(hashing::hash_str_to_u64(string))
+    }
+
+    /// Wraps the given 64-bit hash.
+    pub const fn from_raw_u64(hash: u64) -> Self {
+        Self(hash)
     }
 
     /// Returns the hash as a `u64`.
