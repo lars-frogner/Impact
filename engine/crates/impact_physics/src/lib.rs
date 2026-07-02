@@ -18,7 +18,7 @@ pub mod rigid_body;
 pub mod systems;
 
 use anchor::AnchorManager;
-use collision::{Collidable, CollisionWorld};
+use collision::{Collidable, CollisionCacheUsage, CollisionWorld};
 use constraint::ConstraintManager;
 use driven_motion::MotionDriverManager;
 use force::ForceGeneratorManager;
@@ -41,27 +41,34 @@ pub fn perform_physics_step<C: Collidable>(
     medium: &UniformMedium,
     current_simulation_time: f32,
     step_duration: f32,
+    substep: u32,
 ) {
     let new_simulation_time = current_simulation_time + step_duration;
 
     instrument_task!("Synchronizing collidables with rigid bodies", task_timer, {
         // If collisions have been cached, collidables will already have been
-        // synchronized
-        if !collision_world.has_cached_collisions() {
+        // synchronized. But if we have already performed a substep, that made
+        // the collidables out of sync again.
+        if !collision_world.has_cached_collisions() || substep > 0 {
             collision_world.synchronize_collidables_with_rigid_bodies(rigid_body_manager);
         }
     });
 
     instrument_task!("Preparing constraints", task_timer, {
+        // Use the cached collisions for the first substep only
+        let collision_cache_usage = if substep == 0 {
+            CollisionCacheUsage::UseCached
+        } else {
+            CollisionCacheUsage::IgnoreCached
+        };
         constraint_manager.prepare_constraints(
             intersection_manager,
             rigid_body_manager,
             anchor_manager,
             collision_world,
             collidable_context,
+            collision_cache_usage,
         );
-        // Since we will update positions, cached collisions are now invalidated
-        collision_world.clear_cached_collisions();
     });
 
     instrument_task!("Advancing dynamic rigid body momenta", task_timer, {

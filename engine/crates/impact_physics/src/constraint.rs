@@ -6,7 +6,7 @@ pub mod spherical_joint;
 
 use crate::{
     anchor::{AnchorManager, TypedRigidBodyAnchorID, TypedRigidBodyAnchorRef},
-    collision::{Collidable, Collision, CollisionWorld},
+    collision::{Collidable, Collision, CollisionCacheUsage, CollisionWorld},
     quantities::{OrientationC, Position, PositionC, VelocityC},
     rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager, TypedRigidBodyID},
 };
@@ -176,6 +176,7 @@ impl ConstraintManager {
         anchor_manager: &AnchorManager,
         collision_world: &CollisionWorld<C>,
         collidable_context: &C::Context,
+        collision_cache_usage: CollisionCacheUsage,
     ) {
         if !self.solver.config().enabled {
             return;
@@ -190,6 +191,7 @@ impl ConstraintManager {
             .for_each_potentially_cached_non_phantom_collision_involving_dynamic_collidable(
                 collidable_context,
                 intersection_manager,
+                collision_cache_usage,
                 &mut |Collision {
                           collidable_a,
                           collidable_b,

@@ -101,6 +101,12 @@ pub enum CollidableOrder {
     Swapped,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum CollisionCacheUsage {
+    UseCached,
+    IgnoreCached,
+}
+
 impl<C: Collidable> CollisionWorld<C> {
     pub fn new() -> Self {
         Self {
@@ -258,9 +264,10 @@ impl<C: Collidable> CollisionWorld<C> {
         &self,
         context: &C::Context,
         intersection_manager: &IntersectionManager,
+        cache_usage: CollisionCacheUsage,
         f: &mut impl FnMut(Collision<'_, C>),
     ) {
-        if !self.has_cached_collisions {
+        if cache_usage == CollisionCacheUsage::IgnoreCached || !self.has_cached_collisions {
             self.for_each_non_phantom_collision_involving_dynamic_collidable(
                 context,
                 intersection_manager,
