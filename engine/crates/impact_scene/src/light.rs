@@ -105,6 +105,13 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
             continue;
         }
 
+        if !shadow_mapping_config.enabled {
+            // When shadow mapping is disabled we use the full light sphere
+            // bounds for the shadow shell
+            omnidirectional_light.update_shadow_shell(0.0, omnidirectional_light.max_reach());
+            continue;
+        }
+
         omnidirectional_light.orient_light_space_based_on_visible_models(
             world_to_camera_transform,
             world_space_aabb_for_visible_models,
@@ -199,21 +206,16 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
 
         if shadowing_models.is_empty() {
             // We have no models to bound the near and far distance, so we just
-            // use the outer bounds
-            omnidirectional_light
-                .update_near_and_far_distance(0.0, omnidirectional_light.max_reach());
+            // use the full light sphere bounds
+            omnidirectional_light.update_shadow_shell(0.0, omnidirectional_light.max_reach());
             continue;
         }
 
-        let near_distance = min_squared_dist.sqrt();
-        let far_distance = max_squared_dist.sqrt();
-        omnidirectional_light.update_near_and_far_distance(near_distance, far_distance);
+        let inner_shadow_shell_radius = min_squared_dist.sqrt();
+        let outer_shadow_shell_radius = max_squared_dist.sqrt();
 
-        if !shadow_mapping_config.enabled {
-            // Even with disabled shadow mapping we had to get the appropriate
-            // near and far distances, but we can skip the buffering
-            continue;
-        }
+        omnidirectional_light
+            .update_shadow_shell(inner_shadow_shell_radius, outer_shadow_shell_radius);
 
         for face in CubemapFace::all() {
             if !cubemap_faces_to_include.contains(face.into()) {
@@ -230,7 +232,7 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
             );
 
             let world_space_face_frustum = omnidirectional_light
-                .compute_world_space_frustum_for_face(face, world_to_camera_transform);
+                .compute_world_space_shadow_frustum_for_face(face, world_to_camera_transform);
 
             let camera_to_cubemap_face_space_transform = omnidirectional_light
                 .create_transform_from_camera_space_to_positive_z_cubemap_face_space(face);

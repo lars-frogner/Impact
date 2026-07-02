@@ -282,7 +282,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             }
 
             let positive_z_cubemap_face_frustum =
-                omnidirectional_light.compute_light_space_frustum_for_positive_z_face();
+                omnidirectional_light.compute_light_space_shadow_frustum_for_positive_z_face();
 
             for cubemap_face in CubemapFace::all() {
                 // When updating the shadow map, we don't use model view transforms but rather

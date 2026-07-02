@@ -20,19 +20,20 @@ struct OmnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cameraSpacePosition: vec3f,
     luminousIntensityAndEmissiveRadius: vec4f,
-    distanceMapping: DistanceMapping,
+    lightSphere: LightSphere,
 }
 
-struct DistanceMapping {
-    nearDistance: f32,
-    inverseDistanceSpan: f32,
-    farDistance: f32,
+struct LightSphere {
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
+    maxShadowShellRadius: f32,
+    maxReach: f32,
 }
 
 struct LightQuantities {
     preExposedIncidentLuminance: vec3f,
     lightSpaceFragmentDisplacement: vec3f,
-    normalizedDistance: f32,
+    normalizedDepthInShadowShell: f32,
     dots: ReflectionDotProducts,
 }
 
@@ -163,8 +164,8 @@ fn computeAreaLightQuantities(
     lightLuminousIntensity: vec3f,
     lightRadius: f32,
     cameraToLightSpaceRotationQuaternion: vec4f,
-    nearDistance: f32,
-    lightInverseDistanceSpan: f32,
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
     fragmentPosition: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
@@ -195,7 +196,7 @@ fn computeAreaLightQuantities(
     );
 
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
-    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * lightInverseDistanceSpan;
+    output.normalizedDepthInShadowShell = (length(output.lightSpaceFragmentDisplacement) - minShadowShellRadius) * inverseShadowShellRadialSpan;
 
     let tanAngularLightRadius = lightRadius * inverseDistance;
 
@@ -215,8 +216,8 @@ fn computeLightQuantities(
     lightPosition: vec3f,
     lightLuminousIntensity: vec3f,
     cameraToLightSpaceRotationQuaternion: vec4f,
-    nearDistance: f32,
-    lightInverseDistanceSpan: f32,
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
     fragmentPosition: vec3f,
     fragmentNormal: vec3f,
     viewDirection: vec3f,
@@ -246,7 +247,7 @@ fn computeLightQuantities(
     );
 
     output.lightSpaceFragmentDisplacement = rotateVectorWithQuaternion(cameraToLightSpaceRotationQuaternion, offsetFragmentDisplacement);
-    output.normalizedDistance = (length(output.lightSpaceFragmentDisplacement) - nearDistance) * lightInverseDistanceSpan;
+    output.normalizedDepthInShadowShell = (length(output.lightSpaceFragmentDisplacement) - minShadowShellRadius) * inverseShadowShellRadialSpan;
 
     let onePlusLDotV = max(1.0 + LDotV, 1e-6);
     let inverseHLength = inverseSqrt(2.0 * onePlusLDotV);
@@ -275,21 +276,26 @@ fn computeOffsetFragmentDisplacement(
 }
 
 fn computePCSSLightAccessFactor(
-    nearDistance: f32,
-    lightInverseDistanceSpan: f32,
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
     emissiveRadius: f32,
     cameraFramebufferXYPosition: vec2f,
     lightSpaceFragmentDisplacement: vec3f,
     referenceDepth: f32,
 ) -> f32 {
+    // If the fragment is outside the shadow shell, it should not be shadowed
+    if referenceDepth < 0.0 || referenceDepth > 1.0 {
+        return 1.0;
+    }
+
     let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferXYPosition);
 
     let displacementNormalDirection = normalize(findPerpendicularVector(lightSpaceFragmentDisplacement));
     let displacementBinormalDirection = normalize(cross(lightSpaceFragmentDisplacement, displacementNormalDirection));
 
     let shadowPenumbraExtent = computeShadowPenumbraExtent(
-        nearDistance,
-        lightInverseDistanceSpan,
+        minShadowShellRadius,
+        inverseShadowShellRadialSpan,
         emissiveRadius,
         vogelDiskBaseAngle,
         lightSpaceFragmentDisplacement,
@@ -322,8 +328,8 @@ fn findPerpendicularVector(vector: vec3f) -> vec3f {
 const SHADOW_PENUMBRA_SAMPLE_COUNT: u32 = 8u;
 
 fn computeShadowPenumbraExtent(
-    nearDistance: f32,
-    lightInverseDistanceSpan: f32,
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
     emissiveRadius: f32,
     vogelDiskBaseAngle: f32,
     displacement: vec3f,
@@ -361,7 +367,7 @@ fn computeShadowPenumbraExtent(
         // physical, depths, we must undo the normalization, which can be done
         // by adding the appropriate offset when taking the ratio of normalized
         // depths.
-        let offsetForDepthRatio = nearDistance * lightInverseDistanceSpan;
+        let offsetForDepthRatio = minShadowShellRadius * inverseShadowShellRadialSpan;
         let physicalDepthRatio = (referenceDepth + offsetForDepthRatio) / (averageOccludingDepth + offsetForDepthRatio);
         let relativeDepthDiff = physicalDepthRatio - 1.0;
 
@@ -616,7 +622,14 @@ fn mainVS(
 
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
 
-    let lightVolumeRadius = omnidirectionalLight.distanceMapping.farDistance;
+    let cameraFarDistance = -projectionUniform.frustumFarPlaneCorners[0].z;
+
+    // Clamp light volume radius to less than camera far distance to prevent
+    // culling
+    let lightVolumeRadius = min(
+        omnidirectionalLight.lightSphere.maxReach,
+        cameraFarDistance * 0.99
+    );
 
     let cameraSpacePosition = omnidirectionalLight.cameraSpacePosition + lightVolumeRadius * modelSpacePosition;
     output.projectedPosition = projectionUniform.projectionMatrix * vec4f(cameraSpacePosition, 1.0);
@@ -654,8 +667,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
     let lightEmissiveRadius = omnidirectionalLight.luminousIntensityAndEmissiveRadius.w;
 
-    let lightNearDistance = omnidirectionalLight.distanceMapping.nearDistance;
-    let lightInverseDistanceSpan = omnidirectionalLight.distanceMapping.inverseDistanceSpan;
+    let minShadowShellRadius = omnidirectionalLight.lightSphere.minShadowShellRadius;
+    let inverseShadowShellRadialSpan = omnidirectionalLight.lightSphere.inverseShadowShellRadialSpan;
 
 #if (emulate_area_light_reflection)
     let lightQuantities = computeAreaLightQuantities(
@@ -663,8 +676,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         lightLuminousIntensity,
         lightEmissiveRadius,
         omnidirectionalLight.cameraToLightRotationQuaternion,
-        lightNearDistance,
-        lightInverseDistanceSpan,
+        minShadowShellRadius,
+        inverseShadowShellRadialSpan,
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
@@ -677,8 +690,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         omnidirectionalLight.cameraSpacePosition,
         lightLuminousIntensity,
         omnidirectionalLight.cameraToLightRotationQuaternion,
-        lightNearDistance,
-        lightInverseDistanceSpan,
+        minShadowShellRadius,
+        inverseShadowShellRadialSpan,
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
@@ -688,12 +701,12 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 #endif
 
     let lightAccessFactor = computePCSSLightAccessFactor(
-        lightNearDistance,
-        lightInverseDistanceSpan,
+        minShadowShellRadius,
+        inverseShadowShellRadialSpan,
         lightEmissiveRadius,
         input.projectedPosition.xy,
         lightQuantities.lightSpaceFragmentDisplacement,
-        lightQuantities.normalizedDistance,
+        lightQuantities.normalizedDepthInShadowShell,
     );
 
     let preExposedReflectedLuminance = computeGGXDiffuseGGXSpecularReflectedLuminance(

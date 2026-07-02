@@ -16,12 +16,12 @@ struct OmnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cubemapFaceSpacePosition: vec3f,
     luminousIntensityAndEmissiveRadius: vec4f,
-    distanceMapping: DistanceMapping,
+    lightSphere: LightSphere,
 }
 
-struct DistanceMapping {
-    nearDistance: f32,
-    inverseDistanceSpan: f32,
+struct LightSphere {
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
 }
 
 struct VertexOutput {
@@ -68,12 +68,13 @@ fn applyCubemapFaceProjectionToPosition(
 }
 
 fn computeShadowMapFragmentDepth(
-    nearDistance: f32,
-    inverseDistanceSpan: f32,
+    minShadowShellRadius: f32,
+    inverseShadowShellRadialSpan: f32,
     cubemapSpaceFragmentPosition: vec3f,
 ) -> f32 {
     // Compute distance between fragment and light and scale to [0, 1] range
-    return (length(cubemapSpaceFragmentPosition) - nearDistance) * inverseDistanceSpan;
+    // within the shadow shell
+    return (length(cubemapSpaceFragmentPosition) - minShadowShellRadius) * inverseShadowShellRadialSpan;
 }
 
 @vertex
@@ -102,12 +103,12 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let omnidirectionalLight = omnidirectionalLights.lights[pushConstants.activeLightIdx];
 
-    let lightNearDistance = omnidirectionalLight.distanceMapping.nearDistance;
-    let lightInverseDistanceSpan = omnidirectionalLight.distanceMapping.inverseDistanceSpan;
+    let minShadowShellRadius = omnidirectionalLight.lightSphere.minShadowShellRadius;
+    let inverseShadowShellRadialSpan = omnidirectionalLight.lightSphere.inverseShadowShellRadialSpan;
 
     output.fragmentDepth = computeShadowMapFragmentDepth(
-        lightNearDistance,
-        lightInverseDistanceSpan,
+        minShadowShellRadius,
+        inverseShadowShellRadialSpan,
         input.cubemapFaceSpacePosition,
     );
 
