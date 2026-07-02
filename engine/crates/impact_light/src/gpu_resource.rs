@@ -83,8 +83,8 @@ pub struct OmnidirectionalLightMetadata {
 pub struct ShadowableOmnidirectionalLightMetadata {
     pub id: ShadowableOmnidirectionalLightID,
     pub flags: LightFlags,
-    near_distance: f32,
-    far_distance: f32,
+    shadow_frustum_near_distance: f32,
+    shadow_frustum_far_distance: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -977,8 +977,11 @@ impl LightMetadata for OmnidirectionalLightMetadata {
 impl ShadowableOmnidirectionalLightMetadata {
     /// Computes the frustum for the given positive z cubemap face in light
     /// space.
-    pub fn compute_light_space_frustum_for_positive_z_face(&self) -> Frustum {
-        CubeMapper::compute_frustum_for_positive_z_face(self.near_distance, self.far_distance)
+    pub fn compute_light_space_shadow_frustum_for_positive_z_face(&self) -> Frustum {
+        CubeMapper::compute_frustum_for_positive_z_face(
+            self.shadow_frustum_near_distance,
+            self.shadow_frustum_far_distance,
+        )
     }
 }
 
@@ -989,8 +992,8 @@ impl LightMetadata for ShadowableOmnidirectionalLightMetadata {
     fn from_source(source: &Self::Source, id: Self::ID) -> Self {
         Self {
             id,
-            near_distance: source.near_distance(),
-            far_distance: source.far_distance(),
+            shadow_frustum_near_distance: source.shadow_frustum_near_distance(),
+            shadow_frustum_far_distance: source.shadow_frustum_far_distance(),
             flags: source.flags(),
         }
     }

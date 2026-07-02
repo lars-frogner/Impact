@@ -24,7 +24,7 @@ use impact_id::define_entity_id_newtype;
 use impact_math::{
     angle::{Angle, Degrees},
     bounds::UpperExclusiveBounds,
-    consts::f32::FRAC_1_PI,
+    consts::f32::{FRAC_1_PI, FRAC_1_SQRT_3},
     point::Point3C,
     quaternion::{UnitQuaternion, UnitQuaternionC},
     transform::{Isometry3, Similarity3},
@@ -241,11 +241,11 @@ pub struct ShadowableOmnidirectionalLight {
     // 4-component vector in the shader
     luminous_intensity: LuminousIntensity,
     emissive_radius: f32,
-    // The `near_distance`, `inverse_distance_span` and `far_distance` fields
-    // are accessed as a struct in a single field in the shader
-    near_distance: f32,
-    inverse_distance_span: f32,
-    far_distance: f32,
+    // The four next fields are accessed as a struct in a single field in the
+    // shader
+    inner_shadow_shell_radius: f32,
+    inverse_shadow_shell_radial_span: f32,
+    outer_shadow_shell_radius: f32,
     max_reach: f32,
 }
 
@@ -1123,9 +1123,9 @@ impl ShadowableOmnidirectionalLight {
             _padding_1: [0; 3],
             luminous_intensity,
             emissive_radius: 0.5 * emissive_extent,
-            near_distance: 0.0,
-            inverse_distance_span: 0.0,
-            far_distance: 0.0,
+            inner_shadow_shell_radius: 0.0,
+            inverse_shadow_shell_radial_span: 0.0,
+            outer_shadow_shell_radius: 0.0,
             // This will be computed when the light is added to the light
             // manager
             max_reach: 0.0,
@@ -1163,14 +1163,31 @@ impl ShadowableOmnidirectionalLight {
         self.max_reach
     }
 
+    /// Returns the inner radius of the light-centered shell encompassing all
+    /// objects shadowing the light.
+    pub fn inner_shadow_shell_radius(&self) -> f32 {
+        self.inner_shadow_shell_radius
+    }
+
+    /// Returns the outer radius of the light-centered shell encompassing all
+    /// objects shadowing the light.
+    pub fn outer_shadow_shell_radius(&self) -> f32 {
+        self.outer_shadow_shell_radius
+    }
+
     /// Returns the near plane distance of the shadow cubemap frusta.
-    pub fn near_distance(&self) -> f32 {
-        self.near_distance
+    pub fn shadow_frustum_near_distance(&self) -> f32 {
+        // The near plane must not go past the points where the inner shadow
+        // sphere intersects the edges of the shadow frustum (otherwise, parts
+        // of shadowing objects near the edges of the frustum could be clipped
+        // by the near plane). For a 90x90 degree frustum, that depth is
+        // `radius / sqrt(3)`.
+        self.inner_shadow_shell_radius * FRAC_1_SQRT_3
     }
 
     /// Returns the far plane distance of the shadow cubemap frusta.
-    pub fn far_distance(&self) -> f32 {
-        self.far_distance
+    pub fn shadow_frustum_far_distance(&self) -> f32 {
+        self.outer_shadow_shell_radius
     }
 
     /// Sets the camera space position of the light to the given position.
@@ -1222,20 +1239,24 @@ impl ShadowableOmnidirectionalLight {
         self.camera_to_light_space_rotation = camera_to_light_space_rotation.compact();
     }
 
-    /// Uses the given near and far distance for the light's perspective
-    /// transform.
-    pub fn update_near_and_far_distance(&mut self, near_distance: f32, far_distance: f32) {
-        self.near_distance = near_distance.clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
+    /// Uses the given inner and outer radius for the light's shadow shell.
+    pub fn update_shadow_shell(&mut self, inner_radius: f32, outer_radius: f32) {
+        self.inner_shadow_shell_radius =
+            inner_radius.clamp(Self::MIN_NEAR_DISTANCE, self.max_reach);
 
-        self.far_distance = far_distance.clamp(self.near_distance, self.max_reach);
+        self.outer_shadow_shell_radius =
+            outer_radius.clamp(self.inner_shadow_shell_radius, self.max_reach);
 
-        self.near_distance = self.near_distance.min(self.far_distance - Self::MIN_SPAN);
+        self.inner_shadow_shell_radius = self
+            .inner_shadow_shell_radius
+            .min(self.outer_shadow_shell_radius - Self::MIN_SPAN);
 
-        self.inverse_distance_span = 1.0 / (self.far_distance - self.near_distance);
+        self.inverse_shadow_shell_radial_span =
+            1.0 / (self.outer_shadow_shell_radius - self.inner_shadow_shell_radius);
     }
 
     /// Computes the frustum for the given cubemap face in world space.
-    pub fn compute_world_space_frustum_for_face(
+    pub fn compute_world_space_shadow_frustum_for_face(
         &self,
         face: CubemapFace,
         world_to_camera_transform: &Isometry3,
@@ -1245,8 +1266,8 @@ impl ShadowableOmnidirectionalLight {
         CubeMapper::compute_transformed_frustum_for_face(
             face,
             &Similarity3::from_isometry(world_to_light_transform),
-            self.near_distance,
-            self.far_distance,
+            self.shadow_frustum_near_distance(),
+            self.shadow_frustum_far_distance(),
         )
     }
 

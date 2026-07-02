@@ -577,7 +577,7 @@ fn buffer_transform_for_shadowable_light_sphere_gizmo(
     let light_sphere_from_unit_sphere = GizmoInstanceModelViewTransform::new_with_uniform_scaling(
         UnitQuaternionC::identity(),
         *light.camera_space_position().as_vector(),
-        light.far_distance(), // The shader uses the far distance as the light sphere radius
+        light.max_reach(),
     );
 
     model_instance_manager.buffer_instance_feature(
@@ -600,7 +600,7 @@ fn buffer_instance_features_for_shadow_cubemap_faces_gizmo(
 
     let cubemap_near_plane_transform = GizmoInstanceModelViewTransform::from(
         &Similarity3::from_isometry(light_space_to_camera_transform)
-            .applied_to_scaling(light.near_distance()),
+            .applied_to_scaling(light.shadow_frustum_near_distance()),
     );
 
     model_instance_manager.buffer_instance_feature(
@@ -611,7 +611,7 @@ fn buffer_instance_features_for_shadow_cubemap_faces_gizmo(
 
     let cubemap_far_plane_transform = GizmoInstanceModelViewTransform::from(
         &Similarity3::from_isometry(light_space_to_camera_transform)
-            .applied_to_scaling(light.far_distance()),
+            .applied_to_scaling(light.shadow_frustum_far_distance()),
     );
 
     model_instance_manager.buffer_instance_feature(
