@@ -13,7 +13,7 @@ use impact_math::{
 use impact_physics::{
     anchor::AnchorManager,
     collision::{
-        self, CollidableKind,
+        self, CollidableKind, CollisionCacheUsage,
         collidable::basic::{CollisionWorld, LocalCollidable},
         setup::{PlanarCollidable, SphericalCollidable},
     },
@@ -238,6 +238,7 @@ fn setup_bodies_and_run_constraints(
         &anchor_manager,
         &collision_world,
         &(),
+        CollisionCacheUsage::IgnoreCached,
     );
     constraint_manager.compute_and_apply_constrained_state(rigid_body_manager);
 }

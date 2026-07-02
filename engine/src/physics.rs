@@ -281,7 +281,7 @@ impl PhysicsSimulator {
         let mut collision_world = self.collision_world.owrite();
 
         let substep_duration = self.compute_substep_duration();
-        for _ in 0..self.n_substeps() {
+        for substep in 0..self.n_substeps() {
             impact_physics::perform_physics_step(
                 task_timer,
                 intersection_manager,
@@ -295,6 +295,7 @@ impl PhysicsSimulator {
                 &self.medium,
                 self.simulation_time,
                 substep_duration,
+                substep,
             );
             self.simulation_time += substep_duration;
         }
