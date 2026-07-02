@@ -43,6 +43,14 @@ mod shadow_mapping {
             label: "Shadow mapping",
             hover_text: "Whether shadow mapping is enabled.",
         };
+        pub const CUBEMAP_ALIGNMENT: LabelAndHoverText = LabelAndHoverText {
+            label: "Shadow cubemap alignment",
+            hover_text: "\
+                Whether shadow maps for omnidirectional lights should be aligned with the \
+                world axes or adjusted adaptively based on the scene. The former gives more \
+                stable shadows, while the latter allows for optimizing texture usage.\
+            ",
+        };
         pub const CASCADE_BOUNDING: LabelAndHoverText = LabelAndHoverText {
             label: "Shadow map cascade bounding",
             hover_text: "\
@@ -341,6 +349,36 @@ fn shadow_mapping_options(ui: &mut Ui, engine: &Engine) {
     if option_checkbox(ui, &mut config.enabled, shadow_mapping::docs::ENABLED).changed() {
         config_changed = true;
     }
+
+    labeled_option(ui, shadow_mapping::docs::CUBEMAP_ALIGNMENT, |ui| {
+        ComboBox::from_id_salt(shadow_mapping::docs::CUBEMAP_ALIGNMENT.label)
+            .selected_text(format!(
+                "{:?}",
+                config.omnidirectional_light_shadow_map_alignment
+            ))
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_value(
+                        &mut config.omnidirectional_light_shadow_map_alignment,
+                        impact::impact_light::shadow_map::OmnidirectionalLightShadowMapAlignment::World,
+                        "World",
+                    )
+                    .changed()
+                {
+                    config_changed = true;
+                }
+                if ui
+                    .selectable_value(
+                        &mut config.omnidirectional_light_shadow_map_alignment,
+                        impact::impact_light::shadow_map::OmnidirectionalLightShadowMapAlignment::Adaptive,
+                        "Adaptive",
+                    )
+                    .changed()
+                {
+                    config_changed = true;
+                }
+            })
+    });
 
     labeled_option(ui, shadow_mapping::docs::CASCADE_BOUNDING, |ui| {
         ComboBox::from_id_salt(shadow_mapping::docs::CASCADE_BOUNDING.label)
