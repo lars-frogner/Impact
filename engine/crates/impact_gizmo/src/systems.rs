@@ -56,8 +56,8 @@ use impact_physics::{
 use impact_scene::{SceneEntityFlags, graph::SceneGraph, model::ModelInstanceManager};
 use impact_voxel::{
     HasVoxelObject, VoxelObjectID, VoxelObjectManager,
-    chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk},
     collidable::{Collidable, CollisionWorld},
+    object::{CHUNK_SIZE, VoxelChunk, VoxelObject},
 };
 use std::iter;
 use tinyvec::TinyVec;
@@ -1335,7 +1335,7 @@ fn buffer_instance_features_for_voxel_intersections_gizmo(
     let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverted();
 
     let Some((voxel_ranges_for_a, voxel_ranges_for_b)) =
-        ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
+        VoxelObject::determine_voxel_ranges_encompassing_intersection(
             object_a,
             object_b,
             &transform_from_b_to_a,
@@ -1352,27 +1352,25 @@ fn buffer_instance_features_for_voxel_intersections_gizmo(
 
     let mut instance_features = Vec::with_capacity(256);
 
-    let mut add_transforms = |voxel_object: &ChunkedVoxelObject,
-                              transform_from_object_to_camera_space: &Isometry3,
-                              i,
-                              j,
-                              k| {
-        let voxel_center_in_object_space =
-            voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
+    let mut add_transforms =
+        |voxel_object: &VoxelObject, transform_from_object_to_camera_space: &Isometry3, i, j, k| {
+            let voxel_center_in_object_space =
+                voxel_object.voxel_center_position_from_object_voxel_indices(i, j, k);
 
-        let voxel_center_in_camera_space =
-            transform_from_object_to_camera_space.transform_point(&voxel_center_in_object_space);
+            let voxel_center_in_camera_space = transform_from_object_to_camera_space
+                .transform_point(&voxel_center_in_object_space);
 
-        let model_to_camera_transform = GizmoInstanceModelViewTransform::new_with_uniform_scaling(
-            transform_from_object_to_camera_space.rotation().compact(),
-            voxel_center_in_camera_space.as_vector().compact(),
-            0.5 * voxel_object.voxel_extent(),
-        );
+            let model_to_camera_transform =
+                GizmoInstanceModelViewTransform::new_with_uniform_scaling(
+                    transform_from_object_to_camera_space.rotation().compact(),
+                    voxel_center_in_camera_space.as_vector().compact(),
+                    0.5 * voxel_object.voxel_extent(),
+                );
 
-        instance_features.push(GizmoInstanceFeatures::with_transform(
-            model_to_camera_transform,
-        ));
-    };
+            instance_features.push(GizmoInstanceFeatures::with_transform(
+                model_to_camera_transform,
+            ));
+        };
 
     object_a.for_each_surface_voxel_in_voxel_ranges(voxel_ranges_for_a, &mut |[i, j, k], _, _| {
         add_transforms(object_a, &transform_from_a_to_camera_space, i, j, k);

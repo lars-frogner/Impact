@@ -1,11 +1,11 @@
-//! Intersection of shapes with chunked voxel objects.
+//! Intersection of shapes with voxel objects.
 
 use crate::{
     Voxel, VoxelPlacement, VoxelSurfacePlacement,
-    chunks::{
-        CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, chunk_range_encompassing_voxel_range,
-        chunk_voxels, chunk_voxels_mut, linear_voxel_idx_within_chunk_from_object_voxel_indices,
-        sdf, split_detection::SplitDetector,
+    object::{
+        CHUNK_SIZE, VoxelChunk, VoxelObject, chunk_range_encompassing_voxel_range, chunk_voxels,
+        chunk_voxels_mut, linear_voxel_idx_within_chunk_from_object_voxel_indices, sdf,
+        split_detection::SplitDetector,
     },
 };
 use impact_containers::HashSet;
@@ -19,7 +19,7 @@ use std::{array, ops::Range};
 pub type VoxelRanges = [Range<usize>; 3];
 pub type ChunkRanges = [Range<usize>; 3];
 
-impl ChunkedVoxelObject {
+impl VoxelObject {
     /// Finds non-empty voxels with at least one exposed face that are not fully
     /// outside the negative halfspace of the given plane and calls the given
     /// closure with their indices, the voxels themselves and their placement on
@@ -541,8 +541,8 @@ impl ChunkedVoxelObject {
     }
 
     pub fn modify_intersecting_voxels(
-        voxel_object_a: &mut ChunkedVoxelObject,
-        voxel_object_b: &mut ChunkedVoxelObject,
+        voxel_object_a: &mut VoxelObject,
+        voxel_object_b: &mut VoxelObject,
         transform_from_world_to_a: &Isometry3,
         transform_from_world_to_b: &Isometry3,
         mut should_check: impl FnMut(&Voxel) -> bool,
@@ -553,7 +553,7 @@ impl ChunkedVoxelObject {
             transform_from_world_to_a * transform_from_world_to_b.inverted();
 
         let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
-            ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
+            VoxelObject::determine_voxel_ranges_encompassing_intersection(
                 voxel_object_a,
                 voxel_object_b,
                 &transform_from_b_to_a,
@@ -1008,8 +1008,8 @@ fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedB
 pub mod fuzzing {
     use super::*;
     use crate::{
-        chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
-        mesh::ChunkedVoxelObjectMesh,
+        generation::SDFVoxelGenerator, mesh::VoxelObjectMesh,
+        object::inertia::VoxelObjectInertialPropertyManager,
     };
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
@@ -1089,7 +1089,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane(
         (generator, plane): (SDFVoxelGenerator<Global>, ArbitraryPlane),
     ) {
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
         let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
@@ -1123,7 +1123,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_sphere(
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
         let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_sphere(
@@ -1148,7 +1148,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_voxels_within_sphere(
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         let normalized_sphere = sphere.0.scaled(object.inverse_voxel_extent());
@@ -1177,7 +1177,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_voxels_within_capsule(
         (generator, capsule): (SDFVoxelGenerator<Global>, ArbitraryCapsule),
     ) {
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         let normalized_capsule = capsule.0.scaled(object.inverse_voxel_extent());
@@ -1206,7 +1206,7 @@ pub mod fuzzing {
     pub fn fuzz_test_absorbing_voxels_within_sphere(
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
 
         let mut inertial_property_manager =
@@ -1247,7 +1247,7 @@ pub mod fuzzing {
     pub fn fuzz_test_absorbing_voxels_within_capsule(
         (generator, capsules): (SDFVoxelGenerator<Global>, Vec<ArbitraryCapsule>),
     ) {
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
 
         let mut inertial_property_manager =
@@ -1256,7 +1256,7 @@ pub mod fuzzing {
         let mut inertial_property_updater =
             inertial_property_manager.begin_update(object.voxel_extent(), &voxel_type_densities);
 
-        let mut mesh = ChunkedVoxelObjectMesh::create(&object);
+        let mut mesh = VoxelObjectMesh::create(&object);
 
         for capsule in capsules {
             let normalized_capsule = capsule.0.scaled(object.inverse_voxel_extent());
@@ -1288,7 +1288,7 @@ pub mod fuzzing {
             inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
 
             mesh.sync_with_voxel_object(&mut object);
-            let mesh_from_scratch = ChunkedVoxelObjectMesh::create(&object);
+            let mesh_from_scratch = VoxelObjectMesh::create(&object);
 
             assert_eq!(
                 mesh.chunk_submeshes()
@@ -1338,7 +1338,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
 
         let plane = Plane::new(
             UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 1.0)),
@@ -1389,7 +1389,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
@@ -1432,7 +1432,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
@@ -1478,7 +1478,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
 
         let capsule = Capsule::new(
             object.compute_aabb().center() - (-object_radius) * capsule_direction,
@@ -1527,7 +1527,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
 
         let capsule = Capsule::new(
             Point3::new(3.8, 3.0, -50.0),

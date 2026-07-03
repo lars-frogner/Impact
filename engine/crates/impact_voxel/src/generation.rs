@@ -6,8 +6,8 @@ pub mod voxel_type;
 
 use crate::{
     Voxel, VoxelSignedDistance,
-    chunks::{ChunkSparseness, ChunkedVoxelObject, LoopForChunkVoxels},
     generation::sdf::meta::MetaSDFGraph,
+    object::{ChunkSparseness, LoopForChunkVoxels, VoxelObject},
     voxel_types::VoxelType,
 };
 use impact_alloc::{Allocator, Global};
@@ -296,7 +296,7 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
         voxels: &mut [Voxel],
         chunk_origin: &[usize; 3],
     ) -> ChunkSparseness {
-        assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
+        assert_eq!(voxels.len(), VoxelObject::chunk_voxel_count());
 
         if self.sdf_generator.is_empty()
             || chunk_origin
@@ -316,7 +316,7 @@ impl<A: Allocator> ChunkedVoxelGenerator for SDFVoxelGenerator<A> {
 
         let chunk_aabb_in_root_space = AxisAlignedBox::new(
             chunk_origin_in_root_space,
-            chunk_origin_in_root_space + Vector3::same(ChunkedVoxelObject::chunk_size() as f32),
+            chunk_origin_in_root_space + Vector3::same(VoxelObject::chunk_size() as f32),
         );
 
         self.sdf_generator

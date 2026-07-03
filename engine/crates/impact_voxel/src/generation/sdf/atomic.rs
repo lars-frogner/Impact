@@ -1,7 +1,7 @@
 //! Generation of signed distance fields. This module implements the graph of
 //! simple "atomic" SDF nodes that is traversed during generation.
 
-use crate::{VoxelSignedDistance, chunks::ChunkedVoxelObject};
+use crate::{VoxelSignedDistance, object::VoxelObject};
 use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_ne;
 use impact_alloc::{
@@ -46,8 +46,8 @@ pub struct SDFGeneratorBlockBuffers<const COUNT: usize, A: Allocator> {
     pub signed_distance_stack: AVec<[f32; COUNT], A>,
 }
 
-const CHUNK_SIZE: usize = ChunkedVoxelObject::chunk_size();
-const CHUNK_VOXEL_COUNT: usize = ChunkedVoxelObject::chunk_voxel_count();
+const CHUNK_SIZE: usize = VoxelObject::chunk_size();
+const CHUNK_VOXEL_COUNT: usize = VoxelObject::chunk_voxel_count();
 
 pub type SDFGeneratorChunkBuffers<A> = SDFGeneratorBlockBuffers<CHUNK_VOXEL_COUNT, A>;
 

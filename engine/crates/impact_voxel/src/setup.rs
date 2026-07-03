@@ -2,14 +2,14 @@
 
 use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
-    chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyManager},
     generation::{
         ChunkedVoxelGenerator, VoxelGeneratorID,
         sdf::{SDFGraph, SDFNode, SDFNodeID},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     gpu_resource::VOXEL_MODEL_ID,
-    mesh::MeshedChunkedVoxelObject,
+    mesh::MeshedVoxelObject,
+    object::{VoxelObject, inertia::VoxelObjectInertialPropertyManager},
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use anyhow::{Result, anyhow, bail};
@@ -490,9 +490,9 @@ pub fn setup_voxel_object(
     generator: &impl ChunkedVoxelGenerator,
     entity_id: EntityID,
 ) -> Result<()> {
-    let voxel_object = ChunkedVoxelObject::generate(generator);
+    let voxel_object = VoxelObject::generate(generator);
 
-    let meshed_voxel_object = MeshedChunkedVoxelObject::create(voxel_object);
+    let meshed_voxel_object = MeshedVoxelObject::create(voxel_object);
 
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     voxel_object_manager.add_voxel_object(voxel_object_id, meshed_voxel_object)?;

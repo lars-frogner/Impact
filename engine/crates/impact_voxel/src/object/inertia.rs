@@ -3,7 +3,7 @@
 use super::chunk_voxels;
 use crate::{
     Voxel,
-    chunks::{CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, extraction},
+    object::{CHUNK_SIZE, VoxelChunk, VoxelObject, extraction},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::{matrix::Matrix3, point::Point3, vector::Vector3};
@@ -122,7 +122,7 @@ impl VoxelObjectInertialPropertyManager {
     ///
     /// The mass density of each voxel type will be looked up in the given
     /// slice.
-    pub fn initialized_from(object: &ChunkedVoxelObject, voxel_type_densities: &[f32]) -> Self {
+    pub fn initialized_from(object: &VoxelObject, voxel_type_densities: &[f32]) -> Self {
         let (mass, moments, moments_of_inertia, products_of_inertia) =
             compute_inertial_property_moments_for_object(
                 object.voxel_extent(),
@@ -270,7 +270,7 @@ impl VoxelObjectInertialPropertyManager {
     /// computed from scratch for the given voxel object. This is for validating
     /// that incremental updates produce the correct result.
     #[cfg(any(test, feature = "fuzzing"))]
-    pub fn validate_for_object(&self, object: &ChunkedVoxelObject, voxel_type_densities: &[f32]) {
+    pub fn validate_for_object(&self, object: &VoxelObject, voxel_type_densities: &[f32]) {
         let from_scratch = Self::initialized_from(object, voxel_type_densities);
         approx::assert_relative_eq!(self, &from_scratch, epsilon = 1e-3, max_relative = 1e-3);
     }
@@ -783,12 +783,12 @@ fn compute_inertial_property_moments_for_object(
 mod tests {
     use super::*;
     use crate::{
-        chunks::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
         generation::{
             SDFVoxelGenerator,
             sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
+        object::{CHUNK_VOXEL_COUNT, LoopForChunkVoxels, LoopOverChunkVoxelData},
         voxel_types::VoxelType,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -859,7 +859,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::from_idx(0)).into(),
         );
-        let object = ChunkedVoxelObject::generate_without_derived_state(&generator);
+        let object = VoxelObject::generate_without_derived_state(&generator);
 
         let occupied_voxel_ranges = object.determine_tight_occupied_voxel_ranges();
         let occupied_voxel_extents = occupied_voxel_ranges

@@ -3,9 +3,8 @@
 use crate::{
     VoxelObjectID, VoxelObjectManager,
     mesh::{
-        ChunkSubmesh, CullingFrustum, MeshedChunkedVoxelObject, VoxelMeshIndex,
-        VoxelMeshIndexMaterials, VoxelMeshModifications, VoxelMeshVertexNormalVector,
-        VoxelMeshVertexPosition,
+        ChunkSubmesh, CullingFrustum, MeshedVoxelObject, VoxelMeshIndex, VoxelMeshIndexMaterials,
+        VoxelMeshModifications, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition,
     },
     voxel_types::{FixedVoxelMaterialProperties, VoxelTypeRegistry},
 };
@@ -73,7 +72,7 @@ pub struct VoxelObjectGPUResources {
     buffers: HashMap<VoxelObjectID, VoxelObjectGPUBuffers>,
 }
 
-/// GPU buffers for a [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject).
+/// GPU buffers for a [`VoxelObject`](crate::chunks::VoxelObject).
 #[derive(Debug)]
 pub struct VoxelObjectGPUBuffers {
     chunk_extent: f32,
@@ -479,15 +478,15 @@ impl VoxelMaterialGPUResources {
 }
 
 impl VoxelObjectGPUBuffers {
-    /// Creates new GPU buffers for the given [`MeshedChunkedVoxelObject`],
+    /// Creates new GPU buffers for the given [`MeshedVoxelObject`],
     /// initializing for the relevant data in the object's
-    /// [`ChunkedVoxelObjectMesh`](crate::mesh::ChunkedVoxelObjectMesh).
+    /// [`VoxelObjectMesh`](crate::mesh::VoxelObjectMesh).
     pub fn for_voxel_object(
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         voxel_object_id: VoxelObjectID,
-        voxel_object: &MeshedChunkedVoxelObject,
+        voxel_object: &MeshedVoxelObject,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
         let mesh = voxel_object.mesh();
@@ -719,7 +718,7 @@ impl VoxelObjectGPUBuffers {
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
-        voxel_object: &mut MeshedChunkedVoxelObject,
+        voxel_object: &mut MeshedVoxelObject,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) {
         let mesh = voxel_object.mesh();

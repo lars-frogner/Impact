@@ -46,7 +46,7 @@ use impact_voxel::{
         absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
         fracturing::FracturePointGenerator,
     },
-    mesh::MeshedChunkedVoxelObject,
+    mesh::MeshedVoxelObject,
 };
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -622,7 +622,7 @@ impl Engine {
     pub fn add_voxel_object(
         &self,
         entity_id: EntityID,
-        voxel_object: MeshedChunkedVoxelObject,
+        voxel_object: MeshedVoxelObject,
     ) -> Result<()> {
         let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
         self.scene()
@@ -633,11 +633,7 @@ impl Engine {
             .add_voxel_object(voxel_object_id, voxel_object)
     }
 
-    pub fn replace_voxel_object(
-        &self,
-        entity_id: EntityID,
-        voxel_object: MeshedChunkedVoxelObject,
-    ) {
+    pub fn replace_voxel_object(&self, entity_id: EntityID, voxel_object: MeshedVoxelObject) {
         let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
 
         if let Some(existing_voxel_object) = self

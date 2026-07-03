@@ -2,11 +2,11 @@
 
 use crate::{
     Voxel, VoxelFlags, VoxelSignedDistance,
-    chunks::{
-        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkedVoxelObject, FaceEmptyCounts, FaceVoxelDistribution,
+    object::{
+        CHUNK_SIZE, CHUNK_VOXEL_COUNT, FaceEmptyCounts, FaceVoxelDistribution,
         NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
-        VoxelChunkFlags, chunk_range_encompassing_voxel_range, chunk_voxels, chunk_voxels_mut,
-        determine_occupied_voxel_ranges, linear_voxel_idx_within_chunk,
+        VoxelChunkFlags, VoxelObject, chunk_range_encompassing_voxel_range, chunk_voxels,
+        chunk_voxels_mut, determine_occupied_voxel_ranges, linear_voxel_idx_within_chunk,
         split_detection::{
             CHUNK_MAX_REGIONS, GlobalRegionLabel, NonUniformChunkSplitDetectionData, SplitDetector,
             UniformChunkSplitDetectionData, chunk_voxel_region_labels, find_root_for_region,
@@ -44,11 +44,11 @@ pub trait PropertyComputer {
     fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel);
 }
 
-/// A [`ChunkedVoxelObject`] that has been extracted from a larger object.
+/// A [`VoxelObject`] that has been extracted from a larger object.
 #[derive(Clone, Debug)]
 pub struct ExtractedVoxelObject {
     /// The extracted object.
-    pub voxel_object: ChunkedVoxelObject,
+    pub voxel_object: VoxelObject,
     /// The offset in whole voxels from the origin of the parent object to the
     /// origin of the extracted object, in the reference frame of the
     /// parent object (the extracted object has the same orientation as the
@@ -60,7 +60,7 @@ struct NoPropertyTransferrer;
 
 struct NoPropertyComputer;
 
-impl ChunkedVoxelObject {
+impl VoxelObject {
     /// Checks if the object consists of more than one disconnected region, and
     /// if so, extracts one of them into a seperate object and returns it. Both
     /// this object and the returned object will have the correct derived state
@@ -1795,7 +1795,7 @@ impl PropertyComputer for NoPropertyComputer {
 pub mod fuzzing {
     use super::*;
     use crate::{
-        chunks::inertia::VoxelObjectInertialPropertyManager, generation::SDFVoxelGenerator,
+        generation::SDFVoxelGenerator, object::inertia::VoxelObjectInertialPropertyManager,
     };
     use approx::assert_relative_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
@@ -1837,7 +1837,7 @@ pub mod fuzzing {
     pub fn fuzz_test_voxel_object_split_off_disconnected_region(
         generator: SDFVoxelGenerator<Global>,
     ) {
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
         let voxel_type_densities = vec![1.0; 256];
 
         let original_inertial_property_manager =
@@ -1898,7 +1898,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_voxel_object_copy_polyhedron(input: CopyPolyhedronInput) {
-        let object = ChunkedVoxelObject::generate(&input.generator);
+        let object = VoxelObject::generate(&input.generator);
         let voxel_type_densities = [1.0; 256];
 
         let aabb = object.compute_normalized_chunk_grid_bounds();
@@ -1977,7 +1977,7 @@ mod tests {
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
 
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
         object.validate_region_count();
     }
 
@@ -1998,7 +1998,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = ChunkedVoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(&generator);
         assert!(object.extract_any_disconnected_region().is_some());
     }
 }
