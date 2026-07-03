@@ -7,7 +7,7 @@ use impact_math::{point::Point3C, transform::Similarity3, vector::Vector3C};
 use impact_physics::{
     anchor::AnchorManager,
     collision::{
-        self, CollidableKind, Collision,
+        self, CollidableKind, Collision, CollisionCacheUsage,
         collidable::basic::{CollisionWorld, LocalCollidable},
         setup::SphericalCollidable,
     },
@@ -83,6 +83,7 @@ pub fn solve_contact_velocities(benchmarker: impl Benchmarker) {
         &anchor_manager,
         &collision_world,
         &(),
+        CollisionCacheUsage::IgnoreCached,
     );
 
     benchmarker.benchmark(&mut || {
@@ -114,6 +115,7 @@ pub fn correct_contact_configurations(benchmarker: impl Benchmarker) {
         &anchor_manager,
         &collision_world,
         &(),
+        CollisionCacheUsage::IgnoreCached,
     );
 
     benchmarker.benchmark(&mut || {
