@@ -7,6 +7,7 @@ use impact_containers::BitVector;
 use impact_geometry::{AxisAlignedBox, PlaneC};
 use impact_math::{
     point::Point3C,
+    transform::Isometry3,
     vector::{UnitVector3, UnitVector3C},
 };
 
@@ -306,6 +307,29 @@ impl<A: Allocator> VoronoiPolyhedron<A> {
         deduplicate_vec_by(&mut self.face_planes, |a, b| {
             relative_eq!(a, b, epsilon = 1e-5, max_relative = 1e-5)
         });
+    }
+
+    #[inline]
+    pub fn shift_face_planes(&mut self, displacement: f32) {
+        for plane in &mut self.face_planes {
+            plane.displace_along_normal(displacement);
+        }
+    }
+
+    #[inline]
+    pub fn iso_transform(&mut self, transform: &Isometry3) {
+        for vertex in &mut self.vertices {
+            *vertex = transform.transform_point(&vertex.aligned()).compact();
+        }
+        for ray in &mut self.rays {
+            ray.vertex = transform.transform_point(&ray.vertex.aligned()).compact();
+            ray.direction = transform
+                .transform_unit_vector(&ray.direction.aligned())
+                .compact();
+        }
+        for plane in &mut self.face_planes {
+            *plane = plane.aligned().iso_transformed(transform).compact();
+        }
     }
 }
 

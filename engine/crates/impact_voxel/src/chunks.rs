@@ -981,6 +981,26 @@ impl ChunkedVoxelObject {
         (!voxel.is_empty()).then_some(voxel)
     }
 
+    /// Returns the voxel at the given given grid coordinates (fractional
+    /// indices) in the object's voxel grid, or `None` if the voxel is outside
+    /// the grid.
+    #[inline]
+    pub fn get_voxel_at_grid_coords(&self, grid_coords: &Vector3) -> Option<Voxel> {
+        if grid_coords.has_negative_component() {
+            return None;
+        }
+        let i = grid_coords.x() as usize;
+        let j = grid_coords.y() as usize;
+        let k = grid_coords.z() as usize;
+        if i >= self.chunk_counts[0] * CHUNK_SIZE
+            || j >= self.chunk_counts[1] * CHUNK_SIZE
+            || k >= self.chunk_counts[2] * CHUNK_SIZE
+        {
+            return None;
+        }
+        Some(self.voxel(i, j, k))
+    }
+
     /// Returns the voxel at the given indices in the object's voxel grid.
     ///
     /// Despite the organization of voxels into chunks, this lookup is
@@ -1004,6 +1024,30 @@ impl ChunkedVoxelObject {
         }
     }
 
+    /// Returns the voxel at the given indices in the object's voxel grid.
+    ///
+    /// Despite the organization of voxels into chunks, this lookup is
+    /// relatively efficient because we can perform simple bit manipulations
+    /// to determine the chunk containing the voxel.
+    ///
+    /// # Safety
+    /// If the indices are outside the object's voxel grid, the result may be
+    /// undefined behavior if the `unchecked` feature is enabled.
+    #[inline]
+    pub fn voxel_maybe_unchecked(&self, i: usize, j: usize, k: usize) -> Voxel {
+        let chunk_idx = self.linear_chunk_idx_from_object_voxel_indices(i, j, k);
+        let chunk = self.chunk_at_idx_maybe_unchecked(chunk_idx);
+        match &chunk {
+            VoxelChunk::Void => Voxel::maximally_outside(),
+            VoxelChunk::Uniform(UniformVoxelChunk { voxel, .. }) => *voxel,
+            VoxelChunk::NonUniform(NonUniformVoxelChunk { data_offset, .. }) => {
+                let voxel_idx = chunk_start_voxel_idx(*data_offset)
+                    + linear_voxel_idx_within_chunk_from_object_voxel_indices(i, j, k);
+                self.voxel_at_idx_maybe_unchecked(voxel_idx)
+            }
+        }
+    }
+
     /// Returns the [`VoxelChunk`] at the given indices in the object's chunk
     /// grid. If the indices are out of bounds, a void chunk is returned.
     #[inline]
@@ -1017,6 +1061,30 @@ impl ChunkedVoxelObject {
 
         let chunk_idx = self.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
         self.chunks[chunk_idx]
+    }
+
+    #[cfg(not(feature = "unchecked"))]
+    #[inline]
+    pub fn chunk_at_idx_maybe_unchecked(&self, chunk_idx: usize) -> &VoxelChunk {
+        &self.chunks[chunk_idx]
+    }
+
+    #[cfg(feature = "unchecked")]
+    #[inline]
+    pub fn chunk_at_idx_maybe_unchecked(&self, chunk_idx: usize) -> &VoxelChunk {
+        unsafe { self.chunks.get_unchecked(chunk_idx) }
+    }
+
+    #[cfg(not(feature = "unchecked"))]
+    #[inline]
+    pub fn voxel_at_idx_maybe_unchecked(&self, voxel_idx: usize) -> Voxel {
+        self.voxels[voxel_idx]
+    }
+
+    #[cfg(feature = "unchecked")]
+    #[inline]
+    pub fn voxel_at_idx_maybe_unchecked(&self, voxel_idx: usize) -> Voxel {
+        unsafe { *self.voxels.get_unchecked(voxel_idx) }
     }
 
     /// Computes all derived state based on the raw voxel information in the
@@ -1682,7 +1750,12 @@ impl ChunkedVoxelObject {
     /// Computes the index in `self.chunks` of the chunk containing
     /// the voxel at the given indices into the object's voxel grid.
     #[inline]
-    fn linear_chunk_idx_from_object_voxel_indices(&self, i: usize, j: usize, k: usize) -> usize {
+    pub fn linear_chunk_idx_from_object_voxel_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> usize {
         let chunk_indices = chunk_indices_from_object_voxel_indices(i, j, k);
         self.linear_chunk_idx(&chunk_indices)
     }
@@ -1690,7 +1763,7 @@ impl ChunkedVoxelObject {
     /// Computes the index in `self.chunks` of the chunk with the given 3D index
     /// in the object's chunk grid.
     #[inline]
-    fn linear_chunk_idx(&self, chunk_indices: &[usize; 3]) -> usize {
+    pub fn linear_chunk_idx(&self, chunk_indices: &[usize; 3]) -> usize {
         chunk_indices[0] * self.chunk_idx_strides[0]
             + chunk_indices[1] * self.chunk_idx_strides[1]
             + chunk_indices[2]
@@ -2472,6 +2545,11 @@ impl UniformVoxelChunk {
 
 impl NonUniformVoxelChunk {
     #[inline]
+    pub fn start_voxel_idx(&self) -> usize {
+        chunk_start_voxel_idx(self.data_offset)
+    }
+
+    #[inline]
     const fn contains_only_empty_voxels(&self) -> bool {
         self.flags.contains(VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS)
     }
@@ -2931,7 +3009,7 @@ fn chunk_voxels_mut(voxels: &mut [Voxel], data_offset: u32) -> &mut [Voxel] {
 /// Computes the index into a chunk's flattened voxel grid of the voxel at the
 /// given indices in the parent object's voxel grid.
 #[inline]
-const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
+pub const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
@@ -2943,7 +3021,7 @@ const fn linear_voxel_idx_within_chunk_from_object_voxel_indices(
 /// Computes the index into a chunk's flattened voxel grid of the voxel with the
 /// given 3D index in the voxel grid.
 #[inline]
-const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
+pub const fn linear_voxel_idx_within_chunk(voxel_indices: &[usize; 3]) -> usize {
     (voxel_indices[0] << (2 * LOG2_CHUNK_SIZE))
         + (voxel_indices[1] << LOG2_CHUNK_SIZE)
         + voxel_indices[2]
@@ -2967,7 +3045,7 @@ const fn chunk_voxel_indices_from_linear_idx(idx: usize) -> [usize; 3] {
 /// chunk index is encoded in the upper bits of the corresponding object voxel
 /// index.
 #[inline]
-const fn chunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -> [usize; 3] {
+pub const fn chunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -> [usize; 3] {
     [
         i >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
         j >> CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT,
@@ -2982,7 +3060,7 @@ const fn chunk_indices_from_object_voxel_indices(i: usize, j: usize, k: usize) -
 /// index within the chunk is encoded in the lower bits of the corresponding
 /// object voxel index.
 #[inline]
-const fn voxel_indices_within_chunk_from_object_voxel_indices(
+pub const fn voxel_indices_within_chunk_from_object_voxel_indices(
     i: usize,
     j: usize,
     k: usize,
@@ -2995,7 +3073,7 @@ const fn voxel_indices_within_chunk_from_object_voxel_indices(
 }
 
 #[inline]
-fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usize> {
+pub fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<usize> {
     let start = voxel_range.start / CHUNK_SIZE;
     let end = voxel_range.end.div_ceil(CHUNK_SIZE);
     start..end
