@@ -11,7 +11,10 @@ use crate::{
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
 };
-use impact_math::{point::Point3, vector::Vector3};
+use impact_math::{
+    point::Point3,
+    vector::{Vector3, Vector3C},
+};
 
 /// A signed distance field for a voxel chunk in a [`ChunkedVoxelObject`].
 #[derive(Clone, Debug)]
@@ -573,9 +576,9 @@ impl ChunkedVoxelObject {
 /// The distances are assumed to be laid out such that z varies fastest, then y,
 /// then x.
 #[inline]
-pub fn evaluate_sdf_from_corner_samples(dists: &[f32; 8], fractional_offset: &Vector3) -> f32 {
+pub fn evaluate_sdf_from_corner_samples(dists: &[f32; 8], fractional_offset: &Vector3C) -> f32 {
     let o = fractional_offset;
-    let rev_o = Vector3::same(1.0) - o;
+    let rev_o = Vector3C::same(1.0) - o;
 
     let d00 = dists[0b000] * rev_o.x() + dists[0b100] * o.x();
     let d01 = dists[0b001] * rev_o.x() + dists[0b101] * o.x();
@@ -668,7 +671,7 @@ pub fn sample_voxel_object_sdf(
         sample_dist(sdf_i + 1, sdf_j + 1, sdf_k + 1),
     ];
 
-    evaluate_sdf_from_corner_samples(&dists, &fractional_offset)
+    evaluate_sdf_from_corner_samples(&dists, &fractional_offset.compact())
 }
 
 #[cfg(not(miri))]

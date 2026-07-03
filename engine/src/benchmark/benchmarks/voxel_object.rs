@@ -4,7 +4,9 @@ use super::tesselation::create_randomized_grid_points;
 use impact_alloc::Global;
 use impact_geometry::{Plane, Sphere};
 use impact_math::{
+    point::Point3C,
     quaternion::UnitQuaternion,
+    random::Rng,
     transform::Isometry3,
     vector::{UnitVector3, Vector3},
 };
@@ -22,7 +24,7 @@ use impact_voxel::{
         sdf::{SDFGraph, SDFNode},
         voxel_type::SameVoxelTypeGenerator,
     },
-    mesh::ChunkedVoxelObjectMesh,
+    mesh::{ChunkedVoxelObjectMesh, MeshedChunkedVoxelObject},
     voxel_types::VoxelType,
 };
 use std::hint::black_box;
@@ -347,16 +349,134 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let transform_to_object_b_space =
         Isometry3::from_translation(*object_b.compute_aabb().center().as_vector());
 
+    let meshed_object_a = MeshedChunkedVoxelObject::create(object_a);
+    let meshed_object_b = MeshedChunkedVoxelObject::create(object_b);
+
     benchmarker.benchmark(&mut || {
         collidable::for_each_mutual_voxel_object_contact(
-            &object_a,
-            &object_b,
+            &meshed_object_a,
+            &meshed_object_b,
             &transform_to_object_a_space,
             &transform_to_object_b_space,
             &mut |indices, geometry| {
                 black_box((indices, geometry));
             },
         );
+    });
+}
+
+pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
+    let box_extent = 100.0;
+    let points_per_dim = 4;
+
+    let generator = create_box_generator(box_extent);
+    let object = ChunkedVoxelObject::generate(&generator);
+
+    let voxel_extent = object.voxel_extent();
+
+    let aabb = object.compute_normalized_chunk_grid_bounds();
+
+    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
+
+    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+    const MAX_ANGLE: f32 = 0.03; // radians per axis (~1.7 degrees)
+    const MAX_TRANSLATION: f32 = 0.5; // voxels per axis
+
+    let rand_sym = |rng: &mut Rng| 2.0 * rng.random_f32_fraction() - 1.0;
+    let rand_angle = |rng: &mut Rng| MAX_ANGLE * rand_sym(rng);
+    let rand_translation = |rng: &mut Rng| MAX_TRANSLATION * rand_sym(rng);
+    let rand_perturbation = |vertices: &[Point3C], rng: &mut Rng| {
+        let mut centroid = Vector3::zeros();
+        for vertex in vertices {
+            centroid += *vertex.aligned().as_vector();
+        }
+        centroid /= vertices.len() as f32;
+
+        let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), rand_angle(rng))
+            * UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), rand_angle(rng))
+            * UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), rand_angle(rng));
+        let translation = Vector3::new(
+            rand_translation(rng),
+            rand_translation(rng),
+            rand_translation(rng),
+        );
+
+        Isometry3::from_parts(
+            centroid - rotation.rotate_vector(&centroid) + translation,
+            rotation,
+        )
+    };
+
+    let mut rng = Rng::with_seed(0);
+
+    let mut regions = Vec::new();
+    for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+        polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+        if polyhedron.vertices.is_empty() {
+            continue;
+        }
+
+        polyhedron.iso_transform(&rand_perturbation(&polyhedron.vertices, &mut rng));
+
+        let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
+            continue;
+        };
+        polyhedron.shift_face_planes(-0.1);
+
+        let Some(extracted) = object.copy_polyhedron(&polyhedron_aabb, &polyhedron.face_planes)
+        else {
+            continue;
+        };
+
+        let [offset_i, offset_j, offset_k] = extracted.origin_offset_in_parent;
+        let origin_offset =
+            voxel_extent * Vector3::new(offset_i as f32, offset_j as f32, offset_k as f32);
+
+        let transform_to_object_space = Isometry3::from_translation(-origin_offset);
+
+        let aabb_in_parent_space = extracted
+            .voxel_object
+            .compute_aabb()
+            .translated(&origin_offset);
+
+        let voxel_object = MeshedChunkedVoxelObject::create(extracted.voxel_object);
+
+        regions.push((
+            voxel_object,
+            transform_to_object_space,
+            aabb_in_parent_space,
+        ));
+    }
+
+    let mut overlapping_pairs = Vec::new();
+    for a in 0..regions.len() {
+        for b in (a + 1)..regions.len() {
+            let (_, _, aabb_a) = &regions[a];
+            let (_, _, aabb_b) = &regions[b];
+
+            if aabb_a.compute_overlap_with(aabb_b).is_some() {
+                overlapping_pairs.push([a, b]);
+            }
+        }
+    }
+
+    benchmarker.benchmark(&mut || {
+        for [a, b] in &overlapping_pairs {
+            let (object_a, transform_to_object_a_space, _) = &regions[*a];
+            let (object_b, transform_to_object_b_space, _) = &regions[*b];
+
+            collidable::for_each_mutual_voxel_object_contact(
+                object_a,
+                object_b,
+                transform_to_object_a_space,
+                transform_to_object_b_space,
+                &mut |indices, geometry| {
+                    black_box((indices, geometry));
+                },
+            );
+        }
     });
 }
 
@@ -499,6 +619,18 @@ pub fn copy_voronoi_regions_with_inertial_property_transfer(benchmarker: impl Be
 fn create_sphere_generator(radius: f32) -> SDFVoxelGenerator<Global> {
     let mut graph = SDFGraph::new_in(Global);
     graph.add_node(SDFNode::new_sphere(radius));
+    let sdf_generator = graph.build_in(Global).unwrap();
+
+    SDFVoxelGenerator::new(
+        1.0,
+        sdf_generator,
+        SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+    )
+}
+
+fn create_box_generator(extent: f32) -> SDFVoxelGenerator<Global> {
+    let mut graph = SDFGraph::new_in(Global);
+    graph.add_node(SDFNode::new_box([extent; 3]));
     let sdf_generator = graph.build_in(Global).unwrap();
 
     SDFVoxelGenerator::new(

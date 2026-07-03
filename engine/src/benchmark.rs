@@ -86,6 +86,7 @@ impact_profiling::define_target_enum! {
         obtain_sphere_voxel_object_contacts,
         obtain_plane_voxel_object_contacts,
         obtain_mutual_voxel_object_contacts,
+        obtain_mutual_voronoi_region_contacts,
         extract_voronoi_regions,
         extract_voronoi_regions_with_inertial_property_transfer,
         copy_voronoi_regions,

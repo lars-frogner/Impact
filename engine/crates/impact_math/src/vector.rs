@@ -857,6 +857,12 @@ impl Vector3C {
         Self::new(self.x.abs(), self.y.abs(), self.z.abs())
     }
 
+    /// Returns a vector with each component rounded down.
+    #[inline]
+    pub fn component_floor(&self) -> Self {
+        Self::new(self.x.floor(), self.y.floor(), self.z.floor())
+    }
+
     /// Returns a vector with the reciprocal value of each component.
     #[inline]
     pub fn component_recip(&self) -> Self {
@@ -912,6 +918,12 @@ impl Vector3C {
         let y_is_neg = u32::from(self.y.is_sign_negative());
         let z_is_neg = u32::from(self.z.is_sign_negative());
         (z_is_neg << 2) | (y_is_neg << 1) | x_is_neg
+    }
+
+    /// Whether any of the vector components are negative.
+    #[inline]
+    pub fn has_negative_component(&self) -> bool {
+        self.is_negative_bitmask() != 0
     }
 
     /// Returns a vector with the given closure applied to each component.

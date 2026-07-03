@@ -13,8 +13,8 @@ use impact_math::{
 /// A plane in 3D, represented by a unit normal and a displacement.
 ///
 /// The displacement `d` can be determined from the normal `n` and any point `p`
-/// lying on the plane as `d = -n.dot(p)`. By storing the displacement instead
-/// of the point, we remove redundate degrees of freedom.
+/// lying on the plane as `d = n.dot(p)`. By storing the displacement instead
+/// of the point, we remove redundant degrees of freedom.
 ///
 /// The plane divides space into two halfspaces, the positive and negative
 /// halfspace. The positive one is defined as the halfspace the unit normal is
@@ -34,8 +34,8 @@ pub struct Plane {
 /// "compact" version.
 ///
 /// The displacement `d` can be determined from the normal `n` and any point `p`
-/// lying on the plane as `d = -n.dot(p)`. By storing the displacement instead
-/// of the point, we remove redundate degrees of freedom.
+/// lying on the plane as `d = n.dot(p)`. By storing the displacement instead
+/// of the point, we remove redundant degrees of freedom.
 ///
 /// The plane divides space into two halfspaces, the positive and negative
 /// halfspace. The positive one is defined as the halfspace the unit normal is
@@ -300,6 +300,12 @@ impl PlaneC {
     pub fn flip_normal(&mut self) {
         self.unit_normal = -self.unit_normal;
         self.displacement = -self.displacement;
+    }
+
+    /// Displaces the plane by the given distance along its normal direction.
+    #[inline]
+    pub fn displace_along_normal(&mut self, additional_displacement: f32) {
+        self.displacement += additional_displacement;
     }
 
     /// Deconstructs the plane into its unit normal and displacement.
