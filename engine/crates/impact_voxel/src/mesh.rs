@@ -400,6 +400,20 @@ impl ChunkedVoxelObjectMesh {
         self.chunk_submesh_manager.modifications()
     }
 
+    pub fn vertex_positions_for_chunk_at_indices(
+        &self,
+        chunk_indices: [usize; 3],
+    ) -> Option<&[VoxelMeshVertexPosition]> {
+        let submesh_idx = self
+            .chunk_submesh_manager
+            .chunk_index_map
+            .get(chunk_indices)?;
+
+        let vertex_range = self.chunk_submesh_manager.chunk_vertex_ranges[submesh_idx].clone();
+
+        Some(&self.positions[vertex_range])
+    }
+
     /// Signaling that the mesh modifications from [`Self::mesh_modifications`]
     /// have been synchronized with the GPU.
     pub fn report_gpu_resources_synchronized(&mut self) {
@@ -409,8 +423,12 @@ impl ChunkedVoxelObjectMesh {
 
     /// Returns a guess for the typical number of vertices in a chunk mesh.
     const fn vertex_count_per_chunk_heuristic() -> usize {
-        // Most chunks contain a relatively flat surface, which would have approximately
-        // the same number of vertices as the number of voxels in one chunk face
+        // Surface nets tends to produce roughly 1-2x as many vertices as there
+        // are surface voxels. Most chunks contain a relatively flat surface,
+        // which would have approximately the same number of boundary voxels as
+        // the number of voxels in one chunk face. Probably somewhat less, since
+        // the surface is most likely not axis-aligned. So a reasonable proxy
+        // for the number of vertices is the number of voxels in a chunk face.
         ChunkedVoxelObject::chunk_size().pow(2)
     }
 
