@@ -8,11 +8,10 @@ pub mod systems;
 
 use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
-    chunks::{
-        ChunkedVoxelObject, extraction::ExtractedVoxelObject,
-        inertia::VoxelObjectInertialPropertyManager,
+    mesh::MeshedVoxelObject,
+    object::{
+        VoxelObject, extraction::ExtractedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
     },
-    mesh::MeshedChunkedVoxelObject,
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::VoxelAbsorptionManager;
@@ -93,7 +92,7 @@ struct ExtractedComponents {
 
 #[derive(Debug)]
 struct DynamicExtractedVoxelObject {
-    pub voxel_object: ChunkedVoxelObject,
+    pub voxel_object: VoxelObject,
     pub inertial_property_manager: VoxelObjectInertialPropertyManager,
     pub rigid_body: DynamicRigidBody,
     pub coordinate_changes: ExtractedVoxelObjectCoordinateChanges,
@@ -193,7 +192,7 @@ pub fn sync_voxel_object_bounding_volume(
 fn handle_voxel_object_after_removing_voxels(
     anchor_manager: &mut AnchorManager,
     voxel_type_registry: &VoxelTypeRegistry,
-    voxel_object: &mut ChunkedVoxelObject,
+    voxel_object: &mut VoxelObject,
     inertial_property_manager: &mut VoxelObjectInertialPropertyManager,
     rigid_body_id: DynamicRigidBodyID,
     rigid_body: &mut DynamicRigidBody,
@@ -383,7 +382,7 @@ fn spawn_extracted_voxel_object<C>(
 {
     let object = extracted_components.object;
 
-    let meshed_voxel_object = MeshedChunkedVoxelObject::create(object.voxel_object);
+    let meshed_voxel_object = MeshedVoxelObject::create(object.voxel_object);
 
     let entity_id = entity_id_manager.provide_id();
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
@@ -545,7 +544,7 @@ fn get_all_rigid_body_anchors(
 
 fn handle_anchors_for_original_voxel_object_after_removing_voxels(
     anchor_manager: &mut AnchorManager,
-    voxel_object: &ChunkedVoxelObject,
+    voxel_object: &VoxelObject,
     rigid_body_id: DynamicRigidBodyID,
     original_local_center_of_mass: &Vector3,
     new_local_center_of_mass: &Vector3,
@@ -586,7 +585,7 @@ fn handle_anchors_for_original_voxel_object_after_removing_voxels(
 fn handle_anchors_for_disconnected_voxel_object(
     anchor_manager: &mut AnchorManager,
     lost_anchors: Anchors,
-    disconnected_object: &ChunkedVoxelObject,
+    disconnected_object: &VoxelObject,
     coordinate_changes: &ExtractedVoxelObjectCoordinateChanges,
 ) -> Anchors {
     let mut disconnected_body_anchors = Anchors::new();
@@ -621,7 +620,7 @@ fn handle_anchors_for_disconnected_voxel_object(
 fn get_anchors_on_extracted_voxel_object(
     anchor_manager: &AnchorManager,
     rigid_body_id: DynamicRigidBodyID,
-    extracted_object: &ChunkedVoxelObject,
+    extracted_object: &VoxelObject,
     coordinate_changes: &ExtractedVoxelObjectCoordinateChanges,
 ) -> Anchors {
     let mut anchors = Anchors::new();

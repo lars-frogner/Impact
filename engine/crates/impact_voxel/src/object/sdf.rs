@@ -1,12 +1,12 @@
-//! Signed distance field for chunked voxel objects.
+//! Signed distance field for voxel objects.
 
 pub mod surface_nets;
 
 use crate::{
     VoxelSignedDistance,
-    chunks::{
-        ChunkedVoxelObject, ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk,
-        UniformVoxelChunk, VoxelChunk, VoxelChunkFlags,
+    object::{
+        ExposedVoxelChunk, LoopForChunkVoxels, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
+        VoxelChunkFlags, VoxelObject,
     },
     utils::{DataLoop3, Dimension, Loop3, MutDataLoop3, Side},
     voxel_types::VoxelType,
@@ -16,7 +16,7 @@ use impact_math::{
     vector::{Vector3, Vector3C},
 };
 
-/// A signed distance field for a voxel chunk in a [`ChunkedVoxelObject`].
+/// A signed distance field for a voxel chunk in a [`VoxelObject`].
 #[derive(Clone, Debug)]
 pub struct VoxelChunkSignedDistanceField {
     /// The reason we store the values as `f32` instead of the more compact
@@ -32,7 +32,7 @@ pub struct VoxelChunkSignedDistanceField {
 /// The number of grid cells holding a signed distance in the SDF grid for a
 /// single voxel chunk (equals the number of voxels in the chunk plus one
 /// cell of padding on each side).
-const SDF_GRID_SIZE: usize = ChunkedVoxelObject::chunk_size() + 2;
+const SDF_GRID_SIZE: usize = VoxelObject::chunk_size() + 2;
 
 /// The number of grid cells holding a signed distance in the SDF grid for a
 /// single voxel chunk (equals the number of voxels in the chunk plus one
@@ -143,7 +143,7 @@ impl VoxelChunkSignedDistanceField {
     }
 }
 
-impl ChunkedVoxelObject {
+impl VoxelObject {
     /// Calls the given closure for each exposed chunk in the object, passing in
     /// the chunk and a reference to the given
     /// [`VoxelChunkSignedDistanceField`] that has been filled with signed
@@ -634,7 +634,7 @@ pub fn compute_sdf_gradient_from_corner_samples(
 
 #[inline]
 pub fn sample_voxel_object_sdf(
-    object: &ChunkedVoxelObject,
+    object: &VoxelObject,
     grid_dimensions: &[usize; 3],
     position: &Point3,
 ) -> f32 {
@@ -678,39 +678,37 @@ pub fn sample_voxel_object_sdf(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chunks::tests::OffsetBoxVoxelGenerator;
+    use crate::object::tests::OffsetBoxVoxelGenerator;
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::single_default();
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_full_chunk() {
-        let generator =
-            OffsetBoxVoxelGenerator::with_default([ChunkedVoxelObject::chunk_size(); 3]);
-        let object = ChunkedVoxelObject::generate(&generator);
+        let generator = OffsetBoxVoxelGenerator::with_default([VoxelObject::chunk_size(); 3]);
+        let object = VoxelObject::generate(&generator);
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_two_adjacent_full_chunks() {
         let generator = OffsetBoxVoxelGenerator::with_default([
-            2 * ChunkedVoxelObject::chunk_size(),
-            ChunkedVoxelObject::chunk_size(),
-            ChunkedVoxelObject::chunk_size(),
+            2 * VoxelObject::chunk_size(),
+            VoxelObject::chunk_size(),
+            VoxelObject::chunk_size(),
         ]);
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_fully_enclosed_chunk() {
-        let generator =
-            OffsetBoxVoxelGenerator::with_default([3 * ChunkedVoxelObject::chunk_size(); 3]);
-        let object = ChunkedVoxelObject::generate(&generator);
+        let generator = OffsetBoxVoxelGenerator::with_default([3 * VoxelObject::chunk_size(); 3]);
+        let object = VoxelObject::generate(&generator);
         object.validate_sdf();
     }
 }

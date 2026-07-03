@@ -2,8 +2,8 @@
 
 use crate::{
     Voxel, VoxelManager, VoxelObjectID, VoxelObjectManager,
-    chunks::{ChunkedVoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     interaction::{self, VoxelObjectInteractionContext, VoxelRemovalOutcome},
+    object::{VoxelObject, inertia::VoxelObjectInertialPropertyUpdater},
     voxel_types::VoxelTypeRegistry,
 };
 use anyhow::{Result, bail};
@@ -563,7 +563,7 @@ fn with_potential_voxel_object(
     entity_id: EntityID,
     mut f: impl FnMut(
         &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
-        &mut ChunkedVoxelObject,
+        &mut VoxelObject,
         Vector3,
         Isometry3,
     ),
@@ -610,7 +610,7 @@ fn with_potential_voxel_object(
 
 fn apply_sphere_absorption(
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
-    voxel_object: &mut ChunkedVoxelObject,
+    voxel_object: &mut VoxelObject,
     world_to_voxel_object_transform: &Isometry3,
     tracking_absorbing_sphere: &mut TrackingVoxelAbsorbingSphere,
     sphere_to_world_transform: &Isometry3,
@@ -654,7 +654,7 @@ fn apply_sphere_absorption(
 
 fn apply_capsule_absorption(
     inertial_property_updater: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
-    voxel_object: &mut ChunkedVoxelObject,
+    voxel_object: &mut VoxelObject,
     world_to_voxel_object_transform: &Isometry3,
     tracking_absorbing_capsule: &mut TrackingVoxelAbsorbingCapsule,
     capsule_to_world_transform: &Isometry3,
@@ -699,12 +699,12 @@ fn apply_capsule_absorption(
 pub fn apply_symmetric_mutual_absorption(
     inertial_property_updater_a: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
     inertial_property_updater_b: &mut VoxelObjectInertialPropertyUpdater<'_, '_>,
-    voxel_object_a: &mut ChunkedVoxelObject,
-    voxel_object_b: &mut ChunkedVoxelObject,
+    voxel_object_a: &mut VoxelObject,
+    voxel_object_b: &mut VoxelObject,
     transform_from_world_to_a: &Isometry3,
     transform_from_world_to_b: &Isometry3,
 ) {
-    ChunkedVoxelObject::modify_intersecting_voxels(
+    VoxelObject::modify_intersecting_voxels(
         voxel_object_a,
         voxel_object_b,
         transform_from_world_to_a,

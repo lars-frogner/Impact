@@ -19,7 +19,7 @@ use impact_light::MAX_SHADOW_MAP_CASCADES;
 use impact_math::vector::Vector4C;
 use impact_mesh::{LineSegmentMesh, LineSegmentMeshDirtyMask, TriangleMesh, VertexColor};
 use impact_rendering::resource::BasicResourceRegistries;
-use impact_voxel::chunks::CHUNK_SIZE;
+use impact_voxel::object::CHUNK_SIZE;
 
 impl GizmoType {
     fn generate_mesh_in_registry(&self, resource_registries: &mut impl BasicResourceRegistries) {

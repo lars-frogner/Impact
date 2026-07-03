@@ -1,7 +1,7 @@
-//! Mesh representation of chunked voxel objects.
+//! Mesh representation of voxel objects.
 
-use crate::chunks::{
-    ChunkedVoxelObject, VoxelChunkFlags,
+use crate::object::{
+    VoxelChunkFlags, VoxelObject,
     sdf::{VoxelChunkSignedDistanceField, surface_nets::SurfaceNetsBuffer},
 };
 use bytemuck::{Pod, Zeroable};
@@ -14,20 +14,20 @@ use impact_math::{
 };
 use std::{array, collections::BTreeSet, ops::Range};
 
-/// A [`ChunkedVoxelObject`] with an associated [`ChunkedVoxelObjectMesh`].
+/// A [`VoxelObject`] with an associated [`VoxelObjectMesh`].
 #[derive(Debug)]
-pub struct MeshedChunkedVoxelObject {
-    object: ChunkedVoxelObject,
-    mesh: ChunkedVoxelObjectMesh,
+pub struct MeshedVoxelObject {
+    object: VoxelObject,
+    mesh: VoxelObjectMesh,
 }
 
-/// A mesh representation of a [`ChunkedVoxelObject`]. All the vertices and
-/// indices for the full object are stored together, but the index buffer is
-/// laid out so that the indices defining the triangles for a specific chunk are
+/// A mesh representation of a [`VoxelObject`]. All the vertices and indices for
+/// the full object are stored together, but the index buffer is laid out so
+/// that the indices defining the triangles for a specific chunk are
 /// contiguous in the buffer. A list of [`ChunkSubmesh`] objects mapping each
 /// chunk to its segment of the index buffer is also stored.
 #[derive(Debug)]
-pub struct ChunkedVoxelObjectMesh {
+pub struct VoxelObjectMesh {
     positions: Vec<VoxelMeshVertexPosition>,
     normal_vectors: Vec<VoxelMeshVertexNormalVector>,
     index_materials: Vec<VoxelMeshIndexMaterials>,
@@ -37,20 +37,20 @@ pub struct ChunkedVoxelObjectMesh {
     chunk_submesh_manager: ChunkSubmeshManager,
 }
 
-/// A vertex position in a [`ChunkedVoxelObjectMesh`].
+/// A vertex position in a [`VoxelObjectMesh`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VoxelMeshVertexPosition(pub [f32; 3]);
 
-/// A vertex normal vector in a [`ChunkedVoxelObjectMesh`].
+/// A vertex normal vector in a [`VoxelObjectMesh`].
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Zeroable, Pod)]
 pub struct VoxelMeshVertexNormalVector(pub [f32; 3]);
 
 /// A set of four material indices and corresponding weights for a vertex index
-/// in a [`ChunkedVoxelObjectMesh`]. The materials must be specificed per index
-/// rather than per vertex to ensure that the four materials to blend are the
-/// same for each triangle. The material indices represent the four materials
+/// in a [`VoxelObjectMesh`]. The materials must be specificed per index rather
+/// than per vertex to ensure that the four materials to blend are the same for
+/// each triangle. The material indices represent the four materials
 /// that have the strongest influence on the triangle containing this vertex
 /// index, and the weight for the material is the number of voxels among the
 /// eight voxels defining the vertex that have that material.
@@ -61,14 +61,14 @@ pub struct VoxelMeshIndexMaterials {
     pub weights: [u8; 4],
 }
 
-/// A vertex index a [`ChunkedVoxelObjectMesh`].
+/// A vertex index a [`VoxelObjectMesh`].
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
 pub struct VoxelMeshIndex(pub u32);
 
-/// Metadata associating a chunk in a [`ChunkedVoxelObject`] with the segment of
-/// the index buffer in the [`ChunkedVoxelObjectMesh`] that defines the
-/// triangles for that chunk.
+/// Metadata associating a chunk in a [`VoxelObject`] with the segment of the
+/// index buffer in the [`VoxelObjectMesh`] that defines the triangles for that
+/// chunk.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct ChunkSubmesh {
@@ -139,30 +139,29 @@ struct RangeAllocator {
 #[derive(Clone, Debug)]
 struct RangeByStart(Range<usize>);
 
-impl MeshedChunkedVoxelObject {
-    /// Creates the [`ChunkedVoxelObjectMesh`] for the given
-    /// [`ChunkedVoxelObject`] and returns them as a
-    /// [`MeshedChunkedVoxelObject`].
-    pub fn create(voxel_object: ChunkedVoxelObject) -> Self {
-        let mesh = ChunkedVoxelObjectMesh::create(&voxel_object);
+impl MeshedVoxelObject {
+    /// Creates the [`VoxelObjectMesh`] for the given [`VoxelObject`] and
+    /// returns them as a [`MeshedVoxelObject`].
+    pub fn create(voxel_object: VoxelObject) -> Self {
+        let mesh = VoxelObjectMesh::create(&voxel_object);
         Self {
             object: voxel_object,
             mesh,
         }
     }
 
-    /// Returns a reference to the [`ChunkedVoxelObject`].
-    pub fn object(&self) -> &ChunkedVoxelObject {
+    /// Returns a reference to the [`VoxelObject`].
+    pub fn object(&self) -> &VoxelObject {
         &self.object
     }
 
-    /// Returns a mutable reference to the [`ChunkedVoxelObject`].
-    pub fn object_mut(&mut self) -> &mut ChunkedVoxelObject {
+    /// Returns a mutable reference to the [`VoxelObject`].
+    pub fn object_mut(&mut self) -> &mut VoxelObject {
         &mut self.object
     }
 
-    /// Returns a reference to the object's [`ChunkedVoxelObjectMesh`].
-    pub fn mesh(&self) -> &ChunkedVoxelObjectMesh {
+    /// Returns a reference to the object's [`VoxelObjectMesh`].
+    pub fn mesh(&self) -> &VoxelObjectMesh {
         &self.mesh
     }
 
@@ -180,8 +179,8 @@ impl MeshedChunkedVoxelObject {
     }
 }
 
-impl ChunkedVoxelObjectMesh {
-    pub fn create(voxel_object: &ChunkedVoxelObject) -> Self {
+impl VoxelObjectMesh {
+    pub fn create(voxel_object: &VoxelObject) -> Self {
         let chunk_count_heuristic = voxel_object.exposed_chunk_count_heuristic();
         let vertex_count_huristic =
             chunk_count_heuristic * Self::vertex_count_per_chunk_heuristic();
@@ -261,7 +260,7 @@ impl ChunkedVoxelObjectMesh {
     /// have been invalidated (it is assumed that this is the same voxel object
     /// used for creating the mesh initially). Invalidated mesh data may be
     /// overwritten to reuse buffer space.
-    pub fn sync_with_voxel_object(&mut self, voxel_object: &mut ChunkedVoxelObject) {
+    pub fn sync_with_voxel_object(&mut self, voxel_object: &mut VoxelObject) {
         let invalidated_mesh_chunk_indices = voxel_object.invalidated_mesh_chunk_indices();
 
         for chunk_indices in invalidated_mesh_chunk_indices {
@@ -429,7 +428,7 @@ impl ChunkedVoxelObjectMesh {
         // the number of voxels in one chunk face. Probably somewhat less, since
         // the surface is most likely not axis-aligned. So a reasonable proxy
         // for the number of vertices is the number of voxels in a chunk face.
-        ChunkedVoxelObject::chunk_size().pow(2)
+        VoxelObject::chunk_size().pow(2)
     }
 
     /// Returns a guess for the typical number of indices in a chunk mesh.
@@ -439,7 +438,7 @@ impl ChunkedVoxelObjectMesh {
     }
 
     fn vertex_position_offset_for_chunk(
-        voxel_object: &ChunkedVoxelObject,
+        voxel_object: &VoxelObject,
         chunk_indices: &[usize; 3],
     ) -> Vector3 {
         let voxel_extent = voxel_object.voxel_extent();
@@ -462,7 +461,7 @@ impl ChunkedVoxelObjectMesh {
 impl ChunkSubmesh {
     /// Creates a new [`ChunkSubmesh`] associating the chunk at the given
     /// indices in the voxel object's chunk grid with the given index range in
-    /// the index buffer of the [`ChunkedVoxelObjectMesh`].
+    /// the index buffer of the [`VoxelObjectMesh`].
     fn new(
         chunk_indices: [usize; 3],
         index_offset: usize,

@@ -2,7 +2,7 @@
 
 use crate::{
     VoxelObjectID, VoxelObjectManager,
-    chunks::inertia::VoxelObjectInertialPropertyManager,
+    object::inertia::VoxelObjectInertialPropertyManager,
     interaction::{self, ExtractedComponents, VoxelObjectInteractionContext},
     voxel_types::VoxelTypeRegistry,
 };

@@ -1,6 +1,6 @@
 //! Generation of voxel type distributions.
 
-use crate::{Voxel, chunks::ChunkedVoxelObject, voxel_types::VoxelType};
+use crate::{Voxel, object::VoxelObject, voxel_types::VoxelType};
 use impact_alloc::{AVec, Allocator, avec};
 use impact_math::point::Point3;
 use simdnoise::{NoiseBuilder, Settings};
@@ -86,7 +86,7 @@ impl SameVoxelTypeGenerator {
     }
 
     fn set_voxel_types_for_chunk(&self, voxels: &mut [Voxel]) {
-        assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
+        assert_eq!(voxels.len(), VoxelObject::chunk_voxel_count());
 
         for voxel in voxels {
             voxel.set_voxel_type(self.voxel_type);
@@ -115,7 +115,7 @@ impl GradientNoiseVoxelTypeGenerator {
     }
 
     fn noise_buffer_len(&self) -> usize {
-        ChunkedVoxelObject::chunk_voxel_count() * self.voxel_types.len()
+        VoxelObject::chunk_voxel_count() * self.voxel_types.len()
     }
 
     fn create_noise_buffer_in<A: Allocator>(&self, alloc: A) -> AVec<f32, A> {
@@ -128,7 +128,7 @@ impl GradientNoiseVoxelTypeGenerator {
         buffers: &mut VoxelTypeGeneratorChunkBuffers<A>,
         chunk_origin: &Point3,
     ) {
-        assert_eq!(voxels.len(), ChunkedVoxelObject::chunk_voxel_count());
+        assert_eq!(voxels.len(), VoxelObject::chunk_voxel_count());
 
         NoiseBuilder::gradient_4d_offset(
             // Warning: We reverse the order of dimensions here because the
@@ -136,11 +136,11 @@ impl GradientNoiseVoxelTypeGenerator {
             0.0,
             self.voxel_types.len(),
             chunk_origin.z(),
-            ChunkedVoxelObject::chunk_size(),
+            VoxelObject::chunk_size(),
             chunk_origin.y(),
-            ChunkedVoxelObject::chunk_size(),
+            VoxelObject::chunk_size(),
             chunk_origin.x(),
-            ChunkedVoxelObject::chunk_size(),
+            VoxelObject::chunk_size(),
         )
         .with_freq_4d(
             self.voxel_type_frequency,

@@ -2,9 +2,9 @@
 
 use crate::{
     Voxel, VoxelFlags,
-    chunks::{
-        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkedVoxelObject, LOG2_CHUNK_SIZE, LoopForChunkVoxels,
-        NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk, chunk_start_voxel_idx,
+    object::{
+        CHUNK_SIZE, CHUNK_VOXEL_COUNT, LOG2_CHUNK_SIZE, LoopForChunkVoxels, NonUniformVoxelChunk,
+        UniformVoxelChunk, VoxelChunk, VoxelObject, chunk_start_voxel_idx,
         chunk_voxel_indices_from_linear_idx, chunk_voxels, extract_slice_segments_mut,
         linear_voxel_idx_within_chunk,
     },
@@ -13,8 +13,8 @@ use crate::{
 use std::{iter, ops::Range};
 
 /// Auxiliary data structure for finding regions of connected voxels in a
-/// [`ChunkedVoxelObject`], and hence determining whether and where the object
-/// is split into multiple disconnected parts.
+/// [`VoxelObject`], and hence determining whether and where the object is split
+/// into multiple disconnected parts.
 ///
 /// This is a connected-component labeling problem. We solve it in a two-level
 /// process, where we first use the voxel adjacency information to label
@@ -35,9 +35,8 @@ use std::{iter, ops::Range};
 #[derive(Clone, Debug)]
 pub struct SplitDetector {
     /// Labels identifying which chunk-local connected region each voxel belongs
-    /// to. This buffer is laid out exactly like `voxels` in
-    /// `ChunkedVoxelObject`, with the voxels for each non-uniform chunk in a
-    /// contiguous section.
+    /// to. This buffer is laid out exactly like `voxels` in `VoxelObject`, with
+    /// the voxels for each non-uniform chunk in a contiguous section.
     pub(crate) voxel_region_labels: Vec<LocalRegionLabel>,
     /// Chunk-local connected regions. The first `original_uniform_chunk_count`
     /// regions are the single regions for each uniform chunk. The remainder of
@@ -175,7 +174,7 @@ const CHUNK_MAX_ADJACENT_REGION_CONNECTIONS: usize = CHUNK_MAX_REGIONS;
 /// This is equivalent to [`CHUNK_MAX_ADJACENT_REGION_CONNECTIONS`].
 const CHUNK_MAX_BOUNDARY_REGIONS: usize = CHUNK_MAX_ADJACENT_REGION_CONNECTIONS;
 
-impl ChunkedVoxelObject {
+impl VoxelObject {
     /// Identifies two disconnected regions of the voxel object (if there are
     /// more than two, the rest are ignored). Returns [`None`] if the object has
     /// fewer than two disconnected regions.
@@ -2210,7 +2209,7 @@ pub mod fuzzing {
     use impact_alloc::Global;
 
     pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator<Global>) {
-        let object = ChunkedVoxelObject::generate(&generator);
+        let object = VoxelObject::generate(&generator);
         object.validate_region_count();
     }
 }

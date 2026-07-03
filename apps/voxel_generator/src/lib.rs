@@ -24,9 +24,9 @@ use impact::{
 use impact_dev_ui::UserInterfaceConfig;
 use impact_voxel::{
     HasVoxelObject,
-    chunks::ChunkedVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
-    mesh::MeshedChunkedVoxelObject,
+    mesh::MeshedVoxelObject,
+    object::VoxelObject,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -165,13 +165,10 @@ impl Default for AppConfig {
 fn generate_next_voxel_object(
     thread_pool: &DynamicThreadPool,
     editor: &mut Editor,
-) -> Option<(MeshedChunkedVoxelObject, ModelTransform)> {
+) -> Option<(MeshedVoxelObject, ModelTransform)> {
     let generator = editor.build_next_voxel_sdf_generator(Global)?;
     Some((
-        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
-            thread_pool,
-            &generator,
-        )),
+        MeshedVoxelObject::create(VoxelObject::generate_in_parallel(thread_pool, &generator)),
         compute_model_transform(&generator),
     ))
 }
@@ -179,13 +176,10 @@ fn generate_next_voxel_object(
 fn generate_next_voxel_object_or_default(
     thread_pool: &DynamicThreadPool,
     editor: &mut Editor,
-) -> (MeshedChunkedVoxelObject, ModelTransform) {
+) -> (MeshedVoxelObject, ModelTransform) {
     let generator = editor.build_next_voxel_sdf_generator_or_default(Global);
     (
-        MeshedChunkedVoxelObject::create(ChunkedVoxelObject::generate_in_parallel(
-            thread_pool,
-            &generator,
-        )),
+        MeshedVoxelObject::create(VoxelObject::generate_in_parallel(thread_pool, &generator)),
         compute_model_transform(&generator),
     )
 }

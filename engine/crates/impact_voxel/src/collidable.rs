@@ -8,10 +8,10 @@ pub mod systems;
 
 use crate::{
     Voxel, VoxelObjectID, VoxelObjectManager, VoxelSignedDistance, VoxelSurfacePlacement,
-    chunks::{
-        self, CHUNK_SIZE, ChunkedVoxelObject, VoxelChunk, chunk_range_encompassing_voxel_range, sdf,
+    mesh::MeshedVoxelObject,
+    object::{
+        self, CHUNK_SIZE, VoxelChunk, VoxelObject, chunk_range_encompassing_voxel_range, sdf,
     },
-    mesh::MeshedChunkedVoxelObject,
 };
 use impact_geometry::{Capsule, Plane, Sphere};
 use impact_id::EntityID;
@@ -369,8 +369,8 @@ fn generate_mutual_voxel_object_contact_manifold(
 }
 
 pub fn for_each_mutual_voxel_object_contact<'a>(
-    voxel_object_a: &'a MeshedChunkedVoxelObject,
-    voxel_object_b: &'a MeshedChunkedVoxelObject,
+    voxel_object_a: &'a MeshedVoxelObject,
+    voxel_object_b: &'a MeshedVoxelObject,
     transform_from_world_to_a: &'a Isometry3,
     transform_from_world_to_b: &'a Isometry3,
     f: &mut impl FnMut([usize; 4], ContactGeometry),
@@ -378,7 +378,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
     let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverted();
 
     let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
-        ChunkedVoxelObject::determine_voxel_ranges_encompassing_intersection(
+        VoxelObject::determine_voxel_ranges_encompassing_intersection(
             voxel_object_a.object(),
             voxel_object_b.object(),
             &transform_from_b_to_a,
@@ -581,7 +581,7 @@ fn generate_sphere_voxel_object_contact_manifold(
 }
 
 pub fn for_each_sphere_voxel_object_contact(
-    voxel_object: &ChunkedVoxelObject,
+    voxel_object: &VoxelObject,
     transform_to_object_space: &Isometry3,
     sphere: &Sphere,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
@@ -659,7 +659,7 @@ fn generate_voxel_object_plane_contact_manifold(
 }
 
 pub fn for_each_voxel_object_plane_contact(
-    voxel_object: &ChunkedVoxelObject,
+    voxel_object: &VoxelObject,
     transform_to_object_space: &Isometry3,
     plane: &Plane,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
@@ -740,7 +740,7 @@ fn generate_capsule_voxel_object_contact_manifold(
 }
 
 pub fn for_each_capsule_voxel_object_contact(
-    voxel_object: &ChunkedVoxelObject,
+    voxel_object: &VoxelObject,
     transform_to_object_space: &Isometry3,
     capsule: &Capsule,
     f: &mut impl FnMut([usize; 3], ContactGeometry),
@@ -772,7 +772,7 @@ pub fn for_each_capsule_voxel_object_contact(
 
 #[inline]
 fn determine_sdf_value_and_normal_at_point_if_intersecting(
-    object: &ChunkedVoxelObject,
+    object: &VoxelObject,
     grid_dimensions: &[usize; 3],
     norm_point: &Point3C,
 ) -> Option<(f32, UnitVector3)> {
@@ -798,7 +798,7 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let containing_cell_corner = norm_point.as_vector().component_floor();
     let [ci, cj, ck] = <[f32; 3]>::from(containing_cell_corner).map(|idx| idx as usize);
 
-    let [chunk_i, chunk_j, chunk_k] = chunks::chunk_indices_from_object_voxel_indices(ci, cj, ck);
+    let [chunk_i, chunk_j, chunk_k] = object::chunk_indices_from_object_voxel_indices(ci, cj, ck);
     let chunk_idx = object.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
     let chunk = object.chunk_at_idx_maybe_unchecked(chunk_idx);
 
@@ -809,7 +809,7 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let chunk_start_voxel_idx = chunk.start_voxel_idx();
 
     let containing_voxel_idx = chunk_start_voxel_idx
-        + chunks::linear_voxel_idx_within_chunk_from_object_voxel_indices(ci, cj, ck);
+        + object::linear_voxel_idx_within_chunk_from_object_voxel_indices(ci, cj, ck);
 
     let containing_signed_dist = object
         .voxel_at_idx_maybe_unchecked(containing_voxel_idx)
@@ -821,14 +821,14 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     }
 
     // Lower indices within chunk
-    let [cli, clj, clk] = chunks::voxel_indices_within_chunk_from_object_voxel_indices(li, lj, lk);
+    let [cli, clj, clk] = object::voxel_indices_within_chunk_from_object_voxel_indices(li, lj, lk);
 
     let all_in_same_chunk = cli != CHUNK_SIZE - 1 && clj != CHUNK_SIZE - 1 && clk != CHUNK_SIZE - 1;
 
     let signed_distances = if all_in_same_chunk {
         let sample_dist = |i, j, k| {
             let voxel_idx =
-                chunk_start_voxel_idx + chunks::linear_voxel_idx_within_chunk(&[i, j, k]);
+                chunk_start_voxel_idx + object::linear_voxel_idx_within_chunk(&[i, j, k]);
             let voxel = object.voxel_at_idx_maybe_unchecked(voxel_idx);
             voxel.signed_distance().to_f32()
         };

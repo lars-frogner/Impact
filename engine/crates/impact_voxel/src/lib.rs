@@ -3,12 +3,12 @@
 #[macro_use]
 mod macros;
 
-pub mod chunks;
 pub mod collidable;
 pub mod generation;
 pub mod gpu_resource;
 pub mod interaction;
 pub mod mesh;
+pub mod object;
 pub mod render_commands;
 pub mod setup;
 pub mod shader_templates;
@@ -18,14 +18,14 @@ pub mod voxel_types;
 use anyhow::{Result, bail};
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
-use chunks::inertia::VoxelObjectInertialPropertyManager;
 use gpu_resource::VoxelObjectGPUResources;
 use impact_containers::NoHashMap;
 use impact_gpu::{bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, wgpu};
 use impact_id::define_entity_id_newtype;
 use impact_model::impl_InstanceFeature;
 use impact_scene::model::ModelInstanceManager;
-use mesh::MeshedChunkedVoxelObject;
+use mesh::MeshedVoxelObject;
+use object::inertia::VoxelObjectInertialPropertyManager;
 use roc_integration::roc;
 use std::{
     fmt,
@@ -40,8 +40,7 @@ use voxel_types::VoxelType;
 use crate::interaction::VoxelInteractionManager;
 
 define_entity_id_newtype! {
-    /// Identifier for a
-    /// [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject) in a
+    /// Identifier for a [`VoxelObject`](crate::chunks::VoxelObject) in a
     /// [`VoxelObjectManager`].
     [pub] VoxelObjectID
 }
@@ -123,11 +122,10 @@ pub struct VoxelManager {
     pub interaction_manager: VoxelInteractionManager,
 }
 
-/// Manager of all [`ChunkedVoxelObject`](crate::chunks::ChunkedVoxelObject)s in
-/// a scene.
+/// Manager of all [`VoxelObject`](crate::chunks::VoxelObject)s in a scene.
 #[derive(Debug)]
 pub struct VoxelObjectManager {
-    voxel_objects: NoHashMap<VoxelObjectID, MeshedChunkedVoxelObject>,
+    voxel_objects: NoHashMap<VoxelObjectID, MeshedVoxelObject>,
     physics_contexts: NoHashMap<VoxelObjectID, VoxelObjectPhysicsContext>,
 }
 
@@ -531,23 +529,20 @@ impl VoxelObjectManager {
         self.voxel_objects.len()
     }
 
-    /// Returns a reference to the [`MeshedChunkedVoxelObject`] with the given
-    /// ID, or [`None`] if the voxel object is not present.
+    /// Returns a reference to the [`MeshedVoxelObject`] with the given ID, or
+    /// [`None`] if the voxel object is not present.
     #[inline]
-    pub fn get_voxel_object(
-        &self,
-        voxel_object_id: VoxelObjectID,
-    ) -> Option<&MeshedChunkedVoxelObject> {
+    pub fn get_voxel_object(&self, voxel_object_id: VoxelObjectID) -> Option<&MeshedVoxelObject> {
         self.voxel_objects.get(&voxel_object_id)
     }
 
-    /// Returns a mutable reference to the [`MeshedChunkedVoxelObject`] with the
-    /// given ID, or [`None`] if the voxel object is not present.
+    /// Returns a mutable reference to the [`MeshedVoxelObject`] with the given
+    /// ID, or [`None`] if the voxel object is not present.
     #[inline]
     pub fn get_voxel_object_mut(
         &mut self,
         voxel_object_id: VoxelObjectID,
-    ) -> Option<&mut MeshedChunkedVoxelObject> {
+    ) -> Option<&mut MeshedVoxelObject> {
         self.voxel_objects.get_mut(&voxel_object_id)
     }
 
@@ -562,16 +557,13 @@ impl VoxelObjectManager {
         self.physics_contexts.get(&voxel_object_id)
     }
 
-    /// Returns mutable references to the [`MeshedChunkedVoxelObject`] with the
-    /// given ID and its [`VoxelObjectPhysicsContext`] if both exist.
+    /// Returns mutable references to the [`MeshedVoxelObject`] with the given
+    /// ID and its [`VoxelObjectPhysicsContext`] if both exist.
     #[inline]
     pub fn get_voxel_object_with_physics_context_mut(
         &mut self,
         voxel_object_id: VoxelObjectID,
-    ) -> Option<(
-        &mut MeshedChunkedVoxelObject,
-        &mut VoxelObjectPhysicsContext,
-    )> {
+    ) -> Option<(&mut MeshedVoxelObject, &mut VoxelObjectPhysicsContext)> {
         let voxel_object = self.voxel_objects.get_mut(&voxel_object_id)?;
         let physics_context = self.physics_contexts.get_mut(&voxel_object_id)?;
         Some((voxel_object, physics_context))
@@ -585,19 +577,18 @@ impl VoxelObjectManager {
 
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
     #[inline]
-    pub fn voxel_objects(&self) -> &NoHashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
+    pub fn voxel_objects(&self) -> &NoHashMap<VoxelObjectID, MeshedVoxelObject> {
         &self.voxel_objects
     }
 
     /// Returns a mutable reference to the [`HashMap`] storing all voxel
     /// objects.
     #[inline]
-    pub fn voxel_objects_mut(&mut self) -> &mut NoHashMap<VoxelObjectID, MeshedChunkedVoxelObject> {
+    pub fn voxel_objects_mut(&mut self) -> &mut NoHashMap<VoxelObjectID, MeshedVoxelObject> {
         &mut self.voxel_objects
     }
 
-    /// Adds the given [`MeshedChunkedVoxelObject`] to the manager under the
-    /// given ID.
+    /// Adds the given [`MeshedVoxelObject`] to the manager under the given ID.
     ///
     /// # Errors
     /// Returns an error if the ID is already present.
@@ -605,7 +596,7 @@ impl VoxelObjectManager {
     pub fn add_voxel_object(
         &mut self,
         voxel_object_id: VoxelObjectID,
-        voxel_object: MeshedChunkedVoxelObject,
+        voxel_object: MeshedVoxelObject,
     ) -> Result<()> {
         if self.voxel_objects.contains_key(&voxel_object_id) {
             bail!("A voxel object with ID {voxel_object_id} is already present");
@@ -635,8 +626,8 @@ impl VoxelObjectManager {
         Ok(())
     }
 
-    /// Removes the [`MeshedChunkedVoxelObject`] with the given ID if it exists.
-    /// Also removes any associated [`VoxelObjectInertialPropertyManager`].
+    /// Removes the [`MeshedVoxelObject`] with the given ID if it exists. Also
+    /// removes any associated [`VoxelObjectInertialPropertyManager`].
     #[inline]
     pub fn remove_voxel_object(&mut self, voxel_object_id: VoxelObjectID) {
         self.voxel_objects.remove(&voxel_object_id);

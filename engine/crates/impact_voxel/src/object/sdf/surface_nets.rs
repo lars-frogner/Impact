@@ -2,7 +2,7 @@
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
 use crate::{
-    chunks::sdf::{SDF_GRID_CELL_COUNT, VoxelChunkSignedDistanceField},
+    object::sdf::{SDF_GRID_CELL_COUNT, VoxelChunkSignedDistanceField},
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
     utils::{Dimension, Side},
 };
