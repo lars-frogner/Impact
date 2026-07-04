@@ -125,6 +125,7 @@ fuzzing = [
     "impact_dev_ui/arbitrary",
 ]
 
+unchecked = ["impact/unchecked"]
 checked_lock_order = ["impact/checked_lock_order"]
 hot_reloading = ["dynamic_lib/hot_reloading"]
 

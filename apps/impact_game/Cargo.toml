@@ -119,6 +119,7 @@ png = ["impact/png"]
 obj = ["impact/obj"]
 ply = ["impact/ply"]
 
+unchecked = ["impact/unchecked"]
 checked_lock_order = ["impact/checked_lock_order"]
 hot_reloading = ["dynamic_lib/hot_reloading"]
 
