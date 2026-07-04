@@ -1,8 +1,11 @@
 //! Mesh representation of voxel objects.
 
-use crate::object::{
-    VoxelChunkFlags, VoxelObject,
-    sdf::{VoxelChunkSignedDistanceField, surface_nets::SurfaceNetsBuffer},
+use crate::{
+    collidable::VoxelObjectCollisionProbes,
+    object::{
+        VoxelChunkFlags, VoxelObject,
+        sdf::{VoxelChunkSignedDistanceField, surface_nets::SurfaceNetsBuffer},
+    },
 };
 use bytemuck::{Pod, Zeroable};
 use impact_containers::KeyIndexMapper;
@@ -14,11 +17,13 @@ use impact_math::{
 };
 use std::{array, collections::BTreeSet, ops::Range};
 
-/// A [`VoxelObject`] with an associated [`VoxelObjectMesh`].
+/// A [`VoxelObject`] with an associated [`VoxelObjectMesh`] and mesh-derived
+/// state.
 #[derive(Debug)]
 pub struct MeshedVoxelObject {
     object: VoxelObject,
     mesh: VoxelObjectMesh,
+    collision_probes: VoxelObjectCollisionProbes,
 }
 
 /// A mesh representation of a [`VoxelObject`]. All the vertices and indices for
@@ -140,13 +145,18 @@ struct RangeAllocator {
 struct RangeByStart(Range<usize>);
 
 impl MeshedVoxelObject {
-    /// Creates the [`VoxelObjectMesh`] for the given [`VoxelObject`] and
-    /// returns them as a [`MeshedVoxelObject`].
+    /// Creates the [`VoxelObjectMesh`] and associated derived state for the
+    /// given [`VoxelObject`] and returns it as a [`MeshedVoxelObject`].
     pub fn create(voxel_object: VoxelObject) -> Self {
         let mesh = VoxelObjectMesh::create(&voxel_object);
+
+        let collision_probes =
+            VoxelObjectCollisionProbes::compute_for_all_chunks(&voxel_object, &mesh);
+
         Self {
             object: voxel_object,
             mesh,
+            collision_probes,
         }
     }
 
@@ -165,12 +175,23 @@ impl MeshedVoxelObject {
         &self.mesh
     }
 
-    /// Recomputes the meshes for any exposed chunks in the voxel object that
-    /// have been invalidated (it is assumed that this is the same voxel object
-    /// used for creating the mesh initially). Invalidated mesh data may be
-    /// overwritten to reuse buffer space.
+    /// Returns a reference to the object's [`VoxelObjectCollisionProbes`].
+    pub fn collision_probes(&self) -> &VoxelObjectCollisionProbes {
+        &self.collision_probes
+    }
+
+    /// Recomputes the meshes and associated derived state for any exposed
+    /// chunks in the voxel object that have been invalidated (it is assumed
+    /// that this is the same voxel object used for creating the mesh
+    /// initially). Invalidated mesh data may be overwritten to reuse buffer
+    /// space.
     pub fn sync_mesh_with_object(&mut self) {
-        self.mesh.sync_with_voxel_object(&mut self.object);
+        self.mesh.sync_with_voxel_object(&self.object);
+
+        self.collision_probes
+            .sync_with_voxel_object_and_mesh(&self.object, &self.mesh);
+
+        self.object.mark_chunk_meshes_synchronized();
     }
 
     /// Signaling that the mesh modifications have been synchronized with the GPU.
@@ -260,7 +281,7 @@ impl VoxelObjectMesh {
     /// have been invalidated (it is assumed that this is the same voxel object
     /// used for creating the mesh initially). Invalidated mesh data may be
     /// overwritten to reuse buffer space.
-    pub fn sync_with_voxel_object(&mut self, voxel_object: &mut VoxelObject) {
+    pub fn sync_with_voxel_object(&mut self, voxel_object: &VoxelObject) {
         let invalidated_mesh_chunk_indices = voxel_object.invalidated_mesh_chunk_indices();
 
         for chunk_indices in invalidated_mesh_chunk_indices {
@@ -356,8 +377,6 @@ impl VoxelObjectMesh {
         }
 
         self.chunk_submesh_manager.perform_maintainance();
-
-        voxel_object.mark_chunk_meshes_synchronized();
     }
 
     /// Returns a slice with the positions of all the vertices of the mesh.
@@ -387,10 +406,21 @@ impl VoxelObjectMesh {
         self.chunk_submesh_manager.chunk_submeshes()
     }
 
+    /// Returns a slice with the vertex range for each chunk, in the same order
+    /// as [`Self::chunk_submeshes`].
+    pub fn chunk_vertex_ranges(&self) -> &[Range<usize>] {
+        self.chunk_submesh_manager.chunk_vertex_ranges()
+    }
+
     /// Returns the number of chunks in the voxel object that has associated
     /// triangles in the mesh.
     pub fn n_chunks(&self) -> usize {
         self.chunk_submeshes().len()
+    }
+
+    /// Returns the number of vertices in the mesh.
+    pub fn n_vertices(&self) -> usize {
+        self.positions().len()
     }
 
     /// Returns the modifications that were made to the mesh since it was last
@@ -399,18 +429,22 @@ impl VoxelObjectMesh {
         self.chunk_submesh_manager.modifications()
     }
 
-    pub fn vertex_positions_for_chunk_at_indices(
+    /// Returns the ranges of vertices and indices, respectively, for the chunk
+    /// at the given indices if that chunk has a mesh.
+    pub fn vertex_and_index_range_for_chunk_at_indices(
         &self,
         chunk_indices: [usize; 3],
-    ) -> Option<&[VoxelMeshVertexPosition]> {
+    ) -> Option<(Range<usize>, Range<usize>)> {
         let submesh_idx = self
             .chunk_submesh_manager
             .chunk_index_map
             .get(chunk_indices)?;
 
-        let vertex_range = self.chunk_submesh_manager.chunk_vertex_ranges[submesh_idx].clone();
+        let vertex_range = self.chunk_vertex_ranges()[submesh_idx].clone();
 
-        Some(&self.positions[vertex_range])
+        let index_range = self.chunk_submeshes()[submesh_idx].index_range();
+
+        Some((vertex_range, index_range))
     }
 
     /// Signaling that the mesh modifications from [`Self::mesh_modifications`]
@@ -592,6 +626,10 @@ impl ChunkSubmeshManager {
 
     fn chunk_submeshes(&self) -> &[ChunkSubmesh] {
         &self.chunk_submeshes
+    }
+
+    fn chunk_vertex_ranges(&self) -> &[Range<usize>] {
+        &self.chunk_vertex_ranges
     }
 
     fn push_chunk(

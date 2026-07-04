@@ -339,6 +339,24 @@ pub fn buffer_gizmo_instances(
         [HasCollidable]
     );
 
+    query!(
+        ecs_world,
+        |entity_id: EntityID, gizmos: &Gizmos, flags: &SceneEntityFlags| {
+            if !gizmos.visible_gizmos.contains(GizmoSet::COLLISION_PROBES) || flags.is_disabled() {
+                return;
+            }
+            buffer_instance_features_for_collision_probe_gizmos(
+                model_instance_manager,
+                voxel_object_manager,
+                scene_graph,
+                gizmo_manager.parameters(),
+                current_frame_count,
+                entity_id,
+            );
+        },
+        [HasVoxelObject, HasModel]
+    );
+
     if gizmo_manager
         .visibilities()
         .get_for(GizmoType::Contacts)
@@ -1154,6 +1172,56 @@ fn buffer_instance_features_for_collider_gizmos(
             model_instance_manager.buffer_instance_feature_slice(
                 &models[COLLIDER_GIZMO_VOXEL_SPHERE_MODEL_IDX].model_id,
                 &instance_features,
+            );
+        }
+    }
+}
+
+fn buffer_instance_features_for_collision_probe_gizmos(
+    model_instance_manager: &mut ModelInstanceManager,
+    voxel_object_manager: &VoxelObjectManager,
+    scene_graph: &SceneGraph,
+    parameters: &GizmoParameters,
+    current_frame_number: u32,
+    entity_id: EntityID,
+) {
+    let node = scene_graph
+        .model_instance_nodes()
+        .node(ModelInstanceID::from_entity_id(entity_id));
+
+    if node.frame_number_when_last_visible() != current_frame_number {
+        return;
+    }
+
+    let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+    let Some(voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id) else {
+        return;
+    };
+
+    let model_view_transform = Similarity3::from(
+        model_instance_manager
+            .feature::<InstanceModelViewTransformWithPrevious>(
+                node.get_rendering_feature_id_of_type(
+                    InstanceModelViewTransformWithPrevious::FEATURE_TYPE_ID,
+                )
+                .unwrap(),
+            )
+            .current,
+    );
+
+    for (_, probe_points) in voxel_object.collision_probes().points_per_chunk() {
+        for probe_point in probe_points {
+            let probe_point = probe_point.aligned();
+
+            let probe_transform = model_view_transform
+                .applied_to_translation(probe_point.as_vector())
+                .applied_to_scaling(parameters.collision_probe_radius);
+
+            model_instance_manager.buffer_instance_feature(
+                GizmoType::CollisionProbes.only_model_id(),
+                &GizmoInstanceFeatures::with_transform(GizmoInstanceModelViewTransform::from(
+                    &probe_transform,
+                )),
             );
         }
     }

@@ -3,9 +3,8 @@
 use crate::{
     Voxel, VoxelPlacement, VoxelSurfacePlacement,
     object::{
-        CHUNK_SIZE, VoxelChunk, VoxelObject, chunk_range_encompassing_voxel_range, chunk_voxels,
-        chunk_voxels_mut, linear_voxel_idx_within_chunk_from_object_voxel_indices, sdf,
-        split_detection::SplitDetector,
+        self, CHUNK_SIZE, VoxelChunk, VoxelObject, VoxelRanges, chunk_voxels, chunk_voxels_mut,
+        sdf, split_detection::SplitDetector,
     },
 };
 use impact_containers::HashSet;
@@ -15,9 +14,6 @@ use impact_geometry::{
 };
 use impact_math::{point::Point3, transform::Isometry3};
 use std::{array, ops::Range};
-
-pub type VoxelRanges = [Range<usize>; 3];
-pub type ChunkRanges = [Range<usize>; 3];
 
 impl VoxelObject {
     /// Finds non-empty voxels with at least one exposed face that are not fully
@@ -109,7 +105,7 @@ impl VoxelObject {
 
         let included_chunk_ranges = included_voxel_ranges
             .clone()
-            .map(chunk_range_encompassing_voxel_range);
+            .map(object::chunk_range_encompassing_voxel_range);
 
         for chunk_i in included_chunk_ranges[0].clone() {
             for chunk_j in included_chunk_ranges[1].clone() {
@@ -138,7 +134,7 @@ impl VoxelObject {
                         for j in included_voxel_ranges_in_chunk[1].clone() {
                             for k in included_voxel_ranges_in_chunk[2].clone() {
                                 let voxel_idx =
-                                    linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                    object::linear_voxel_idx_within_chunk_from_object_voxel_indices(
                                         i, j, k,
                                     );
                                 let voxel = &voxels[voxel_idx];
@@ -179,7 +175,7 @@ impl VoxelObject {
 
         let included_chunk_ranges = included_voxel_ranges
             .clone()
-            .map(chunk_range_encompassing_voxel_range);
+            .map(object::chunk_range_encompassing_voxel_range);
 
         let mut removed_chunks = false;
 
@@ -227,7 +223,7 @@ impl VoxelObject {
                         for j in included_voxel_ranges_in_chunk[1].clone() {
                             for k in included_voxel_ranges_in_chunk[2].clone() {
                                 let voxel_idx =
-                                    linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                    object::linear_voxel_idx_within_chunk_from_object_voxel_indices(
                                         i, j, k,
                                     );
                                 let voxel = &mut voxels[voxel_idx];
@@ -298,7 +294,7 @@ impl VoxelObject {
 
         let touched_chunk_ranges = touched_voxel_ranges
             .clone()
-            .map(chunk_range_encompassing_voxel_range);
+            .map(object::chunk_range_encompassing_voxel_range);
 
         let normalized_sphere_radius_squared = normalized_sphere.radius_squared();
 
@@ -348,7 +344,7 @@ impl VoxelObject {
                         for j in touched_voxel_ranges_in_chunk[1].clone() {
                             for k in touched_voxel_ranges_in_chunk[2].clone() {
                                 let normalized_voxel_center_position =
-                                    normalized_voxel_center_position_from_object_voxel_indices(
+                                    object::normalized_voxel_center_position_from_object_voxel_indices(
                                         i, j, k,
                                     );
 
@@ -359,7 +355,7 @@ impl VoxelObject {
 
                                 if normalized_distance_squared < normalized_sphere_radius_squared {
                                     let voxel_idx =
-                                        linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                        object::linear_voxel_idx_within_chunk_from_object_voxel_indices(
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
@@ -432,7 +428,7 @@ impl VoxelObject {
 
         let touched_chunk_ranges = touched_voxel_ranges
             .clone()
-            .map(chunk_range_encompassing_voxel_range);
+            .map(object::chunk_range_encompassing_voxel_range);
 
         let containment_tester = normalized_capsule.create_point_containment_tester();
 
@@ -448,9 +444,11 @@ impl VoxelObject {
                         chunk_indices.map(|index| index * CHUNK_SIZE..(index + 1) * CHUNK_SIZE);
 
                     let Some(trimmed_normalized_capsule) = normalized_capsule
-                        .trim_segment_outside_aab(&normalized_chunk_aabb_from_chunk_indices(
-                            chunk_i, chunk_j, chunk_k,
-                        ))
+                        .trim_segment_outside_aab(
+                            &object::normalized_chunk_aabb_from_chunk_indices(
+                                chunk_i, chunk_j, chunk_k,
+                            ),
+                        )
                     else {
                         continue;
                     };
@@ -492,7 +490,7 @@ impl VoxelObject {
                         for j in touched_voxel_ranges_in_chunk[1].clone() {
                             for k in touched_voxel_ranges_in_chunk[2].clone() {
                                 let normalized_voxel_center_position =
-                                    normalized_voxel_center_position_from_object_voxel_indices(
+                                    object::normalized_voxel_center_position_from_object_voxel_indices(
                                         i, j, k,
                                     );
 
@@ -502,7 +500,7 @@ impl VoxelObject {
                                     )
                                 {
                                     let voxel_idx =
-                                        linear_voxel_idx_within_chunk_from_object_voxel_indices(
+                                        object::linear_voxel_idx_within_chunk_from_object_voxel_indices(
                                             i, j, k,
                                         );
                                     let voxel = &mut voxels[voxel_idx];
@@ -583,8 +581,12 @@ impl VoxelObject {
                     return false;
                 }
 
-                let center =
-                    voxel_center_position_from_object_voxel_indices(voxel_extent_a, i, j, k);
+                let center = object::voxel_center_position_from_object_voxel_indices(
+                    voxel_extent_a,
+                    i,
+                    j,
+                    k,
+                );
 
                 let center_in_b = voxel_object_b.inverse_voxel_extent()
                     * transform_from_b_to_a.inverse_transform_point(&center);
@@ -614,8 +616,12 @@ impl VoxelObject {
                     return false;
                 }
 
-                let center =
-                    voxel_center_position_from_object_voxel_indices(voxel_extent_b, i, j, k);
+                let center = object::voxel_center_position_from_object_voxel_indices(
+                    voxel_extent_b,
+                    i,
+                    j,
+                    k,
+                );
 
                 let center_in_a = voxel_object_a.inverse_voxel_extent()
                     * transform_from_b_to_a.transform_point(&center);
@@ -637,47 +643,6 @@ impl VoxelObject {
                 true
             },
         );
-    }
-
-    /// Returns the object space position of the center of the voxel at the
-    /// given object voxel indices.
-    #[inline]
-    pub fn voxel_center_position_from_object_voxel_indices(
-        &self,
-        i: usize,
-        j: usize,
-        k: usize,
-    ) -> Point3 {
-        voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
-    }
-
-    /// Returns the object space position of the center of the chunk at the
-    /// given object chunk indices.
-    #[inline]
-    pub fn chunk_center_position_from_chunk_indices(
-        &self,
-        chunk_i: usize,
-        chunk_j: usize,
-        chunk_k: usize,
-    ) -> Point3 {
-        voxel_center_position_from_object_voxel_indices(
-            self.chunk_extent(),
-            chunk_i,
-            chunk_j,
-            chunk_k,
-        )
-    }
-
-    /// Returns the object space axis aligned bounding box of the voxel at the
-    /// given object voxel indices.
-    #[inline]
-    pub fn voxel_aabb_from_object_voxel_indices(
-        &self,
-        i: usize,
-        j: usize,
-        k: usize,
-    ) -> AxisAlignedBox {
-        voxel_aabb_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 
     fn handle_chunk_voxels_modified(
@@ -853,10 +818,12 @@ impl VoxelObject {
         object_b: &Self,
         transform_from_b_to_a: &Isometry3,
     ) -> Option<(VoxelRanges, VoxelRanges)> {
-        let object_a_aabb = normalized_aabb_from_voxel_ranges(&object_a.occupied_voxel_ranges)
-            .scaled(object_a.voxel_extent);
-        let object_b_aabb = normalized_aabb_from_voxel_ranges(&object_b.occupied_voxel_ranges)
-            .scaled(object_b.voxel_extent);
+        let object_a_aabb =
+            object::normalized_aabb_from_voxel_ranges(&object_a.occupied_voxel_ranges)
+                .scaled(object_a.voxel_extent);
+        let object_b_aabb =
+            object::normalized_aabb_from_voxel_ranges(&object_b.occupied_voxel_ranges)
+                .scaled(object_b.voxel_extent);
 
         let object_b_obb = OrientedBox::from_axis_aligned_box(&object_b_aabb);
 
@@ -894,7 +861,7 @@ fn voxel_ranges_within_plane(
     max_voxel_ranges: VoxelRanges,
     normalized_plane: &Plane,
 ) -> VoxelRanges {
-    let normalized_aabb = normalized_aabb_from_voxel_ranges(&max_voxel_ranges);
+    let normalized_aabb = object::normalized_aabb_from_voxel_ranges(&max_voxel_ranges);
 
     let normalized_aabb_within_plane =
         normalized_aabb.projected_onto_negative_halfspace(normalized_plane);
@@ -921,87 +888,6 @@ fn voxel_ranges_touching_aab(
     }
 
     touched_voxel_ranges
-}
-
-#[inline]
-fn voxel_center_position_from_object_voxel_indices(
-    voxel_extent: f32,
-    i: usize,
-    j: usize,
-    k: usize,
-) -> Point3 {
-    Point3::new(
-        (i as f32 + 0.5) * voxel_extent,
-        (j as f32 + 0.5) * voxel_extent,
-        (k as f32 + 0.5) * voxel_extent,
-    )
-}
-
-#[inline]
-fn normalized_voxel_center_position_from_object_voxel_indices(
-    i: usize,
-    j: usize,
-    k: usize,
-) -> Point3 {
-    Point3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5)
-}
-
-#[inline]
-fn normalized_chunk_aabb_from_chunk_indices(
-    chunk_i: usize,
-    chunk_j: usize,
-    chunk_k: usize,
-) -> AxisAlignedBox {
-    AxisAlignedBox::new(
-        Point3::new(
-            (chunk_i * CHUNK_SIZE) as f32,
-            (chunk_j * CHUNK_SIZE) as f32,
-            (chunk_k * CHUNK_SIZE) as f32,
-        ),
-        Point3::new(
-            ((chunk_i + 1) * CHUNK_SIZE) as f32,
-            ((chunk_j + 1) * CHUNK_SIZE) as f32,
-            ((chunk_k + 1) * CHUNK_SIZE) as f32,
-        ),
-    )
-}
-
-#[inline]
-fn voxel_aabb_from_object_voxel_indices(
-    voxel_extent: f32,
-    i: usize,
-    j: usize,
-    k: usize,
-) -> AxisAlignedBox {
-    AxisAlignedBox::new(
-        Point3::new(
-            i as f32 * voxel_extent,
-            j as f32 * voxel_extent,
-            k as f32 * voxel_extent,
-        ),
-        Point3::new(
-            (i as f32 + 1.0) * voxel_extent,
-            (j as f32 + 1.0) * voxel_extent,
-            (k as f32 + 1.0) * voxel_extent,
-        ),
-    )
-}
-
-#[inline]
-fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox {
-    let lower_corner = Point3::new(
-        voxel_ranges[0].start as f32,
-        voxel_ranges[1].start as f32,
-        voxel_ranges[2].start as f32,
-    );
-
-    let upper_corner = Point3::new(
-        voxel_ranges[0].end as f32,
-        voxel_ranges[1].end as f32,
-        voxel_ranges[2].end as f32,
-    );
-
-    AxisAlignedBox::new(lower_corner, upper_corner)
 }
 
 #[cfg(feature = "fuzzing")]
@@ -1287,7 +1173,7 @@ pub mod fuzzing {
 
             inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
 
-            mesh.sync_with_voxel_object(&mut object);
+            mesh.sync_with_voxel_object(&object);
             let mesh_from_scratch = VoxelObjectMesh::create(&object);
 
             assert_eq!(

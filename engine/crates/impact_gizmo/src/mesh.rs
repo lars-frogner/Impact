@@ -189,6 +189,15 @@ impl GizmoType {
                     voxel_sphere_mesh,
                 );
             }
+            Self::CollisionProbes => {
+                let mesh = TriangleMesh::create_unit_sphere_with_color(
+                    16,
+                    VertexColor::YELLOW.with_alpha(0.4),
+                );
+                resource_registries
+                    .triangle_mesh_mut()
+                    .insert(self.only_triangle_mesh_id(), mesh);
+            }
             Self::Contacts => {
                 let mesh = TriangleMesh::create_unit_sphere_with_color(
                     16,

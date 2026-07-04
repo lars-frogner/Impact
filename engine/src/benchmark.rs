@@ -79,6 +79,7 @@ impact_profiling::define_target_enum! {
         compute_all_derived_state,
         initialize_inertial_properties,
         create_mesh,
+        compute_collision_probes,
         modify_voxels_within_sphere,
         split_off_disconnected_region,
         split_off_disconnected_region_with_inertial_property_transfer,

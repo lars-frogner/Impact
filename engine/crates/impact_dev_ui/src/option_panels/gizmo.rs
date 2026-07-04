@@ -96,6 +96,14 @@ fn gizmo_parameter_options(
             },
             Slider::new(&mut parameters.anchor_radius, 0.01..=1.0).logarithmic(true),
         )),
+        GizmoType::CollisionProbes => Some(option_slider(
+            ui,
+            LabelAndHoverText {
+                label: "Collision probe radius",
+                hover_text: "The radius to use for collision probe spheres.",
+            },
+            Slider::new(&mut parameters.collision_probe_radius, 0.01..=1.0).logarithmic(true),
+        )),
         GizmoType::Contacts => Some(option_slider(
             ui,
             LabelAndHoverText {

@@ -4,7 +4,7 @@ use crate::{
     Voxel, VoxelFlags,
     object::{
         CHUNK_SIZE, CHUNK_VOXEL_COUNT, LOG2_CHUNK_SIZE, LoopForChunkVoxels, NonUniformVoxelChunk,
-        UniformVoxelChunk, VoxelChunk, VoxelObject, chunk_start_voxel_idx,
+        UniformVoxelChunk, VoxelChunk, VoxelObject, VoxelRanges, chunk_start_voxel_idx,
         chunk_voxel_indices_from_linear_idx, chunk_voxels, extract_slice_segments_mut,
         linear_voxel_idx_within_chunk,
     },
@@ -634,7 +634,7 @@ impl SplitDetector {
         voxels: &[Voxel],
         chunk: &mut NonUniformVoxelChunk,
         chunk_idx: u32,
-        occupied_voxel_ranges: &[Range<usize>; 3],
+        occupied_voxel_ranges: &VoxelRanges,
     ) {
         for range in occupied_voxel_ranges {
             assert!(range.end <= CHUNK_SIZE);
@@ -2122,10 +2122,7 @@ fn add_adjacent_connection_for_region(
         AdjacentRegionConnection::new(adjacent_region_idx, face_dim, face_side);
 }
 
-fn for_chunk_voxel_indices_outside_ranges(
-    ranges: &[Range<usize>; 3],
-    mut f: impl FnMut([usize; 3]),
-) {
+fn for_chunk_voxel_indices_outside_ranges(ranges: &VoxelRanges, mut f: impl FnMut([usize; 3])) {
     let lower = [
         ranges[0].start.min(CHUNK_SIZE),
         ranges[1].start.min(CHUNK_SIZE),
