@@ -14,7 +14,7 @@ use impact_physics::quantities::Position;
 use impact_profiling::benchmark::Benchmarker;
 use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
 use impact_voxel::{
-    collidable,
+    collidable::{self, VoxelObjectCollisionProbes},
     generation::{
         SDFVoxelGenerator,
         sdf::{SDFGraph, SDFNode},
@@ -108,6 +108,14 @@ pub fn create_mesh(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
     let object = VoxelObject::generate(&generator);
     benchmarker.benchmark(&mut || VoxelObjectMesh::create(&object));
+}
+
+pub fn compute_collision_probes(benchmarker: impl Benchmarker) {
+    let generator = create_sphere_generator(100.0);
+    let object = VoxelObject::generate(&generator);
+    let mesh = VoxelObjectMesh::create(&object);
+    benchmarker
+        .benchmark(&mut || VoxelObjectCollisionProbes::compute_for_all_chunks(&object, &mesh));
 }
 
 pub fn get_each_voxel(benchmarker: impl Benchmarker) {
@@ -283,7 +291,7 @@ pub fn update_mesh(benchmarker: impl Benchmarker) {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
             black_box((indices, position, voxel));
         });
-        mesh.sync_with_voxel_object(&mut object);
+        mesh.sync_with_voxel_object(&object);
         black_box((&object, &mesh));
     });
 }

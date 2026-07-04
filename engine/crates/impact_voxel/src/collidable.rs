@@ -8,11 +8,13 @@ pub mod systems;
 
 use crate::{
     Voxel, VoxelObjectID, VoxelObjectManager, VoxelSignedDistance, VoxelSurfacePlacement,
-    mesh::MeshedVoxelObject,
+    mesh::{MeshedVoxelObject, VoxelMeshVertexPosition, VoxelObjectMesh},
     object::{
-        self, CHUNK_SIZE, VoxelChunk, VoxelObject, chunk_range_encompassing_voxel_range, sdf,
+        self, CHUNK_SIZE, LOG2_CHUNK_SIZE, VoxelChunk, VoxelObject,
+        chunk_range_encompassing_voxel_range, sdf,
     },
 };
+use impact_containers::HashMap;
 use impact_geometry::{Capsule, Plane, Sphere};
 use impact_id::EntityID;
 use impact_math::{
@@ -73,6 +75,11 @@ pub struct VoxelObjectCollidable {
     entity_id: EntityID,
     response_params: ContactResponseParameters,
     transform_to_object_space: Isometry3C,
+}
+
+#[derive(Clone, Debug)]
+pub struct VoxelObjectCollisionProbes {
+    points_per_chunk: HashMap<[usize; 3], Vec<Point3C>>,
 }
 
 impl collision::Collidable for Collidable {
@@ -310,6 +317,260 @@ impl VoxelObjectCollidable {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BlockSize {
+    One,
+    Two,
+    Four,
+}
+
+impl VoxelObjectCollisionProbes {
+    pub fn compute_for_all_chunks(object: &VoxelObject, mesh: &VoxelObjectMesh) -> Self {
+        match Self::determine_log2_block_size_for_mesh(mesh) {
+            BlockSize::One => {
+                const LOG2_BLOCK_SIZE: usize = 0;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                Self::compute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                    object, mesh,
+                )
+            }
+            BlockSize::Two => {
+                const LOG2_BLOCK_SIZE: usize = 1;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                Self::compute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                    object, mesh,
+                )
+            }
+            BlockSize::Four => {
+                const LOG2_BLOCK_SIZE: usize = 2;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                Self::compute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                    object, mesh,
+                )
+            }
+        }
+    }
+
+    pub fn sync_with_voxel_object_and_mesh(
+        &mut self,
+        object: &VoxelObject,
+        mesh: &VoxelObjectMesh,
+    ) {
+        match Self::determine_log2_block_size_for_mesh(mesh) {
+            BlockSize::One => {
+                const LOG2_BLOCK_SIZE: usize = 0;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                self.sync_with_voxel_object_and_mesh_with_block_size::<
+                    LOG2_BLOCK_SIZE,
+                    CHUNK_BLOCK_COUNT,
+                >(object, mesh);
+            }
+            BlockSize::Two => {
+                const LOG2_BLOCK_SIZE: usize = 1;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                self.sync_with_voxel_object_and_mesh_with_block_size::<
+                    LOG2_BLOCK_SIZE,
+                    CHUNK_BLOCK_COUNT,
+                >(object, mesh);
+            }
+            BlockSize::Four => {
+                const LOG2_BLOCK_SIZE: usize = 2;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                self.sync_with_voxel_object_and_mesh_with_block_size::<
+                    LOG2_BLOCK_SIZE,
+                    CHUNK_BLOCK_COUNT,
+                >(object, mesh);
+            }
+        }
+    }
+
+    pub fn points_per_chunk(&self) -> impl ExactSizeIterator<Item = (&[usize; 3], &[Point3C])> {
+        self.points_per_chunk
+            .iter()
+            .map(|(chunk_indices, points)| (chunk_indices, points.as_slice()))
+    }
+
+    fn determine_log2_block_size_for_mesh(mesh: &VoxelObjectMesh) -> BlockSize {
+        let n_vertices = mesh.positions().len();
+        if n_vertices >= 800 {
+            BlockSize::Four
+        } else if n_vertices >= 80 {
+            BlockSize::Two
+        } else {
+            BlockSize::One
+        }
+    }
+
+    fn compute_for_all_chunks_with_block_size<
+        const LOG2_BLOCK_SIZE: usize,
+        const CHUNK_BLOCK_COUNT: usize,
+    >(
+        object: &VoxelObject,
+        mesh: &VoxelObjectMesh,
+    ) -> Self {
+        let mut points_per_chunk =
+            HashMap::with_capacity_and_hasher(mesh.n_chunks(), Default::default());
+
+        for (submesh, vertex_range) in mesh
+            .chunk_submeshes()
+            .iter()
+            .zip(mesh.chunk_vertex_ranges())
+        {
+            let mut points = Vec::with_capacity(CHUNK_BLOCK_COUNT);
+
+            let positions = &mesh.positions()[vertex_range.clone()];
+
+            Self::add_points_for_vertices_in_blocks::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                &mut points,
+                positions,
+                object.inverse_voxel_extent(),
+            );
+
+            let chunk_indices = submesh.chunk_indices().map(|idx| idx as usize);
+            points_per_chunk.insert(chunk_indices, points);
+        }
+
+        Self { points_per_chunk }
+    }
+
+    fn sync_with_voxel_object_and_mesh_with_block_size<
+        const LOG2_BLOCK_SIZE: usize,
+        const CHUNK_BLOCK_COUNT: usize,
+    >(
+        &mut self,
+        object: &VoxelObject,
+        mesh: &VoxelObjectMesh,
+    ) {
+        for chunk_indices in object.invalidated_mesh_chunk_indices() {
+            self.update_for_chunk::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                object,
+                mesh,
+                *chunk_indices,
+            );
+        }
+    }
+
+    fn update_for_chunk<const LOG2_BLOCK_SIZE: usize, const CHUNK_BLOCK_COUNT: usize>(
+        &mut self,
+        object: &VoxelObject,
+        mesh: &VoxelObjectMesh,
+        chunk_indices: [usize; 3],
+    ) {
+        let Some((vertex_range, _)) =
+            mesh.vertex_and_index_range_for_chunk_at_indices(chunk_indices)
+        else {
+            self.points_per_chunk.remove(&chunk_indices);
+            return;
+        };
+
+        let points = self
+            .points_per_chunk
+            .entry(chunk_indices)
+            .or_insert_with(|| Vec::with_capacity(CHUNK_BLOCK_COUNT));
+
+        let positions = &mesh.positions()[vertex_range];
+
+        Self::add_points_for_vertices_in_blocks::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+            points,
+            positions,
+            object.inverse_voxel_extent(),
+        );
+    }
+
+    fn add_points_for_vertices_in_blocks<
+        const LOG2_BLOCK_SIZE: usize,
+        const CHUNK_BLOCK_COUNT: usize,
+    >(
+        points: &mut Vec<Point3C>,
+        vertex_positions: &[VoxelMeshVertexPosition],
+        inverse_voxel_extent: f32,
+    ) {
+        points.clear();
+
+        let mut taken = [false; CHUNK_BLOCK_COUNT];
+
+        for vertex_position in vertex_positions {
+            let position = Point3C::from(vertex_position.0);
+            let norm_position = position * inverse_voxel_extent;
+
+            let floored_position = norm_position.as_vector().component_floor();
+            let object_voxel_indices = <[f32; 3]>::from(floored_position).map(|idx| idx as usize);
+
+            let block_idx = Self::linear_block_idx_from_object_voxel_indices(
+                LOG2_BLOCK_SIZE,
+                object_voxel_indices,
+            );
+
+            let block_taken = &mut taken[block_idx];
+            if *block_taken {
+                continue;
+            }
+
+            points.push(position);
+
+            *block_taken = true;
+        }
+    }
+
+    #[inline]
+    fn linear_block_idx_from_object_voxel_indices(
+        log2_block_size: usize,
+        object_voxel_indices: [usize; 3],
+    ) -> usize {
+        let block_indices =
+            Self::block_indices_from_object_voxel_indices(log2_block_size, object_voxel_indices);
+        Self::linear_block_idx_within_chunk(log2_block_size, block_indices)
+    }
+
+    #[inline]
+    fn block_indices_from_object_voxel_indices(
+        log2_block_size: usize,
+        [i, j, k]: [usize; 3],
+    ) -> [usize; 3] {
+        let indices_within_chunk =
+            object::voxel_indices_within_chunk_from_object_voxel_indices(i, j, k);
+        Self::block_indices_from_voxel_indices_within_chunk(log2_block_size, indices_within_chunk)
+    }
+
+    #[inline]
+    fn block_indices_from_voxel_indices_within_chunk(
+        log2_block_size: usize,
+        voxel_indices: [usize; 3],
+    ) -> [usize; 3] {
+        [
+            Self::shift_from_voxel_idx_within_chunk_to_block_idx(log2_block_size, voxel_indices[0]),
+            Self::shift_from_voxel_idx_within_chunk_to_block_idx(log2_block_size, voxel_indices[1]),
+            Self::shift_from_voxel_idx_within_chunk_to_block_idx(log2_block_size, voxel_indices[2]),
+        ]
+    }
+
+    #[inline]
+    fn linear_block_idx_within_chunk(log2_block_size: usize, block_indices: [usize; 3]) -> usize {
+        let log2_chunk_size_in_blocks = log2_chunk_size_in_blocks(log2_block_size);
+        (block_indices[0] << (2 * log2_chunk_size_in_blocks))
+            + (block_indices[1] << log2_chunk_size_in_blocks)
+            + block_indices[2]
+    }
+
+    #[inline]
+    const fn shift_from_voxel_idx_within_chunk_to_block_idx(
+        log2_block_size: usize,
+        voxel_idx: usize,
+    ) -> usize {
+        voxel_idx >> log2_block_size
+    }
+}
+
+#[inline]
+const fn log2_chunk_size_in_blocks(log2_block_size: usize) -> usize {
+    LOG2_CHUNK_SIZE - log2_block_size
+}
+
+#[inline]
+const fn chunk_block_count(log2_block_size: usize) -> usize {
+    1 << (3 * log2_chunk_size_in_blocks(log2_block_size))
+}
+
 fn generate_mutual_voxel_object_contact_manifold(
     voxel_object_manager: &VoxelObjectManager,
     voxel_object_a: &VoxelObjectCollidable,
@@ -369,165 +630,166 @@ fn generate_mutual_voxel_object_contact_manifold(
 }
 
 pub fn for_each_mutual_voxel_object_contact<'a>(
-    voxel_object_a: &'a MeshedVoxelObject,
-    voxel_object_b: &'a MeshedVoxelObject,
+    meshed_voxel_object_a: &'a MeshedVoxelObject,
+    meshed_voxel_object_b: &'a MeshedVoxelObject,
     transform_from_world_to_a: &'a Isometry3,
     transform_from_world_to_b: &'a Isometry3,
     f: &mut impl FnMut([usize; 4], ContactGeometry),
 ) {
+    let object_a = meshed_voxel_object_a.object();
+    let object_b = meshed_voxel_object_b.object();
+
     let transform_from_b_to_a = transform_from_world_to_a * transform_from_world_to_b.inverted();
 
     let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
         VoxelObject::determine_voxel_ranges_encompassing_intersection(
-            voxel_object_a.object(),
-            voxel_object_b.object(),
+            object_a,
+            object_b,
             &transform_from_b_to_a,
         )
     else {
         return;
     };
 
-    let voxel_object_a_intersection_size = intersection_voxel_ranges_in_a
-        .iter()
-        .map(|r| r.len())
-        .product::<usize>();
-    let voxel_object_b_intersection_size = intersection_voxel_ranges_in_b
-        .iter()
-        .map(|r| r.len())
-        .product::<usize>();
+    if meshed_voxel_object_a.mesh().n_vertices() <= meshed_voxel_object_b.mesh().n_vertices() {
+        let grid_dimensions_for_b = object_b.chunk_counts().map(|count| count * CHUNK_SIZE);
 
-    if voxel_object_a_intersection_size <= voxel_object_b_intersection_size {
-        let grid_dimensions_for_b = voxel_object_b
-            .object()
-            .chunk_counts()
-            .map(|count| count * CHUNK_SIZE);
+        // We expand the intersected AABB by one voxel because the surface can
+        // poke slightly outside the occupied voxel range (a voxel is only
+        // considered occuped if the surface crosses its center)
+        let intersection_aabb_in_a = object::aabb_from_voxel_ranges(
+            object_a.voxel_extent(),
+            &intersection_voxel_ranges_in_a,
+        )
+        .expanded_about_center(object_a.voxel_extent());
 
         let intersection_chunk_ranges_in_a = intersection_voxel_ranges_in_a
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        for chunk_i in intersection_chunk_ranges_in_a[0].clone() {
-            for chunk_j in intersection_chunk_ranges_in_a[1].clone() {
-                for chunk_k in intersection_chunk_ranges_in_a[2].clone() {
-                    let Some(vertex_positions) = voxel_object_a
-                        .mesh()
-                        .vertex_positions_for_chunk_at_indices([chunk_i, chunk_j, chunk_k])
-                    else {
-                        continue;
-                    };
-                    for vertex_position in vertex_positions {
-                        let vertex_position = Point3C::from(vertex_position.0);
+        for (chunk_indices, probe_points) in
+            meshed_voxel_object_a.collision_probes().points_per_chunk()
+        {
+            if !intersection_chunk_ranges_in_a[0].contains(&chunk_indices[0])
+                || !intersection_chunk_ranges_in_a[1].contains(&chunk_indices[1])
+                || !intersection_chunk_ranges_in_a[2].contains(&chunk_indices[2])
+            {
+                continue;
+            }
 
-                        let point_in_a = vertex_position.aligned();
+            for probe_point in probe_points {
+                let point_in_a = probe_point.aligned();
 
-                        let point = transform_from_world_to_a.inverse_transform_point(&point_in_a);
-
-                        let norm_point_in_b = transform_from_world_to_b.transform_point(&point)
-                            * voxel_object_b.object().inverse_voxel_extent();
-
-                        let Some((signed_distance_in_b, normal_vector_in_b)) =
-                            determine_sdf_value_and_normal_at_point_if_intersecting(
-                                voxel_object_b.object(),
-                                &grid_dimensions_for_b,
-                                &norm_point_in_b.compact(),
-                            )
-                        else {
-                            continue;
-                        };
-
-                        let surface_normal = transform_from_world_to_b
-                            .rotation()
-                            .inverse()
-                            .rotate_unit_vector(&normal_vector_in_b);
-
-                        let penetration_depth =
-                            -signed_distance_in_b * voxel_object_b.object().voxel_extent();
-
-                        let norm_point_in_a =
-                            point_in_a * voxel_object_a.object().inverse_voxel_extent();
-
-                        let [i_a, j_a, k_a] =
-                            <[f32; 3]>::from(norm_point_in_a.as_vector().component_floor())
-                                .map(|idx| idx as usize);
-
-                        f(
-                            [0, i_a, j_a, k_a],
-                            ContactGeometry {
-                                position: point,
-                                surface_normal,
-                                penetration_depth,
-                            },
-                        );
-                    }
+                if !intersection_aabb_in_a.contains_point(&point_in_a) {
+                    continue;
                 }
+
+                let point = transform_from_world_to_a.inverse_transform_point(&point_in_a);
+
+                let norm_point_in_b = transform_from_world_to_b.transform_point(&point)
+                    * object_b.inverse_voxel_extent();
+
+                let Some((signed_distance_in_b, normal_vector_in_b)) =
+                    determine_sdf_value_and_normal_at_point_if_intersecting(
+                        object_b,
+                        &grid_dimensions_for_b,
+                        &norm_point_in_b.compact(),
+                    )
+                else {
+                    continue;
+                };
+
+                let surface_normal = transform_from_world_to_b
+                    .rotation()
+                    .inverse()
+                    .rotate_unit_vector(&normal_vector_in_b);
+
+                let penetration_depth = -signed_distance_in_b * object_b.voxel_extent();
+
+                let norm_point_in_a = point_in_a * object_a.inverse_voxel_extent();
+
+                let [i_a, j_a, k_a] =
+                    <[f32; 3]>::from(norm_point_in_a.as_vector().component_floor())
+                        .map(|idx| idx as usize);
+
+                f(
+                    [0, i_a, j_a, k_a],
+                    ContactGeometry {
+                        position: point,
+                        surface_normal,
+                        penetration_depth,
+                    },
+                );
             }
         }
     } else {
-        let grid_dimensions_for_a = voxel_object_a
-            .object()
-            .chunk_counts()
-            .map(|count| count * CHUNK_SIZE);
+        let grid_dimensions_for_a = object_a.chunk_counts().map(|count| count * CHUNK_SIZE);
+
+        let intersection_aabb_in_b = object::aabb_from_voxel_ranges(
+            object_b.voxel_extent(),
+            &intersection_voxel_ranges_in_b,
+        )
+        .expanded_about_center(object_a.voxel_extent());
 
         let intersection_chunk_ranges_in_b = intersection_voxel_ranges_in_b
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        for chunk_i in intersection_chunk_ranges_in_b[0].clone() {
-            for chunk_j in intersection_chunk_ranges_in_b[1].clone() {
-                for chunk_k in intersection_chunk_ranges_in_b[2].clone() {
-                    let Some(vertex_positions) = voxel_object_b
-                        .mesh()
-                        .vertex_positions_for_chunk_at_indices([chunk_i, chunk_j, chunk_k])
-                    else {
-                        continue;
-                    };
-                    for vertex_position in vertex_positions {
-                        let vertex_position = Point3C::from(vertex_position.0);
+        for (chunk_indices, probe_points) in
+            meshed_voxel_object_b.collision_probes().points_per_chunk()
+        {
+            if !intersection_chunk_ranges_in_b[0].contains(&chunk_indices[0])
+                || !intersection_chunk_ranges_in_b[1].contains(&chunk_indices[1])
+                || !intersection_chunk_ranges_in_b[2].contains(&chunk_indices[2])
+            {
+                continue;
+            }
 
-                        let point_in_b = vertex_position.aligned();
+            for probe_point in probe_points {
+                let point_in_b = probe_point.aligned();
 
-                        let point = transform_from_world_to_b.inverse_transform_point(&point_in_b);
-
-                        let norm_point_in_a = transform_from_world_to_a.transform_point(&point)
-                            * voxel_object_a.object().inverse_voxel_extent();
-
-                        let Some((signed_distance_in_a, normal_vector_in_a)) =
-                            determine_sdf_value_and_normal_at_point_if_intersecting(
-                                voxel_object_a.object(),
-                                &grid_dimensions_for_a,
-                                &norm_point_in_a.compact(),
-                            )
-                        else {
-                            continue;
-                        };
-
-                        let normal_vector = transform_from_world_to_a
-                            .rotation()
-                            .inverse()
-                            .rotate_unit_vector(&normal_vector_in_a);
-
-                        let surface_normal = -normal_vector;
-
-                        let penetration_depth =
-                            -signed_distance_in_a * voxel_object_a.object().voxel_extent();
-
-                        let norm_point_in_b =
-                            point_in_b * voxel_object_b.object().inverse_voxel_extent();
-
-                        let [i_b, j_b, k_b] =
-                            <[f32; 3]>::from(norm_point_in_b.as_vector().component_floor())
-                                .map(|idx| idx as usize);
-
-                        f(
-                            [0, i_b, j_b, k_b],
-                            ContactGeometry {
-                                position: point,
-                                surface_normal,
-                                penetration_depth,
-                            },
-                        );
-                    }
+                if !intersection_aabb_in_b.contains_point(&point_in_b) {
+                    continue;
                 }
+
+                let point = transform_from_world_to_b.inverse_transform_point(&point_in_b);
+
+                let norm_point_in_a = transform_from_world_to_a.transform_point(&point)
+                    * object_a.inverse_voxel_extent();
+
+                let Some((signed_distance_in_a, normal_vector_in_a)) =
+                    determine_sdf_value_and_normal_at_point_if_intersecting(
+                        object_a,
+                        &grid_dimensions_for_a,
+                        &norm_point_in_a.compact(),
+                    )
+                else {
+                    continue;
+                };
+
+                let normal_vector = transform_from_world_to_a
+                    .rotation()
+                    .inverse()
+                    .rotate_unit_vector(&normal_vector_in_a);
+
+                let surface_normal = -normal_vector;
+
+                let penetration_depth = -signed_distance_in_a * object_a.voxel_extent();
+
+                let norm_point_in_b = point_in_b * object_b.inverse_voxel_extent();
+
+                let [i_b, j_b, k_b] =
+                    <[f32; 3]>::from(norm_point_in_b.as_vector().component_floor())
+                        .map(|idx| idx as usize);
+
+                f(
+                    [0, i_b, j_b, k_b],
+                    ContactGeometry {
+                        position: point,
+                        surface_normal,
+                        penetration_depth,
+                    },
+                );
             }
         }
     }
@@ -782,16 +1044,19 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let lower_indices_f32 = shifted_point.as_vector().component_floor();
     let fractional_offset = shifted_point.as_vector() - lower_indices_f32;
 
+    // Avoid sampling outside the lower bounds of the SDF grid
     if lower_indices_f32.has_negative_component() {
-        // Avoid sampling outside the lower bounds of the SDF grid
         return None;
     }
 
     let [li, lj, lk] = <[f32; 3]>::from(lower_indices_f32).map(|idx| idx as usize);
 
-    if li + 1 >= grid_dimensions[0] || lj + 1 >= grid_dimensions[1] || lk + 1 >= grid_dimensions[2]
+    // Avoid sampling outside the upper bounds of the SDF grid. We use bitwise
+    // ORs to avoid branches due to short-circuiting.
+    if (li + 1 >= grid_dimensions[0])
+        | (lj + 1 >= grid_dimensions[1])
+        | (lk + 1 >= grid_dimensions[2])
     {
-        // Avoid sampling outside the upper bounds of the SDF grid
         return None;
     }
 
@@ -802,6 +1067,9 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let chunk_idx = object.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
     let chunk = object.chunk_at_idx_maybe_unchecked(chunk_idx);
 
+    // If the point lies inside a void chunk, it's outside. If it lies inside a
+    // uniform chunk, it's so far inside that we can't determine the normal
+    // reliably.
     let VoxelChunk::NonUniform(chunk) = chunk else {
         return None;
     };
@@ -816,14 +1084,17 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
         .signed_distance()
         .to_f32();
 
+    // If the signed distance at the center of the voxel containing the point
+    // exceeds half a voxel diagonal, the surface doesn't reach the voxel, so
+    // the point can't cross the surface
     if containing_signed_dist > HALF_VOXEL_DIAGONAL {
         return None;
     }
 
-    // Lower indices within chunk
     let [cli, clj, clk] = object::voxel_indices_within_chunk_from_object_voxel_indices(li, lj, lk);
 
-    let all_in_same_chunk = cli != CHUNK_SIZE - 1 && clj != CHUNK_SIZE - 1 && clk != CHUNK_SIZE - 1;
+    let all_in_same_chunk =
+        (cli != CHUNK_SIZE - 1) & (clj != CHUNK_SIZE - 1) & (clk != CHUNK_SIZE - 1);
 
     let signed_distances = if all_in_same_chunk {
         let sample_dist = |i, j, k| {
@@ -865,15 +1136,15 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let signed_distance =
         sdf::evaluate_sdf_from_corner_samples(&signed_distances, &fractional_offset);
 
+    // Check if the point is outside of the surface
     if signed_distance > 0.0 {
-        // The point is fully on the outside of the surface
         return None;
     }
 
+    // If the point is deep enough in the SDF interior that the local signed
+    // distance is capped, we will get a zero gradient, so we can't determine
+    // the normal vector. If so, we ignore the contact.
     if (signed_distance - VoxelSignedDistance::MIN_F32).abs() < 1e-3 {
-        // The point is deep enough in the SDF interior that the local signed
-        // distance is capped, so the gradient will be zero. We don't have
-        // enough information to proceed.
         return None;
     }
 

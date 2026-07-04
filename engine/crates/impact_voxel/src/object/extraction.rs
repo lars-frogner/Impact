@@ -3,7 +3,7 @@
 use crate::{
     Voxel, VoxelFlags, VoxelSignedDistance,
     object::{
-        CHUNK_SIZE, CHUNK_VOXEL_COUNT, FaceEmptyCounts, FaceVoxelDistribution,
+        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkRanges, FaceEmptyCounts, FaceVoxelDistribution,
         NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
         VoxelChunkFlags, VoxelObject, chunk_range_encompassing_voxel_range, chunk_voxels,
         chunk_voxels_mut, determine_occupied_voxel_ranges, linear_voxel_idx_within_chunk,
@@ -255,7 +255,7 @@ impl VoxelObject {
         region_to_extract: GlobalRegionLabel,
         region_linear_chunk_indices: Vec<usize>,
         region_non_uniform_chunk_count: usize,
-        region_chunk_ranges: [Range<usize>; 3],
+        region_chunk_ranges: ChunkRanges,
         property_transferrer: &mut impl PropertyTransferrer,
     ) -> Option<ExtractedVoxelObject> {
         let region_chunk_counts = region_chunk_ranges.clone().map(|range| range.len());
@@ -1509,7 +1509,7 @@ impl VoxelObject {
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         chunk_counts: [usize; 3],
-        chunk_ranges: [Range<usize>; 3],
+        chunk_ranges: ChunkRanges,
         uniform_chunk_count: usize,
         non_uniform_chunk_count: usize,
         voxels: Vec<Voxel>,

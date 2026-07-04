@@ -10,6 +10,7 @@ define_criterion_target!(voxel_object, compute_all_derived_state);
 define_criterion_target!(voxel_object, initialize_inertial_properties);
 define_criterion_target!(voxel_object, clone_object);
 define_criterion_target!(voxel_object, create_mesh);
+define_criterion_target!(voxel_object, compute_collision_probes);
 define_criterion_target!(voxel_object, get_each_voxel);
 define_criterion_target!(
     voxel_object,
@@ -54,6 +55,7 @@ criterion::criterion_group!(
         for_each_exposed_chunk_with_sdf,
         clone_object,
         create_mesh,
+        compute_collision_probes,
         get_each_voxel,
         obtain_surface_voxels_within_negative_halfspace_of_plane,
         obtain_surface_voxels_within_sphere,

@@ -3,12 +3,11 @@
 use super::chunk_voxels;
 use crate::{
     Voxel,
-    object::{CHUNK_SIZE, VoxelChunk, VoxelObject, extraction},
+    object::{CHUNK_SIZE, ChunkRanges, VoxelChunk, VoxelObject, extraction},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::{matrix::Matrix3, point::Point3, vector::Vector3};
 use impact_physics::inertia::{InertiaTensor, InertialProperties};
-use std::ops::Range;
 
 /// Keeps track of the inertial properties (mass, center of mass and inertia
 /// tensor) of a voxel object. Specifically, stores the mass (`m`), moments
@@ -745,7 +744,7 @@ fn compute_moments_for_uniform_chunk(
 
 fn compute_inertial_property_moments_for_object(
     voxel_extent: f32,
-    occupied_chunk_ranges: &[Range<usize>; 3],
+    occupied_chunk_ranges: &ChunkRanges,
     chunk_idx_strides: &[usize; 3],
     chunks: &[VoxelChunk],
     voxels: &[Voxel],

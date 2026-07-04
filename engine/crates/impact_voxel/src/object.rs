@@ -46,8 +46,8 @@ pub struct VoxelObject {
     inverse_voxel_extent: f32,
     chunk_counts: [usize; 3],
     chunk_idx_strides: [usize; 3],
-    occupied_chunk_ranges: [Range<usize>; 3],
-    occupied_voxel_ranges: [Range<usize>; 3],
+    occupied_chunk_ranges: ChunkRanges,
+    occupied_voxel_ranges: VoxelRanges,
     origin_offset_in_root: [usize; 3],
     chunks: Vec<VoxelChunk>,
     voxels: Vec<Voxel>,
@@ -124,12 +124,15 @@ pub struct ChunkSparseness {
     pub is_void: bool,
 }
 
+pub type VoxelRanges = [Range<usize>; 3];
+pub type ChunkRanges = [Range<usize>; 3];
+
 #[derive(Clone, Debug)]
 struct ChunkAnalysisResults {
     uniform_chunk_count: usize,
     non_uniform_chunk_count: usize,
-    occupied_chunk_ranges: [Range<usize>; 3],
-    occupied_voxel_ranges: [Range<usize>; 3],
+    occupied_chunk_ranges: ChunkRanges,
+    occupied_voxel_ranges: VoxelRanges,
 }
 
 /// Information about the distribution of voxels across a specific face of a
@@ -183,7 +186,7 @@ pub type LoopForChunkVoxels = Loop3<CHUNK_SIZE>;
 pub type LoopOverChunkVoxelData<'a, 'b> = DataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
 pub type LoopOverChunkVoxelDataMut<'a, 'b> = MutDataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
 
-const LOG2_CHUNK_SIZE: usize = 4;
+pub const LOG2_CHUNK_SIZE: usize = 4;
 
 /// The minimum number of non-empty voxels that should be present in a voxel
 /// object for it to be considered non-empty.
@@ -199,8 +202,8 @@ const CHUNK_VOXEL_COUNT: usize = CHUNK_SIZE.pow(3);
 // We assume that a linear voxel index within a chunk fits into a `u16`
 const _: () = assert!(CHUNK_VOXEL_COUNT <= u16::MAX as usize);
 
-const CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT: usize = LOG2_CHUNK_SIZE;
-const VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
+pub const CHUNK_IDX_FROM_OBJECT_VOXEL_IDX_SHIFT: usize = LOG2_CHUNK_SIZE;
+pub const VOXEL_IDX_FROM_OBJECT_VOXEL_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
 
 const VOXEL_INDEX_FROM_LINEAR_IDX_MASK: usize = (1 << LOG2_CHUNK_SIZE) - 1;
 
@@ -652,14 +655,14 @@ impl VoxelObject {
     /// Returns the range of indices along each axis of the object's chunk
     /// grid that may contain non-void chunks.
     #[inline]
-    pub fn occupied_chunk_ranges(&self) -> &[Range<usize>; 3] {
+    pub fn occupied_chunk_ranges(&self) -> &ChunkRanges {
         &self.occupied_chunk_ranges
     }
 
     /// Returns the range of indices along each axis of the object's voxel
     /// grid that may contain non-empty voxels.
     #[inline]
-    pub fn occupied_voxel_ranges(&self) -> &[Range<usize>; 3] {
+    pub fn occupied_voxel_ranges(&self) -> &VoxelRanges {
         &self.occupied_voxel_ranges
     }
 
@@ -691,7 +694,7 @@ impl VoxelObject {
 
     /// Determines the exact range of indices along each axis of the object's
     /// voxel grid that may contain non-empty voxels.
-    pub fn determine_tight_occupied_voxel_ranges(&self) -> [Range<usize>; 3] {
+    pub fn determine_tight_occupied_voxel_ranges(&self) -> VoxelRanges {
         determine_occupied_voxel_ranges(self.chunk_counts, &self.chunks, &self.voxels)
     }
 
@@ -1630,7 +1633,7 @@ impl VoxelObject {
 
     fn update_upper_boundary_adjacencies_for_chunks_in_ranges(
         &mut self,
-        chunk_ranges: [Range<usize>; 3],
+        chunk_ranges: ChunkRanges,
     ) {
         for chunk_i in chunk_ranges[0].clone() {
             for chunk_j in chunk_ranges[1].clone() {
@@ -1762,6 +1765,47 @@ impl VoxelObject {
         chunk_indices[0] * self.chunk_idx_strides[0]
             + chunk_indices[1] * self.chunk_idx_strides[1]
             + chunk_indices[2]
+    }
+
+    /// Returns the object space position of the center of the voxel at the
+    /// given object voxel indices.
+    #[inline]
+    pub fn voxel_center_position_from_object_voxel_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> Point3 {
+        voxel_center_position_from_object_voxel_indices(self.voxel_extent, i, j, k)
+    }
+
+    /// Returns the object space position of the center of the chunk at the
+    /// given object chunk indices.
+    #[inline]
+    pub fn chunk_center_position_from_chunk_indices(
+        &self,
+        chunk_i: usize,
+        chunk_j: usize,
+        chunk_k: usize,
+    ) -> Point3 {
+        voxel_center_position_from_object_voxel_indices(
+            self.chunk_extent(),
+            chunk_i,
+            chunk_j,
+            chunk_k,
+        )
+    }
+
+    /// Returns the object space axis aligned bounding box of the voxel at the
+    /// given object voxel indices.
+    #[inline]
+    pub fn voxel_aabb_from_object_voxel_indices(
+        &self,
+        i: usize,
+        j: usize,
+        k: usize,
+    ) -> AxisAlignedBox {
+        voxel_aabb_from_object_voxel_indices(self.voxel_extent, i, j, k)
     }
 }
 
@@ -2918,7 +2962,7 @@ fn determine_occupied_voxel_ranges(
     chunk_counts: [usize; 3],
     chunks: &[VoxelChunk],
     voxels: &[Voxel],
-) -> [Range<usize>; 3] {
+) -> VoxelRanges {
     let mut min_voxel_indices = [usize::MAX; 3];
     let mut max_voxel_indices = [0; 3];
 
@@ -3072,6 +3116,92 @@ pub fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<
     let start = voxel_range.start / CHUNK_SIZE;
     let end = voxel_range.end.div_ceil(CHUNK_SIZE);
     start..end
+}
+
+#[inline]
+fn voxel_center_position_from_object_voxel_indices(
+    voxel_extent: f32,
+    i: usize,
+    j: usize,
+    k: usize,
+) -> Point3 {
+    Point3::new(
+        (i as f32 + 0.5) * voxel_extent,
+        (j as f32 + 0.5) * voxel_extent,
+        (k as f32 + 0.5) * voxel_extent,
+    )
+}
+
+#[inline]
+fn normalized_voxel_center_position_from_object_voxel_indices(
+    i: usize,
+    j: usize,
+    k: usize,
+) -> Point3 {
+    Point3::new(i as f32 + 0.5, j as f32 + 0.5, k as f32 + 0.5)
+}
+
+#[inline]
+fn normalized_chunk_aabb_from_chunk_indices(
+    chunk_i: usize,
+    chunk_j: usize,
+    chunk_k: usize,
+) -> AxisAlignedBox {
+    AxisAlignedBox::new(
+        Point3::new(
+            (chunk_i * CHUNK_SIZE) as f32,
+            (chunk_j * CHUNK_SIZE) as f32,
+            (chunk_k * CHUNK_SIZE) as f32,
+        ),
+        Point3::new(
+            ((chunk_i + 1) * CHUNK_SIZE) as f32,
+            ((chunk_j + 1) * CHUNK_SIZE) as f32,
+            ((chunk_k + 1) * CHUNK_SIZE) as f32,
+        ),
+    )
+}
+
+#[inline]
+fn voxel_aabb_from_object_voxel_indices(
+    voxel_extent: f32,
+    i: usize,
+    j: usize,
+    k: usize,
+) -> AxisAlignedBox {
+    AxisAlignedBox::new(
+        Point3::new(
+            i as f32 * voxel_extent,
+            j as f32 * voxel_extent,
+            k as f32 * voxel_extent,
+        ),
+        Point3::new(
+            (i as f32 + 1.0) * voxel_extent,
+            (j as f32 + 1.0) * voxel_extent,
+            (k as f32 + 1.0) * voxel_extent,
+        ),
+    )
+}
+
+#[inline]
+fn normalized_aabb_from_voxel_ranges(voxel_ranges: &VoxelRanges) -> AxisAlignedBox {
+    let lower_corner = Point3::new(
+        voxel_ranges[0].start as f32,
+        voxel_ranges[1].start as f32,
+        voxel_ranges[2].start as f32,
+    );
+
+    let upper_corner = Point3::new(
+        voxel_ranges[0].end as f32,
+        voxel_ranges[1].end as f32,
+        voxel_ranges[2].end as f32,
+    );
+
+    AxisAlignedBox::new(lower_corner, upper_corner)
+}
+
+#[inline]
+pub fn aabb_from_voxel_ranges(voxel_extent: f32, voxel_ranges: &VoxelRanges) -> AxisAlignedBox {
+    normalized_aabb_from_voxel_ranges(voxel_ranges).scaled(voxel_extent)
 }
 
 fn extract_slice_segments_mut<T>(
