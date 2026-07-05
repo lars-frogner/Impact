@@ -17,7 +17,7 @@ endef
 .PHONY: all clean help
 .PHONY: init-build build build-debug build-debug-cl build-debug-asan
 .PHONY: run run-debug run-roc-debug run-debug-asan run-debug-cl
-.PHONY: profile-perf profile-tracy profile-heaptrack profile-dhat
+.PHONY: profile-perf profile-samply profile-tracy profile-heaptrack profile-dhat
 .PHONY: generate-roc clean-roc
 .PHONY: clean-profiling
 .PHONY: cargo-clean cargo-update
@@ -50,6 +50,9 @@ build-debug-asan: build_script
 
 build-perf: build_script
 	OUTPUT_DIR=./dist/perf PROFILING=1 ./build_script
+
+build-samply: build_script
+	OUTPUT_DIR=./dist/samply PROFILING=1 ./build_script
 
 build-tracy: build_script
 	OUTPUT_DIR=./dist/tracy PROFILING=1 TRACY=1 ./build_script
@@ -84,10 +87,13 @@ run-debug-asan: build-debug-asan
 # Profiling
 profile-perf: build-perf
 	sudo env RUST_LOG="$(RUST_LOG_QUIET)" \
-		perf record --delay 5000 --freq 1000 --call-graph dwarf ./dist/perf/$(APP_NAME) run -c $(CONFIG_FILE)
+		perf record --delay 5000 --freq 999 --call-graph dwarf ./dist/perf/$(APP_NAME) run -c $(CONFIG_FILE)
 	sudo chown $(USER) "perf.data"
 	perf script -i "perf.data" > "profile.perf"
-	perf report --call-graph -M intel -i "perf.data"
+	perf report --call-graph -i "perf.data"
+
+profile-samply: build-samply
+	RUST_LOG="$(RUST_LOG_NORMAL)" samply record ./dist/samply/$(APP_NAME) run -c $(CONFIG_FILE)
 
 profile-tracy: build-tracy
 	RUST_LOG="$(RUST_LOG_NORMAL)" RUST_BACKTRACE=1 ./dist/tracy/$(APP_NAME) run -c $(CONFIG_FILE)
@@ -110,7 +116,7 @@ clean:
 	rm -rf build_script lib/ dist/ roc_platform/build roc_platform/lib/
 
 clean-profiling:
-	rm -rf perf.data profile.perf dhat.out.* heaptrack.*.zst
+	rm -rf perf.data profile.perf profile.json.gz dhat.out.* heaptrack.*.zst
 
 # Cargo
 
@@ -147,6 +153,7 @@ help:
 	@echo ""
 	@echo "Profiling:"
 	@echo "  profile-perf      - Build and run with perf profiling"
+	@echo "  profile-samply    - Build and run with samply profiling"
 	@echo "  profile-tracy     - Build and run with Tracy profiling"
 	@echo "  profile-heaptrack - Build and run with heaptrack profiling"
 	@echo "  profile-dhat      - Build and run with DHAT profiling"
