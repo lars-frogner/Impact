@@ -66,23 +66,30 @@ cargo_build_platform! = |platform_dir, linker, debug_mode, valgrind_mode|
             Debug -> []
             Release -> ["--release"]
 
-    linker_env_vars =
+    linker_rustflags =
         when linker is
             Ld -> []
-            Mold -> ["RUSTFLAGS=-C link-arg=-fuse-ld=mold"]
+            Mold -> ["-C link-arg=-fuse-ld=mold"]
 
-    valgrind_env_vars =
+    valgrind_rustflags =
         when valgrind_mode is
             NoValgrind -> []
-            Valgrind ->
-                [
-                    "RUSTFLAGS=-C target-cpu=x86-64",
-                ]
+            # Valgrind doesn't handle AVX512
+            Valgrind -> ["-C target-cpu=x86-64"]
+
+    rustflags =
+        linker_rustflags
+        |> List.concat(valgrind_rustflags)
+
+    rustflags_env_vars =
+        if List.is_empty(rustflags) then
+            []
+        else
+            ["RUSTFLAGS=${Str.join_with(rustflags, " ")}"]
 
     Cmd.exec!(
         "env",
-        linker_env_vars
-        |> List.concat(valgrind_env_vars)
+        rustflags_env_vars
         |> List.concat(["cargo", "build"])
         |> List.concat(base_args)
         |> List.concat(debug_args),
