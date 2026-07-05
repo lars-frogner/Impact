@@ -212,40 +212,44 @@ cargo_build_app! = |app_dir, backend, linker, debug_mode, asan_mode, profiling_m
             LLVM -> []
             Cranelift -> ["CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift"]
 
-    linker_env_vars =
+    linker_rustflags =
         when linker is
             Ld -> []
-            Mold -> ["RUSTFLAGS=-C link-arg=-fuse-ld=mold"]
+            Mold -> ["-C link-arg=-fuse-ld=mold"]
 
-    asan_env_vars =
+    asan_rustflags =
         when asan_mode is
             NoAddressSanitizer -> []
             AddressSanitizer ->
-                [
-                    "RUSTFLAGS=-C debuginfo=2 -C debug-assertions -C overflow-checks=yes -Z sanitizer=address -C link-arg=-lasan",
-                ]
+                ["-C debuginfo=2 -C debug-assertions -C overflow-checks=yes -Z sanitizer=address -C link-arg=-lasan"]
 
-    profiling_env_vars =
+    profiling_rustflags =
         when profiling_mode is
             NoProfiling -> []
-            Profiling -> ["RUSTFLAGS=-C debuginfo=2 -C force-frame-pointers=yes -C strip=none"]
+            Profiling -> ["-C debuginfo=2 -C force-frame-pointers=yes -C strip=none -C target-cpu=native"]
 
-    valgrind_env_vars =
+    valgrind_rustflags =
         when valgrind_mode is
             NoValgrind -> []
-            Valgrind ->
-                [
-                    # Valgrind doesn't handle AVX512
-                    "RUSTFLAGS=-C target-cpu=x86-64",
-                ]
+            # Valgrind doesn't handle AVX512
+            Valgrind -> ["-C target-cpu=x86-64"]
+
+    rustflags =
+        linker_rustflags
+        |> List.concat(asan_rustflags)
+        |> List.concat(profiling_rustflags)
+        |> List.concat(valgrind_rustflags)
+
+    rustflags_env_vars =
+        if List.is_empty(rustflags) then
+            []
+        else
+            ["RUSTFLAGS=${Str.join_with(rustflags, " ")}"]
 
     Cmd.exec!(
         "env",
         backend_env_vars
-        |> List.concat(linker_env_vars)
-        |> List.concat(asan_env_vars)
-        |> List.concat(profiling_env_vars)
-        |> List.concat(valgrind_env_vars)
+        |> List.concat(rustflags_env_vars)
         |> List.append("cargo")
         |> List.concat(nightly_arg)
         |> List.append("build")
