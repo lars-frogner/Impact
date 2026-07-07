@@ -688,6 +688,13 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                 let norm_point_in_b = transform_from_world_to_b.transform_point(&point)
                     * object_b.inverse_voxel_extent();
+                let norm_point_in_b = norm_point_in_b.as_vector();
+
+                // Required to ensure safety in
+                // `determine_sdf_value_and_normal_at_point_if_intersecting`. We
+                // make the assertion here to avoid pressuring that function
+                // with more instructions.
+                assert!(!norm_point_in_b.has_nan_component());
 
                 let Some((signed_distance_in_b, normal_vector_in_b)) =
                     determine_sdf_value_and_normal_at_point_if_intersecting(
@@ -708,9 +715,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                 let norm_point_in_a = point_in_a * object_a.inverse_voxel_extent();
 
-                let [i_a, j_a, k_a] =
-                    <[f32; 3]>::from(norm_point_in_a.as_vector().component_floor())
-                        .map(|idx| idx as usize);
+                let [i_a, j_a, k_a] = <[f32; 3]>::from(norm_point_in_a).map(|idx| idx as usize);
 
                 f(
                     [0, i_a, j_a, k_a],
@@ -756,6 +761,9 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                 let norm_point_in_a = transform_from_world_to_a.transform_point(&point)
                     * object_a.inverse_voxel_extent();
+                let norm_point_in_a = norm_point_in_a.as_vector();
+
+                assert!(!norm_point_in_a.has_nan_component());
 
                 let Some((signed_distance_in_a, normal_vector_in_a)) =
                     determine_sdf_value_and_normal_at_point_if_intersecting(
@@ -778,9 +786,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
                 let norm_point_in_b = point_in_b * object_b.inverse_voxel_extent();
 
-                let [i_b, j_b, k_b] =
-                    <[f32; 3]>::from(norm_point_in_b.as_vector().component_floor())
-                        .map(|idx| idx as usize);
+                let [i_b, j_b, k_b] = <[f32; 3]>::from(norm_point_in_b).map(|idx| idx as usize);
 
                 f(
                     [0, i_b, j_b, k_b],
@@ -1032,24 +1038,23 @@ pub fn for_each_capsule_voxel_object_contact(
     );
 }
 
-#[inline]
 fn determine_sdf_value_and_normal_at_point_if_intersecting(
     object: &VoxelObject,
     grid_dimensions: &[usize; 3],
-    norm_point: &Point3C,
+    norm_point: &Vector3C,
 ) -> Option<(f32, UnitVector3)> {
     const HALF_VOXEL_DIAGONAL: f32 = 0.5 * SQRT_3;
 
-    let shifted_point = norm_point - Vector3C::same(0.5);
-    let lower_indices_f32 = shifted_point.as_vector().component_floor();
-    let fractional_offset = shifted_point.as_vector() - lower_indices_f32;
+    // Compute the point that, when floored, gives the indices of the lower cell
+    // of the 2x2x2 region closest to the point.
+    let lower_point = norm_point - Vector3C::same(0.5);
 
     // Avoid sampling outside the lower bounds of the SDF grid
-    if lower_indices_f32.has_negative_component() {
+    if lower_point.has_negative_component() {
         return None;
     }
 
-    let [li, lj, lk] = <[f32; 3]>::from(lower_indices_f32).map(|idx| idx as usize);
+    let [li, lj, lk] = <[f32; 3]>::from(lower_point).map(|idx| idx as usize);
 
     // Avoid sampling outside the upper bounds of the SDF grid. We use bitwise
     // ORs to avoid branches due to short-circuiting.
@@ -1060,8 +1065,11 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
         return None;
     }
 
-    let containing_cell_corner = norm_point.as_vector().component_floor();
-    let [ci, cj, ck] = <[f32; 3]>::from(containing_cell_corner).map(|idx| idx as usize);
+    // Compute the indices of the cell containing the point.
+    //
+    // SAFETY: The point is within the 2x2x2 region, so we know it is
+    // non-negative and fits in `usize`. The caller asserted that it is not NaN.
+    let [ci, cj, ck] = index_vector_to_ints_maybe_unchecked(*norm_point);
 
     let [chunk_i, chunk_j, chunk_k] = object::chunk_indices_from_object_voxel_indices(ci, cj, ck);
     let chunk_idx = object.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
@@ -1133,6 +1141,8 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
         ]
     };
 
+    let lower_indices = lower_point.component_floor();
+    let fractional_offset = lower_point - lower_indices;
     let signed_distance =
         sdf::evaluate_sdf_from_corner_samples(&signed_distances, &fractional_offset);
 
@@ -1156,6 +1166,18 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let normal_vector = UnitVector3::normalized_from_if_above(sdf_gradient, 1e-8)?;
 
     Some((signed_distance, normal_vector))
+}
+
+#[cfg(not(feature = "unchecked"))]
+#[inline]
+fn index_vector_to_ints_maybe_unchecked(indices: Vector3C) -> [usize; 3] {
+    <[f32; 3]>::from(indices).map(|idx| idx as usize)
+}
+
+#[cfg(feature = "unchecked")]
+#[inline]
+fn index_vector_to_ints_maybe_unchecked(indices: Vector3C) -> [usize; 3] {
+    <[f32; 3]>::from(indices).map(|idx| unsafe { idx.to_int_unchecked::<usize>() })
 }
 
 #[inline]
