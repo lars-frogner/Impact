@@ -4,6 +4,7 @@ pub mod aligned_byte_vec;
 pub mod bit_vector;
 pub mod fixed_queue;
 pub mod key_index_mapper;
+pub mod range_allocator;
 pub mod slot_map;
 pub mod tracking;
 
@@ -11,6 +12,7 @@ pub use aligned_byte_vec::{AlignedByteVec, Alignment};
 pub use bit_vector::BitVector;
 pub use fixed_queue::FixedQueue;
 pub use key_index_mapper::KeyIndexMapper;
+pub use range_allocator::RangeAllocator;
 pub use slot_map::{SlotKey, SlotMap};
 
 pub use hashbrown::hash_map;
