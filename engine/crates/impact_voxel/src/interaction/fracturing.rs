@@ -2,8 +2,8 @@
 
 use crate::{
     VoxelObjectID, VoxelObjectManager,
-    object::inertia::VoxelObjectInertialPropertyManager,
     interaction::{self, ExtractedComponents, VoxelObjectInteractionContext},
+    object::inertia::VoxelObjectInertialPropertyManager,
     voxel_types::VoxelTypeRegistry,
 };
 use anyhow::{Result, anyhow, bail};
@@ -171,9 +171,14 @@ impl FracturingProcess {
             self.processed_vertex_count += 1;
 
             polyhedron.extract_from_delaunay_tetrahedra(&self.tetrahedralization, dual_vertex_idx);
+
             let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
                 continue;
             };
+
+            // Shrink the polyhedron slightly to avoid slowing down collision
+            // detection with a lot of exactly touching flat surfaces
+            polyhedron.shift_face_planes(-0.1);
 
             let mut poly_inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
 
