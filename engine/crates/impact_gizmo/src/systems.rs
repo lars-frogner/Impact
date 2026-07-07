@@ -1209,8 +1209,8 @@ fn buffer_instance_features_for_collision_probe_gizmos(
             .current,
     );
 
-    for (_, probe_points) in voxel_object.collision_probes().points_per_chunk() {
-        for probe_point in probe_points {
+    for (_, probe_point_range) in voxel_object.collision_probes().chunk_point_ranges() {
+        for probe_point in &voxel_object.collision_probes().probe_points()[probe_point_range] {
             let probe_point = probe_point.aligned();
 
             let probe_transform = model_view_transform

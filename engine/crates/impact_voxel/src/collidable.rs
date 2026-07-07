@@ -17,8 +17,8 @@ use crate::{
         chunk_range_encompassing_voxel_range, sdf,
     },
 };
-use impact_alloc::{AVec, arena::ArenaPool};
-use impact_containers::HashMap;
+use impact_alloc::{AVec, Allocator, Global, arena::ArenaPool};
+use impact_containers::{HashMap, RangeAllocator};
 use impact_geometry::{Capsule, Plane, Sphere};
 use impact_id::EntityID;
 use impact_math::{
@@ -95,7 +95,9 @@ pub struct VoxelObjectCollidable {
 /// the protruding parts of the mesh.
 #[derive(Clone, Debug)]
 pub struct VoxelObjectCollisionProbes {
-    points_per_chunk: HashMap<[usize; 3], Vec<Point3C>>,
+    chunk_point_ranges: HashMap<[usize; 3], Range<usize>>,
+    probe_points: AVec<Point3C, Global>,
+    point_range_allocator: RangeAllocator,
 }
 
 impl collision::Collidable for Collidable {
@@ -400,10 +402,14 @@ impl VoxelObjectCollisionProbes {
         }
     }
 
-    pub fn points_per_chunk(&self) -> impl ExactSizeIterator<Item = (&[usize; 3], &[Point3C])> {
-        self.points_per_chunk
+    pub fn chunk_point_ranges(&self) -> impl ExactSizeIterator<Item = (&[usize; 3], Range<usize>)> {
+        self.chunk_point_ranges
             .iter()
-            .map(|(chunk_indices, points)| (chunk_indices, points.as_slice()))
+            .map(|(chunk_indices, range)| (chunk_indices, range.clone()))
+    }
+
+    pub fn probe_points(&self) -> &[Point3C] {
+        &self.probe_points
     }
 
     fn determine_log2_block_size_for_object(object: &VoxelObject) -> BlockSize {
@@ -433,17 +439,19 @@ impl VoxelObjectCollisionProbes {
         object: &VoxelObject,
         mesh: &VoxelObjectMesh,
     ) -> Self {
-        let mut points_per_chunk =
+        let mut chunk_point_ranges =
             HashMap::with_capacity_and_hasher(mesh.n_chunks(), Default::default());
+
+        let mut probe_points = AVec::with_capacity(mesh.n_chunks() * CHUNK_BLOCK_COUNT);
 
         for (submesh, vertex_range) in mesh
             .chunk_submeshes()
             .iter()
             .zip(mesh.chunk_vertex_ranges())
         {
-            let index_range = submesh.index_range();
+            let point_range_start = probe_points.len();
 
-            let mut points = Vec::with_capacity(CHUNK_BLOCK_COUNT);
+            let index_range = submesh.index_range();
 
             let chunk_indices = submesh.chunk_indices().map(|idx| idx as usize);
 
@@ -452,8 +460,8 @@ impl VoxelObjectCollisionProbes {
             let start_index = vertex_range.start as u32;
             let indices = &mesh.indices()[index_range];
 
-            Self::add_points_for_vertices_in_blocks::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
-                &mut points,
+            Self::add_points_for_vertices_in_blocks::<_, LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                &mut probe_points,
                 &chunk_indices,
                 vertex_positions,
                 vertex_normals,
@@ -462,11 +470,23 @@ impl VoxelObjectCollisionProbes {
                 object.inverse_voxel_extent(),
             );
 
-            let chunk_indices = submesh.chunk_indices().map(|idx| idx as usize);
-            points_per_chunk.insert(chunk_indices, points);
+            let point_range_end = probe_points.len();
+            let point_range = point_range_start..point_range_end;
+
+            if point_range.is_empty() {
+                continue;
+            }
+
+            chunk_point_ranges.insert(chunk_indices, point_range);
         }
 
-        Self { points_per_chunk }
+        let point_range_allocator = RangeAllocator::fully_occupied();
+
+        Self {
+            chunk_point_ranges,
+            probe_points,
+            point_range_allocator,
+        }
     }
 
     fn sync_with_voxel_object_and_mesh_with_block_size<
@@ -484,6 +504,7 @@ impl VoxelObjectCollisionProbes {
                 *chunk_indices,
             );
         }
+        self.point_range_allocator.merge_consecutive_ranges();
     }
 
     fn update_for_chunk<const LOG2_BLOCK_SIZE: usize, const CHUNK_BLOCK_COUNT: usize>(
@@ -495,22 +516,24 @@ impl VoxelObjectCollisionProbes {
         let Some((vertex_range, index_range)) =
             mesh.vertex_and_index_range_for_chunk_at_indices(chunk_indices)
         else {
-            self.points_per_chunk.remove(&chunk_indices);
+            // If the chunk doesn't have vertices, remove it
+            if let Some(removed_range) = self.chunk_point_ranges.remove(&chunk_indices) {
+                // Free its point range if it was present
+                self.point_range_allocator.free_range(&removed_range);
+            }
             return;
         };
 
-        let points = self
-            .points_per_chunk
-            .entry(chunk_indices)
-            .or_insert_with(|| Vec::with_capacity(CHUNK_BLOCK_COUNT));
+        let arena = ArenaPool::get_arena();
+        let mut point_buffer = AVec::with_capacity_in(CHUNK_BLOCK_COUNT, &arena);
 
         let vertex_positions = &mesh.positions()[vertex_range.clone()];
         let vertex_normals = &mesh.normal_vectors()[vertex_range.clone()];
         let start_index = vertex_range.start as u32;
         let indices = &mesh.indices()[index_range];
 
-        Self::add_points_for_vertices_in_blocks::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
-            points,
+        Self::add_points_for_vertices_in_blocks::<_, LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+            &mut point_buffer,
             &chunk_indices,
             vertex_positions,
             vertex_normals,
@@ -518,13 +541,50 @@ impl VoxelObjectCollisionProbes {
             start_index,
             object.inverse_voxel_extent(),
         );
+
+        // If there were no points, abort after removing the chunk and freeing
+        // its range
+        if point_buffer.is_empty() {
+            if let Some(old_point_range) = self.chunk_point_ranges.remove(&chunk_indices) {
+                self.point_range_allocator.free_range(&old_point_range);
+            }
+            return;
+        }
+
+        // Free the old point range if we had points for the chunk
+        if let Some(old_point_range) = self.chunk_point_ranges.get(&chunk_indices) {
+            self.point_range_allocator.free_range(old_point_range);
+        }
+
+        // Look for a free range for the new points
+        if let Some(point_range) = self
+            .point_range_allocator
+            .allocate_range(point_buffer.len())
+        {
+            // If we found a free range, store it for the chunk and copy in the
+            // new points
+            self.chunk_point_ranges
+                .insert(chunk_indices, point_range.clone());
+
+            self.probe_points[point_range].copy_from_slice(&point_buffer);
+        } else {
+            // If there was no free range, append the new points to the end
+            let point_range =
+                self.probe_points.len()..(self.probe_points.len() + point_buffer.len());
+
+            self.chunk_point_ranges
+                .insert(chunk_indices, point_range.clone());
+
+            self.probe_points.extend_from_slice(&point_buffer);
+        }
     }
 
     fn add_points_for_vertices_in_blocks<
+        A: Allocator,
         const LOG2_BLOCK_SIZE: usize,
         const CHUNK_BLOCK_COUNT: usize,
     >(
-        points: &mut Vec<Point3C>,
+        points: &mut AVec<Point3C, A>,
         chunk_indices: &[usize; 3],
         vertex_positions: &[VoxelMeshVertexPosition],
         vertex_normals: &[VoxelMeshVertexNormalVector],
@@ -629,8 +689,6 @@ impl VoxelObjectCollisionProbes {
                     Vector4C::new(position.x(), position.y(), position.z(), curvature);
             }
         }
-
-        points.clear();
 
         // Gather the best vertex (if present) from each block
         for best_point_and_curvature in best_points_and_curvatures {
@@ -795,9 +853,9 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        for (chunk_indices, probe_points) in
-            meshed_voxel_object_a.collision_probes().points_per_chunk()
-        {
+        let collision_probes_for_a = meshed_voxel_object_a.collision_probes();
+
+        for (chunk_indices, probe_point_range) in collision_probes_for_a.chunk_point_ranges() {
             if !intersection_chunk_ranges_in_a[0].contains(&chunk_indices[0])
                 || !intersection_chunk_ranges_in_a[1].contains(&chunk_indices[1])
                 || !intersection_chunk_ranges_in_a[2].contains(&chunk_indices[2])
@@ -805,7 +863,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 continue;
             }
 
-            for probe_point in probe_points {
+            for probe_point in &collision_probes_for_a.probe_points()[probe_point_range] {
                 let point_in_a = probe_point.aligned();
 
                 if !intersection_aabb_in_a.contains_point(&point_in_a) {
@@ -868,9 +926,9 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
             .clone()
             .map(chunk_range_encompassing_voxel_range);
 
-        for (chunk_indices, probe_points) in
-            meshed_voxel_object_b.collision_probes().points_per_chunk()
-        {
+        let collision_probes_for_b = meshed_voxel_object_b.collision_probes();
+
+        for (chunk_indices, probe_point_range) in collision_probes_for_b.chunk_point_ranges() {
             if !intersection_chunk_ranges_in_b[0].contains(&chunk_indices[0])
                 || !intersection_chunk_ranges_in_b[1].contains(&chunk_indices[1])
                 || !intersection_chunk_ranges_in_b[2].contains(&chunk_indices[2])
@@ -878,7 +936,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 continue;
             }
 
-            for probe_point in probe_points {
+            for probe_point in &collision_probes_for_b.probe_points()[probe_point_range] {
                 let point_in_b = probe_point.aligned();
 
                 if !intersection_aabb_in_b.contains_point(&point_in_b) {
