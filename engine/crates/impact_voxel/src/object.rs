@@ -1669,40 +1669,6 @@ impl VoxelObject {
         }
     }
 
-    fn update_upper_boundary_adjacencies_along_dim_for_chunks(
-        &mut self,
-        chunk_indices_and_dims: impl IntoIterator<Item = (usize, Dimension)>,
-    ) {
-        for (chunk_idx, dim) in chunk_indices_and_dims {
-            let [chunk_i, chunk_j, chunk_k] =
-                chunk_indices_from_linear_idx(&self.chunk_counts, chunk_idx);
-
-            let adjacent_chunk_indices = [
-                [chunk_i + 1, chunk_j, chunk_k],
-                [chunk_i, chunk_j + 1, chunk_k],
-                [chunk_i, chunk_j, chunk_k + 1],
-            ][dim.idx()];
-
-            let upper_chunk_idx =
-                if adjacent_chunk_indices[dim.idx()] < self.occupied_chunk_ranges[dim.idx()].end {
-                    let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
-
-                    Some(adjacent_chunk_idx)
-                } else {
-                    None
-                };
-
-            VoxelChunk::update_mutual_face_adjacencies(
-                &mut self.chunks,
-                &mut self.voxels,
-                &mut self.split_detector,
-                Some(chunk_idx),
-                upper_chunk_idx,
-                dim,
-            );
-        }
-    }
-
     fn update_all_lower_edge_boundary_adjacencies(&mut self) {
         for chunk_j in 0..self.chunk_counts[1] {
             for chunk_k in 0..self.chunk_counts[2] {
@@ -2801,11 +2767,6 @@ impl FaceVoxelDistribution {
     #[inline]
     fn all_empty() -> [[FaceVoxelDistribution; 2]; 3] {
         [[FaceVoxelDistribution::Empty; 2]; 3]
-    }
-
-    #[inline]
-    fn is_empty(self) -> bool {
-        self == FaceVoxelDistribution::Empty
     }
 }
 
