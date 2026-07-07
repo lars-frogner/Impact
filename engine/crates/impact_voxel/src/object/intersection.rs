@@ -445,9 +445,7 @@ impl VoxelObject {
 
                     let Some(trimmed_normalized_capsule) = normalized_capsule
                         .trim_segment_outside_aab(
-                            &object::normalized_chunk_aabb_from_chunk_indices(
-                                chunk_i, chunk_j, chunk_k,
-                            ),
+                            &object::normalized_chunk_aabb_from_chunk_indices(&chunk_indices),
                         )
                     else {
                         continue;

@@ -8,12 +8,16 @@ pub mod systems;
 
 use crate::{
     Voxel, VoxelObjectID, VoxelObjectManager, VoxelSignedDistance, VoxelSurfacePlacement,
-    mesh::{MeshedVoxelObject, VoxelMeshVertexPosition, VoxelObjectMesh},
+    mesh::{
+        MeshedVoxelObject, VoxelMeshIndex, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition,
+        VoxelObjectMesh,
+    },
     object::{
         self, CHUNK_SIZE, LOG2_CHUNK_SIZE, VoxelChunk, VoxelObject,
         chunk_range_encompassing_voxel_range, sdf,
     },
 };
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashMap;
 use impact_geometry::{Capsule, Plane, Sphere};
 use impact_id::EntityID;
@@ -21,7 +25,7 @@ use impact_math::{
     consts::f32::SQRT_3,
     point::Point3C,
     transform::{Isometry3, Isometry3C},
-    vector::{UnitVector3, Vector3, Vector3C},
+    vector::{UnitVector3, UnitVector3C, Vector3, Vector3C, Vector4C},
 };
 use impact_physics::{
     collision::{
@@ -44,6 +48,7 @@ use impact_physics::{
     constraint::contact::{Contact, ContactGeometry, ContactManifold, ContactWithID},
     material::ContactResponseParameters,
 };
+use std::ops::Range;
 
 pub type CollisionWorld = collision::CollisionWorld<Collidable>;
 
@@ -77,6 +82,17 @@ pub struct VoxelObjectCollidable {
     transform_to_object_space: Isometry3C,
 }
 
+/// Specially selected points on the voxel object surface to use for probing the
+/// other object's SDF during mutual voxel object collision detection and
+/// contact generation.
+///
+/// The points are a subset of the object's mesh vertices and are determined for
+/// each chunk separately. The vertices for a chunk are spatially grouped by
+/// dividing the chunk into blocks of 4³ voxels (or 2³ or 1³ if the object is
+/// small). Within each block, the vertex with the largest convex curvature (as
+/// determined by a cheap heuristic) is selected as the probe. This approach is
+/// intended to yield a relatively small number of distributed points focused on
+/// the protruding parts of the mesh.
 #[derive(Clone, Debug)]
 pub struct VoxelObjectCollisionProbes {
     points_per_chunk: HashMap<[usize; 3], Vec<Point3C>>,
@@ -326,7 +342,7 @@ enum BlockSize {
 
 impl VoxelObjectCollisionProbes {
     pub fn compute_for_all_chunks(object: &VoxelObject, mesh: &VoxelObjectMesh) -> Self {
-        match Self::determine_log2_block_size_for_mesh(mesh) {
+        match Self::determine_log2_block_size_for_object(object) {
             BlockSize::One => {
                 const LOG2_BLOCK_SIZE: usize = 0;
                 const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
@@ -356,7 +372,7 @@ impl VoxelObjectCollisionProbes {
         object: &VoxelObject,
         mesh: &VoxelObjectMesh,
     ) {
-        match Self::determine_log2_block_size_for_mesh(mesh) {
+        match Self::determine_log2_block_size_for_object(object) {
             BlockSize::One => {
                 const LOG2_BLOCK_SIZE: usize = 0;
                 const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
@@ -390,11 +406,20 @@ impl VoxelObjectCollisionProbes {
             .map(|(chunk_indices, points)| (chunk_indices, points.as_slice()))
     }
 
-    fn determine_log2_block_size_for_mesh(mesh: &VoxelObjectMesh) -> BlockSize {
-        let n_vertices = mesh.positions().len();
-        if n_vertices >= 800 {
+    fn determine_log2_block_size_for_object(object: &VoxelObject) -> BlockSize {
+        let min_extent_in_voxels = object
+            .occupied_voxel_ranges()
+            .iter()
+            .map(Range::len)
+            .min()
+            .unwrap();
+
+        // We want the largest block size we can get away with without missing
+        // mesh features. The worst outcome if the block size is too large is
+        // that only one side of a thin object gets collision probes.
+        if min_extent_in_voxels >= 2 * 4 {
             BlockSize::Four
-        } else if n_vertices >= 80 {
+        } else if min_extent_in_voxels >= 2 * 2 {
             BlockSize::Two
         } else {
             BlockSize::One
@@ -416,13 +441,24 @@ impl VoxelObjectCollisionProbes {
             .iter()
             .zip(mesh.chunk_vertex_ranges())
         {
+            let index_range = submesh.index_range();
+
             let mut points = Vec::with_capacity(CHUNK_BLOCK_COUNT);
 
-            let positions = &mesh.positions()[vertex_range.clone()];
+            let chunk_indices = submesh.chunk_indices().map(|idx| idx as usize);
+
+            let vertex_positions = &mesh.positions()[vertex_range.clone()];
+            let vertex_normals = &mesh.normal_vectors()[vertex_range.clone()];
+            let start_index = vertex_range.start as u32;
+            let indices = &mesh.indices()[index_range];
 
             Self::add_points_for_vertices_in_blocks::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
                 &mut points,
-                positions,
+                &chunk_indices,
+                vertex_positions,
+                vertex_normals,
+                indices,
+                start_index,
                 object.inverse_voxel_extent(),
             );
 
@@ -456,7 +492,7 @@ impl VoxelObjectCollisionProbes {
         mesh: &VoxelObjectMesh,
         chunk_indices: [usize; 3],
     ) {
-        let Some((vertex_range, _)) =
+        let Some((vertex_range, index_range)) =
             mesh.vertex_and_index_range_for_chunk_at_indices(chunk_indices)
         else {
             self.points_per_chunk.remove(&chunk_indices);
@@ -468,11 +504,18 @@ impl VoxelObjectCollisionProbes {
             .entry(chunk_indices)
             .or_insert_with(|| Vec::with_capacity(CHUNK_BLOCK_COUNT));
 
-        let positions = &mesh.positions()[vertex_range];
+        let vertex_positions = &mesh.positions()[vertex_range.clone()];
+        let vertex_normals = &mesh.normal_vectors()[vertex_range.clone()];
+        let start_index = vertex_range.start as u32;
+        let indices = &mesh.indices()[index_range];
 
         Self::add_points_for_vertices_in_blocks::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
             points,
-            positions,
+            &chunk_indices,
+            vertex_positions,
+            vertex_normals,
+            indices,
+            start_index,
             object.inverse_voxel_extent(),
         );
     }
@@ -482,33 +525,118 @@ impl VoxelObjectCollisionProbes {
         const CHUNK_BLOCK_COUNT: usize,
     >(
         points: &mut Vec<Point3C>,
+        chunk_indices: &[usize; 3],
         vertex_positions: &[VoxelMeshVertexPosition],
+        vertex_normals: &[VoxelMeshVertexNormalVector],
+        indices: &[VoxelMeshIndex],
+        start_index: u32,
         inverse_voxel_extent: f32,
     ) {
-        points.clear();
+        let arena = ArenaPool::get_arena();
 
-        let mut taken = [false; CHUNK_BLOCK_COUNT];
+        // Running sum and count of curvature samples for each vertex
+        let mut vertex_curvatures = AVec::with_capacity_in(vertex_positions.len(), &arena);
+        vertex_curvatures.resize(vertex_positions.len(), [0.0, 0.0]);
 
-        for vertex_position in vertex_positions {
+        let (triangles, []) = indices.as_chunks::<3>() else {
+            panic!("Indices were not divisible into triangles");
+        };
+
+        // For each triangle, add a curvature sample for each of the three
+        // vertices. We produce a curvature sample for a vertex by projecting
+        // its normal along an outgoing edge. If negative, the edge has a
+        // component opposite the normal direction, so the curvature is convex.
+        // Each vertex in the triangle get two samples, since they are connected
+        // to two triangle edges.
+        //
+        // Note that since we treat each triangle in isolation, edges shared
+        // between triangles will yield two equal samples to each connected
+        // vertex. This will make interior vertices biased differently from
+        // boundary vertices, but the extra cost of detecting shared edges is
+        // not worth it. This is only supposed to be a cheap heuristic.
+        for &[i0, i1, i2] in triangles {
+            let i0 = (i0.0 - start_index) as usize;
+            let i1 = (i1.0 - start_index) as usize;
+            let i2 = (i2.0 - start_index) as usize;
+
+            let v0 = Point3C::from(vertex_positions[i0].0);
+            let v1 = Point3C::from(vertex_positions[i1].0);
+            let v2 = Point3C::from(vertex_positions[i2].0);
+
+            let n0 = UnitVector3C::unchecked_from(vertex_normals[i0].0.into());
+            let n1 = UnitVector3C::unchecked_from(vertex_normals[i1].0.into());
+            let n2 = UnitVector3C::unchecked_from(vertex_normals[i2].0.into());
+
+            let edge_01 = v1 - v0;
+            let edge_12 = v2 - v1;
+            let edge_20 = v0 - v2;
+
+            let [sum, count] = &mut vertex_curvatures[i0];
+            *sum += n0.dot(&edge_01) - n0.dot(&edge_20);
+            *count += 2.0;
+
+            let [sum, count] = &mut vertex_curvatures[i1];
+            *sum += n1.dot(&edge_12) - n1.dot(&edge_01);
+            *count += 2.0;
+
+            let [sum, count] = &mut vertex_curvatures[i2];
+            *sum += n2.dot(&edge_20) - n2.dot(&edge_12);
+            *count += 2.0;
+        }
+
+        let norm_chunk_aabb =
+            object::normalized_chunk_aabb_from_chunk_indices(chunk_indices).compact();
+
+        // Running best point and associated minimum (most convex) curvature for
+        // each block in the chunk. The point and curvature are packed into a
+        // Vector4 to keep them adjacent in memory.
+        let mut best_points_and_curvatures = AVec::with_capacity_in(CHUNK_BLOCK_COUNT, &arena);
+        best_points_and_curvatures.resize(CHUNK_BLOCK_COUNT, Vector4C::same(f32::INFINITY));
+
+        for (vertex_position, [curvature_sum, curvature_count]) in
+            vertex_positions.iter().zip(vertex_curvatures)
+        {
+            // There may be vertices not connected to any edges. We ignore
+            // those.
+            if curvature_count == 0.0 {
+                continue;
+            }
+
             let position = Point3C::from(vertex_position.0);
             let norm_position = position * inverse_voxel_extent;
 
-            let floored_position = norm_position.as_vector().component_floor();
-            let object_voxel_indices = <[f32; 3]>::from(floored_position).map(|idx| idx as usize);
+            // Vertices may be slightly outside the chunk, so we clamp the
+            // position to the chunk for the purpose of determining the block
+            let clamped_norm_position = norm_position
+                .max_with(norm_chunk_aabb.lower_corner())
+                .min_with(norm_chunk_aabb.upper_corner());
+
+            let object_voxel_indices =
+                <[f32; 3]>::from(clamped_norm_position).map(|idx| idx as usize);
 
             let block_idx = Self::linear_block_idx_from_object_voxel_indices(
                 LOG2_BLOCK_SIZE,
                 object_voxel_indices,
             );
 
-            let block_taken = &mut taken[block_idx];
-            if *block_taken {
-                continue;
+            let curvature = curvature_sum / curvature_count;
+
+            let min_curvature = best_points_and_curvatures[block_idx].w();
+
+            // Keep the point with the minimum curvature
+            if curvature < min_curvature {
+                best_points_and_curvatures[block_idx] =
+                    Vector4C::new(position.x(), position.y(), position.z(), curvature);
             }
+        }
 
-            points.push(position);
+        points.clear();
 
-            *block_taken = true;
+        // Gather the best vertex (if present) from each block
+        for best_point_and_curvature in best_points_and_curvatures {
+            if best_point_and_curvature.w() != f32::INFINITY {
+                points.push(best_point_and_curvature.xyz().into());
+            }
         }
     }
 
@@ -553,7 +681,7 @@ impl VoxelObjectCollisionProbes {
     }
 
     #[inline]
-    const fn shift_from_voxel_idx_within_chunk_to_block_idx(
+    fn shift_from_voxel_idx_within_chunk_to_block_idx(
         log2_block_size: usize,
         voxel_idx: usize,
     ) -> usize {
