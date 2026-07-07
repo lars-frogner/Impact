@@ -54,6 +54,8 @@ pub struct ExtractedVoxelObject {
     /// parent object (the extracted object has the same orientation as the
     /// parent object, only the offset is different).
     pub origin_offset_in_parent: [usize; 3],
+    /// The ranges of chunks in the parent object the object was extracted from.
+    pub chunk_ranges_in_parent: ChunkRanges,
 }
 
 struct NoPropertyTransferrer;
@@ -1509,7 +1511,7 @@ impl VoxelObject {
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         chunk_counts: [usize; 3],
-        chunk_ranges: ChunkRanges,
+        chunk_ranges_in_parent: ChunkRanges,
         uniform_chunk_count: usize,
         non_uniform_chunk_count: usize,
         voxels: Vec<Voxel>,
@@ -1535,7 +1537,9 @@ impl VoxelObject {
 
         // Offset in number of voxels from the origin of the original object to
         // the origin of the extracted object
-        let origin_offset_in_parent = chunk_ranges.map(|range| range.start * CHUNK_SIZE);
+        let origin_offset_in_parent = chunk_ranges_in_parent
+            .clone()
+            .map(|range| range.start * CHUNK_SIZE);
 
         Some(if chunk_counts.iter().all(|&count| count <= 2) {
             // If the extracted object consists of at most 2 x 2 x 2 chunks,
@@ -1547,6 +1551,7 @@ impl VoxelObject {
                 voxel_extent,
                 parent_origin_offset_in_root,
                 origin_offset_in_parent,
+                chunk_ranges_in_parent,
                 chunk_counts,
                 uniform_chunk_count,
                 chunks,
@@ -1558,6 +1563,7 @@ impl VoxelObject {
                 voxel_extent,
                 parent_origin_offset_in_root,
                 origin_offset_in_parent,
+                chunk_ranges_in_parent,
                 chunk_counts,
                 chunks,
                 voxels,
@@ -1571,6 +1577,7 @@ impl VoxelObject {
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         origin_offset_in_parent: [usize; 3],
+        chunk_ranges_in_parent: ChunkRanges,
         chunk_counts: [usize; 3],
         uniform_chunk_count: usize,
         chunks: Vec<VoxelChunk>,
@@ -1708,6 +1715,7 @@ impl VoxelObject {
                     voxel_extent,
                     parent_origin_offset_in_root,
                     single_chunk_origin_offset_in_parent,
+                    chunk_ranges_in_parent,
                     [1; 3],
                     vec![VoxelChunk::NonUniform(single_chunk)],
                     single_chunk_voxels,
@@ -1720,6 +1728,7 @@ impl VoxelObject {
             voxel_extent,
             parent_origin_offset_in_root,
             origin_offset_in_parent,
+            chunk_ranges_in_parent,
             chunk_counts,
             chunks,
             voxels,
@@ -1731,6 +1740,7 @@ impl VoxelObject {
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         origin_offset_in_parent: [usize; 3],
+        chunk_ranges_in_parent: ChunkRanges,
         chunk_counts: [usize; 3],
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
@@ -1765,6 +1775,7 @@ impl VoxelObject {
         ExtractedVoxelObject {
             voxel_object,
             origin_offset_in_parent,
+            chunk_ranges_in_parent,
         }
     }
 }
@@ -1862,6 +1873,7 @@ pub mod fuzzing {
             let ExtractedVoxelObject {
                 voxel_object: disconnected_object,
                 origin_offset_in_parent: origin_offset,
+                chunk_ranges_in_parent: _,
             } = disconnected_object;
 
             assert!(original_region_count > 1);
@@ -1929,6 +1941,7 @@ pub mod fuzzing {
             let ExtractedVoxelObject {
                 voxel_object: poly_object,
                 origin_offset_in_parent: origin_offset,
+                chunk_ranges_in_parent: _,
             } = copied_object;
 
             poly_object.validate_adjacencies();
