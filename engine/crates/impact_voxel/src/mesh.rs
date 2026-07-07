@@ -68,7 +68,7 @@ pub struct VoxelMeshIndexMaterials {
 
 /// A vertex index a [`VoxelObjectMesh`].
 #[repr(transparent)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Zeroable, Pod)]
 pub struct VoxelMeshIndex(pub u32);
 
 /// Metadata associating a chunk in a [`VoxelObject`] with the segment of the
@@ -519,6 +519,10 @@ impl ChunkSubmesh {
         &self.chunk_indices
     }
 
+    pub fn index_range(&self) -> Range<usize> {
+        (self.index_offset as usize)..(self.index_offset as usize + self.index_count as usize)
+    }
+
     fn compute_directional_obscuredness_table(flags: VoxelChunkFlags) -> [[[u32; 2]; 2]; 2] {
         const OBSCURED_X: [VoxelChunkFlags; 2] = [
             VoxelChunkFlags::IS_OBSCURED_X_DN,
@@ -543,10 +547,6 @@ impl ChunkSubmesh {
                 })
             })
         })
-    }
-
-    fn index_range(&self) -> Range<usize> {
-        (self.index_offset as usize)..(self.index_offset as usize + self.index_count as usize)
     }
 }
 

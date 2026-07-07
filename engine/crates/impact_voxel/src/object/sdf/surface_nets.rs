@@ -2,11 +2,14 @@
 //! Adapted from <https://github.com/bonsairobo/fast-surface-nets-rs>.
 
 use crate::{
-    object::sdf::{SDF_GRID_CELL_COUNT, VoxelChunkSignedDistanceField},
     mesh::{VoxelMeshIndexMaterials, VoxelMeshVertexNormalVector, VoxelMeshVertexPosition},
+    object::sdf::{SDF_GRID_CELL_COUNT, VoxelChunkSignedDistanceField},
     utils::{Dimension, Side},
 };
-use impact_math::{point::Point3, vector::Vector3};
+use impact_math::{
+    point::Point3,
+    vector::{UnitVector3, Vector3},
+};
 use std::array;
 
 /// The output buffers used by
@@ -17,9 +20,6 @@ pub struct SurfaceNetsBuffer {
     /// The triangle mesh vertex positions.
     pub positions: Vec<VoxelMeshVertexPosition>,
     /// The triangle mesh vertex normal vectors.
-    ///
-    /// The normals are **not** normalized, since that is done most efficiently
-    /// on the GPU.
     pub normal_vectors: Vec<VoxelMeshVertexNormalVector>,
     /// The material indices and weights for each vertex in the mesh.
     pub vertex_materials: Vec<SurfaceNetsVertexMaterials>,
@@ -187,7 +187,7 @@ impl VoxelChunkSignedDistanceField {
     fn estimate_surface_net_vertex_attributes_in_cube(
         &self,
         min_corner_linear_idx: u32,
-    ) -> Option<(Point3, Vector3, SurfaceNetsVertexMaterials)> {
+    ) -> Option<(Point3, UnitVector3, SurfaceNetsVertexMaterials)> {
         let mut corner_dists = [0.0; 8];
         let mut corner_has_voxel = [false; 8];
 
@@ -220,8 +220,11 @@ impl VoxelChunkSignedDistanceField {
         }
 
         let centroid = centroid_of_edge_intersections(&corner_dists);
-        let normal =
+
+        let gradient =
             super::compute_sdf_gradient_from_corner_samples(&corner_dists, centroid.as_vector());
+        let normal = UnitVector3::normalized_from(gradient);
+
         let vertex_materials =
             SurfaceNetsVertexMaterials::compute(corner_has_voxel, corner_material_indices);
 

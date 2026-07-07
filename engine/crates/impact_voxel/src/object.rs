@@ -3142,21 +3142,25 @@ fn normalized_voxel_center_position_from_object_voxel_indices(
 }
 
 #[inline]
-fn normalized_chunk_aabb_from_chunk_indices(
-    chunk_i: usize,
-    chunk_j: usize,
-    chunk_k: usize,
+pub fn chunk_aabb_from_chunk_indices(
+    voxel_extent: f32,
+    chunk_indices: &[usize; 3],
 ) -> AxisAlignedBox {
+    normalized_chunk_aabb_from_chunk_indices(chunk_indices).scaled(voxel_extent)
+}
+
+#[inline]
+pub fn normalized_chunk_aabb_from_chunk_indices(chunk_indices: &[usize; 3]) -> AxisAlignedBox {
     AxisAlignedBox::new(
         Point3::new(
-            (chunk_i * CHUNK_SIZE) as f32,
-            (chunk_j * CHUNK_SIZE) as f32,
-            (chunk_k * CHUNK_SIZE) as f32,
+            (chunk_indices[0] * CHUNK_SIZE) as f32,
+            (chunk_indices[1] * CHUNK_SIZE) as f32,
+            (chunk_indices[2] * CHUNK_SIZE) as f32,
         ),
         Point3::new(
-            ((chunk_i + 1) * CHUNK_SIZE) as f32,
-            ((chunk_j + 1) * CHUNK_SIZE) as f32,
-            ((chunk_k + 1) * CHUNK_SIZE) as f32,
+            ((chunk_indices[0] + 1) * CHUNK_SIZE) as f32,
+            ((chunk_indices[1] + 1) * CHUNK_SIZE) as f32,
+            ((chunk_indices[2] + 1) * CHUNK_SIZE) as f32,
         ),
     )
 }
