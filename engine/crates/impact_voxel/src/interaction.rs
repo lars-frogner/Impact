@@ -10,7 +10,8 @@ use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     mesh::MeshedVoxelObject,
     object::{
-        VoxelObject, extraction::ExtractedVoxelObject, inertia::VoxelObjectInertialPropertyManager,
+        ChunkRanges, VoxelObject, extraction::ExtractedVoxelObject,
+        inertia::VoxelObjectInertialPropertyManager,
     },
     voxel_types::VoxelTypeRegistry,
 };
@@ -96,6 +97,7 @@ struct DynamicExtractedVoxelObject {
     pub inertial_property_manager: VoxelObjectInertialPropertyManager,
     pub rigid_body: DynamicRigidBody,
     pub coordinate_changes: ExtractedVoxelObjectCoordinateChanges,
+    pub chunk_ranges_in_parent: ChunkRanges,
 }
 
 #[derive(Clone, Debug)]
@@ -463,6 +465,7 @@ fn determine_extracted_voxel_object_dynamics(
     let ExtractedVoxelObject {
         voxel_object,
         origin_offset_in_parent,
+        chunk_ranges_in_parent,
     } = extracted_object;
 
     let origin_offset_in_voxel_object_space = Vector3::from(
@@ -501,6 +504,7 @@ fn determine_extracted_voxel_object_dynamics(
         inertial_property_manager,
         rigid_body,
         coordinate_changes,
+        chunk_ranges_in_parent,
     }
 }
 
