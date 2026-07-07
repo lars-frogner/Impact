@@ -279,8 +279,8 @@ impl From<[f64; 2]> for Vector2 {
 
 impl From<Vector2> for [f64; 2] {
     #[inline]
-    fn from(point: Vector2) -> Self {
-        [f64::from(point.x()), f64::from(point.y())]
+    fn from(vector: Vector2) -> Self {
+        [f64::from(vector.x()), f64::from(vector.y())]
     }
 }
 
@@ -583,6 +583,12 @@ impl Vector3 {
         self.is_negative_bitmask() != 0
     }
 
+    /// Whether any of the vector components are NaN.
+    #[inline]
+    pub fn has_nan_component(&self) -> bool {
+        self.inner.is_nan()
+    }
+
     /// Returns a vector with the given closure applied to each component.
     #[inline]
     pub fn mapped(&self, mut f: impl FnMut(f32) -> f32) -> Self {
@@ -647,11 +653,11 @@ impl From<[f64; 3]> for Vector3 {
 
 impl From<Vector3> for [f64; 3] {
     #[inline]
-    fn from(point: Vector3) -> Self {
+    fn from(vector: Vector3) -> Self {
         [
-            f64::from(point.x()),
-            f64::from(point.y()),
-            f64::from(point.z()),
+            f64::from(vector.x()),
+            f64::from(vector.y()),
+            f64::from(vector.z()),
         ]
     }
 }
@@ -926,6 +932,12 @@ impl Vector3C {
         self.is_negative_bitmask() != 0
     }
 
+    /// Whether any of the vector components are NaN.
+    #[inline]
+    pub fn has_nan_component(&self) -> bool {
+        self.x.is_nan() | self.y.is_nan() | self.z.is_nan()
+    }
+
     /// Returns a vector with the given closure applied to each component.
     #[inline]
     pub fn mapped(&self, mut f: impl FnMut(f32) -> f32) -> Self {
@@ -979,11 +991,11 @@ impl From<[f64; 3]> for Vector3C {
 
 impl From<Vector3C> for [f64; 3] {
     #[inline]
-    fn from(point: Vector3C) -> Self {
+    fn from(vector: Vector3C) -> Self {
         [
-            f64::from(point.x()),
-            f64::from(point.y()),
-            f64::from(point.z()),
+            f64::from(vector.x()),
+            f64::from(vector.y()),
+            f64::from(vector.z()),
         ]
     }
 }
@@ -1213,6 +1225,24 @@ impl Deref for UnitVector3 {
     }
 }
 
+impl From<UnitVector3> for [f32; 3] {
+    #[inline]
+    fn from(vector: UnitVector3) -> Self {
+        [vector.x(), vector.y(), vector.z()]
+    }
+}
+
+impl From<UnitVector3> for [f64; 3] {
+    #[inline]
+    fn from(vector: UnitVector3) -> Self {
+        [
+            f64::from(vector.x()),
+            f64::from(vector.y()),
+            f64::from(vector.z()),
+        ]
+    }
+}
+
 impl_binop!(Mul, mul, UnitVector3, f32, Vector3, |a, b| {
     Vector3::wrap(a.inner.mul(*b))
 });
@@ -1385,14 +1415,27 @@ impl Deref for UnitVector3C {
 }
 
 impl From<UnitVector3C> for [f32; 3] {
+    #[inline]
     fn from(vector: UnitVector3C) -> Self {
         [vector.x(), vector.y(), vector.z()]
     }
 }
 
 impl From<[f32; 3]> for UnitVector3C {
+    #[inline]
     fn from(vector: [f32; 3]) -> Self {
         Self::normalized_from(vector.into())
+    }
+}
+
+impl From<UnitVector3C> for [f64; 3] {
+    #[inline]
+    fn from(vector: UnitVector3C) -> Self {
+        [
+            f64::from(vector.x()),
+            f64::from(vector.y()),
+            f64::from(vector.z()),
+        ]
     }
 }
 
