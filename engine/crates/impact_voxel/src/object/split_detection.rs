@@ -57,7 +57,7 @@ pub struct SplitDetector {
     /// each uniform chunk. We don't bother truncating or modifying the
     /// buffer when a uniform chunk is converted to non-uniform, we just
     /// keep the stale entries around.
-    uniform_chunk_adjacencent_region_connections: Vec<AdjacentRegionConnection>,
+    uniform_chunk_adjacent_region_connections: Vec<AdjacentRegionConnection>,
 }
 
 /// The heap memory buffers for a [`SplitDetector`].
@@ -66,7 +66,7 @@ pub struct SplitDetectorBuffers {
     voxel_region_labels: Vec<LocalRegionLabel>,
     regions: Vec<LocalRegion>,
     adjacent_region_connections: Vec<AdjacentRegionConnection>,
-    uniform_chunk_adjacencent_region_connections: Vec<AdjacentRegionConnection>,
+    uniform_chunk_adjacent_region_connections: Vec<AdjacentRegionConnection>,
 }
 
 /// Data for a uniform chunk needed to perform split detection.
@@ -324,7 +324,7 @@ impl VoxelObject {
         let adjacent_region_connections = &self.split_detector.adjacent_region_connections;
         let uniform_chunk_adjacent_region_connections = &self
             .split_detector
-            .uniform_chunk_adjacencent_region_connections;
+            .uniform_chunk_adjacent_region_connections;
 
         // The only regions whose connections with regions in other chunks need to be
         // resolved are the ones touching the chunk boundaries. We initialize each such
@@ -575,7 +575,7 @@ impl SplitDetector {
             mut voxel_region_labels,
             mut regions,
             mut adjacent_region_connections,
-            mut uniform_chunk_adjacencent_region_connections,
+            mut uniform_chunk_adjacent_region_connections,
         } = buffers;
 
         let voxel_count = non_uniform_chunk_count << (3 * LOG2_CHUNK_SIZE);
@@ -595,7 +595,7 @@ impl SplitDetector {
             AdjacentRegionConnection::zero(),
         );
 
-        uniform_chunk_adjacencent_region_connections.resize(
+        uniform_chunk_adjacent_region_connections.resize(
             uniform_chunk_adjacent_region_connection_count,
             AdjacentRegionConnection::zero(),
         );
@@ -605,7 +605,7 @@ impl SplitDetector {
             regions,
             original_uniform_chunk_count: uniform_chunk_count,
             adjacent_region_connections,
-            uniform_chunk_adjacencent_region_connections,
+            uniform_chunk_adjacent_region_connections,
         }
     }
 
@@ -633,7 +633,7 @@ impl SplitDetector {
         // adjacency information
         self.adjacent_region_connections
             .extend_from_slice(chunk_adjacent_region_connections(
-                &self.uniform_chunk_adjacencent_region_connections,
+                &self.uniform_chunk_adjacent_region_connections,
                 split_detection.data_offset,
             ));
     }
@@ -1045,7 +1045,7 @@ impl SplitDetector {
 
         let (lower_chunk_adjacent_region_connections, upper_chunk_adjacent_region_connections) =
             adjacent_region_connections_for_two_chunks_mut(
-                &mut self.uniform_chunk_adjacencent_region_connections,
+                &mut self.uniform_chunk_adjacent_region_connections,
                 lower_chunk_split_detection.data_offset,
                 upper_chunk_split_detection.data_offset,
             );
@@ -1193,7 +1193,7 @@ impl SplitDetector {
             &mut self.regions[uniform_chunk_split_detection.data_offset as usize];
 
         let uniform_chunk_adjacent_region_connections = chunk_adjacent_region_connections_mut(
-            &mut self.uniform_chunk_adjacencent_region_connections,
+            &mut self.uniform_chunk_adjacent_region_connections,
             uniform_chunk_split_detection.data_offset,
         );
 
@@ -1318,8 +1318,8 @@ impl SplitDetector {
             voxel_region_labels: self.voxel_region_labels,
             regions: self.regions,
             adjacent_region_connections: self.adjacent_region_connections,
-            uniform_chunk_adjacencent_region_connections: self
-                .uniform_chunk_adjacencent_region_connections,
+            uniform_chunk_adjacent_region_connections: self
+                .uniform_chunk_adjacent_region_connections,
         };
         buffers.clear();
         buffers
@@ -1333,7 +1333,7 @@ impl SplitDetectorBuffers {
             voxel_region_labels: Vec::new(),
             regions: Vec::new(),
             adjacent_region_connections: Vec::new(),
-            uniform_chunk_adjacencent_region_connections: Vec::new(),
+            uniform_chunk_adjacent_region_connections: Vec::new(),
         }
     }
 
@@ -1342,7 +1342,7 @@ impl SplitDetectorBuffers {
         self.voxel_region_labels.clear();
         self.regions.clear();
         self.adjacent_region_connections.clear();
-        self.uniform_chunk_adjacencent_region_connections.clear();
+        self.uniform_chunk_adjacent_region_connections.clear();
     }
 }
 
