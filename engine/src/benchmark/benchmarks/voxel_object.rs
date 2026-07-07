@@ -22,8 +22,8 @@ use impact_voxel::{
     },
     mesh::{MeshedVoxelObject, VoxelObjectMesh},
     object::{
-        VoxelObject, inertia::VoxelObjectInertialPropertyManager,
-        sdf::VoxelChunkSignedDistanceField,
+        VoxelObject, VoxelObjectBuffers, extraction::ExtractionResult,
+        inertia::VoxelObjectInertialPropertyManager, sdf::VoxelChunkSignedDistanceField,
     },
     voxel_types::VoxelType,
 };
@@ -31,7 +31,8 @@ use std::hint::black_box;
 
 pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let mut object = VoxelObject::generate_without_derived_state(&generator);
+    let mut object =
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || {
         object.update_internal_adjacencies_for_all_chunks();
     });
@@ -40,7 +41,8 @@ pub fn update_internal_adjacencies_for_all_chunks(benchmarker: impl Benchmarker)
 
 pub fn update_connected_regions_for_all_chunks(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let mut object = VoxelObject::generate_without_derived_state(&generator);
+    let mut object =
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     object.update_internal_adjacencies_for_all_chunks();
     benchmarker.benchmark(&mut || {
         object.update_local_connected_regions_for_all_chunks();
@@ -50,7 +52,8 @@ pub fn update_connected_regions_for_all_chunks(benchmarker: impl Benchmarker) {
 
 pub fn update_all_chunk_boundary_adjacencies(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let mut object = VoxelObject::generate_without_derived_state(&generator);
+    let mut object =
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     object.update_internal_adjacencies_for_all_chunks();
     object.update_local_connected_regions_for_all_chunks();
     benchmarker.benchmark(&mut || {
@@ -61,7 +64,8 @@ pub fn update_all_chunk_boundary_adjacencies(benchmarker: impl Benchmarker) {
 
 pub fn resolve_connected_regions_between_all_chunks(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let mut object = VoxelObject::generate_without_derived_state(&generator);
+    let mut object =
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     object.update_internal_adjacencies_for_all_chunks();
     object.update_local_connected_regions_for_all_chunks();
     object.update_all_chunk_boundary_adjacencies();
@@ -73,7 +77,8 @@ pub fn resolve_connected_regions_between_all_chunks(benchmarker: impl Benchmarke
 
 pub fn update_occupied_voxel_ranges(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let mut object = VoxelObject::generate_without_derived_state(&generator);
+    let mut object =
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || {
         object.update_occupied_voxel_ranges();
     });
@@ -82,7 +87,8 @@ pub fn update_occupied_voxel_ranges(benchmarker: impl Benchmarker) {
 
 pub fn compute_all_derived_state(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let mut object = VoxelObject::generate_without_derived_state(&generator);
+    let mut object =
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || {
         object.compute_all_derived_state();
     });
@@ -92,7 +98,7 @@ pub fn compute_all_derived_state(benchmarker: impl Benchmarker) {
 pub fn initialize_inertial_properties(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
     let voxel_type_densities = [1.0; 256];
-    let object = VoxelObject::generate_without_derived_state(&generator);
+    let object = VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || {
         VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities)
     });
@@ -100,19 +106,19 @@ pub fn initialize_inertial_properties(benchmarker: impl Benchmarker) {
 
 pub fn clone_object(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || object.clone());
 }
 
 pub fn create_mesh(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || VoxelObjectMesh::create(&object));
 }
 
 pub fn compute_collision_probes(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let mesh = VoxelObjectMesh::create(&object);
     benchmarker
         .benchmark(&mut || VoxelObjectCollisionProbes::compute_for_all_chunks(&object, &mesh));
@@ -120,7 +126,7 @@ pub fn compute_collision_probes(benchmarker: impl Benchmarker) {
 
 pub fn get_each_voxel(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let object = VoxelObject::generate_without_derived_state(&generator);
+    let object = VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
     let ranges = object.occupied_voxel_ranges();
     benchmarker.benchmark(&mut || {
         for i in ranges[0].clone() {
@@ -137,7 +143,7 @@ pub fn obtain_surface_voxels_within_negative_halfspace_of_plane(benchmarker: imp
     let object_radius = 100.0;
     let plane_displacement = 0.4 * object_radius;
     let generator = create_sphere_generator(object_radius);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let plane = Plane::new(
         UnitVector3::normalized_from(Vector3::same(1.0)),
         plane_displacement,
@@ -156,7 +162,7 @@ pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = create_sphere_generator(object_radius);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let sphere = Sphere::new(
         object.compute_aabb().center()
             - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
@@ -174,7 +180,7 @@ pub fn obtain_surface_voxels_within_sphere(benchmarker: impl Benchmarker) {
 
 pub fn for_each_exposed_chunk_with_sdf(benchmarker: impl Benchmarker) {
     let generator = create_sphere_generator(100.0);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || {
         let mut count = 0;
         let mut sdf = VoxelChunkSignedDistanceField::default();
@@ -191,7 +197,7 @@ pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = create_sphere_generator(object_radius);
-    let mut object = VoxelObject::generate(&generator);
+    let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let sphere = Sphere::new(
         object.compute_aabb().center()
             - object_radius * UnitVector3::normalized_from(Vector3::same(1.0)),
@@ -220,8 +226,12 @@ pub fn split_off_disconnected_region(benchmarker: impl Benchmarker) {
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    let object = VoxelObject::generate(&generator);
-    benchmarker.benchmark(&mut || object.clone().extract_any_disconnected_region().unwrap());
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
+    benchmarker.benchmark(&mut || {
+        object
+            .clone()
+            .extract_any_disconnected_region(VoxelObjectBuffers::new())
+    });
 }
 
 pub fn split_off_disconnected_region_with_inertial_property_transfer(
@@ -242,7 +252,7 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
     let voxel_type_densities = [1.0; 256];
     let inertial_property_manager =
@@ -261,13 +271,12 @@ pub fn split_off_disconnected_region_with_inertial_property_transfer(
             &voxel_type_densities,
         );
 
-        let disconnected_object = object
-            .extract_any_disconnected_region_with_property_transferrer(
-                &mut inertial_property_transferrer,
-            )
-            .unwrap();
+        let result = object.extract_any_disconnected_region_with_property_transferrer(
+            VoxelObjectBuffers::new(),
+            &mut inertial_property_transferrer,
+        );
         (
-            disconnected_object,
+            result,
             inertial_property_manager,
             disconnected_inertial_property_manager,
         )
@@ -278,7 +287,7 @@ pub fn update_mesh(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = create_sphere_generator(object_radius);
-    let mut object = VoxelObject::generate(&generator);
+    let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let mut mesh = VoxelObjectMesh::create(&object);
 
     let sphere = Sphere::new(
@@ -300,7 +309,7 @@ pub fn obtain_sphere_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let sphere_radius = 0.15 * object_radius;
     let generator = create_sphere_generator(object_radius);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let sphere = Sphere::new(Position::origin(), sphere_radius);
     let transform_to_object_space = Isometry3::from_parts(
         *(object.compute_aabb().center()
@@ -324,7 +333,7 @@ pub fn obtain_plane_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_radius = 100.0;
     let plane_displacement = -0.92 * object_radius;
     let generator = create_sphere_generator(object_radius);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     let plane = Plane::new(UnitVector3::unit_y(), plane_displacement);
     let transform_to_object_space =
         Isometry3::from_translation(*object.compute_aabb().center().as_vector());
@@ -346,8 +355,8 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let object_b_radius = 0.15 * object_a_radius;
     let generator_a = create_sphere_generator(object_a_radius);
     let generator_b = create_sphere_generator(object_b_radius);
-    let object_a = VoxelObject::generate(&generator_a);
-    let object_b = VoxelObject::generate(&generator_b);
+    let object_a = VoxelObject::generate(VoxelObjectBuffers::new(), &generator_a);
+    let object_b = VoxelObject::generate(VoxelObjectBuffers::new(), &generator_b);
     let transform_to_object_a_space = Isometry3::from_parts(
         *(object_a.compute_aabb().center()
             - object_a_radius * UnitVector3::normalized_from(Vector3::same(1.0)))
@@ -378,7 +387,7 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
     let points_per_dim = 4;
 
     let generator = create_box_generator(box_extent);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
     let voxel_extent = object.voxel_extent();
 
@@ -433,8 +442,11 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
         };
         polyhedron.shift_face_planes(-0.1);
 
-        let Some(extracted) = object.copy_polyhedron(&polyhedron_aabb, &polyhedron.face_planes)
-        else {
+        let ExtractionResult::Extracted(extracted) = object.copy_polyhedron(
+            VoxelObjectBuffers::new(),
+            &polyhedron_aabb,
+            &polyhedron.face_planes,
+        ) else {
             continue;
         };
 
@@ -493,7 +505,7 @@ pub fn copy_voronoi_regions(benchmarker: impl Benchmarker) {
     let points_per_dim = 4;
 
     let generator = create_sphere_generator(object_radius);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
     let aabb = object.compute_normalized_chunk_grid_bounds();
 
@@ -507,9 +519,13 @@ pub fn copy_voronoi_regions(benchmarker: impl Benchmarker) {
             polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
             let polyhedron_aabb = polyhedron.compute_bounded_aabb(&aabb).unwrap();
 
-            let copied_object = object.copy_polyhedron(&polyhedron_aabb, &polyhedron.face_planes);
+            let result = object.copy_polyhedron(
+                VoxelObjectBuffers::new(),
+                &polyhedron_aabb,
+                &polyhedron.face_planes,
+            );
 
-            black_box(copied_object);
+            black_box(result);
         }
     });
 }
@@ -519,7 +535,7 @@ pub fn copy_voronoi_regions_with_inertial_property_transfer(benchmarker: impl Be
     let points_per_dim = 4;
 
     let generator = create_sphere_generator(object_radius);
-    let object = VoxelObject::generate(&generator);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
     let voxel_type_densities = [1.0; 256];
 
@@ -539,13 +555,14 @@ pub fn copy_voronoi_regions_with_inertial_property_transfer(benchmarker: impl Be
             let mut inertial_property_copier = poly_inertial_property_manager
                 .begin_computation(object.voxel_extent(), &voxel_type_densities);
 
-            let copied_object = object.copy_polyhedron_with_property_computer(
+            let result = object.copy_polyhedron_with_property_computer(
+                VoxelObjectBuffers::new(),
                 &polyhedron_aabb,
                 &polyhedron.face_planes,
                 &mut inertial_property_copier,
             );
 
-            black_box(copied_object);
+            black_box(result);
         }
     });
 }

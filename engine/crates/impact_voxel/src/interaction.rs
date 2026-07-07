@@ -10,7 +10,8 @@ use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     mesh::MeshedVoxelObject,
     object::{
-        ChunkRanges, VoxelObject, extraction::ExtractedVoxelObject,
+        ChunkRanges, VoxelObject, VoxelObjectBuffers,
+        extraction::{ExtractedVoxelObject, ExtractionResult},
         inertia::VoxelObjectInertialPropertyManager,
     },
     voxel_types::VoxelTypeRegistry,
@@ -227,8 +228,9 @@ fn handle_voxel_object_after_removing_voxels(
         voxel_type_registry.mass_densities(),
     );
 
-    if let Some(disconnected_voxel_object) = voxel_object
+    if let ExtractionResult::Extracted(disconnected_voxel_object) = voxel_object
         .extract_any_disconnected_region_with_property_transferrer(
+            VoxelObjectBuffers::new(),
             &mut inertial_property_transferrer,
         )
     {

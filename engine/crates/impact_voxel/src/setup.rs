@@ -9,7 +9,7 @@ use crate::{
     },
     gpu_resource::VOXEL_MODEL_ID,
     mesh::MeshedVoxelObject,
-    object::{VoxelObject, inertia::VoxelObjectInertialPropertyManager},
+    object::{VoxelObject, VoxelObjectBuffers, inertia::VoxelObjectInertialPropertyManager},
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use anyhow::{Result, anyhow, bail};
@@ -490,7 +490,7 @@ pub fn setup_voxel_object(
     generator: &impl ChunkedVoxelGenerator,
     entity_id: EntityID,
 ) -> Result<()> {
-    let voxel_object = VoxelObject::generate(generator);
+    let voxel_object = VoxelObject::generate(VoxelObjectBuffers::new(), generator);
 
     let meshed_voxel_object = MeshedVoxelObject::create(voxel_object);
 

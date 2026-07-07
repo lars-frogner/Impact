@@ -892,8 +892,9 @@ fn voxel_ranges_touching_aab(
 pub mod fuzzing {
     use super::*;
     use crate::{
-        generation::SDFVoxelGenerator, mesh::VoxelObjectMesh,
-        object::inertia::VoxelObjectInertialPropertyManager,
+        generation::SDFVoxelGenerator,
+        mesh::VoxelObjectMesh,
+        object::{VoxelObjectBuffers, inertia::VoxelObjectInertialPropertyManager},
     };
     use approx::abs_diff_eq;
     use arbitrary::{Arbitrary, Result, Unstructured};
@@ -973,7 +974,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_negative_halfspace_of_plane(
         (generator, plane): (SDFVoxelGenerator<Global>, ArbitraryPlane),
     ) {
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_negative_halfspace_of_plane(
@@ -1007,7 +1008,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_surface_voxels_maybe_intersecting_sphere(
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let mut indices_of_touched_voxels = HashSet::<_, Global>::default();
 
         object.for_each_surface_voxel_maybe_intersecting_sphere(
@@ -1032,7 +1033,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_voxels_within_sphere(
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         let normalized_sphere = sphere.0.scaled(object.inverse_voxel_extent());
@@ -1061,7 +1062,7 @@ pub mod fuzzing {
     pub fn fuzz_test_obtaining_voxels_within_capsule(
         (generator, capsule): (SDFVoxelGenerator<Global>, ArbitraryCapsule),
     ) {
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let mut indices_of_inside_voxels = HashSet::<_, Global>::default();
 
         let normalized_capsule = capsule.0.scaled(object.inverse_voxel_extent());
@@ -1090,7 +1091,7 @@ pub mod fuzzing {
     pub fn fuzz_test_absorbing_voxels_within_sphere(
         (generator, sphere): (SDFVoxelGenerator<Global>, ArbitrarySphere),
     ) {
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let voxel_type_densities = vec![1.0; 256];
 
         let mut inertial_property_manager =
@@ -1131,7 +1132,7 @@ pub mod fuzzing {
     pub fn fuzz_test_absorbing_voxels_within_capsule(
         (generator, capsules): (SDFVoxelGenerator<Global>, Vec<ArbitraryCapsule>),
     ) {
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let voxel_type_densities = vec![1.0; 256];
 
         let mut inertial_property_manager =
@@ -1203,6 +1204,7 @@ mod tests {
             sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
+        object::VoxelObjectBuffers,
         voxel_types::VoxelType,
     };
     use impact_alloc::Global;
@@ -1222,7 +1224,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
         let plane = Plane::new(
             UnitVector3::normalized_from(Vector3::new(1.0, 1.0, 1.0)),
@@ -1273,7 +1275,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
@@ -1316,7 +1318,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
         let sphere = Sphere::new(
             object.compute_aabb().center()
@@ -1362,7 +1364,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
         let capsule = Capsule::new(
             object.compute_aabb().center() - (-object_radius) * capsule_direction,
@@ -1411,7 +1413,7 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
 
         let capsule = Capsule::new(
             Point3::new(3.8, 3.0, -50.0),

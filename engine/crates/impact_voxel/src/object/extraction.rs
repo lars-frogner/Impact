@@ -5,8 +5,9 @@ use crate::{
     object::{
         CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkRanges, FaceEmptyCounts, FaceVoxelDistribution,
         NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
-        VoxelChunkFlags, VoxelObject, chunk_range_encompassing_voxel_range, chunk_voxels,
-        chunk_voxels_mut, determine_occupied_voxel_ranges, linear_voxel_idx_within_chunk,
+        VoxelChunkFlags, VoxelObject, VoxelObjectBuffers, chunk_range_encompassing_voxel_range,
+        chunk_voxels, chunk_voxels_mut, determine_occupied_voxel_ranges,
+        linear_voxel_idx_within_chunk,
         split_detection::{
             CHUNK_MAX_REGIONS, GlobalRegionLabel, NonUniformChunkSplitDetectionData, SplitDetector,
             UniformChunkSplitDetectionData, chunk_voxel_region_labels, find_root_for_region,
@@ -54,35 +55,54 @@ pub struct ExtractedVoxelObject {
     pub chunk_ranges_in_parent: ChunkRanges,
 }
 
+/// Either `Extracted`, containing the extracted voxel object, or
+/// `NotExtracted`, containing the memory buffers intended for the extracted
+/// object.
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug)]
+pub enum ExtractionResult {
+    Extracted(ExtractedVoxelObject),
+    NotExtracted(VoxelObjectBuffers),
+}
+
 struct NoPropertyTransferrer;
 
 struct NoPropertyComputer;
 
 impl VoxelObject {
     /// Checks if the object consists of more than one disconnected region, and
-    /// if so, extracts one of them into a seperate object and returns it. Both
-    /// this object and the returned object will have the correct derived state
-    /// when this call returns.
-    pub fn extract_any_disconnected_region(&mut self) -> Option<ExtractedVoxelObject> {
-        self.extract_any_disconnected_region_with_property_transferrer(&mut NoPropertyTransferrer)
+    /// if so, extracts one of them into a seperate object (using the given
+    /// memory buffers) and returns it. Both this object and the returned object
+    /// will have the correct derived state when this call returns.
+    pub fn extract_any_disconnected_region(
+        &mut self,
+        buffers: VoxelObjectBuffers,
+    ) -> ExtractionResult {
+        self.extract_any_disconnected_region_with_property_transferrer(
+            buffers,
+            &mut NoPropertyTransferrer,
+        )
     }
 
     /// Checks if the object consists of more than one disconnected region, and
-    /// if so, extracts one of them into a seperate object and returns it. Both
-    /// this object and the returned object will have the correct derived state
-    /// when this call returns. The methods of the given `PropertyTransferrer`
-    /// will be called appropriately when voxels or whole chunks are copied over
-    /// to the disconnected object.
+    /// if so, extracts one of them into a seperate object (using the given
+    /// memory buffers) and returns it. Both this object and the returned object
+    /// will have the correct derived state when this call returns. The methods
+    /// of the given `PropertyTransferrer` will be called appropriately when
+    /// voxels or whole chunks are copied over to the disconnected object.
     pub fn extract_any_disconnected_region_with_property_transferrer(
         &mut self,
+        buffers: VoxelObjectBuffers,
         property_transferrer: &mut impl PropertyTransferrer,
-    ) -> Option<ExtractedVoxelObject> {
+    ) -> ExtractionResult {
         // If we just look for any disconnected region and extract it, that
         // region could turn out to contain most of the object. To avoid this,
         // we consider two regions in tandem and extract whichever of them
         // contains the fewest chunks.
 
-        let disconnected_regions = self.find_two_disconnected_regions()?;
+        let Some(disconnected_regions) = self.find_two_disconnected_regions() else {
+            return ExtractionResult::NotExtracted(buffers);
+        };
 
         let mut region_linear_chunk_indices = [Vec::with_capacity(16), Vec::with_capacity(16)];
         let mut region_non_uniform_chunk_counts = [0; 2];
@@ -240,6 +260,7 @@ impl VoxelObject {
         });
 
         self.extract_disconnected_region(
+            buffers,
             smallest_region,
             smallest_region_linear_chunk_indices,
             smallest_non_uniform_chunk_count,
@@ -250,24 +271,34 @@ impl VoxelObject {
 
     fn extract_disconnected_region(
         &mut self,
+        mut buffers: VoxelObjectBuffers,
         region_to_extract: GlobalRegionLabel,
         region_linear_chunk_indices: Vec<usize>,
         region_non_uniform_chunk_count: usize,
         region_chunk_ranges: ChunkRanges,
         property_transferrer: &mut impl PropertyTransferrer,
-    ) -> Option<ExtractedVoxelObject> {
+    ) -> ExtractionResult {
+        buffers.clear();
+        let VoxelObjectBuffers {
+            chunks: mut region_chunks,
+            voxels: mut region_voxels,
+            invalidated_mesh_chunk_indices: region_invalidated_mesh_chunk_indices,
+            split_detector_buffers: region_split_detector_buffers,
+        } = buffers;
+
         let region_chunk_counts = region_chunk_ranges.clone().map(|range| range.len());
         let total_region_chunk_count = region_chunk_counts.iter().product();
         let region_uniform_chunk_count =
             region_linear_chunk_indices.len() - region_non_uniform_chunk_count;
 
-        let mut region_voxels =
-            Vec::with_capacity(region_non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+        region_voxels.reserve(region_non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+        region_chunks.reserve(total_region_chunk_count);
 
-        let mut region_chunks = Vec::with_capacity(total_region_chunk_count);
-
-        let mut region_split_detector =
-            SplitDetector::new(region_uniform_chunk_count, region_non_uniform_chunk_count);
+        let mut region_split_detector = SplitDetector::new(
+            region_split_detector_buffers,
+            region_uniform_chunk_count,
+            region_non_uniform_chunk_count,
+        );
 
         // We use this to lookup if a `LocalRegionLabel` for a voxel corresponds
         // to the global region that we are extracting
@@ -497,7 +528,7 @@ impl VoxelObject {
         // original object has been modified
         self.resolve_connected_regions_between_all_chunks();
 
-        let mut extracted = Self::complete_extracted_voxel_object(
+        let extraction_result = Self::complete_extracted_voxel_object(
             self.voxel_extent,
             &self.origin_offset_in_root,
             region_chunk_counts,
@@ -507,7 +538,15 @@ impl VoxelObject {
             region_voxels,
             region_chunks,
             region_split_detector,
-        )?;
+            region_invalidated_mesh_chunk_indices,
+        );
+
+        let mut extracted = match extraction_result {
+            ExtractionResult::Extracted(extracted) => extracted,
+            result @ ExtractionResult::NotExtracted(_) => {
+                return result;
+            }
+        };
 
         // We have already computed the internal adjacencies and local region
         // connectivity in the extracted object, but all derived state between
@@ -524,7 +563,7 @@ impl VoxelObject {
         // Also make sure to tighten the voxel ranges
         extracted.voxel_object.update_occupied_ranges();
 
-        Some(extracted)
+        ExtractionResult::Extracted(extracted)
     }
 
     /// Creates a new voxel object from the part of this object inside the
@@ -535,10 +574,12 @@ impl VoxelObject {
     /// grid is at the origin and the cartesian axes are aligned with the grid.
     pub fn copy_polyhedron(
         &self,
+        buffers: VoxelObjectBuffers,
         normalized_aabb: &AxisAlignedBox,
         normalized_face_planes: &[PlaneC],
-    ) -> Option<ExtractedVoxelObject> {
+    ) -> ExtractionResult {
         self.copy_polyhedron_with_property_computer(
+            buffers,
             normalized_aabb,
             normalized_face_planes,
             &mut NoPropertyComputer,
@@ -556,10 +597,11 @@ impl VoxelObject {
     /// when voxels or whole chunks are copied over to the new object.
     pub fn copy_polyhedron_with_property_computer(
         &self,
+        mut buffers: VoxelObjectBuffers,
         normalized_aabb: &AxisAlignedBox,
         normalized_face_planes: &[PlaneC],
         property_computer: &mut impl PropertyComputer,
-    ) -> Option<ExtractedVoxelObject> {
+    ) -> ExtractionResult {
         #![allow(clippy::needless_range_loop)]
 
         // Outside the exterior margin of the polyhedron, all voxels will be
@@ -576,7 +618,7 @@ impl VoxelObject {
         let poly_voxel_ranges = self.voxel_ranges_in_object_touching_aab(&expanded_aabb);
 
         if poly_voxel_ranges.iter().any(Range::is_empty) {
-            return None;
+            return ExtractionResult::NotExtracted(buffers);
         }
 
         let poly_chunk_ranges = poly_voxel_ranges
@@ -625,10 +667,16 @@ impl VoxelObject {
             ));
         }
 
-        let mut poly_voxels =
-            Vec::with_capacity(touched_non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+        buffers.clear();
+        let VoxelObjectBuffers {
+            chunks: mut poly_chunks,
+            voxels: mut poly_voxels,
+            invalidated_mesh_chunk_indices: poly_invalidated_mesh_chunk_indices,
+            split_detector_buffers: poly_split_detector_buffers,
+        } = buffers;
 
-        let mut poly_chunks = Vec::with_capacity(total_poly_chunk_count);
+        poly_voxels.reserve(touched_non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
+        poly_chunks.reserve(total_poly_chunk_count);
 
         // Lists of chunks we must update connected regions for
         let mut non_uniform_chunks_inside =
@@ -930,8 +978,11 @@ impl VoxelObject {
             }
         }
 
-        let mut poly_split_detector =
-            SplitDetector::new(poly_uniform_chunk_count, poly_non_uniform_chunk_count);
+        let mut poly_split_detector = SplitDetector::new(
+            poly_split_detector_buffers,
+            poly_uniform_chunk_count,
+            poly_non_uniform_chunk_count,
+        );
 
         for (chunk, poly_chunk_idx) in non_uniform_chunks_inside {
             // The internal connected region information can be copied over
@@ -960,7 +1011,7 @@ impl VoxelObject {
             }
         }
 
-        let mut extracted = Self::complete_extracted_voxel_object(
+        let extraction_result = Self::complete_extracted_voxel_object(
             self.voxel_extent,
             &self.origin_offset_in_root,
             poly_chunk_counts,
@@ -970,7 +1021,15 @@ impl VoxelObject {
             poly_voxels,
             poly_chunks,
             poly_split_detector,
-        )?;
+            poly_invalidated_mesh_chunk_indices,
+        );
+
+        let mut extracted = match extraction_result {
+            ExtractionResult::Extracted(extracted) => extracted,
+            result @ ExtractionResult::NotExtracted(_) => {
+                return result;
+            }
+        };
 
         // We have already computed the internal adjacencies and local region
         // connectivity in the extracted object, but all derived state between
@@ -987,7 +1046,7 @@ impl VoxelObject {
         // Also make sure to tighten the voxel ranges
         extracted.voxel_object.update_occupied_ranges();
 
-        Some(extracted)
+        ExtractionResult::Extracted(extracted)
     }
 
     #[inline]
@@ -1098,7 +1157,8 @@ impl VoxelObject {
         voxels: Vec<Voxel>,
         chunks: Vec<VoxelChunk>,
         split_detector: SplitDetector,
-    ) -> Option<ExtractedVoxelObject> {
+        invalidated_mesh_chunk_indices: HashSet<[usize; 3]>,
+    ) -> ExtractionResult {
         assert_eq!(voxels.len(), non_uniform_chunk_count * CHUNK_VOXEL_COUNT);
         assert_eq!(chunks.len(), chunk_counts.iter().product::<usize>());
 
@@ -1112,7 +1172,14 @@ impl VoxelObject {
                 .count();
 
             if extracted_non_empty_voxel_count < NON_EMPTY_VOXEL_THRESHOLD {
-                return None;
+                let mut buffers = VoxelObjectBuffers {
+                    chunks,
+                    voxels,
+                    invalidated_mesh_chunk_indices,
+                    split_detector_buffers: split_detector.into_buffers(),
+                };
+                buffers.clear();
+                return ExtractionResult::NotExtracted(buffers);
             }
         }
 
@@ -1122,7 +1189,7 @@ impl VoxelObject {
             .clone()
             .map(|range| range.start * CHUNK_SIZE);
 
-        Some(if chunk_counts.iter().all(|&count| count <= 2) {
+        ExtractionResult::Extracted(if chunk_counts.iter().all(|&count| count <= 2) {
             // If the extracted object consists of at most 2 x 2 x 2 chunks,
             // there is a reasonable chance that the actual region of extracted
             // voxels could fit within a single chunk if we offset it
@@ -1138,6 +1205,7 @@ impl VoxelObject {
                 chunks,
                 voxels,
                 split_detector,
+                invalidated_mesh_chunk_indices,
             )
         } else {
             Self::create_extracted_voxel_object(
@@ -1149,6 +1217,7 @@ impl VoxelObject {
                 chunks,
                 voxels,
                 split_detector,
+                invalidated_mesh_chunk_indices,
             )
         })
     }
@@ -1164,6 +1233,7 @@ impl VoxelObject {
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
         split_detector: SplitDetector,
+        invalidated_mesh_chunk_indices: HashSet<[usize; 3]>,
     ) -> ExtractedVoxelObject {
         // If there uniform chunks, the object either won't fit in a single
         // chunk or it does so already. If it is already a single chunk, we
@@ -1285,7 +1355,12 @@ impl VoxelObject {
 
                 // Since the voxels are now chunked differently, we need a new
                 // split detector
-                let mut single_chunk_split_detector = SplitDetector::new(0, 1);
+                let mut split_detector_buffers = split_detector.into_buffers();
+                split_detector_buffers.clear();
+
+                let mut single_chunk_split_detector =
+                    SplitDetector::new(split_detector_buffers, 0, 1);
+
                 single_chunk_split_detector.update_local_connected_regions_for_chunk(
                     &single_chunk_voxels,
                     &mut single_chunk,
@@ -1301,6 +1376,7 @@ impl VoxelObject {
                     vec![VoxelChunk::NonUniform(single_chunk)],
                     single_chunk_voxels,
                     single_chunk_split_detector,
+                    invalidated_mesh_chunk_indices,
                 );
             }
         }
@@ -1314,6 +1390,7 @@ impl VoxelObject {
             chunks,
             voxels,
             split_detector,
+            invalidated_mesh_chunk_indices,
         )
     }
 
@@ -1326,6 +1403,7 @@ impl VoxelObject {
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
         split_detector: SplitDetector,
+        invalidated_mesh_chunk_indices: HashSet<[usize; 3]>,
     ) -> ExtractedVoxelObject {
         // The chunk grid of the extracted object should start at the origin
         let offset_chunk_ranges = chunk_counts.map(|count| 0..count);
@@ -1350,7 +1428,7 @@ impl VoxelObject {
             chunks,
             voxels,
             split_detector,
-            invalidated_mesh_chunk_indices: HashSet::default(),
+            invalidated_mesh_chunk_indices,
         };
 
         ExtractedVoxelObject {
@@ -1429,7 +1507,7 @@ pub mod fuzzing {
     pub fn fuzz_test_voxel_object_split_off_disconnected_region(
         generator: SDFVoxelGenerator<Global>,
     ) {
-        let mut object = VoxelObject::generate(&generator);
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         let voxel_type_densities = vec![1.0; 256];
 
         let original_inertial_property_manager =
@@ -1446,8 +1524,9 @@ pub mod fuzzing {
         );
 
         let original_region_count = object.count_regions();
-        if let Some(disconnected_object) = object
+        if let ExtractionResult::Extracted(disconnected_object) = object
             .extract_any_disconnected_region_with_property_transferrer(
+                VoxelObjectBuffers::new(),
                 &mut inertial_property_transferrer,
             )
         {
@@ -1491,7 +1570,7 @@ pub mod fuzzing {
     }
 
     pub fn fuzz_test_voxel_object_copy_polyhedron(input: CopyPolyhedronInput) {
-        let object = VoxelObject::generate(&input.generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &input.generator);
         let voxel_type_densities = [1.0; 256];
 
         let aabb = object.compute_normalized_chunk_grid_bounds();
@@ -1511,11 +1590,14 @@ pub mod fuzzing {
             let mut inertial_property_copier = poly_inertial_property_manager
                 .begin_computation(object.voxel_extent(), &voxel_type_densities);
 
-            let Some(copied_object) = object.copy_polyhedron_with_property_computer(
-                &polyhedron_aabb,
-                &polyhedron.face_planes,
-                &mut inertial_property_copier,
-            ) else {
+            let ExtractionResult::Extracted(copied_object) = object
+                .copy_polyhedron_with_property_computer(
+                    VoxelObjectBuffers::new(),
+                    &polyhedron_aabb,
+                    &polyhedron.face_planes,
+                    &mut inertial_property_copier,
+                )
+            else {
                 continue;
             };
 
@@ -1571,7 +1653,7 @@ mod tests {
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
 
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         object.validate_region_count();
     }
 
@@ -1592,7 +1674,10 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::default()).into(),
         );
-        let mut object = VoxelObject::generate(&generator);
-        assert!(object.extract_any_disconnected_region().is_some());
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
+        assert!(matches!(
+            object.extract_any_disconnected_region(VoxelObjectBuffers::new()),
+            ExtractionResult::Extracted(_),
+        ));
     }
 }

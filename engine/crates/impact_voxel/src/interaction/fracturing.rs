@@ -3,7 +3,10 @@
 use crate::{
     VoxelObjectID, VoxelObjectManager,
     interaction::{self, ExtractedComponents, VoxelObjectInteractionContext},
-    object::inertia::VoxelObjectInertialPropertyManager,
+    object::{
+        VoxelObjectBuffers, extraction::ExtractionResult,
+        inertia::VoxelObjectInertialPropertyManager,
+    },
     voxel_types::VoxelTypeRegistry,
 };
 use anyhow::{Result, anyhow, bail};
@@ -187,11 +190,14 @@ impl FracturingProcess {
                 voxel_type_registry.mass_densities(),
             );
 
-            let Some(poly_object) = voxel_object.copy_polyhedron_with_property_computer(
-                &polyhedron_aabb,
-                &polyhedron.face_planes,
-                &mut inertial_property_copier,
-            ) else {
+            let ExtractionResult::Extracted(poly_object) = voxel_object
+                .copy_polyhedron_with_property_computer(
+                    VoxelObjectBuffers::new(),
+                    &polyhedron_aabb,
+                    &polyhedron.face_planes,
+                    &mut inertial_property_copier,
+                )
+            else {
                 continue;
             };
 

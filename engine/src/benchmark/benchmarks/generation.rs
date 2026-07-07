@@ -16,7 +16,7 @@ use impact_voxel::{
         sdf::{SDFGraph, SDFNode, SphereSDF},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
-    object::{CHUNK_SIZE, VoxelObject},
+    object::{CHUNK_SIZE, VoxelObject, VoxelObjectBuffers},
     voxel_types::VoxelType,
 };
 use std::{hint::black_box, num::NonZeroUsize};
@@ -32,7 +32,9 @@ pub fn generate_box(benchmarker: impl Benchmarker) {
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
 
-    benchmarker.benchmark(&mut || VoxelObject::generate_without_derived_state(&generator));
+    benchmarker.benchmark(&mut || {
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator)
+    });
 }
 
 pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
@@ -51,7 +53,9 @@ pub fn generate_sphere_union(benchmarker: impl Benchmarker) {
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    benchmarker.benchmark(&mut || VoxelObject::generate_without_derived_state(&generator));
+    benchmarker.benchmark(&mut || {
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator)
+    });
 }
 
 pub fn generate_complex_object(benchmarker: impl Benchmarker) {
@@ -75,7 +79,9 @@ pub fn generate_complex_object(benchmarker: impl Benchmarker) {
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    benchmarker.benchmark(&mut || VoxelObject::generate_without_derived_state(&generator));
+    benchmarker.benchmark(&mut || {
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator)
+    });
 }
 
 pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
@@ -91,7 +97,9 @@ pub fn generate_object_with_multifractal_noise(benchmarker: impl Benchmarker) {
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     );
-    benchmarker.benchmark(&mut || VoxelObject::generate_without_derived_state(&generator));
+    benchmarker.benchmark(&mut || {
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator)
+    });
 }
 
 pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarker) {
@@ -115,7 +123,9 @@ pub fn generate_box_with_gradient_noise_voxel_types(benchmarker: impl Benchmarke
         )
         .into(),
     );
-    benchmarker.benchmark(&mut || VoxelObject::generate_without_derived_state(&generator));
+    benchmarker.benchmark(&mut || {
+        VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator)
+    });
 }
 
 pub fn compile_complex_meta_graph(benchmarker: impl Benchmarker) {
@@ -161,6 +171,7 @@ pub fn generate_object_from_complex_graph(benchmarker: impl Benchmarker) {
     benchmarker.benchmark(&mut || {
         black_box(VoxelObject::generate_without_derived_state_in_parallel(
             &thread_pool,
+            VoxelObjectBuffers::new(),
             &generator,
         ));
     });
