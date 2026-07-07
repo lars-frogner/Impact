@@ -843,6 +843,7 @@ mod tests {
     #[test]
     #[cfg(not(miri))]
     fn box_voxel_object_has_box_inertial_properties() {
+        use crate::object::VoxelObjectBuffers;
         use impact_math::{quaternion::UnitQuaternion, transform::Similarity3};
 
         let voxel_extent = 0.1;
@@ -858,7 +859,8 @@ mod tests {
             sdf_generator,
             SameVoxelTypeGenerator::new(VoxelType::from_idx(0)).into(),
         );
-        let object = VoxelObject::generate_without_derived_state(&generator);
+        let object =
+            VoxelObject::generate_without_derived_state(VoxelObjectBuffers::new(), &generator);
 
         let occupied_voxel_ranges = object.determine_tight_occupied_voxel_ranges();
         let occupied_voxel_extents = occupied_voxel_ranges

@@ -678,19 +678,19 @@ pub fn sample_voxel_object_sdf(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::object::tests::OffsetBoxVoxelGenerator;
+    use crate::object::{VoxelObjectBuffers, tests::OffsetBoxVoxelGenerator};
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_single_voxel() {
         let generator = OffsetBoxVoxelGenerator::single_default();
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_full_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([VoxelObject::chunk_size(); 3]);
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         object.validate_sdf();
     }
 
@@ -701,14 +701,14 @@ mod tests {
             VoxelObject::chunk_size(),
             VoxelObject::chunk_size(),
         ]);
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         object.validate_sdf();
     }
 
     #[test]
     fn should_calculate_valid_sdf_for_object_with_fully_enclosed_chunk() {
         let generator = OffsetBoxVoxelGenerator::with_default([3 * VoxelObject::chunk_size(); 3]);
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         object.validate_sdf();
     }
 }

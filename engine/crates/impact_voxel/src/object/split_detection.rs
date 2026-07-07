@@ -60,6 +60,15 @@ pub struct SplitDetector {
     uniform_chunk_adjacencent_region_connections: Vec<AdjacentRegionConnection>,
 }
 
+/// The heap memory buffers for a [`SplitDetector`].
+#[derive(Clone, Debug)]
+pub struct SplitDetectorBuffers {
+    voxel_region_labels: Vec<LocalRegionLabel>,
+    regions: Vec<LocalRegion>,
+    adjacent_region_connections: Vec<AdjacentRegionConnection>,
+    uniform_chunk_adjacencent_region_connections: Vec<AdjacentRegionConnection>,
+}
+
 /// Data for a uniform chunk needed to perform split detection.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UniformChunkSplitDetectionData {
@@ -554,9 +563,21 @@ impl VoxelObject {
 }
 
 impl SplitDetector {
-    /// Initializes the split detector, allocating buffers for the given number
-    /// of uniform and non-uniform chunks.
-    pub fn new(uniform_chunk_count: usize, non_uniform_chunk_count: usize) -> Self {
+    /// Initializes the split detector, initializing the buffers for the given
+    /// number of uniform and non-uniform chunks.
+    pub fn new(
+        mut buffers: SplitDetectorBuffers,
+        uniform_chunk_count: usize,
+        non_uniform_chunk_count: usize,
+    ) -> Self {
+        buffers.clear();
+        let SplitDetectorBuffers {
+            mut voxel_region_labels,
+            mut regions,
+            mut adjacent_region_connections,
+            mut uniform_chunk_adjacencent_region_connections,
+        } = buffers;
+
         let voxel_count = non_uniform_chunk_count << (3 * LOG2_CHUNK_SIZE);
         let voxel_region_label_count = voxel_count;
         let local_region_count = uniform_chunk_count + CHUNK_MAX_REGIONS * non_uniform_chunk_count;
@@ -564,18 +585,27 @@ impl SplitDetector {
             CHUNK_MAX_ADJACENT_REGION_CONNECTIONS * non_uniform_chunk_count;
         let uniform_chunk_adjacent_region_connection_count =
             CHUNK_MAX_ADJACENT_REGION_CONNECTIONS * uniform_chunk_count;
+
+        voxel_region_labels.resize(voxel_region_label_count, 0);
+
+        regions.resize(local_region_count, LocalRegion::zeroed());
+
+        adjacent_region_connections.resize(
+            adjacenct_region_connection_count,
+            AdjacentRegionConnection::zero(),
+        );
+
+        uniform_chunk_adjacencent_region_connections.resize(
+            uniform_chunk_adjacent_region_connection_count,
+            AdjacentRegionConnection::zero(),
+        );
+
         Self {
-            voxel_region_labels: vec![0; voxel_region_label_count],
-            regions: vec![LocalRegion::zeroed(); local_region_count],
+            voxel_region_labels,
+            regions,
             original_uniform_chunk_count: uniform_chunk_count,
-            adjacent_region_connections: vec![
-                AdjacentRegionConnection::zero();
-                adjacenct_region_connection_count
-            ],
-            uniform_chunk_adjacencent_region_connections: vec![
-                AdjacentRegionConnection::zero();
-                uniform_chunk_adjacent_region_connection_count
-            ],
+            adjacent_region_connections,
+            uniform_chunk_adjacencent_region_connections,
         }
     }
 
@@ -1280,6 +1310,39 @@ impl SplitDetector {
                 );
             }
         });
+    }
+
+    /// Consumes the split detector and returns its heap memory buffers.
+    pub fn into_buffers(self) -> SplitDetectorBuffers {
+        let mut buffers = SplitDetectorBuffers {
+            voxel_region_labels: self.voxel_region_labels,
+            regions: self.regions,
+            adjacent_region_connections: self.adjacent_region_connections,
+            uniform_chunk_adjacencent_region_connections: self
+                .uniform_chunk_adjacencent_region_connections,
+        };
+        buffers.clear();
+        buffers
+    }
+}
+
+impl SplitDetectorBuffers {
+    /// Creates new empty buffers.
+    pub fn new() -> Self {
+        Self {
+            voxel_region_labels: Vec::new(),
+            regions: Vec::new(),
+            adjacent_region_connections: Vec::new(),
+            uniform_chunk_adjacencent_region_connections: Vec::new(),
+        }
+    }
+
+    /// Clears all buffers.
+    pub fn clear(&mut self) {
+        self.voxel_region_labels.clear();
+        self.regions.clear();
+        self.adjacent_region_connections.clear();
+        self.uniform_chunk_adjacencent_region_connections.clear();
     }
 }
 
@@ -2202,11 +2265,11 @@ fn set_maybe_unchecked<T>(values: &mut [T], idx: usize, value: T) {
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use super::*;
-    use crate::generation::SDFVoxelGenerator;
+    use crate::{generation::SDFVoxelGenerator, object::VoxelObjectBuffers};
     use impact_alloc::Global;
 
     pub fn fuzz_test_voxel_object_connected_regions(generator: SDFVoxelGenerator<Global>) {
-        let object = VoxelObject::generate(&generator);
+        let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
         object.validate_region_count();
     }
 }

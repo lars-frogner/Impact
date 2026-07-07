@@ -60,6 +60,8 @@
 
 - Make relevant `impact_ecs` types accept allocator.
 
+- Make `VoxelObjectManager` maintain pool of reusable `VoxelObjectBuffers`.
+
 ## ECS
 
 - Support querying only entities where certain components have changed.
