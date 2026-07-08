@@ -575,6 +575,13 @@ impl VoxelObjectManager {
         self.voxel_objects.contains_key(&voxel_object_id)
     }
 
+    /// Whether the voxel object with the given ID has a physics context in the
+    /// manager.
+    #[inline]
+    pub fn has_physics_context(&self, voxel_object_id: VoxelObjectID) -> bool {
+        self.physics_contexts.contains_key(&voxel_object_id)
+    }
+
     /// Returns a reference to the [`HashMap`] storing all voxel objects.
     #[inline]
     pub fn voxel_objects(&self) -> &NoHashMap<VoxelObjectID, MeshedVoxelObject> {
