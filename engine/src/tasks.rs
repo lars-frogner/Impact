@@ -8,6 +8,7 @@ use anyhow::Result;
 use impact_profiling::instrument_task;
 use impact_scene::buffer_model_instances_and_bound_lights;
 use impact_scheduling::{define_execution_tag, define_task};
+use std::time::Duration;
 
 // =============================================================================
 // EXECUTION TAGS
@@ -1038,6 +1039,8 @@ define_task!(
             let force_generator_manager = simulator.force_generator_manager().oread();
             let collision_world = simulator.collision_world().oread();
 
+            let max_duration = Some(Duration::from_millis(5));
+
             impact_voxel::interaction::systems::execute_fracturing_processes(
                 engine.component_metadata_registry(),
                 &mut entity_id_manager,
@@ -1050,6 +1053,7 @@ define_task!(
                 &mut anchor_manager,
                 &force_generator_manager,
                 &collision_world,
+                max_duration,
             );
 
             Ok(())

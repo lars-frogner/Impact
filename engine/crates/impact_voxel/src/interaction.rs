@@ -10,8 +10,7 @@ use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
     object::{
-        VoxelObject, VoxelObjectBuffers,
-        extraction::{ExtractedVoxelObject, ExtractionResult},
+        VoxelObject, VoxelObjectBuffers, extraction::ExtractionResult,
         inertia::VoxelObjectInertialPropertyManager,
     },
     voxel_types::VoxelTypeRegistry,
@@ -88,14 +87,14 @@ struct VoxelRemovalOutcome {
 
 #[derive(Debug)]
 struct ExtractedComponents {
-    object: DynamicExtractedVoxelObject,
+    meshed_voxel_object: MeshedVoxelObject,
+    inertial_property_manager: VoxelObjectInertialPropertyManager,
+    rigid_body: DynamicRigidBody,
     anchors: Anchors,
 }
 
 #[derive(Debug)]
-struct DynamicExtractedVoxelObject {
-    pub voxel_object: VoxelObject,
-    pub inertial_property_manager: VoxelObjectInertialPropertyManager,
+struct ExtractedVoxelObjectDynamics {
     pub rigid_body: DynamicRigidBody,
     pub coordinate_changes: ExtractedVoxelObjectCoordinateChanges,
 }
@@ -298,9 +297,10 @@ fn handle_voxel_object_after_removing_voxels(
         };
 
         // We also need to handle the physics for the part that was disconnected
-        let dynamic_disconnected_object = determine_extracted_voxel_object_dynamics(
-            disconnected_voxel_object,
-            disconnected_object_inertial_property_manager,
+        let dynamics = determine_extracted_voxel_object_dynamics(
+            &disconnected_voxel_object.voxel_object,
+            disconnected_voxel_object.origin_offset_in_parent,
+            &mut disconnected_object_inertial_property_manager,
             original_local_center_of_mass,
             original_position,
             orientation,
@@ -311,14 +311,21 @@ fn handle_voxel_object_after_removing_voxels(
         let anchors = handle_anchors_for_disconnected_voxel_object(
             anchor_manager,
             lost_anchors,
-            &dynamic_disconnected_object.voxel_object,
-            &dynamic_disconnected_object.coordinate_changes,
+            &disconnected_voxel_object.voxel_object,
+            &dynamics.coordinate_changes,
+        );
+
+        let meshed_disconnected_object = MeshedVoxelObject::create(
+            VoxelObjectMeshBuffers::new(),
+            disconnected_voxel_object.voxel_object,
         );
 
         VoxelRemovalOutcome {
             original_object_empty,
             disconnected_components: Some(ExtractedComponents {
-                object: dynamic_disconnected_object,
+                meshed_voxel_object: meshed_disconnected_object,
+                inertial_property_manager: disconnected_object_inertial_property_manager,
+                rigid_body: dynamics.rigid_body,
                 anchors,
             }),
         }
@@ -383,10 +390,7 @@ fn spawn_extracted_voxel_object<C>(
 ) where
     C: VoxelObjectInteractionContext,
 {
-    let object = extracted_components.object;
-
-    let meshed_voxel_object =
-        MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), object.voxel_object);
+    let meshed_voxel_object = extracted_components.meshed_voxel_object;
 
     let entity_id = entity_id_manager.provide_id();
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
@@ -397,11 +401,11 @@ fn spawn_extracted_voxel_object<C>(
         .unwrap();
 
     rigid_body_manager
-        .add_dynamic_rigid_body(rigid_body_id, object.rigid_body)
+        .add_dynamic_rigid_body(rigid_body_id, extracted_components.rigid_body)
         .unwrap();
 
     let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager: object.inertial_property_manager,
+        inertial_property_manager: extracted_components.inertial_property_manager,
     };
 
     voxel_object_manager
@@ -424,14 +428,15 @@ fn spawn_extracted_voxel_object<C>(
 }
 
 fn determine_extracted_voxel_object_dynamics(
-    extracted_object: ExtractedVoxelObject,
-    mut inertial_property_manager: VoxelObjectInertialPropertyManager,
+    voxel_object: &VoxelObject,
+    origin_offset_in_parent: [usize; 3],
+    inertial_property_manager: &mut VoxelObjectInertialPropertyManager,
     original_local_center_of_mass: Vector3,
     original_position: Position,
     orientation: Orientation,
     original_linear_velocity: Velocity,
     angular_velocity: AngularVelocity,
-) -> DynamicExtractedVoxelObject {
+) -> ExtractedVoxelObjectDynamics {
     // In terms of physics, extracting part of a voxel object is really just a
     // partitioning of the mass, inertia tensor and linear and angular momentum
     // of the original object into two parts. Since these quantities are
@@ -464,12 +469,6 @@ fn determine_extracted_voxel_object_dynamics(
         .as_vector()
         .cross(&world_center_of_mass_displacement);
 
-    let ExtractedVoxelObject {
-        voxel_object,
-        origin_offset_in_parent,
-        chunk_ranges_in_parent: _,
-    } = extracted_object;
-
     let origin_offset_in_voxel_object_space = Vector3::from(
         origin_offset_in_parent.map(|offset| offset as f32 * voxel_object.voxel_extent()),
     );
@@ -501,9 +500,7 @@ fn determine_extracted_voxel_object_dynamics(
         *new_local_center_of_mass,
     );
 
-    DynamicExtractedVoxelObject {
-        voxel_object,
-        inertial_property_manager,
+    ExtractedVoxelObjectDynamics {
         rigid_body,
         coordinate_changes,
     }
@@ -625,7 +622,7 @@ fn handle_anchors_for_disconnected_voxel_object(
 fn get_anchors_on_extracted_voxel_object(
     anchor_manager: &AnchorManager,
     rigid_body_id: DynamicRigidBodyID,
-    extracted_object: &VoxelObject,
+    voxel_object: &VoxelObject,
     coordinate_changes: &ExtractedVoxelObjectCoordinateChanges,
 ) -> Anchors {
     let mut anchors = Anchors::new();
@@ -636,7 +633,7 @@ fn get_anchors_on_extracted_voxel_object(
         let local_anchor = coordinate_changes
             .change_from_original_com_frame_to_new_origin_frame(&anchor_point.aligned());
 
-        if extracted_object
+        if voxel_object
             .get_voxel_at_coords_if_occupied(local_anchor.as_vector())
             .is_some()
         {

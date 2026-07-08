@@ -221,6 +221,14 @@ impl MeshedVoxelObject {
 }
 
 impl MeshedVoxelObjectBuffers {
+    /// Creates new empty buffers.
+    pub fn new() -> Self {
+        Self {
+            object_buffers: VoxelObjectBuffers::new(),
+            mesh_buffers: VoxelObjectMeshBuffers::new(),
+        }
+    }
+
     /// Clears all buffers.
     pub fn clear(&mut self) {
         self.object_buffers.clear();
