@@ -20,7 +20,7 @@ use impact_voxel::{
         sdf::{SDFGraph, SDFNode},
         voxel_type::SameVoxelTypeGenerator,
     },
-    mesh::{MeshedVoxelObject, VoxelObjectMesh},
+    mesh::{MeshedVoxelObject, VoxelObjectMesh, VoxelObjectMeshBuffers},
     object::{
         VoxelObject, VoxelObjectBuffers, extraction::ExtractionResult,
         inertia::VoxelObjectInertialPropertyManager, sdf::VoxelChunkSignedDistanceField,
@@ -183,7 +183,7 @@ pub fn for_each_exposed_chunk_with_sdf(benchmarker: impl Benchmarker) {
     let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
     benchmarker.benchmark(&mut || {
         let mut count = 0;
-        let mut sdf = VoxelChunkSignedDistanceField::default();
+        let mut sdf = VoxelChunkSignedDistanceField::new();
         object.for_each_exposed_chunk_with_sdf(&mut sdf, &mut |chunk, sdf| {
             black_box(chunk);
             black_box(sdf);
@@ -366,8 +366,8 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let transform_to_object_b_space =
         Isometry3::from_translation(*object_b.compute_aabb().center().as_vector());
 
-    let meshed_object_a = MeshedVoxelObject::create(object_a);
-    let meshed_object_b = MeshedVoxelObject::create(object_b);
+    let meshed_object_a = MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), object_a);
+    let meshed_object_b = MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), object_b);
 
     benchmarker.benchmark(&mut || {
         collidable::for_each_mutual_voxel_object_contact(
@@ -461,7 +461,8 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
             .compute_aabb()
             .translated(&origin_offset);
 
-        let voxel_object = MeshedVoxelObject::create(extracted.voxel_object);
+        let voxel_object =
+            MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), extracted.voxel_object);
 
         regions.push((
             voxel_object,

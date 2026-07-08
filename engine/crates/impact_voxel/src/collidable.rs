@@ -343,28 +343,42 @@ enum BlockSize {
 }
 
 impl VoxelObjectCollisionProbes {
+    pub fn new() -> Self {
+        Self {
+            chunk_point_ranges: HashMap::default(),
+            probe_points: AVec::new(),
+            point_range_allocator: RangeAllocator::fully_occupied(),
+        }
+    }
+
     pub fn compute_for_all_chunks(object: &VoxelObject, mesh: &VoxelObjectMesh) -> Self {
+        let mut probes = Self::new();
+        probes.recompute_for_all_chunks(object, mesh);
+        probes
+    }
+
+    pub fn recompute_for_all_chunks(&mut self, object: &VoxelObject, mesh: &VoxelObjectMesh) {
         match Self::determine_log2_block_size_for_object(object) {
             BlockSize::One => {
                 const LOG2_BLOCK_SIZE: usize = 0;
                 const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
-                Self::compute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                self.recompute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
                     object, mesh,
-                )
+                );
             }
             BlockSize::Two => {
                 const LOG2_BLOCK_SIZE: usize = 1;
                 const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
-                Self::compute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                self.recompute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
                     object, mesh,
-                )
+                );
             }
             BlockSize::Four => {
                 const LOG2_BLOCK_SIZE: usize = 2;
                 const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
-                Self::compute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                self.recompute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
                     object, mesh,
-                )
+                );
             }
         }
     }
@@ -402,6 +416,12 @@ impl VoxelObjectCollisionProbes {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.chunk_point_ranges.clear();
+        self.probe_points.clear();
+        self.point_range_allocator.mark_all_ranges_occupied();
+    }
+
     pub fn chunk_point_ranges(&self) -> impl ExactSizeIterator<Item = (&[usize; 3], Range<usize>)> {
         self.chunk_point_ranges
             .iter()
@@ -432,24 +452,26 @@ impl VoxelObjectCollisionProbes {
         }
     }
 
-    fn compute_for_all_chunks_with_block_size<
+    fn recompute_for_all_chunks_with_block_size<
         const LOG2_BLOCK_SIZE: usize,
         const CHUNK_BLOCK_COUNT: usize,
     >(
+        &mut self,
         object: &VoxelObject,
         mesh: &VoxelObjectMesh,
-    ) -> Self {
-        let mut chunk_point_ranges =
-            HashMap::with_capacity_and_hasher(mesh.n_chunks(), Default::default());
+    ) {
+        self.clear();
 
-        let mut probe_points = AVec::with_capacity(mesh.n_chunks() * CHUNK_BLOCK_COUNT);
+        self.chunk_point_ranges.reserve(mesh.n_chunks());
+        self.probe_points
+            .reserve(mesh.n_chunks() * CHUNK_BLOCK_COUNT);
 
         for (submesh, vertex_range) in mesh
             .chunk_submeshes()
             .iter()
             .zip(mesh.chunk_vertex_ranges())
         {
-            let point_range_start = probe_points.len();
+            let point_range_start = self.probe_points.len();
 
             let index_range = submesh.index_range();
 
@@ -461,7 +483,7 @@ impl VoxelObjectCollisionProbes {
             let indices = &mesh.indices()[index_range];
 
             Self::add_points_for_vertices_in_blocks::<_, LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
-                &mut probe_points,
+                &mut self.probe_points,
                 &chunk_indices,
                 vertex_positions,
                 vertex_normals,
@@ -470,22 +492,14 @@ impl VoxelObjectCollisionProbes {
                 object.inverse_voxel_extent(),
             );
 
-            let point_range_end = probe_points.len();
+            let point_range_end = self.probe_points.len();
             let point_range = point_range_start..point_range_end;
 
             if point_range.is_empty() {
                 continue;
             }
 
-            chunk_point_ranges.insert(chunk_indices, point_range);
-        }
-
-        let point_range_allocator = RangeAllocator::fully_occupied();
-
-        Self {
-            chunk_point_ranges,
-            probe_points,
-            point_range_allocator,
+            self.chunk_point_ranges.insert(chunk_indices, point_range);
         }
     }
 

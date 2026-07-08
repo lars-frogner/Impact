@@ -8,9 +8,9 @@ pub mod systems;
 
 use crate::{
     VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
-    mesh::MeshedVoxelObject,
+    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
     object::{
-        ChunkRanges, VoxelObject, VoxelObjectBuffers,
+        VoxelObject, VoxelObjectBuffers,
         extraction::{ExtractedVoxelObject, ExtractionResult},
         inertia::VoxelObjectInertialPropertyManager,
     },
@@ -98,7 +98,6 @@ struct DynamicExtractedVoxelObject {
     pub inertial_property_manager: VoxelObjectInertialPropertyManager,
     pub rigid_body: DynamicRigidBody,
     pub coordinate_changes: ExtractedVoxelObjectCoordinateChanges,
-    pub chunk_ranges_in_parent: ChunkRanges,
 }
 
 #[derive(Clone, Debug)]
@@ -386,7 +385,8 @@ fn spawn_extracted_voxel_object<C>(
 {
     let object = extracted_components.object;
 
-    let meshed_voxel_object = MeshedVoxelObject::create(object.voxel_object);
+    let meshed_voxel_object =
+        MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), object.voxel_object);
 
     let entity_id = entity_id_manager.provide_id();
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
@@ -467,7 +467,7 @@ fn determine_extracted_voxel_object_dynamics(
     let ExtractedVoxelObject {
         voxel_object,
         origin_offset_in_parent,
-        chunk_ranges_in_parent,
+        chunk_ranges_in_parent: _,
     } = extracted_object;
 
     let origin_offset_in_voxel_object_space = Vector3::from(
@@ -506,7 +506,6 @@ fn determine_extracted_voxel_object_dynamics(
         inertial_property_manager,
         rigid_body,
         coordinate_changes,
-        chunk_ranges_in_parent,
     }
 }
 

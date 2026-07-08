@@ -8,7 +8,7 @@ use crate::{
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     gpu_resource::VOXEL_MODEL_ID,
-    mesh::MeshedVoxelObject,
+    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
     object::{VoxelObject, VoxelObjectBuffers, inertia::VoxelObjectInertialPropertyManager},
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
@@ -492,7 +492,8 @@ pub fn setup_voxel_object(
 ) -> Result<()> {
     let voxel_object = VoxelObject::generate(VoxelObjectBuffers::new(), generator);
 
-    let meshed_voxel_object = MeshedVoxelObject::create(voxel_object);
+    let meshed_voxel_object =
+        MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), voxel_object);
 
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     voxel_object_manager.add_voxel_object(voxel_object_id, meshed_voxel_object)?;

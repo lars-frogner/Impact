@@ -28,6 +28,11 @@ impl RangeAllocator {
         }
     }
 
+    /// Resets the allocator by removing all free ranges.
+    pub fn mark_all_ranges_occupied(&mut self) {
+        self.free_ranges.clear();
+    }
+
     /// Finds a range of the required length among the free ranges and marks the
     /// required part of it occupied, returning the allocated range. Returns
     /// [`None`] if no free range of the required length was found.

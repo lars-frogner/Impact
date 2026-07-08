@@ -87,7 +87,7 @@ impl VoxelChunkSignedDistanceField {
 
     #[allow(clippy::large_stack_arrays)]
     #[inline]
-    pub const fn default() -> Self {
+    pub const fn new() -> Self {
         Self {
             values: [0.0; SDF_GRID_CELL_COUNT],
             voxel_types: [VoxelType::dummy(); SDF_GRID_CELL_COUNT],
@@ -509,7 +509,7 @@ impl VoxelObject {
 
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn validate_sdf(&self) {
-        let mut sdf = VoxelChunkSignedDistanceField::default();
+        let mut sdf = VoxelChunkSignedDistanceField::new();
         self.for_each_exposed_chunk_with_sdf(&mut sdf,&mut |chunk, sdf| {
             let lower_chunk_voxel_indices = chunk.lower_voxel_indices();
 
