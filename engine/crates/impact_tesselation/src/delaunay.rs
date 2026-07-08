@@ -34,7 +34,7 @@ const MIN_RELATIVE_POINT_SEPARATION: f32 = 1e-9;
 /// vertices.
 #[derive(Clone, Debug)]
 pub struct DelaunayTetrahedralization<A: Allocator = Global> {
-    inner: Tetrahedralization<A>,
+    tetras: Tetrahedralization<A>,
 }
 
 /// A subdivision of space into tetrahedra.
@@ -77,6 +77,11 @@ struct TetrahedronIDChange {
 }
 
 impl DelaunayTetrahedralization<Global> {
+    /// Creates an empty Delaunay tetrahedralization.
+    pub fn new() -> Self {
+        Self::new_in(Global)
+    }
+
     /// Subdivides the convex hull of the given set of points into tetrahedra
     /// that satisfy the Delaunay criterion.
     ///
@@ -89,9 +94,30 @@ impl DelaunayTetrahedralization<Global> {
     pub fn construct(points: &[Point3C]) -> Result<Self> {
         Self::construct_in(Global, points)
     }
+
+    /// Subdivides the convex hull of the given set of points into tetrahedra
+    /// that satisfy the Delaunay criterion and updates this object to hold the
+    /// resulting tetrahedralization.
+    ///
+    /// Uses an incremental insertion algorithm described in Ledoux (2007),
+    /// "Computing the 3D Voronoi Diagram Robustly: An Easy Explanation".
+    ///
+    /// # Errors
+    /// Returns an error if the number of points or the resulting number of
+    /// tetra exceeds a max limit.
+    pub fn reconstruct(&mut self, points: &[Point3C]) -> Result<()> {
+        self.reconstruct_in(points)
+    }
 }
 
 impl<A: Allocator> DelaunayTetrahedralization<A> {
+    /// Creates an empty Delaunay tetrahedralization using the given allocator.
+    pub fn new_in(alloc: A) -> Self {
+        Self {
+            tetras: Tetrahedralization::new_in(alloc),
+        }
+    }
+
     /// Subdivides the convex hull of the given set of points into tetrahedra
     /// that satisfy the Delaunay criterion.
     ///
@@ -102,6 +128,22 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
     /// Returns an error if the number of points or the resulting number of
     /// tetra exceeds a max limit.
     pub fn construct_in(alloc: A, points: &[Point3C]) -> Result<Self> {
+        let mut tetrahedralization = Self::new_in(alloc);
+        tetrahedralization.reconstruct_in(points)?;
+        Ok(tetrahedralization)
+    }
+
+    /// Subdivides the convex hull of the given set of points into tetrahedra
+    /// that satisfy the Delaunay criterion and updates this object to hold the
+    /// resulting tetrahedralization.
+    ///
+    /// Uses an incremental insertion algorithm described in Ledoux (2007),
+    /// "Computing the 3D Voronoi Diagram Robustly: An Easy Explanation".
+    ///
+    /// # Errors
+    /// Returns an error if the number of points or the resulting number of
+    /// tetra exceeds a max limit.
+    pub fn reconstruct_in(&mut self, points: &[Point3C]) -> Result<()> {
         let n_points = points.len();
 
         if n_points + 4 > VertexIdx::MAX as usize {
@@ -109,17 +151,15 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
         }
 
         if n_points < 4 {
-            return Ok(Self {
-                inner: Tetrahedralization::new(alloc),
-            });
+            return Ok(());
         }
 
-        let mut tetras = Tetrahedralization::with_vertex_capacity(alloc, n_points + 4);
+        self.tetras.clear_with_vertex_capacity(n_points + 4);
 
         let aabb = AxisAlignedBox::aabb_for_points(points);
         let bounding_sphere = Sphere::bounding_sphere_from_aabb(&aabb);
 
-        tetras.add_bounding_tetrahedron(&bounding_sphere);
+        self.tetras.add_bounding_tetrahedron(&bounding_sphere);
 
         let min_squared_point_separation =
             (MIN_RELATIVE_POINT_SEPARATION * bounding_sphere.radius()).powi(2);
@@ -138,13 +178,14 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
         let mut locator = TetrahedronPointLocator::new(0);
 
         'insertion: for new_vertex in points {
-            let inside_tetra_id = locator.find_tetrahedron_containing_point(&tetras, new_vertex);
+            let inside_tetra_id =
+                locator.find_tetrahedron_containing_point(&self.tetras, new_vertex);
             assert_ne!(inside_tetra_id, NO_TETRAHEDRON_ID);
 
-            let inside_tetra = tetras.tetrahedron(inside_tetra_id);
+            let inside_tetra = self.tetras.tetrahedron(inside_tetra_id);
 
             // Skip the new vertex if it coincides with an existing vertex
-            for vertex in inside_tetra.vertex_points(tetras.vertices()) {
+            for vertex in inside_tetra.vertex_points(self.tetras.vertices()) {
                 if Point3C::squared_distance_between(new_vertex, &vertex)
                     < min_squared_point_separation
                 {
@@ -152,8 +193,10 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                 }
             }
 
-            let new_vertex_idx = tetras.n_vertices() as VertexIdx;
-            let new_tetra_ids = tetras.insert_and_connect_vertex(*new_vertex, inside_tetra_id)?;
+            let new_vertex_idx = self.tetras.n_vertices() as VertexIdx;
+            let new_tetra_ids = self
+                .tetras
+                .insert_and_connect_vertex(*new_vertex, inside_tetra_id)?;
 
             stack.extend_from_slice(&new_tetra_ids);
 
@@ -166,7 +209,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
 
                 // Let the current tetrahedron be ABCD. The inserted vertex is A
                 // (the reconnection operations never move A).
-                let abcd = tetras.tetrahedron(abcd_id);
+                let abcd = self.tetras.tetrahedron(abcd_id);
 
                 let [a, b, c, d] = abcd.vertices;
                 debug_assert_eq!(a, new_vertex_idx);
@@ -176,18 +219,18 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                 if bcde_id == NO_TETRAHEDRON_ID {
                     continue;
                 }
-                let bcde = tetras.tetrahedron(bcde_id);
+                let bcde = self.tetras.tetrahedron(bcde_id);
 
                 // The neighbor shares the BDC face (in vertex order BCD).
                 // Find the fourth vertex E not on that face.
                 let e_corner = bcde.corner_not_on_face([b, c, d]);
                 let e = bcde.vertices[e_corner];
 
-                let vertex_a = abcd.vertex_point(tetras.vertices(), 0);
-                let vertex_b = abcd.vertex_point(tetras.vertices(), 1);
-                let vertex_c = abcd.vertex_point(tetras.vertices(), 2);
-                let vertex_d = abcd.vertex_point(tetras.vertices(), 3);
-                let vertex_e = bcde.vertex_point(tetras.vertices(), e_corner);
+                let vertex_a = abcd.vertex_point(self.tetras.vertices(), 0);
+                let vertex_b = abcd.vertex_point(self.tetras.vertices(), 1);
+                let vertex_c = abcd.vertex_point(self.tetras.vertices(), 2);
+                let vertex_d = abcd.vertex_point(self.tetras.vertices(), 3);
+                let vertex_e = bcde.vertex_point(self.tetras.vertices(), e_corner);
 
                 // If E lies inside the circumsphere of ABCD, ABCD does not
                 // satisfy the Delaunay criterion, so we divide the hull of ABCD
@@ -214,7 +257,8 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                             // The hull of ABCD and BCDE is convex. They can be
                             // reconnected into three tetrahedra ABCE, ACDE and
                             // ADBE.
-                            let new_tetra_ids = tetras.reconnect_two_to_three(abcd_id, bcde_id)?;
+                            let new_tetra_ids =
+                                self.tetras.reconnect_two_to_three(abcd_id, bcde_id)?;
 
                             stack.extend_from_slice(&new_tetra_ids);
                         }
@@ -251,8 +295,9 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                                 continue;
                             }
                             // Reconnect into two tetrahedra AXZE and AZYE
-                            let (new_tetra_ids, id_change) =
-                                tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
+                            let (new_tetra_ids, id_change) = self
+                                .tetras
+                                .reconnect_three_to_two(abcd_id, bcde_id, axye_id);
 
                             // The old tetrahedra ABCD, BCDE and AXYE are now
                             // removed and their IDs no longer point to them, so
@@ -308,8 +353,9 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                                     && axye_nb_of_abcd != NO_TETRAHEDRON_ID
                                 {
                                     let axye_id = axye_nb_of_abcd;
-                                    let (new_tetra_ids, id_change) =
-                                        tetras.reconnect_three_to_two(abcd_id, bcde_id, axye_id);
+                                    let (new_tetra_ids, id_change) = self
+                                        .tetras
+                                        .reconnect_three_to_two(abcd_id, bcde_id, axye_id);
 
                                     for id in &mut stack {
                                         if *id == axye_id {
@@ -321,7 +367,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                                     stack.extend_from_slice(&new_tetra_ids);
                                 } else {
                                     let new_tetra_ids =
-                                        tetras.reconnect_two_to_three(abcd_id, bcde_id)?;
+                                        self.tetras.reconnect_two_to_three(abcd_id, bcde_id)?;
 
                                     stack.extend_from_slice(&new_tetra_ids);
                                 }
@@ -368,8 +414,8 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                                 {
                                     continue;
                                 }
-                                let tetra_3 = tetras.tetrahedron(tetra_3_id);
-                                let tetra_4 = tetras.tetrahedron(tetra_4_id);
+                                let tetra_3 = self.tetras.tetrahedron(tetra_3_id);
+                                let tetra_4 = self.tetras.tetrahedron(tetra_4_id);
 
                                 let f_corner_t3 = tetra_3.corner_not_on_face(tetra_3_non_f_face);
                                 let f_corner_t4 = tetra_4.corner_not_on_face(tetra_4_non_f_face);
@@ -381,7 +427,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                                     continue;
                                 }
 
-                                let new_tetra_ids = tetras.reconnect_four_to_four(
+                                let new_tetra_ids = self.tetras.reconnect_four_to_four(
                                     abcd_id, bcde_id, tetra_3_id, tetra_4_id,
                                 );
 
@@ -398,77 +444,77 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
             }
         }
 
-        tetras.remove_boundary_tetrahedra(&arena);
+        self.tetras.remove_boundary_tetrahedra(&arena);
 
-        Ok(Self { inner: tetras })
+        Ok(())
     }
 
     /// Returns the vertices in the tetrahedralization.
     #[inline]
     pub fn vertices(&self) -> &[Vertex] {
-        self.inner.vertices()
+        self.tetras.vertices()
     }
 
     /// Returns the number of vertices in the tetrahedralization.
     #[inline]
     pub fn n_vertices(&self) -> usize {
-        self.inner.n_vertices()
+        self.tetras.n_vertices()
     }
 
     /// Returns the range of vertex indices excluding the four ad-hoc boundary
     /// vertices.
     #[inline]
     pub fn internal_vertex_indices(&self) -> Range<VertexIdx> {
-        4..(self.inner.n_vertices() as VertexIdx)
+        4..(self.tetras.n_vertices() as VertexIdx)
     }
 
     /// Returns the tetrahedra in the tetrahedralization. The ID of each
     /// tetrahedron corresponds to its index in the slice.
     #[inline]
     pub fn tetrahedra(&self) -> &[Tetrahedron] {
-        self.inner.tetrahedra()
+        self.tetras.tetrahedra()
     }
 
     /// Returns the number of tetrahedra in the tetrahedralization.
     #[inline]
     pub fn n_tetrahedra(&self) -> usize {
-        self.inner.n_tetrahedra()
+        self.tetras.n_tetrahedra()
     }
 
     /// Returns the tetrahedron with the given ID.
     #[inline]
     pub fn tetrahedron(&self, id: TetrahedronID) -> &Tetrahedron {
-        self.inner.tetrahedron(id)
+        self.tetras.tetrahedron(id)
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
     fn validate_brute_force(&self) {
-        for (tetra_id, tetra) in self.inner.tetrahedra_with_ids() {
+        for (tetra_id, tetra) in self.tetras.tetrahedra_with_ids() {
             for vertex_idx in tetra.vertices {
                 assert!(
                     vertex_idx >= 4,
                     "Tetrahedron {tetra_id} contains boundary vertex {vertex_idx}"
                 );
-                let vertex = &self.inner.vertices()[vertex_idx as usize];
+                let vertex = &self.tetras.vertices()[vertex_idx as usize];
                 assert_ne!(
                     vertex.tetra_id, NO_TETRAHEDRON_ID,
                     "Vertex {vertex_idx} points to no tetrahedron despite being used in tetrahedron {tetra_id}"
                 );
             }
 
-            let [a, b, c, d] = tetra.vertex_points(self.inner.vertices());
+            let [a, b, c, d] = tetra.vertex_points(self.tetras.vertices());
 
             for (nb_idx, &nb_id) in tetra.neighbors.iter().enumerate() {
                 if nb_id == NO_TETRAHEDRON_ID {
                     continue;
                 }
                 assert!(
-                    self.inner.has_tetrahedron(nb_id),
+                    self.tetras.has_tetrahedron(nb_id),
                     "Tetrahedron {tetra_id} is missing neighbor {nb_id} at slot {nb_idx}"
                 );
 
                 let face = tetra.face_opposite_neighbor(nb_idx);
-                let neighbor = self.inner.tetrahedron(nb_id);
+                let neighbor = self.tetras.tetrahedron(nb_id);
 
                 let mut back_idx = None;
                 for (i, &id) in neighbor.neighbors.iter().enumerate() {
@@ -506,7 +552,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
                 panic!("Tetrahedron {tetra_id} has a negative signed volume");
             }
 
-            for (v_idx, v) in self.inner.vertices().iter().enumerate() {
+            for (v_idx, v) in self.tetras.vertices().iter().enumerate() {
                 if point_lies_strictly_inside_circumsphere(&a, &b, &c, &d, &v.point) {
                     let [a_idx, b_idx, c_idx, d_idx] = tetra.vertices;
                     panic!(
@@ -518,12 +564,12 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
             }
         }
 
-        for (vertex_idx, vertex) in self.inner.vertices().iter().enumerate().skip(4) {
+        for (vertex_idx, vertex) in self.tetras.vertices().iter().enumerate().skip(4) {
             let vertex_idx = vertex_idx as VertexIdx;
             if vertex.tetra_id == NO_TETRAHEDRON_ID {
                 continue;
             }
-            let Some(tetra) = self.inner.get_tetrahedron(vertex.tetra_id) else {
+            let Some(tetra) = self.tetras.get_tetrahedron(vertex.tetra_id) else {
                 panic!(
                     "Vertex {vertex_idx} points to missing tetrahedron {}",
                     vertex.tetra_id
@@ -539,18 +585,21 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
 }
 
 impl<A: Allocator> Tetrahedralization<A> {
-    fn new(alloc: A) -> Self {
-        Self::with_vertex_capacity(alloc, 0)
+    fn new_in(alloc: A) -> Self {
+        Self {
+            vertices: AVec::new_in(alloc),
+            tetrahedra: AVec::new_in(alloc),
+        }
     }
 
-    fn with_vertex_capacity(alloc: A, vertex_capacity: usize) -> Self {
-        let vertices = AVec::with_capacity_in(vertex_capacity, alloc);
+    fn clear_with_vertex_capacity(&mut self, vertex_capacity: usize) {
         let tetra_capacity = estimated_tetrahedron_count(vertex_capacity);
-        let tetrahedra = AVec::with_capacity_in(tetra_capacity, alloc);
-        Self {
-            vertices,
-            tetrahedra,
-        }
+
+        self.vertices.clear();
+        self.vertices.reserve(vertex_capacity);
+
+        self.tetrahedra.clear();
+        self.tetrahedra.reserve(tetra_capacity);
     }
 
     /// Returns the vertices in the tetrahedralization.
