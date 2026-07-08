@@ -55,18 +55,30 @@ impl SurfaceNetsBuffer {
         self.indices.is_empty()
     }
 
-    /// Creates a new empty buffer with the given capacities for vertices and
-    /// indices.
-    pub fn with_capacities(vertex_capacity: usize, index_capacity: usize) -> Self {
+    /// Creates a new empty buffer.
+    pub fn new() -> Self {
         Self {
-            positions: Vec::with_capacity(vertex_capacity),
-            normal_vectors: Vec::with_capacity(vertex_capacity),
-            vertex_materials: Vec::with_capacity(vertex_capacity),
-            index_materials: Vec::with_capacity(index_capacity),
-            indices: Vec::with_capacity(index_capacity),
-            surface_points_and_linear_indices: Vec::with_capacity(vertex_capacity),
+            positions: Vec::new(),
+            normal_vectors: Vec::new(),
+            vertex_materials: Vec::new(),
+            index_materials: Vec::new(),
+            indices: Vec::new(),
+            surface_points_and_linear_indices: Vec::new(),
             voxel_linear_idx_to_vertex_index: [NULL_VERTEX; SDF_GRID_CELL_COUNT],
         }
+    }
+
+    /// Clears the buffer and ensures the given capacities for vertices and
+    /// indices.
+    pub fn clear_with_capacities(&mut self, vertex_capacity: usize, index_capacity: usize) {
+        self.reset();
+        self.positions.reserve(vertex_capacity);
+        self.normal_vectors.reserve(vertex_capacity);
+        self.vertex_materials.reserve(vertex_capacity);
+        self.index_materials.reserve(index_capacity);
+        self.indices.reserve(index_capacity);
+        self.surface_points_and_linear_indices
+            .reserve(vertex_capacity);
     }
 
     /// Clears all of the buffers, but keeps the memory allocated for reuse.

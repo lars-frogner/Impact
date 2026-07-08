@@ -3,7 +3,7 @@
 use crate::{
     collidable::VoxelObjectCollisionProbes,
     object::{
-        VoxelChunkFlags, VoxelObject,
+        VoxelChunkFlags, VoxelObject, VoxelObjectBuffers,
         sdf::{VoxelChunkSignedDistanceField, surface_nets::SurfaceNetsBuffer},
     },
 };
@@ -22,6 +22,21 @@ use std::{array, ops::Range};
 #[derive(Debug)]
 pub struct MeshedVoxelObject {
     object: VoxelObject,
+    mesh: VoxelObjectMesh,
+    collision_probes: VoxelObjectCollisionProbes,
+}
+
+/// The heap memory buffers for a [`MeshedVoxelObject`].
+#[derive(Debug)]
+pub struct MeshedVoxelObjectBuffers {
+    pub object_buffers: VoxelObjectBuffers,
+    pub mesh_buffers: VoxelObjectMeshBuffers,
+}
+
+/// The heap memory buffers for the mesh-related data in a
+/// [`MeshedVoxelObject`].
+#[derive(Debug)]
+pub struct VoxelObjectMeshBuffers {
     mesh: VoxelObjectMesh,
     collision_probes: VoxelObjectCollisionProbes,
 }
@@ -136,12 +151,14 @@ struct ChunkSubmeshManager {
 
 impl MeshedVoxelObject {
     /// Creates the [`VoxelObjectMesh`] and associated derived state for the
-    /// given [`VoxelObject`] and returns it as a [`MeshedVoxelObject`].
-    pub fn create(voxel_object: VoxelObject) -> Self {
-        let mesh = VoxelObjectMesh::create(&voxel_object);
+    /// given [`VoxelObject`] using the given memory buffers and returns it as a
+    /// [`MeshedVoxelObject`].
+    pub fn create(buffers: VoxelObjectMeshBuffers, voxel_object: VoxelObject) -> Self {
+        let mut mesh = buffers.mesh;
+        mesh.recreate(&voxel_object);
 
-        let collision_probes =
-            VoxelObjectCollisionProbes::compute_for_all_chunks(&voxel_object, &mesh);
+        let mut collision_probes = buffers.collision_probes;
+        collision_probes.recompute_for_all_chunks(&voxel_object, &mesh);
 
         Self {
             object: voxel_object,
@@ -188,10 +205,67 @@ impl MeshedVoxelObject {
     pub fn report_gpu_resources_synchronized(&mut self) {
         self.mesh.report_gpu_resources_synchronized();
     }
+
+    /// Consumes the meshed voxel object and returns its heap memory buffers.
+    pub fn into_buffers(self) -> MeshedVoxelObjectBuffers {
+        let mut buffers = MeshedVoxelObjectBuffers {
+            object_buffers: self.object.into_buffers(),
+            mesh_buffers: VoxelObjectMeshBuffers {
+                mesh: self.mesh,
+                collision_probes: self.collision_probes,
+            },
+        };
+        buffers.clear();
+        buffers
+    }
+}
+
+impl MeshedVoxelObjectBuffers {
+    /// Clears all buffers.
+    pub fn clear(&mut self) {
+        self.object_buffers.clear();
+        self.mesh_buffers.clear();
+    }
+}
+
+impl VoxelObjectMeshBuffers {
+    /// Creates new empty buffers.
+    pub fn new() -> Self {
+        Self {
+            mesh: VoxelObjectMesh::new(),
+            collision_probes: VoxelObjectCollisionProbes::new(),
+        }
+    }
+
+    /// Clears all buffers.
+    pub fn clear(&mut self) {
+        self.mesh.clear();
+        self.collision_probes.clear();
+    }
 }
 
 impl VoxelObjectMesh {
+    pub fn new() -> Self {
+        Self {
+            positions: Vec::new(),
+            normal_vectors: Vec::new(),
+            index_materials: Vec::new(),
+            indices: Vec::new(),
+            sdf_buffer: VoxelChunkSignedDistanceField::new(),
+            surface_nets_buffer: SurfaceNetsBuffer::new(),
+            chunk_submesh_manager: ChunkSubmeshManager::new(),
+        }
+    }
+
     pub fn create(voxel_object: &VoxelObject) -> Self {
+        let mut mesh = Self::new();
+        mesh.recreate(voxel_object);
+        mesh
+    }
+
+    pub fn recreate(&mut self, voxel_object: &VoxelObject) {
+        self.clear();
+
         let chunk_count_heuristic = voxel_object.exposed_chunk_count_heuristic();
         let vertex_count_huristic =
             chunk_count_heuristic * Self::vertex_count_per_chunk_heuristic();
@@ -199,21 +273,20 @@ impl VoxelObjectMesh {
 
         // There is likely to be a lot of mesh data, so allocating up front tends to
         // give a significant performace gain
-        let mut positions = Vec::with_capacity(vertex_count_huristic);
-        let mut normal_vectors = Vec::with_capacity(vertex_count_huristic);
-        let mut index_materials = Vec::with_capacity(index_count_huristic);
-        let mut indices = Vec::with_capacity(index_count_huristic);
+        self.positions.reserve(vertex_count_huristic);
+        self.normal_vectors.reserve(vertex_count_huristic);
+        self.index_materials.reserve(index_count_huristic);
+        self.indices.reserve(index_count_huristic);
 
-        let mut sdf_buffer = VoxelChunkSignedDistanceField::default();
-
-        let mut surface_nets_buffer = SurfaceNetsBuffer::with_capacities(
+        self.surface_nets_buffer.clear_with_capacities(
             Self::vertex_count_per_chunk_heuristic(),
             Self::index_count_per_chunk_heuristic(),
         );
 
-        let mut chunk_submesh_manager = ChunkSubmeshManager::with_capacity(chunk_count_heuristic);
+        self.chunk_submesh_manager
+            .clear_with_capacity(chunk_count_heuristic);
 
-        voxel_object.for_each_exposed_chunk_with_sdf(&mut sdf_buffer, &mut |chunk, sdf| {
+        voxel_object.for_each_exposed_chunk_with_sdf(&mut self.sdf_buffer, &mut |chunk, sdf| {
             let chunk_indices = chunk.chunk_indices();
 
             let vertex_position_offset =
@@ -222,19 +295,19 @@ impl VoxelObjectMesh {
             sdf.compute_surface_nets_mesh(
                 voxel_object.voxel_extent(),
                 &vertex_position_offset,
-                &mut surface_nets_buffer,
+                &mut self.surface_nets_buffer,
             );
 
-            if surface_nets_buffer.is_empty() {
+            if self.surface_nets_buffer.is_empty() {
                 return;
             }
 
-            let vertex_offset = positions.len();
-            let index_offset = indices.len();
-            let vertex_count = surface_nets_buffer.positions.len();
-            let index_count = surface_nets_buffer.indices.len();
+            let vertex_offset = self.positions.len();
+            let index_offset = self.indices.len();
+            let vertex_count = self.surface_nets_buffer.positions.len();
+            let index_count = self.surface_nets_buffer.indices.len();
 
-            chunk_submesh_manager.push_chunk(
+            self.chunk_submesh_manager.push_chunk(
                 *chunk_indices,
                 vertex_offset,
                 vertex_count,
@@ -243,28 +316,21 @@ impl VoxelObjectMesh {
                 chunk.flags(),
             );
 
-            positions.extend_from_slice(&surface_nets_buffer.positions);
-            normal_vectors.extend_from_slice(&surface_nets_buffer.normal_vectors);
-            index_materials.extend_from_slice(&surface_nets_buffer.index_materials);
+            self.positions
+                .extend_from_slice(&self.surface_nets_buffer.positions);
+            self.normal_vectors
+                .extend_from_slice(&self.surface_nets_buffer.normal_vectors);
+            self.index_materials
+                .extend_from_slice(&self.surface_nets_buffer.index_materials);
 
-            indices.reserve(index_count);
-            indices.extend(
-                surface_nets_buffer
+            self.indices.reserve(index_count);
+            self.indices.extend(
+                self.surface_nets_buffer
                     .indices
                     .iter()
                     .map(|&index| VoxelMeshIndex(vertex_offset as u32 + u32::from(index))),
             );
         });
-
-        Self {
-            positions,
-            normal_vectors,
-            index_materials,
-            indices,
-            sdf_buffer,
-            surface_nets_buffer,
-            chunk_submesh_manager,
-        }
     }
 
     /// Recomputes the meshes for any exposed chunks in the voxel object that
@@ -444,6 +510,15 @@ impl VoxelObjectMesh {
             .report_gpu_resources_synchronized();
     }
 
+    /// Clears all mesh data.
+    pub fn clear(&mut self) {
+        self.positions.clear();
+        self.normal_vectors.clear();
+        self.index_materials.clear();
+        self.indices.clear();
+        self.chunk_submesh_manager.clear();
+    }
+
     /// Returns a guess for the typical number of vertices in a chunk mesh.
     const fn vertex_count_per_chunk_heuristic() -> usize {
         // Surface nets tends to produce roughly 1-2x as many vertices as there
@@ -602,16 +677,23 @@ impl CullingFrustum {
 }
 
 impl ChunkSubmeshManager {
-    fn with_capacity(chunk_count: usize) -> Self {
+    fn new() -> Self {
         Self {
-            chunk_index_map: KeyIndexMapper::with_capacity(chunk_count),
-            chunk_submeshes: Vec::with_capacity(chunk_count),
-            chunk_vertex_ranges: Vec::with_capacity(chunk_count),
+            chunk_index_map: KeyIndexMapper::new(),
+            chunk_submeshes: Vec::new(),
+            chunk_vertex_ranges: Vec::new(),
             vertex_range_allocator: RangeAllocator::fully_occupied(),
             index_range_allocator: RangeAllocator::fully_occupied(),
             updated_data_ranges: Vec::new(),
             chunks_were_removed: false,
         }
+    }
+
+    fn clear_with_capacity(&mut self, chunk_count: usize) {
+        self.clear();
+        self.chunk_index_map.reserve(chunk_count);
+        self.chunk_submeshes.reserve(chunk_count);
+        self.chunk_vertex_ranges.reserve(chunk_count);
     }
 
     fn chunk_submeshes(&self) -> &[ChunkSubmesh] {
@@ -731,6 +813,16 @@ impl ChunkSubmeshManager {
     }
 
     fn report_gpu_resources_synchronized(&mut self) {
+        self.updated_data_ranges.clear();
+        self.chunks_were_removed = false;
+    }
+
+    fn clear(&mut self) {
+        self.chunk_index_map.clear();
+        self.chunk_submeshes.clear();
+        self.chunk_vertex_ranges.clear();
+        self.vertex_range_allocator.mark_all_ranges_occupied();
+        self.index_range_allocator.mark_all_ranges_occupied();
         self.updated_data_ranges.clear();
         self.chunks_were_removed = false;
     }
