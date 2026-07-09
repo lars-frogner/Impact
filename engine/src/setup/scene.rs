@@ -9,6 +9,7 @@ pub mod voxel;
 
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
+    setup::EntitySetupContext,
 };
 use anyhow::Result;
 use impact_ecs::{
@@ -30,6 +31,7 @@ use parking_lot::RwLock;
 /// (except scene graph components, which are added by calling
 /// [`add_new_entities_to_scene_graph`].
 pub fn setup_scene_data_for_new_entities(
+    ctx: EntitySetupContext<'_>,
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
@@ -41,7 +43,7 @@ pub fn setup_scene_data_for_new_entities(
 
     material::setup_materials_for_new_entities(resource_manager, entities)?;
 
-    voxel::setup_voxel_objects_for_new_entities(resource_manager, scene, simulator, entities)?;
+    voxel::setup_voxel_objects_for_new_entities(ctx, resource_manager, scene, simulator, entities)?;
     voxel::setup_voxel_interaction_for_new_entities(scene, entities)?;
 
     bounding_volume::setup_bounding_volumes_for_new_entities(resource_manager, scene, entities)?;

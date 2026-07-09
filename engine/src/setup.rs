@@ -8,12 +8,23 @@ use crate::engine::Engine;
 use anyhow::Result;
 use impact_ecs::world::{EntityEntry, PrototypeEntities};
 use impact_id::EntityID;
+use impact_thread::pool::DynamicThreadPool;
+
+#[derive(Clone, Copy, Debug)]
+pub struct EntitySetupContext<'a> {
+    pub thread_pool: Option<&'a DynamicThreadPool>,
+}
 
 pub fn perform_setup_for_new_entities(
     engine: &Engine,
     entities: &mut PrototypeEntities,
 ) -> Result<()> {
+    let ctx = EntitySetupContext {
+        thread_pool: engine.intra_task_thread_pool(),
+    };
+
     scene::setup_scene_data_for_new_entities(
+        ctx,
         engine.resource_manager(),
         engine.scene(),
         engine.simulator(),

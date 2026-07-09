@@ -41,6 +41,7 @@ use impact_profiling::TaskTimer;
 use impact_scene::model::ModelInstanceManager;
 use impact_scheduling::TaskErrors;
 use impact_texture::{SamplerRegistry, TextureRegistry};
+use impact_thread::pool::DynamicThreadPool;
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,7 @@ use std::{
 #[derive(Debug)]
 pub struct Engine {
     app: Arc<dyn ApplicationInterface>,
+    intra_task_thread_pool: Option<DynamicThreadPool>,
     graphics_device: Arc<GraphicsDevice>,
     component_metadata_registry: ComponentMetadataRegistry,
     game_loop_controller: RwLock<GameLoopController>,
@@ -169,6 +171,7 @@ impl Engine {
 
         let engine = Self {
             app,
+            intra_task_thread_pool: None,
             graphics_device,
             component_metadata_registry,
             game_loop_controller: RwLock::new(game_loop_controller),
@@ -197,6 +200,12 @@ impl Engine {
     /// Returns a reference to the [`Application`].
     pub(crate) fn app(&self) -> &dyn ApplicationInterface {
         self.app.as_ref()
+    }
+
+    /// Returns a reference to the [`DynamicThreadPool`] to use for
+    /// parallelization within tasks, if it exists.
+    pub(crate) fn intra_task_thread_pool(&self) -> Option<&DynamicThreadPool> {
+        self.intra_task_thread_pool.as_ref()
     }
 
     /// Returns a reference to the [`GraphicsDevice`].
@@ -276,6 +285,11 @@ impl Engine {
     /// Returns a reference to the [`TaskTimer`].
     pub(crate) fn task_timer(&self) -> &TaskTimer {
         &self.task_timer
+    }
+
+    /// Sets the thread pool to use for parallelization within tasks.
+    pub(crate) fn set_intra_task_thread_pool(&mut self, thread_pool: Option<DynamicThreadPool>) {
+        self.intra_task_thread_pool = thread_pool;
     }
 
     /// Captures and saves any screenshots or related textures requested through

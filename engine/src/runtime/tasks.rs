@@ -3,7 +3,6 @@
 use crate::{engine::Engine, tasks, ui::UserInterface};
 use anyhow::Result;
 use impact_scheduling::TaskScheduler;
-use impact_thread::pool::DynamicThreadPool;
 use std::{num::NonZeroUsize, sync::Arc};
 
 pub type RuntimeTaskScheduler = TaskScheduler<RuntimeContext>;
@@ -18,19 +17,13 @@ pub type RuntimeTaskScheduler = TaskScheduler<RuntimeContext>;
 pub struct RuntimeContext {
     engine: Arc<Engine>,
     user_interface: Arc<dyn UserInterface>,
-    thread_pool: Option<Arc<DynamicThreadPool>>,
 }
 
 impl RuntimeContext {
-    pub(super) fn new(
-        engine: Arc<Engine>,
-        user_interface: Arc<dyn UserInterface>,
-        thread_pool: Option<Arc<DynamicThreadPool>>,
-    ) -> Self {
+    pub(super) fn new(engine: Arc<Engine>, user_interface: Arc<dyn UserInterface>) -> Self {
         Self {
             engine,
             user_interface,
-            thread_pool,
         }
     }
 
@@ -40,10 +33,6 @@ impl RuntimeContext {
 
     pub fn user_interface(&self) -> &dyn UserInterface {
         self.user_interface.as_ref()
-    }
-
-    pub fn thread_pool(&self) -> Option<&DynamicThreadPool> {
-        self.thread_pool.as_deref()
     }
 }
 
