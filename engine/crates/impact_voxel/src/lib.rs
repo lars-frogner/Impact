@@ -37,7 +37,7 @@ use std::{
 use utils::{Dimension, Side};
 use voxel_types::VoxelType;
 
-use crate::interaction::VoxelInteractionManager;
+use crate::{interaction::VoxelInteractionManager, mesh::MeshedVoxelObjectBuffers};
 
 define_entity_id_newtype! {
     /// Identifier for a [`VoxelObject`](crate::chunks::VoxelObject) in a
@@ -120,6 +120,7 @@ pub enum VoxelSurfacePlacement {
 pub struct VoxelManager {
     pub object_manager: VoxelObjectManager,
     pub interaction_manager: VoxelInteractionManager,
+    pub object_buffer_pool: VoxelObjectBufferPool,
 }
 
 /// Manager of all [`VoxelObject`](crate::chunks::VoxelObject)s in a scene.
@@ -127,6 +128,11 @@ pub struct VoxelManager {
 pub struct VoxelObjectManager {
     voxel_objects: NoHashMap<VoxelObjectID, MeshedVoxelObject>,
     physics_contexts: NoHashMap<VoxelObjectID, VoxelObjectPhysicsContext>,
+}
+
+#[derive(Debug)]
+pub struct VoxelObjectBufferPool {
+    buffer_pool: Vec<MeshedVoxelObjectBuffers>,
 }
 
 /// Physics context for voxel objects that participate in dynamic rigid body
@@ -479,6 +485,7 @@ impl VoxelManager {
         Self {
             object_manager: VoxelObjectManager::new(),
             interaction_manager: VoxelInteractionManager::new(),
+            object_buffer_pool: VoxelObjectBufferPool::new(),
         }
     }
 
@@ -506,11 +513,37 @@ impl VoxelManager {
         &mut self.interaction_manager
     }
 
+    /// Returns a mutable reference to the [`VoxelObjectBufferPool`].
+    #[inline]
+    pub fn object_buffer_pool_mut(&mut self) -> &mut VoxelObjectBufferPool {
+        &mut self.object_buffer_pool
+    }
+
     /// Removes all voxel objects and interaction entities.
+    ///
+    /// The memory buffers of the removed voxel objects are added to the buffer
+    /// pool for reuse.
     #[inline]
     pub fn remove_all_voxel_entities(&mut self) {
-        self.object_manager.remove_all_voxel_objects();
         self.interaction_manager.remove_all_interactors();
+
+        let voxel_objects = self.object_manager.remove_all_voxel_objects();
+
+        self.object_buffer_pool
+            .extend_with_buffers(voxel_objects.map(MeshedVoxelObject::into_buffers));
+    }
+
+    /// Removes the [`MeshedVoxelObject`] with the given ID if it exists. Also
+    /// removes any associated [`VoxelObjectInertialPropertyManager`].
+    ///
+    /// The memory buffers of the removed voxel object are added to the buffer
+    /// pool for reuse.
+    #[inline]
+    pub fn remove_voxel_object_and_store_buffers(&mut self, voxel_object_id: VoxelObjectID) {
+        if let Some(voxel_object) = self.object_manager.remove_voxel_object(voxel_object_id) {
+            self.object_buffer_pool
+                .add_buffers(voxel_object.into_buffers());
+        }
     }
 }
 
@@ -635,16 +668,26 @@ impl VoxelObjectManager {
 
     /// Removes the [`MeshedVoxelObject`] with the given ID if it exists. Also
     /// removes any associated [`VoxelObjectInertialPropertyManager`].
+    ///
+    /// # Returns
+    /// The removed object.
     #[inline]
-    pub fn remove_voxel_object(&mut self, voxel_object_id: VoxelObjectID) {
-        self.voxel_objects.remove(&voxel_object_id);
+    pub fn remove_voxel_object(
+        &mut self,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<MeshedVoxelObject> {
         self.physics_contexts.remove(&voxel_object_id);
+        self.voxel_objects.remove(&voxel_object_id)
     }
 
-    /// Removes all voxel objects in the manager.
+    /// Removes all voxel objects in the manager and returns them in an
+    /// iterator.
     #[inline]
-    pub fn remove_all_voxel_objects(&mut self) {
-        self.voxel_objects.clear();
+    pub fn remove_all_voxel_objects(&mut self) -> impl Iterator<Item = MeshedVoxelObject> {
+        self.physics_contexts.clear();
+        self.voxel_objects
+            .drain()
+            .map(|(_, voxel_object)| voxel_object)
     }
 
     /// Recomputes the meshes for any voxel objects with invalidated chunks.
@@ -683,6 +726,43 @@ impl VoxelObjectManager {
 impl Default for VoxelObjectManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl VoxelObjectBufferPool {
+    fn new() -> Self {
+        Self {
+            buffer_pool: Vec::new(),
+        }
+    }
+
+    /// Adds the given memory buffers to the pool.
+    #[inline]
+    pub fn add_buffers(&mut self, buffers: MeshedVoxelObjectBuffers) {
+        self.buffer_pool.push(buffers);
+    }
+
+    /// Adds memory buffers from the given iterator to the pool.
+    #[inline]
+    pub fn extend_with_buffers(
+        &mut self,
+        buffers: impl IntoIterator<Item = MeshedVoxelObjectBuffers>,
+    ) {
+        self.buffer_pool.extend(buffers);
+    }
+
+    /// Returns an available set of memory buffers from the pool.
+    #[inline]
+    pub fn take_buffers(&mut self) -> Option<MeshedVoxelObjectBuffers> {
+        self.buffer_pool.pop()
+    }
+
+    /// Returns an available set of memory buffers from the pool, or creates one
+    /// if not available.
+    #[inline]
+    pub fn take_or_create_buffers(&mut self) -> MeshedVoxelObjectBuffers {
+        self.take_buffers()
+            .unwrap_or_else(MeshedVoxelObjectBuffers::new)
     }
 }
 

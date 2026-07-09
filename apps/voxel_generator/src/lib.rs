@@ -104,8 +104,11 @@ impl App {
                 Ok(())
             })?;
 
+        self.engine().remove_voxel_object(OBJECT_ENTITY_ID);
+
         self.engine()
-            .replace_voxel_object(OBJECT_ENTITY_ID, voxel_object);
+            .add_voxel_object(OBJECT_ENTITY_ID, voxel_object)
+            .unwrap();
 
         Ok(())
     }
