@@ -13,6 +13,7 @@ use crate::{
 };
 use anyhow::Result;
 use impact_profiling::instrumentation;
+use impact_thread::pool::DynamicThreadPool;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroUsize},
@@ -32,8 +33,14 @@ pub struct Runtime<UI> {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RuntimeConfig {
-    n_worker_threads: NonZeroUsize,
+    /// Number of threads for parallel task execution.
+    n_task_threads: NonZeroUsize,
+    /// Communication queue capacity for task threads.
     task_queue_capacity: NonZeroUsize,
+    /// Number of threads for parallelization within certain tasks.
+    n_intra_task_threads: NonZeroUsize,
+    /// Communication queue capacity for intra-task threads.
+    intra_task_queue_capacity: NonZeroUsize,
 }
 
 impl<UI> Runtime<UI>
@@ -47,10 +54,17 @@ where
         let engine = Arc::new(engine);
         let user_interface = Arc::new(user_interface);
 
-        let ctx = RuntimeContext::new(engine.clone(), user_interface.clone());
+        let thread_pool = (config.n_intra_task_threads.get() > 1).then(|| {
+            Arc::new(DynamicThreadPool::new_dynamic(
+                config.n_intra_task_threads,
+                config.intra_task_queue_capacity,
+            ))
+        });
+
+        let ctx = RuntimeContext::new(engine.clone(), user_interface.clone(), thread_pool);
 
         let task_scheduler =
-            tasks::create_task_scheduler(ctx, config.n_worker_threads, config.task_queue_capacity)?;
+            tasks::create_task_scheduler(ctx, config.n_task_threads, config.task_queue_capacity)?;
 
         Ok(Self {
             engine,
@@ -100,8 +114,10 @@ impl<UI> Runtime<UI> {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            n_worker_threads: NonZeroUsize::new(1).unwrap(),
+            n_task_threads: NonZeroUsize::new(1).unwrap(),
             task_queue_capacity: NonZeroUsize::new(1024).unwrap(),
+            n_intra_task_threads: NonZeroUsize::new(1).unwrap(),
+            intra_task_queue_capacity: NonZeroUsize::new(1024).unwrap(),
         }
     }
 }
