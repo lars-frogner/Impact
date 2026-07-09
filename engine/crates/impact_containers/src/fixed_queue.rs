@@ -1,6 +1,6 @@
 //! A fixed-capacity circular queue (ring buffer) implementation.
 
-use impact_alloc::{AVec, Allocator, Global};
+use impact_alloc::{AVec, Allocator, Global, avec};
 
 /// A fixed-capacity circular queue (ring buffer) that stores elements in FIFO
 /// order.
@@ -41,8 +41,7 @@ impl<T: Copy> FixedQueue<T> {
 impl<T: Copy + Default, A: Allocator> FixedQueue<T, A> {
     /// Creates a new empty queue with the specified capacity and allocator.
     pub fn with_capacity_in(capacity: usize, alloc: A) -> Self {
-        let mut queue = AVec::new_in(alloc);
-        queue.resize(capacity, T::default());
+        let queue = avec![in alloc; T::default(); capacity];
         Self {
             queue,
             first: 0,

@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use external::{ExternalGPUProfiler, ExternalGPUSpanGuard};
-use impact_alloc::{AVec, arena::ArenaPool};
+use impact_alloc::{arena::ArenaPool, avec};
 use std::{borrow::Cow, iter, num::NonZeroU32, time::Duration};
 
 /// Helper for performing timestamp GPU queries.
@@ -174,8 +174,7 @@ impl TimestampQueryManager {
         let timestamps = self.timestamp_result_buffer.map_and_process_buffer_bytes(
             graphics_device,
             |bytes| {
-                let mut timestamps = AVec::new_in(&arena);
-                timestamps.resize(2 * self.timestamp_pairs.len(), 0_u64);
+                let mut timestamps = avec![in &arena; 0_u64; 2 * self.timestamp_pairs.len()];
                 let timestamp_bytes = bytemuck::cast_slice_mut(&mut timestamps);
                 timestamp_bytes.copy_from_slice(bytes);
                 timestamps

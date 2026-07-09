@@ -3,7 +3,7 @@
 use crate::gpu_resource::VoxelMaterialGPUResources;
 use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
-use impact_alloc::AVec;
+use impact_alloc::{AVec, avec};
 use impact_containers::NoHashMap;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
@@ -593,8 +593,7 @@ fn create_uniform_roughness_image(texture_resolution: NonZeroU32, roughness: f32
         pixel_format: PixelFormat::Luma8,
     };
 
-    let mut data = AVec::new();
-    data.resize(pixel_count, float_to_u8(roughness));
+    let data = avec![float_to_u8(roughness); pixel_count];
 
     Image { meta, data }
 }
