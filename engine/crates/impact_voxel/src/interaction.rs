@@ -56,6 +56,14 @@ pub trait VoxelObjectInteractionContext {
         parent_entity_id: EntityID,
     );
 
+    /// Called when new voxel object entities should be created for extracted
+    /// voxel objects.
+    fn create_extracted_voxel_object_entities(
+        &mut self,
+        new_entity_ids: Vec<EntityID>,
+        parent_entity_id: EntityID,
+    );
+
     /// Called when a voxel object should be removed.
     fn remove_voxel_object_entity(&mut self, entity_id: EntityID);
 }
@@ -379,7 +387,7 @@ fn handle_voxel_object_after_removing_voxels(
     }
 }
 
-fn spawn_extracted_voxel_object<C>(
+fn spawn_extracted_voxel_object_and_entity<C>(
     context: &mut C,
     entity_id_manager: &mut EntityIDManager,
     voxel_object_manager: &mut VoxelObjectManager,
@@ -390,9 +398,28 @@ fn spawn_extracted_voxel_object<C>(
 ) where
     C: VoxelObjectInteractionContext,
 {
+    let entity_id = entity_id_manager.provide_id();
+
+    spawn_extracted_voxel_object(
+        voxel_object_manager,
+        rigid_body_manager,
+        anchor_manager,
+        extracted_components,
+        entity_id,
+    );
+
+    context.create_extracted_voxel_object_entity(entity_id, parent_entity_id);
+}
+
+fn spawn_extracted_voxel_object(
+    voxel_object_manager: &mut VoxelObjectManager,
+    rigid_body_manager: &mut RigidBodyManager,
+    anchor_manager: &mut AnchorManager,
+    extracted_components: ExtractedComponents,
+    entity_id: EntityID,
+) {
     let meshed_voxel_object = extracted_components.meshed_voxel_object;
 
-    let entity_id = entity_id_manager.provide_id();
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
 
@@ -423,8 +450,6 @@ fn spawn_extracted_voxel_object<C>(
             },
         );
     }
-
-    context.create_extracted_voxel_object_entity(entity_id, parent_entity_id);
 }
 
 fn determine_extracted_voxel_object_dynamics(
@@ -621,13 +646,16 @@ fn handle_anchors_for_disconnected_voxel_object(
 
 fn get_anchors_on_extracted_voxel_object(
     anchor_manager: &AnchorManager,
-    rigid_body_id: DynamicRigidBodyID,
+    original_rigid_body_id: DynamicRigidBodyID,
     voxel_object: &VoxelObject,
     coordinate_changes: &ExtractedVoxelObjectCoordinateChanges,
 ) -> Anchors {
     let mut anchors = Anchors::new();
 
-    for (anchor_id, anchor_point) in anchor_manager.dynamic().anchors_for_body(rigid_body_id) {
+    for (anchor_id, anchor_point) in anchor_manager
+        .dynamic()
+        .anchors_for_body(original_rigid_body_id)
+    {
         // Make anchor point relative to the origin of the extracted object for
         // querying which voxel it sits on
         let local_anchor = coordinate_changes
