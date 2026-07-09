@@ -424,7 +424,9 @@ impl VoxelObject {
         let num_chunks = chunks.len();
         let chunks_per_thread = num_chunks.div_ceil(num_threads);
         // Number of slices `chunks.chunks_mut(chunks_per_thread)` will produce
-        let num_tasks = num_chunks / chunks_per_thread;
+        let num_tasks = num_chunks.div_ceil(chunks_per_thread);
+
+        debug_assert_eq!(chunks.chunks(chunks_per_thread).count(), num_tasks);
 
         thread_pool
             .with_scope(|scope| {
