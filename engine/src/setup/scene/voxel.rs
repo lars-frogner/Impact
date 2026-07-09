@@ -65,7 +65,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -106,7 +106,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -120,7 +121,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -148,7 +149,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -162,7 +164,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -190,7 +192,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -204,7 +207,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -232,7 +235,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -246,7 +250,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -287,7 +291,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -301,7 +306,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -329,7 +334,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -343,7 +349,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -371,7 +377,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -385,7 +392,7 @@ pub fn setup_voxel_objects_for_new_entities(
         {
             let resource_manager = resource_manager.oread();
             let scene = scene.oread();
-            let mut voxel_manager = scene.voxel_manager().owrite();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
         },
         entities,
         |entity_id: EntityID,
@@ -413,7 +420,8 @@ pub fn setup_voxel_objects_for_new_entities(
 
             setup::setup_voxel_object(
                 ctx.thread_pool,
-                voxel_manager.object_manager_mut(),
+                &mut voxel_manager.object_manager,
+                &mut voxel_manager.object_buffer_pool,
                 &generator,
                 entity_id,
             )?;
@@ -546,9 +554,7 @@ pub fn cleanup_voxel_object_for_removed_entity(
         let scene = scene.oread();
         let mut voxel_manager = scene.voxel_manager().owrite();
         let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
-        voxel_manager
-            .object_manager_mut()
-            .remove_voxel_object(voxel_object_id);
+        voxel_manager.remove_voxel_object_and_store_buffers(voxel_object_id);
     }
 }
 

@@ -398,6 +398,7 @@ pub fn execute_fracturing_processes(
     };
 
     let voxel_object_manager = &mut voxel_manager.object_manager;
+    let voxel_object_buffer_pool = &mut voxel_manager.object_buffer_pool;
     let interaction_manager = &mut voxel_manager.interaction_manager;
     let fracturing_manager = interaction_manager.fracturing_manager_mut();
 
@@ -408,6 +409,7 @@ pub fn execute_fracturing_processes(
             entity_id_manager,
             voxel_type_registry,
             voxel_object_manager,
+            voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
             max_duration,
@@ -418,6 +420,7 @@ pub fn execute_fracturing_processes(
             entity_id_manager,
             voxel_type_registry,
             voxel_object_manager,
+            voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
             max_duration,

@@ -1,7 +1,7 @@
 //! Voxel object fracturing.
 
 use crate::{
-    VoxelObjectID, VoxelObjectManager,
+    VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager,
     interaction::{self, ExtractedComponents, VoxelObjectInteractionContext},
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
     object::{
@@ -48,7 +48,6 @@ struct FracturingProcess {
     tetrahedralization: DelaunayTetrahedralization,
     dual_vertex_queue: VecDeque<VertexIdx>,
     fracture_objects: Vec<FractureObject>,
-    object_buffer_pool: Vec<MeshedVoxelObjectBuffers>,
 }
 
 #[derive(Debug)]
@@ -137,6 +136,7 @@ impl VoxelObjectFracturingManager {
         entity_id_manager: &mut EntityIDManager,
         voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &mut VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
         max_duration: Option<Duration>,
@@ -147,10 +147,12 @@ impl VoxelObjectFracturingManager {
             context,
             entity_id_manager,
             voxel_object_manager,
+            voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
             max_duration,
             |voxel_object_manager,
+             voxel_object_buffer_pool,
              rigid_body_manager,
              process,
              voxel_object_id,
@@ -158,6 +160,7 @@ impl VoxelObjectFracturingManager {
                 process.execute(
                     voxel_type_registry,
                     voxel_object_manager,
+                    voxel_object_buffer_pool,
                     rigid_body_manager,
                     voxel_object_id,
                     remaining_duration,
@@ -180,6 +183,7 @@ impl VoxelObjectFracturingManager {
         entity_id_manager: &mut EntityIDManager,
         voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &mut VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
         max_duration: Option<Duration>,
@@ -190,10 +194,12 @@ impl VoxelObjectFracturingManager {
             context,
             entity_id_manager,
             voxel_object_manager,
+            voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
             max_duration,
             |voxel_object_manager,
+             voxel_object_buffer_pool,
              rigid_body_manager,
              process,
              voxel_object_id,
@@ -202,6 +208,7 @@ impl VoxelObjectFracturingManager {
                     thread_pool,
                     voxel_type_registry,
                     voxel_object_manager,
+                    voxel_object_buffer_pool,
                     rigid_body_manager,
                     voxel_object_id,
                     remaining_duration,
@@ -215,11 +222,13 @@ impl VoxelObjectFracturingManager {
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
         voxel_object_manager: &mut VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
         max_duration: Option<Duration>,
         execute_process: impl Fn(
             &mut VoxelObjectManager,
+            &mut VoxelObjectBufferPool,
             &mut RigidBodyManager,
             &mut FracturingProcess,
             VoxelObjectID,
@@ -238,6 +247,7 @@ impl VoxelObjectFracturingManager {
 
             execute_process(
                 voxel_object_manager,
+                voxel_object_buffer_pool,
                 rigid_body_manager,
                 process,
                 voxel_object_id,
@@ -262,6 +272,7 @@ impl VoxelObjectFracturingManager {
                 context,
                 entity_id_manager,
                 voxel_object_manager,
+                voxel_object_buffer_pool,
                 rigid_body_manager,
                 anchor_manager,
                 voxel_object_id,
@@ -278,7 +289,6 @@ impl FracturingProcess {
             tetrahedralization: DelaunayTetrahedralization::new(),
             dual_vertex_queue: VecDeque::new(),
             fracture_objects: Vec::new(),
-            object_buffer_pool: Vec::new(),
         }
     }
 
@@ -302,6 +312,7 @@ impl FracturingProcess {
         &mut self,
         voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &RigidBodyManager,
         voxel_object_id: VoxelObjectID,
         max_duration: Duration,
@@ -315,7 +326,7 @@ impl FracturingProcess {
             rigid_body_manager,
             voxel_object_id,
         ) else {
-            self.reset();
+            self.reset(voxel_object_buffer_pool);
             return;
         };
 
@@ -323,8 +334,11 @@ impl FracturingProcess {
 
         let arena = ArenaPool::get_arena();
 
-        let max_remaining =
-            self.invalidate_required_completed_objects_and_get_max_remaining(&arena, voxel_object);
+        let max_remaining = self.invalidate_required_completed_objects_and_get_max_remaining(
+            voxel_object_buffer_pool,
+            &arena,
+            voxel_object,
+        );
 
         let mut polyhedron = VoronoiPolyhedron::empty_in(&arena);
 
@@ -332,10 +346,7 @@ impl FracturingProcess {
         let start_time = Instant::now();
 
         while let Some(dual_vertex_idx) = self.dual_vertex_queue.pop_front() {
-            let buffers = self
-                .object_buffer_pool
-                .pop()
-                .unwrap_or_else(MeshedVoxelObjectBuffers::new);
+            let buffers = voxel_object_buffer_pool.take_or_create_buffers();
 
             let result = Self::generate_fracture_object(
                 voxel_type_registry,
@@ -353,7 +364,7 @@ impl FracturingProcess {
                 }
                 FractureObjectGenerationResult::NotGenerated(buffers) => {
                     // Store the buffers for reuse
-                    self.object_buffer_pool.push(buffers);
+                    voxel_object_buffer_pool.add_buffers(buffers);
                 }
             }
 
@@ -371,6 +382,7 @@ impl FracturingProcess {
         thread_pool: &DynamicThreadPool,
         voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &RigidBodyManager,
         voxel_object_id: VoxelObjectID,
         max_duration: Duration,
@@ -384,15 +396,19 @@ impl FracturingProcess {
             rigid_body_manager,
             voxel_object_id,
         ) else {
-            self.reset();
+            self.reset(voxel_object_buffer_pool);
             return;
         };
 
         let aabb = voxel_object.compute_normalized_chunk_grid_bounds();
 
         let arena = ArenaPool::get_arena();
-        let max_remaining =
-            self.invalidate_required_completed_objects_and_get_max_remaining(&arena, voxel_object);
+
+        let max_remaining = self.invalidate_required_completed_objects_and_get_max_remaining(
+            voxel_object_buffer_pool,
+            &arena,
+            voxel_object,
+        );
 
         let num_threads = thread_pool.n_workers().get();
 
@@ -467,10 +483,7 @@ impl FracturingProcess {
                             // results
                             break 'outer;
                         };
-                        let buffers = self
-                            .object_buffer_pool
-                            .pop()
-                            .unwrap_or_else(MeshedVoxelObjectBuffers::new);
+                        let buffers = voxel_object_buffer_pool.take_or_create_buffers();
 
                         let task_input = TaskInput {
                             dual_vertex_idx,
@@ -500,7 +513,7 @@ impl FracturingProcess {
                             }
                             FractureObjectGenerationResult::NotGenerated(buffers) => {
                                 // Store the buffers for reuse
-                                self.object_buffer_pool.push(buffers);
+                                voxel_object_buffer_pool.add_buffers(buffers);
                             }
                         }
                         received_count += 1;
@@ -521,7 +534,7 @@ impl FracturingProcess {
                             self.fracture_objects.push(fracture_object);
                         }
                         FractureObjectGenerationResult::NotGenerated(buffers) => {
-                            self.object_buffer_pool.push(buffers);
+                            voxel_object_buffer_pool.add_buffers(buffers);
                         }
                     }
                     in_flight_count -= 1;
@@ -624,12 +637,13 @@ impl FracturingProcess {
 
     fn invalidate_required_completed_objects_and_get_max_remaining(
         &mut self,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         arena: &PoolArena,
         voxel_object: &VoxelObject,
     ) -> usize {
         let original_completed_count = self.fracture_objects.len();
 
-        self.invalidate_required_completed_objects(arena, voxel_object);
+        self.invalidate_required_completed_objects(voxel_object_buffer_pool, arena, voxel_object);
 
         // If invalidation happens faster than we can keep up, we are allowed to
         // exceed the time budget. We require that at least twice the number of
@@ -644,6 +658,7 @@ impl FracturingProcess {
 
     fn invalidate_required_completed_objects(
         &mut self,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         arena: &PoolArena,
         voxel_object: &VoxelObject,
     ) {
@@ -674,8 +689,8 @@ impl FracturingProcess {
             for &object_idx in invalidated_object_indices.iter().rev() {
                 let fracture_object = self.fracture_objects.swap_remove(object_idx);
 
-                self.object_buffer_pool
-                    .push(fracture_object.meshed_voxel_object.into_buffers());
+                voxel_object_buffer_pool
+                    .add_buffers(fracture_object.meshed_voxel_object.into_buffers());
 
                 self.dual_vertex_queue
                     .push_back(fracture_object.dual_vertex_idx);
@@ -710,6 +725,7 @@ impl FracturingProcess {
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
         voxel_object_manager: &mut VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
         original_voxel_object_id: VoxelObjectID,
@@ -725,7 +741,7 @@ impl FracturingProcess {
             log::warn!(
                 "Tried to complete fracturing for missing voxel object: {original_voxel_object_id}"
             );
-            self.reset();
+            self.reset(voxel_object_buffer_pool);
             return;
         };
         let Some(physics_context) =
@@ -735,7 +751,7 @@ impl FracturingProcess {
                 "Tried to execute fracturing for voxel object {original_voxel_object_id} \
                  with missing physics context"
             );
-            self.reset();
+            self.reset(voxel_object_buffer_pool);
             return;
         };
         let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(original_rigid_body_id)
@@ -744,7 +760,7 @@ impl FracturingProcess {
                 "Tried to execute fracturing for voxel object {original_voxel_object_id} \
                  with missing rigid body"
             );
-            self.reset();
+            self.reset(voxel_object_buffer_pool);
             return;
         };
 
@@ -801,18 +817,21 @@ impl FracturingProcess {
         context.create_extracted_voxel_object_entities(entity_ids, original_entity_id);
         context.remove_voxel_object_entity(original_entity_id);
 
-        self.reset();
+        self.reset(voxel_object_buffer_pool);
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self, voxel_object_buffer_pool: &mut VoxelObjectBufferPool) {
         self.dual_vertex_queue.clear();
-        self.reclaim_fracture_object_buffers();
+        self.reclaim_fracture_object_buffers(voxel_object_buffer_pool);
     }
 
-    fn reclaim_fracture_object_buffers(&mut self) {
+    fn reclaim_fracture_object_buffers(
+        &mut self,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
+    ) {
         for fracture_object in self.fracture_objects.drain(..) {
             let buffers = fracture_object.meshed_voxel_object.into_buffers();
-            self.object_buffer_pool.push(buffers);
+            voxel_object_buffer_pool.add_buffers(buffers);
         }
     }
 }

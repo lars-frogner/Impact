@@ -47,8 +47,8 @@ use impact_voxel::{
         absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
         fracturing::FracturePointGenerator,
     },
-    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
-    object::{VoxelObject, VoxelObjectBuffers},
+    mesh::MeshedVoxelObject,
+    object::VoxelObject,
 };
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -653,14 +653,21 @@ impl Engine {
     where
         G: ChunkedVoxelGenerator + Sync,
     {
+        let buffers = self
+            .scene()
+            .oread()
+            .voxel_manager()
+            .owrite()
+            .object_buffer_pool_mut()
+            .take_or_create_buffers();
+
         let voxel_object = if let Some(thread_pool) = self.intra_task_thread_pool() {
-            VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), generator)
+            VoxelObject::generate_in_parallel(thread_pool, buffers.object_buffers, generator)
         } else {
-            VoxelObject::generate(VoxelObjectBuffers::new(), generator)
+            VoxelObject::generate(buffers.object_buffers, generator)
         };
 
-        let meshed_voxel_object =
-            MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), voxel_object);
+        let meshed_voxel_object = MeshedVoxelObject::create(buffers.mesh_buffers, voxel_object);
 
         meshed_voxel_object
     }
@@ -679,34 +686,21 @@ impl Engine {
             .add_voxel_object(voxel_object_id, voxel_object)
     }
 
-    pub fn replace_voxel_object(&self, entity_id: EntityID, voxel_object: MeshedVoxelObject) {
+    pub fn remove_voxel_object(&self, entity_id: EntityID) {
         let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
 
-        if let Some(existing_voxel_object) = self
-            .scene()
+        self.scene()
             .oread()
             .voxel_manager()
             .owrite()
-            .object_manager_mut()
-            .get_voxel_object_mut(voxel_object_id)
-        {
-            *existing_voxel_object = voxel_object;
-        }
+            .remove_voxel_object_and_store_buffers(voxel_object_id);
+
         self.renderer
             .oread()
             .render_resource_manager()
             .owrite()
             .voxel_objects
             .remove_voxel_object_buffers(voxel_object_id);
-    }
-
-    pub fn remove_voxel_object(&self, voxel_object_id: VoxelObjectID) {
-        self.scene()
-            .oread()
-            .voxel_manager()
-            .owrite()
-            .object_manager_mut()
-            .remove_voxel_object(voxel_object_id);
     }
 
     pub fn fracture_voxel_object(

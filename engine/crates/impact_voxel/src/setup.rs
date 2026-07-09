@@ -1,15 +1,15 @@
 //! Setup of voxel objects.
 
 use crate::{
-    VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
+    VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     generation::{
         ChunkedVoxelGenerator, VoxelGeneratorID,
         sdf::{SDFGraph, SDFNode, SDFNodeID},
         voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
     },
     gpu_resource::VOXEL_MODEL_ID,
-    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
-    object::{VoxelObject, VoxelObjectBuffers, inertia::VoxelObjectInertialPropertyManager},
+    mesh::MeshedVoxelObject,
+    object::{VoxelObject, inertia::VoxelObjectInertialPropertyManager},
     voxel_types::{VoxelType, VoxelTypeRegistry},
 };
 use anyhow::{Result, anyhow, bail};
@@ -489,20 +489,22 @@ pub fn apply_modifications<A: Allocator>(
 pub fn setup_voxel_object<G>(
     thread_pool: Option<&DynamicThreadPool>,
     voxel_object_manager: &mut VoxelObjectManager,
+    voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
     generator: &G,
     entity_id: EntityID,
 ) -> Result<()>
 where
     G: ChunkedVoxelGenerator + Sync,
 {
+    let buffers = voxel_object_buffer_pool.take_or_create_buffers();
+
     let voxel_object = if let Some(thread_pool) = thread_pool {
-        VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), generator)
+        VoxelObject::generate_in_parallel(thread_pool, buffers.object_buffers, generator)
     } else {
-        VoxelObject::generate(VoxelObjectBuffers::new(), generator)
+        VoxelObject::generate(buffers.object_buffers, generator)
     };
 
-    let meshed_voxel_object =
-        MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), voxel_object);
+    let meshed_voxel_object = MeshedVoxelObject::create(buffers.mesh_buffers, voxel_object);
 
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     voxel_object_manager.add_voxel_object(voxel_object_id, meshed_voxel_object)?;

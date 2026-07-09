@@ -397,6 +397,7 @@ pub fn apply_absorption<C>(
     C: VoxelObjectInteractionContext,
 {
     let voxel_object_manager = &mut voxel_manager.object_manager;
+    let voxel_object_buffer_pool = &mut voxel_manager.object_buffer_pool;
     let voxel_absorption_manager = voxel_manager.interaction_manager.absorption_manager_mut();
 
     let absorbing_sphere_entities = context.gather_voxel_absorbing_sphere_entities();
@@ -530,6 +531,7 @@ pub fn apply_absorption<C>(
             } = interaction::handle_voxel_object_after_removing_voxels(
                 anchor_manager,
                 voxel_type_registry,
+                voxel_object_buffer_pool,
                 voxel_object,
                 &mut physics_context.inertial_property_manager,
                 rigid_body_id,
