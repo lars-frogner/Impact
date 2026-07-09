@@ -35,6 +35,7 @@ use impact_scene::{
     ParentEntity, SceneEntityFlags,
     graph::{SceneGraph, SceneGroupID},
 };
+use impact_thread::pool::DynamicThreadPool;
 use std::time::Duration;
 use tinyvec::TinyVec;
 
@@ -308,6 +309,7 @@ pub fn apply_absorption(
 
 /// Executes initiated fracturing processes.
 pub fn execute_fracturing_processes(
+    thread_pool: Option<&DynamicThreadPool>,
     component_metadata_registry: &ComponentMetadataRegistry,
     entity_id_manager: &mut EntityIDManager,
     entity_stager: &mut EntityStager,
@@ -334,13 +336,26 @@ pub fn execute_fracturing_processes(
     let interaction_manager = &mut voxel_manager.interaction_manager;
     let fracturing_manager = interaction_manager.fracturing_manager_mut();
 
-    fracturing_manager.execute_fracturing_processes(
-        &mut interaction_context,
-        entity_id_manager,
-        voxel_type_registry,
-        voxel_object_manager,
-        rigid_body_manager,
-        anchor_manager,
-        max_duration,
-    );
+    if let Some(thread_pool) = thread_pool {
+        fracturing_manager.execute_fracturing_processes_in_parallel(
+            thread_pool,
+            &mut interaction_context,
+            entity_id_manager,
+            voxel_type_registry,
+            voxel_object_manager,
+            rigid_body_manager,
+            anchor_manager,
+            max_duration,
+        );
+    } else {
+        fracturing_manager.execute_fracturing_processes(
+            &mut interaction_context,
+            entity_id_manager,
+            voxel_type_registry,
+            voxel_object_manager,
+            rigid_body_manager,
+            anchor_manager,
+            max_duration,
+        );
+    }
 }
