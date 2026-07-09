@@ -201,16 +201,16 @@ fn load_png_from_reader<A: Allocator, R>(alloc: A, reader: R) -> Result<Image<A>
 where
     R: std::io::BufRead + std::io::Seek,
 {
+    use impact_alloc::avec;
+
     let decoder = png::Decoder::new(reader);
     let mut reader = decoder.read_info().context("Failed to read PNG info")?;
 
-    let mut buf = AVec::new_in(alloc);
-    buf.resize(
-        reader
-            .output_buffer_size()
-            .ok_or_else(|| anyhow::anyhow!("PNG overflows available memory"))?,
-        0,
-    );
+    let output_buffer_size = reader
+        .output_buffer_size()
+        .ok_or_else(|| anyhow::anyhow!("PNG overflows available memory"))?;
+
+    let mut buf = avec![in alloc; 0; output_buffer_size];
 
     let info = reader
         .next_frame(&mut buf)
@@ -277,6 +277,7 @@ fn read_jpeg_metadata_from_bytes(bytes: &[u8]) -> Result<ImageMetadata> {
 /// Loads a JPEG image from a byte buffer.
 #[cfg(feature = "jpeg")]
 fn load_jpeg_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>> {
+    use impact_alloc::avec;
     use zune_jpeg::zune_core::{
         bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions,
     };
@@ -289,8 +290,7 @@ fn load_jpeg_from_bytes<A: Allocator>(alloc: A, bytes: &[u8]) -> Result<Image<A>
     let colorspace = decoder.input_colorspace().unwrap();
     decoder.set_options(DecoderOptions::default().jpeg_set_out_colorspace(colorspace));
 
-    let mut pixels = AVec::new_in(alloc);
-    pixels.resize(decoder.output_buffer_size().unwrap(), 0);
+    let mut pixels = avec![in alloc; 0; decoder.output_buffer_size().unwrap()];
 
     decoder
         .decode_into(&mut pixels)
@@ -490,11 +490,11 @@ fn ycbcr_to_rgb(y: u8, cb: u8, cr: u8) -> (u8, u8, u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use impact_alloc::avec;
 
     #[test]
     fn test_decoded_image_dimensions() {
-        let mut data = AVec::new();
-        data.resize(100 * 200 * 4, 0);
+        let data = avec![0; 100 * 200 * 4];
 
         let image = Image {
             meta: ImageMetadata {

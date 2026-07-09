@@ -62,7 +62,7 @@ pub fn save_texture_as_png_file(
     output_path: impl AsRef<Path>,
 ) -> Result<()> {
     use anyhow::{anyhow, bail};
-    use impact_alloc::AVec;
+    use impact_alloc::{AVec, avec};
     use impact_gpu::wgpu;
 
     fn byte_to_float(byte: u8) -> f32 {
@@ -236,8 +236,7 @@ pub fn save_texture_as_png_file(
                 let (rg_data, rem) = data.as_chunks::<2>();
                 assert!(rem.is_empty());
 
-                let mut rgba_data = AVec::new_in(&arena);
-                rgba_data.resize(data.len() * 2, 0.0);
+                let mut rgba_data = avec![in &arena; 0.0; data.len() * 2];
 
                 for (i, &[r, g]) in rg_data.iter().enumerate() {
                     rgba_data[i * 4] = r;

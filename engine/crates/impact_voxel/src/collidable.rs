@@ -17,7 +17,7 @@ use crate::{
         chunk_range_encompassing_voxel_range, sdf,
     },
 };
-use impact_alloc::{AVec, Allocator, Global, arena::ArenaPool};
+use impact_alloc::{AVec, Allocator, Global, arena::ArenaPool, avec};
 use impact_containers::{HashMap, RangeAllocator};
 use impact_geometry::{Capsule, Plane, Sphere};
 use impact_id::EntityID;
@@ -609,8 +609,7 @@ impl VoxelObjectCollisionProbes {
         let arena = ArenaPool::get_arena();
 
         // Running sum and count of curvature samples for each vertex
-        let mut vertex_curvatures = AVec::with_capacity_in(vertex_positions.len(), &arena);
-        vertex_curvatures.resize(vertex_positions.len(), [0.0, 0.0]);
+        let mut vertex_curvatures = avec![in &arena; [0.0, 0.0]; vertex_positions.len()];
 
         let (triangles, []) = indices.as_chunks::<3>() else {
             panic!("Indices were not divisible into triangles");
@@ -664,8 +663,8 @@ impl VoxelObjectCollisionProbes {
         // Running best point and associated minimum (most convex) curvature for
         // each block in the chunk. The point and curvature are packed into a
         // Vector4 to keep them adjacent in memory.
-        let mut best_points_and_curvatures = AVec::with_capacity_in(CHUNK_BLOCK_COUNT, &arena);
-        best_points_and_curvatures.resize(CHUNK_BLOCK_COUNT, Vector4C::same(f32::INFINITY));
+        let mut best_points_and_curvatures =
+            avec![in &arena; Vector4C::same(f32::INFINITY); CHUNK_BLOCK_COUNT];
 
         for (vertex_position, [curvature_sum, curvature_count]) in
             vertex_positions.iter().zip(vertex_curvatures)
