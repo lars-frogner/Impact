@@ -33,6 +33,7 @@ use impact_scene::{
     graph::{FeatureIDSet, SceneGraph, SceneGroupID},
     model::ModelInstanceManager,
 };
+use impact_thread::pool::DynamicThreadPool;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -485,12 +486,20 @@ pub fn apply_modifications<A: Allocator>(
     }
 }
 
-pub fn setup_voxel_object(
+pub fn setup_voxel_object<G>(
+    thread_pool: Option<&DynamicThreadPool>,
     voxel_object_manager: &mut VoxelObjectManager,
-    generator: &impl ChunkedVoxelGenerator,
+    generator: &G,
     entity_id: EntityID,
-) -> Result<()> {
-    let voxel_object = VoxelObject::generate(VoxelObjectBuffers::new(), generator);
+) -> Result<()>
+where
+    G: ChunkedVoxelGenerator + Sync,
+{
+    let voxel_object = if let Some(thread_pool) = thread_pool {
+        VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), generator)
+    } else {
+        VoxelObject::generate(VoxelObjectBuffers::new(), generator)
+    };
 
     let meshed_voxel_object =
         MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), voxel_object);

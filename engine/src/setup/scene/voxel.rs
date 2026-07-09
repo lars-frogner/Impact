@@ -2,9 +2,10 @@
 
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
+    setup::EntitySetupContext,
 };
 use anyhow::{Context, Result, anyhow};
-use impact_alloc::arena::ArenaPool;
+use impact_alloc::{Global, arena::ArenaPool};
 use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
@@ -29,6 +30,7 @@ use impact_voxel::{
 use parking_lot::RwLock;
 
 pub fn setup_voxel_objects_for_new_entities(
+    ctx: EntitySetupContext<'_>,
     resource_manager: &RwLock<ResourceManager>,
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
@@ -88,7 +90,7 @@ pub fn setup_voxel_objects_for_new_entities(
                     format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
                 })?;
 
-            let sdf_generator = graph.build_in(&arena).with_context(|| {
+            let sdf_generator = graph.build_in(Global).with_context(|| {
                 format!("Failed to build SDF generator from atomic graph for voxel generator {generator_id}")
             })?;
 
@@ -102,7 +104,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -127,7 +134,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let node_id = voxel_box.add(&mut graph);
             setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
-            let sdf_generator = graph.build_in(&arena)?;
+            let sdf_generator = graph.build_in(Global)?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -139,7 +146,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -164,7 +176,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let node_id = voxel_sphere.add(&mut graph);
             setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
-            let sdf_generator = graph.build_in(&arena)?;
+            let sdf_generator = graph.build_in(Global)?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -176,7 +188,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -201,7 +218,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let node_id = voxel_sphere_union.add(&mut graph);
             setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
-            let sdf_generator = graph.build_in(&arena)?;
+            let sdf_generator = graph.build_in(Global)?;
 
             let voxel_type_generator = voxel_type
                 .create_generator(&resource_manager.voxel_types)?
@@ -213,7 +230,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -249,7 +271,7 @@ pub fn setup_voxel_objects_for_new_entities(
                     format!("Failed to compile meta SDF graph into atomic graph for voxel generator {generator_id}")
                 })?;
 
-            let sdf_generator = graph.build_in(&arena).with_context(|| {
+            let sdf_generator = graph.build_in(Global).with_context(|| {
                 format!("Failed to build SDF generator from atomic graph for voxel generator {generator_id}")
             })?;
 
@@ -263,7 +285,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -288,7 +315,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let node_id = voxel_box.add(&mut graph);
             setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
-            let sdf_generator = graph.build_in(&arena)?;
+            let sdf_generator = graph.build_in(Global)?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?
@@ -300,7 +327,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -325,7 +357,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let node_id = voxel_sphere.add(&mut graph);
             setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
-            let sdf_generator = graph.build_in(&arena)?;
+            let sdf_generator = graph.build_in(Global)?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?
@@ -337,7 +369,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },
@@ -362,7 +399,7 @@ pub fn setup_voxel_objects_for_new_entities(
             let node_id = voxel_sphere_union.add(&mut graph);
             setup::apply_modifications(&mut graph, node_id, multifractal_noise_modification);
 
-            let sdf_generator = graph.build_in(&arena)?;
+            let sdf_generator = graph.build_in(Global)?;
 
             let voxel_type_generator = voxel_types
                 .create_generator(&resource_manager.voxel_types)?
@@ -374,7 +411,12 @@ pub fn setup_voxel_objects_for_new_entities(
                 voxel_type_generator,
             );
 
-            setup::setup_voxel_object(voxel_manager.object_manager_mut(), &generator, entity_id)?;
+            setup::setup_voxel_object(
+                ctx.thread_pool,
+                voxel_manager.object_manager_mut(),
+                &generator,
+                entity_id,
+            )?;
 
             Ok(HasVoxelObject)
         },

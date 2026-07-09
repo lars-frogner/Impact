@@ -1042,7 +1042,7 @@ define_task!(
             let max_duration = Some(Duration::from_millis(5));
 
             impact_voxel::interaction::systems::execute_fracturing_processes(
-                ctx.thread_pool(),
+                engine.intra_task_thread_pool(),
                 engine.component_metadata_registry(),
                 &mut entity_id_manager,
                 &mut entity_stager,

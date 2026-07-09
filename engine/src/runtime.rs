@@ -47,21 +47,22 @@ impl<UI> Runtime<UI>
 where
     UI: UserInterface + 'static,
 {
-    pub fn new(engine: Engine, user_interface: UI, config: RuntimeConfig) -> Result<Self> {
+    pub fn new(mut engine: Engine, user_interface: UI, config: RuntimeConfig) -> Result<Self> {
         instrumentation::initialize();
         instrumentation::set_thread_name("Main");
+
+        if config.n_intra_task_threads.get() > 1 {
+            let thread_pool = DynamicThreadPool::new_dynamic(
+                config.n_intra_task_threads,
+                config.intra_task_queue_capacity,
+            );
+            engine.set_intra_task_thread_pool(Some(thread_pool));
+        }
 
         let engine = Arc::new(engine);
         let user_interface = Arc::new(user_interface);
 
-        let thread_pool = (config.n_intra_task_threads.get() > 1).then(|| {
-            Arc::new(DynamicThreadPool::new_dynamic(
-                config.n_intra_task_threads,
-                config.intra_task_queue_capacity,
-            ))
-        });
-
-        let ctx = RuntimeContext::new(engine.clone(), user_interface.clone(), thread_pool);
+        let ctx = RuntimeContext::new(engine.clone(), user_interface.clone());
 
         let task_scheduler =
             tasks::create_task_scheduler(ctx, config.n_task_threads, config.task_queue_capacity)?;
