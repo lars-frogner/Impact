@@ -25,8 +25,8 @@ use impact_dev_ui::UserInterfaceConfig;
 use impact_voxel::{
     HasVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
-    mesh::MeshedVoxelObject,
-    object::VoxelObject,
+    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
+    object::{VoxelObject, VoxelObjectBuffers},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -168,7 +168,10 @@ fn generate_next_voxel_object(
 ) -> Option<(MeshedVoxelObject, ModelTransform)> {
     let generator = editor.build_next_voxel_sdf_generator(Global)?;
     Some((
-        MeshedVoxelObject::create(VoxelObject::generate_in_parallel(thread_pool, &generator)),
+        MeshedVoxelObject::create(
+            VoxelObjectMeshBuffers::new(),
+            VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), &generator),
+        ),
         compute_model_transform(&generator),
     ))
 }
@@ -179,7 +182,10 @@ fn generate_next_voxel_object_or_default(
 ) -> (MeshedVoxelObject, ModelTransform) {
     let generator = editor.build_next_voxel_sdf_generator_or_default(Global);
     (
-        MeshedVoxelObject::create(VoxelObject::generate_in_parallel(thread_pool, &generator)),
+        MeshedVoxelObject::create(
+            VoxelObjectMeshBuffers::new(),
+            VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), &generator),
+        ),
         compute_model_transform(&generator),
     )
 }
