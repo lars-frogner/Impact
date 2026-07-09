@@ -137,7 +137,7 @@ inventory = "0.3"
 parking_lot = "0.12"
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }
-tinyfiledialogs = "3.9"
+tinyfiledialogs = { package = "tinyfiledialogs-rs", version = "3.21" }
 tinyvec = { version = "1.9", features = ["alloc", "serde"] }
 
 [lints]
