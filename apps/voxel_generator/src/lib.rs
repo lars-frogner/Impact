@@ -10,14 +10,13 @@ pub use impact;
 pub use impact::{component::gather_roc_type_ids_for_all_components, roc_integration};
 
 use anyhow::Result;
-use editor::{Editor, EditorConfig};
+use editor::EditorConfig;
 use impact::{
     engine::{Engine, EngineConfig},
     impact_alloc::{Allocator, Global},
     impact_geometry::{ModelTransform, ReferenceFrame},
     impact_id::EntityID,
     impact_io,
-    impact_thread::pool::{DynamicThreadPool, ThreadPool},
     runtime::RuntimeConfig,
     window::WindowConfig,
 };
@@ -25,12 +24,9 @@ use impact_dev_ui::UserInterfaceConfig;
 use impact_voxel::{
     HasVoxelObject,
     generation::{ChunkedVoxelGenerator, SDFVoxelGenerator},
-    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
-    object::{VoxelObject, VoxelObjectBuffers},
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -41,7 +37,6 @@ const OBJECT_ENTITY_ID: EntityID = EntityID::hashed_from_str("object");
 #[derive(Debug)]
 pub struct App {
     user_interface: UserInterface,
-    thread_pool: DynamicThreadPool,
     engine: Option<Arc<Engine>>,
 }
 
@@ -57,11 +52,8 @@ pub struct AppConfig {
 
 impl App {
     pub(crate) fn new(user_interface: UserInterface) -> Self {
-        let n_workers = num_threads();
-        let queue_capacity = NonZeroUsize::new(n_workers.get() * 64).unwrap();
         Self {
             user_interface,
-            thread_pool: ThreadPool::new_dynamic(n_workers, queue_capacity),
             engine: None,
         }
     }
@@ -73,10 +65,13 @@ impl App {
     }
 
     fn initialize_voxel_object(&mut self) -> Result<()> {
-        let (voxel_object, model_transform) = generate_next_voxel_object_or_default(
-            &self.thread_pool,
-            self.user_interface.editor_mut(),
-        );
+        let generator = self
+            .user_interface
+            .editor_mut()
+            .build_next_voxel_sdf_generator_or_default(Global);
+
+        let voxel_object = self.engine().generate_voxel_object(&generator);
+        let model_transform = compute_model_transform(&generator);
 
         self.engine()
             .add_voxel_object(OBJECT_ENTITY_ID, voxel_object)?;
@@ -92,17 +87,26 @@ impl App {
     }
 
     fn update_voxel_object(&mut self) -> Result<()> {
-        if let Some((voxel_object, new_model_transform)) =
-            generate_next_voxel_object(&self.thread_pool, self.user_interface.editor_mut())
-        {
-            let engine = self.engine();
+        let Some(generator) = self
+            .user_interface
+            .editor_mut()
+            .build_next_voxel_sdf_generator(Global)
+        else {
+            return Ok(());
+        };
 
-            engine.with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
+        let voxel_object = self.engine().generate_voxel_object(&generator);
+        let new_model_transform = compute_model_transform(&generator);
+
+        self.engine()
+            .with_component_mut(OBJECT_ENTITY_ID, |model_transform| {
                 *model_transform = new_model_transform;
                 Ok(())
             })?;
-            engine.replace_voxel_object(OBJECT_ENTITY_ID, voxel_object);
-        }
+
+        self.engine()
+            .replace_voxel_object(OBJECT_ENTITY_ID, voxel_object);
+
         Ok(())
     }
 }
@@ -162,40 +166,8 @@ impl Default for AppConfig {
     }
 }
 
-fn generate_next_voxel_object(
-    thread_pool: &DynamicThreadPool,
-    editor: &mut Editor,
-) -> Option<(MeshedVoxelObject, ModelTransform)> {
-    let generator = editor.build_next_voxel_sdf_generator(Global)?;
-    Some((
-        MeshedVoxelObject::create(
-            VoxelObjectMeshBuffers::new(),
-            VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), &generator),
-        ),
-        compute_model_transform(&generator),
-    ))
-}
-
-fn generate_next_voxel_object_or_default(
-    thread_pool: &DynamicThreadPool,
-    editor: &mut Editor,
-) -> (MeshedVoxelObject, ModelTransform) {
-    let generator = editor.build_next_voxel_sdf_generator_or_default(Global);
-    (
-        MeshedVoxelObject::create(
-            VoxelObjectMeshBuffers::new(),
-            VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), &generator),
-        ),
-        compute_model_transform(&generator),
-    )
-}
-
 fn compute_model_transform<A: Allocator>(generator: &SDFVoxelGenerator<A>) -> ModelTransform {
     ModelTransform::with_offset(
         generator.voxel_extent() * generator.grid_center().as_vector().compact(),
     )
-}
-
-fn num_threads() -> NonZeroUsize {
-    std::thread::available_parallelism().unwrap_or_else(|_| NonZeroUsize::new(4).unwrap())
 }

@@ -42,11 +42,13 @@ use impact_rendering::{
 };
 use impact_voxel::{
     VoxelObjectID,
+    generation::ChunkedVoxelGenerator,
     interaction::{
         absorption::{AbsorbedVoxels, VoxelAbsorbingCapsuleID, VoxelAbsorbingSphereID},
         fracturing::FracturePointGenerator,
     },
-    mesh::MeshedVoxelObject,
+    mesh::{MeshedVoxelObject, VoxelObjectMeshBuffers},
+    object::{VoxelObject, VoxelObjectBuffers},
 };
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -645,6 +647,22 @@ impl Engine {
             })?;
 
         f(generator)
+    }
+
+    pub fn generate_voxel_object<G>(&self, generator: &G) -> MeshedVoxelObject
+    where
+        G: ChunkedVoxelGenerator + Sync,
+    {
+        let voxel_object = if let Some(thread_pool) = self.intra_task_thread_pool() {
+            VoxelObject::generate_in_parallel(thread_pool, VoxelObjectBuffers::new(), generator)
+        } else {
+            VoxelObject::generate(VoxelObjectBuffers::new(), generator)
+        };
+
+        let meshed_voxel_object =
+            MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), voxel_object);
+
+        meshed_voxel_object
     }
 
     pub fn add_voxel_object(
