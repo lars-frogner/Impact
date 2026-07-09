@@ -340,6 +340,7 @@ enum BlockSize {
     One,
     Two,
     Four,
+    Eight,
 }
 
 impl VoxelObjectCollisionProbes {
@@ -380,6 +381,13 @@ impl VoxelObjectCollisionProbes {
                     object, mesh,
                 );
             }
+            BlockSize::Eight => {
+                const LOG2_BLOCK_SIZE: usize = 3;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                self.recompute_for_all_chunks_with_block_size::<LOG2_BLOCK_SIZE, CHUNK_BLOCK_COUNT>(
+                    object, mesh,
+                );
+            }
         }
     }
 
@@ -407,6 +415,14 @@ impl VoxelObjectCollisionProbes {
             }
             BlockSize::Four => {
                 const LOG2_BLOCK_SIZE: usize = 2;
+                const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
+                self.sync_with_voxel_object_and_mesh_with_block_size::<
+                    LOG2_BLOCK_SIZE,
+                    CHUNK_BLOCK_COUNT,
+                >(object, mesh);
+            }
+            BlockSize::Eight => {
+                const LOG2_BLOCK_SIZE: usize = 3;
                 const CHUNK_BLOCK_COUNT: usize = chunk_block_count(LOG2_BLOCK_SIZE);
                 self.sync_with_voxel_object_and_mesh_with_block_size::<
                     LOG2_BLOCK_SIZE,
@@ -443,7 +459,9 @@ impl VoxelObjectCollisionProbes {
         // We want the largest block size we can get away with without missing
         // mesh features. The worst outcome if the block size is too large is
         // that only one side of a thin object gets collision probes.
-        if min_extent_in_voxels >= 2 * 4 {
+        if min_extent_in_voxels >= 2 * 8 {
+            BlockSize::Eight
+        } else if min_extent_in_voxels >= 2 * 4 {
             BlockSize::Four
         } else if min_extent_in_voxels >= 2 * 2 {
             BlockSize::Two
@@ -850,7 +868,12 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
         return;
     };
 
-    if meshed_voxel_object_a.mesh().n_vertices() <= meshed_voxel_object_b.mesh().n_vertices() {
+    // There might be cases where checking one against the other is enough, but
+    // until we have a good heuristic for that, we check both
+    let check_a_against_b = true;
+    let check_b_against_a = true;
+
+    if check_a_against_b {
         let grid_dimensions_for_b = object_b.chunk_counts().map(|count| count * CHUNK_SIZE);
 
         // We expand the intersected AABB by one voxel because the surface can
@@ -926,7 +949,9 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                 );
             }
         }
-    } else {
+    }
+
+    if check_b_against_a {
         let grid_dimensions_for_a = object_a.chunk_counts().map(|count| count * CHUNK_SIZE);
 
         let intersection_aabb_in_b = object::aabb_from_voxel_ranges(
