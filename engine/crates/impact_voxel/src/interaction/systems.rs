@@ -10,8 +10,13 @@ use crate::{
     },
     voxel_types::VoxelTypeRegistry,
 };
+use impact_alloc::{
+    arena::{ArenaPool, PoolArena},
+    avec,
+};
 use impact_ecs::{
-    component::{ComponentArray, ComponentFlags, ComponentStorage},
+    archetype::ArchetypeComponents,
+    component::{Component, ComponentArray, ComponentFlags, ComponentStorage, SingleInstance},
     metadata::ComponentMetadataRegistry,
     query,
     world::{EntityStager, World as ECSWorld},
@@ -168,10 +173,79 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
 
         let mut components = Vec::with_capacity(parent_components.n_component_types());
 
-        components.push(ComponentStorage::from_single_instance_view(&HasVoxelObject));
-        components.push(ComponentStorage::from_single_instance_view(
-            &HasDynamicRigidBody,
-        ));
+        self.derive_components_for_extracted_voxel_object_entities(
+            1,
+            parent_entity_id,
+            parent_components,
+            |storage| {
+                components.push(SingleInstance::new(storage));
+            },
+        );
+
+        self.entity_stager
+            .stage_entity_for_creation_with_id(new_entity_id, components)
+            .expect("Failed to stage voxel object entity for creation");
+    }
+
+    fn create_extracted_voxel_object_entities(
+        &mut self,
+        new_entity_ids: Vec<EntityID>,
+        parent_entity_id: EntityID,
+    ) {
+        if new_entity_ids.is_empty() {
+            return;
+        }
+        let parent_components = self.ecs_world.entity(parent_entity_id).cloned_components();
+
+        let mut components = Vec::with_capacity(parent_components.n_component_types());
+
+        self.derive_components_for_extracted_voxel_object_entities(
+            new_entity_ids.len(),
+            parent_entity_id,
+            parent_components,
+            |storage| {
+                components.push(storage);
+            },
+        );
+
+        self.entity_stager
+            .stage_entities_for_creation_with_ids(new_entity_ids, components)
+            .expect("Failed to stage voxel object entities for creation");
+    }
+
+    fn remove_voxel_object_entity(&mut self, entity_id: EntityID) {
+        self.entity_stager.stage_entity_for_removal(entity_id);
+    }
+}
+
+impl<'a> ECSVoxelObjectInteractionContext<'a> {
+    fn derive_components_for_extracted_voxel_object_entities(
+        &mut self,
+        n_entities: usize,
+        parent_entity_id: EntityID,
+        parent_components: ArchetypeComponents<SingleInstance<ComponentStorage>>,
+        mut add_component_storage: impl FnMut(ComponentStorage),
+    ) {
+        #[inline]
+        fn create_storage<T: Component>(
+            arena: &PoolArena,
+            n_entities: usize,
+            value: T,
+        ) -> ComponentStorage {
+            if n_entities == 1 {
+                ComponentStorage::from_view(&[value])
+            } else {
+                let instances = avec![in arena; value; n_entities];
+                ComponentStorage::from_view(instances.as_slice())
+            }
+        }
+
+        assert_ne!(n_entities, 0);
+
+        let arena = ArenaPool::get_arena();
+
+        add_component_storage(create_storage(&arena, n_entities, HasVoxelObject));
+        add_component_storage(create_storage(&arena, n_entities, HasDynamicRigidBody));
 
         if parent_components
             .archetype()
@@ -185,9 +259,9 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                 && let LocalCollidable::VoxelObject(local_collidable) =
                     descriptor.local_collidable()
             {
-                components.push(ComponentStorage::from_single_instance_view(
-                    &VoxelCollidable::new(descriptor.kind(), *local_collidable.response_params()),
-                ));
+                let collidable =
+                    VoxelCollidable::new(descriptor.kind(), *local_collidable.response_params());
+                add_component_storage(create_storage(&arena, n_entities, collidable));
             }
         }
 
@@ -203,9 +277,8 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                 .constant_accelerations()
                 .get_generator(&parent_force_generator_id)
             {
-                components.push(ComponentStorage::from_single_instance_view(
-                    &force_generator.acceleration,
-                ));
+                let acceleration = force_generator.acceleration;
+                add_component_storage(create_storage(&arena, n_entities, acceleration));
             }
         }
 
@@ -219,17 +292,9 @@ impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> 
                 .metadata(component_storage.component_id());
 
             if metadata.flags.contains(ComponentFlags::INHERITABLE) {
-                components.push(component_storage);
+                add_component_storage(component_storage.duplicate_instance(n_entities));
             }
         }
-
-        self.entity_stager
-            .stage_entity_for_creation_with_id(new_entity_id, components)
-            .expect("Failed to stage voxel object entity for creation");
-    }
-
-    fn remove_voxel_object_entity(&mut self, entity_id: EntityID) {
-        self.entity_stager.stage_entity_for_removal(entity_id);
     }
 }
 

@@ -712,32 +712,36 @@ impl FracturingProcess {
         voxel_object_manager: &mut VoxelObjectManager,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
-        voxel_object_id: VoxelObjectID,
+        original_voxel_object_id: VoxelObjectID,
     ) where
         C: VoxelObjectInteractionContext,
     {
         assert!(self.is_complete());
 
-        let entity_id = voxel_object_id.as_entity_id();
-        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+        let original_entity_id = original_voxel_object_id.as_entity_id();
+        let original_rigid_body_id = DynamicRigidBodyID::from_entity_id(original_entity_id);
 
-        if !voxel_object_manager.has_voxel_object(voxel_object_id) {
-            log::warn!("Tried to complete fracturing for missing voxel object: {voxel_object_id}");
+        if !voxel_object_manager.has_voxel_object(original_voxel_object_id) {
+            log::warn!(
+                "Tried to complete fracturing for missing voxel object: {original_voxel_object_id}"
+            );
             self.reset();
             return;
         };
-        let Some(physics_context) = voxel_object_manager.get_physics_context(voxel_object_id)
+        let Some(physics_context) =
+            voxel_object_manager.get_physics_context(original_voxel_object_id)
         else {
             log::warn!(
-                "Tried to execute fracturing for voxel object {voxel_object_id} \
+                "Tried to execute fracturing for voxel object {original_voxel_object_id} \
                  with missing physics context"
             );
             self.reset();
             return;
         };
-        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) else {
+        let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(original_rigid_body_id)
+        else {
             log::warn!(
-                "Tried to execute fracturing for voxel object {voxel_object_id} \
+                "Tried to execute fracturing for voxel object {original_voxel_object_id} \
                  with missing rigid body"
             );
             self.reset();
@@ -753,7 +757,11 @@ impl FracturingProcess {
         let original_linear_velocity = rigid_body.compute_velocity();
         let angular_velocity = rigid_body.compute_angular_velocity();
 
-        for mut fracture_object in self.fracture_objects.drain(..) {
+        let entity_ids = entity_id_manager.provide_id_vec(self.fracture_objects.len());
+
+        for (&entity_id, mut fracture_object) in
+            entity_ids.iter().zip(self.fracture_objects.drain(..))
+        {
             let voxel_object = fracture_object.meshed_voxel_object.object();
 
             let dynamics = interaction::determine_extracted_voxel_object_dynamics(
@@ -769,7 +777,7 @@ impl FracturingProcess {
 
             let anchors = interaction::get_anchors_on_extracted_voxel_object(
                 anchor_manager,
-                rigid_body_id,
+                original_rigid_body_id,
                 voxel_object,
                 &dynamics.coordinate_changes,
             );
@@ -782,8 +790,6 @@ impl FracturingProcess {
             };
 
             interaction::spawn_extracted_voxel_object(
-                context,
-                entity_id_manager,
                 voxel_object_manager,
                 rigid_body_manager,
                 anchor_manager,
@@ -792,7 +798,8 @@ impl FracturingProcess {
             );
         }
 
-        context.remove_voxel_object_entity(entity_id);
+        context.create_extracted_voxel_object_entities(entity_ids, original_entity_id);
+        context.remove_voxel_object_entity(original_entity_id);
 
         self.reset();
     }

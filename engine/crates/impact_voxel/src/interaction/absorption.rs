@@ -542,7 +542,7 @@ pub fn apply_absorption<C>(
             }
 
             if let Some(disconnected_components) = disconnected_components {
-                interaction::spawn_extracted_voxel_object(
+                interaction::spawn_extracted_voxel_object_and_entity(
                     context,
                     entity_id_manager,
                     voxel_object_manager,
