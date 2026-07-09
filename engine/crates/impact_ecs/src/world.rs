@@ -53,6 +53,7 @@ pub struct EntityEntry<'a> {
 #[derive(Debug)]
 pub struct EntityStager {
     to_create_with_id: Vec<EntityToCreateWithID>,
+    to_create_multiple_with_ids: Vec<EntitiesToCreateWithIDs>,
     to_create: Vec<EntityToCreate>,
     to_create_multiple: Vec<EntitiesToCreate>,
     to_update: Vec<EntityToUpdate>,
@@ -64,6 +65,14 @@ pub struct EntityStager {
 pub struct EntityToCreateWithID {
     pub entity_id: EntityID,
     pub components: SingleInstance<ArchetypeComponentStorage>,
+}
+
+/// The components of one or more entities of the same archetype that have yet
+/// to be created under specific IDs.
+#[derive(Debug)]
+pub struct EntitiesToCreateWithIDs {
+    pub entity_ids: Vec<EntityID>,
+    pub components: ArchetypeComponentStorage,
 }
 
 /// The components of an entity that has yet to be created.
@@ -873,6 +882,7 @@ impl EntityStager {
     pub fn new() -> Self {
         Self {
             to_create_with_id: Vec::new(),
+            to_create_multiple_with_ids: Vec::new(),
             to_create: Vec::new(),
             to_create_multiple: Vec::new(),
             to_update: Vec::new(),
@@ -897,6 +907,32 @@ impl EntityStager {
             entity_id,
             components,
         });
+
+        Ok(())
+    }
+
+    /// Stages the entities of the same archetype defined by the given
+    /// components for later creation under the given IDs.
+    pub fn stage_entities_for_creation_with_ids<A, E>(
+        &mut self,
+        entity_ids: Vec<EntityID>,
+        components: impl TryInto<ArchetypeComponents<A>, Error = E>,
+    ) -> Result<()>
+    where
+        A: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components.try_into().map_err(E::into)?.into_storage();
+
+        if entity_ids.len() != components.instance_count() {
+            bail!("Mismatching number of IDs and component instances for staged entities");
+        }
+
+        self.to_create_multiple_with_ids
+            .push(EntitiesToCreateWithIDs {
+                entity_ids,
+                components,
+            });
 
         Ok(())
     }
@@ -957,6 +993,12 @@ impl EntityStager {
     /// since the last time this method was called.
     pub fn drain_entities_to_create_with_id(&mut self) -> Drain<'_, EntityToCreateWithID> {
         self.to_create_with_id.drain(..)
+    }
+
+    /// Returns a draining iterator over multi-entities staged for creation with
+    /// IDs since the last time this method was called.
+    pub fn drain_entities_to_create_with_ids(&mut self) -> Drain<'_, EntitiesToCreateWithIDs> {
+        self.to_create_multiple_with_ids.drain(..)
     }
 
     /// Returns a draining iterator over single entities staged for creation

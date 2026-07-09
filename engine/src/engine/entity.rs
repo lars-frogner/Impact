@@ -6,7 +6,8 @@ use anyhow::Result;
 use impact_ecs::{
     component::{ComponentCategory, ComponentID},
     world::{
-        EntitiesToCreate, EntityToCreate, EntityToCreateWithID, EntityToUpdate, PrototypeEntities,
+        EntitiesToCreate, EntitiesToCreateWithIDs, EntityToCreate, EntityToCreateWithID,
+        EntityToUpdate, PrototypeEntities,
     },
 };
 use impact_id::EntityID;
@@ -27,6 +28,14 @@ impl Engine {
         } in entity_stager.drain_entities_to_create_with_id()
         {
             self.create_entity_with_id(entity_id, components)?;
+        }
+
+        for EntitiesToCreateWithIDs {
+            entity_ids,
+            components,
+        } in entity_stager.drain_entities_to_create_with_ids()
+        {
+            self.create_entities_with_ids(entity_ids, components)?;
         }
 
         for EntityToCreate { components } in entity_stager.drain_single_entities_to_create() {

@@ -112,19 +112,15 @@ impl Engine {
             .stage_entity_for_removal(entity_id);
     }
 
-    pub fn create_entity_with_id<CA, E>(
+    pub fn create_entity_with_id<AC, E>(
         &self,
         entity_id: EntityID,
-        components: impl TryInto<SingleInstance<ArchetypeComponents<CA>>, Error = E>,
+        components: impl TryInto<SingleInstance<ArchetypeComponents<AC>>, Error = E>,
     ) -> Result<()>
     where
-        CA: ComponentArray,
+        AC: ComponentArray,
         E: Into<anyhow::Error>,
     {
-        self.entity_id_manager
-            .olock()
-            .register_id_if_absent(entity_id);
-
         let mut entities = PrototypeEntities::new_single(entity_id, components)?;
 
         setup::perform_setup_for_new_entities(self, &mut entities)?;
@@ -132,6 +128,38 @@ impl Engine {
         self.ecs_world
             .owrite()
             .create_prototype_entities(entities)?;
+
+        self.entity_id_manager
+            .olock()
+            .register_id_if_absent(entity_id);
+
+        Ok(())
+    }
+
+    pub fn create_entities_with_ids<AC, E>(
+        &self,
+        entity_ids: Vec<EntityID>,
+        components: impl TryInto<ArchetypeComponents<AC>, Error = E>,
+    ) -> Result<()>
+    where
+        AC: ComponentArray,
+        E: Into<anyhow::Error>,
+    {
+        let components = components.try_into().map_err(E::into)?;
+
+        let mut entities = PrototypeEntities::new(entity_ids, components)?;
+
+        setup::perform_setup_for_new_entities(self, &mut entities)?;
+
+        let entity_ids = self
+            .ecs_world
+            .owrite()
+            .create_prototype_entities(entities)?;
+
+        let mut entity_id_manager = self.entity_id_manager.olock();
+        for entity_id in entity_ids {
+            entity_id_manager.register_id_if_absent(entity_id);
+        }
 
         Ok(())
     }
