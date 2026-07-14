@@ -254,7 +254,7 @@ fn applyNormalBias(
     distanceFromCamera: f32,
     ) -> vec3f {
     let lightDirectionDotNormalVector = -lightSpaceNormalVector.z;
-    return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 - lightDirectionDotNormalVector, 0.0, 1.0) * max(1e-1, 1e-2 * distanceFromCamera);
+    return lightSpacePosition + lightSpaceNormalVector * clamp(1.0 + lightDirectionDotNormalVector, 5e-2, 1.0) * max(2e-1, 2e-2 * distanceFromCamera);
 }
 
 fn determineCascadeIdxMax1(partitionDepths: vec4f, depth: f32) -> i32 {
