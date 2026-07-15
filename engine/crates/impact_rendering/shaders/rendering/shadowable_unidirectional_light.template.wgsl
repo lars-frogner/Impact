@@ -348,6 +348,8 @@ fn computePCSSLightAccessFactor(
     );
 }
 
+const SHADOW_PENUMBRA_SAMPLE_COUNT: u32 = 8u;
+
 fn computeShadowPenumbraExtent(
     array_index: i32,
     tanAngularRadius: f32,
@@ -357,20 +359,19 @@ fn computeShadowPenumbraExtent(
     centerTextureCoords: vec2f,
     referenceDepth: f32,
 ) -> f32 {
-    let diskRadius: f32 = 0.4 * worldSpaceToLightNDCSpaceXYScale;
-    let sampleCount: u32 = 8u;
+    let sampleDiskRadius: f32 = 0.4 * worldSpaceToLightNDCSpaceXYScale;
 
-    let inverseSqrtSampleCount = inverseSqrt(f32(sampleCount));
+    let inverseSqrtSampleCount = inverseSqrt(f32(SHADOW_PENUMBRA_SAMPLE_COUNT));
 
     var averageOccludingDepth: f32 = 0.0;
     var occludingDepthCount: f32 = 0.0;
 
-    for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
+    for (var sampleIdx: u32 = 0u; sampleIdx < SHADOW_PENUMBRA_SAMPLE_COUNT; sampleIdx++) {
         let sampleTextureCoords = generateVogelDiskSampleCoords(
             vogelDiskBaseAngle,
             inverseSqrtSampleCount,
             sampleIdx,
-        ) * diskRadius + centerTextureCoords;
+        ) * sampleDiskRadius + centerTextureCoords;
 
         let sampledDepth = textureSample(
             cascadedShadowMapTexture,
@@ -383,6 +384,20 @@ fn computeShadowPenumbraExtent(
             averageOccludingDepth += sampledDepth;
             occludingDepthCount += 1.0;
         }
+    }
+
+    // Add a sample at the center of the disk (the Vogel samples do not include
+    // the exact center) so that any genuinely occluded fragment detects its
+    // occluder regardless of the occluder's size.
+    let centerDepth = textureSample(
+        cascadedShadowMapTexture,
+        cascadedShadowMapSampler,
+        centerTextureCoords,
+        array_index,
+    ).r;
+    if centerDepth < referenceDepth {
+        averageOccludingDepth += centerDepth;
+        occludingDepthCount += 1.0;
     }
 
     let minPenumbraExtent = 0.01;

@@ -340,8 +340,18 @@ fn computeShadowPenumbraExtent(
     var occludingDepthCount: f32 = 0.0;
 
     for (var sampleIdx: u32 = 0u; sampleIdx < SHADOW_PENUMBRA_SAMPLE_COUNT; sampleIdx++) {
-        let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
-        let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
+        let sampleOnPerpendicularDisk = generateVogelDiskSampleCoords(
+            vogelDiskBaseAngle,
+            inverseSqrtSampleCount,
+            sampleIdx,
+        ) * sampleDiskRadius;
+
+        let sampleDisplacement = generateSampleDisplacement(
+            displacement,
+            displacementNormalDirection,
+            displacementBinormalDirection,
+            sampleOnPerpendicularDisk,
+        );
 
         let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement).r;
 
@@ -349,6 +359,15 @@ fn computeShadowPenumbraExtent(
             averageOccludingDepth += sampledDepth;
             occludingDepthCount += 1.0;
         }
+    }
+
+    // Add a sample at the center of the disk (the Vogel samples do not include
+    // the exact center) so that any genuinely occluded fragment detects its
+    // occluder regardless of the occluder's size.
+    let centerDepth = textureSample(shadowMapTexture, shadowMapSampler, displacement).r;
+    if centerDepth < referenceDepth {
+        averageOccludingDepth += centerDepth;
+        occludingDepthCount += 1.0;
     }
 
     let minPenumbraExtent = 0.01;
@@ -399,10 +418,22 @@ fn computeVogelDiskComparisonSampleAverage(
     var sampleAverage: f32 = 0.0;
 
     for (var sampleIdx: u32 = 0u; sampleIdx < sampleCount; sampleIdx++) {
-        let sampleOnPerpendicularDisk = sampleDiskRadius * generateVogelDiskSampleCoords(vogelDiskBaseAngle, inverseSqrtSampleCount, sampleIdx);
-        let sampleDisplacement = generateSampleDisplacement(displacement, displacementNormalDirection, displacementBinormalDirection, sampleOnPerpendicularDisk);
+        let sampleOnPerpendicularDisk = generateVogelDiskSampleCoords(
+            vogelDiskBaseAngle,
+            inverseSqrtSampleCount,
+            sampleIdx,
+        ) * sampleDiskRadius;
+
+        let sampleDisplacement = generateSampleDisplacement(
+            displacement,
+            displacementNormalDirection,
+            displacementBinormalDirection,
+            sampleOnPerpendicularDisk,
+        );
+
 
         let sampledDepth = textureSample(shadowMapTexture, shadowMapSampler, sampleDisplacement).r;
+
         if (sampledDepth >= referenceDepth) {
             sampleAverage += invSampleCount;
         }
