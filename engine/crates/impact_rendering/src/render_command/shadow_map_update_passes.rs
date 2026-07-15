@@ -472,7 +472,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             STANDARD_FRONT_FACE,
             Some(wgpu::Face::Back),
             wgpu::PolygonMode::Fill,
-            false,
+            true,
             None,
             "Unidirectional light shadow map update render pipeline",
         );
@@ -564,7 +564,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 STANDARD_FRONT_FACE,
                 Some(wgpu::Face::Back),
                 wgpu::PolygonMode::Fill,
-                false,
+                true,
                 None,
                 "Unidirectional light shadow map update render pipeline",
             );
