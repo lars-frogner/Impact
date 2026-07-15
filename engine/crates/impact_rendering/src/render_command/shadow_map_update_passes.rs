@@ -425,7 +425,12 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 }
 
 impl UnidirectionalLightShadowMapUpdatePasses {
-    const CLEAR_COLOR: wgpu::Color = wgpu::Color::WHITE;
+    const CLEAR_COLOR: wgpu::Color = wgpu::Color {
+        r: f64::INFINITY,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
 
     pub fn new(
         graphics_device: &GraphicsDevice,
