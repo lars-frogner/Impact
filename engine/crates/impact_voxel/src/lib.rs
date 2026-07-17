@@ -27,17 +27,15 @@ use impact_scene::model::ModelInstanceManager;
 use mesh::MeshedVoxelObject;
 use object::inertia::VoxelObjectInertialPropertyManager;
 use roc_integration::roc;
-use std::{
-    fmt,
-    hash::Hash,
-    num::NonZeroU32,
-    ops::Neg,
-    path::{Path, PathBuf},
-};
+use std::{fmt, hash::Hash, ops::Neg, path::Path};
 use utils::{Dimension, Side};
 use voxel_types::VoxelType;
 
-use crate::{interaction::VoxelInteractionManager, mesh::MeshedVoxelObjectBuffers};
+use crate::{
+    interaction::{VoxelInteractionConfig, VoxelInteractionManager},
+    mesh::MeshedVoxelObjectBuffers,
+    voxel_types::VoxelTypeConfig,
+};
 
 define_entity_id_newtype! {
     /// Identifier for a [`VoxelObject`](crate::chunks::VoxelObject) in a
@@ -147,12 +145,10 @@ pub struct VoxelObjectPhysicsContext {
     derive(serde::Serialize, serde::Deserialize),
     serde(default)
 )]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct VoxelConfig {
-    pub texture_resolution: NonZeroU32,
-    /// Path to the RON file containing the specification of each voxel type.
-    /// If [`None`], a single voxel type called "Default" will be defined.
-    pub voxel_types_path: Option<PathBuf>,
+    pub types: VoxelTypeConfig,
+    pub interaction: VoxelInteractionConfig,
 }
 
 impl VoxelSignedDistance {
@@ -480,11 +476,11 @@ impl Voxel {
 impl_InstanceFeature!(VoxelObjectID);
 
 impl VoxelManager {
-    /// Creates a new voxel manager with no state.
-    pub fn new() -> Self {
+    /// Creates a new voxel manager with no state and the given configuration.
+    pub fn new(config: VoxelConfig) -> Self {
         Self {
             object_manager: VoxelObjectManager::new(),
-            interaction_manager: VoxelInteractionManager::new(),
+            interaction_manager: VoxelInteractionManager::new(config.interaction),
             object_buffer_pool: VoxelObjectBufferPool::new(),
         }
     }
@@ -770,18 +766,7 @@ impl VoxelConfig {
     /// Resolves all paths in the configuration by prepending the given root
     /// path to all paths.
     pub fn resolve_paths(&mut self, root_path: &Path) {
-        if let Some(voxel_types_path) = self.voxel_types_path.as_mut() {
-            *voxel_types_path = root_path.join(&voxel_types_path);
-        }
-    }
-}
-
-impl Default for VoxelConfig {
-    fn default() -> Self {
-        Self {
-            texture_resolution: NonZeroU32::new(256).unwrap(),
-            voxel_types_path: None,
-        }
+        self.types.resolve_paths(root_path);
     }
 }
 

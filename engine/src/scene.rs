@@ -10,7 +10,7 @@ use impact_scene::{
     model::{ModelInstanceManager, ModelInstanceManagerState},
     skybox::Skybox,
 };
-use impact_voxel::VoxelManager;
+use impact_voxel::{VoxelConfig, VoxelManager};
 use parking_lot::RwLock;
 
 /// Container for data needed to render a scene.
@@ -32,6 +32,7 @@ impl Scene {
         entity_id_manager: &mut EntityIDManager,
         camera_context: CameraContext,
         model_instance_manager: ModelInstanceManager,
+        voxel_config: VoxelConfig,
     ) -> Self {
         let scene_graph_root_node_id = SceneGroupID::from_entity_id(entity_id_manager.provide_id());
         let initial_model_instance_manager_state = model_instance_manager.record_state();
@@ -39,7 +40,7 @@ impl Scene {
             skybox: RwLock::new(None),
             camera_manager: RwLock::new(CameraManager::new(camera_context)),
             light_manager: RwLock::new(LightManager::new()),
-            voxel_manager: RwLock::new(VoxelManager::new()),
+            voxel_manager: RwLock::new(VoxelManager::new(voxel_config)),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
             intersection_manager: RwLock::new(IntersectionManager::new()),

@@ -117,7 +117,7 @@ impl Engine {
         let voxel_type_registry = VoxelTypeRegistry::from_config(
             &mut texture_registry,
             &mut sampler_registry,
-            config.voxel,
+            config.voxel.types.clone(),
         )?;
 
         let mut resource_manager = ResourceManager::new(
@@ -146,6 +146,7 @@ impl Engine {
             &mut entity_id_manager,
             camera_context,
             model_instance_manager,
+            config.voxel,
         );
 
         let graphics_device = Arc::new(graphics.device);
