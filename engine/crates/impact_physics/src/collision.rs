@@ -281,20 +281,19 @@ impl<C: Collidable> CollisionWorld<C> {
             return;
         }
 
-        for CachedCollision {
-            collidable_a_id,
-            collidable_b_id,
-            contact_manifold,
-        } in &self.cached_collisions
-        {
-            let Some(descriptor_a) = self.get_collidable_descriptor(*collidable_a_id) else {
+        for cached_collision in &self.cached_collisions {
+            let Some(descriptor_a) =
+                self.get_collidable_descriptor(cached_collision.collidable_a_id)
+            else {
                 continue;
             };
             if descriptor_a.kind == CollidableKind::Phantom {
                 continue;
             }
 
-            let Some(descriptor_b) = self.get_collidable_descriptor(*collidable_b_id) else {
+            let Some(descriptor_b) =
+                self.get_collidable_descriptor(cached_collision.collidable_b_id)
+            else {
                 continue;
             };
             if descriptor_b.kind == CollidableKind::Phantom {
@@ -310,7 +309,7 @@ impl<C: Collidable> CollisionWorld<C> {
             f(Collision {
                 collidable_a: descriptor_a,
                 collidable_b: descriptor_b,
-                contact_manifold,
+                contact_manifold: &cached_collision.contact_manifold,
             });
         }
     }

@@ -7,7 +7,7 @@ use super::{
 use crate::{
     anchor::AnchorManager,
     constraint::{
-        ConstraintID,
+        ConstrainedBodyManager, ConstraintID,
         contact::{ContactID, PreparedContact},
         spherical_joint::{PreparedSphericalJoint, SphericalJoint},
     },
@@ -25,8 +25,7 @@ use std::{
 /// A Sequential Impulse constraint solver.
 #[derive(Clone, Debug)]
 pub struct ConstraintSolver {
-    bodies: Vec<ConstrainedBody>,
-    body_index_map: KeyIndexMapper<TypedRigidBodyID>,
+    body_manager: ConstrainedBodyManager,
     contacts: ConstraintCache<ContactID, PreparedContact>,
     spherical_joints: ConstraintCache<ConstraintID, PreparedSphericalJoint>,
     config: ConstraintSolverConfig,
@@ -90,8 +89,7 @@ impl ConstraintSolver {
     /// parameters.
     pub fn new(config: ConstraintSolverConfig) -> Self {
         Self {
-            bodies: Vec::new(),
-            body_index_map: KeyIndexMapper::new(),
+            body_manager: ConstrainedBodyManager::new(),
             contacts: ConstraintCache::new(),
             spherical_joints: ConstraintCache::new(),
             config,
@@ -107,7 +105,7 @@ impl ConstraintSolver {
     }
 
     pub fn prepared_body_count(&self) -> usize {
-        self.bodies.len()
+        self.body_manager.n_bodies()
     }
 
     pub fn config(&self) -> &ConstraintSolverConfig {
@@ -182,9 +180,7 @@ impl ConstraintSolver {
         &mut self,
         rigid_body_manager: &RigidBodyManager,
     ) {
-        for (rigid_body_id, constrained_body) in
-            self.body_index_map.key_at_each_idx().zip(&mut self.bodies)
-        {
+        for (rigid_body_id, constrained_body) in self.body_manager.bodies_with_ids_mut() {
             synchronize_prepared_constrained_body_velocities(
                 rigid_body_manager,
                 rigid_body_id,
@@ -207,21 +203,21 @@ impl ConstraintSolver {
     /// starting the above procedure.
     pub fn compute_constrained_velocities(&mut self) {
         apply_warm_impulses_for_body_pair_constraints(
-            &mut self.bodies,
+            self.body_manager.bodies_mut(),
             self.contacts.constraints(),
         );
         apply_warm_impulses_for_body_pair_constraints(
-            &mut self.bodies,
+            self.body_manager.bodies_mut(),
             self.spherical_joints.constraints(),
         );
 
         for _ in 0..self.config.n_iterations {
             apply_impulses_sequentially_for_body_pair_constraints(
-                &mut self.bodies,
+                self.body_manager.bodies_mut(),
                 self.contacts.constraints_mut(),
             );
             apply_impulses_sequentially_for_body_pair_constraints(
-                &mut self.bodies,
+                self.body_manager.bodies_mut(),
                 self.spherical_joints.constraints_mut(),
             );
         }
@@ -242,12 +238,12 @@ impl ConstraintSolver {
     pub fn compute_corrected_configurations(&mut self) {
         for _ in 0..self.config.n_positional_correction_iterations {
             apply_positional_corrections_sequentially_for_body_pair_constraints(
-                &mut self.bodies,
+                self.body_manager.bodies_mut(),
                 self.contacts.constraints(),
                 self.config.positional_correction_factor,
             );
             apply_positional_corrections_sequentially_for_body_pair_constraints(
-                &mut self.bodies,
+                self.body_manager.bodies_mut(),
                 self.spherical_joints.constraints(),
                 self.config.positional_correction_factor,
             );
@@ -262,9 +258,7 @@ impl ConstraintSolver {
         &self,
         rigid_body_manager: &mut RigidBodyManager,
     ) {
-        for (rigid_body_id, constrained_body) in
-            self.body_index_map.key_at_each_idx().zip(&self.bodies)
-        {
+        for (rigid_body_id, constrained_body) in self.body_manager.bodies_with_ids() {
             apply_constrained_body_velocities_and_configuration_to_rigid_body(
                 rigid_body_manager,
                 rigid_body_id,
@@ -277,8 +271,7 @@ impl ConstraintSolver {
     /// should always be done before starting to prepare constraints for the
     /// next solve.
     pub fn clear_prepared_bodies(&mut self) {
-        self.bodies.clear();
-        self.body_index_map.clear();
+        self.body_manager.clear();
     }
 
     /// Removes all stored constraint solver state.
@@ -295,11 +288,16 @@ impl ConstraintSolver {
         rigid_body_b_id: TypedRigidBodyID,
         constraint: &C,
     ) -> Option<BodyPairConstraint<C::Prepared>> {
-        let (body_a_idx, body_b_idx) =
-            self.prepare_body_pair(rigid_body_manager, rigid_body_a_id, rigid_body_b_id)?;
+        let (body_a_idx, body_b_idx) = self.body_manager.add_body_pair(
+            rigid_body_manager,
+            rigid_body_a_id,
+            rigid_body_b_id,
+        )?;
 
-        let prepared_constraint =
-            constraint.prepare(&self.bodies[body_a_idx], &self.bodies[body_b_idx]);
+        let prepared_constraint = constraint.prepare(
+            self.body_manager.body(body_a_idx),
+            self.body_manager.body(body_b_idx),
+        );
 
         Some(BodyPairConstraint {
             body_a_idx,
@@ -318,15 +316,15 @@ impl ConstraintSolver {
     ) -> Option<BodyPairConstraint<C::Prepared>> {
         let (anchor_a, anchor_b) = constraint.resolve_anchors(anchor_manager)?;
 
-        let (body_a_idx, body_b_idx) = self.prepare_body_pair(
+        let (body_a_idx, body_b_idx) = self.body_manager.add_body_pair(
             rigid_body_manager,
             anchor_a.rigid_body_id(),
             anchor_b.rigid_body_id(),
         )?;
 
         let prepared_constraint = constraint.prepare(
-            &self.bodies[body_a_idx],
-            &self.bodies[body_b_idx],
+            self.body_manager.body(body_a_idx),
+            self.body_manager.body(body_b_idx),
             anchor_a,
             anchor_b,
         );
@@ -338,44 +336,6 @@ impl ConstraintSolver {
             accumulated_impulses: Default::default(),
             flags: ConstraintFlags::WAS_PREPARED,
         })
-    }
-
-    fn prepare_body_pair(
-        &mut self,
-        rigid_body_manager: &RigidBodyManager,
-        rigid_body_a_id: TypedRigidBodyID,
-        rigid_body_b_id: TypedRigidBodyID,
-    ) -> Option<(usize, usize)> {
-        let body_a_idx = self.prepare_body(rigid_body_manager, rigid_body_a_id)?;
-        let body_b_idx = self.prepare_body(rigid_body_manager, rigid_body_b_id)?;
-        Some((body_a_idx, body_b_idx))
-    }
-
-    fn prepare_body(
-        &mut self,
-        rigid_body_manager: &RigidBodyManager,
-        rigid_body_id: TypedRigidBodyID,
-    ) -> Option<usize> {
-        if let Some(body_idx) = self.body_index_map.get(rigid_body_id) {
-            return Some(body_idx);
-        }
-
-        let constrained_body = match rigid_body_id {
-            TypedRigidBodyID::Dynamic(id) => {
-                let rigid_body = rigid_body_manager.get_dynamic_rigid_body(id)?;
-                ConstrainedBody::from_dynamic_rigid_body(rigid_body)
-            }
-            TypedRigidBodyID::Kinematic(id) => {
-                let rigid_body = rigid_body_manager.get_kinematic_rigid_body(id)?;
-                ConstrainedBody::from_kinematic_rigid_body(rigid_body)
-            }
-        };
-
-        let body_idx = self.bodies.len();
-        self.bodies.push(constrained_body);
-        self.body_index_map.push_key(rigid_body_id);
-
-        Some(body_idx)
     }
 }
 
@@ -520,15 +480,16 @@ fn apply_impulses_sequentially_for_body_pair_constraints<P: PreparedTwoBodyConst
         // an inequality constraint. To update the accumulated impulse, we
         // add the incremental impulses and apply the clamping required to
         // make the constraint an inequality constraint.
-        let old_accumulated_impulses = constraint.accumulated_impulses;
-        constraint.accumulated_impulses =
+        let new_accumulated_impulses =
             constraint.clamp_impulses(constraint.accumulated_impulses + corrective_impulses);
 
         // To update the current velocities to be consistent with the new
         // accumulated impulses, we compute the difference from the old
         // accumulated impulses and apply that
         let clamped_corrective_impulses =
-            constraint.accumulated_impulses - old_accumulated_impulses;
+            new_accumulated_impulses - constraint.accumulated_impulses;
+
+        constraint.accumulated_impulses = new_accumulated_impulses;
 
         constraint.apply_impulses_to_body_pair(body_a, body_b, clamped_corrective_impulses);
     }

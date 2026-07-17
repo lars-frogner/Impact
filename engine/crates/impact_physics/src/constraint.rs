@@ -12,7 +12,8 @@ use crate::{
 };
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
-use impact_containers::HashMap;
+use impact_alloc::{AVec, Allocator, Global};
+use impact_containers::{HashMap, KeyIndexMapper, RandomState};
 use impact_intersection::IntersectionManager;
 use impact_math::{matrix::Matrix3C, vector::Vector3C};
 use solver::{ConstraintSolver, ConstraintSolverConfig};
@@ -120,10 +121,18 @@ trait PreparedTwoBodyConstraint {
     );
 }
 
+/// Manages copies of the states of all rigid bodies involved in a constraint
+/// solve.
+#[derive(Clone, Debug)]
+pub struct ConstrainedBodyManager<A: Allocator = Global> {
+    bodies: AVec<ConstrainedBody, A>,
+    body_index_map: KeyIndexMapper<TypedRigidBodyID, RandomState, A>,
+}
+
 /// The relevant properties and state of a rigid body required for constraint
 /// solving. The state is updated iteratively as constraints are being solved.
 #[derive(Clone, Debug)]
-struct ConstrainedBody {
+pub struct ConstrainedBody {
     /// Inverse of the body's mass.
     pub inverse_mass: f32,
     /// Inverse of the body's inertia tensor (in world space).
@@ -273,8 +282,129 @@ impl ConstraintManager {
     }
 }
 
+impl ConstrainedBodyManager {
+    /// Creates a new manager with no constrained bodies.
+    pub fn new() -> Self {
+        Self::new_in(Global)
+    }
+}
+
+impl<A: Allocator> ConstrainedBodyManager<A> {
+    /// Creates a new manager with no constrained bodies, using the given
+    /// allocator.
+    pub fn new_in(alloc: A) -> Self {
+        Self {
+            bodies: AVec::new_in(alloc),
+            body_index_map: KeyIndexMapper::new_in(alloc),
+        }
+    }
+
+    /// Returns the current number of constrained bodies.
+    pub fn n_bodies(&self) -> usize {
+        self.bodies.len()
+    }
+
+    /// Returns a reference to the constrained body at the given index in
+    /// [`Self::bodies`].
+    #[inline]
+    pub fn body(&self, idx: usize) -> &ConstrainedBody {
+        &self.bodies[idx]
+    }
+
+    /// Returns the ID of the body at the given index in [`Self::bodies`].
+    ///
+    /// # Panics
+    /// If the index is out of bounds.
+    #[inline]
+    pub fn body_id(&self, idx: usize) -> TypedRigidBodyID {
+        self.body_index_map.key_at_idx(idx)
+    }
+
+    /// Returns the slice of constrained bodies in the manager.
+    #[inline]
+    pub fn bodies(&self) -> &[ConstrainedBody] {
+        &self.bodies
+    }
+
+    /// Returns a mutable reference to the slice of constrained bodies in the
+    /// manager.
+    #[inline]
+    pub fn bodies_mut(&mut self) -> &mut [ConstrainedBody] {
+        &mut self.bodies
+    }
+
+    /// Returns an iterator over each constrained body with its typed ID.
+    pub fn bodies_with_ids(&self) -> impl Iterator<Item = (TypedRigidBodyID, &ConstrainedBody)> {
+        self.body_index_map.key_at_each_idx().zip(&self.bodies)
+    }
+
+    /// Returns an iterator over each constrained body (as a mutable reference)
+    /// with its typed ID.
+    pub fn bodies_with_ids_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (TypedRigidBodyID, &mut ConstrainedBody)> {
+        self.body_index_map.key_at_each_idx().zip(&mut self.bodies)
+    }
+
+    /// Add the state of each of the given rigid bodies to the manager if it
+    /// exists and was not already added.
+    ///
+    /// # Returns
+    /// The indices of both the added bodies in [`Self::bodies`] if they both
+    /// exist.
+    pub fn add_body_pair(
+        &mut self,
+        rigid_body_manager: &RigidBodyManager,
+        rigid_body_a_id: TypedRigidBodyID,
+        rigid_body_b_id: TypedRigidBodyID,
+    ) -> Option<(usize, usize)> {
+        let body_a_idx = self.add_body(rigid_body_manager, rigid_body_a_id);
+        let body_b_idx = self.add_body(rigid_body_manager, rigid_body_b_id);
+        Some((body_a_idx?, body_b_idx?))
+    }
+
+    /// Add the state of the given rigid body to the manager if it exists and
+    /// was not already added.
+    ///
+    /// # Returns
+    /// The index of the added body in [`Self::bodies`] if the body exists.
+    pub fn add_body(
+        &mut self,
+        rigid_body_manager: &RigidBodyManager,
+        rigid_body_id: TypedRigidBodyID,
+    ) -> Option<usize> {
+        if let Some(body_idx) = self.body_index_map.get(rigid_body_id) {
+            return Some(body_idx);
+        }
+
+        let constrained_body = match rigid_body_id {
+            TypedRigidBodyID::Dynamic(id) => {
+                let rigid_body = rigid_body_manager.get_dynamic_rigid_body(id)?;
+                ConstrainedBody::from_dynamic_rigid_body(rigid_body)
+            }
+            TypedRigidBodyID::Kinematic(id) => {
+                let rigid_body = rigid_body_manager.get_kinematic_rigid_body(id)?;
+                ConstrainedBody::from_kinematic_rigid_body(rigid_body)
+            }
+        };
+
+        let body_idx = self.bodies.len();
+        self.bodies.push(constrained_body);
+        self.body_index_map.push_key(rigid_body_id);
+
+        Some(body_idx)
+    }
+
+    /// Removes all stored constrained bodies.
+    pub fn clear(&mut self) {
+        self.bodies.clear();
+        self.body_index_map.clear();
+    }
+}
+
 impl ConstrainedBody {
-    fn from_dynamic_rigid_body(body: &DynamicRigidBody) -> Self {
+    /// Extracts the state of a dynamic rigid body.
+    pub fn from_dynamic_rigid_body(body: &DynamicRigidBody) -> Self {
         let inverse_inertia_tensor = body
             .inertia_tensor()
             .aligned()
@@ -290,8 +420,9 @@ impl ConstrainedBody {
         }
     }
 
-    /// We can treat kinematic bodies as having infinite mass.
-    fn from_kinematic_rigid_body(body: &KinematicRigidBody) -> Self {
+    /// Extracts the state of a kinematic rigid body. We can treat kinematic
+    /// bodies as having infinite mass.
+    pub fn from_kinematic_rigid_body(body: &KinematicRigidBody) -> Self {
         Self {
             inverse_mass: 0.0,
             inverse_inertia_tensor: Matrix3C::zeros(),
@@ -305,14 +436,14 @@ impl ConstrainedBody {
     /// Transforms the given point to world space from the coordinate system
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
-    fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
+    pub fn transform_point_from_body_to_world_frame(&self, point: &Position) -> Position {
         self.orientation.aligned().rotate_point(point) + self.position.aligned().as_vector()
     }
 
     /// Transforms the given point from world space to the coordinate system
     /// that moves and rotates with the rigid body, with its origin at the
     /// body's center of mass.
-    fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
+    pub fn transform_point_from_world_to_body_frame(&self, point: &Position) -> Position {
         self.orientation
             .aligned()
             .inverse()
