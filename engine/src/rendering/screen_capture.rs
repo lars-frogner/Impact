@@ -51,6 +51,12 @@ impl ScreenCapturer {
         }
     }
 
+    /// Whether [`Self::request_screenshot_save`] was called after the last
+    /// [`Self::save_screenshot_if_requested`] call.
+    pub fn has_pending_screenshot_save(&self) -> bool {
+        self.screenshot_save_requested.load(Ordering::Acquire)
+    }
+
     /// Schedule a screenshot capture for the next
     /// [`Self::save_screenshot_if_requested`] call.
     pub fn request_screenshot_save(&self) {

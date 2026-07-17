@@ -14,7 +14,7 @@ pub use command::{UICommand, UICommandQueue};
 use anyhow::Result;
 use impact::{
     command::{
-        AdminCommand, controller::ControlAdminCommand,
+        AdminCommand, capture::CaptureAdminCommand, controller::ControlAdminCommand,
         instrumentation::InstrumentationAdminCommand, physics::PhysicsAdminCommand,
         uils::ToActiveState,
     },
@@ -76,6 +76,12 @@ pub trait CustomElements {
 #[derive(Clone, Copy, Debug)]
 pub struct NoCustomElements;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RequestedScreenshotAction {
+    None,
+    HideUI,
+}
+
 impl UserInterface {
     pub fn new(config: UserInterfaceConfig) -> Self {
         Self {
@@ -123,10 +129,8 @@ impl UserInterface {
         custom_elements: &mut impl CustomElements,
     ) -> FullOutput {
         let mut output = ctx.run(input, |ctx| {
-            // Return without adding any output if we requested a screenshot in
-            // the previous frame and should hide the UI
-            if self.screenshot_requested && self.config.hide_ui_during_screenshots {
-                self.screenshot_requested = false;
+            if self.handle_requested_screenshot(engine) == RequestedScreenshotAction::HideUI {
+                // Return without adding any output
                 return;
             }
 
@@ -192,6 +196,29 @@ impl UserInterface {
         self.execute_commands(&mut output, engine, command_queue);
 
         output
+    }
+
+    fn handle_requested_screenshot(&mut self, engine: &Engine) -> RequestedScreenshotAction {
+        // In order to be able to hide the UI while capturing a screenshot, we
+        // can't enqueue the screenshot save command on the same frame that the
+        // screenshot is requested, since we have already began updating the UI
+        // rendering state for the frame at the point when we receive the
+        // request. Instead, we detect the request here (one frame later),
+        // enqueue the command, and abort before updating any UI rendering state
+        // so that the UI is hidden. We keep it hidden until we detect that the
+        // screenshot save has been performed.
+        if self.screenshot_requested {
+            engine
+                .enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveScreenshot));
+            self.screenshot_requested = false;
+
+            if self.config.hide_ui_during_screenshots {
+                return RequestedScreenshotAction::HideUI;
+            }
+        } else if self.config.hide_ui_during_screenshots && engine.has_pending_screenshot_save() {
+            return RequestedScreenshotAction::HideUI;
+        }
+        RequestedScreenshotAction::None
     }
 }
 
