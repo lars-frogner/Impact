@@ -10,6 +10,29 @@ use impact_gpu::{
 use impact_io::image;
 use std::path::Path;
 
+/// Colors for rendering texels with non-finite values when saving a texture as
+/// an image.
+#[cfg(feature = "png")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NonFiniteColors {
+    /// RGB color for texels that are NaN.
+    pub nan: [u8; 3],
+    /// RGB color for texels that are positive infinity.
+    pub infinity: [u8; 3],
+    /// RGB color for texels that are negative infinity.
+    pub neg_infinity: [u8; 3],
+}
+
+impl Default for NonFiniteColors {
+    fn default() -> Self {
+        Self {
+            nan: [255, 0, 255],
+            infinity: [0, 255, 255],
+            neg_infinity: [255, 255, 0],
+        }
+    }
+}
+
 /// Creates a texture for the image file at the given path, using the given
 /// configuration parameters. Mipmaps will be generated automatically.
 ///
@@ -59,37 +82,11 @@ pub fn save_texture_as_png_file(
     mip_level: u32,
     texture_array_idx: u32,
     already_gamma_corrected: bool,
+    non_finite_colors: Option<NonFiniteColors>,
     output_path: impl AsRef<Path>,
 ) -> Result<()> {
     use anyhow::{anyhow, bail};
-    use impact_alloc::{AVec, avec};
     use impact_gpu::wgpu;
-
-    fn byte_to_float(byte: u8) -> f32 {
-        f32::from(byte) / 255.0
-    }
-
-    fn float_to_byte(float: f32) -> u8 {
-        (float.clamp(0.0, 1.0) * 255.0) as u8
-    }
-
-    fn linear_to_srgb(linear_value: f32) -> f32 {
-        if linear_value <= 0.0031308 {
-            linear_value * 12.92
-        } else {
-            (linear_value.abs().powf(1.0 / 2.4) * 1.055) - 0.055
-        }
-    }
-
-    fn linear_depth_to_srgb(linear_value: f32) -> f32 {
-        // To make small depths darker, we invert before gamma correcting, then
-        // invert back
-        1.0 - linear_to_srgb(1.0 - linear_value)
-    }
-
-    fn linear_byte_to_srgb(linear_value: u8) -> u8 {
-        float_to_byte(linear_to_srgb(byte_to_float(linear_value)))
-    }
 
     if mip_level >= texture.mip_level_count() {
         return Err(anyhow!(
@@ -113,192 +110,345 @@ pub fn save_texture_as_png_file(
         .size()
         .mip_level_size(mip_level, texture.dimension());
 
-    let arena = ArenaPool::get_arena();
+    let params = PngSaveParams {
+        graphics_device,
+        texture,
+        format,
+        mip_level,
+        texture_array_idx,
+        already_gamma_corrected,
+        non_finite_colors,
+        width: size.width,
+        height: size.height,
+        output_path,
+    };
 
     match format {
         wgpu::TextureFormat::Rgba8Unorm
         | wgpu::TextureFormat::Rgba8UnormSrgb
         | wgpu::TextureFormat::Bgra8Unorm
         | wgpu::TextureFormat::Bgra8UnormSrgb
-        | wgpu::TextureFormat::R8Unorm => {
-            let mut data = AVec::new_in(&arena);
-            impact_gpu::texture::extract_texture_data_into(
-                &mut data,
-                graphics_device.device(),
-                graphics_device.queue(),
-                texture,
-                mip_level,
-                texture_array_idx,
-            )?;
-
-            if matches!(
-                format,
-                wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-            ) {
-                convert_bgra8_to_rgba8(&mut data);
-            }
-
-            if matches!(format, wgpu::TextureFormat::R8Unorm) {
-                if !already_gamma_corrected {
-                    for pixel in &mut data {
-                        *pixel = linear_byte_to_srgb(*pixel);
-                    }
-                }
-
-                image::save_luma8_as_png(&data, size.width, size.height, output_path)?;
-            } else {
-                let (rgba_data, rem) = data.as_chunks_mut::<4>();
-                assert!(rem.is_empty());
-
-                if matches!(
-                    format,
-                    wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
-                ) && !already_gamma_corrected
-                {
-                    for rgba in rgba_data {
-                        rgba[0] = linear_byte_to_srgb(rgba[0]);
-                        rgba[1] = linear_byte_to_srgb(rgba[1]);
-                        rgba[2] = linear_byte_to_srgb(rgba[2]);
-                        rgba[3] = 255;
-                    }
-                } else {
-                    for rgba in rgba_data {
-                        rgba[3] = 255;
-                    }
-                }
-
-                image::save_rgba8_as_png(&data, size.width, size.height, output_path)?;
-            }
-        }
+        | wgpu::TextureFormat::R8Unorm => save_u8_texture_as_png(params),
         wgpu::TextureFormat::Rgba16Float | wgpu::TextureFormat::R16Float => {
-            let mut data = AVec::new_in(&arena);
-            impact_gpu::texture::extract_converted_texture_data_into::<_, half::f16, f32>(
-                &mut data,
-                graphics_device.device(),
-                graphics_device.queue(),
-                texture,
-                mip_level,
-                texture_array_idx,
-            )?;
-
-            if !already_gamma_corrected {
-                for value in &mut data {
-                    *value = linear_to_srgb(value.clamp(0.0, 1.0));
-                }
-            }
-
-            if matches!(format, wgpu::TextureFormat::R16Float) {
-                let luma8_data: Vec<u8> = data.into_iter().map(float_to_byte).collect();
-
-                impact_io::image::save_luma8_as_png(
-                    &luma8_data,
-                    size.width,
-                    size.height,
-                    output_path,
-                )?;
-            } else {
-                let (rgba_f32_data, rem) = data.as_chunks::<4>();
-                assert!(rem.is_empty());
-
-                let mut rgba8_data = Vec::with_capacity(data.len());
-
-                for &[r, g, b, _] in rgba_f32_data {
-                    rgba8_data.push(float_to_byte(r));
-                    rgba8_data.push(float_to_byte(g));
-                    rgba8_data.push(float_to_byte(b));
-                    rgba8_data.push(255);
-                }
-
-                impact_io::image::save_rgba8_as_png(
-                    &rgba8_data,
-                    size.width,
-                    size.height,
-                    output_path,
-                )?;
-            }
+            save_f16_texture_as_png(params)
         }
         wgpu::TextureFormat::Depth32Float
         | wgpu::TextureFormat::Depth32FloatStencil8
         | wgpu::TextureFormat::Rgba32Float
         | wgpu::TextureFormat::R32Float
-        | wgpu::TextureFormat::Rg32Float => {
-            let mut data = AVec::<f32, _>::new_in(&arena);
-            impact_gpu::texture::extract_texture_data_into(
-                &mut data,
-                graphics_device.device(),
-                graphics_device.queue(),
-                texture,
-                mip_level,
-                texture_array_idx,
-            )?;
+        | wgpu::TextureFormat::Rg32Float => save_f32_texture_as_png(params),
+        _ => bail!(
+            "Unsupported texture format for saving as image file: {:?}",
+            format
+        ),
+    }
+}
 
-            if matches!(format, wgpu::TextureFormat::Rg32Float) {
-                let (rg_data, rem) = data.as_chunks::<2>();
-                assert!(rem.is_empty());
+#[cfg(feature = "png")]
+struct PngSaveParams<'a, P: AsRef<Path>> {
+    graphics_device: &'a GraphicsDevice,
+    texture: &'a impact_gpu::wgpu::Texture,
+    format: impact_gpu::wgpu::TextureFormat,
+    mip_level: u32,
+    texture_array_idx: u32,
+    already_gamma_corrected: bool,
+    non_finite_colors: Option<NonFiniteColors>,
+    width: u32,
+    height: u32,
+    output_path: P,
+}
 
-                let mut rgba_data = avec![in &arena; 0.0; data.len() * 2];
+#[cfg(feature = "png")]
+fn byte_to_float(byte: u8) -> f32 {
+    f32::from(byte) / 255.0
+}
 
-                for (i, &[r, g]) in rg_data.iter().enumerate() {
-                    rgba_data[i * 4] = r;
-                    rgba_data[i * 4 + 1] = g;
-                    rgba_data[i * 4 + 2] = 0.0;
-                    rgba_data[i * 4 + 3] = 1.0;
-                }
-                data = rgba_data;
-            }
+#[cfg(feature = "png")]
+fn float_to_byte(float: f32) -> u8 {
+    (float.clamp(0.0, 1.0) * 255.0) as u8
+}
 
-            if matches!(
-                format,
-                wgpu::TextureFormat::Depth32Float
-                    | wgpu::TextureFormat::Depth32FloatStencil8
-                    | wgpu::TextureFormat::R32Float
-            ) {
-                if !already_gamma_corrected {
-                    if matches!(format, wgpu::TextureFormat::R32Float) {
-                        for value in &mut data {
-                            *value = linear_to_srgb(value.clamp(0.0, 1.0));
-                        }
-                    } else {
-                        for value in &mut data {
-                            *value = linear_depth_to_srgb(*value);
-                        }
-                    }
-                }
+#[cfg(feature = "png")]
+fn linear_to_srgb(linear_value: f32) -> f32 {
+    if linear_value <= 0.0031308 {
+        linear_value * 12.92
+    } else {
+        (linear_value.abs().powf(1.0 / 2.4) * 1.055) - 0.055
+    }
+}
 
-                let luma8_data: Vec<u8> = data.into_iter().map(float_to_byte).collect();
+#[cfg(feature = "png")]
+fn linear_depth_to_srgb(linear_value: f32) -> f32 {
+    // To make small depths darker, we invert before gamma correcting, then
+    // invert back
+    1.0 - linear_to_srgb(1.0 - linear_value)
+}
 
-                impact_io::image::save_luma8_as_png(
-                    &luma8_data,
-                    size.width,
-                    size.height,
-                    output_path,
-                )?;
-            } else {
-                if !already_gamma_corrected {
-                    for value in &mut data {
-                        *value = linear_to_srgb(value.clamp(0.0, 1.0));
-                    }
-                }
+#[cfg(feature = "png")]
+fn linear_byte_to_srgb(linear_value: u8) -> u8 {
+    float_to_byte(linear_to_srgb(byte_to_float(linear_value)))
+}
 
-                let luma8_data: Vec<u8> = data.into_iter().map(float_to_byte).collect();
+#[cfg(feature = "png")]
+fn gamma_correct_linear_in_place(data: &mut [f32]) {
+    for value in data {
+        *value = linear_to_srgb(value.clamp(0.0, 1.0));
+    }
+}
 
-                impact_io::image::save_rgba8_as_png(
-                    &luma8_data,
-                    size.width,
-                    size.height,
-                    output_path,
-                )?;
-            }
-        }
-        _ => {
-            bail!(
-                "Unsupported texture format for saving as image file: {:?}",
-                format
-            );
-        }
+#[cfg(feature = "png")]
+fn save_u8_texture_as_png(params: PngSaveParams<'_, impl AsRef<Path>>) -> Result<()> {
+    use impact_alloc::AVec;
+    use impact_gpu::wgpu;
+
+    let arena = ArenaPool::get_arena();
+
+    let mut data = AVec::<u8, _>::new_in(&arena);
+
+    impact_gpu::texture::extract_texture_data_into(
+        &mut data,
+        params.graphics_device.device(),
+        params.graphics_device.queue(),
+        params.texture,
+        params.mip_level,
+        params.texture_array_idx,
+    )?;
+
+    if matches!(
+        params.format,
+        wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
+    ) {
+        convert_bgra8_to_rgba8(&mut data);
     }
 
-    Ok(())
+    if matches!(params.format, wgpu::TextureFormat::R8Unorm) {
+        if !params.already_gamma_corrected {
+            for pixel in &mut data {
+                *pixel = linear_byte_to_srgb(*pixel);
+            }
+        }
+        image::save_luma8_as_png(&data, params.width, params.height, params.output_path)
+    } else {
+        let (rgba_data, rem) = data.as_chunks_mut::<4>();
+        assert!(rem.is_empty());
+
+        let gamma_correct = !params.already_gamma_corrected
+            && matches!(
+                params.format,
+                wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
+            );
+
+        if gamma_correct {
+            for rgba in rgba_data {
+                rgba[0] = linear_byte_to_srgb(rgba[0]);
+                rgba[1] = linear_byte_to_srgb(rgba[1]);
+                rgba[2] = linear_byte_to_srgb(rgba[2]);
+                rgba[3] = 255;
+            }
+        } else {
+            for rgba in rgba_data {
+                rgba[3] = 255;
+            }
+        }
+
+        image::save_rgba8_as_png(&data, params.width, params.height, params.output_path)
+    }
+}
+
+#[cfg(feature = "png")]
+fn save_f16_texture_as_png(params: PngSaveParams<'_, impl AsRef<Path>>) -> Result<()> {
+    use impact_alloc::AVec;
+    use impact_gpu::wgpu;
+
+    let arena = ArenaPool::get_arena();
+
+    let mut data = AVec::<f32, _>::new_in(&arena);
+
+    impact_gpu::texture::extract_converted_texture_data_into::<_, half::f16, f32>(
+        &mut data,
+        params.graphics_device.device(),
+        params.graphics_device.queue(),
+        params.texture,
+        params.mip_level,
+        params.texture_array_idx,
+    )?;
+
+    if let Some(colors) = params.non_finite_colors {
+        let components_per_texel = if matches!(params.format, wgpu::TextureFormat::R16Float) {
+            1
+        } else {
+            4
+        };
+        let rgba8_data = convert_f32_to_rgba8_with_non_finite_colors(
+            &arena,
+            &data,
+            components_per_texel,
+            params.already_gamma_corrected,
+            GammaCorrection::Standard,
+            colors,
+        );
+        image::save_rgba8_as_png(&rgba8_data, params.width, params.height, params.output_path)
+    } else {
+        if !params.already_gamma_corrected {
+            gamma_correct_linear_in_place(&mut data);
+        }
+
+        if matches!(params.format, wgpu::TextureFormat::R16Float) {
+            let mut luma8_data = AVec::with_capacity_in(data.len(), &arena);
+            luma8_data.extend(data.into_iter().map(float_to_byte));
+            image::save_luma8_as_png(&luma8_data, params.width, params.height, params.output_path)
+        } else {
+            let (rgba_f32_data, rem) = data.as_chunks::<4>();
+            assert!(rem.is_empty());
+
+            let mut rgba8_data = AVec::with_capacity_in(data.len(), &arena);
+            for &[r, g, b, _] in rgba_f32_data {
+                rgba8_data.push(float_to_byte(r));
+                rgba8_data.push(float_to_byte(g));
+                rgba8_data.push(float_to_byte(b));
+                rgba8_data.push(255);
+            }
+
+            image::save_rgba8_as_png(&rgba8_data, params.width, params.height, params.output_path)
+        }
+    }
+}
+
+#[cfg(feature = "png")]
+fn save_f32_texture_as_png(params: PngSaveParams<'_, impl AsRef<Path>>) -> Result<()> {
+    use impact_alloc::{AVec, avec};
+    use impact_gpu::wgpu;
+
+    let arena = ArenaPool::get_arena();
+
+    let mut data = AVec::<f32, _>::new_in(&arena);
+
+    impact_gpu::texture::extract_texture_data_into(
+        &mut data,
+        params.graphics_device.device(),
+        params.graphics_device.queue(),
+        params.texture,
+        params.mip_level,
+        params.texture_array_idx,
+    )?;
+
+    // Expand two-channel data to four channels so it can be saved as RGBA.
+    if matches!(params.format, wgpu::TextureFormat::Rg32Float) {
+        let (rg_data, rem) = data.as_chunks::<2>();
+        assert!(rem.is_empty());
+
+        let mut rgba_data = avec![in &arena; 0.0; data.len() * 2];
+        for (i, &[r, g]) in rg_data.iter().enumerate() {
+            rgba_data[i * 4] = r;
+            rgba_data[i * 4 + 1] = g;
+            rgba_data[i * 4 + 2] = 0.0;
+            rgba_data[i * 4 + 3] = 1.0;
+        }
+        data = rgba_data;
+    }
+
+    let is_depth = matches!(
+        params.format,
+        wgpu::TextureFormat::Depth32Float | wgpu::TextureFormat::Depth32FloatStencil8
+    );
+
+    let is_single_channel = is_depth || matches!(params.format, wgpu::TextureFormat::R32Float);
+
+    if let Some(colors) = params.non_finite_colors {
+        let components_per_texel = if is_single_channel { 1 } else { 4 };
+        let gamma_correction = if is_depth {
+            GammaCorrection::Depth
+        } else {
+            GammaCorrection::Standard
+        };
+        let rgba8_data = convert_f32_to_rgba8_with_non_finite_colors(
+            &arena,
+            &data,
+            components_per_texel,
+            params.already_gamma_corrected,
+            gamma_correction,
+            colors,
+        );
+        image::save_rgba8_as_png(&rgba8_data, params.width, params.height, params.output_path)
+    } else {
+        if is_single_channel {
+            if !params.already_gamma_corrected {
+                if matches!(params.format, wgpu::TextureFormat::R32Float) {
+                    gamma_correct_linear_in_place(&mut data);
+                } else {
+                    for value in &mut data {
+                        *value = linear_depth_to_srgb(*value);
+                    }
+                }
+            }
+
+            let mut luma8_data = AVec::with_capacity_in(data.len(), &arena);
+            luma8_data.extend(data.into_iter().map(float_to_byte));
+            image::save_luma8_as_png(&luma8_data, params.width, params.height, params.output_path)
+        } else {
+            if !params.already_gamma_corrected {
+                gamma_correct_linear_in_place(&mut data);
+            }
+            let mut rgba8_data = AVec::with_capacity_in(data.len(), &arena);
+            rgba8_data.extend(data.into_iter().map(float_to_byte));
+            image::save_rgba8_as_png(&rgba8_data, params.width, params.height, params.output_path)
+        }
+    }
+}
+
+#[cfg(feature = "png")]
+#[derive(Clone, Copy)]
+enum GammaCorrection {
+    Standard,
+    Depth,
+}
+
+#[cfg(feature = "png")]
+fn convert_f32_to_rgba8_with_non_finite_colors<A>(
+    alloc: A,
+    data: &[f32],
+    components_per_texel: usize,
+    already_gamma_corrected: bool,
+    gamma_correction: GammaCorrection,
+    colors: NonFiniteColors,
+) -> impact_alloc::AVec<u8, A>
+where
+    A: impact_alloc::Allocator,
+{
+    use impact_alloc::AVec;
+
+    assert!(components_per_texel == 1 || components_per_texel == 4);
+
+    let convert = |mut value: f32| {
+        if !already_gamma_corrected {
+            value = match gamma_correction {
+                GammaCorrection::Standard => linear_to_srgb(value.clamp(0.0, 1.0)),
+                GammaCorrection::Depth => linear_depth_to_srgb(value),
+            };
+        }
+        float_to_byte(value)
+    };
+
+    let texel_count = data.len() / components_per_texel;
+    let mut rgba8_data = AVec::with_capacity_in(texel_count * 4, alloc);
+
+    for texel in data.chunks_exact(components_per_texel) {
+        let [r, g, b] = if texel.iter().any(|value| value.is_nan()) {
+            colors.nan
+        } else if texel.contains(&f32::INFINITY) {
+            colors.infinity
+        } else if texel.contains(&f32::NEG_INFINITY) {
+            colors.neg_infinity
+        } else if components_per_texel == 1 {
+            let value = convert(texel[0]);
+            [value, value, value]
+        } else {
+            [convert(texel[0]), convert(texel[1]), convert(texel[2])]
+        };
+        rgba8_data.extend_from_slice(&[r, g, b, 255]);
+    }
+
+    rgba8_data
 }
 
 /// Loads and returns the `Postcard` serialized metadata header of the lookup

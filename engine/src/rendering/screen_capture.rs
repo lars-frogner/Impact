@@ -121,6 +121,7 @@ impl ScreenCapturer {
                 0,
                 0,
                 true,
+                Some(Default::default()),
                 output_path,
             )?;
         }
