@@ -421,15 +421,18 @@ where
             // We know this constraint from the previous solve
             let old_constraint = &self.constraints[idx];
 
-            // If the geometry has not changed significantly, the impulses
-            // obtained from the previous solve are likely still close to the
-            // solution, so we initialize the constraint with the old impulses
-            // as an initial guess, but with a weight to mitigate overshoot
-            if prepared_constraint.can_use_warm_impulses_from(old_constraint) {
-                self.constraints[idx] = prepared_constraint.with_accumulated_impulses(
-                    old_constraint.accumulated_impulses * old_impulse_weight,
-                );
-            }
+            self.constraints[idx] =
+                if prepared_constraint.can_use_warm_impulses_from(old_constraint) {
+                    // If the geometry has not changed significantly, the impulses
+                    // obtained from the previous solve are likely still close to the
+                    // solution, so we initialize the constraint with the old impulses
+                    // as an initial guess, but with a weight to mitigate overshoot
+                    prepared_constraint.with_accumulated_impulses(
+                        old_constraint.accumulated_impulses * old_impulse_weight,
+                    )
+                } else {
+                    prepared_constraint
+                };
         } else {
             self.constraints.push(prepared_constraint);
             self.constraint_index_map.push_key(key);
