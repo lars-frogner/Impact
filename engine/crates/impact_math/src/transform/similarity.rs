@@ -5,7 +5,7 @@ use crate::{
     point::Point3,
     quaternion::{UnitQuaternion, UnitQuaternionC},
     transform::{Isometry3, Isometry3C},
-    vector::{Vector3, Vector3C},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -212,6 +212,13 @@ impl Similarity3 {
     #[inline]
     pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
         self.rotation.rotate_vector(&(self.scaling * vector))
+    }
+
+    /// Applies the transform to the given unit vector. The translation and
+    /// scaling of the transform is not applied to unit vectors.
+    #[inline]
+    pub fn transform_unit_vector(&self, unit_vector: &UnitVector3) -> UnitVector3 {
+        self.rotation.rotate_unit_vector(unit_vector)
     }
 
     /// Applies the inverse of this transform to the given point. For a single
