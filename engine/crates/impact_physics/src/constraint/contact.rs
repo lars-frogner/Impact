@@ -93,37 +93,64 @@ pub struct ContactImpulses {
     bitangent: f32,
 }
 
+impl ContactImpulses {
+    /// The impulse magnitude along the contact normal.
+    #[inline]
+    pub fn normal(&self) -> f32 {
+        self.normal
+    }
+
+    /// The impulse magnitude along the contact tangent.
+    #[inline]
+    pub fn tangent(&self) -> f32 {
+        self.tangent
+    }
+
+    /// The impulse magnitude along the contact bitangent.
+    #[inline]
+    pub fn bitangent(&self) -> f32 {
+        self.bitangent
+    }
+}
+
 impl ContactManifold {
+    #[inline]
     pub fn new() -> Self {
         Self {
             contacts: TinyVec::new(),
         }
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.contacts.is_empty()
     }
 
+    #[inline]
     pub fn contacts(&self) -> &[ContactWithID] {
         self.contacts.as_slice()
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.contacts.clear();
     }
 
+    #[inline]
     pub fn add_contact(&mut self, contact: ContactWithID) {
         self.contacts.push(contact);
     }
 }
 
 impl Default for ContactManifold {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Default for ContactWithID {
+    #[inline]
     fn default() -> Self {
         Self {
             id: ContactID(u64::MAX),
@@ -133,10 +160,12 @@ impl Default for ContactWithID {
 }
 
 impl ContactID {
+    #[inline]
     pub fn from_two_u64(a: u64, b: u64) -> Self {
         Self(splitmix::random_u64_from_two_states(a, b))
     }
 
+    #[inline]
     pub fn from_two_u64_and_n_indices<const N: usize>(a: u64, b: u64, indices: [usize; N]) -> Self {
         let mut id = splitmix::random_u64_from_two_states(a, b);
         for index in indices {
@@ -151,18 +180,21 @@ impl ContactGeometry {
     /// Returns world space position of the point on body A that penetrates
     /// deepest into body B along the surface normal from
     /// [`Self::position_on_b`].
+    #[inline]
     pub fn position_on_a(&self) -> Position {
         self.position - self.penetration_depth * self.surface_normal
     }
 
     /// Returns world space position of the point on body B that penetrates
     /// deepest into body A.
+    #[inline]
     pub fn position_on_b(&self) -> Position {
         self.position
     }
 }
 
 impl Default for ContactGeometry {
+    #[inline]
     fn default() -> Self {
         Self {
             position: Position::origin(),
@@ -461,6 +493,7 @@ impl Default for ContactImpulses {
 impl Add for ContactImpulses {
     type Output = Self;
 
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         Self {
             normal: self.normal + rhs.normal,
@@ -473,6 +506,7 @@ impl Add for ContactImpulses {
 impl Sub for ContactImpulses {
     type Output = Self;
 
+    #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
         Self {
             normal: self.normal - rhs.normal,
@@ -485,6 +519,7 @@ impl Sub for ContactImpulses {
 impl Mul<f32> for ContactImpulses {
     type Output = Self;
 
+    #[inline]
     fn mul(self, rhs: f32) -> Self::Output {
         Self {
             normal: self.normal * rhs,
@@ -494,10 +529,12 @@ impl Mul<f32> for ContactImpulses {
     }
 }
 
+#[inline]
 fn compute_point_velocity(body: &ConstrainedBody, disp: &Vector3) -> Velocity {
     body.velocity.aligned() + body.angular_velocity.aligned().cross(disp)
 }
 
+#[inline]
 fn compute_effective_mass(
     body_a: &ConstrainedBody,
     body_b: &ConstrainedBody,
@@ -522,6 +559,7 @@ fn compute_effective_mass(
     effective_mass
 }
 
+#[inline]
 fn construct_tangent_vectors(surface_normal: &UnitVector3) -> (UnitVector3, UnitVector3) {
     const INV_SQRT_THREE: f32 = 0.57735;
 
@@ -543,6 +581,7 @@ fn construct_tangent_vectors(surface_normal: &UnitVector3) -> (UnitVector3, Unit
     (tangent_1, tangent_2)
 }
 
+#[inline]
 fn pseudo_advanced_orientation(
     orientation: &Orientation,
     pseudo_angular_velocity: &Vector3,

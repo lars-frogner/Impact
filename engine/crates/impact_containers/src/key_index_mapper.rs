@@ -413,7 +413,7 @@ where
     }
 }
 
-impl<K: fmt::Debug, S> fmt::Debug for KeyIndexMapper<K, S> {
+impl<K: fmt::Debug, S, A: Allocator> fmt::Debug for KeyIndexMapper<K, S, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("KeyIndexMapper")
             .field("indices_for_keys", &self.indices_for_keys)
