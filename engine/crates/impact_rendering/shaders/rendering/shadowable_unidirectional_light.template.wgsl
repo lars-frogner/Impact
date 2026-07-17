@@ -322,6 +322,13 @@ fn computePCSSLightAccessFactor(
     centerTextureCoords: vec2f,
     referenceDepth: f32,
 ) -> f32 {
+    // Report no occlusion when outside the shadow map. Clamping to the texture
+    // edge is not sufficient, since depths may have been written to the edge
+    // texels.
+    if any(centerTextureCoords < vec2(0.0)) || any(centerTextureCoords > vec2(1.0)) {
+        return 1.0;
+    }
+
     let vogelDiskBaseAngle = generateRandomAngle(cameraFramebufferXYPosition);
 
     let shadowPenumbraExtent = computeShadowPenumbraExtent(
