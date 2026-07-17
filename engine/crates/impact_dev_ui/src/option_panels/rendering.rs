@@ -904,7 +904,6 @@ fn capture_options(
     ui.end_row();
 
     if ui.button(capture::docs::SCREENSHOT).clicked() {
-        engine.enqueue_admin_command(AdminCommand::Capture(CaptureAdminCommand::SaveScreenshot));
         *screenshot_requested = true;
     }
     ui.end_row();

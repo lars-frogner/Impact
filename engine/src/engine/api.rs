@@ -355,6 +355,10 @@ impl Engine {
         Ok(())
     }
 
+    pub fn has_pending_screenshot_save(&self) -> bool {
+        self.screen_capturer().has_pending_screenshot_save()
+    }
+
     pub fn controls_enabled(&self) -> bool {
         self.controls_enabled.load(Ordering::Relaxed)
     }
