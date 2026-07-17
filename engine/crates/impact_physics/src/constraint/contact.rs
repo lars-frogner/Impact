@@ -17,7 +17,7 @@ use tinyvec::TinyVec;
 /// contact.
 #[derive(Clone, Debug)]
 pub struct ContactManifold {
-    contacts: TinyVec<[ContactWithID; 4]>,
+    contacts: TinyVec<[ContactWithID; 32]>,
 }
 
 #[derive(Clone, Debug)]
