@@ -8,6 +8,7 @@ pub mod systems;
 
 use crate::{
     VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
+    interaction::fracturing::VoxelFracturingConfig,
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
     object::{
         VoxelObject, extraction::ExtractionResult, inertia::VoxelObjectInertialPropertyManager,
@@ -74,6 +75,16 @@ pub struct VoxelInteractionManager {
     fracturing_manager: VoxelObjectFracturingManager,
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
+pub struct VoxelInteractionConfig {
+    pub fracturing: VoxelFracturingConfig,
+}
+
 #[derive(Debug, Default)]
 pub struct VoxelAbsorbingSphereEntity {
     pub entity_id: EntityID,
@@ -119,10 +130,10 @@ struct ExtractedVoxelObjectCoordinateChanges {
 type Anchors = TinyVec<[(DynamicRigidBodyAnchorID, Position); 4]>;
 
 impl VoxelInteractionManager {
-    pub fn new() -> Self {
+    pub fn new(config: VoxelInteractionConfig) -> Self {
         Self {
             absorption_manager: VoxelAbsorptionManager::new(),
-            fracturing_manager: VoxelObjectFracturingManager::new(),
+            fracturing_manager: VoxelObjectFracturingManager::new(config.fracturing),
         }
     }
 

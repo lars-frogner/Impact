@@ -41,7 +41,16 @@ use std::{
 pub struct VoxelObjectFracturingManager {
     ongoing_processes: HashMap<VoxelObjectID, FracturingProcess>,
     completed_processes: Vec<FracturingProcess>,
+    config: VoxelFracturingConfig,
 }
+
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug)]
+pub struct VoxelFracturingConfig {}
 
 #[derive(Debug)]
 struct FracturingProcess {
@@ -77,11 +86,12 @@ pub struct RandomizedGridFracturePointGenerator {
 }
 
 impl VoxelObjectFracturingManager {
-    /// Creates a new empty fracturing manager.
-    pub fn new() -> Self {
+    /// Creates a new empty fracturing manager with the given configuration.
+    pub fn new(config: VoxelFracturingConfig) -> Self {
         Self {
             ongoing_processes: HashMap::default(),
             completed_processes: Vec::new(),
+            config,
         }
     }
 
@@ -280,6 +290,12 @@ impl VoxelObjectFracturingManager {
 
             self.completed_processes.push(process);
         }
+    }
+}
+
+impl Default for VoxelFracturingConfig {
+    fn default() -> Self {
+        Self {}
     }
 }
 

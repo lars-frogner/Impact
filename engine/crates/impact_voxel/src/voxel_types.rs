@@ -94,6 +94,19 @@ pub struct FixedVoxelMaterialProperties {
     properties: Vector4C,
 }
 
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug)]
+pub struct VoxelTypeConfig {
+    pub texture_resolution: NonZeroU32,
+    /// Path to the RON file containing the specification of each voxel type.
+    /// If [`None`], a single voxel type called "Default" will be defined.
+    pub voxel_types_path: Option<PathBuf>,
+}
+
 impl VoxelType {
     /// Creates a dummy voxel type that can not be present in any registry.
     pub const fn dummy() -> Self {
@@ -136,16 +149,16 @@ impl VoxelTypeRegistry {
     pub fn from_config(
         texture_registry: &mut TextureRegistry,
         sampler_registry: &mut SamplerRegistry,
-        voxel_config: crate::VoxelConfig,
+        voxel_type_config: VoxelTypeConfig,
     ) -> anyhow::Result<Self> {
-        let voxel_types = match voxel_config.voxel_types_path {
+        let voxel_types = match voxel_type_config.voxel_types_path {
             Some(file_path) => VoxelTypeSpecifications::from_ron_file(file_path)?,
             None => VoxelTypeSpecifications::default(),
         };
         Self::create(
             texture_registry,
             sampler_registry,
-            voxel_config.texture_resolution,
+            voxel_type_config.texture_resolution,
             voxel_types,
         )
     }
@@ -556,6 +569,25 @@ impl VoxelTypeSpecification {
         }
         if let Some(VoxelNormalMap { path, .. }) = &mut self.normal_map {
             *path = root_path.join(&path);
+        }
+    }
+}
+
+impl VoxelTypeConfig {
+    /// Resolves all paths in the configuration by prepending the given root
+    /// path to all paths.
+    pub fn resolve_paths(&mut self, root_path: &Path) {
+        if let Some(voxel_types_path) = self.voxel_types_path.as_mut() {
+            *voxel_types_path = root_path.join(&voxel_types_path);
+        }
+    }
+}
+
+impl Default for VoxelTypeConfig {
+    fn default() -> Self {
+        Self {
+            texture_resolution: NonZeroU32::new(256).unwrap(),
+            voxel_types_path: None,
         }
     }
 }
