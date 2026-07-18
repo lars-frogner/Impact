@@ -41,7 +41,6 @@ use impact_scene::{
     graph::{SceneGraph, SceneGroupID},
 };
 use impact_thread::pool::DynamicThreadPool;
-use std::time::Duration;
 use tinyvec::TinyVec;
 
 /// ECS-based implementation of a voxel object interaction context.
@@ -386,7 +385,6 @@ pub fn execute_fracturing_processes(
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &ForceGeneratorManager,
     collision_world: &CollisionWorld,
-    max_duration: Option<Duration>,
 ) {
     let mut interaction_context = ECSVoxelObjectInteractionContext {
         component_metadata_registry,
@@ -412,7 +410,6 @@ pub fn execute_fracturing_processes(
             voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
-            max_duration,
         );
     } else {
         fracturing_manager.execute_fracturing_processes(
@@ -423,7 +420,6 @@ pub fn execute_fracturing_processes(
             voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
-            max_duration,
         );
     }
 }

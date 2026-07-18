@@ -50,7 +50,16 @@ pub struct VoxelObjectFracturingManager {
     serde(default)
 )]
 #[derive(Clone, Debug)]
-pub struct VoxelFracturingConfig {}
+pub struct VoxelFracturingConfig {
+    /// If set, the processing time for generating fracture objects per frame
+    /// will be attempted limited to this number of microseconds. The time
+    /// budget may be exceeded to spawn the fracture objects for completed
+    /// processes and to make sure all processes make enough progress to counter
+    /// the rate of invalidation due to objects being modified.
+    ///
+    /// Note: Setting this duration breaks determinism.
+    pub max_processing_duration_us: Option<u64>,
+}
 
 #[derive(Debug)]
 struct FracturingProcess {
@@ -134,12 +143,6 @@ impl VoxelObjectFracturingManager {
     }
 
     /// Executes all initiated fracturing processes.
-    ///
-    /// If a `max_duration` is given, the processing time will be attempted
-    /// limited to that time. The time budget may be exceeded to spawn the
-    /// fracture objects for completed processes and to make sure all processes
-    /// make enough progress to counter the rate of invalidation due to objects
-    /// being modified.
     pub fn execute_fracturing_processes<C>(
         &mut self,
         context: &mut C,
@@ -149,7 +152,6 @@ impl VoxelObjectFracturingManager {
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
-        max_duration: Option<Duration>,
     ) where
         C: VoxelObjectInteractionContext,
     {
@@ -160,7 +162,6 @@ impl VoxelObjectFracturingManager {
             voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
-            max_duration,
             |voxel_object_manager,
              voxel_object_buffer_pool,
              rigid_body_manager,
@@ -180,12 +181,6 @@ impl VoxelObjectFracturingManager {
     }
 
     /// Executes all initiated fracturing processes.
-    ///
-    /// If a `max_duration` is given, the processing time will be attempted
-    /// limited to that time. The time budget may be exceeded to spawn the
-    /// fracture objects for completed processes and to make sure all processes
-    /// make enough progress to counter the rate of invalidation due to objects
-    /// being modified.
     pub fn execute_fracturing_processes_in_parallel<C>(
         &mut self,
         thread_pool: &DynamicThreadPool,
@@ -196,7 +191,6 @@ impl VoxelObjectFracturingManager {
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
-        max_duration: Option<Duration>,
     ) where
         C: VoxelObjectInteractionContext,
     {
@@ -207,7 +201,6 @@ impl VoxelObjectFracturingManager {
             voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
-            max_duration,
             |voxel_object_manager,
              voxel_object_buffer_pool,
              rigid_body_manager,
@@ -235,7 +228,6 @@ impl VoxelObjectFracturingManager {
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
-        max_duration: Option<Duration>,
         execute_process: impl Fn(
             &mut VoxelObjectManager,
             &mut VoxelObjectBufferPool,
@@ -250,7 +242,10 @@ impl VoxelObjectFracturingManager {
         let arena = ArenaPool::get_arena();
         let mut completed_voxel_object_ids = AVec::new_in(&arena);
 
-        let mut remaining_duration = max_duration.unwrap_or(Duration::MAX);
+        let mut remaining_duration = self
+            .config
+            .max_processing_duration_us
+            .map_or(Duration::MAX, Duration::from_micros);
 
         for (&voxel_object_id, process) in &mut self.ongoing_processes {
             let start_time = Instant::now();
@@ -295,7 +290,9 @@ impl VoxelObjectFracturingManager {
 
 impl Default for VoxelFracturingConfig {
     fn default() -> Self {
-        Self {}
+        Self {
+            max_processing_duration_us: None,
+        }
     }
 }
 

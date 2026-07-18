@@ -94,6 +94,11 @@
             texture_resolution: 4096,
             voxel_types_path: Some("voxel_types.ron"),
         ),
+        interaction: (
+            fracturing: (
+                max_processing_duration_us: None,
+            ),
+        ),
     ),
     controller: (
         motion: SemiDirectional((

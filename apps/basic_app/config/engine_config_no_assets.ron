@@ -91,6 +91,11 @@
             texture_resolution: 256,
             voxel_types_path: None,
         ),
+        interaction: (
+            fracturing: (
+                max_processing_duration_us: None,
+            ),
+        ),
     ),
     controller: (
         motion: SemiDirectional((
