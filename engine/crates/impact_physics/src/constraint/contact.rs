@@ -80,9 +80,8 @@ pub struct PreparedContact {
     effective_mass_normal: f32,
     effective_mass_tangent: f32,
     effective_mass_bitangent: f32,
-    restitution_coef: f32,
     friction_coef: f32,
-    initial_separating_velocity: f32,
+    target_separating_velocity: f32,
 }
 
 /// Impulses along the three axes of a surface-aligned coordinate system for a
@@ -209,6 +208,12 @@ impl TwoBodyConstraint for Contact {
     type Prepared = PreparedContact;
 
     fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared {
+        // For slower impacts than this, we always use a restitution coefficient
+        // of zero so that resting contacts become less jittery
+        const NORMAL_SPEED_FOR_BOUNCE: f32 = 0.4;
+
+        const SQUARED_SLIP_SPEED_FOR_DYNAMIC_FRICTION: f32 = 1e-4;
+
         let body_a_position = body_a.position.aligned();
         let body_b_position = body_b.position.aligned();
 
@@ -243,19 +248,28 @@ impl TwoBodyConstraint for Contact {
         let velocity_a = compute_point_velocity(body_a, &disp_a);
         let velocity_b = compute_point_velocity(body_b, &disp_b);
 
+        let relative_velocity = velocity_a - velocity_b;
+
+        let separating_velocity = normal.dot(&relative_velocity);
+
+        let target_separating_velocity = if separating_velocity.abs() >= NORMAL_SPEED_FOR_BOUNCE {
+            -restitution_coef * separating_velocity
+        } else {
+            0.0
+        };
+
         // We need the speed at which the surfaces of the two bodies are
         // slipping at the contact point to determine whether to apply static
         // or dynamic friction. Note that the body velocities have not yet been
         // advanced based on non-constraint forces for this frame, which is
         // crucial for correctly identifying the kind of friction to use.
-        let relative_velocity = velocity_a - velocity_b;
         let slip_speed_squared =
             relative_velocity.dot(&tangent_1).powi(2) + relative_velocity.dot(&tangent_2).powi(2);
 
-        let friction_coef = if slip_speed_squared < 1e-4 {
-            static_friction_coef
-        } else {
+        let friction_coef = if slip_speed_squared >= SQUARED_SLIP_SPEED_FOR_DYNAMIC_FRICTION {
             dynamic_friction_coef
+        } else {
+            static_friction_coef
         };
 
         PreparedContact {
@@ -267,11 +281,8 @@ impl TwoBodyConstraint for Contact {
             effective_mass_normal,
             effective_mass_tangent: effective_mass_tangent_1,
             effective_mass_bitangent: effective_mass_tangent_2,
-            restitution_coef,
             friction_coef,
-            // Will be set after the velocities have been advanced due to
-            // non-constraint forces
-            initial_separating_velocity: 0.0,
+            target_separating_velocity,
         }
     }
 }
@@ -290,29 +301,6 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let tangent_matches = self.tangent.dot(&other.tangent) > 1.0 - THRESHOLD;
 
         normal_matches && tangent_matches
-    }
-
-    fn update_after_advancing_body_velocities(
-        &mut self,
-        body_a: &ConstrainedBody,
-        body_b: &ConstrainedBody,
-    ) {
-        let normal = self.normal.aligned();
-        let local_position_on_b = self.local_position_on_b.aligned();
-        let body_a_position = body_a.position.aligned();
-        let body_b_position = body_b.position.aligned();
-
-        let position_on_b = body_b.transform_point_from_body_to_world_frame(&local_position_on_b);
-
-        let disp_a = position_on_b - body_a_position;
-        let disp_b = position_on_b - body_b_position;
-
-        let velocity_a = compute_point_velocity(body_a, &disp_a);
-        let velocity_b = compute_point_velocity(body_b, &disp_b);
-
-        let relative_velocity = velocity_a - velocity_b;
-
-        self.initial_separating_velocity = normal.dot(&relative_velocity);
     }
 
     fn compute_impulses(
@@ -344,10 +332,8 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let separating_velocity = normal.dot(&relative_velocity);
 
-        let target_separating_velocity = -self.restitution_coef * self.initial_separating_velocity;
-
         let normal_impulse =
-            -self.effective_mass_normal * (separating_velocity - target_separating_velocity);
+            -self.effective_mass_normal * (separating_velocity - self.target_separating_velocity);
 
         let tangent_impulse = -self.effective_mass_tangent * tangent.dot(&relative_velocity);
         let bitangent_impulse = -self.effective_mass_bitangent * bitangent.dot(&relative_velocity);
