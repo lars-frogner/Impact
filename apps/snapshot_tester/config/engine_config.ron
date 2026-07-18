@@ -60,8 +60,8 @@
         simulator: (
             enabled: false,
             n_substeps: 1,
-            initial_time_step_duration: 0.001,
-            match_frame_duration: true,
+            initial_time_step_duration: 0.01667,
+            match_frame_duration: false,
             simulation_speed_multiplier_increment_factor: 1.1,
         ),
         rigid_body_force: (

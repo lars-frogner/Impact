@@ -7,6 +7,9 @@
     window: (
         initial_size: (1600, 1200),
     ),
+    runtime: (
+        n_intra_task_threads: 1,
+    ),
     ui_config_path: "ui_config.ron",
     engine_config_path: "engine_config.ron",
 )

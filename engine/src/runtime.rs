@@ -34,10 +34,14 @@ pub struct Runtime<UI> {
 #[serde(default)]
 pub struct RuntimeConfig {
     /// Number of threads for parallel task execution.
+    ///
+    /// Note: Using more than one thread may break determinism.
     n_task_threads: NonZeroUsize,
     /// Communication queue capacity for task threads.
     task_queue_capacity: NonZeroUsize,
     /// Number of threads for parallelization within certain tasks.
+    ///
+    /// Note: Using more than one thread may break determinism.
     n_intra_task_threads: NonZeroUsize,
     /// Communication queue capacity for intra-task threads.
     intra_task_queue_capacity: NonZeroUsize,

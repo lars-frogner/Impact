@@ -3,6 +3,9 @@
         reset_scene_on_reload: true,
     ),
     run_mode: Windowed,
+    runtime: (
+        n_intra_task_threads: 1,
+    ),
     ui_config_path: "ui_config.ron",
     engine_config_path: "engine_config.ron",
 )
