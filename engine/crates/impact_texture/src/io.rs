@@ -23,6 +23,7 @@ pub struct NonFiniteColors {
     pub neg_infinity: [u8; 3],
 }
 
+#[cfg(feature = "png")]
 impl Default for NonFiniteColors {
     fn default() -> Self {
         Self {
