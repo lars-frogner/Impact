@@ -57,10 +57,13 @@ pub struct SimulatorConfig {
     /// The number of substeps to perform each simulation step. Increase to
     /// improve accuracy.
     pub n_substeps: u32,
-    /// The duration to use for the first time step.
+    /// The duration to use for the first time step. This will be used for all
+    /// steps if `match_frame_duration` is `false`.
     pub initial_time_step_duration: f32,
     /// If `true`, the time step duration will be updated regularly to match the
     /// frame duration. This gives "real-time" simulation.
+    ///
+    /// Note: This breaks determinism.
     pub match_frame_duration: bool,
     /// If specified, the time step duration will not be increased automatically
     /// above this value. This means it will lag behind real-time for
@@ -342,8 +345,8 @@ impl Default for SimulatorConfig {
         Self {
             enabled: true,
             n_substeps: 1,
-            initial_time_step_duration: 0.001,
-            match_frame_duration: true,
+            initial_time_step_duration: 0.01667,
+            match_frame_duration: false,
             max_auto_time_step_duration: None,
         }
     }
