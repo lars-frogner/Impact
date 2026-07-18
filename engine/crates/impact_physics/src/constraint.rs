@@ -90,6 +90,15 @@ trait PreparedTwoBodyConstraint {
     /// constraint.
     fn can_use_warm_impulses_from(&self, other: &Self) -> bool;
 
+    /// Updates the constraint based on the velocities in the given constrained
+    /// bodies. Called after advancing the rigid body velocities based on
+    /// non-constraint forces.
+    fn update_after_advancing_body_velocities(
+        &mut self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    );
+
     /// Computes the corrective impulses that should be applied to the bodies
     /// in order to satisfy the velocity constraint. This method should not
     /// perform clamping.
@@ -263,6 +272,8 @@ impl ConstraintManager {
         }
         self.solver
             .synchronize_prepared_constrained_body_velocities(rigid_body_manager);
+        self.solver
+            .update_constraints_after_advancing_body_velocities();
         self.solver.compute_constrained_velocities();
         self.solver.compute_corrected_configurations();
         self.solver
