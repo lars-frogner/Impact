@@ -63,13 +63,6 @@ impl PreparedTwoBodyConstraint for PreparedSphericalJoint {
         true
     }
 
-    fn update_after_advancing_body_velocities(
-        &mut self,
-        _body_a: &ConstrainedBody,
-        _body_b: &ConstrainedBody,
-    ) {
-    }
-
     fn compute_impulses(&self, _body_a: &ConstrainedBody, _body_b: &ConstrainedBody) -> f32 {
         0.0
     }
