@@ -189,6 +189,24 @@ impl ConstraintSolver {
         }
     }
 
+    /// Lets each prepared constraint update its state based on the current
+    /// velocities of the constrained bodies. This should be called after
+    /// advancing the rigid body velocities based on the non-constraint forces
+    /// and synchronizing the results with
+    /// [`Self::synchronize_prepared_constrained_body_velocities`], so that the
+    /// constraints that need to know the initial velocities before the solve
+    /// are able to access them.
+    pub fn update_constraints_after_advancing_body_velocities(&mut self) {
+        update_body_pair_constraints_after_advancing_body_velocities(
+            self.body_manager.bodies(),
+            self.contacts.constraints_mut(),
+        );
+        update_body_pair_constraints_after_advancing_body_velocities(
+            self.body_manager.bodies(),
+            self.spherical_joints.constraints_mut(),
+        );
+    }
+
     /// Tries to solve all prepared velocity constraints as follows:
     /// - Go though each constraint.
     /// - Compute the impulses that must be applied to the involved bodies for
@@ -443,6 +461,18 @@ impl<C: PreparedTwoBodyConstraint> Deref for BodyPairConstraint<C> {
 impl<C: PreparedTwoBodyConstraint> DerefMut for BodyPairConstraint<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.constraint
+    }
+}
+
+fn update_body_pair_constraints_after_advancing_body_velocities<P: PreparedTwoBodyConstraint>(
+    bodies: &[ConstrainedBody],
+    constraints: &mut [BodyPairConstraint<P>],
+) {
+    for constraint in constraints {
+        let body_a = &bodies[constraint.body_a_idx];
+        let body_b = &bodies[constraint.body_b_idx];
+
+        constraint.update_after_advancing_body_velocities(body_a, body_b);
     }
 }
 

@@ -82,6 +82,7 @@ pub struct PreparedContact {
     effective_mass_bitangent: f32,
     restitution_coef: f32,
     friction_coef: f32,
+    initial_separating_velocity: f32,
 }
 
 /// Impulses along the three axes of a surface-aligned coordinate system for a
@@ -268,6 +269,9 @@ impl TwoBodyConstraint for Contact {
             effective_mass_bitangent: effective_mass_tangent_2,
             restitution_coef,
             friction_coef,
+            // Will be set after the velocities have been advanced due to
+            // non-constraint forces
+            initial_separating_velocity: 0.0,
         }
     }
 }
@@ -286,6 +290,29 @@ impl PreparedTwoBodyConstraint for PreparedContact {
         let tangent_matches = self.tangent.dot(&other.tangent) > 1.0 - THRESHOLD;
 
         normal_matches && tangent_matches
+    }
+
+    fn update_after_advancing_body_velocities(
+        &mut self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) {
+        let normal = self.normal.aligned();
+        let local_position_on_b = self.local_position_on_b.aligned();
+        let body_a_position = body_a.position.aligned();
+        let body_b_position = body_b.position.aligned();
+
+        let position_on_b = body_b.transform_point_from_body_to_world_frame(&local_position_on_b);
+
+        let disp_a = position_on_b - body_a_position;
+        let disp_b = position_on_b - body_b_position;
+
+        let velocity_a = compute_point_velocity(body_a, &disp_a);
+        let velocity_b = compute_point_velocity(body_b, &disp_b);
+
+        let relative_velocity = velocity_a - velocity_b;
+
+        self.initial_separating_velocity = normal.dot(&relative_velocity);
     }
 
     fn compute_impulses(
@@ -317,9 +344,10 @@ impl PreparedTwoBodyConstraint for PreparedContact {
 
         let separating_velocity = normal.dot(&relative_velocity);
 
-        let normal_impulse = -self.effective_mass_normal
-            * (1.0 + self.restitution_coef)
-            * separating_velocity.min(0.0); // <- The impulse should be zero if the bodies are separating
+        let target_separating_velocity = -self.restitution_coef * self.initial_separating_velocity;
+
+        let normal_impulse =
+            -self.effective_mass_normal * (separating_velocity - target_separating_velocity);
 
         let tangent_impulse = -self.effective_mass_tangent * tangent.dot(&relative_velocity);
         let bitangent_impulse = -self.effective_mass_bitangent * bitangent.dot(&relative_velocity);
