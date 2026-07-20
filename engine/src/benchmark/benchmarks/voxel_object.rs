@@ -2,19 +2,30 @@
 
 use super::tesselation::create_randomized_grid_points;
 use impact_alloc::Global;
-use impact_geometry::{Plane, Sphere};
+use impact_geometry::{AxisAlignedBox, Plane, ReferenceFrame, Sphere};
+use impact_id::EntityIDManager;
+use impact_intersection::{IntersectionManager, bounding_volume::BoundingVolumeID};
 use impact_math::{
     point::Point3C,
     quaternion::UnitQuaternion,
     random::Rng,
-    transform::Isometry3,
+    transform::{Isometry3, Similarity3},
     vector::{UnitVector3, Vector3},
 };
-use impact_physics::quantities::Position;
+use impact_physics::{
+    collision::CollidableKind,
+    material::ContactResponseParameters,
+    quantities::Position,
+    rigid_body::{RigidBodyManager, RigidBodyType},
+};
 use impact_profiling::benchmark::Benchmarker;
 use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
 use impact_voxel::{
-    collidable::{self, VoxelObjectCollisionProbes},
+    VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
+    collidable::{
+        self, CollisionWorld, VoxelObjectCollisionProbes,
+        setup::{VoxelCollidable, setup_voxel_collidable},
+    },
     generation::{
         SDFVoxelGenerator,
         sdf::{SDFGraph, SDFNode},
@@ -25,6 +36,7 @@ use impact_voxel::{
         VoxelObject, VoxelObjectBuffers, extraction::ExtractionResult,
         inertia::VoxelObjectInertialPropertyManager, sdf::VoxelChunkSignedDistanceField,
     },
+    setup,
     voxel_types::VoxelType,
 };
 use std::hint::black_box;
@@ -393,107 +405,33 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
 pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
     let box_extent = 100.0;
     let points_per_dim = 4;
+    let face_plane_shift = -0.1;
+    let max_perturbation_angle = 0.03;
+    let max_perturbation_translation = 0.5;
 
-    let generator = create_box_generator(box_extent);
-    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
-
-    let voxel_type_densities = [1.0; 256];
-
-    let voxel_extent = object.voxel_extent();
-
-    let aabb = object.compute_normalized_chunk_grid_bounds();
-
-    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
-    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
-
-    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
-
-    const MAX_ANGLE: f32 = 0.03; // radians per axis (~1.7 degrees)
-    const MAX_TRANSLATION: f32 = 0.5; // voxels per axis
-
-    let rand_sym = |rng: &mut Rng| 2.0 * rng.random_f32_fraction() - 1.0;
-    let rand_angle = |rng: &mut Rng| MAX_ANGLE * rand_sym(rng);
-    let rand_translation = |rng: &mut Rng| MAX_TRANSLATION * rand_sym(rng);
-    let rand_perturbation = |vertices: &[Point3C], rng: &mut Rng| {
-        let mut centroid = Vector3::zeros();
-        for vertex in vertices {
-            centroid += *vertex.aligned().as_vector();
-        }
-        centroid /= vertices.len() as f32;
-
-        let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), rand_angle(rng))
-            * UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), rand_angle(rng))
-            * UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), rand_angle(rng));
-        let translation = Vector3::new(
-            rand_translation(rng),
-            rand_translation(rng),
-            rand_translation(rng),
-        );
-
-        Isometry3::from_parts(
-            centroid - rotation.rotate_vector(&centroid) + translation,
-            rotation,
-        )
-    };
-
-    let mut rng = Rng::with_seed(0);
-
-    let mut regions = Vec::new();
-    for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
-        polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
-        if polyhedron.vertices.is_empty() {
-            continue;
-        }
-
-        polyhedron.iso_transform(&rand_perturbation(&polyhedron.vertices, &mut rng));
-
-        let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
-            continue;
-        };
-        polyhedron.shift_face_planes(-0.1);
-
-        let mut inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
-        let mut inertial_property_copier = inertial_property_manager
-            .begin_computation(object.voxel_extent(), &voxel_type_densities);
-
-        let ExtractionResult::Extracted(extracted) = object.copy_polyhedron_with_property_computer(
-            VoxelObjectBuffers::new(),
-            &polyhedron_aabb,
-            &polyhedron.face_planes,
-            &mut inertial_property_copier,
-        ) else {
-            continue;
-        };
-
-        let [offset_i, offset_j, offset_k] = extracted.origin_offset_in_parent;
-        let origin_offset =
-            voxel_extent * Vector3::new(offset_i as f32, offset_j as f32, offset_k as f32);
-
-        let transform_to_object_space = Isometry3::from_translation(-origin_offset);
-
-        let aabb_in_parent_space = extracted
-            .voxel_object
-            .compute_aabb()
-            .translated(&origin_offset);
-
-        let voxel_object =
-            MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), extracted.voxel_object);
-
-        regions.push((
-            voxel_object,
-            inertial_property_manager,
-            transform_to_object_space,
-            aabb_in_parent_space,
-        ));
-    }
+    let objects = generate_voronoi_region_voxel_objects(
+        box_extent,
+        points_per_dim,
+        face_plane_shift,
+        max_perturbation_angle,
+        max_perturbation_translation,
+        0,
+    );
 
     let mut overlapping_pairs = Vec::new();
-    for a in 0..regions.len() {
-        for b in (a + 1)..regions.len() {
-            let (_, _, _, aabb_a) = &regions[a];
-            let (_, _, _, aabb_b) = &regions[b];
+    for a in 0..objects.len() {
+        for b in (a + 1)..objects.len() {
+            let object_a = &objects[a];
+            let object_b = &objects[b];
 
-            if aabb_a.compute_overlap_with(aabb_b).is_some() {
+            let aabb_a = object_a
+                .aabb
+                .aabb_of_transformed(&object_a.transform_to_object_space.inverted().to_matrix());
+            let aabb_b = object_b
+                .aabb
+                .aabb_of_transformed(&object_b.transform_to_object_space.inverted().to_matrix());
+
+            if aabb_a.compute_overlap_with(&aabb_b).is_some() {
                 overlapping_pairs.push([a, b]);
             }
         }
@@ -501,16 +439,16 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
 
     benchmarker.benchmark(&mut || {
         for [a, b] in &overlapping_pairs {
-            let (object_a, inertial_properties_a, transform_to_object_a_space, _) = &regions[*a];
-            let (object_b, inertial_properties_b, transform_to_object_b_space, _) = &regions[*b];
+            let object_a = &objects[*a];
+            let object_b = &objects[*b];
 
             collidable::for_each_mutual_voxel_object_contact(
-                object_a,
-                inertial_properties_a,
-                object_b,
-                inertial_properties_b,
-                transform_to_object_a_space,
-                transform_to_object_b_space,
+                &object_a.voxel_object,
+                &object_a.inertial_property_manager,
+                &object_b.voxel_object,
+                &object_b.inertial_property_manager,
+                &object_a.transform_to_object_space,
+                &object_b.transform_to_object_space,
                 &mut |indices, geometry| {
                     black_box((indices, geometry));
                 },
@@ -608,4 +546,195 @@ fn create_box_generator(extent: f32) -> SDFVoxelGenerator<Global> {
         sdf_generator,
         SameVoxelTypeGenerator::new(VoxelType::default()).into(),
     )
+}
+
+#[derive(Debug)]
+pub struct GeneratedVoxelObject {
+    voxel_object: MeshedVoxelObject,
+    inertial_property_manager: VoxelObjectInertialPropertyManager,
+    transform_to_object_space: Isometry3,
+    aabb: AxisAlignedBox,
+}
+
+pub fn generate_voronoi_region_voxel_objects(
+    box_extent: f32,
+    points_per_dim: usize,
+    face_plane_shift: f32,
+    max_perturbation_angle: f32,       // Radians per axis
+    max_perturbation_translation: f32, // Voxels per axis
+    perturbation_seed: u64,
+) -> Vec<GeneratedVoxelObject> {
+    let generator = create_box_generator(box_extent);
+    let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
+
+    let voxel_type_densities = [1.0; 256];
+
+    let voxel_extent = object.voxel_extent();
+
+    let aabb = object.compute_normalized_chunk_grid_bounds();
+
+    let points = create_randomized_grid_points(points_per_dim, &aabb.compact());
+    let tetrahedralization = DelaunayTetrahedralization::construct(&points).unwrap();
+
+    let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+    let rand_sym = |rng: &mut Rng| 2.0 * rng.random_f32_fraction() - 1.0;
+    let rand_angle = |rng: &mut Rng| max_perturbation_angle * rand_sym(rng);
+    let rand_translation = |rng: &mut Rng| max_perturbation_translation * rand_sym(rng);
+    let rand_perturbation = |vertices: &[Point3C], rng: &mut Rng| {
+        let mut centroid = Vector3::zeros();
+        for vertex in vertices {
+            centroid += *vertex.aligned().as_vector();
+        }
+        centroid /= vertices.len() as f32;
+
+        let rotation = UnitQuaternion::from_axis_angle(&UnitVector3::unit_x(), rand_angle(rng))
+            * UnitQuaternion::from_axis_angle(&UnitVector3::unit_y(), rand_angle(rng))
+            * UnitQuaternion::from_axis_angle(&UnitVector3::unit_z(), rand_angle(rng));
+        let translation = Vector3::new(
+            rand_translation(rng),
+            rand_translation(rng),
+            rand_translation(rng),
+        );
+
+        Isometry3::from_parts(
+            centroid - rotation.rotate_vector(&centroid) + translation,
+            rotation,
+        )
+    };
+
+    let mut rng = Rng::with_seed(perturbation_seed);
+
+    let mut generated_objects = Vec::new();
+
+    for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+        polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+        if polyhedron.vertices.is_empty() {
+            continue;
+        }
+
+        polyhedron.iso_transform(&rand_perturbation(&polyhedron.vertices, &mut rng));
+
+        let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
+            continue;
+        };
+        polyhedron.shift_face_planes(face_plane_shift);
+
+        let mut inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
+        let mut inertial_property_copier = inertial_property_manager
+            .begin_computation(object.voxel_extent(), &voxel_type_densities);
+
+        let ExtractionResult::Extracted(extracted) = object.copy_polyhedron_with_property_computer(
+            VoxelObjectBuffers::new(),
+            &polyhedron_aabb,
+            &polyhedron.face_planes,
+            &mut inertial_property_copier,
+        ) else {
+            continue;
+        };
+
+        let [offset_i, offset_j, offset_k] = extracted.origin_offset_in_parent;
+        let origin_offset =
+            voxel_extent * Vector3::new(offset_i as f32, offset_j as f32, offset_k as f32);
+
+        let transform_to_object_space = Isometry3::from_translation(-origin_offset);
+
+        let aabb = extracted.voxel_object.compute_aabb();
+
+        let voxel_object =
+            MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), extracted.voxel_object);
+
+        generated_objects.push(GeneratedVoxelObject {
+            voxel_object,
+            inertial_property_manager,
+            transform_to_object_space,
+            aabb,
+        });
+    }
+
+    generated_objects
+}
+
+pub fn setup_generated_voxel_objects(
+    entity_id_manager: &mut EntityIDManager,
+    voxel_object_manager: &mut VoxelObjectManager,
+    intersection_manager: &mut IntersectionManager,
+    rigid_body_manager: &mut RigidBodyManager,
+    collision_world: &mut CollisionWorld,
+    objects: impl IntoIterator<Item = GeneratedVoxelObject>,
+) {
+    for GeneratedVoxelObject {
+        voxel_object,
+        inertial_property_manager,
+        transform_to_object_space,
+        aabb,
+    } in objects
+    {
+        let transform_to_world_space = transform_to_object_space.inverted();
+        let inertial_properties = inertial_property_manager.derive_inertial_properties();
+
+        let world_center_of_mass =
+            transform_to_world_space.transform_point(inertial_properties.center_of_mass());
+
+        let frame = ReferenceFrame::new(
+            world_center_of_mass.compact(),
+            transform_to_world_space.rotation().compact(),
+        );
+
+        let entity_id = entity_id_manager.provide_id();
+
+        let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
+
+        voxel_object_manager
+            .add_voxel_object(voxel_object_id, voxel_object)
+            .unwrap();
+
+        voxel_object_manager
+            .add_physics_context_for_voxel_object(
+                voxel_object_id,
+                VoxelObjectPhysicsContext {
+                    inertial_property_manager,
+                },
+            )
+            .unwrap();
+
+        let (model_transform, _, _) = setup::setup_rigid_body_for_new_voxel_object(
+            rigid_body_manager,
+            entity_id,
+            inertial_properties,
+            None,
+            Some(&frame),
+            None,
+        )
+        .unwrap();
+
+        let bounding_volume_id = BoundingVolumeID::from_entity_id(entity_id);
+
+        intersection_manager
+            .bounding_volume_manager
+            .insert_bounding_volume(bounding_volume_id, aabb.compact())
+            .unwrap();
+
+        intersection_manager
+            .add_bounding_volume_to_hierarchy(
+                bounding_volume_id,
+                &Similarity3::from_isometry(transform_to_world_space),
+            )
+            .unwrap();
+
+        setup_voxel_collidable(
+            collision_world,
+            entity_id,
+            RigidBodyType::Dynamic,
+            &VoxelCollidable::new(
+                CollidableKind::Dynamic,
+                ContactResponseParameters {
+                    restitution_coef: 0.4,
+                    ..Default::default()
+                },
+            ),
+            Some(&model_transform),
+        )
+        .unwrap();
+    }
 }
