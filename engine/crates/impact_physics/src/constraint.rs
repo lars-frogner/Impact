@@ -13,7 +13,8 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_alloc::{AVec, Allocator, Global};
-use impact_containers::{HashMap, KeyIndexMapper, RandomState};
+use impact_containers::{HashMap, HashSet, KeyIndexMapper, RandomState};
+use impact_id::EntityID;
 use impact_intersection::IntersectionManager;
 use impact_math::{matrix::Matrix3C, vector::Vector3C};
 use solver::{ConstraintSolver, ConstraintSolverConfig};
@@ -33,6 +34,7 @@ pub struct ConstraintID(u32);
 pub struct ConstraintManager {
     solver: ConstraintSolver,
     spherical_joints: HashMap<ConstraintID, SphericalJoint>,
+    ignored_collisions: HashSet<[EntityID; 2]>,
     constraint_id_counter: u32,
 }
 
@@ -154,6 +156,7 @@ impl ConstraintManager {
         Self {
             solver: ConstraintSolver::new(solver_config),
             spherical_joints: HashMap::default(),
+            ignored_collisions: HashSet::default(),
             constraint_id_counter: 0,
         }
     }
@@ -164,6 +167,13 @@ impl ConstraintManager {
 
     pub fn solver_mut(&mut self) -> &mut ConstraintSolver {
         &mut self.solver
+    }
+
+    /// Causes collisions between the given pair of entities to be ignored
+    /// during constraint solving.
+    pub fn add_collision_to_ignore_list(&mut self, entity_ids: [EntityID; 2]) {
+        self.ignored_collisions
+            .insert(Self::sorted_entity_pair(entity_ids));
     }
 
     /// Registers the given spherical joint constraint and returns a new ID
@@ -206,6 +216,12 @@ impl ConstraintManager {
                           collidable_b,
                           contact_manifold,
                       }| {
+                    if self.ignored_collisions.contains(&Self::sorted_entity_pair([
+                        collidable_a.rigid_body_id().entity_id(),
+                        collidable_b.rigid_body_id().entity_id(),
+                    ])) {
+                        return;
+                    }
                     for contact in contact_manifold.contacts() {
                         self.solver.prepare_contact(
                             rigid_body_manager,
@@ -269,10 +285,24 @@ impl ConstraintManager {
             .apply_constrained_velocities_and_corrected_configurations(rigid_body_manager);
     }
 
+    pub fn remove_collisions_involving_entity_from_ignore_list(&mut self, entity_id: EntityID) {
+        self.ignored_collisions
+            .retain(|&[id_a, id_b]| id_a != entity_id && id_b != entity_id);
+    }
+
     /// Removes all stored constraint state.
     pub fn clear(&mut self) {
         self.solver.clear();
         self.spherical_joints.clear();
+        self.ignored_collisions.clear();
+    }
+
+    fn sorted_entity_pair(entity_ids: [EntityID; 2]) -> [EntityID; 2] {
+        if entity_ids[0].as_u64() <= entity_ids[1].as_u64() {
+            entity_ids
+        } else {
+            [entity_ids[1], entity_ids[0]]
+        }
     }
 
     fn create_new_constraint_id(&mut self) -> ConstraintID {
