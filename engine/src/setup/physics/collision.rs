@@ -226,8 +226,12 @@ pub fn remove_collidable_for_entity(
 ) {
     if entity.has_component::<HasCollidable>() {
         let simulator = simulator.oread();
+
         let mut collision_world = simulator.collision_world().owrite();
         let collidable_id = CollidableID::from_entity_id(entity_id);
         collision_world.remove_collidable(collidable_id);
+
+        let mut constraint_manager = simulator.constraint_manager().owrite();
+        constraint_manager.remove_collisions_involving_entity_from_ignore_list(entity_id);
     }
 }

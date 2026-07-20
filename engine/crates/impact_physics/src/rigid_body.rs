@@ -124,6 +124,13 @@ impl TypedRigidBodyID {
             }
         }
     }
+
+    pub fn entity_id(&self) -> EntityID {
+        match self {
+            Self::Dynamic(id) => id.as_entity_id(),
+            Self::Kinematic(id) => id.as_entity_id(),
+        }
+    }
 }
 
 impl From<DynamicRigidBodyID> for TypedRigidBodyID {
