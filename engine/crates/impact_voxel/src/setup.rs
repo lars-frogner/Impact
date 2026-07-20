@@ -635,7 +635,7 @@ pub fn setup_bounding_volume_for_voxel_object(
     bounding_volume_manager.insert_bounding_volume(bounding_volume_id, aabb)
 }
 
-fn setup_rigid_body_for_new_voxel_object(
+pub fn setup_rigid_body_for_new_voxel_object(
     rigid_body_manager: &mut RigidBodyManager,
     entity_id: EntityID,
     inertial_properties: InertialProperties,

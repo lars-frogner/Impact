@@ -99,6 +99,9 @@ impact_profiling::define_target_enum! {
         prepare_contacts,
         solve_contact_velocities,
         correct_contact_configurations,
+        prepare_voxel_object_contacts,
+        solve_voxel_object_contact_velocities,
+        correct_voxel_object_contact_configurations,
     },
     lookup_table => {
         compute_specular_ggx_reflectance,
