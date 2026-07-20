@@ -216,19 +216,24 @@ impl ConstraintManager {
                           collidable_b,
                           contact_manifold,
                       }| {
+                    let rigid_body_a_id = collidable_a.rigid_body_id();
+                    let rigid_body_b_id = collidable_b.rigid_body_id();
+
                     if self.ignored_collisions.contains(&Self::sorted_entity_pair([
-                        collidable_a.rigid_body_id().entity_id(),
-                        collidable_b.rigid_body_id().entity_id(),
+                        rigid_body_a_id.entity_id(),
+                        rigid_body_b_id.entity_id(),
                     ])) {
                         return;
                     }
+                    let Some((body_a_idx, body_b_idx)) = self.solver.prepare_constrained_body_pair(
+                        rigid_body_manager,
+                        rigid_body_a_id,
+                        rigid_body_b_id,
+                    ) else {
+                        return;
+                    };
                     for contact in contact_manifold.contacts() {
-                        self.solver.prepare_contact(
-                            rigid_body_manager,
-                            collidable_a.rigid_body_id(),
-                            collidable_b.rigid_body_id(),
-                            contact,
-                        );
+                        self.solver.prepare_contact(body_a_idx, body_b_idx, contact);
                     }
                 },
             );
@@ -252,12 +257,14 @@ impl ConstraintManager {
         self.solver.clear_prepared_bodies();
 
         for (rigid_body_a_id, rigid_body_b_id, contact) in contacts {
-            self.solver.prepare_contact(
+            let Some((body_a_idx, body_b_idx)) = self.solver.prepare_constrained_body_pair(
                 rigid_body_manager,
                 rigid_body_a_id,
                 rigid_body_b_id,
-                contact,
-            );
+            ) else {
+                return;
+            };
+            self.solver.prepare_contact(body_a_idx, body_b_idx, contact);
         }
 
         self.solver.remove_unprepared_constraints();
@@ -330,12 +337,16 @@ impl<A: Allocator> ConstrainedBodyManager<A> {
     }
 
     /// Returns the current number of constrained bodies.
+    #[inline]
     pub fn n_bodies(&self) -> usize {
         self.bodies.len()
     }
 
     /// Returns a reference to the constrained body at the given index in
     /// [`Self::bodies`].
+    ///
+    /// # Panics
+    /// If the index is out of bounds.
     #[inline]
     pub fn body(&self, idx: usize) -> &ConstrainedBody {
         &self.bodies[idx]
@@ -364,12 +375,14 @@ impl<A: Allocator> ConstrainedBodyManager<A> {
     }
 
     /// Returns an iterator over each constrained body with its typed ID.
+    #[inline]
     pub fn bodies_with_ids(&self) -> impl Iterator<Item = (TypedRigidBodyID, &ConstrainedBody)> {
         self.body_index_map.key_at_each_idx().zip(&self.bodies)
     }
 
     /// Returns an iterator over each constrained body (as a mutable reference)
     /// with its typed ID.
+    #[inline]
     pub fn bodies_with_ids_mut(
         &mut self,
     ) -> impl Iterator<Item = (TypedRigidBodyID, &mut ConstrainedBody)> {
@@ -382,6 +395,7 @@ impl<A: Allocator> ConstrainedBodyManager<A> {
     /// # Returns
     /// The indices of both the added bodies in [`Self::bodies`] if they both
     /// exist.
+    #[inline]
     pub fn add_body_pair(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
@@ -398,6 +412,7 @@ impl<A: Allocator> ConstrainedBodyManager<A> {
     ///
     /// # Returns
     /// The index of the added body in [`Self::bodies`] if the body exists.
+    #[inline]
     pub fn add_body(
         &mut self,
         rigid_body_manager: &RigidBodyManager,

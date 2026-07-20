@@ -116,31 +116,49 @@ impl ConstraintSolver {
         &mut self.config
     }
 
-    /// Prepares the given contact between the given bodies for solution. The
-    /// states of the involved rigid bodies will be fetched and cached.
-    pub fn prepare_contact(
+    /// Stores the states of the given rigid bodies in the
+    /// [`ConstrainedBodyManager`] for use during constraint solving.
+    ///
+    /// # Returns
+    /// The indices of both the added bodies in the `ConstrainedBodyManager` if
+    /// they both exist.
+    pub fn prepare_constrained_body_pair(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
         rigid_body_a_id: TypedRigidBodyID,
         rigid_body_b_id: TypedRigidBodyID,
+    ) -> Option<(usize, usize)> {
+        self.body_manager
+            .add_body_pair(rigid_body_manager, rigid_body_a_id, rigid_body_b_id)
+    }
+
+    /// Prepares the given contact between the [`ConstrainedBody`]s with the
+    /// given indices in the [`ConstrainedBodyManager`] for solution.
+    ///
+    /// # Panics
+    /// If any of the indices are out of bounds.
+    pub fn prepare_contact(
+        &mut self,
+        constrained_body_a_idx: usize,
+        constrained_body_b_idx: usize,
         contact: &ContactWithID,
     ) {
-        if let Some(prepared_contact) = self.prepare_constraint_for_body_pair(
-            rigid_body_manager,
-            rigid_body_a_id,
-            rigid_body_b_id,
+        let prepared_contact = self.prepare_constraint_for_constrained_body_pair(
+            constrained_body_a_idx,
+            constrained_body_b_idx,
             &contact.contact,
-        ) {
-            self.contacts.register_prepared_constraint(
-                contact.id,
-                prepared_contact,
-                self.config.old_impulse_weight,
-            );
-        }
+        );
+        self.contacts.register_prepared_constraint(
+            contact.id,
+            prepared_contact,
+            self.config.old_impulse_weight,
+        );
     }
 
     /// Prepares the given [`SphericalJoint`] constraint for solution. The
-    /// states of the involved rigid bodies will be fetched and cached.
+    /// states of the involved rigid bodies will be added to the
+    /// [`ConstrainedBodyManager`] for use during constraint solving if they
+    /// have not already been added.
     pub fn prepare_spherical_joint(
         &mut self,
         rigid_body_manager: &RigidBodyManager,
@@ -281,31 +299,24 @@ impl ConstraintSolver {
         self.spherical_joints.clear();
     }
 
-    fn prepare_constraint_for_body_pair<C: TwoBodyConstraint>(
+    fn prepare_constraint_for_constrained_body_pair<C: TwoBodyConstraint>(
         &mut self,
-        rigid_body_manager: &RigidBodyManager,
-        rigid_body_a_id: TypedRigidBodyID,
-        rigid_body_b_id: TypedRigidBodyID,
+        body_a_idx: usize,
+        body_b_idx: usize,
         constraint: &C,
-    ) -> Option<BodyPairConstraint<C::Prepared>> {
-        let (body_a_idx, body_b_idx) = self.body_manager.add_body_pair(
-            rigid_body_manager,
-            rigid_body_a_id,
-            rigid_body_b_id,
-        )?;
-
+    ) -> BodyPairConstraint<C::Prepared> {
         let prepared_constraint = constraint.prepare(
             self.body_manager.body(body_a_idx),
             self.body_manager.body(body_b_idx),
         );
 
-        Some(BodyPairConstraint {
+        BodyPairConstraint {
             body_a_idx,
             body_b_idx,
             constraint: prepared_constraint,
             accumulated_impulses: Default::default(),
             flags: ConstraintFlags::WAS_PREPARED,
-        })
+        }
     }
 
     fn prepare_anchored_constraint_for_body_pair<C: AnchoredTwoBodyConstraint>(
