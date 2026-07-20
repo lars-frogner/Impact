@@ -366,13 +366,21 @@ pub fn obtain_mutual_voxel_object_contacts(benchmarker: impl Benchmarker) {
     let transform_to_object_b_space =
         Isometry3::from_translation(*object_b.compute_aabb().center().as_vector());
 
+    let voxel_type_densities = [1.0; 256];
+    let inertial_properties_a =
+        VoxelObjectInertialPropertyManager::initialized_from(&object_a, &voxel_type_densities);
+    let inertial_properties_b =
+        VoxelObjectInertialPropertyManager::initialized_from(&object_b, &voxel_type_densities);
+
     let meshed_object_a = MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), object_a);
     let meshed_object_b = MeshedVoxelObject::create(VoxelObjectMeshBuffers::new(), object_b);
 
     benchmarker.benchmark(&mut || {
         collidable::for_each_mutual_voxel_object_contact(
             &meshed_object_a,
+            &inertial_properties_a,
             &meshed_object_b,
+            &inertial_properties_b,
             &transform_to_object_a_space,
             &transform_to_object_b_space,
             &mut |indices, geometry| {
@@ -388,6 +396,8 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
 
     let generator = create_box_generator(box_extent);
     let object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
+
+    let voxel_type_densities = [1.0; 256];
 
     let voxel_extent = object.voxel_extent();
 
@@ -442,10 +452,15 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
         };
         polyhedron.shift_face_planes(-0.1);
 
-        let ExtractionResult::Extracted(extracted) = object.copy_polyhedron(
+        let mut inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
+        let mut inertial_property_copier = inertial_property_manager
+            .begin_computation(object.voxel_extent(), &voxel_type_densities);
+
+        let ExtractionResult::Extracted(extracted) = object.copy_polyhedron_with_property_computer(
             VoxelObjectBuffers::new(),
             &polyhedron_aabb,
             &polyhedron.face_planes,
+            &mut inertial_property_copier,
         ) else {
             continue;
         };
@@ -466,6 +481,7 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
 
         regions.push((
             voxel_object,
+            inertial_property_manager,
             transform_to_object_space,
             aabb_in_parent_space,
         ));
@@ -474,8 +490,8 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
     let mut overlapping_pairs = Vec::new();
     for a in 0..regions.len() {
         for b in (a + 1)..regions.len() {
-            let (_, _, aabb_a) = &regions[a];
-            let (_, _, aabb_b) = &regions[b];
+            let (_, _, _, aabb_a) = &regions[a];
+            let (_, _, _, aabb_b) = &regions[b];
 
             if aabb_a.compute_overlap_with(aabb_b).is_some() {
                 overlapping_pairs.push([a, b]);
@@ -485,12 +501,14 @@ pub fn obtain_mutual_voronoi_region_contacts(benchmarker: impl Benchmarker) {
 
     benchmarker.benchmark(&mut || {
         for [a, b] in &overlapping_pairs {
-            let (object_a, transform_to_object_a_space, _) = &regions[*a];
-            let (object_b, transform_to_object_b_space, _) = &regions[*b];
+            let (object_a, inertial_properties_a, transform_to_object_a_space, _) = &regions[*a];
+            let (object_b, inertial_properties_b, transform_to_object_b_space, _) = &regions[*b];
 
             collidable::for_each_mutual_voxel_object_contact(
                 object_a,
+                inertial_properties_a,
                 object_b,
+                inertial_properties_b,
                 transform_to_object_a_space,
                 transform_to_object_b_space,
                 &mut |indices, geometry| {

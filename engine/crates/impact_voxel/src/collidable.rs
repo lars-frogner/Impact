@@ -14,7 +14,7 @@ use crate::{
     },
     object::{
         self, CHUNK_SIZE, LOG2_CHUNK_SIZE, VoxelChunk, VoxelObject,
-        chunk_range_encompassing_voxel_range, sdf,
+        chunk_range_encompassing_voxel_range, inertia::VoxelObjectInertialPropertyManager, sdf,
     },
 };
 use impact_alloc::{AVec, Allocator, Global, arena::ArenaPool, avec};
@@ -812,11 +812,19 @@ fn generate_mutual_voxel_object_contact_manifold(
     let Some(object_a) = voxel_object_manager.get_voxel_object(object_a_id) else {
         return;
     };
+    let Some(physics_context_a) = voxel_object_manager.get_physics_context(object_a_id) else {
+        return;
+    };
+    let inertial_properties_a = &physics_context_a.inertial_property_manager;
 
     let object_b_id = VoxelObjectID::from_entity_id(*entity_b_id);
     let Some(object_b) = voxel_object_manager.get_voxel_object(object_b_id) else {
         return;
     };
+    let Some(physics_context_b) = voxel_object_manager.get_physics_context(object_b_id) else {
+        return;
+    };
+    let inertial_properties_b = &physics_context_b.inertial_property_manager;
 
     let transform_from_world_to_a = transform_from_world_to_a.aligned();
     let transform_from_world_to_b = transform_from_world_to_b.aligned();
@@ -825,7 +833,9 @@ fn generate_mutual_voxel_object_contact_manifold(
 
     for_each_mutual_voxel_object_contact(
         object_a,
+        inertial_properties_a,
         object_b,
+        inertial_properties_b,
         &transform_from_world_to_a,
         &transform_from_world_to_b,
         &mut |indices_for_id, geometry| {
@@ -848,7 +858,9 @@ fn generate_mutual_voxel_object_contact_manifold(
 
 pub fn for_each_mutual_voxel_object_contact<'a>(
     meshed_voxel_object_a: &'a MeshedVoxelObject,
+    inertial_properties_a: &'a VoxelObjectInertialPropertyManager,
     meshed_voxel_object_b: &'a MeshedVoxelObject,
+    inertial_properties_b: &'a VoxelObjectInertialPropertyManager,
     transform_from_world_to_a: &'a Isometry3,
     transform_from_world_to_b: &'a Isometry3,
     f: &mut impl FnMut([usize; 4], ContactGeometry),
@@ -875,6 +887,11 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
     if check_a_against_b {
         let grid_dimensions_for_b = object_b.chunk_counts().map(|count| count * CHUNK_SIZE);
+
+        // Use the center of mass as the object center
+        let norm_object_center_for_b = (inertial_properties_b.derive_center_of_mass()
+            * object_b.inverse_voxel_extent())
+        .compact();
 
         // We expand the intersected AABB by one voxel because the surface can
         // poke slightly outside the occupied voxel range (a voxel is only
@@ -922,6 +939,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                     determine_sdf_value_and_normal_at_point_if_intersecting(
                         object_b,
                         &grid_dimensions_for_b,
+                        &norm_object_center_for_b,
                         &norm_point_in_b.compact(),
                     )
                 else {
@@ -953,6 +971,10 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
 
     if check_b_against_a {
         let grid_dimensions_for_a = object_a.chunk_counts().map(|count| count * CHUNK_SIZE);
+
+        let norm_object_center_for_a = (inertial_properties_a.derive_center_of_mass()
+            * object_a.inverse_voxel_extent())
+        .compact();
 
         let intersection_aabb_in_b = object::aabb_from_voxel_ranges(
             object_b.voxel_extent(),
@@ -993,6 +1015,7 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
                     determine_sdf_value_and_normal_at_point_if_intersecting(
                         object_a,
                         &grid_dimensions_for_a,
+                        &norm_object_center_for_a,
                         &norm_point_in_a.compact(),
                     )
                 else {
@@ -1265,6 +1288,7 @@ pub fn for_each_capsule_voxel_object_contact(
 fn determine_sdf_value_and_normal_at_point_if_intersecting(
     object: &VoxelObject,
     grid_dimensions: &[usize; 3],
+    norm_object_center: &Vector3C,
     norm_point: &Vector3C,
 ) -> Option<(f32, UnitVector3)> {
     const HALF_VOXEL_DIAGONAL: f32 = 0.5 * SQRT_3;
@@ -1299,11 +1323,18 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
     let chunk_idx = object.linear_chunk_idx(&[chunk_i, chunk_j, chunk_k]);
     let chunk = object.chunk_at_idx_maybe_unchecked(chunk_idx);
 
-    // If the point lies inside a void chunk, it's outside. If it lies inside a
-    // uniform chunk, it's so far inside that we can't determine the normal
-    // reliably.
-    let VoxelChunk::NonUniform(chunk) = chunk else {
-        return None;
+    let chunk = match chunk {
+        VoxelChunk::NonUniform(chunk) => chunk,
+        VoxelChunk::Uniform(_) => {
+            return estimate_sdf_value_and_normal_at_point_deep_inside(
+                norm_object_center,
+                norm_point,
+            );
+        }
+        // If the point lies inside a void chunk, it's outside
+        VoxelChunk::Void => {
+            return None;
+        }
     };
 
     let chunk_start_voxel_idx = chunk.start_voxel_idx();
@@ -1375,11 +1406,9 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
         return None;
     }
 
-    // If the point is deep enough in the SDF interior that the local signed
-    // distance is capped, we will get a zero gradient, so we can't determine
-    // the normal vector. If so, we ignore the contact.
+    // Check if the point is deep enough inside that the signed distance is capped
     if (signed_distance - VoxelSignedDistance::MIN_F32).abs() < 1e-3 {
-        return None;
+        return estimate_sdf_value_and_normal_at_point_deep_inside(norm_object_center, norm_point);
     }
 
     let sdf_gradient = sdf::compute_sdf_gradient_from_corner_samples(
@@ -1389,6 +1418,22 @@ fn determine_sdf_value_and_normal_at_point_if_intersecting(
 
     let normal_vector = UnitVector3::normalized_from_if_above(sdf_gradient, 1e-8)?;
 
+    Some((signed_distance, normal_vector))
+}
+
+fn estimate_sdf_value_and_normal_at_point_deep_inside(
+    norm_object_center: &Vector3C,
+    norm_point: &Vector3C,
+) -> Option<(f32, UnitVector3)> {
+    // If the point is deep enough in the SDF interior that the local signed
+    // distance is capped, we would get a zero gradient, so we can't determine
+    // the normal vector from that. As a rough fallback, we use the direction
+    // from the object center to the point as the normal vector and the capped
+    // signed distance as a conservative estimate for calculating the
+    // penetration depth.
+    let signed_distance = VoxelSignedDistance::MIN_F32;
+    let displacement = (norm_point - norm_object_center).aligned();
+    let normal_vector = UnitVector3::normalized_from_if_above(displacement, 1e-8)?;
     Some((signed_distance, normal_vector))
 }
 
