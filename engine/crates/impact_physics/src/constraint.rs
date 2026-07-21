@@ -232,7 +232,18 @@ impl ConstraintManager {
                     ) else {
                         return;
                     };
-                    for contact in contact_manifold.contacts() {
+
+                    let separating_contact = self.solver.create_separating_contact_if_interlocked(
+                        body_a_idx,
+                        body_b_idx,
+                        contact_manifold,
+                    );
+
+                    let contacts = separating_contact
+                        .as_ref()
+                        .map_or_else(|| contact_manifold.contacts(), std::slice::from_ref);
+
+                    for contact in contacts {
                         self.solver.prepare_contact(body_a_idx, body_b_idx, contact);
                     }
                 },
