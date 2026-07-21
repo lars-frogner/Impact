@@ -6,6 +6,7 @@ use crate::{
     quantities::{self, Orientation, Position, PositionC, Velocity},
 };
 use impact_math::{
+    point::Point3,
     quaternion::UnitQuaternion,
     random::splitmix,
     vector::{UnitVector3, UnitVector3C, Vector3},
@@ -149,6 +150,23 @@ impl Default for ContactManifold {
     }
 }
 
+impl ContactWithID {
+    #[inline]
+    pub fn position(&self) -> &Position {
+        &self.contact.geometry.position
+    }
+
+    #[inline]
+    pub fn surface_normal(&self) -> &UnitVector3 {
+        &self.contact.geometry.surface_normal
+    }
+
+    #[inline]
+    pub fn penetration_depth(&self) -> f32 {
+        self.contact.geometry.penetration_depth
+    }
+}
+
 impl Default for ContactWithID {
     #[inline]
     fn default() -> Self {
@@ -160,6 +178,11 @@ impl Default for ContactWithID {
 }
 
 impl ContactID {
+    #[inline]
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
+
     #[inline]
     pub fn from_two_u64(a: u64, b: u64) -> Self {
         Self(splitmix::random_u64_from_two_states(a, b))
@@ -541,6 +564,179 @@ impl Mul<f32> for ContactImpulses {
             bitangent: self.bitangent * rhs,
         }
     }
+}
+
+/// Analyzes the contact manifold for a collision between two objects and
+/// determines whether the contacts will keep the objects interlocked rather
+/// than pushing them apart.
+///
+/// The objects are considered interlocked when the contact penetration vectors
+/// are strongly misaligned, meaning that the positional corrections would fight
+/// to push the objects apart along opposing directions.
+pub fn objects_in_contact_are_interlocked(contact_manifold: &ContactManifold) -> bool {
+    const ALIGNMENT_THRESHOLD: f32 = 0.1;
+
+    let mut abs_penetration_sum = 0.0;
+    let mut penetration_vector_sum = Vector3::zeros();
+
+    for contact in contact_manifold.contacts() {
+        let penetration_depth = contact.contact.geometry.penetration_depth;
+        if penetration_depth <= 0.0 {
+            continue;
+        }
+        abs_penetration_sum += penetration_depth;
+        penetration_vector_sum += penetration_depth * contact.contact.geometry.surface_normal;
+    }
+
+    if abs_penetration_sum < 1e-6 {
+        // Effectively no penetration to correct
+        return false;
+    }
+
+    // 1.0 when all corrections would be aligned, 0.0 when they would cancel
+    let correction_alignment_factor =
+        penetration_vector_sum.norm_squared() / abs_penetration_sum.powi(2);
+
+    correction_alignment_factor < ALIGNMENT_THRESHOLD
+}
+
+/// Creates a synthetic contact designed to separate two interlocked objects by
+/// substituting their contact manifold for it.
+///
+/// The method looks at the distribution of contact points and estimates the
+/// axis along which they are least separated. It uses this to create a contact
+/// that, when used for positional correction, pushes the objects apart along
+/// that axis enough to remove the separation.
+///
+/// No contact will be returned if the contact manifold is empty or effectively
+/// a single point.
+pub fn create_separating_contact_for_interlocked_objects(
+    body_a: &ConstrainedBody,
+    body_b: &ConstrainedBody,
+    contact_manifold: &ContactManifold,
+) -> Option<ContactWithID> {
+    let contacts = contact_manifold.contacts();
+
+    if contacts.is_empty() {
+        return None;
+    }
+
+    // Find the axis with the maximum separation of contacts
+    let major_displacement = find_max_displacement_vector(contacts, |point| *point);
+    let major_axis = UnitVector3::normalized_from_if_above(major_displacement, 1e-6)?;
+
+    // Project the contact positions onto the plane perpendicular to the major
+    // axis and find the axis with the maximum separation inside that plane.
+    // This gives the axis with the maximum separation perpendicular to the
+    // major axis.
+    let middle_displacement = find_max_displacement_vector(contacts, |point| {
+        point - point.as_vector().dot(&major_axis) * major_axis
+    });
+    let Some(middle_axis) = UnitVector3::normalized_from_if_above(middle_displacement, 1e-6) else {
+        // If the contacts all lie along the major axis, fall back to using the
+        // major axis as the separating axis
+        return create_contact_separating_along_axis(body_a, body_b, contacts, major_axis);
+    };
+
+    // Calculate the axis perpendicular to the major and middle axis and use
+    // that as the separating axis
+    let minor_axis = UnitVector3::normalized_from(major_axis.cross(&middle_axis));
+    create_contact_separating_along_axis(body_a, body_b, contacts, minor_axis).or_else(|| {
+        // If the contacts all lie in the plane perpendicular to the minor axis,
+        // fall back to using the middle axis as the separating axis
+        create_contact_separating_along_axis(body_a, body_b, contacts, middle_axis)
+    })
+}
+
+fn find_max_displacement_vector(
+    contacts: &[ContactWithID],
+    map_point: impl Fn(&Point3) -> Point3,
+) -> Vector3 {
+    let mut max_squared_dist = f32::NEG_INFINITY;
+    let mut best_pair = [usize::MAX; 2];
+
+    for (i, contact_i) in contacts.iter().enumerate().take(contacts.len() - 1) {
+        for (j, contact_j) in contacts.iter().enumerate().skip(i + 1) {
+            let squared_dist = Point3::squared_distance_between(
+                &map_point(contact_i.position()),
+                &map_point(contact_j.position()),
+            );
+            if squared_dist > max_squared_dist {
+                max_squared_dist = squared_dist;
+                best_pair = [i, j];
+            }
+        }
+    }
+
+    let [i, j] = best_pair;
+    map_point(contacts[j].position()) - map_point(contacts[i].position())
+}
+
+fn create_contact_separating_along_axis(
+    body_a: &ConstrainedBody,
+    body_b: &ConstrainedBody,
+    contacts: &[ContactWithID],
+    mut separating_axis: UnitVector3,
+) -> Option<ContactWithID> {
+    // The axis will be the "surface normal" of body B, which corresponds to the
+    // direction we will push body A. We orient the axis so that we push the COM
+    // of A away from the COM of B.
+    if separating_axis.dot(&(body_a.position - body_b.position).aligned()) < 0.0 {
+        separating_axis = -separating_axis;
+    }
+
+    // Determine the contacts with the minimum and maximum displacement along
+    // the separating axis
+    let mut min_displacement = f32::INFINITY;
+    let mut max_displacement = f32::NEG_INFINITY;
+    let mut most_separated_pair = [usize::MAX; 2];
+
+    for (i, contact) in contacts.iter().enumerate() {
+        let displacement_along_axis = contact.position().as_vector().dot(&separating_axis);
+
+        if displacement_along_axis < min_displacement {
+            min_displacement = displacement_along_axis;
+            most_separated_pair[0] = i;
+        }
+        if displacement_along_axis > max_displacement {
+            max_displacement = displacement_along_axis;
+            most_separated_pair[1] = i;
+        }
+    }
+
+    let [i, j] = most_separated_pair;
+    if i == j {
+        // The contacts all lie in the plane perpendicular to the axis, so we do
+        // not attempt to proceed with separation along this axis
+        return None;
+    }
+
+    // The separation required to move the lower contact to the upper contact
+    let required_separation = max_displacement - min_displacement;
+
+    let contact_i = &contacts[i];
+    let contact_j = &contacts[j];
+
+    let separating_contact = Contact {
+        geometry: ContactGeometry {
+            position: *contact_i.position(),
+            surface_normal: separating_axis,
+            penetration_depth: required_separation,
+        },
+        // The purpose of this contact is positional correction. To minimize
+        // side effects from velocity correction, we use response parameters
+        // that kill the relative velocity.
+        response_params: ContactResponseParameters::new(0.0, f32::INFINITY, f32::INFINITY),
+    };
+
+    // The choice of ID is a bit arbitrary. The main point is that it does not
+    // alias existing IDs.
+    let id = ContactID::from_two_u64(contact_i.id.as_u64(), contact_j.id.as_u64());
+
+    Some(ContactWithID {
+        id,
+        contact: separating_contact,
+    })
 }
 
 #[inline]

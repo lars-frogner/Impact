@@ -47,6 +47,7 @@ use impact_model::{
 use impact_physics::{
     anchor::AnchorManager,
     collision::{CollidableID, CollidableKind, HasCollidable},
+    constraint::contact,
     quantities::Motion,
     rigid_body::{
         DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, RigidBodyManager,
@@ -1249,10 +1250,14 @@ fn buffer_instance_features_for_contacts_gizmo(
     };
 
     for collision in collisions {
-        let hash_a = Hash64::from_raw_u64(collision.collidable_a_id.as_u64());
-        let hash_b = Hash64::from_raw_u64(collision.collidable_b_id.as_u64());
-        let pair_hash = hash::compute_hash_64_of_two_hash_64(hash_a, hash_b).to_u64();
-        let color = color_from_hash(pair_hash);
+        let color = if contact::objects_in_contact_are_interlocked(&collision.contact_manifold) {
+            Vector4C::new(1.0, 0.0, 0.0, 1.0)
+        } else {
+            let hash_a = Hash64::from_raw_u64(collision.collidable_a_id.as_u64());
+            let hash_b = Hash64::from_raw_u64(collision.collidable_b_id.as_u64());
+            let pair_hash = hash::compute_hash_64_of_two_hash_64(hash_a, hash_b).to_u64();
+            color_from_hash(pair_hash)
+        };
 
         for contact in collision.contact_manifold.contacts() {
             let geometry = &contact.contact.geometry;

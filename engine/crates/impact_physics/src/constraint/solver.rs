@@ -1,14 +1,14 @@
 //! Constraint solving based on the sequential impulse method.
 
-use super::{
-    AnchoredTwoBodyConstraint, ConstrainedBody, PreparedTwoBodyConstraint, TwoBodyConstraint,
-    contact::ContactWithID,
-};
 use crate::{
     anchor::AnchorManager,
     constraint::{
-        ConstrainedBodyManager, ConstraintID,
-        contact::{ContactID, PreparedContact},
+        AnchoredTwoBodyConstraint, ConstrainedBody, ConstrainedBodyManager, ConstraintID,
+        PreparedTwoBodyConstraint, TwoBodyConstraint,
+        contact::{
+            ContactID, ContactManifold, ContactWithID, PreparedContact,
+            create_separating_contact_for_interlocked_objects, objects_in_contact_are_interlocked,
+        },
         spherical_joint::{PreparedSphericalJoint, SphericalJoint},
     },
     quantities::{AngularVelocity, AngularVelocityC},
@@ -130,6 +130,26 @@ impl ConstraintSolver {
     ) -> Option<(usize, usize)> {
         self.body_manager
             .add_body_pair(rigid_body_manager, rigid_body_a_id, rigid_body_b_id)
+    }
+
+    /// Analyzes the contact manifold for a collision between two objects and
+    /// determines whether the contacts will keep the objects interlocked rather
+    /// than pushing them apart. If so, creates a synthetic contact designed to
+    /// separate the objects by substituting their contact manifold for it.
+    pub fn create_separating_contact_if_interlocked(
+        &self,
+        constrained_body_a_idx: usize,
+        constrained_body_b_idx: usize,
+        contact_manifold: &ContactManifold,
+    ) -> Option<ContactWithID> {
+        if !objects_in_contact_are_interlocked(contact_manifold) {
+            return None;
+        }
+
+        let body_a = self.body_manager.body(constrained_body_a_idx);
+        let body_b = self.body_manager.body(constrained_body_b_idx);
+
+        create_separating_contact_for_interlocked_objects(body_a, body_b, contact_manifold)
     }
 
     /// Prepares the given contact between the [`ConstrainedBody`]s with the
