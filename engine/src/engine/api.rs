@@ -8,7 +8,7 @@ use crate::{
     setup,
 };
 use anyhow::{Result, anyhow};
-use impact_alloc::arena::ArenaPool;
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_ecs::{
     archetype::ArchetypeComponents,
     component::{
@@ -730,13 +730,16 @@ impl Engine {
         let aabb = voxel_object.object().compute_normalized_aabb().compact();
 
         let arena = ArenaPool::get_arena();
-        let seed_points = fracture_point_generator.generate_fracture_points(&arena, &aabb, seed);
+        let mut fracture_points = AVec::new_in(&arena);
+        fracture_point_generator.add_fracture_points(&mut fracture_points, &aabb, seed);
 
-        fracturing_manager.initiate_fracturing_process(
+        fracturing_manager.add_fracture_points_for_object(
             voxel_object_manager,
             voxel_object_id,
-            &seed_points,
-        )
+            &fracture_points,
+            None,
+        )?;
+        fracturing_manager.initiate_fracturing_process(voxel_object_manager, voxel_object_id)
     }
 
     pub fn with_absorbed_voxels_for_sphere<R>(

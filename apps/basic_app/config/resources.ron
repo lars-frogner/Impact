@@ -1,21 +1,21 @@
 (
     triangle_meshes: [
-        (
-            id: "dragon",
-            source: File("../resources/Dragon_1.obj"),
-        ),
-        (
-            id: "abstract_object",
-            source: File("../resources/abstract_object.obj"),
-        ),
-        (
-            id: "abstract_pyramid",
-            source: File("../resources/abstract_pyramid.obj"),
-        ),
-        (
-            id: "abstract_cube",
-            source: File("../resources/abstract_cube.obj"),
-        ),
+        // (
+        //     id: "dragon",
+        //     source: File("../resources/Dragon_1.obj"),
+        // ),
+        // (
+        //     id: "abstract_object",
+        //     source: File("../resources/abstract_object.obj"),
+        // ),
+        // (
+        //     id: "abstract_pyramid",
+        //     source: File("../resources/abstract_pyramid.obj"),
+        // ),
+        // (
+        //     id: "abstract_cube",
+        //     source: File("../resources/abstract_cube.obj"),
+        // ),
     ],
     textures: [
         (
@@ -33,151 +33,151 @@
             ),
             sampler_config: Some(()),
         ),
-        (
-            id: "ocean_skybox",
-            source: CubemapImages(
-                right: "../resources/ocean_skybox/right.jpg",
-                left: "../resources/ocean_skybox/left.jpg",
-                top: "../resources/ocean_skybox/top.jpg",
-                bottom: "../resources/ocean_skybox/bottom.jpg",
-                front: "../resources/ocean_skybox/front.jpg",
-                back: "../resources/ocean_skybox/back.jpg",
-            ),
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some(()),
-        ),
-        (
-            id: "concrete_color_texture",
-            source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg"),
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "concrete_roughness_texture",
-            source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "concrete_normal_texture",
-            source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "plastic_color_texture",
-            source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg"),
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "plastic_roughness_texture",
-            source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "plastic_normal_texture",
-            source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "bricks_color_texture",
-            source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "bricks_roughness_texture",
-            source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "bricks_height_texture",
-            source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "wood_floor_color_texture",
-            source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "wood_floor_roughness_texture",
-            source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "wood_floor_normal_texture",
-            source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
-            texture_config: (
-                color_space: Linear,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
-        (
-            id: "ground_color_texture",
-            source: Image("../resources/Ground029_4K-JPG/Ground029_4K-JPG_Color.jpg"),
-            texture_config: (
-                color_space: Srgb,
-            ),
-            sampler_config: Some((
-                addressing: Repeating,
-            )),
-        ),
+        // (
+        //     id: "ocean_skybox",
+        //     source: CubemapImages(
+        //         right: "../resources/ocean_skybox/right.jpg",
+        //         left: "../resources/ocean_skybox/left.jpg",
+        //         top: "../resources/ocean_skybox/top.jpg",
+        //         bottom: "../resources/ocean_skybox/bottom.jpg",
+        //         front: "../resources/ocean_skybox/front.jpg",
+        //         back: "../resources/ocean_skybox/back.jpg",
+        //     ),
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some(()),
+        // ),
+        // (
+        //     id: "concrete_color_texture",
+        //     source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Color.jpg"),
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "concrete_roughness_texture",
+        //     source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_Roughness.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "concrete_normal_texture",
+        //     source: Image("../resources/Concrete034_4K-JPG/Concrete034_4K-JPG_NormalDX.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "plastic_color_texture",
+        //     source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Color.jpg"),
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "plastic_roughness_texture",
+        //     source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_Roughness.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "plastic_normal_texture",
+        //     source: Image("../resources/Plastic007_4K-JPG/Plastic007_4K-JPG_NormalDX.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "bricks_color_texture",
+        //     source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Color.jpg"),
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "bricks_roughness_texture",
+        //     source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Roughness.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "bricks_height_texture",
+        //     source: Image("../resources/Bricks059_4K-JPG/Bricks059_4K-JPG_Displacement.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "wood_floor_color_texture",
+        //     source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Color.jpg"),
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "wood_floor_roughness_texture",
+        //     source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_Roughness.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "wood_floor_normal_texture",
+        //     source: Image("../resources/WoodFloor041_4K-JPG/WoodFloor041_4K-JPG_NormalDX.jpg"),
+        //     texture_config: (
+        //         color_space: Linear,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
+        // (
+        //     id: "ground_color_texture",
+        //     source: Image("../resources/Ground029_4K-JPG/Ground029_4K-JPG_Color.jpg"),
+        //     texture_config: (
+        //         color_space: Srgb,
+        //     ),
+        //     sampler_config: Some((
+        //         addressing: Repeating,
+        //     )),
+        // ),
     ],
     voxel_generators: [
         (

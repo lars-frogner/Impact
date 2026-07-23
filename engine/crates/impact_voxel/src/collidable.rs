@@ -135,6 +135,8 @@ impl collision::Collidable for Collidable {
     ) -> CollidableOrder {
         use Collidable::{Capsule, Plane, Sphere, VoxelObject};
 
+        log::trace!(target: "contact_gen", "pair a={} b={}", collidable_a.id(), collidable_b.id());
+
         match (collidable_a.collidable(), collidable_b.collidable()) {
             (VoxelObject(voxel_object_a), VoxelObject(voxel_object_b)) => {
                 generate_mutual_voxel_object_contact_manifold(
@@ -839,6 +841,12 @@ fn generate_mutual_voxel_object_contact_manifold(
         &transform_from_world_to_a,
         &transform_from_world_to_b,
         &mut |indices_for_id, geometry| {
+            log::trace!(target: "contact_gen",
+                "contact idx={:?} pos=[{:.4},{:.4},{:.4}] nrm=[{:.4},{:.4},{:.4}] dep={:.6}",
+                indices_for_id,
+                geometry.position.x(), geometry.position.y(), geometry.position.z(),
+                geometry.surface_normal.x(), geometry.surface_normal.y(), geometry.surface_normal.z(),
+                geometry.penetration_depth);
             let id = contact_id_from_collidable_ids_and_indices(
                 voxel_object_a_collidable_id,
                 voxel_object_b_collidable_id,
@@ -909,6 +917,9 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
         let collision_probes_for_a = meshed_voxel_object_a.collision_probes();
 
         for (chunk_indices, probe_point_range) in collision_probes_for_a.chunk_point_ranges() {
+            log::trace!(target: "contact_gen",
+                "vv_a chunk=[{},{},{}] n={}",
+                chunk_indices[0], chunk_indices[1], chunk_indices[2], probe_point_range.len());
             if !intersection_chunk_ranges_in_a[0].contains(&chunk_indices[0])
                 || !intersection_chunk_ranges_in_a[1].contains(&chunk_indices[1])
                 || !intersection_chunk_ranges_in_a[2].contains(&chunk_indices[2])
@@ -989,6 +1000,9 @@ pub fn for_each_mutual_voxel_object_contact<'a>(
         let collision_probes_for_b = meshed_voxel_object_b.collision_probes();
 
         for (chunk_indices, probe_point_range) in collision_probes_for_b.chunk_point_ranges() {
+            log::trace!(target: "contact_gen",
+                "vv_b chunk=[{},{},{}] n={}",
+                chunk_indices[0], chunk_indices[1], chunk_indices[2], probe_point_range.len());
             if !intersection_chunk_ranges_in_b[0].contains(&chunk_indices[0])
                 || !intersection_chunk_ranges_in_b[1].contains(&chunk_indices[1])
                 || !intersection_chunk_ranges_in_b[2].contains(&chunk_indices[2])
@@ -1078,6 +1092,12 @@ fn generate_sphere_voxel_object_contact_manifold(
         &transform_to_object_space,
         &sphere,
         &mut |indices, geometry| {
+            log::trace!(target: "contact_gen",
+                "contact idx={:?} pos=[{:.4},{:.4},{:.4}] nrm=[{:.4},{:.4},{:.4}] dep={:.6}",
+                indices,
+                geometry.position.x(), geometry.position.y(), geometry.position.z(),
+                geometry.surface_normal.x(), geometry.surface_normal.y(), geometry.surface_normal.z(),
+                geometry.penetration_depth);
             let id = contact_id_from_collidable_ids_and_indices(
                 sphere_collidable_id,
                 voxel_object_collidable_id,
@@ -1156,6 +1176,12 @@ fn generate_voxel_object_plane_contact_manifold(
         &transform_to_object_space,
         &plane,
         &mut |indices, geometry| {
+            log::trace!(target: "contact_gen",
+                "contact idx={:?} pos=[{:.4},{:.4},{:.4}] nrm=[{:.4},{:.4},{:.4}] dep={:.6}",
+                indices,
+                geometry.position.x(), geometry.position.y(), geometry.position.z(),
+                geometry.surface_normal.x(), geometry.surface_normal.y(), geometry.surface_normal.z(),
+                geometry.penetration_depth);
             let id = contact_id_from_collidable_ids_and_indices(
                 plane_collidable_id,
                 voxel_object_collidable_id,
@@ -1237,6 +1263,12 @@ fn generate_capsule_voxel_object_contact_manifold(
         &transform_to_object_space,
         &capsule,
         &mut |indices, geometry| {
+            log::trace!(target: "contact_gen",
+                "contact idx={:?} pos=[{:.4},{:.4},{:.4}] nrm=[{:.4},{:.4},{:.4}] dep={:.6}",
+                indices,
+                geometry.position.x(), geometry.position.y(), geometry.position.z(),
+                geometry.surface_normal.x(), geometry.surface_normal.y(), geometry.surface_normal.z(),
+                geometry.penetration_depth);
             let id = contact_id_from_collidable_ids_and_indices(
                 capsule_collidable_id,
                 voxel_object_collidable_id,

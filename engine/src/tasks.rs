@@ -5,6 +5,7 @@ use crate::{
     runtime::tasks::{RuntimeContext, RuntimeTaskScheduler},
 };
 use anyhow::Result;
+use impact_math::random::Rng;
 use impact_profiling::instrument_task;
 use impact_scene::buffer_model_instances_and_bound_lights;
 use impact_scheduling::{define_execution_tag, define_task};
@@ -433,6 +434,53 @@ define_task!(
 );
 
 // =============================================================================
+// COLLISION TRIGGERED LOGIC
+// =============================================================================
+
+// TODO: This should be replaced by a more generic event handling task when we
+// get an event system.
+define_task!(
+    /// Runs logic triggered by collisions.
+    [pub] RunCollisionTriggeredLogic,
+    depends_on = [
+        // We need to include the newly created entities.
+        HandleStagedEntities,
+        // We need the up-to-date collidables.
+        SyncVoxelObjectCollidables,
+        // The triggers use the collisions just detected.
+        DetectCollisions
+    ],
+    execute_on = [RenderingTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Running collision triggered logic", engine.task_timer(), {
+            let scene = engine.scene().oread();
+            let voxel_manager = &mut **scene.voxel_manager().owrite();
+            let voxel_object_manager = &voxel_manager.object_manager;
+            let interaction_manager = &mut voxel_manager.interaction_manager;
+            let fracturing_manager = interaction_manager.fracturing_manager_mut();
+            let simulator = engine.simulator().oread();
+            let rigid_body_manager = simulator.rigid_body_manager().oread();
+            let constraint_manager = &mut **simulator.constraint_manager().owrite();
+            let collision_world = simulator.collision_world().oread();
+            let time_step_duration = simulator.scaled_time_step_duration();
+
+            let mut rng = Rng::with_seed(0);
+            fracturing_manager.handle_fracturing_impacts(
+                voxel_object_manager,
+                &rigid_body_manager,
+                constraint_manager,
+                &collision_world,
+                time_step_duration,
+                &mut rng,
+            );
+
+            Ok(())
+        })
+    }
+);
+
+// =============================================================================
 // CONTROLLED ENTITIES (updates to state for current frame)
 // =============================================================================
 
@@ -474,7 +522,9 @@ define_task!(
         // Voxel object meshes are used for collision detection.
         UpdateVoxelObjectMeshes,
         // We use cached collisions in the first substep.
-        DetectCollisions
+        DetectCollisions,
+        // Collision triggered logic may influence the simulation.
+        RunCollisionTriggeredLogic
     ],
     execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
@@ -1102,6 +1152,9 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
 
     // COLLISION DETECTION (based on state from previous frame)
     task_scheduler.register_task(DetectCollisions)?;
+
+    // COLLISION TRIGGERED LOGIC
+    task_scheduler.register_task(RunCollisionTriggeredLogic)?;
 
     // CONTROLLED ENTITIES (updates to state for current frame)
     task_scheduler.register_task(UpdateControlledEntityMotion)?;

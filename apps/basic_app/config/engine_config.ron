@@ -59,7 +59,7 @@
     ),
     physics: (
         simulator: (
-            enabled: true,
+            enabled: false,
             n_substeps: 1,
             initial_time_step_duration: 0.01667,
             match_frame_duration: false,
