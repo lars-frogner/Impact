@@ -120,6 +120,22 @@ define_setup_type! {
 }
 
 define_setup_type! {
+    /// An object made of voxels in a capsular configuration.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct VoxelCapsule {
+        /// The extent of a single voxel.
+        pub voxel_extent: f32,
+        /// The number of voxels along the segment between the bases of the
+        /// spherical caps.
+        pub segment_length: f32,
+        /// The number of voxels along the radius.
+        pub radius: f32,
+    }
+}
+
+define_setup_type! {
     /// An object made of voxels in a configuration described by the smooth
     /// union of two spheres.
     #[roc(parents = "Setup")]
@@ -365,11 +381,11 @@ impl VoxelSphere {
     ///
     /// # Panics
     /// - If the voxel extent is negative.
-    /// - If the radius zero or negative.
+    /// - If the radius is zero or negative.
     #[roc(body = r#"
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect voxel_extent > 0.0
-    # expect radius >= 0.0
+    # expect radius > 0.0
     {
         voxel_extent,
         radius,
@@ -393,6 +409,56 @@ impl VoxelSphere {
 
     pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
         graph.add_node(SDFNode::new_sphere(self.radius_in_voxels()))
+    }
+}
+
+#[roc]
+impl VoxelCapsule {
+    /// Defines a capsule with the given voxel extent and number of voxels
+    /// across its middle segment and radius.
+    ///
+    /// # Panics
+    /// - If the voxel extent is negative.
+    /// - If the segment length is negative.
+    /// - If the radius is zero or negative.
+    #[roc(body = r#"
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect voxel_extent > 0.0
+    # expect segment_length >= 0.0
+    # expect radius > 0.0
+    {
+        voxel_extent,
+        segment_length,
+        radius,
+    }"#)]
+    pub fn new(voxel_extent: f32, segment_length: f32, radius: f32) -> Self {
+        assert!(voxel_extent > 0.0);
+        assert!(segment_length >= 0.0);
+        assert!(radius > 0.0);
+        Self {
+            voxel_extent,
+            segment_length,
+            radius,
+        }
+    }
+
+    pub fn voxel_extent(&self) -> f32 {
+        self.voxel_extent
+    }
+
+    pub fn segment_length_in_voxels(&self) -> f32 {
+        self.segment_length
+    }
+
+    pub fn radius_in_voxels(&self) -> f32 {
+        self.radius
+    }
+
+    pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
+        graph.add_node(SDFNode::new_capsule(
+            self.segment_length_in_voxels(),
+            self.radius_in_voxels(),
+        ))
     }
 }
 
