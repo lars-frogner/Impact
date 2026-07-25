@@ -1,5 +1,5 @@
-# Hash: d174480d3e4b6185
-# Generated: 2025-12-29T23:55:22.755341756
+# Hash: c23889a3e1a66198
+# Generated: 2026-07-25T04:36:23.812972238
 # Rust type: impact_voxel::setup::VoxelSphere
 # Type category: Component
 module [
@@ -30,12 +30,12 @@ VoxelSphere : {
 ##
 ## # Panics
 ## - If the voxel extent is negative.
-## - If the radius zero or negative.
+## - If the radius is zero or negative.
 new : F32, F32 -> VoxelSphere
 new = |voxel_extent, radius|
     # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
     # expect voxel_extent > 0.0
-    # expect radius >= 0.0
+    # expect radius > 0.0
     {
         voxel_extent,
         radius,
@@ -46,7 +46,7 @@ new = |voxel_extent, radius|
 ##
 ## # Panics
 ## - If the voxel extent is negative.
-## - If the radius zero or negative.
+## - If the radius is zero or negative.
 ## Adds the component to the given entity's data.
 add_new : Entity.ComponentData, F32, F32 -> Entity.ComponentData
 add_new = |entity_data, voxel_extent, radius|
@@ -57,7 +57,7 @@ add_new = |entity_data, voxel_extent, radius|
 ##
 ## # Panics
 ## - If the voxel extent is negative.
-## - If the radius zero or negative.
+## - If the radius is zero or negative.
 ## Adds multiple values of the component to the data of
 ## a set of entities of the same archetype's data.
 add_multiple_new : Entity.MultiComponentData, Entity.Arg.Broadcasted (F32), Entity.Arg.Broadcasted (F32) -> Result Entity.MultiComponentData Str
