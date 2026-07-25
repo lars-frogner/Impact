@@ -138,8 +138,8 @@ impl ForceGeneratorManager {
         for generator in self.constant_accelerations.generators() {
             generator.apply(rigid_body_manager);
         }
-        for generator in self.local_forces.generators() {
-            generator.apply(rigid_body_manager, anchor_manager);
+        for (&anchor_id, generator) in self.local_forces.generators_with_ids() {
+            generator.apply(anchor_id, rigid_body_manager, anchor_manager);
         }
         for generator in self.dynamic_dynamic_spring_forces.generators() {
             generator.apply(rigid_body_manager, anchor_manager);
@@ -192,6 +192,11 @@ impl<Id: Copy + Eq + Hash + fmt::Display, G> ForceGeneratorRegistry<Id, G> {
     /// Returns an iterator over all generators.
     pub fn generators(&self) -> impl Iterator<Item = &G> {
         self.generators.values()
+    }
+
+    /// Returns an iterator over all generators and their IDs.
+    pub fn generators_with_ids(&self) -> impl Iterator<Item = (&Id, &G)> {
+        self.generators.iter()
     }
 
     /// Adds the given force generator to the map under the given ID.

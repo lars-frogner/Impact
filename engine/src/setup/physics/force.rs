@@ -18,7 +18,6 @@ use impact_physics::{
         },
         detailed_drag::{DetailedDragForceGeneratorID, HasDetailedDragForceGenerator},
         dynamic_gravity::DynamicGravity,
-        local_force::{HasLocalForceGenerator, LocalForceGeneratorID},
         setup::{
             self, ConstantAcceleration, DetailedDragProperties, FixedDirectionAlignmentTorque,
             GravityAlignmentTorque, LocalForce,
@@ -67,15 +66,14 @@ pub fn setup_forces_for_new_entities(
         |entity_id: EntityID,
          local_force: &LocalForce,
          model_transform: Option<&ModelTransform>|
-         -> Result<HasLocalForceGenerator> {
-            setup::setup_local_force(
+         -> Result<()> {
+            setup::add_local_force_for_body(
                 &mut anchor_manager,
                 &mut force_generator_manager,
                 entity_id,
                 *local_force,
                 model_transform,
-            )?;
-            Ok(HasLocalForceGenerator)
+            )
         },
         [HasDynamicRigidBody]
     )?;
@@ -222,14 +220,6 @@ pub fn remove_force_generators_for_entity(
         let generator_id = ConstantAccelerationGeneratorID::from_entity_id(entity_id);
         force_generator_manager
             .constant_accelerations_mut()
-            .remove_generator(generator_id);
-    }
-    if entity.has_component::<HasLocalForceGenerator>() {
-        let simulator = simulator.oread();
-        let mut force_generator_manager = simulator.force_generator_manager().owrite();
-        let generator_id = LocalForceGeneratorID::from_entity_id(entity_id);
-        force_generator_manager
-            .local_forces_mut()
             .remove_generator(generator_id);
     }
     if entity.has_component::<HasDynamicDynamicSpringForceGenerator>() {

@@ -14,7 +14,7 @@ use crate::{
         ForceGeneratorManager,
         alignment_torque::{AlignmentTorqueGenerator, AlignmentTorqueGeneratorID},
         constant_acceleration::{ConstantAccelerationGenerator, ConstantAccelerationGeneratorID},
-        local_force::{LocalForceGenerator, LocalForceGeneratorID},
+        local_force::LocalForceGenerator,
         spring_force::{
             DynamicDynamicSpringForceGeneratorID, DynamicDynamicSpringForceProperties,
             DynamicKinematicSpringForceGeneratorID, DynamicKinematicSpringForceProperties,
@@ -40,7 +40,7 @@ pub fn setup_constant_acceleration(
         )
 }
 
-pub fn setup_local_force(
+pub fn add_local_force_for_body(
     anchor_manager: &mut AnchorManager,
     force_generator_manager: &mut ForceGeneratorManager,
     entity_id: EntityID,
@@ -55,16 +55,14 @@ pub fn setup_local_force(
     }
 
     let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
-    let anchor = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
+    let anchor_id = anchor_manager.dynamic_mut().insert(DynamicRigidBodyAnchor {
         rigid_body_id,
         point: point.compact(),
     });
 
-    let generator_id = LocalForceGeneratorID::from_entity_id(entity_id);
     force_generator_manager.local_forces_mut().insert_generator(
-        generator_id,
+        anchor_id,
         LocalForceGenerator {
-            anchor,
             force: local_force.force,
         },
     )

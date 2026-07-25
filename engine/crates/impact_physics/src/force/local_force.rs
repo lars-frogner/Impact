@@ -7,35 +7,15 @@ use crate::{
     rigid_body::RigidBodyManager,
 };
 use bytemuck::{Pod, Zeroable};
-use impact_id::define_entity_id_newtype;
 use roc_integration::roc;
 
 /// Manages all [`LocalForceGenerator`]s.
-pub type LocalForceRegistry = ForceGeneratorRegistry<LocalForceGeneratorID, LocalForceGenerator>;
-
-define_entity_id_newtype! {
-    /// Identifier for a [`LocalForceGenerator`].
-    [pub] LocalForceGeneratorID
-}
-
-define_component_type! {
-    /// Marks that an entity has a local force generator identified by a
-    /// [`LocalForceGeneratorID`].
-    ///
-    /// Use [`LocalForceGeneratorID::from_entity_id`] to obtain the generator ID
-    /// from the entity ID.
-    #[roc(parents = "Comp")]
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct HasLocalForceGenerator;
-}
+pub type LocalForceRegistry = ForceGeneratorRegistry<DynamicRigidBodyAnchorID, LocalForceGenerator>;
 
 /// Generator for a constant body-space force applied to a specific point on
 /// a dynamic rigid body.
 #[derive(Clone, Debug)]
 pub struct LocalForceGenerator {
-    /// The anchor point where the force is applied.
-    pub anchor: DynamicRigidBodyAnchorID,
     /// The force vector in the body-fixed frame.
     pub force: ForceC,
 }
@@ -56,8 +36,13 @@ define_setup_type! {
 
 impl LocalForceGenerator {
     /// Applies the force to the appropriate dynamic rigid body.
-    pub fn apply(&self, rigid_body_manager: &mut RigidBodyManager, anchor_manager: &AnchorManager) {
-        let Some(anchor) = anchor_manager.dynamic().get(self.anchor) else {
+    pub fn apply(
+        &self,
+        anchor_id: DynamicRigidBodyAnchorID,
+        rigid_body_manager: &mut RigidBodyManager,
+        anchor_manager: &AnchorManager,
+    ) {
+        let Some(anchor) = anchor_manager.dynamic().get(anchor_id) else {
             return;
         };
 
