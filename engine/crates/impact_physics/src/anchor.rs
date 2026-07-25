@@ -91,9 +91,21 @@ impl From<u64> for DynamicRigidBodyAnchorID {
     }
 }
 
+impl fmt::Display for DynamicRigidBodyAnchorID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl From<u64> for KinematicRigidBodyAnchorID {
     fn from(id: u64) -> Self {
         Self(id)
+    }
+}
+
+impl fmt::Display for KinematicRigidBodyAnchorID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -282,12 +294,20 @@ impl<A: Anchor> SpecificAnchorManager<A> {
     }
 
     /// Removes all anchors on the rigid body with the given ID.
-    pub fn remove_all_anchors_for_body(&mut self, rigid_body_id: A::RigidBodyID) {
-        if let Some(anchor_ids) = self.anchor_ids_by_body.remove(&rigid_body_id) {
+    ///
+    /// # Returns
+    /// The IDs of the body's anchors if they exist.
+    pub fn remove_all_anchors_for_body(
+        &mut self,
+        rigid_body_id: A::RigidBodyID,
+    ) -> Option<impl IntoIterator<Item = A::ID>> {
+        let anchor_ids = self.anchor_ids_by_body.remove(&rigid_body_id);
+        if let Some(anchor_ids) = anchor_ids.as_ref() {
             for id in anchor_ids {
-                self.anchors.remove(&id);
+                self.anchors.remove(id);
             }
         }
+        anchor_ids
     }
 
     fn insert_with_id(&mut self, anchor_id: A::ID, anchor: A) {

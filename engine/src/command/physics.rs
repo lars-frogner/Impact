@@ -6,14 +6,11 @@ use crate::{
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use impact_id::EntityID;
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
-    force::{
-        alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
-        local_force::LocalForceGeneratorID,
-    },
+    force::alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
     quantities::{ForceC, ImpulseC, Motion, PositionC},
     rigid_body::DynamicRigidBodyID,
 };
@@ -91,24 +88,28 @@ pub fn update_local_force(
     force: ForceC,
 ) -> Result<()> {
     let simulator = engine.simulator().oread();
+    let anchor_manager = simulator.anchor_manager().oread();
     let mut force_generator_manager = simulator.force_generator_manager().owrite();
 
-    let generator_id = LocalForceGeneratorID::from_entity_id(entity_id);
-    let local_force = force_generator_manager
-        .local_forces_mut()
-        .get_generator_mut(&generator_id)
-        .ok_or_else(|| anyhow!("No local force with ID {generator_id}"))?;
-
-    match mode {
-        LocalForceUpdateMode::Set => {
-            local_force.force = force;
-        }
-        LocalForceUpdateMode::Add => {
-            local_force.force += force;
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+    for (anchor_id, _) in anchor_manager.dynamic().anchors_for_body(rigid_body_id) {
+        if let Some(local_force) = force_generator_manager
+            .local_forces_mut()
+            .get_generator_mut(&anchor_id)
+        {
+            match mode {
+                LocalForceUpdateMode::Set => {
+                    local_force.force = force;
+                }
+                LocalForceUpdateMode::Add => {
+                    local_force.force += force;
+                }
+            }
+            return Ok(());
         }
     }
 
-    Ok(())
+    bail!("No local force for entity {entity_id}")
 }
 
 pub fn set_alignment_torque_direction(
