@@ -25,39 +25,39 @@ Contact traction: ``\mathbf{P}(\mathbf{x}, t) = \frac{\mathrm{d}\mathbf{F}}{\mat
 
 Assuming the force is constant over the collision time and uniform over the contact area ``A``, the traction becomes ``\mathbf{P} = \mathbf{F}/A = \mathbf{J}/(A \Delta t)``.
 
-An object will fracture if the impact traction exceeds a material-specific threshold ``P_\mathrm{f}``, or equivalently (in the constant uniform force case), the impulse exceeds the threshold ``J_\mathrm{f} = A \Delta t P_\mathrm{f}``.
+An object will fracture if the impact traction exceeds a material-specific threshold ``P_\mathrm{f}``, or equivalently (in the constant uniform force case), the force exceeds the threshold ``F_\mathrm{f} = A P_\mathrm{f}``.
 
-If it does, the impact will deliver a load ``L(r, \theta, \phi)`` to the material at spherical coordinates ``(r, \theta, \phi)`` in the frame centered at the impact point and with the polar axis aligned with the impulse vector. ``r`` is a unitless distance normalized by the characteristic length of the object.
+If it does, the impact will deliver a load ``L(r, \theta, \phi)`` to the material at spherical coordinates ``(r, \theta, \phi)`` in the frame centered at the impact point and with the polar axis aligned with the force vector.
 
-We model the load axisymmetrically as ``L(r, \theta) = J (\cos_+\theta)^a (r/r_0 + 1)^{-b}``, where ``\cos_+\theta = 0`` for ``|\theta| \ge \pi/2``.
+We model the load axisymmetrically as ``L(r, \theta) = F (r/r_0 + 1)^{-\rho}(\cos_+\theta)^\alpha``, where ``\cos_+\theta = 0`` for ``|\theta| \ge \pi/2``. The load is ``F`` at the impact point ``r = 0``.
 
-``a`` controls how steeply the load decreases away from the impact axis, ``b`` controls how steeply it decreases with distance from the impact point and ``r_0`` is a softening distance limiting how steeply the load decreases close to the impact point. The load is unity at the impact point, and we define ``L(r > 1, \theta) = 0``.
+The power ``\rho`` controls how steeply the load decreases with distance from the impact point, ``\alpha`` controls how steeply it decreases away from the force axis, and ``r_0`` is the extent of the contact area, which we define as ``r_0 = \sqrt{A}``. The contact size ``r_0`` works as a softening distance limiting how steeply the load decreases close to the impact point, and it affects how far from the impact point fine fragmentation can occur.
 
-Fracturing occurs where ``L(r, \theta) \ge J_\mathrm{f}``. We want fracturing all the way out to ``r = 1`` for ``\theta = 0``. This determines ``r_0``: ``L(1, 0) = J_\mathrm{f} \Rightarrow J (1/r_0 + 1)^{-b} = J_\mathrm{f} \Rightarrow r_0 = ((J/J_\mathrm{f})^{1/b} - 1)^{-1}``
+Realistically, ``r_0`` is determined by the contact geometry (at least to first approximation). But in order to avoid concentrating the fragments in a small region surrounding the impact point, we may want to compute ``r_0`` such that the distance ``r_\mathrm{max}`` at which the load ``L`` has decreased to the force threshold ``F_\mathrm{f}`` coincides with the characteristic size ``R`` of the object. The resulting value of ``r_0`` becomes ``r_0 = R/((F/F_\mathrm{f})^{1/\rho} - 1)``.
 """
 
-# ╔═╡ f029222c-e70d-4044-8191-27dedda5b5f7
-function r₀(J, Jf, b)
-	1.0 / ((J / Jf)^(1/b) - 1)
+# ╔═╡ 3dca1e6d-6203-4cfa-a8da-2e8a72006bfd
+function L(r, u, F, r₀, ρ, α)
+	F * (r / r₀ + 1)^(-ρ) * u^α
 end
 
-# ╔═╡ 3dca1e6d-6203-4cfa-a8da-2e8a72006bfd
-function L(J, r, u, Jf, a, b)
-	J * u^a * (r / r₀(J, Jf, b) + 1)^(-b)
+# ╔═╡ 287b2896-1574-4743-83ac-8855cab8f5dd
+function r₀_full(R, F, Ff, ρ)
+	R / ((F / Ff)^(1 / ρ) - 1)
 end
 
 # ╔═╡ 35a5d4f5-3243-4d0a-8a3f-c4cf8d655300
 md"""
 We let the expected fragment size ``s`` be determined by the load excess over the fracture threshold:
 
-``s(r, \theta) = \mathrm{max}(s_\mathrm{min}, s_\mathrm{c} J_\mathrm{f}/(L(r, \theta) - J_\mathrm{f} + s_\mathrm{c} J_\mathrm{f}/s_\mathrm{max}))``
+``s(r, \theta) = \mathrm{min}(s_\mathrm{min}, s_\mathrm{c}/(\mathrm{max}(s_\mathrm{c} / s_\mathrm{max} + 1, L(r, \theta)/F_\mathrm{f}) - 1))``
 
-Here, ``s_\mathrm{c}`` is a characteristic fragment size, ``s_\mathrm{min}`` is the minimum fragment size and ``s_\mathrm{max}`` is the maximum fragment size, which we fix to ``s_\mathrm{max} = 1``.
+Here, ``s_\mathrm{c}`` is a characteristic fragment size, ``s_\mathrm{min}`` is the minimum fragment size and ``s_\mathrm{max}`` is the maximum fragment size.
 """
 
 # ╔═╡ d17038d7-d594-43e7-9913-a41005bf5ba3
-function s(J, r, u, Jf, sc, s_min, a, b)
-	max(s_min, sc * Jf / (L(J, r, u, Jf, a, b) - Jf + sc * Jf))
+function s(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	max(s_min, sc / (max(sc / s_max + 1, L(r, u, F, r₀, ρ, α) / Ff) - 1))
 end
 
 # ╔═╡ 723a6734-dc3c-4623-b8ed-d8c354d2312e
@@ -68,75 +68,61 @@ If we define the fragment volume to be ``s^3``, the mean fragment number density
 """
 
 # ╔═╡ 0e9da54d-7bb2-47fd-8e5a-c555fb8de0e8
-function n(J, r, u, Jf, sc, s_min, a, b)
-	s(J, r, u, Jf, sc, s_min, a, b)^(-3)
+function n(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	s(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)^(-3)
 end
 
 # ╔═╡ f9c1ab12-e2fa-451c-b58e-3c9177021659
 md"""
-The expected fragment count is
-
-``N = \int_{V_\mathrm{f}} n\;\mathrm{d}V``,
-
-where ``V_\mathrm{f}`` is the fragmented volume covering all locations where ``L(r, \theta) \ge J_\mathrm{f}``.
+The expected fragment count is ``N = \int_{V_\mathrm{f}} n\;\mathrm{d}V``, where ``V_\mathrm{f}`` is the fragmented volume, corresponding to the hemisphere of radius ``R`` centered on the impact point.
 
 The volume element is ``\mathrm{d}V = r^2 \sin\theta\;\mathrm{d}\phi\;\mathrm{d}\theta\;\mathrm{d}r``. Defining ``u = \cos\theta``, it becomes ``\mathrm{d}V = -r^2 \;\mathrm{d}\phi\;\mathrm{d}u\;\mathrm{d}r``.
 
-The fragmented volume can then be written ``V_\mathrm{f} = 2\pi\int_0^1\int_{u_\mathrm{min}}^1 r^2\;\mathrm{d}u\;\mathrm{d}r``, where ``u_\mathrm{min}(r) = (J_\mathrm{f}/J)^{1/a}(r/r_0 + 1)^{b/a}`` is the value of ``u`` above which ``L(r, \theta) \ge J_\mathrm{f}``.
-
-We then get:
-
-``N = 2\pi\int_0^1\int_{u_\mathrm{min}}^1 r^2\; n(r, u)\;\mathrm{d}u\;\mathrm{d}r``
+We then get ``N = 2\pi\int_0^R\int_0^1 r^2 \; n(r, u)\;\mathrm{d}u\;\mathrm{d}r``.
 """
 
-# ╔═╡ 56b6278f-8f73-444c-b6f2-c3ff6a204a1c
-function u_min(J, r, Jf, a, b)
-	(Jf / J)^(1 / a) * (r / r₀(J, Jf, b) + 1)^(b / a)
-end
-
 # ╔═╡ 48fd43f5-4752-4dc5-a500-68fa9955d916
-function n_dV(J, r, u, Jf, sc, s_min, a, b)
-	if L(J, r, u, Jf, a, b) >= Jf
-		2π * r^2 * n(J, r, u, Jf, sc, s_min, a, b)
-	else
-		0.0
-	end
+function n_dV(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	2π * r^2 * n(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)
 end
 
-# ╔═╡ af3a3f03-647f-4cc7-a93c-7629af5e1689
-begin
-	nr = 256
-	nu = 256
-	Δr = 1.0 / (nr - 1)
+# ╔═╡ 9520fe42-7d3e-4669-bee2-1c74843e18d1
+function r_grid(R, nr)
+	Δr = R / (nr - 1)
+	(Δr, 0.0:Δr:R)
+end
+
+# ╔═╡ 9ed511f9-41cd-442c-b81d-1eb90b485ade
+function u_grid(nu)
 	Δu = 1.0 / (nu - 1)
-	rg = 0.0:Δr:1.0
-	ug = 0.0:Δu:1.0
+	(Δu, 0.0:Δu:1.0)
 end
 
 # ╔═╡ caa817c6-e880-4fff-8b21-9aaa37a98857
-function N(J, Jf, sc, s_min, a, b)
-	n_dV_values = n_dV.(J, rg, ug', Jf, sc, s_min, a, b)
-	N(n_dV_values)
+function N(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; nr = 256, nu = 256)
+	(Δr, rg) = r_grid(R, nr)
+	(Δu, ug) = u_grid(nu)
+	
+	n_dV_grid = n_dV.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	N(n_dV_grid, Δr, Δu)
 end
 
 # ╔═╡ b385833b-fa13-4301-9de1-773b8c342679
-function N(n_dV_values)
-	sum(n_dV_values) * Δr * Δu
+function N(n_dV_grid, Δr, Δu)
+	sum(n_dV_grid) * Δr * Δu
 end
 
 # ╔═╡ b1a94136-f4b4-4026-9c5b-b937b0248f53
-function N_disc(n_dV_values)
-	Int(max(4, floor(N(n_dV_values))))
-end
-
-# ╔═╡ 82b66a89-2200-4041-9f83-3f9cd38e6738
-function u_min_idx(J, r, Jf, a, b)
-	Int(floor(u_min(J, r, Jf, a, b) * (nu - 1))) + 1
+function N_disc(N_min, N_max, n_dV_grid, Δr, Δu)
+	clamp(Int(floor(N(n_dV_grid, Δr, Δu))), N_min:N_max)
 end
 
 # ╔═╡ 23e6c9f3-91ad-429a-b38f-5545a37a04a4
-function sample_points_unrestricted(n_dV_values, u_min_indices, n_samples; seed = 0)
-	max_n_dV = maximum(n_dV_values[:, end])
+function sample_points_unrestricted(rg, ug, n_dV_grid, n_samples; seed = 0)
+	nr = length(rg)
+	nu = length(ug)
+	
+	max_n_dV = maximum(n_dV_grid[:, end])
 
 	rs = []
 	us = []
@@ -146,16 +132,11 @@ function sample_points_unrestricted(n_dV_values, u_min_indices, n_samples; seed 
 	
 	while length(rs) < n_samples
 		r_idx = rand(rng, 1:nr)
-		
-		min_u_idx = u_min_indices[r_idx]
-		u_idx = rand(rng, min_u_idx:nu)
+		u_idx = rand(rng, 1:nu)
 		
 		prob = rand(rng)
 		
-		# For correcting for not sampling the full range of u indices
-		u_range_fraction = (nu - min_u_idx + 1) / nu
-		
-		if prob * max_n_dV <= n_dV_values[r_idx, u_idx] * u_range_fraction
+		if prob * max_n_dV <= n_dV_grid[r_idx, u_idx]
 			ϕ = 2π * rand(rng)
 			
 			push!(rs, rg[r_idx])
@@ -168,13 +149,16 @@ function sample_points_unrestricted(n_dV_values, u_min_indices, n_samples; seed 
 end
 
 # ╔═╡ e6942b52-2a36-4ce2-8b13-242e7dba4d27
-function min_dist(J, r, u, Jf, sc, s_min, a, b, cutoff)
-	min(cutoff, s(J, r, u, Jf, sc, s_min, a, b))
+function min_dist(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	s(r, u, F, Ff, sc, s_min, s_max, r₀, ρ, α)
 end
 
 # ╔═╡ 86ade710-e0f7-4dd8-b383-f36a6a01a658
-function sample_points(n_dV_values, u_min_indices, min_sq_dists, max_samples; seed = 0, max_rejected_per_sample = 100)
-	max_n_dV = maximum(n_dV_values[:, end])
+function sample_points(rg, ug, n_dV_grid, min_sq_dists, max_samples; seed = 0, max_rejected_per_sample = 128)
+	nr = length(rg)
+	nu = length(ug)
+	
+	max_n_dV = maximum(n_dV_grid[:, end])
 	vg = @. sqrt(max(0, 1 - ug^2))
 
 	rs = []
@@ -191,16 +175,11 @@ function sample_points(n_dV_values, u_min_indices, min_sq_dists, max_samples; se
 	
 	while length(rs) < max_samples && n_rejected < max_rejected
 		r_idx = rand(rng, 1:nr)
-		
-		min_u_idx = u_min_indices[r_idx]
-		u_idx = rand(rng, min_u_idx:nu)
+		u_idx = rand(rng, 1:nu)
 		
 		prob = rand(rng)
 		
-		# For correcting for not sampling the full range of u indices
-		u_range_fraction = (nu - min_u_idx + 1) / nu
-		
-		if prob * max_n_dV > n_dV_values[r_idx, u_idx] * u_range_fraction
+		if prob * max_n_dV > n_dV_grid[r_idx, u_idx]
 			continue
 		end
 
@@ -243,22 +222,26 @@ function sample_points(n_dV_values, u_min_indices, min_sq_dists, max_samples; se
 end
 
 # ╔═╡ cb686f41-4f96-4dd0-8f11-90537e045038
-function plot_samples(J, Jf, sc, s_min, a, b, min_dist_cutoff; seed = 0)
-	n_dV_values = n_dV.(J, rg, ug', Jf, sc, s_min, a, b)
-	max_samples = N_disc(n_dV_values)
-	u_min_indices = u_min_idx.(J, rg, Jf, a, b)
-	min_sq_dists = min_dist.(J, rg, ug', Jf, sc, s_min, a, b, min_dist_cutoff).^2
-	(_, _, x, y, z) = sample_points(n_dV_values, u_min_indices, min_sq_dists, max_samples; seed = seed)
+function plot_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = 1, N_max = 512, nr = 256, nu = 256, seed = 0)
+	(Δr, rg) = r_grid(R, nr)
+	(Δu, ug) = u_grid(nu)
 	
-	scatter(x, z; color="crimson", axis=(; limits=(-0.5, 0.5, 0.0, 1.0), title="Samples: $(length(x))"))
+	n_dV_grid = n_dV.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	max_samples = N_disc(N_min, N_max, n_dV_grid, Δr, Δu)
+	min_sq_dists = min_dist.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α).^2
+	(_, _, x, y, z) = sample_points(rg, ug, n_dV_grid, min_sq_dists, max_samples; seed = seed)
+	
+	scatter(x, z; color="crimson", axis=(; limits=(-0.5R, 0.5R, 0.0, R), title="Samples: $(length(x))"))
 end
 
 # ╔═╡ 2d718f1e-ae6f-412c-94dd-6eb99203a2d3
-function plot_unrestricted_samples(J, Jf, sc, s_min, a, b; seed = 0)
-	n_dV_values = n_dV.(J, rg, ug', Jf, sc, s_min, a, b)
-	n_samples = N_disc(n_dV_values)
-	u_min_indices = u_min_idx.(J, rg, Jf, a, b)
-	(r, cosθ, ϕ) = sample_points_unrestricted(n_dV_values, u_min_indices, n_samples; seed = seed)
+function plot_unrestricted_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = 1, N_max = 512, nr = 256, nu = 256, seed = 0)
+	(Δr, rg) = r_grid(R, nr)
+	(Δu, ug) = u_grid(nu)
+	
+	n_dV_grid = n_dV.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α)
+	n_samples = N_disc(N_min, N_max, n_dV_grid, Δr, Δu)
+	(r, cosθ, ϕ) = sample_points_unrestricted(rg, ug, n_dV_grid, n_samples; seed = seed)
 	sinθ = @. sqrt(1 - cosθ^2)
 	cosϕ = cos.(ϕ)
 	sinϕ = sin.(ϕ)
@@ -267,20 +250,22 @@ function plot_unrestricted_samples(J, Jf, sc, s_min, a, b; seed = 0)
 	y = @. r * sinθ * sinϕ
 	z = @. r * cosθ
 	
-	scatter(x, z; color="crimson", axis=(; limits=(-0.5, 0.5, 0.0, 1.0), title="Samples: $n_samples"))
+	scatter(x, z; color="crimson", axis=(; limits=(-0.5R, 0.5R, 0.0, R), title="Samples: $n_samples"))
 end
 
 # ╔═╡ a3f7c65a-08b0-4562-afc3-a0f3bce50b83
-function plot_n_dV_with_samples(J, Jf, sc, s_min, a, b, min_dist_cutoff; seed = 0)
-	n_dV_values = n_dV.(J, rg, ug', Jf, sc, s_min, a, b)
+function plot_n_dV_with_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = 1, N_max = 512, nr = 256, nu = 256, seed = 0)
+	(Δr, rg) = r_grid(R, nr)
+	(Δu, ug) = u_grid(nu)
 	
-	fig, ax, hm = heatmap(ug, rg, n_dV_values', axis=(; xlabel="cos(θ)", ylabel="r"))
-	lines!(ax, u_min.(J, rg, Jf, a, b), rg)
+	n_dV_grid = n_dV.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α)
 	
-	n_samples = N_disc(n_dV_values)
-	u_min_indices = u_min_idx.(J, rg, Jf, a, b)
-	min_sq_dists = min_dist.(J, rg, ug', Jf, sc, s_min, a, b, min_dist_cutoff).^2
-	(rs, us, _, _, _) = sample_points(n_dV_values, u_min_indices, min_sq_dists, n_samples; seed = seed)
+	fig, ax, hm = heatmap(ug, rg, n_dV_grid', axis=(; xlabel="cos(θ)", ylabel="r"))
+	
+	max_samples = N_disc(N_min, N_max, n_dV_grid, Δr, Δu)
+	min_sq_dists = min_dist.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α).^2
+	(rs, us, _, _, _) = sample_points(rg, ug, n_dV_grid, min_sq_dists, max_samples; seed = seed)
+	
 	scatter!(ax, us, rs, color="crimson")
     
 	Colorbar(fig[1, 2], hm; label = "ndV")
@@ -288,15 +273,17 @@ function plot_n_dV_with_samples(J, Jf, sc, s_min, a, b, min_dist_cutoff; seed = 
 end
 
 # ╔═╡ f495ecbe-5b21-49e9-b7a2-6451b3ba1093
-function plot_n_dV_with_unrestricted_samples(J, Jf, sc, s_min, a, b; seed = 0)
-	n_dV_values = n_dV.(J, rg, ug', Jf, sc, s_min, a, b)
+function plot_n_dV_with_unrestricted_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = 1, N_max = 512, nr = 256, nu = 256, seed = 0)
+	(Δr, rg) = r_grid(R, nr)
+	(Δu, ug) = u_grid(nu)
 	
-	fig, ax, hm = heatmap(ug, rg, n_dV_values', axis=(; xlabel="cos(θ)", ylabel="r"))
-	lines!(ax, u_min.(J, rg, Jf, a, b), rg)
+	n_dV_grid = n_dV.(rg, ug', F, Ff, sc, s_min, s_max, r₀, ρ, α)
 	
-	n_samples = N_disc(n_dV_values)
-	u_min_indices = u_min_idx.(J, rg, Jf, a, b)
-	(rs, us, _) = sample_points_unrestricted(n_dV_values, u_min_indices, n_samples; seed = seed)
+	fig, ax, hm = heatmap(ug, rg, n_dV_grid', axis=(; xlabel="cos(θ)", ylabel="r"))
+	
+	n_samples = N_disc(N_min, N_max, n_dV_grid, Δr, Δu)
+	(rs, us, _) = sample_points_unrestricted(rg, ug, n_dV_grid, n_samples; seed = seed)
+	
 	scatter!(ax, us, rs, color="crimson")
     
 	Colorbar(fig[1, 2], hm; label = "ndV")
@@ -305,33 +292,46 @@ end
 
 # ╔═╡ 2edf1c49-36bf-4b44-b3d1-62b12d822f0c
 begin
-	a = 1
-	b = 2
-	min_dist_cutoff = 0.5
-	
-	Jf = 1.0
-	sc = 0.5
-	s_min = 0.03
-	
-	J = 50.0
+	ρ = 2
+	α = 0.5
 
-	seed = 5
+	N_min = 1
+	N_max = 512
+
+	Ff = 1e5
+	sc_rel = 0.5
+	s_min_rel = 0.2
+	s_max_rel = 0.4
+	
+	R = 2.4
+	F = 1.098e7
+
+	sc = sc_rel * R
+	s_min = s_min_rel * sqrt(R)
+	s_max = s_max_rel * R
+	
+	r₀ = @show min(R, r₀_full(R, F, Ff, ρ))
+
+	nr = 128
+	nu = 128
+
+	seed = 0
 end
 
 # ╔═╡ b8a0fd3e-2bb1-4383-a699-734cca2cd6d3
-N(J, Jf, sc, s_min, a, b)
+N(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; nr = nr, nu = nu)
 
 # ╔═╡ b70be084-cc28-442b-885f-fd1c05db8ddc
-plot_samples(J, Jf, sc, s_min, a, b, min_dist_cutoff; seed = seed)
+plot_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = N_min, N_max = N_max, nr = nr, nu = nu, seed = seed)
 
 # ╔═╡ fb009301-09e0-4043-958b-a01412e3b814
-plot_n_dV_with_samples(J, Jf, sc, s_min, a, b, min_dist_cutoff; seed = seed)
+plot_n_dV_with_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = N_min, N_max = N_max, nr = nr, nu = nu, seed = seed)
 
 # ╔═╡ 01bb79c3-1475-485f-aaec-4498888dfa2a
-plot_unrestricted_samples(J, Jf, sc, s_min, a, b; seed = seed)
+plot_unrestricted_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = N_min, N_max = N_max, nr = nr, nu = nu, seed = seed)
 
 # ╔═╡ a3f79a55-fcd5-42a4-8205-89292845dd6f
-plot_n_dV_with_unrestricted_samples(J, Jf, sc, s_min, a, b; seed = seed)
+plot_n_dV_with_unrestricted_samples(R, F, Ff, sc, s_min, s_max, r₀, ρ, α; N_min = N_min, N_max = N_max, nr = nr, nu = nu, seed = seed)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1982,24 +1982,23 @@ version = "4.1.0+0"
 
 # ╔═╡ Cell order:
 # ╠═c96b197d-87b0-4cde-813c-5e3e11b18a06
-# ╠═f029222c-e70d-4044-8191-27dedda5b5f7
 # ╠═3dca1e6d-6203-4cfa-a8da-2e8a72006bfd
+# ╠═287b2896-1574-4743-83ac-8855cab8f5dd
 # ╠═35a5d4f5-3243-4d0a-8a3f-c4cf8d655300
 # ╠═d17038d7-d594-43e7-9913-a41005bf5ba3
 # ╠═723a6734-dc3c-4623-b8ed-d8c354d2312e
 # ╠═0e9da54d-7bb2-47fd-8e5a-c555fb8de0e8
 # ╠═f9c1ab12-e2fa-451c-b58e-3c9177021659
-# ╠═56b6278f-8f73-444c-b6f2-c3ff6a204a1c
 # ╠═48fd43f5-4752-4dc5-a500-68fa9955d916
-# ╠═af3a3f03-647f-4cc7-a93c-7629af5e1689
+# ╠═9520fe42-7d3e-4669-bee2-1c74843e18d1
+# ╠═9ed511f9-41cd-442c-b81d-1eb90b485ade
 # ╠═caa817c6-e880-4fff-8b21-9aaa37a98857
 # ╠═b385833b-fa13-4301-9de1-773b8c342679
 # ╠═b1a94136-f4b4-4026-9c5b-b937b0248f53
-# ╠═82b66a89-2200-4041-9f83-3f9cd38e6738
-# ╠═a7abbe58-9d07-40b9-a552-56dd980b1d25
 # ╠═23e6c9f3-91ad-429a-b38f-5545a37a04a4
 # ╠═e6942b52-2a36-4ce2-8b13-242e7dba4d27
 # ╠═86ade710-e0f7-4dd8-b383-f36a6a01a658
+# ╠═a7abbe58-9d07-40b9-a552-56dd980b1d25
 # ╠═8883c586-8660-11f1-a310-6fce09967d39
 # ╠═cb686f41-4f96-4dd0-8f11-90537e045038
 # ╠═2d718f1e-ae6f-412c-94dd-6eb99203a2d3
