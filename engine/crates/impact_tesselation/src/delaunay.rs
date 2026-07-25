@@ -150,11 +150,11 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
             bail!("Number of points {n_points} is higher than supported");
         }
 
+        self.tetras.clear_with_vertex_capacity(n_points + 4);
+
         if n_points < 4 {
             return Ok(());
         }
-
-        self.tetras.clear_with_vertex_capacity(n_points + 4);
 
         let aabb = AxisAlignedBox::aabb_for_points(points);
         let bounding_sphere = Sphere::bounding_sphere_from_aabb(&aabb);
