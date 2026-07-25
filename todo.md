@@ -28,8 +28,6 @@
 
 - Add more constraints.
 
-- Implement Voronoi fracturing.
-
 - Implement N-body gravity simulation using multipole expansion for the gravitational field of extended objects and a Barnes-Hut tree as acceleration structure.
 
 - Correct gravitational field inside voxel objects.

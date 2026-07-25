@@ -566,6 +566,40 @@ impl Mul<f32> for ContactImpulses {
     }
 }
 
+impl Contact {
+    /// Computes the magnitude of the impulse along the contact normal caused by
+    /// this contact between body A and B.
+    pub fn compute_normal_impulse(
+        &self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> f32 {
+        // World space displacements from the center of mass of each body to
+        // the reference contact point (taken to be on body B)
+        let disp_a = self.geometry.position_on_b() - body_a.position.aligned();
+        let disp_b = self.geometry.position_on_b() - body_b.position.aligned();
+
+        let normal = self.geometry.surface_normal;
+
+        let effective_mass = compute_effective_mass(body_a, body_b, &disp_a, &disp_b, &normal);
+
+        let velocity_a = compute_point_velocity(body_a, &disp_a);
+        let velocity_b = compute_point_velocity(body_b, &disp_b);
+
+        let relative_velocity = velocity_a - velocity_b;
+
+        let separating_velocity = normal.dot(&relative_velocity);
+
+        let normal_impulse =
+            -effective_mass * (1.0 + self.response_params.restitution_coef) * separating_velocity;
+
+        // This ensures that the normal impulse can only push the bodies apart
+        let clamped_normal_impulse = f32::max(0.0, normal_impulse);
+
+        clamped_normal_impulse
+    }
+}
+
 /// Analyzes the contact manifold for a collision between two objects and
 /// determines whether the contacts will keep the objects interlocked rather
 /// than pushing them apart.

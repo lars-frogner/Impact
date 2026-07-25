@@ -7,6 +7,7 @@ use crate::{
         self, VoxelAbsorbingCapsuleEntity, VoxelAbsorbingSphereEntity,
         VoxelObjectInteractionContext,
         absorption::{self, HasVoxelAbsorbingCapsule, HasVoxelAbsorbingSphere},
+        fracturing::{FracturingProperties, VoxelObjectFracturingContext},
     },
     voxel_types::VoxelTypeRegistry,
 };
@@ -52,6 +53,12 @@ pub struct ECSVoxelObjectInteractionContext<'a> {
     pub scene_graph: &'a SceneGraph,
     pub force_generator_manager: &'a ForceGeneratorManager,
     pub collision_world: &'a CollisionWorld,
+}
+
+/// ECS-based implementation of a voxel object fracturing context.
+#[derive(Debug)]
+pub struct ECSVoxelObjectFracturingContext<'a> {
+    pub ecs_world: &'a ECSWorld,
 }
 
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
@@ -294,6 +301,17 @@ impl<'a> ECSVoxelObjectInteractionContext<'a> {
                 add_component_storage(component_storage.duplicate_instance(n_entities));
             }
         }
+    }
+}
+
+impl<'a> VoxelObjectFracturingContext for ECSVoxelObjectFracturingContext<'a> {
+    fn get_fracturing_properties_for_entity(
+        &self,
+        entity_id: EntityID,
+    ) -> Option<FracturingProperties> {
+        self.ecs_world
+            .get_entity(entity_id)
+            .and_then(|entity| entity.get_component().map(|props| *props.access()))
     }
 }
 
