@@ -640,7 +640,13 @@ pub fn create_separating_contact_for_interlocked_objects(
 
     // Calculate the axis perpendicular to the major and middle axis and use
     // that as the separating axis
-    let minor_axis = UnitVector3::normalized_from(major_axis.cross(&middle_axis));
+    let Some(minor_axis) =
+        UnitVector3::normalized_from_if_above(major_axis.cross(&middle_axis), 1e-4)
+    else {
+        // If there is no clear separation between the middle and major axis,
+        // fall back to using the major axis as the separating axis
+        return create_contact_separating_along_axis(body_a, body_b, contacts, major_axis);
+    };
     create_contact_separating_along_axis(body_a, body_b, contacts, minor_axis).or_else(|| {
         // If the contacts all lie in the plane perpendicular to the minor axis,
         // fall back to using the middle axis as the separating axis
