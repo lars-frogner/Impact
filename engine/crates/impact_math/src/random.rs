@@ -42,6 +42,12 @@ impl Rng {
         self.0.u64(range)
     }
 
+    /// Generates a uniformly random `usize` in the given range.
+    #[inline]
+    pub fn random_usize_in_range(&mut self, range: impl RangeBounds<usize>) -> usize {
+        self.0.usize(range)
+    }
+
     /// Shuffles the given slice randomly.
     #[inline]
     pub fn shuffle<T>(&mut self, slice: &mut [T]) {
