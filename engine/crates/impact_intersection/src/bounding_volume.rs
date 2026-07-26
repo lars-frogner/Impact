@@ -80,8 +80,8 @@ impl BoundingVolumeManager {
         self.aabbs.remove(&id);
     }
 
-    /// Removes all bounding volumes.
-    pub fn remove_all_bounding_volumes(&mut self) {
-        self.aabbs.clear();
+    /// Removes all bounding volumes and frees up all allocated memory.
+    pub fn clear_and_free(&mut self) {
+        self.aabbs = NoHashMap::default();
     }
 }

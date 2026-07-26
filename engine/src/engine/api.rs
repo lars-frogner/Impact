@@ -339,15 +339,22 @@ impl Engine {
         }
     }
 
-    /// Resets the scene, ECS world and physics simulator to the initial empty
+    /// Resets the entities, scene and physics simulator to the initial empty
     /// state and sets the simulation time to zero.
     pub fn reset_world(&self) -> Result<()> {
         log::info!("Resetting world");
-        self.ecs_world.owrite().remove_all_entities();
-        self.scene.oread().clear();
-        self.simulator.owrite().reset();
+        let mut entity_id_manager = self.entity_id_manager.olock();
+        entity_id_manager.reset_and_free();
 
-        self.command_queues.clear();
+        self.entity_stager.olock().reset_and_free();
+
+        self.ecs_world.owrite().reset_and_free();
+
+        self.scene.oread().reset_and_free(&mut entity_id_manager);
+
+        self.simulator.owrite().reset_and_free();
+
+        self.command_queues.reset_and_free();
 
         self.renderer.owrite().synchronize_render_commands()?;
         self.sync_all_gpu_resources()?;

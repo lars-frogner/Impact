@@ -321,10 +321,10 @@ impl VoxelAbsorptionManager {
         self.capsules.remove(&id);
     }
 
-    /// Removes all stored voxel absorbers.
-    pub fn remove_all_absorbers(&mut self) {
-        self.spheres.clear();
-        self.capsules.clear();
+    /// Removes all stored voxel absorbers and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.spheres = HashMap::default();
+        self.capsules = HashMap::default();
     }
 }
 

@@ -164,10 +164,11 @@ impl DetailedDragForceRegistry {
         }
     }
 
-    /// Removes all stored drag load generators and maps.
-    pub fn clear(&mut self) {
-        self.generators.clear();
-        self.drag_load_map_repository.clear();
+    /// Removes all stored drag load generators and maps and frees up all
+    /// allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.generators.reset_and_free();
+        self.drag_load_map_repository.reset_and_free();
     }
 }
 
@@ -304,9 +305,9 @@ impl DragLoadMapRepository {
         let _ = self.add_drag_load_map(id, map);
     }
 
-    /// Removes all stored drag load maps.
-    pub fn clear(&mut self) {
-        self.drag_load_maps.clear();
+    /// Removes all stored drag load maps and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.drag_load_maps = HashMap::default();
     }
 }
 

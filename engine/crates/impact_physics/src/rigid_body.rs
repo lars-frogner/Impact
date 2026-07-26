@@ -393,12 +393,12 @@ impl RigidBodyManager {
         }
     }
 
-    /// Removes all stored rigid bodies.
-    pub fn clear(&mut self) {
-        self.dynamic_bodies.clear();
-        self.dynamic_body_indices_by_id.clear();
-        self.kinematic_bodies.clear();
-        self.kinematic_body_indices_by_id.clear();
+    /// Removes all stored rigid bodies and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.dynamic_bodies = Vec::new();
+        self.dynamic_body_indices_by_id = KeyIndexMapper::new();
+        self.kinematic_bodies = Vec::new();
+        self.kinematic_body_indices_by_id = KeyIndexMapper::new();
     }
 }
 

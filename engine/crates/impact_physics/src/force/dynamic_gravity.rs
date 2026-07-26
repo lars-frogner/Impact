@@ -116,10 +116,10 @@ impl DynamicGravityManager {
         self.config.gravitational_constant = gravitational_constant;
     }
 
-    pub fn clear(&mut self) {
-        self.body_ids.clear();
-        self.bodies.clear();
-        self.loads.clear();
+    pub fn reset_and_free(&mut self) {
+        self.body_ids = KeyIndexMapper::new();
+        self.bodies = Vec::new();
+        self.loads = Vec::new();
     }
 
     fn synchronize_bodies(&mut self, rigid_body_manager: &RigidBodyManager) {

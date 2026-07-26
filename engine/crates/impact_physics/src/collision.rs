@@ -372,11 +372,16 @@ impl<C: Collidable> CollisionWorld<C> {
         });
     }
 
-    /// Removes all stored collision state.
-    pub fn clear(&mut self) {
-        self.collidable_descriptors.clear();
-        self.clear_spatial_state();
-        self.clear_cached_collisions();
+    /// Removes all stored collision state and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.collidable_descriptors = NoHashMap::default();
+
+        for collidables_of_kind in &mut self.collidables {
+            *collidables_of_kind = Vec::new();
+        }
+
+        self.cached_collisions = Vec::new();
+        self.has_cached_collisions = false;
     }
 
     fn collidables(&self, kind: CollidableKind) -> &[CollidableWithId<C>] {

@@ -308,11 +308,11 @@ impl ConstraintManager {
             .retain(|&[id_a, id_b]| id_a != entity_id && id_b != entity_id);
     }
 
-    /// Removes all stored constraint state.
-    pub fn clear(&mut self) {
-        self.solver.clear();
-        self.spherical_joints.clear();
-        self.ignored_collisions.clear();
+    /// Removes all stored constraint state and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.solver.reset_and_free();
+        self.spherical_joints = HashMap::default();
+        self.ignored_collisions = HashSet::default();
     }
 
     fn sorted_entity_pair(entity_ids: [EntityID; 2]) -> [EntityID; 2] {
@@ -334,6 +334,12 @@ impl ConstrainedBodyManager {
     /// Creates a new manager with no constrained bodies.
     pub fn new() -> Self {
         Self::new_in(Global)
+    }
+
+    /// Removes all stored constrained bodies and frees up all allocated memory.
+    pub fn clear_and_free(&mut self) {
+        self.bodies = AVec::new();
+        self.body_index_map = KeyIndexMapper::new();
     }
 }
 

@@ -121,6 +121,13 @@ impl EntityIDManager {
     pub fn unregister_id(&mut self, id: EntityID) {
         self.ids_in_use.remove(&id.0);
     }
+
+    /// Forgets all IDs in use, resets the ID counter and frees up all allocated
+    /// memory.
+    pub fn reset_and_free(&mut self) {
+        self.ids_in_use = NoHashSet::default();
+        self.id_counter = 0;
+    }
 }
 
 #[macro_export]

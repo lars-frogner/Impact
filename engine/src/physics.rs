@@ -259,14 +259,15 @@ impl PhysicsSimulator {
         log::trace!("Simulation time: {:.1}", self.simulation_time);
     }
 
-    /// Resets the simulator to the initial empty state and sets the simulation
-    /// time to zero.
-    pub fn reset(&mut self) {
-        self.rigid_body_manager.owrite().clear();
-        self.force_generator_manager.owrite().clear();
-        self.motion_driver_manager.owrite().clear();
-        self.constraint_manager.owrite().clear();
-        self.collision_world.owrite().clear();
+    /// Resets the simulator to the initial empty state, frees up all allocated
+    /// memory and sets the simulation time to zero.
+    pub fn reset_and_free(&mut self) {
+        self.rigid_body_manager.owrite().reset_and_free();
+        self.anchor_manager.owrite().reset_and_free();
+        self.force_generator_manager.owrite().reset_and_free();
+        self.motion_driver_manager.owrite().reset_and_free();
+        self.constraint_manager.owrite().reset_and_free();
+        self.collision_world.owrite().reset_and_free();
         self.simulation_time = 0.0;
     }
 

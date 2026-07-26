@@ -375,11 +375,13 @@ impl SceneGraph {
         }
     }
 
-    /// Removes all descendents of the root node from the tree.
-    pub fn clear_nodes(&mut self) {
-        self.group_nodes.remove_all_nodes();
-        self.model_instance_nodes.remove_all_nodes();
-        self.camera_nodes.remove_all_nodes();
+    /// Removes all scene graph state, frees up all allocated memory and creates
+    /// a new root node with the given ID
+    pub fn reset_and_free(&mut self, root_node_id: SceneGroupID) {
+        self.root_node_id = root_node_id;
+        self.group_nodes.reset_and_free();
+        self.model_instance_nodes.reset_and_free();
+        self.camera_nodes.reset_and_free();
         self.group_nodes
             .add_node(self.root_node_id, GroupNode::root());
     }
@@ -586,8 +588,8 @@ impl<N: SceneGraphNode> NodeStorage<N> {
         self.nodes.remove(&node_id);
     }
 
-    fn remove_all_nodes(&mut self) {
-        self.nodes.clear();
+    fn reset_and_free(&mut self) {
+        self.nodes = NoHashMap::default();
     }
 }
 

@@ -158,15 +158,15 @@ impl ForceGeneratorManager {
         }
     }
 
-    /// Removes all stored force generators.
-    pub fn clear(&mut self) {
-        self.constant_accelerations.clear();
-        self.local_forces.clear();
-        self.dynamic_dynamic_spring_forces.clear();
-        self.dynamic_kinematic_spring_forces.clear();
-        self.detailed_drag_forces.clear();
-        self.dynamic_gravity_manager.clear();
-        self.alignment_torques.clear();
+    /// Removes all stored force generators and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.constant_accelerations.reset_and_free();
+        self.local_forces.reset_and_free();
+        self.dynamic_dynamic_spring_forces.reset_and_free();
+        self.dynamic_kinematic_spring_forces.reset_and_free();
+        self.detailed_drag_forces.reset_and_free();
+        self.dynamic_gravity_manager.reset_and_free();
+        self.alignment_torques.reset_and_free();
     }
 }
 
@@ -216,8 +216,8 @@ impl<Id: Copy + Eq + Hash + fmt::Display, G> ForceGeneratorRegistry<Id, G> {
         self.generators.remove(&id);
     }
 
-    fn clear(&mut self) {
-        self.generators.clear();
+    fn reset_and_free(&mut self) {
+        self.generators = HashMap::default();
     }
 }
 
