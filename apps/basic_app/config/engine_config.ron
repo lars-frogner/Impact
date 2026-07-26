@@ -96,6 +96,15 @@
         ),
         interaction: (
             fracturing: (
+                impact: (
+                    max_fragment_count: 512,
+                    radial_falloff_power: 2.0,
+                    angular_falloff_power: 0.5,
+                    radial_grid_size: 128,
+                    angular_grid_size: 128,
+                    max_position_rejections_per_sample: 128,
+                    seed: 0,
+                ),
                 max_processing_duration_us: None,
             ),
         ),
