@@ -308,14 +308,14 @@ setup_rotational_impact! = |{}|
 
     base
     |> Setup.VoxelSphere.add_new(0.04, 20)
-    |> Comp.ReferenceFrame.add_unoriented((0.5, 1, 5))
+    |> Comp.ReferenceFrame.add_unoriented((0.5, 1, 4))
     |> Comp.Motion.add_stationary
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     base
     |> Setup.VoxelCapsule.add_new(0.04, 60, 10)
-    |> Comp.ReferenceFrame.add_unoriented((-0.8, 1.5, 5))
+    |> Comp.ReferenceFrame.add_unoriented((-0.8, 1.5, 4))
     |> Comp.Motion.add_new(
         (0, 0, 0),
         AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(-140.0)),
