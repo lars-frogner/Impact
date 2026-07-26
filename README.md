@@ -18,13 +18,14 @@ The engine does physically based 3D rendering. The graphics system is built on [
 ### Physics
 
 - Full rigid body dynamics for objects of any shape.
-- Various force and torque generators.
-- A drag model that computes both forces and torques for objects of any shape.
 - Collision resolution and constraint solving using sequential impulses.
+- Procedural fracturing of colliding voxel objects.
+- A drag model that computes both forces and torques for objects of any shape.
+- Various force and torque generators.
 
 ### Voxels
 
-Voxel based objects have first-class support. The shape of these objects are defined by signed distance fields, which combined with Surface Nets-based meshing gives them a smooth appearance. An object can be comprised of voxels with many different materials, which are smoothly blended between during rendering. The objects can also be arbitrarily deformed or split up, which dynamically affects their physical behavior. See the video below for a demonstration.
+Voxel based objects have first-class support. The shape of these objects are defined by signed distance fields, which combined with Surface Nets-based meshing gives them a smooth appearance. An object can be comprised of voxels with many different materials, which are smoothly blended between during rendering. The objects can also be arbitrarily deformed or split up, which dynamically affects their physical behavior. See the videos below for a demonstration.
 
 ### SDF generation
 
@@ -54,6 +55,8 @@ The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven
 
 ![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
 
+![fracturing](showcase/fracturing.gif "Fracturing")
+
 ![screenshot_2](showcase/screenshot_2.png "Screenshot 2")
 
 ![screenshot_3](showcase/screenshot_3.png "Screenshot 3")
@@ -64,8 +67,8 @@ The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven
 
 ### Requirements
 
-- Rust (https://rustup.rs)
-- Roc (https://roc-lang.org/install/) for scripting. Applications do not have to use Roc, but the existing applications do.
+- [Rust](https://rustup.rs)
+- [Roc](https://github.com/roc-lang/roc/releases/tag/alpha4-rolling) for scripting. Applications do not have to use Roc, but the existing applications do.
 - Make, if you want to use the Makefiles.
 
 ### Things to try
@@ -74,12 +77,12 @@ Existing applications can be found in the `apps` directory.
 
 To try the SDF graph editor shown in the video above, navigate to the `apps/voxel_generator` directory and run `make run`. The graph created in the video can be loaded from the `voxel_generator/examples` directory.
 
-The `basic_app` application has a handful of simple scenes and physics experiments that can be switched between by editing `main.roc` in the `basic_app/scripts` directory. However, most of the scenes assume certain textures and meshes to be available, and those are not included in this repo. The `VoxelBoxTumber` scene used by default does not require any assets, and can be tried out by running `make run CONFIG_FILE=config/config_no_assets.ron` in the `apps/basic_app` directory.
+The `basic_app` application has a handful of simple scenes and physics experiments that can be switched between by editing `main.roc` in the `basic_app/scripts` directory. However, most of the scenes assume certain textures and meshes to be available, and those are not included in this repo. The `Fracturing` experiment used by default and the `VoxelBoxTumber` scene do not require any assets, and can be tried out by running `make run CONFIG_FILE=config/config_no_assets.ron` in the `apps/basic_app` directory.
 
 ## Planned features
 
+- Particle system.
 - N-body gravity simulation.
-- Voxel object fracturing.
 - Procedural system for assigning materials to voxels.
 - Expanded scripting capabilities.
 - Expanded GUI.
@@ -87,7 +90,7 @@ The `basic_app` application has a handful of simple scenes and physics experimen
 - Audio.
 - Let's see when we get here...
 
-Once the engine has the sufficient features, a game will be developed in parallel with the engine. 
+A game is also being developed in parallel with the engine. 
 
 ## How applications work
 
