@@ -57,6 +57,11 @@ impl<C> CommandQueue<C> {
     pub fn clear(&self) {
         self.commands.write().clear();
     }
+
+    /// Removes all commands in the queue and frees up allocated memory.
+    pub fn clear_and_free(&self) {
+        *self.commands.write() = VecDeque::new();
+    }
 }
 
 impl<C> Default for CommandQueue<C> {

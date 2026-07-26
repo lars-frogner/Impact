@@ -126,9 +126,9 @@ impl IntersectionManager {
         self.bvh.clear();
     }
 
-    /// Removes all intersection state.
-    pub fn remove_all_intersection_state(&mut self) {
-        self.bounding_volume_manager.remove_all_bounding_volumes();
-        self.bvh.clear();
+    /// Removes all intersection state and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.bounding_volume_manager.clear_and_free();
+        self.bvh.clear_and_free();
     }
 }

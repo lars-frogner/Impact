@@ -125,13 +125,13 @@ impl MotionDriverManager {
         &mut self.orbital_trajectories
     }
 
-    /// Removes all stored motion drivers.
-    pub fn clear(&mut self) {
-        self.circular_trajectories.clear();
-        self.constant_acceleration_trajectories.clear();
-        self.constant_rotations.clear();
-        self.harmonic_oscillator_trajectories.clear();
-        self.orbital_trajectories.clear();
+    /// Removes all stored motion drivers and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.circular_trajectories.reset_and_free();
+        self.constant_acceleration_trajectories.reset_and_free();
+        self.constant_rotations.reset_and_free();
+        self.harmonic_oscillator_trajectories.reset_and_free();
+        self.orbital_trajectories.reset_and_free();
     }
 }
 
@@ -182,7 +182,7 @@ impl<Id: Copy + Eq + Hash + fmt::Display, D> MotionDriverRegistry<Id, D> {
         self.drivers.remove(&id);
     }
 
-    fn clear(&mut self) {
-        self.drivers.clear();
+    fn reset_and_free(&mut self) {
+        self.drivers = HashMap::default();
     }
 }

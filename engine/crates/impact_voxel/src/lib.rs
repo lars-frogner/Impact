@@ -515,18 +515,12 @@ impl VoxelManager {
         &mut self.object_buffer_pool
     }
 
-    /// Removes all voxel objects and interaction entities.
-    ///
-    /// The memory buffers of the removed voxel objects are added to the buffer
-    /// pool for reuse.
+    /// Removes all voxel-related state and frees up all allocated memory.
     #[inline]
-    pub fn remove_all_voxel_entities(&mut self) {
-        self.interaction_manager.remove_all_interactors();
-
-        let voxel_objects = self.object_manager.remove_all_voxel_objects();
-
-        self.object_buffer_pool
-            .extend_with_buffers(voxel_objects.map(MeshedVoxelObject::into_buffers));
+    pub fn reset_and_free(&mut self) {
+        self.interaction_manager.reset_and_free();
+        self.object_manager.reset_and_free();
+        self.object_buffer_pool.reset_and_free();
     }
 
     /// Removes the [`MeshedVoxelObject`] with the given ID if it exists. Also
@@ -676,14 +670,11 @@ impl VoxelObjectManager {
         self.voxel_objects.remove(&voxel_object_id)
     }
 
-    /// Removes all voxel objects in the manager and returns them in an
-    /// iterator.
+    /// Removes all state in the manager and frees up all allocated memory.
     #[inline]
-    pub fn remove_all_voxel_objects(&mut self) -> impl Iterator<Item = MeshedVoxelObject> {
-        self.physics_contexts.clear();
-        self.voxel_objects
-            .drain()
-            .map(|(_, voxel_object)| voxel_object)
+    pub fn reset_and_free(&mut self) {
+        self.physics_contexts = NoHashMap::default();
+        self.voxel_objects = NoHashMap::default();
     }
 
     /// Recomputes the meshes for any voxel objects with invalidated chunks.
@@ -759,6 +750,11 @@ impl VoxelObjectBufferPool {
     pub fn take_or_create_buffers(&mut self) -> MeshedVoxelObjectBuffers {
         self.take_buffers()
             .unwrap_or_else(MeshedVoxelObjectBuffers::new)
+    }
+
+    /// Removes all buffers in the pool and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.buffer_pool = Vec::new();
     }
 }
 

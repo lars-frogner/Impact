@@ -80,30 +80,30 @@ pub struct AdminCommandQueues {
 }
 
 impl EngineCommandQueues {
-    pub(crate) fn clear(&self) {
-        self.user.clear();
-        self.admin.clear();
+    pub(crate) fn reset_and_free(&self) {
+        self.user.reset_and_free();
+        self.admin.reset_and_free();
     }
 }
 
 impl UserCommandQueues {
-    pub(crate) fn clear(&self) {
-        self.scene.clear();
-        self.control.clear();
-        self.physics.clear();
+    pub(crate) fn reset_and_free(&self) {
+        self.scene.clear_and_free();
+        self.control.clear_and_free();
+        self.physics.clear_and_free();
     }
 }
 
 impl AdminCommandQueues {
-    pub(crate) fn clear(&self) {
-        self.rendering.clear();
-        self.physics.clear();
-        self.control.clear();
-        self.capture.clear();
-        self.instrumentation.clear();
-        self.game_loop.clear();
-        self.gizmo.clear();
-        self.system.clear();
+    pub(crate) fn reset_and_free(&self) {
+        self.rendering.clear_and_free();
+        self.physics.clear_and_free();
+        self.control.clear_and_free();
+        self.capture.clear_and_free();
+        self.instrumentation.clear_and_free();
+        self.game_loop.clear_and_free();
+        self.gizmo.clear_and_free();
+        self.system.clear_and_free();
     }
 }
 

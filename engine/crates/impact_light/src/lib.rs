@@ -897,15 +897,14 @@ impl LightManager {
             .valid_uniforms_with_ids_mut()
     }
 
-    /// Removes all lights from the storage.
-    pub fn remove_all_lights(&mut self) {
-        self.ambient_light_buffer.remove_all_uniforms();
-        self.omnidirectional_light_buffer.remove_all_uniforms();
+    /// Removes all lights from the storage and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.ambient_light_buffer.reset_and_free();
+        self.omnidirectional_light_buffer.reset_and_free();
         self.shadowable_omnidirectional_light_buffer
-            .remove_all_uniforms();
-        self.unidirectional_light_buffer.remove_all_uniforms();
-        self.shadowable_unidirectional_light_buffer
-            .remove_all_uniforms();
+            .reset_and_free();
+        self.unidirectional_light_buffer.reset_and_free();
+        self.shadowable_unidirectional_light_buffer.reset_and_free();
         self.total_ambient_luminance = Luminance::zeros();
     }
 

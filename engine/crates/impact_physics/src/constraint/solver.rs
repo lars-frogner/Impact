@@ -312,11 +312,12 @@ impl ConstraintSolver {
         self.body_manager.clear();
     }
 
-    /// Removes all stored constraint solver state.
-    pub fn clear(&mut self) {
-        self.clear_prepared_bodies();
-        self.contacts.clear();
-        self.spherical_joints.clear();
+    /// Removes all stored constraint solver state and frees up all allocated
+    /// memory.
+    pub fn reset_and_free(&mut self) {
+        self.body_manager.clear_and_free();
+        self.contacts.reset_and_free();
+        self.spherical_joints.reset_and_free();
     }
 
     fn prepare_constraint_for_constrained_body_pair<C: TwoBodyConstraint>(
@@ -450,9 +451,9 @@ where
         }
     }
 
-    fn clear(&mut self) {
-        self.constraints.clear();
-        self.constraint_index_map.clear();
+    fn reset_and_free(&mut self) {
+        self.constraints = Vec::new();
+        self.constraint_index_map = KeyIndexMapper::new();
     }
 }
 

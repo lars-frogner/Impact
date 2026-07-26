@@ -157,9 +157,10 @@ impl VoxelInteractionManager {
         &mut self.fracturing_manager
     }
 
-    /// Removes all voxel interaction entities.
-    pub fn remove_all_interactors(&mut self) {
-        self.absorption_manager.remove_all_absorbers();
+    /// Removes all voxel interaction state and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.absorption_manager.reset_and_free();
+        self.fracturing_manager.reset_and_free();
     }
 }
 

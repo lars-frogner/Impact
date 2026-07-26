@@ -292,6 +292,12 @@ impl BoundingVolumeHierarchy {
         self.root_node_id = None;
     }
 
+    pub fn clear_and_free(&mut self) {
+        self.primitives.clear_and_free();
+        self.nodes = Vec::new();
+        self.root_node_id = None;
+    }
+
     fn for_each_intersecting_bounding_volume(
         &self,
         mut is_intersection: impl FnMut(&AxisAlignedBoxC) -> bool,
@@ -485,6 +491,11 @@ impl Primitives {
     fn clear(&mut self) {
         self.aabbs.clear();
         self.index_map.clear();
+    }
+
+    fn clear_and_free(&mut self) {
+        self.aabbs = Vec::new();
+        self.index_map = KeyIndexMapper::new();
     }
 }
 

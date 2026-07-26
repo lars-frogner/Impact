@@ -214,6 +214,13 @@ where
         self.change_tracker.reset();
     }
 
+    /// Removes all the uniforms from the buffer, resets the change tracker and
+    /// frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.index_map = KeyIndexMapper::new();
+        self.change_tracker = CollectionChangeTracker::default();
+    }
+
     /// Removes all the uniforms from the buffer.
     pub fn remove_all_uniforms(&mut self) {
         self.index_map.clear();

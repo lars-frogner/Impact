@@ -208,6 +208,12 @@ impl AnchorManager {
     pub fn kinematic_mut(&mut self) -> &mut SpecificAnchorManager<KinematicRigidBodyAnchor> {
         &mut self.kinematic
     }
+
+    /// Removes all anchor state and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.dynamic.reset_and_free();
+        self.kinematic.reset_and_free();
+    }
 }
 
 impl Default for AnchorManager {
@@ -323,6 +329,12 @@ impl<A: Anchor> SpecificAnchorManager<A> {
         let id = A::ID::from(self.id_counter);
         self.id_counter = self.id_counter.checked_add(1).unwrap();
         id
+    }
+
+    fn reset_and_free(&mut self) {
+        self.anchors = HashMap::default();
+        self.anchor_ids_by_body = HashMap::default();
+        self.id_counter = 0;
     }
 }
 

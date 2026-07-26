@@ -693,6 +693,12 @@ impl VoxelObjectFracturingManager {
             // }
         }
     }
+
+    /// Removes all fracturing state and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.active_processes = HashMap::default();
+        self.process_pool = Vec::new();
+    }
 }
 
 impl Default for VoxelFracturingConfig {

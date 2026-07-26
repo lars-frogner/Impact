@@ -96,24 +96,28 @@ impl Scene {
             .set_aspect_ratio(new_aspect_ratio);
     }
 
-    /// Resets the scene to the initial empty state.
-    pub fn clear(&self) {
+    /// Resets the scene to the initial empty state and frees up allocated
+    /// memory.
+    pub fn reset_and_free(&self, entity_id_manager: &mut EntityIDManager) {
         self.skybox.owrite().take();
 
-        self.camera_manager.owrite().remove_all_cameras();
+        self.camera_manager.owrite().reset_and_free();
 
-        self.light_manager.owrite().remove_all_lights();
+        self.light_manager.owrite().reset_and_free();
 
-        self.voxel_manager.owrite().remove_all_voxel_entities();
+        self.voxel_manager.owrite().reset_and_free();
 
         self.model_instance_manager
             .owrite()
             .reset_to_state(&self.initial_model_instance_manager_state);
 
-        self.intersection_manager
-            .owrite()
-            .remove_all_intersection_state();
+        self.intersection_manager.owrite().reset_and_free();
 
-        self.scene_graph.owrite().clear_nodes();
+        // Create a new ID for the scene graph root node in case the entity ID
+        // manager has been reset
+        let scene_graph_root_node_id = SceneGroupID::from_entity_id(entity_id_manager.provide_id());
+        self.scene_graph
+            .owrite()
+            .reset_and_free(scene_graph_root_node_id);
     }
 }

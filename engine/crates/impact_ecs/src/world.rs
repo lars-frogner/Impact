@@ -261,11 +261,16 @@ impl World {
     /// Removes all entities and their components from the world.
     pub fn remove_all_entities(&mut self) {
         self.entity_archetypes.clear();
-        for table in &self.archetype_tables {
-            table.write().remove_all_entities();
-        }
         self.archetype_tables.clear();
         self.archetype_table_indices_by_id.clear();
+    }
+
+    /// Removes all entities and their components from the world and frees up
+    /// all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.entity_archetypes = NoHashMap::default();
+        self.archetype_tables = Vec::new();
+        self.archetype_table_indices_by_id = NoHashKeyIndexMapper::default();
     }
 
     /// Returns an [`EntityEntry`] that can be used to access the components of
@@ -1023,6 +1028,16 @@ impl EntityStager {
     /// last time this method was called.
     pub fn drain_entities_to_remove(&mut self) -> Drain<'_, EntityID> {
         self.to_remove.drain(..)
+    }
+
+    /// Clears all staged entities and frees up all allocated memory.
+    pub fn reset_and_free(&mut self) {
+        self.to_create_with_id = Vec::new();
+        self.to_create_multiple_with_ids = Vec::new();
+        self.to_create = Vec::new();
+        self.to_create_multiple = Vec::new();
+        self.to_update = Vec::new();
+        self.to_remove = Vec::new();
     }
 }
 
