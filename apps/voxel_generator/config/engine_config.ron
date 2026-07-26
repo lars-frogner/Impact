@@ -1,6 +1,6 @@
 (
     resources: (
-        resource_file_path: None,//Some("resources.ron"),
+        resource_file_path: None,
         lookup_table_dir: "../resources/lookup_tables",
     ),
     rendering: (
@@ -92,12 +92,19 @@
     voxel: (
         types: (
             texture_resolution: 256,
-            voxel_types_path: Some("default_voxel_type.ron"),
-            // texture_resolution: 4096,
-            // voxel_types_path: Some("voxel_types.ron"),
+            voxel_types_path: Some("voxel_types.ron"),
         ),
         interaction: (
             fracturing: (
+                impact: (
+                    max_fragment_count: 512,
+                    radial_falloff_power: 2.0,
+                    angular_falloff_power: 0.5,
+                    radial_grid_size: 128,
+                    angular_grid_size: 128,
+                    max_position_rejections_per_sample: 128,
+                    seed: 0,
+                ),
                 max_processing_duration_us: None,
             ),
         ),
