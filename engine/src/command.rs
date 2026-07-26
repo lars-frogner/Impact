@@ -9,7 +9,7 @@ pub mod physics;
 pub mod queue;
 pub mod rendering;
 pub mod scene;
-pub mod uils;
+pub mod utils;
 
 use crate::{
     command::{controller::ControlAdminCommand, physics::PhysicsCommand, queue::CommandQueue},

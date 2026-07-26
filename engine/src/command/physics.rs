@@ -1,7 +1,7 @@
 //! Commands for operating the physics simulator.
 
 use crate::{
-    command::uils::{ModifiedActiveState, ToActiveState},
+    command::utils::{ModifiedActiveState, ToActiveState},
     engine::Engine,
     lock_order::{OrderedMutex, OrderedRwLock},
     physics::PhysicsSimulator,

@@ -3,7 +3,7 @@
 use super::UserInterface;
 use impact::{
     command::{
-        AdminCommand, controller::ControlAdminCommand, queue::CommandQueue, uils::ToActiveState,
+        AdminCommand, controller::ControlAdminCommand, queue::CommandQueue, utils::ToActiveState,
     },
     egui::FullOutput,
     engine::Engine,

@@ -1,6 +1,6 @@
 //! Controller commands.
 
-use crate::{command::uils::ToActiveState, engine::Engine, lock_order::OrderedMutex};
+use crate::{command::utils::ToActiveState, engine::Engine, lock_order::OrderedMutex};
 use impact_controller::motion::{MotionDirection, MotionState};
 use roc_integration::roc;
 

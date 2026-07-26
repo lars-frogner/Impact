@@ -3,7 +3,7 @@
 pub mod postprocessing;
 
 use crate::{
-    command::uils::{ModifiedActiveState, ToActiveState},
+    command::utils::{ModifiedActiveState, ToActiveState},
     lock_order::OrderedRwLock,
     rendering::RenderingSystem,
     scene::Scene,

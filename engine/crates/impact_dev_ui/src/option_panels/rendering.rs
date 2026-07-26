@@ -8,7 +8,7 @@ use impact::{
         AdminCommand,
         capture::{CaptureAdminCommand, SaveShadowMapsFor},
         rendering::{RenderingAdminCommand, postprocessing::ToRenderAttachmentQuantity},
-        uils::ToActiveState,
+        utils::ToActiveState,
     },
     egui::{ComboBox, Context, Slider, Ui},
     engine::Engine,
