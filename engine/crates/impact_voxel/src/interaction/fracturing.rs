@@ -97,6 +97,9 @@ pub struct VoxelObjectFracturingManager {
 #[derive(Clone, Debug)]
 pub struct VoxelFracturingConfig {
     pub impact: VoxelImpactFracturingConfig,
+    /// Fragments whose mass is a smaller fraction of the original object's mass
+    /// than this will be discarded.
+    pub min_relative_fragment_mass: f32,
     /// If set, the processing time for generating fracture objects per frame
     /// will be attempted limited to this number of microseconds. The time
     /// budget may be exceeded to spawn the fracture objects for completed
@@ -435,6 +438,7 @@ impl VoxelObjectFracturingManager {
             if process.is_complete() {
                 log::debug!("Completing fracturing for voxel object: {voxel_object_id}");
                 process.complete(
+                    &self.config,
                     context,
                     entity_id_manager,
                     voxel_object_manager,
@@ -705,6 +709,7 @@ impl Default for VoxelFracturingConfig {
     fn default() -> Self {
         Self {
             impact: Default::default(),
+            min_relative_fragment_mass: 1e-3,
             max_processing_duration_us: None,
         }
     }
@@ -1260,6 +1265,7 @@ impl FracturingProcess {
 
     fn complete<C>(
         &mut self,
+        config: &VoxelFracturingConfig,
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
         voxel_object_manager: &mut VoxelObjectManager,
@@ -1306,14 +1312,15 @@ impl FracturingProcess {
             .inertial_property_manager
             .derive_center_of_mass();
 
+        let original_mass = rigid_body.mass();
         let original_position = rigid_body.position().aligned();
         let orientation = rigid_body.orientation().aligned();
         let original_linear_velocity = rigid_body.compute_velocity();
         let angular_velocity = rigid_body.compute_angular_velocity();
 
-        let entity_ids = entity_id_manager.provide_id_vec(self.fragments.len());
+        let mut entity_ids = Vec::with_capacity(self.fragments.len());
 
-        for (&entity_id, mut fragment) in entity_ids.iter().zip(self.fragments.drain(..)) {
+        for mut fragment in self.fragments.drain(..) {
             let voxel_object = fragment.meshed_voxel_object.object();
 
             let dynamics = interaction::determine_extracted_voxel_object_dynamics(
@@ -1326,6 +1333,11 @@ impl FracturingProcess {
                 original_linear_velocity,
                 angular_velocity,
             );
+
+            if dynamics.rigid_body.mass() < config.min_relative_fragment_mass * original_mass {
+                voxel_object_buffer_pool.add_buffers(fragment.meshed_voxel_object.into_buffers());
+                continue;
+            }
 
             let anchors = interaction::get_anchors_on_extracted_voxel_object(
                 anchor_manager,
@@ -1341,6 +1353,8 @@ impl FracturingProcess {
                 anchors,
             };
 
+            let entity_id = entity_id_manager.provide_id();
+
             interaction::spawn_extracted_voxel_object(
                 voxel_object_manager,
                 rigid_body_manager,
@@ -1348,6 +1362,8 @@ impl FracturingProcess {
                 extracted_components,
                 entity_id,
             );
+
+            entity_ids.push(entity_id);
         }
 
         context.create_extracted_voxel_object_entities(entity_ids, original_entity_id);

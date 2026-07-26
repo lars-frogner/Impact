@@ -108,6 +108,7 @@
                     max_position_rejections_per_sample: 128,
                     seed: 0,
                 ),
+                min_relative_fragment_mass: 1e-3,
                 max_processing_duration_us: None,
             ),
         ),
