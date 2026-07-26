@@ -1,7 +1,7 @@
 //! Commands for controlling the game loop.
 
 use crate::{
-    command::uils::ToActiveState,
+    command::utils::ToActiveState,
     game_loop::{GameLoopController, GameLoopState},
 };
 

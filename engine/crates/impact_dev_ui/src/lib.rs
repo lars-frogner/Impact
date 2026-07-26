@@ -16,7 +16,7 @@ use impact::{
     command::{
         AdminCommand, capture::CaptureAdminCommand, controller::ControlAdminCommand,
         instrumentation::InstrumentationAdminCommand, physics::PhysicsAdminCommand,
-        uils::ToActiveState,
+        utils::ToActiveState,
     },
     egui::{Context, FullOutput, RawInput, Ui},
     engine::Engine,

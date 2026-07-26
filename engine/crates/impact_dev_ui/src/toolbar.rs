@@ -1,6 +1,6 @@
 use crate::{CustomElements, UserInterfaceConfig};
 use impact::{
-    command::{AdminCommand, instrumentation::InstrumentationAdminCommand, uils::ToActiveState},
+    command::{AdminCommand, instrumentation::InstrumentationAdminCommand, utils::ToActiveState},
     egui::{Context, Frame, TopBottomPanel},
     engine::Engine,
 };

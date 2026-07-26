@@ -1,6 +1,6 @@
 //! Commands for controlling post-processing.
 
-use crate::command::uils::{ModifiedActiveState, ToActiveState};
+use crate::command::utils::{ModifiedActiveState, ToActiveState};
 use anyhow::Result;
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,

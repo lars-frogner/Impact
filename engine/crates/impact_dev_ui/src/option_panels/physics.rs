@@ -4,7 +4,7 @@ use impact::{
     command::{
         AdminCommand,
         physics::{PhysicsAdminCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
-        uils::ToActiveState,
+        utils::ToActiveState,
     },
     egui::{Context, Slider, Ui},
     engine::Engine,

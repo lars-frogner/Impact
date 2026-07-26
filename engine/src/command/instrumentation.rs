@@ -1,6 +1,6 @@
 //! Commands for instrumentation.
 
-use crate::{command::uils::ToActiveState, rendering::RenderingSystem};
+use crate::{command::utils::ToActiveState, rendering::RenderingSystem};
 use impact_profiling::TaskTimer;
 
 #[derive(Clone, Debug)]
