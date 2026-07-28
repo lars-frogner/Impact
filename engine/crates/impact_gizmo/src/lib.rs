@@ -735,7 +735,7 @@ impl Default for GizmoParameters {
             min_signed_distance: VoxelSignedDistance::min_f32(),
             max_signed_distance: VoxelSignedDistance::max_f32(),
             sdf_radius_scale: 1.0,
-            sdf_alpha: 0.1,
+            sdf_alpha: 0.02,
         }
     }
 }
