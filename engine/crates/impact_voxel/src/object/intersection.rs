@@ -4,7 +4,7 @@ use crate::{
     Voxel, VoxelPlacement, VoxelSurfacePlacement,
     object::{
         self, CHUNK_SIZE, VoxelChunk, VoxelObject, VoxelRanges, chunk_voxels, chunk_voxels_mut,
-        sdf, split_detection::SplitDetector,
+        split_detection::SplitDetector,
     },
 };
 use impact_containers::HashSet;
@@ -533,113 +533,6 @@ impl VoxelObject {
 
         self.update_upper_boundary_adjacencies_for_chunks_in_ranges(
             touched_chunk_ranges.map(|range| range.start.saturating_sub(1)..range.end),
-        );
-    }
-
-    pub fn modify_intersecting_voxels(
-        voxel_object_a: &mut VoxelObject,
-        voxel_object_b: &mut VoxelObject,
-        transform_from_world_to_a: &Isometry3,
-        transform_from_world_to_b: &Isometry3,
-        mut should_check: impl FnMut(&Voxel) -> bool,
-        modify_a: &mut impl FnMut([usize; 3], &mut Voxel, f32),
-        modify_b: &mut impl FnMut([usize; 3], &mut Voxel, f32),
-    ) {
-        let transform_from_b_to_a =
-            transform_from_world_to_a * transform_from_world_to_b.inverted();
-
-        let Some((intersection_voxel_ranges_in_a, intersection_voxel_ranges_in_b)) =
-            VoxelObject::determine_voxel_ranges_encompassing_intersection(
-                voxel_object_a,
-                voxel_object_b,
-                &transform_from_b_to_a,
-            )
-        else {
-            return;
-        };
-
-        let voxel_extent_a = voxel_object_a.voxel_extent();
-        let voxel_extent_b = voxel_object_b.voxel_extent();
-
-        let b_dist_to_a = voxel_object_b.voxel_extent() * voxel_object_a.inverse_voxel_extent();
-        let a_dist_to_b = voxel_object_a.voxel_extent() * voxel_object_b.inverse_voxel_extent();
-
-        let grid_dimensions_for_a = voxel_object_a
-            .chunk_counts()
-            .map(|count| count * CHUNK_SIZE);
-
-        let grid_dimensions_for_b = voxel_object_b
-            .chunk_counts()
-            .map(|count| count * CHUNK_SIZE);
-
-        voxel_object_a.modify_voxels_within_ranges(
-            intersection_voxel_ranges_in_a,
-            &mut |[i, j, k], voxel| {
-                if !should_check(voxel) {
-                    return false;
-                }
-
-                let center = object::voxel_center_position_from_object_voxel_indices(
-                    voxel_extent_a,
-                    i,
-                    j,
-                    k,
-                );
-
-                let center_in_b = voxel_object_b.inverse_voxel_extent()
-                    * transform_from_b_to_a.inverse_transform_point(&center);
-
-                let signed_distance_inside_b_in_b = sdf::sample_voxel_object_sdf(
-                    voxel_object_b,
-                    &grid_dimensions_for_b,
-                    &center_in_b,
-                );
-
-                if signed_distance_inside_b_in_b.is_sign_positive() {
-                    return false;
-                }
-
-                let signed_distance_inside_b = signed_distance_inside_b_in_b * b_dist_to_a;
-
-                modify_a([i, j, k], voxel, signed_distance_inside_b);
-
-                true
-            },
-        );
-
-        voxel_object_b.modify_voxels_within_ranges(
-            intersection_voxel_ranges_in_b,
-            &mut |[i, j, k], voxel| {
-                if !should_check(voxel) {
-                    return false;
-                }
-
-                let center = object::voxel_center_position_from_object_voxel_indices(
-                    voxel_extent_b,
-                    i,
-                    j,
-                    k,
-                );
-
-                let center_in_a = voxel_object_a.inverse_voxel_extent()
-                    * transform_from_b_to_a.transform_point(&center);
-
-                let signed_distance_inside_a_in_a = sdf::sample_voxel_object_sdf(
-                    voxel_object_a,
-                    &grid_dimensions_for_a,
-                    &center_in_a,
-                );
-
-                if signed_distance_inside_a_in_a.is_sign_positive() {
-                    return false;
-                }
-
-                let signed_distance_inside_a = signed_distance_inside_a_in_a * a_dist_to_b;
-
-                modify_b([i, j, k], voxel, signed_distance_inside_a);
-
-                true
-            },
         );
     }
 

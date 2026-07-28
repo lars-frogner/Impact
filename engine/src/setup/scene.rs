@@ -84,7 +84,7 @@ pub fn cleanup_scene_data_for_removed_entity(
 
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
-    voxel::cleanup_voxel_object_for_removed_entity(scene, entity_id, entity);
+    voxel::cleanup_voxel_state_for_removed_entity(scene, entity_id, entity);
 
     bounding_volume::cleanup_bounding_volume_for_removed_entity(scene, entity_id, entity);
 }

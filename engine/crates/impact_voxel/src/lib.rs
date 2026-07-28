@@ -592,6 +592,34 @@ impl VoxelObjectManager {
         Some((voxel_object, physics_context))
     }
 
+    /// Returns mutable references to the two [`MeshedVoxelObject`] with the
+    /// given IDs and their [`VoxelObjectPhysicsContext`]s if they all exist.
+    ///
+    /// # Panics
+    /// If the two IDs are equal.
+    #[inline]
+    pub fn get_voxel_object_pair_with_physics_contexts_mut(
+        &mut self,
+        voxel_object_a_id: VoxelObjectID,
+        voxel_object_b_id: VoxelObjectID,
+    ) -> Option<[(&mut MeshedVoxelObject, &mut VoxelObjectPhysicsContext); 2]> {
+        let ids = [&voxel_object_a_id, &voxel_object_b_id];
+
+        let voxel_objects = self.voxel_objects.get_disjoint_mut(ids);
+        let physics_contexts = self.physics_contexts.get_disjoint_mut(ids);
+
+        if voxel_objects.iter().any(|object| object.is_none())
+            || physics_contexts.iter().any(|context| context.is_none())
+        {
+            return None;
+        }
+
+        let [object_a, object_b] = voxel_objects.map(Option::unwrap);
+        let [context_a, context_b] = physics_contexts.map(Option::unwrap);
+
+        Some([(object_a, context_a), (object_b, context_b)])
+    }
+
     /// Whether a voxel object with the given ID exists in the manager.
     #[inline]
     pub fn has_voxel_object(&self, voxel_object_id: VoxelObjectID) -> bool {

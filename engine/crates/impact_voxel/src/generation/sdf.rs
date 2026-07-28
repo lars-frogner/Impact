@@ -46,7 +46,7 @@ impl From<f32> for Smoothness {
 #[inline]
 pub fn sdf_union(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
     if smoothness.is_zero() {
-        f32::min(distance_1, distance_2)
+        hard_sdf_union(distance_1, distance_2)
     } else {
         smooth_sdf_union(distance_1, distance_2, smoothness)
     }
@@ -55,7 +55,7 @@ pub fn sdf_union(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f3
 #[inline]
 pub fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
     if smoothness.is_zero() {
-        f32::max(distance_1, -distance_2)
+        hard_sdf_subtraction(distance_1, distance_2)
     } else {
         smooth_sdf_subtraction(distance_1, distance_2, smoothness)
     }
@@ -64,10 +64,25 @@ pub fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: Smoothness)
 #[inline]
 pub fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
     if smoothness.is_zero() {
-        f32::max(distance_1, distance_2)
+        hard_sdf_intersection(distance_1, distance_2)
     } else {
         smooth_sdf_intersection(distance_1, distance_2, smoothness)
     }
+}
+
+#[inline]
+pub fn hard_sdf_union(distance_1: f32, distance_2: f32) -> f32 {
+    f32::min(distance_1, distance_2)
+}
+
+#[inline]
+pub fn hard_sdf_subtraction(distance_1: f32, distance_2: f32) -> f32 {
+    f32::max(distance_1, -distance_2)
+}
+
+#[inline]
+pub fn hard_sdf_intersection(distance_1: f32, distance_2: f32) -> f32 {
+    f32::max(distance_1, distance_2)
 }
 
 #[inline]

@@ -632,7 +632,16 @@ pub fn setup_scene_graph_model_instance_nodes_for_new_voxel_object_entities(
     )
 }
 
-pub fn cleanup_voxel_object_for_removed_entity(
+pub fn cleanup_voxel_state_for_removed_entity(
+    scene: &RwLock<Scene>,
+    entity_id: EntityID,
+    entity: &impact_ecs::world::EntityEntry<'_>,
+) {
+    cleanup_voxel_object_for_removed_entity(scene, entity_id, entity);
+    cleanup_voxel_interaction_for_removed_entity(scene, entity_id, entity);
+}
+
+fn cleanup_voxel_object_for_removed_entity(
     scene: &RwLock<Scene>,
     entity_id: EntityID,
     entity: &impact_ecs::world::EntityEntry<'_>,
@@ -645,7 +654,7 @@ pub fn cleanup_voxel_object_for_removed_entity(
     }
 }
 
-pub fn cleanup_voxel_interaction_for_removed_entity(
+fn cleanup_voxel_interaction_for_removed_entity(
     scene: &RwLock<Scene>,
     entity_id: EntityID,
     entity: &impact_ecs::world::EntityEntry<'_>,
@@ -667,5 +676,13 @@ pub fn cleanup_voxel_interaction_for_removed_entity(
             .interaction_manager_mut()
             .absorption_manager_mut()
             .remove_absorbing_capsule(absorber_id);
+    }
+    if entity.has_component::<HasVoxelObject>() {
+        let scene = scene.oread();
+        let mut voxel_manager = scene.voxel_manager().owrite();
+        voxel_manager
+            .interaction_manager_mut()
+            .absorption_manager_mut()
+            .remove_mutual_absorption_processes_involving_entity(entity_id);
     }
 }

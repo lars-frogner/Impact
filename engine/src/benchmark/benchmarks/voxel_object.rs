@@ -28,9 +28,10 @@ use impact_voxel::{
     },
     generation::{
         SDFVoxelGenerator,
-        sdf::{SDFGraph, SDFNode},
+        sdf::{SDFGraph, SDFNode, Smoothness},
         voxel_type::SameVoxelTypeGenerator,
     },
+    interaction::absorption::{MutualVoxelAbsorptionProcess, apply_mutual_absorption},
     mesh::{MeshedVoxelObject, VoxelObjectMesh, VoxelObjectMeshBuffers},
     object::{
         VoxelObject, VoxelObjectBuffers, extraction::ExtractionResult,
@@ -219,6 +220,50 @@ pub fn modify_voxels_within_sphere(benchmarker: impl Benchmarker) {
         object.modify_voxels_within_sphere(&sphere, &mut |indices, position, voxel| {
             black_box((indices, position, voxel));
         });
+    });
+}
+
+pub fn apply_mutual_voxel_absorption(benchmarker: impl Benchmarker) {
+    let object_radius = 40.0;
+    let generator = create_sphere_generator(object_radius);
+
+    let object_a = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
+    let object_b = object_a.clone();
+
+    let voxel_type_densities = [1.0; 256];
+    let inertial_property_manager_a =
+        VoxelObjectInertialPropertyManager::initialized_from(&object_a, &voxel_type_densities);
+    let inertial_property_manager_b =
+        VoxelObjectInertialPropertyManager::initialized_from(&object_b, &voxel_type_densities);
+
+    let transform_from_world_to_a = Isometry3::identity();
+    let transform_from_world_to_b = Isometry3::from_translation(Vector3::new(70.0, 0.0, 0.0));
+
+    benchmarker.benchmark(&mut || {
+        let mut object_a = object_a.clone();
+        let mut object_b = object_b.clone();
+
+        let mut inertial_property_manager_a = inertial_property_manager_a.clone();
+        let mut inertial_property_manager_b = inertial_property_manager_b.clone();
+
+        let mut inertial_property_updater_a =
+            inertial_property_manager_a.begin_update(1.0, &voxel_type_densities);
+        let mut inertial_property_updater_b =
+            inertial_property_manager_b.begin_update(1.0, &voxel_type_densities);
+
+        apply_mutual_absorption(
+            &mut object_a,
+            &mut object_b,
+            &mut inertial_property_updater_a,
+            &mut inertial_property_updater_b,
+            &transform_from_world_to_a,
+            &transform_from_world_to_b,
+            &MutualVoxelAbsorptionProcess {
+                smoothness: Smoothness::new(2.0),
+            },
+        );
+
+        (object_a, object_b)
     });
 }
 

@@ -19,6 +19,7 @@ define_criterion_target!(
 define_criterion_target!(voxel_object, obtain_surface_voxels_within_sphere);
 define_criterion_target!(voxel_object, for_each_exposed_chunk_with_sdf);
 define_criterion_target!(voxel_object, modify_voxels_within_sphere);
+define_criterion_target!(voxel_object, apply_mutual_voxel_absorption);
 define_criterion_target!(voxel_object, split_off_disconnected_region);
 define_criterion_target!(
     voxel_object,
@@ -56,6 +57,7 @@ criterion::criterion_group!(
         obtain_surface_voxels_within_sphere,
         for_each_exposed_chunk_with_sdf,
         modify_voxels_within_sphere,
+        apply_mutual_voxel_absorption,
         split_off_disconnected_region,
         split_off_disconnected_region_with_inertial_property_transfer,
         update_mesh,

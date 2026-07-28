@@ -81,6 +81,7 @@ impact_profiling::define_target_enum! {
         create_mesh,
         compute_collision_probes,
         modify_voxels_within_sphere,
+        apply_mutual_voxel_absorption,
         split_off_disconnected_region,
         split_off_disconnected_region_with_inertial_property_transfer,
         update_mesh,

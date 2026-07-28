@@ -107,6 +107,8 @@
                     angular_grid_size: 128,
                     max_position_rejections_per_sample: 128,
                     seed: 0,
+                    enable_mutual_absorption_during_processing: true,
+                    mutual_absorption_smoothness: 2.0,
                 ),
                 min_relative_fragment_mass: 1e-3,
                 max_processing_duration_us: None,

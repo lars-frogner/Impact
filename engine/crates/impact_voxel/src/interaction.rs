@@ -72,8 +72,8 @@ pub trait VoxelObjectInteractionContext {
 /// Manages voxel interaction processes and state.
 #[derive(Debug)]
 pub struct VoxelInteractionManager {
-    absorption_manager: VoxelAbsorptionManager,
-    fracturing_manager: VoxelObjectFracturingManager,
+    pub absorption_manager: VoxelAbsorptionManager,
+    pub fracturing_manager: VoxelObjectFracturingManager,
 }
 
 #[cfg_attr(
