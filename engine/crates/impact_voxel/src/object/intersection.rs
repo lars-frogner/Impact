@@ -210,7 +210,7 @@ impl VoxelObject {
 
                     let included_voxel_ranges_in_chunk: [_; 3] = array::from_fn(|dim| {
                         let range_in_chunk = &object_voxel_ranges_in_chunk[dim];
-                        let included_range = &included_chunk_ranges[dim];
+                        let included_range = &included_voxel_ranges[dim];
                         usize::max(range_in_chunk.start, included_range.start)
                             ..usize::min(range_in_chunk.end, included_range.end)
                     });
