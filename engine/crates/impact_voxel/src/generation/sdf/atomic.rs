@@ -1,7 +1,7 @@
 //! Generation of signed distance fields. This module implements the graph of
 //! simple "atomic" SDF nodes that is traversed during generation.
 
-use crate::{VoxelSignedDistance, object::VoxelObject};
+use crate::{VoxelSignedDistance, generation::sdf::Smoothness, object::VoxelObject};
 use anyhow::{Result, anyhow, bail};
 use approx::abs_diff_ne;
 use impact_alloc::{
@@ -177,12 +177,6 @@ pub struct MultifractalNoiseSDFModifier {
     amplitude: f32,
     noise_scale: f32,
     seed: u32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Smoothness {
-    smoothness: f32,
-    quarter_inv_smoothness: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -806,7 +800,7 @@ impl<A: Allocator> SDFGenerator<A> {
                             &node.transform_to_node_space,
                             block_origin_in_root_space,
                             &|idx, _| {
-                                sdf_union(distances_1[idx], distances_2[idx], smoothness)
+                                super::sdf_union(distances_1[idx], distances_2[idx], smoothness)
                                     >= node.domain_margin
                             },
                         )
@@ -833,8 +827,11 @@ impl<A: Allocator> SDFGenerator<A> {
                             &node.transform_to_node_space,
                             block_origin_in_root_space,
                             &|idx, _| {
-                                sdf_subtraction(distances_1[idx], distances_2[idx], smoothness)
-                                    >= node.domain_margin
+                                super::sdf_subtraction(
+                                    distances_1[idx],
+                                    distances_2[idx],
+                                    smoothness,
+                                ) >= node.domain_margin
                             },
                         )
                     {
@@ -860,8 +857,11 @@ impl<A: Allocator> SDFGenerator<A> {
                             &node.transform_to_node_space,
                             block_origin_in_root_space,
                             &|idx, _| {
-                                sdf_intersection(distances_1[idx], distances_2[idx], smoothness)
-                                    >= node.domain_margin
+                                super::sdf_intersection(
+                                    distances_1[idx],
+                                    distances_2[idx],
+                                    smoothness,
+                                ) >= node.domain_margin
                             },
                         )
                     {
@@ -1572,38 +1572,6 @@ impl MultifractalNoiseSDFModifier {
     }
 }
 
-impl Smoothness {
-    #[inline]
-    pub fn new(smoothness: f32) -> Self {
-        Self {
-            smoothness,
-            quarter_inv_smoothness: 0.25 / smoothness,
-        }
-    }
-
-    #[inline]
-    pub fn get(&self) -> f32 {
-        self.smoothness
-    }
-
-    #[inline]
-    pub fn scaled(&self, scale: f32) -> Self {
-        Self::new(self.smoothness * scale)
-    }
-
-    #[inline]
-    pub fn is_zero(&self) -> bool {
-        self.smoothness == 0.0
-    }
-}
-
-impl From<f32> for Smoothness {
-    #[inline]
-    fn from(smoothness: f32) -> Self {
-        Self::new(smoothness)
-    }
-}
-
 #[inline]
 fn zero_domain() -> AxisAlignedBox {
     AxisAlignedBox::new(Point3::origin(), Point3::origin())
@@ -1840,7 +1808,7 @@ fn apply_sdf_unions<const COUNT: usize>(
         }
     } else {
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
-            *distance_1 = smooth_sdf_union(*distance_1, distance_2, smoothness);
+            *distance_1 = super::smooth_sdf_union(*distance_1, distance_2, smoothness);
         }
     }
 }
@@ -1857,7 +1825,7 @@ fn apply_sdf_subtractions<const COUNT: usize>(
         }
     } else {
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
-            *distance_1 = smooth_sdf_subtraction(*distance_1, distance_2, smoothness);
+            *distance_1 = super::smooth_sdf_subtraction(*distance_1, distance_2, smoothness);
         }
     }
 }
@@ -1874,52 +1842,9 @@ fn apply_sdf_intersections<const COUNT: usize>(
         }
     } else {
         for (distance_1, &distance_2) in distances_1.iter_mut().zip(distances_2.iter()) {
-            *distance_1 = smooth_sdf_intersection(*distance_1, distance_2, smoothness);
+            *distance_1 = super::smooth_sdf_intersection(*distance_1, distance_2, smoothness);
         }
     }
-}
-
-#[inline]
-fn sdf_union(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
-    if smoothness.is_zero() {
-        f32::min(distance_1, distance_2)
-    } else {
-        smooth_sdf_union(distance_1, distance_2, smoothness)
-    }
-}
-
-#[inline]
-fn sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
-    if smoothness.is_zero() {
-        f32::max(distance_1, -distance_2)
-    } else {
-        smooth_sdf_subtraction(distance_1, distance_2, smoothness)
-    }
-}
-
-#[inline]
-fn sdf_intersection(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
-    if smoothness.is_zero() {
-        f32::max(distance_1, distance_2)
-    } else {
-        smooth_sdf_intersection(distance_1, distance_2, smoothness)
-    }
-}
-
-#[inline]
-fn smooth_sdf_union(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
-    let h = (smoothness.get() - (distance_1 - distance_2).abs()).max(0.0);
-    distance_1.min(distance_2) - (h * h) * smoothness.quarter_inv_smoothness
-}
-
-#[inline]
-fn smooth_sdf_subtraction(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
-    -smooth_sdf_union(-distance_1, distance_2, smoothness)
-}
-
-#[inline]
-fn smooth_sdf_intersection(distance_1: f32, distance_2: f32, smoothness: Smoothness) -> f32 {
-    -smooth_sdf_union(-distance_1, -distance_2, smoothness)
 }
 
 /// Assumes underlying gradient noise in range [-1.0, 1.0].
