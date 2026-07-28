@@ -16,6 +16,7 @@ use crate::{
     voxel_types::VoxelTypeRegistry,
 };
 use absorption::VoxelAbsorptionManager;
+use anyhow::Result;
 use fracturing::VoxelObjectFracturingManager;
 use impact_geometry::{AxisAlignedBoxC, ModelTransform};
 use impact_id::{EntityID, EntityIDManager};
@@ -130,11 +131,11 @@ struct ExtractedVoxelObjectCoordinateChanges {
 type Anchors = TinyVec<[(DynamicRigidBodyAnchorID, Position); 4]>;
 
 impl VoxelInteractionManager {
-    pub fn new(config: VoxelInteractionConfig) -> Self {
-        Self {
+    pub fn new(config: VoxelInteractionConfig) -> Result<Self> {
+        Ok(Self {
             absorption_manager: VoxelAbsorptionManager::new(),
-            fracturing_manager: VoxelObjectFracturingManager::new(config.fracturing),
-        }
+            fracturing_manager: VoxelObjectFracturingManager::new(config.fracturing)?,
+        })
     }
 
     /// Returns a reference to the [`VoxelAbsorptionManager`].

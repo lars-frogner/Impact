@@ -147,7 +147,7 @@ impl Engine {
             camera_context,
             model_instance_manager,
             config.voxel,
-        );
+        )?;
 
         let graphics_device = Arc::new(graphics.device);
         let rendering_surface = graphics.surface;

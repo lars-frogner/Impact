@@ -1,6 +1,7 @@
 //! Scene containing data to render.
 
 use crate::lock_order::OrderedRwLock;
+use anyhow::Result;
 use impact_camera::{CameraContext, CameraManager};
 use impact_id::EntityIDManager;
 use impact_intersection::IntersectionManager;
@@ -33,19 +34,19 @@ impl Scene {
         camera_context: CameraContext,
         model_instance_manager: ModelInstanceManager,
         voxel_config: VoxelConfig,
-    ) -> Self {
+    ) -> Result<Self> {
         let scene_graph_root_node_id = SceneGroupID::from_entity_id(entity_id_manager.provide_id());
         let initial_model_instance_manager_state = model_instance_manager.record_state();
-        Self {
+        Ok(Self {
             skybox: RwLock::new(None),
             camera_manager: RwLock::new(CameraManager::new(camera_context)),
             light_manager: RwLock::new(LightManager::new()),
-            voxel_manager: RwLock::new(VoxelManager::new(voxel_config)),
+            voxel_manager: RwLock::new(VoxelManager::new(voxel_config)?),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
             intersection_manager: RwLock::new(IntersectionManager::new()),
             scene_graph: RwLock::new(SceneGraph::new(scene_graph_root_node_id)),
-        }
+        })
     }
 
     /// Returns a reference to the [`Skybox`], or [`None`] if no skybox has

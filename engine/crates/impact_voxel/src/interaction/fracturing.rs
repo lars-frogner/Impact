@@ -196,12 +196,13 @@ struct FractureForce {
 
 impl VoxelObjectFracturingManager {
     /// Creates a new empty fracturing manager with the given configuration.
-    pub fn new(config: VoxelFracturingConfig) -> Self {
-        Self {
+    pub fn new(config: VoxelFracturingConfig) -> Result<Self> {
+        config.validate()?;
+        Ok(Self {
             active_processes: HashMap::default(),
             process_pool: Vec::new(),
             config,
-        }
+        })
     }
 
     /// Adds the given fracture points to use in the fracturing process of the
@@ -705,6 +706,21 @@ impl VoxelObjectFracturingManager {
     }
 }
 
+impl VoxelFracturingConfig {
+    fn validate(&self) -> Result<()> {
+        self.impact.validate()?;
+
+        if self.min_relative_fragment_mass < 0.0 {
+            bail!(
+                "Minimum relative fragment mass for fracturing must be non-negative: {}",
+                self.min_relative_fragment_mass
+            );
+        }
+
+        Ok(())
+    }
+}
+
 impl Default for VoxelFracturingConfig {
     fn default() -> Self {
         Self {
@@ -712,6 +728,36 @@ impl Default for VoxelFracturingConfig {
             min_relative_fragment_mass: 1e-3,
             max_processing_duration_us: None,
         }
+    }
+}
+
+impl VoxelImpactFracturingConfig {
+    fn validate(&self) -> Result<()> {
+        if self.radial_falloff_power < 0.0 {
+            bail!(
+                "Radial falloff power for impact fragment generation must be non-negative: {}",
+                self.radial_falloff_power
+            );
+        }
+        if self.angular_falloff_power < 0.0 {
+            bail!(
+                "Angular falloff power for impact fragment generation must be non-negative: {}",
+                self.angular_falloff_power
+            );
+        }
+        if self.radial_grid_size < 2 {
+            bail!(
+                "Radial grid size for impact fragment generation must be at least 2: {}",
+                self.radial_grid_size
+            );
+        }
+        if self.angular_grid_size < 2 {
+            bail!(
+                "Angular grid size for impact fragment generation must be at least 2: {}",
+                self.angular_grid_size
+            );
+        }
+        Ok(())
     }
 }
 

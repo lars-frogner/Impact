@@ -477,12 +477,12 @@ impl_InstanceFeature!(VoxelObjectID);
 
 impl VoxelManager {
     /// Creates a new voxel manager with no state and the given configuration.
-    pub fn new(config: VoxelConfig) -> Self {
-        Self {
+    pub fn new(config: VoxelConfig) -> Result<Self> {
+        Ok(Self {
             object_manager: VoxelObjectManager::new(),
-            interaction_manager: VoxelInteractionManager::new(config.interaction),
+            interaction_manager: VoxelInteractionManager::new(config.interaction)?,
             object_buffer_pool: VoxelObjectBufferPool::new(),
-        }
+        })
     }
 
     /// Returns a reference to the [`VoxelObjectManager`].
