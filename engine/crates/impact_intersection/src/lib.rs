@@ -80,6 +80,14 @@ impl IntersectionManager {
         self.bvh.for_each_bounding_volume(f);
     }
 
+    pub fn bounding_volumes_intersect(
+        &self,
+        id_a: BoundingVolumeID,
+        id_b: BoundingVolumeID,
+    ) -> bool {
+        self.bvh.bounding_volumes_intersect(id_a, id_b)
+    }
+
     pub fn for_each_bounding_volume_in_axis_aligned_box(
         &self,
         axis_aligned_box: &AxisAlignedBox,
