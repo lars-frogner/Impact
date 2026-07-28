@@ -3151,7 +3151,7 @@ pub fn chunk_range_encompassing_voxel_range(voxel_range: Range<usize>) -> Range<
 }
 
 #[inline]
-fn voxel_center_position_from_object_voxel_indices(
+pub fn voxel_center_position_from_object_voxel_indices(
     voxel_extent: f32,
     i: usize,
     j: usize,

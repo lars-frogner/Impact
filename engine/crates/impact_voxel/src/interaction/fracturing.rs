@@ -3,7 +3,11 @@
 use crate::{
     VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager,
     collidable::{Collidable, CollisionWorld},
-    interaction::{self, ExtractedComponents, VoxelObjectInteractionContext},
+    generation::sdf::Smoothness,
+    interaction::{
+        self, ExtractedComponents, VoxelObjectInteractionContext,
+        absorption::{MutualVoxelAbsorptionProcess, VoxelAbsorptionManager},
+    },
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
     object::{
         ChunkRanges, VoxelObject, extraction::ExtractionResult,
@@ -139,6 +143,13 @@ pub struct VoxelImpactFracturingConfig {
     pub max_position_rejections_per_sample: u64,
     /// The seed to use for fragment generation.
     pub seed: u64,
+    /// Whether to enable mutual voxel absorption between colliding voxel
+    /// objects while the fragments are being generated (only has an effect if
+    /// processing takes multiple frames).
+    pub enable_mutual_absorption_during_processing: bool,
+    /// The smoothness to use for SDF subtraction during mutual voxel
+    /// absorption.
+    pub mutual_absorption_smoothness: f32,
 }
 
 #[derive(Debug)]
@@ -183,9 +194,6 @@ pub enum FracturePointGenerator {
 pub struct RandomizedGridFracturePointGenerator {
     points_per_dim: usize,
 }
-
-#[derive(Clone, Debug)]
-pub struct ImpulseFracturePointGenerator {}
 
 #[derive(Clone, Debug)]
 struct FractureForce {
@@ -464,6 +472,7 @@ impl VoxelObjectFracturingManager {
         &mut self,
         context: &C,
         voxel_object_manager: &VoxelObjectManager,
+        absorption_manager: &mut VoxelAbsorptionManager,
         rigid_body_manager: &RigidBodyManager,
         constraint_manager: &mut ConstraintManager,
         collision_world: &CollisionWorld,
@@ -691,11 +700,21 @@ impl VoxelObjectFracturingManager {
             // applied until the fragments are generated
             constraint_manager.add_collision_to_ignore_list(entity_ids);
 
-            // if entity_ids.iter().all(|&entity_id| {
-            //     voxel_object_manager.has_voxel_object(VoxelObjectID::from_entity_id(entity_id))
-            // }) {
-            //     todo!("Enable mutual voxel absorption for the pair of objects")
-            // }
+            if self
+                .config
+                .impact
+                .enable_mutual_absorption_during_processing
+            {
+                let process = MutualVoxelAbsorptionProcess {
+                    smoothness: Smoothness::new(self.config.impact.mutual_absorption_smoothness),
+                };
+
+                if entity_ids.iter().all(|&entity_id| {
+                    voxel_object_manager.has_voxel_object(VoxelObjectID::from_entity_id(entity_id))
+                }) {
+                    absorption_manager.initiate_mutual_absorption_process(entity_ids, process);
+                }
+            }
         }
     }
 
@@ -757,6 +776,12 @@ impl VoxelImpactFracturingConfig {
                 self.angular_grid_size
             );
         }
+        if self.mutual_absorption_smoothness < 0.0 {
+            bail!(
+                "Mutual absorption smoothness for impact fragment generation must be at non-negative: {}",
+                self.mutual_absorption_smoothness
+            );
+        }
         Ok(())
     }
 }
@@ -771,6 +796,8 @@ impl Default for VoxelImpactFracturingConfig {
             angular_grid_size: 128,
             max_position_rejections_per_sample: 128,
             seed: 0,
+            enable_mutual_absorption_during_processing: true,
+            mutual_absorption_smoothness: 2.0,
         }
     }
 }
