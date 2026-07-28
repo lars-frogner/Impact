@@ -146,6 +146,20 @@ impl BoundingVolumeHierarchy {
         }
     }
 
+    pub fn bounding_volumes_intersect(
+        &self,
+        id_a: BoundingVolumeID,
+        id_b: BoundingVolumeID,
+    ) -> bool {
+        let Some(aabb_a) = self.primitives.aabb_with_id(id_a) else {
+            return false;
+        };
+        let Some(aabb_b) = self.primitives.aabb_with_id(id_b) else {
+            return false;
+        };
+        !aabb_a.aligned().box_lies_outside(&aabb_b.aligned())
+    }
+
     pub fn for_each_bounding_volume_in_axis_aligned_box(
         &self,
         axis_aligned_box: &AxisAlignedBox,
@@ -476,6 +490,12 @@ impl Primitives {
             .map_err(|_idx| anyhow!("A bounding volume with ID {id} is already present"))?;
         self.aabbs.push(aabb);
         Ok(())
+    }
+
+    #[inline]
+    fn aabb_with_id(&self, id: BoundingVolumeID) -> Option<&AxisAlignedBoxC> {
+        let idx = self.index_map.get(id)?;
+        Some(self.aabb_at_idx(idx))
     }
 
     #[inline]
