@@ -236,6 +236,12 @@ impl MeshedVoxelObjectBuffers {
     }
 }
 
+impl Default for MeshedVoxelObjectBuffers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VoxelObjectMeshBuffers {
     /// Creates new empty buffers.
     pub fn new() -> Self {
@@ -249,6 +255,12 @@ impl VoxelObjectMeshBuffers {
     pub fn clear(&mut self) {
         self.mesh.clear();
         self.collision_probes.clear();
+    }
+}
+
+impl Default for VoxelObjectMeshBuffers {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

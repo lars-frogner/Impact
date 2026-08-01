@@ -776,8 +776,7 @@ impl VoxelObjectBufferPool {
     /// if not available.
     #[inline]
     pub fn take_or_create_buffers(&mut self) -> MeshedVoxelObjectBuffers {
-        self.take_buffers()
-            .unwrap_or_else(MeshedVoxelObjectBuffers::new)
+        self.take_buffers().unwrap_or_default()
     }
 
     /// Removes all buffers in the pool and frees up all allocated memory.

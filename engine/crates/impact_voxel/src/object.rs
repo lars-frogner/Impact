@@ -1846,6 +1846,12 @@ impl VoxelObjectBuffers {
     }
 }
 
+impl Default for VoxelObjectBuffers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VoxelChunk {
     fn create_for_generated_voxels(chunk_voxels: &[Voxel], sparseness: ChunkSparseness) -> Self {
         assert_eq!(chunk_voxels.len(), CHUNK_VOXEL_COUNT);
