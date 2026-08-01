@@ -413,7 +413,7 @@ define_task!(
         // Voxel object meshes are used for collision detection.
         UpdateVoxelObjectMeshes
     ],
-    execute_on = [RenderingTag],
+    execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Detecting collisions", engine.task_timer(), {
@@ -450,7 +450,7 @@ define_task!(
         // The triggers use the collisions just detected.
         DetectCollisions
     ],
-    execute_on = [RenderingTag],
+    execute_on = [PhysicsTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Running collision triggered logic", engine.task_timer(), {
@@ -665,7 +665,7 @@ define_task!(
         // We depend on the updated group-to-world transforms.
         UpdateSceneGroupToWorldTransforms
     ],
-    execute_on = [RenderingTag],
+    execute_on = [PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Adding bounding volumes to hierarchy", engine.task_timer(), {
@@ -692,7 +692,7 @@ define_task!(
     depends_on = [
         AddBoundingVolumesToHierarchy
     ],
-    execute_on = [RenderingTag],
+    execute_on = [PhysicsTag, RenderingTag],
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Building bounding volume hierarchy", engine.task_timer(), {
