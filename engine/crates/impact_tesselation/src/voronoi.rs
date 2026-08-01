@@ -44,16 +44,6 @@ struct PartialPlane {
     point_count: u32,
 }
 
-impl VoronoiPolyhedron<impact_alloc::Global> {
-    pub fn extract_from_delaunay_tetrahedra_g(
-        &mut self,
-        tetrahedralization: &DelaunayTetrahedralization<impact_alloc::Global>,
-        dual_vertex_idx: VertexIdx,
-    ) {
-        self.extract_from_delaunay_tetrahedra(tetrahedralization, dual_vertex_idx);
-    }
-}
-
 impl<A: Allocator> VoronoiPolyhedron<A> {
     /// Creates a new empty Voronoi polyhedron using the given allocator.
     pub fn empty_in(alloc: A) -> Self {
