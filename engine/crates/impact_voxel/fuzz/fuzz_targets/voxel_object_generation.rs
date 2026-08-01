@@ -1,7 +1,7 @@
 #![no_main]
 
 use impact_voxel::{
-    chunks::fuzzing::fuzz_test_voxel_object_generation, generation::SDFVoxelGenerator,
+    generation::SDFVoxelGenerator, object::fuzzing::fuzz_test_voxel_object_generation,
 };
 use libfuzzer_sys::fuzz_target;
 
