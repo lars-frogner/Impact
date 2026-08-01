@@ -462,6 +462,9 @@ define_task!(
             let absorption_manager = &mut interaction_manager.absorption_manager;
             let fracturing_manager = &mut interaction_manager.fracturing_manager;
             let simulator = engine.simulator().oread();
+            if !simulator.enabled() {
+                return Ok(());
+            }
             let rigid_body_manager = simulator.rigid_body_manager().oread();
             let constraint_manager = &mut **simulator.constraint_manager().owrite();
             let collision_world = simulator.collision_world().oread();
@@ -562,6 +565,9 @@ define_task!(
         instrument_task!("Synchronizing rigid body components", engine.task_timer(), {
             let ecs_world = engine.ecs_world().oread();
             let simulator = engine.simulator().oread();
+            if !simulator.enabled() {
+                return Ok(());
+            }
             let rigid_body_manager = simulator.rigid_body_manager().oread();
             impact_physics::systems::synchronize_rigid_body_components(&ecs_world, &rigid_body_manager);
             Ok(())
@@ -1037,6 +1043,9 @@ define_task!(
             let intersection_manager = scene.intersection_manager().oread();
             let scene_graph = scene.scene_graph().oread();
             let simulator = engine.simulator().oread();
+            if !simulator.enabled() {
+                return Ok(());
+            }
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
             let mut anchor_manager = simulator.anchor_manager().owrite();
             let force_generator_manager = simulator.force_generator_manager().oread();
@@ -1092,6 +1101,9 @@ define_task!(
             let mut voxel_manager = scene.voxel_manager().owrite();
             let scene_graph = scene.scene_graph().oread();
             let simulator = engine.simulator().oread();
+            if !simulator.enabled() {
+                return Ok(());
+            }
             let mut rigid_body_manager = simulator.rigid_body_manager().owrite();
             let mut anchor_manager = simulator.anchor_manager().owrite();
             let force_generator_manager = simulator.force_generator_manager().oread();
