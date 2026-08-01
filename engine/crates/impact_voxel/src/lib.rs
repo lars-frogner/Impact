@@ -272,7 +272,7 @@ impl Neg for VoxelSignedDistance {
 
     #[inline]
     fn neg(self) -> Self::Output {
-        Self::from_encoded(-self.encoded)
+        Self::from_encoded(self.encoded.saturating_neg())
     }
 }
 
