@@ -1,10 +1,10 @@
 #![no_main]
 
-use impact_voxel::chunks::extraction::fuzzing::{
-    CopyPolyhedronInput, fuzz_test_voxel_object_copy_polyhedron,
+use impact_voxel::object::extraction::fuzzing::{
+    ExtractPolyhedronInput, fuzz_test_voxel_object_copy_polyhedron,
 };
 use libfuzzer_sys::fuzz_target;
 
-fuzz_target!(|input: CopyPolyhedronInput| {
+fuzz_target!(|input: ExtractPolyhedronInput| {
     fuzz_test_voxel_object_copy_polyhedron(input);
 });

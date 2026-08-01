@@ -1,8 +1,8 @@
 #![no_main]
 
 use impact_voxel::{
-    chunks::intersection::fuzzing::{ArbitraryCapsule, fuzz_test_obtaining_voxels_within_capsule},
     generation::SDFVoxelGenerator,
+    object::intersection::fuzzing::{ArbitraryCapsule, fuzz_test_obtaining_voxels_within_capsule},
 };
 use libfuzzer_sys::fuzz_target;
 

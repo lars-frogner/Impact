@@ -1,8 +1,8 @@
 #![no_main]
 
 use impact_voxel::{
-    chunks::extraction::fuzzing::fuzz_test_voxel_object_split_off_disconnected_region,
     generation::SDFVoxelGenerator,
+    object::extraction::fuzzing::fuzz_test_voxel_object_split_off_disconnected_region,
 };
 use libfuzzer_sys::fuzz_target;
 
