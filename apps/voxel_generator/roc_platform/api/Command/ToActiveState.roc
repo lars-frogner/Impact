@@ -1,6 +1,6 @@
 # Hash: a01ae115655d6843
 # Generated: 2025-12-29T23:56:08.53639192
-# Rust type: impact::command::uils::ToActiveState
+# Rust type: impact::command::utils::ToActiveState
 # Type category: Inline
 module [
     ToActiveState,
