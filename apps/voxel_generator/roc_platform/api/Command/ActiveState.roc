@@ -1,6 +1,6 @@
 # Hash: ccda81fd0436c5e5
 # Generated: 2025-12-29T23:56:08.53639192
-# Rust type: impact::command::uils::ActiveState
+# Rust type: impact::command::utils::ActiveState
 # Type category: Inline
 module [
     ActiveState,

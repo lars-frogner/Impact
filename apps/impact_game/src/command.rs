@@ -2,7 +2,7 @@
 
 use crate::{Game, InteractionMode};
 use impact::command::{
-    AdminCommand, physics::PhysicsAdminCommand, queue::CommandQueue, uils::ToActiveState,
+    AdminCommand, physics::PhysicsAdminCommand, queue::CommandQueue, utils::ToActiveState,
 };
 use roc_integration::roc;
 
