@@ -22,8 +22,13 @@ pub type TetrahedronID = u32;
 pub const NO_TETRAHEDRON_ID: TetrahedronID = u32::MAX;
 
 /// How much to expand the bounding tetrahedron relative to the bounding sphere
-/// of the point cloud.
-const BOUNDING_TETRA_MARGIN_FACTOR: f32 = 1.1;
+/// of the point cloud. This factor must be sufficiently large that all vertices
+/// of the bounding tetrahedron will stay outside the circumspheres of all
+/// interior tetrahedra. Otherwise, removing the tetrahedra connected to the
+/// boundary will not leave behind a valid Delaunay tetrahedralization. We can
+/// never guarantee that this factor is large enough for all possible inputs,
+/// but using a large value leaves us reasonably safe in practice.
+const BOUNDING_TETRA_MARGIN_FACTOR: f32 = 1000.0;
 
 /// Points closer than this relative to the total size of the point cloud will
 /// be merged.
