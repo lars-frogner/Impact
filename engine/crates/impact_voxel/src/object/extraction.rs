@@ -878,8 +878,15 @@ impl VoxelObject {
                                             .transfer_voxel(&[obj_i, obj_j, obj_k], *voxel);
                                     }
 
-                                    voxel.signed_distance =
-                                        voxel.signed_distance.max(-planes_signed_distance);
+                                    // The original object keeps the complement
+                                    // of the polyhedron. We can't use plain
+                                    // negation here, since a voxel whose center
+                                    // falls exactly on the polyhedron boundary
+                                    // has zero signed distance, and would thus
+                                    // end up empty in both objects
+                                    voxel.signed_distance = voxel
+                                        .signed_distance
+                                        .max(planes_signed_distance.complement());
 
                                     poly_voxel.signed_distance =
                                         poly_voxel.signed_distance.max(planes_signed_distance);
@@ -2181,9 +2188,9 @@ pub mod fuzzing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generation::SDFVoxelGenerator;
     use crate::{
         generation::{
+            SDFVoxelGenerator,
             sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },

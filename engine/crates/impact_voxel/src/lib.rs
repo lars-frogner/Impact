@@ -251,6 +251,14 @@ impl VoxelSignedDistance {
     pub fn max(self, other: Self) -> Self {
         Self::from_encoded(self.encoded.max(other.encoded))
     }
+
+    /// Returns the signed distance to the complement of the region described by
+    /// this signed distance. i.e. the negated signed distance shifted one
+    /// quantization step toward the inside of the complement.
+    #[inline]
+    pub const fn complement(self) -> Self {
+        Self::from_encoded(self.encoded.saturating_add(1).saturating_neg())
+    }
 }
 
 impl From<f32> for VoxelSignedDistance {
