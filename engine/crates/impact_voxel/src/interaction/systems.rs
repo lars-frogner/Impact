@@ -62,6 +62,10 @@ pub struct ECSVoxelObjectFracturingContext<'a> {
 }
 
 impl<'a> VoxelObjectInteractionContext for ECSVoxelObjectInteractionContext<'a> {
+    fn entity_exists(&self, entity_id: EntityID) -> bool {
+        self.ecs_world.has_entity(entity_id)
+    }
+
     fn gather_voxel_absorbing_sphere_entities(
         &mut self,
     ) -> TinyVec<[VoxelAbsorbingSphereEntity; 4]> {

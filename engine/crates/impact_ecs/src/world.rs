@@ -291,6 +291,15 @@ impl World {
         Some(EntityEntry::new(entity_id, table))
     }
 
+    /// Whether an entity with the given ID exists.
+    pub fn has_entity(&self, entity_id: EntityID) -> bool {
+        let Some(archetype_id) = self.entity_archetypes.get(&entity_id) else {
+            return false;
+        };
+        self.archetype_table_indices_by_id
+            .contains_key(*archetype_id)
+    }
+
     /// Returns an [`EntityEntry`] that can be used to access the components of
     /// the specified entity.
     ///

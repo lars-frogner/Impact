@@ -14,12 +14,16 @@ use crate::{
             non_uniform_chunk_regions, non_uniform_chunk_start_region_idx,
         },
     },
+    utils::{Dimension, Faces},
 };
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Plane, PlaneC};
-use impact_math::{point::Point3C, vector::Vector3C};
-use std::{array, cmp::Ordering, mem, ops::Range};
+use impact_math::{
+    point::Point3C,
+    vector::{Vector3, Vector3C},
+};
+use std::{array, cmp::Ordering, ops::Range};
 
 /// Represents a helper for keeping track of the transferral of some aggregate
 /// voxel property when a voxel object is extracted from another.
@@ -51,8 +55,6 @@ pub struct ExtractedVoxelObject {
     /// parent object (the extracted object has the same orientation as the
     /// parent object, only the offset is different).
     pub origin_offset_in_parent: [usize; 3],
-    /// The ranges of chunks in the parent object the object was extracted from.
-    pub chunk_ranges_in_parent: ChunkRanges,
 }
 
 /// Either `Extracted`, containing the extracted voxel object, or
@@ -104,7 +106,31 @@ impl VoxelObject {
             return ExtractionResult::NotExtracted(buffers);
         };
 
-        let mut region_linear_chunk_indices = [Vec::with_capacity(16), Vec::with_capacity(16)];
+        self.extract_smallest_region_with_property_transferrer(
+            disconnected_regions,
+            buffers,
+            property_transferrer,
+        )
+    }
+
+    /// Extracts the smallest of the given disconnected regions into a separate
+    /// object (using the given memory buffers) and returns it. Both this object
+    /// and the returned object will have the correct derived state when this
+    /// call returns. The methods of the given `PropertyTransferrer` will be
+    /// called appropriately when voxels or whole chunks are copied over to the
+    /// disconnected object.
+    pub fn extract_smallest_region_with_property_transferrer(
+        &mut self,
+        disconnected_regions: [GlobalRegionLabel; 2],
+        buffers: VoxelObjectBuffers,
+        property_transferrer: &mut impl PropertyTransferrer,
+    ) -> ExtractionResult {
+        let arena = ArenaPool::get_arena();
+
+        let mut region_linear_chunk_indices = [
+            AVec::with_capacity_in(16, &arena),
+            AVec::with_capacity_in(16, &arena),
+        ];
         let mut region_non_uniform_chunk_counts = [0; 2];
 
         let mut min_region_chunk_indices = [[usize::MAX; 3]; 2];
@@ -248,7 +274,7 @@ impl VoxelObject {
         let smallest_region = disconnected_regions[smallest_region_idx];
 
         let smallest_region_linear_chunk_indices =
-            mem::take(&mut region_linear_chunk_indices[smallest_region_idx]);
+            &region_linear_chunk_indices[smallest_region_idx];
 
         let smallest_non_uniform_chunk_count = region_non_uniform_chunk_counts[smallest_region_idx];
 
@@ -273,7 +299,7 @@ impl VoxelObject {
         &mut self,
         mut buffers: VoxelObjectBuffers,
         region_to_extract: GlobalRegionLabel,
-        region_linear_chunk_indices: Vec<usize>,
+        region_linear_chunk_indices: &[usize],
         region_non_uniform_chunk_count: usize,
         region_chunk_ranges: ChunkRanges,
         property_transferrer: &mut impl PropertyTransferrer,
@@ -1665,7 +1691,6 @@ impl VoxelObject {
                 voxel_extent,
                 parent_origin_offset_in_root,
                 origin_offset_in_parent,
-                chunk_ranges_in_parent,
                 chunk_counts,
                 uniform_chunk_count,
                 chunks,
@@ -1678,7 +1703,6 @@ impl VoxelObject {
                 voxel_extent,
                 parent_origin_offset_in_root,
                 origin_offset_in_parent,
-                chunk_ranges_in_parent,
                 chunk_counts,
                 chunks,
                 voxels,
@@ -1693,7 +1717,6 @@ impl VoxelObject {
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         origin_offset_in_parent: [usize; 3],
-        chunk_ranges_in_parent: ChunkRanges,
         chunk_counts: [usize; 3],
         uniform_chunk_count: usize,
         chunks: Vec<VoxelChunk>,
@@ -1837,7 +1860,6 @@ impl VoxelObject {
                     voxel_extent,
                     parent_origin_offset_in_root,
                     single_chunk_origin_offset_in_parent,
-                    chunk_ranges_in_parent,
                     [1; 3],
                     vec![VoxelChunk::NonUniform(single_chunk)],
                     single_chunk_voxels,
@@ -1851,7 +1873,6 @@ impl VoxelObject {
             voxel_extent,
             parent_origin_offset_in_root,
             origin_offset_in_parent,
-            chunk_ranges_in_parent,
             chunk_counts,
             chunks,
             voxels,
@@ -1864,7 +1885,6 @@ impl VoxelObject {
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
         origin_offset_in_parent: [usize; 3],
-        chunk_ranges_in_parent: ChunkRanges,
         chunk_counts: [usize; 3],
         chunks: Vec<VoxelChunk>,
         voxels: Vec<Voxel>,
@@ -1900,7 +1920,6 @@ impl VoxelObject {
         ExtractedVoxelObject {
             voxel_object,
             origin_offset_in_parent,
-            chunk_ranges_in_parent,
         }
     }
 }
@@ -1939,12 +1958,13 @@ pub mod fuzzing {
     use impact_alloc::Global;
     use impact_math::vector::Vector3;
     use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
+    use std::mem;
 
     const FLOAT_RESOLUTION: u32 = 10000;
     const DELAUNAY_DOMAIN_EXTENT: f32 = 200.0;
 
     #[derive(Clone, Debug, Arbitrary)]
-    pub struct CopyPolyhedronInput {
+    pub struct ExtractPolyhedronInput {
         generator: SDFVoxelGenerator<Global>,
         points: Vec<DelaunayPoint>,
     }
@@ -1999,7 +2019,6 @@ pub mod fuzzing {
             let ExtractedVoxelObject {
                 voxel_object: disconnected_object,
                 origin_offset_in_parent: origin_offset,
-                chunk_ranges_in_parent: _,
             } = disconnected_object;
 
             assert!(original_region_count > 1);
@@ -2133,7 +2152,6 @@ pub mod fuzzing {
             let ExtractedVoxelObject {
                 voxel_object: poly_object,
                 origin_offset_in_parent: origin_offset,
-                chunk_ranges_in_parent: _,
             } = copied_object;
 
             poly_object.validate_adjacencies();
@@ -2159,9 +2177,9 @@ pub mod fuzzing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::generation::SDFVoxelGenerator;
     use crate::{
         generation::{
-            SDFVoxelGenerator,
             sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },

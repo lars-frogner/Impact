@@ -459,8 +459,7 @@ define_task!(
             let voxel_manager = &mut **scene.voxel_manager().owrite();
             let voxel_object_manager = &voxel_manager.object_manager;
             let interaction_manager = &mut voxel_manager.interaction_manager;
-            let absorption_manager = &mut interaction_manager.absorption_manager;
-            let fracturing_manager = &mut interaction_manager.fracturing_manager;
+            let fracturing_manager = interaction_manager.fracturing_manager_mut();
             let simulator = engine.simulator().oread();
             if !simulator.enabled() {
                 return Ok(());
@@ -477,7 +476,6 @@ define_task!(
             fracturing_manager.handle_fracturing_impacts(
                 &fracturing_context,
                 voxel_object_manager,
-                absorption_manager,
                 &rigid_body_manager,
                 constraint_manager,
                 &collision_world,
