@@ -939,9 +939,14 @@ impl VoxelObject {
 
                     if !invalidated_faces.is_empty() {
                         for dim in Dimension::all() {
+                            // We must consider every neighbor in the chunk grid
+                            // here, not just the ones within the occupied chunk
+                            // ranges, since non-uniform chunks with only empty
+                            // voxels may reside outside those ranges and still
+                            // carry obscuredness flags and outward adjacencies
+                            // that this modification invalidates
                             if invalidated_faces.contains(Faces::all_lower()[dim.idx()])
-                                && chunk_indices[dim.idx()]
-                                    > self.occupied_chunk_ranges[dim.idx()].start
+                                && chunk_indices[dim.idx()] > 0
                             {
                                 let mut lower_chunk_indices = chunk_indices;
                                 lower_chunk_indices[dim.idx()] -= 1;
@@ -949,8 +954,7 @@ impl VoxelObject {
                                 invalidated_upper_face_chunks.insert((lower_chunk_idx, dim));
                             }
                             if invalidated_faces.contains(Faces::all_upper()[dim.idx()])
-                                && chunk_indices[dim.idx()]
-                                    < self.occupied_chunk_ranges[dim.idx()].end - 1
+                                && chunk_indices[dim.idx()] < self.chunk_counts[dim.idx()] - 1
                             {
                                 invalidated_upper_face_chunks.insert((chunk_idx, dim));
                             }

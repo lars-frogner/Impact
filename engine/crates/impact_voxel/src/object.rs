@@ -1685,7 +1685,7 @@ impl VoxelObject {
                         ([chunk_i, chunk_j, chunk_k + 1], Dimension::Z),
                     ] {
                         let upper_chunk_idx = if adjacent_chunk_indices[dim.idx()]
-                            < self.occupied_chunk_ranges[dim.idx()].end
+                            < self.chunk_counts[dim.idx()]
                         {
                             let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
 
@@ -1723,7 +1723,7 @@ impl VoxelObject {
             ][dim.idx()];
 
             let upper_chunk_idx =
-                if adjacent_chunk_indices[dim.idx()] < self.occupied_chunk_ranges[dim.idx()].end {
+                if adjacent_chunk_indices[dim.idx()] < self.chunk_counts[dim.idx()] {
                     let adjacent_chunk_idx = self.linear_chunk_idx(&adjacent_chunk_indices);
 
                     Some(adjacent_chunk_idx)
