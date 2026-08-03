@@ -304,6 +304,8 @@ impl PhysicsSimulator {
             self.simulation_time += substep_duration;
         }
 
+        constraint_manager.finalize_time_step();
+
         // Sync the collidables so that they are up to date for later tasks in
         // the frame (currently, this is only required for making collidable
         // gizmos not lag by one frame)
