@@ -13,7 +13,7 @@ use crate::{
 use bytemuck::{Pod, Zeroable};
 use contact::ContactWithID;
 use impact_alloc::{AVec, Allocator, Global};
-use impact_containers::{HashMap, HashSet, KeyIndexMapper, RandomState};
+use impact_containers::{HashMap, KeyIndexMapper, RandomState};
 use impact_id::EntityID;
 use impact_intersection::IntersectionManager;
 use impact_math::{matrix::Matrix3C, vector::Vector3C};

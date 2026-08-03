@@ -522,7 +522,7 @@ impl CountedGPUBuffer {
         let buffer_size = Self::compute_size_including_count(padded_count_size, bytes.len());
         assert!(n_valid_bytes <= buffer_size);
 
-        let buffer_label = format!("{} {} GPU buffer", label, &buffer_type);
+        let buffer_label = format!("{} {} GPU buffer", label, buffer_type);
         let buffer = Self::create_initialized_counted_buffer_of_type(
             graphics_device.device(),
             buffer_type,

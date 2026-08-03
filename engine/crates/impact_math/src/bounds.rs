@@ -47,8 +47,8 @@ where
         assert!(
             upper >= lower,
             "Upper bound ({:?}) is smaller than lower bound ({:?})",
-            &upper,
-            &lower
+            upper,
+            lower
         );
         Self { lower, upper }
     }
@@ -83,8 +83,8 @@ where
         assert!(
             upper > lower,
             "Upper bound ({:?}) does not exceed lower bound ({:?})",
-            &upper,
-            &lower
+            upper,
+            lower
         );
         Self { lower, upper }
     }

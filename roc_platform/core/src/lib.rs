@@ -124,7 +124,7 @@ pub unsafe extern "C" fn roc_panic(msg: *mut RocStr, tag_id: u32) {
 /// ??
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn roc_dbg(loc: *mut RocStr, msg: *mut RocStr, src: *mut RocStr) {
-    unsafe { eprintln!("[{}] {} = {}", &*loc, &*src, &*msg) };
+    unsafe { eprintln!("[{}] {} = {}", *loc, *src, *msg) };
 }
 
 #[unsafe(no_mangle)]

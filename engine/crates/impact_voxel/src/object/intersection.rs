@@ -946,7 +946,7 @@ pub mod fuzzing {
         assert!(
             indices_of_inside_voxels.is_empty(),
             "Found voxels not inside sphere: {:?}",
-            &indices_of_inside_voxels
+            indices_of_inside_voxels
         );
 
         object.validate_region_count();
@@ -975,7 +975,7 @@ pub mod fuzzing {
         assert!(
             indices_of_inside_voxels.is_empty(),
             "Found voxels not inside capsule: {:?}",
-            &indices_of_inside_voxels
+            indices_of_inside_voxels
         );
 
         object.validate_region_count();
@@ -1237,7 +1237,7 @@ mod tests {
         assert!(
             indices_of_inside_voxels.is_empty(),
             "Found voxels not inside sphere: {:?}",
-            &indices_of_inside_voxels
+            indices_of_inside_voxels
         );
     }
 
