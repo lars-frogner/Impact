@@ -30,6 +30,11 @@ define_criterion_target!(voxel_object, obtain_sphere_voxel_object_contacts);
 define_criterion_target!(voxel_object, obtain_plane_voxel_object_contacts);
 define_criterion_target!(voxel_object, obtain_mutual_voxel_object_contacts);
 define_criterion_target!(voxel_object, obtain_mutual_voronoi_region_contacts);
+define_criterion_target!(voxel_object, extract_voronoi_regions);
+define_criterion_target!(
+    voxel_object,
+    extract_voronoi_regions_with_inertial_property_transfer
+);
 define_criterion_target!(voxel_object, copy_voronoi_regions);
 define_criterion_target!(
     voxel_object,
@@ -65,6 +70,8 @@ criterion::criterion_group!(
         obtain_plane_voxel_object_contacts,
         obtain_mutual_voxel_object_contacts,
         obtain_mutual_voronoi_region_contacts,
+        extract_voronoi_regions,
+        extract_voronoi_regions_with_inertial_property_transfer,
         copy_voronoi_regions,
         copy_voronoi_regions_with_inertial_property_transfer,
 );
