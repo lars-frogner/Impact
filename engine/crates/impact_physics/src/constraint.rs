@@ -34,7 +34,7 @@ pub struct ConstraintID(u32);
 pub struct ConstraintManager {
     solver: ConstraintSolver,
     spherical_joints: HashMap<ConstraintID, SphericalJoint>,
-    ignored_collisions: HashSet<[EntityID; 2]>,
+    ignored_collisions: HashMap<[EntityID; 2], u64>,
     constraint_id_counter: u32,
 }
 
@@ -156,7 +156,7 @@ impl ConstraintManager {
         Self {
             solver: ConstraintSolver::new(solver_config),
             spherical_joints: HashMap::default(),
-            ignored_collisions: HashSet::default(),
+            ignored_collisions: HashMap::default(),
             constraint_id_counter: 0,
         }
     }
@@ -170,10 +170,12 @@ impl ConstraintManager {
     }
 
     /// Causes collisions between the given pair of entities to be ignored
-    /// during constraint solving.
-    pub fn add_collision_to_ignore_list(&mut self, entity_ids: [EntityID; 2]) {
-        self.ignored_collisions
-            .insert(Self::sorted_entity_pair(entity_ids));
+    /// during the constraint solves for the next `n_steps` physics steps.
+    pub fn skip_collision_for_steps(&mut self, entity_ids: [EntityID; 2], n_steps: u64) {
+        if n_steps > 0 {
+            self.ignored_collisions
+                .insert(Self::sorted_entity_pair(entity_ids), n_steps);
+        }
     }
 
     /// Registers the given spherical joint constraint and returns a new ID
@@ -219,10 +221,13 @@ impl ConstraintManager {
                     let rigid_body_a_id = collidable_a.rigid_body_id();
                     let rigid_body_b_id = collidable_b.rigid_body_id();
 
-                    if self.ignored_collisions.contains(&Self::sorted_entity_pair([
-                        rigid_body_a_id.entity_id(),
-                        rigid_body_b_id.entity_id(),
-                    ])) {
+                    if self
+                        .ignored_collisions
+                        .contains_key(&Self::sorted_entity_pair([
+                            rigid_body_a_id.entity_id(),
+                            rigid_body_b_id.entity_id(),
+                        ]))
+                    {
                         return;
                     }
                     let Some((body_a_idx, body_b_idx)) = self.solver.prepare_constrained_body_pair(
@@ -303,16 +308,20 @@ impl ConstraintManager {
             .apply_constrained_velocities_and_corrected_configurations(rigid_body_manager);
     }
 
-    pub fn remove_collisions_involving_entity_from_ignore_list(&mut self, entity_id: EntityID) {
-        self.ignored_collisions
-            .retain(|&[id_a, id_b]| id_a != entity_id && id_b != entity_id);
+    /// Call when a physics step has been completed so the list of collisions to
+    /// skip can be updated.
+    pub fn finalize_time_step(&mut self) {
+        self.ignored_collisions.retain(|_, n_steps| {
+            *n_steps = n_steps.saturating_sub(1);
+            *n_steps > 0
+        });
     }
 
     /// Removes all stored constraint state and frees up all allocated memory.
     pub fn reset_and_free(&mut self) {
         self.solver.reset_and_free();
         self.spherical_joints = HashMap::default();
-        self.ignored_collisions = HashSet::default();
+        self.ignored_collisions = HashMap::default();
     }
 
     fn sorted_entity_pair(entity_ids: [EntityID; 2]) -> [EntityID; 2] {
