@@ -2,13 +2,13 @@
 
 use anyhow::{Result, bail};
 use impact_alloc::{AVec, Allocator, Global, arena::ArenaPool};
-use impact_geometry::{AxisAlignedBox, Sphere};
+use impact_geometry::{AxisAlignedBox, PlaneC, Sphere};
 use impact_math::{
     consts::f32::{FRAC_1_SQRT_6, SQRT_3, SQRT_6},
     matrix::Matrix3,
     point::{Point3, Point3C},
     random::Rng,
-    vector::Vector3,
+    vector::{UnitVector3C, Vector3, Vector3C},
 };
 use std::ops::Range;
 
@@ -95,7 +95,7 @@ impl DelaunayTetrahedralization<Global> {
     ///
     /// # Errors
     /// Returns an error if the number of points or the resulting number of
-    /// tetra exceeds a max limit.
+    /// tetrahedra exceeds a max limit.
     pub fn construct(points: &[Point3C]) -> Result<Self> {
         Self::construct_in(Global, points)
     }
@@ -109,7 +109,7 @@ impl DelaunayTetrahedralization<Global> {
     ///
     /// # Errors
     /// Returns an error if the number of points or the resulting number of
-    /// tetra exceeds a max limit.
+    /// tetrahedra exceeds a max limit.
     pub fn reconstruct(&mut self, points: &[Point3C]) -> Result<()> {
         self.reconstruct_in(points)
     }
@@ -131,7 +131,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
     ///
     /// # Errors
     /// Returns an error if the number of points or the resulting number of
-    /// tetra exceeds a max limit.
+    /// tetrahedra exceeds a max limit.
     pub fn construct_in(alloc: A, points: &[Point3C]) -> Result<Self> {
         let mut tetrahedralization = Self::new_in(alloc);
         tetrahedralization.reconstruct_in(points)?;
@@ -147,7 +147,7 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
     ///
     /// # Errors
     /// Returns an error if the number of points or the resulting number of
-    /// tetra exceeds a max limit.
+    /// tetrahedra exceeds a max limit.
     pub fn reconstruct_in(&mut self, points: &[Point3C]) -> Result<()> {
         let n_points = points.len();
 
@@ -492,6 +492,58 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
         self.tetras.tetrahedron(id)
     }
 
+    /// Computes the axis-aligned box encompassing all the tetrahedra (not
+    /// including the ad-hoc boundary tetrahedra).
+    ///
+    /// # Panics
+    /// If the tetrahedralization is empty.
+    pub fn compute_aabb(&self) -> AxisAlignedBox {
+        // Exclude the four ad-hoc boundary vertices
+        let vertices = &self.tetras.vertices[4..];
+        AxisAlignedBox::aabb_for_points(vertices.iter().map(|vertex| &vertex.point))
+    }
+
+    /// Computes the plane of each tetrahedron face on the (non-ad-hoc) boundary
+    /// of the tetrahedralization. The face plane normals will be oriented
+    /// outward.
+    pub fn compute_boundary_face_planes<PA: Allocator>(&self, alloc: PA) -> AVec<PlaneC, PA> {
+        let mut face_planes = AVec::new_in(alloc);
+
+        // The ad-hoc boundary tetrahedra have been removed, so we will not
+        // encounter them
+        for tetra in self.tetrahedra() {
+            for (nb_idx, &nb_id) in tetra.neighbors.iter().enumerate() {
+                // Faces with no neighbor are boundary faces
+                if nb_id != NO_TETRAHEDRON_ID {
+                    continue;
+                }
+                let [v1_idx, v2_idx, v3_idx] = tetra.face_opposite_neighbor(nb_idx);
+
+                let v1 = &self.vertices()[v1_idx as usize].point;
+                let v2 = &self.vertices()[v2_idx as usize].point;
+                let v3 = &self.vertices()[v3_idx as usize].point;
+
+                let e12 = v2 - v1;
+                let e13 = v3 - v1;
+
+                // `face_opposite_neighbor` gives the vertices in inward
+                // orientation order, so we swap the order of the cross product
+                // to get the outward oriented normal
+                let unit_normal = UnitVector3C::normalized_from(e13.cross(&e12));
+
+                let displacement = unit_normal.dot(v1.as_vector());
+
+                face_planes.push(PlaneC::new(unit_normal, displacement));
+            }
+        }
+        face_planes
+    }
+
+    /// Adds the given displacement to all tetrahedron vertices.
+    pub fn displace_vertices(&mut self, displacement: Vector3C) {
+        self.tetras.displace_vertices(displacement);
+    }
+
     #[cfg(any(test, feature = "fuzzing"))]
     fn validate_brute_force(&self) {
         for (tetra_id, tetra) in self.tetras.tetrahedra_with_ids() {
@@ -589,6 +641,12 @@ impl<A: Allocator> DelaunayTetrahedralization<A> {
     }
 }
 
+impl Default for DelaunayTetrahedralization {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<A: Allocator> Tetrahedralization<A> {
     fn new_in(alloc: A) -> Self {
         Self {
@@ -661,6 +719,13 @@ impl<A: Allocator> Tetrahedralization<A> {
             .iter()
             .enumerate()
             .map(|(id, tetra)| (id as TetrahedronID, tetra))
+    }
+
+    /// Adds the given displacement to all tetrahedron vertices.
+    pub fn displace_vertices(&mut self, displacement: Vector3C) {
+        for vertex in &mut self.vertices {
+            vertex.point += displacement;
+        }
     }
 
     /// Removes the given tetrahedron by replacing it with the last tetrahedron
@@ -1209,6 +1274,12 @@ impl<A: Allocator> Tetrahedralization<A> {
     }
 }
 
+impl Default for Tetrahedralization<Global> {
+    fn default() -> Self {
+        Self::new_in(Global)
+    }
+}
+
 impl Tetrahedron {
     /// Returns the position of the vertex at the given corner (index in
     /// `self.vertices`) for this tetrahedron.
@@ -1363,7 +1434,6 @@ impl Tetrahedron {
         }
     }
 
-    #[allow(dead_code)]
     #[inline]
     fn face_opposite_neighbor(&self, neighbor_idx: usize) -> [VertexIdx; 3] {
         let [a, b, c, d] = self.vertices;
@@ -1859,6 +1929,44 @@ mod tests {
         let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
         assert!(tetrahedra.n_tetrahedra() > 0);
         tetrahedra.validate_brute_force();
+    }
+
+    #[test]
+    fn boundary_face_planes_are_correct_for_cubic_tetrahedralization() {
+        let points = [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 2.0],
+            [0.0, 2.0, 0.0],
+            [0.0, 2.0, 2.0],
+            [2.0, 0.0, 0.0],
+            [2.0, 0.0, 2.0],
+            [2.0, 2.0, 0.0],
+            [2.0, 2.0, 2.0],
+        ]
+        .map(Point3C::from);
+
+        let tetrahedra = DelaunayTetrahedralization::construct(&points).unwrap();
+
+        let face_planes = tetrahedra.compute_boundary_face_planes(Global);
+
+        assert_eq!(face_planes.len(), 12);
+
+        for normal in [
+            UnitVector3C::neg_unit_x(),
+            UnitVector3C::neg_unit_y(),
+            UnitVector3C::neg_unit_z(),
+        ] {
+            let plane = PlaneC::new(normal, 0.0);
+            assert!(face_planes.contains(&plane));
+        }
+        for normal in [
+            UnitVector3C::unit_x(),
+            UnitVector3C::unit_y(),
+            UnitVector3C::unit_z(),
+        ] {
+            let plane = PlaneC::new(normal, 2.0);
+            assert!(face_planes.contains(&plane));
+        }
     }
 
     #[test]

@@ -3,7 +3,7 @@
 use crate::{
     Voxel, VoxelManager, VoxelObjectID, VoxelObjectManager, VoxelSignedDistance,
     generation::sdf::{Smoothness, hard_sdf_subtraction, sdf_subtraction},
-    interaction::{self, VoxelObjectInteractionContext, VoxelRemovalOutcome},
+    interaction::{self, RemovedMassFate, VoxelObjectInteractionContext, VoxelRemovalOutcome},
     object::{self, CHUNK_SIZE, VoxelObject, inertia::VoxelObjectInertialPropertyUpdater, sdf},
     voxel_types::VoxelTypeRegistry,
 };
@@ -341,6 +341,13 @@ impl VoxelAbsorptionManager {
         self.absorbing_capsules.remove(&id);
     }
 
+    /// Stops any mutual absorption process for the voxel object entities with
+    /// the given IDs.
+    pub fn stop_mutual_absorption_process(&mut self, entity_ids: [EntityID; 2]) {
+        self.mutual_absorption_processes
+            .remove(&Self::sorted_entity_pair(entity_ids));
+    }
+
     /// Removes all mutual voxel absorption processes involving the entity with
     /// the given ID.
     pub fn remove_mutual_absorption_processes_involving_entity(&mut self, entity_id: EntityID) {
@@ -619,10 +626,18 @@ pub fn apply_absorption<C>(
                 .get_dynamic_rigid_body_mut(rigid_body_id)
                 .unwrap();
 
+            // The global connected region information has not been resolved
+            // after the voxels were absorbed
+            voxel_object.resolve_connected_regions_between_all_chunks();
+
+            let arena = ArenaPool::get_arena();
+
             let VoxelRemovalOutcome {
                 original_object_empty,
-                disconnected_components,
+                extracted_components_for_disconnected_objects,
+                lost_anchors,
             } = interaction::handle_voxel_object_after_removing_voxels(
+                &arena,
                 anchor_manager,
                 voxel_type_registry,
                 voxel_object_buffer_pool,
@@ -631,23 +646,37 @@ pub fn apply_absorption<C>(
                 rigid_body_id,
                 rigid_body,
                 original_local_center_of_mass,
+                RemovedMassFate::Destroyed,
             );
+
+            // All lost anchors not inherited by a disconnected object should be
+            // deleted
+            for (anchor_id, _) in lost_anchors {
+                anchor_manager.dynamic_mut().remove(anchor_id);
+            }
 
             if original_object_empty {
                 context.remove_voxel_object_entity(entity_id);
             }
 
-            if let Some(disconnected_components) = disconnected_components {
-                interaction::spawn_extracted_voxel_object_and_entity(
-                    context,
-                    entity_id_manager,
+            let disconnected_entity_ids = entity_id_manager
+                .provide_id_vec(extracted_components_for_disconnected_objects.len());
+
+            for (disconnected_entity_id, extracted_components) in disconnected_entity_ids
+                .iter()
+                .copied()
+                .zip(extracted_components_for_disconnected_objects)
+            {
+                interaction::spawn_extracted_voxel_object(
                     voxel_object_manager,
                     rigid_body_manager,
                     anchor_manager,
-                    disconnected_components,
-                    entity_id,
+                    extracted_components,
+                    disconnected_entity_id,
                 );
             }
+
+            context.create_extracted_voxel_object_entities(disconnected_entity_ids, entity_id);
         }
     }
 }

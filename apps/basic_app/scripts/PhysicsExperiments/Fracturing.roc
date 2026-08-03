@@ -103,12 +103,7 @@ setup_dropped_box! = |{}|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 5e4,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(5e4, 5e6)
     base_object(response_params, fracturing_props)
     |> Setup.VoxelBox.add_new(0.04, 50, 50, 50)
     |> Comp.ReferenceFrame.add_new(
@@ -128,12 +123,7 @@ setup_dropped_sphere! = |{}|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 5e4,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(5e4, 1e7)
     base_object(response_params, fracturing_props)
     |> Setup.VoxelSphere.add_new(0.04, 30)
     |> Comp.ReferenceFrame.add_unoriented((0, 5, 5))
@@ -147,12 +137,7 @@ setup_colliding_spheres! = |y_offset|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 1e5,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(1e5, 5e6)
     sphere =  base_object(response_params, fracturing_props)
         |> Setup.VoxelSphere.add_new(0.04, 20)
 
@@ -176,12 +161,7 @@ setup_box_impacting_sphere! = |{}|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 5e4,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(5e4, 2e6)
     base =  base_object(response_params, fracturing_props)
 
     y_offset = 0.8
@@ -207,12 +187,7 @@ setup_simultaneous_side_impacts! = |{}|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 1e5,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(1e5, 2e6)
 
     sphere =  base_object(response_params, fracturing_props)
 
@@ -245,15 +220,10 @@ setup_bullet_impacting_targets! = |{}|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 1e5,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(1e5, 1e7)
     base =  base_object(response_params, fracturing_props)
 
-    speed = 10
+    speed = 12
 
     base
     |> Setup.VoxelBox.add_new(0.04, 50, 50, 50)
@@ -298,12 +268,7 @@ setup_rotational_impact! = |{}|
         static_friction_coef: 0.7,
         dynamic_friction_coef: 0.5,
     }
-    fracturing_props = {
-        force_threshold : 5e4,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 0.3,
-    }
+    fracturing_props = default_fracturing_props(5e4, 1e6)
     base =  base_object(response_params, fracturing_props)
 
     base
@@ -318,10 +283,19 @@ setup_rotational_impact! = |{}|
     |> Comp.ReferenceFrame.add_unoriented((-0.8, 1.5, 4))
     |> Comp.Motion.add_new(
         (0, 0, 0),
-        AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(-140.0)),
+        AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(-250.0)),
     )
     |> Entity.create!
     |> Result.map_ok(|_| {})
+
+default_fracturing_props = |fracturing_force, shattering_pressure|
+    {
+        fracturing_force,
+        shattering_pressure,
+        fragment_scale : 0.3,
+        min_fragment_extent : 0.15,
+        max_fragment_extent : 1.0,
+    }
 
 base_object = |response_params, fracturing_props|
     Entity.new_component_data

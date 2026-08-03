@@ -3,26 +3,25 @@
 use crate::{
     VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager,
     collidable::{Collidable, CollisionWorld},
-    generation::sdf::Smoothness,
     interaction::{
-        self, ExtractedComponents, VoxelObjectInteractionContext,
-        absorption::{MutualVoxelAbsorptionProcess, VoxelAbsorptionManager},
+        self, Anchors, ExtractedComponents, RemovedMassFate, VoxelObjectInteractionContext,
+        VoxelRemovalOutcome,
     },
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
     object::{
-        ChunkRanges, VoxelObject, extraction::ExtractionResult,
+        VoxelObject, VoxelObjectBuffers, extraction::ExtractionResult,
         inertia::VoxelObjectInertialPropertyManager,
     },
     voxel_types::VoxelTypeRegistry,
 };
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::{
     AVec, Allocator,
     arena::{ArenaPool, PoolArena},
     avec,
 };
-use impact_containers::{HashMap, HashSet};
+use impact_containers::{HashMap, hash_map::Entry};
 use impact_geometry::{AxisAlignedBox, AxisAlignedBoxC};
 use impact_id::{EntityID, EntityIDManager};
 use impact_math::{
@@ -31,13 +30,14 @@ use impact_math::{
     quaternion::UnitQuaternion,
     random::Rng,
     transform::Isometry3,
-    vector::{UnitVector3, UnitVector3C, Vector3, Vector3C},
+    vector::{UnitVector3, Vector3, Vector3C},
 };
 use impact_physics::{
     anchor::AnchorManager,
     collision::CollidableID,
     constraint::{ConstrainedBodyManager, ConstraintManager},
-    rigid_body::{DynamicRigidBodyID, RigidBodyManager},
+    quantities::{AngularVelocity, Velocity},
+    rigid_body::{DynamicRigidBody, DynamicRigidBodyID, RigidBodyManager},
 };
 use impact_tesselation::{
     delaunay::{DelaunayTetrahedralization, VertexIdx},
@@ -48,11 +48,7 @@ use impact_thread::{
     pool::{DynamicTask, DynamicThreadPool},
 };
 use roc_integration::roc;
-use std::{
-    cmp::Ordering,
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::time::Instant;
 
 pub trait VoxelObjectFracturingContext {
     /// Returns the fracturing properties of the given entity if they exist.
@@ -70,7 +66,11 @@ define_component_type! {
     pub struct FracturingProperties {
         /// The minimum collisional force (assumed constant during the
         /// collision) required for an impact to cause fracturing.
-        pub force_threshold: f32,
+        pub fracturing_force: f32,
+        /// The collisional force per object surface area (approximated by the
+        /// square of the object extent) required for the object to shatter (the
+        /// fracturing radius reaching the characteristic size of the object).
+        pub shattering_pressure: f32,
         /// The characteristic length scale of generated fragments, relative to
         /// the extent of the object.
         pub fragment_scale: f32,
@@ -80,7 +80,7 @@ define_component_type! {
         /// size.
         pub min_fragment_extent: f32,
         /// The target maximum extent of generated fragments, relative to the
-        /// extent of the object. Should be ~0.5 in most cases.
+        /// extent of the object.
         pub max_fragment_extent: f32,
     }
 }
@@ -88,7 +88,9 @@ define_component_type! {
 /// Manages voxel object fracturing processes and state.
 #[derive(Debug)]
 pub struct VoxelObjectFracturingManager {
-    active_processes: HashMap<VoxelObjectID, FracturingProcess>,
+    staged_processes: HashMap<VoxelObjectID, StagedFracturingProcess>,
+    fracture_region_pool: Vec<DelaunayTetrahedralization>,
+    fracture_region_buffer_pool: Vec<VoxelObjectBuffers>,
     process_pool: Vec<FracturingProcess>,
     config: VoxelFracturingConfig,
 }
@@ -104,14 +106,6 @@ pub struct VoxelFracturingConfig {
     /// Fragments whose mass is a smaller fraction of the original object's mass
     /// than this will be discarded.
     pub min_relative_fragment_mass: f32,
-    /// If set, the processing time for generating fracture objects per frame
-    /// will be attempted limited to this number of microseconds. The time
-    /// budget may be exceeded to spawn the fracture objects for completed
-    /// processes and to make sure all processes make enough progress to counter
-    /// the rate of invalidation due to objects being modified.
-    ///
-    /// Note: Setting this duration breaks determinism.
-    pub max_processing_duration_us: Option<u64>,
 }
 
 #[cfg_attr(
@@ -121,6 +115,23 @@ pub struct VoxelFracturingConfig {
 )]
 #[derive(Clone, Debug)]
 pub struct VoxelImpactFracturingConfig {
+    /// Number of polar grid cells in the hemispherical boundary point sampling
+    /// grid. Larger grid sizes makes the fracture region boundary smoother and
+    /// more hemispherical.
+    pub boundary_polar_grid_size: usize,
+    /// Number of azimuthal grid cells in the hemispherical boundary point
+    /// sampling grid. Larger grid sizes makes the fracture region boundary
+    /// smoother and more hemispherical.
+    pub boundary_azimuthal_grid_size: usize,
+    /// Max randomized angular change relative the grid cell size when sampling
+    /// directions for boundary points. `0.0` puts the sample at the center,
+    /// `1.0` samples anywhere within the grid cell.
+    pub boundary_angular_jitter: f32,
+    /// Max randomized change relative to the boundary region extent when
+    /// sampling radial distances for boundary points. `0.0` puts the sample at
+    /// the analytical radius, `1.0` samples in a radius-wide band centered on
+    /// the radius.
+    pub boundary_radial_jitter: f32,
     /// The maximum number of fragments to generate for an impact-fragmented
     /// object.
     pub max_fragment_count: u64,
@@ -143,38 +154,49 @@ pub struct VoxelImpactFracturingConfig {
     pub max_position_rejections_per_sample: u64,
     /// The seed to use for fragment generation.
     pub seed: u64,
-    /// Whether to enable mutual voxel absorption between colliding voxel
-    /// objects while the fragments are being generated (only has an effect if
-    /// processing takes multiple frames).
-    pub enable_mutual_absorption_during_processing: bool,
-    /// The smoothness to use for SDF subtraction during mutual voxel
-    /// absorption.
-    pub mutual_absorption_smoothness: f32,
+}
+
+#[derive(Debug)]
+struct StagedFracturingProcess {
+    fracture_region_tetras: Option<DelaunayTetrahedralization>,
+    process: FracturingProcess,
+}
+
+#[derive(Debug)]
+struct ActiveFracturingProcess {
+    fracture_region_object: Option<FractureRegionObject>,
+    process: FracturingProcess,
+}
+
+#[derive(Debug)]
+struct FractureRegionObject {
+    voxel_object: VoxelObject,
+    inertial_property_manager: VoxelObjectInertialPropertyManager,
+    rigid_body: DynamicRigidBody,
+    anchors: Anchors,
+    origin_offset_in_parent: [usize; 3],
+    original_object_mass: f32,
 }
 
 #[derive(Debug)]
 struct FracturingProcess {
     state: FracturingProcessState,
-    fracture_points: Vec<Point3C>,
-    processing_direction: Option<Vector3C>,
     tetrahedralization: DelaunayTetrahedralization,
-    dual_vertex_queue: VecDeque<VertexIdx>,
+    vertex_indices: Vec<VertexIdx>,
     fragments: Vec<Fragment>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum FracturingProcessState {
     Idle,
-    Initiated,
+    Initialized,
     Cancelled,
 }
 
 #[derive(Debug)]
 struct Fragment {
-    dual_vertex_idx: VertexIdx,
     meshed_voxel_object: MeshedVoxelObject,
     origin_offset_in_parent: [usize; 3],
-    chunk_ranges_in_parent: ChunkRanges,
     inertial_property_manager: VoxelObjectInertialPropertyManager,
 }
 
@@ -207,101 +229,112 @@ impl VoxelObjectFracturingManager {
     pub fn new(config: VoxelFracturingConfig) -> Result<Self> {
         config.validate()?;
         Ok(Self {
-            active_processes: HashMap::default(),
+            staged_processes: HashMap::default(),
+            fracture_region_pool: Vec::new(),
+            fracture_region_buffer_pool: Vec::new(),
             process_pool: Vec::new(),
             config,
         })
     }
 
-    /// Adds the given fracture points to use in the fracturing process of the
-    /// given voxel object. Fracture points can be added multiple times. When
-    /// all fracturing points are added, call
-    /// [`Self::initiate_fracturing_process`] to commit the fracture points and
-    /// enable the fracturing process to be executed with
-    /// [`Self::execute_fracturing_processes`].
+    /// Stages a fracturing process for the given voxel object. If boundary
+    /// points for the fracture region are specified, their convex hull will be
+    /// used as the boundary of the fractured region. If not specified, the
+    /// fracture region will be the whole object. The fragments within the
+    /// fracture region will be the Voronoi cells centered on the given fracture
+    /// points.
     ///
-    /// If `processing_direction` is specified, the fracture objects will be
-    /// generated in order of their projected distance along that direction.
-    /// This can reduce the amount of wasted work if chunk invalidation is
-    /// expected to happen on a particular side of the object. When multiple
-    /// processing directions are specified (across multiple calls), their
-    /// average is used.
+    /// Note that both the fracture region boundary points and fracture points
+    /// should be specified in the normalized space of the voxel object (where
+    /// distance is in units of voxels).
     ///
-    /// Note that both the fracture points and processing direction should be
-    /// specified in the normalized space of the voxel object (where distance is
-    /// in units of voxels).
+    /// Call [`Self::execute_fracturing_processes`] to execute the staged
+    /// fracturing processes.
+    ///
+    /// # Returns
+    /// `true` if the fracture region and points result in a staged fracturing
+    /// process.
     ///
     /// # Errors
     /// Returns an error if:
     /// - The voxel object does not exist.
-    /// - Fracturing has already been initiated for the object.
-    pub fn add_fracture_points_for_object(
+    /// - Another fracturing process is currently staged for the same object.
+    /// - The Delaunay tetrahedralization for the convex hull of the fracture
+    ///   region boundary points can't be computed.
+    pub fn stage_fracturing_process_for_object(
         &mut self,
         voxel_object_manager: &VoxelObjectManager,
         voxel_object_id: VoxelObjectID,
+        fracture_region_boundary_points: Option<&[Point3C]>,
         fracture_points: &[Point3C],
-        processing_direction: Option<&UnitVector3C>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if !voxel_object_manager.has_voxel_object(voxel_object_id) {
-            bail!("Tried to add fracture points for missing voxel object {voxel_object_id}");
+            bail!("Tried to stage fracturing process for missing voxel object {voxel_object_id}");
         }
 
-        let process = self
-            .active_processes
-            .entry(voxel_object_id)
-            .or_insert_with(|| {
-                self.process_pool
-                    .pop()
-                    .unwrap_or_else(FracturingProcess::new)
-            });
+        let Entry::Vacant(process_entry) = self.staged_processes.entry(voxel_object_id) else {
+            bail!(
+                "Tried to stage multiple fracturing processes for voxel object {voxel_object_id}"
+            );
+        };
 
-        log::debug!(
-            "Adding {} fracture points for voxel object: {voxel_object_id}",
-            fracture_points.len()
-        );
-        process
-            .add_fracture_points(fracture_points, processing_direction)
-            .with_context(|| {
-                format!("Failed to add fracture points for voxel object: {voxel_object_id}")
-            })
-    }
+        log::debug!("Staging fracturing process for voxel object {voxel_object_id}");
 
-    /// Stages the given voxel object for fracturing using all fracture points
-    /// added for the object through [`Self::add_fracture_points_for_object`].
-    /// The actual processing will not happen until
-    /// [`Self::execute_fracturing_processes`] is called.
-    ///
-    /// # Errors
-    /// Returns an error if:
-    /// - The voxel object does not exist.
-    /// - [`Self::add_fracture_points_for_object`] has not been called for the object.
-    /// - Fracturing has already been initiated for the object.
-    pub fn initiate_fracturing_process(
-        &mut self,
-        voxel_object_manager: &VoxelObjectManager,
-        voxel_object_id: VoxelObjectID,
-    ) -> Result<()> {
-        if !voxel_object_manager.has_voxel_object(voxel_object_id) {
-            bail!("Tried to initiate fracturing for missing voxel object {voxel_object_id}");
+        let fracture_region_tetras = if let Some(fracture_region_boundary_points) =
+            fracture_region_boundary_points
+        {
+            let mut fracture_region_tetras = self.fracture_region_pool.pop().unwrap_or_default();
+
+            let result = fracture_region_tetras
+                .reconstruct(fracture_region_boundary_points)
+                .with_context(|| {
+                    format!("Failed to construct fracture region polyhedron for voxel object {voxel_object_id}")
+                });
+
+            // Reclaim resources before returning (with or without an error)
+            if result.is_err() || fracture_region_tetras.n_tetrahedra() == 0 {
+                self.fracture_region_pool.push(fracture_region_tetras);
+                return result.map(|_| false);
+            }
+
+            Some(fracture_region_tetras)
+        } else {
+            None
+        };
+
+        let mut process = self.process_pool.pop().unwrap_or_default();
+
+        let result = process.initialize(fracture_points).with_context(|| {
+            format!("Failed to tetrahedralize fracture points for voxel object {voxel_object_id}")
+        });
+
+        if result.is_err() || !process.is_initialized() {
+            // Reclaim resources before returning (with or without an error)
+            if let Some(fracture_region_tetras) = fracture_region_tetras {
+                self.fracture_region_pool.push(fracture_region_tetras);
+            }
+            self.process_pool.push(process);
+            return result.map(|_| false);
         }
 
-        let process = self
-            .active_processes
-            .get_mut(&voxel_object_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Tried to initiate fracturing for voxel object {voxel_object_id} \
-                     without adding fracture points first"
-                )
-            })?;
+        let staged_process = StagedFracturingProcess {
+            fracture_region_tetras,
+            process,
+        };
 
-        log::debug!("Initiating fracturing process for voxel object: {voxel_object_id}");
-        process.initiate().with_context(|| {
-            format!("Failed to initiate fracturing process for voxel object: {voxel_object_id}")
-        })
+        process_entry.insert(staged_process);
+
+        Ok(true)
     }
 
-    /// Executes all initiated fracturing processes.
+    /// Whether a fracturing process is currently staged for the given voxel
+    /// object.
+    pub fn object_has_staged_fracturing_process(&self, voxel_object_id: VoxelObjectID) -> bool {
+        self.staged_processes.contains_key(&voxel_object_id)
+    }
+
+    /// Executes all fracturing processes staged with
+    /// [`Self::stage_fracturing_process_for_object`].
     pub fn execute_fracturing_processes<C>(
         &mut self,
         context: &mut C,
@@ -317,29 +350,24 @@ impl VoxelObjectFracturingManager {
         self.execute_fracturing_processes_with_closure(
             context,
             entity_id_manager,
+            voxel_type_registry,
             voxel_object_manager,
             voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
-            |voxel_object_manager,
-             voxel_object_buffer_pool,
-             rigid_body_manager,
-             process,
-             voxel_object_id,
-             remaining_duration| {
+            |voxel_object_buffer_pool, process, voxel_object_id, voxel_object| {
                 process.execute(
                     voxel_type_registry,
-                    voxel_object_manager,
                     voxel_object_buffer_pool,
-                    rigid_body_manager,
                     voxel_object_id,
-                    remaining_duration,
+                    voxel_object,
                 );
             },
         );
     }
 
-    /// Executes all initiated fracturing processes.
+    /// Executes all fracturing processes staged with
+    /// [`Self::stage_fracturing_process_for_object`] in parallel.
     pub fn execute_fracturing_processes_in_parallel<C>(
         &mut self,
         thread_pool: &DynamicThreadPool,
@@ -356,106 +384,115 @@ impl VoxelObjectFracturingManager {
         self.execute_fracturing_processes_with_closure(
             context,
             entity_id_manager,
+            voxel_type_registry,
             voxel_object_manager,
             voxel_object_buffer_pool,
             rigid_body_manager,
             anchor_manager,
-            |voxel_object_manager,
-             voxel_object_buffer_pool,
-             rigid_body_manager,
-             process,
-             voxel_object_id,
-             remaining_duration| {
+            |voxel_object_buffer_pool, process, voxel_object_id, voxel_object| {
                 process.execute_in_parallel(
                     thread_pool,
                     voxel_type_registry,
-                    voxel_object_manager,
                     voxel_object_buffer_pool,
-                    rigid_body_manager,
                     voxel_object_id,
-                    remaining_duration,
+                    voxel_object,
                 );
             },
         );
-    }
-
-    /// Whether a fracturing process has been initiated for the given voxel
-    /// object.
-    pub fn object_has_initiated_fracturing_process(&self, voxel_object_id: VoxelObjectID) -> bool {
-        self.active_processes
-            .get(&voxel_object_id)
-            .is_some_and(|process| process.is_initiated())
     }
 
     fn execute_fracturing_processes_with_closure<C>(
         &mut self,
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
+        voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &mut VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
         anchor_manager: &mut AnchorManager,
         execute_process: impl Fn(
-            &mut VoxelObjectManager,
             &mut VoxelObjectBufferPool,
-            &mut RigidBodyManager,
             &mut FracturingProcess,
             VoxelObjectID,
-            Duration,
+            &VoxelObject,
         ),
     ) where
         C: VoxelObjectInteractionContext,
     {
-        let arena = ArenaPool::get_arena();
-        let mut finished_voxel_object_ids = AVec::new_in(&arena);
-
-        let mut remaining_duration = self
-            .config
-            .max_processing_duration_us
-            .map_or(Duration::MAX, Duration::from_micros);
-
-        for (&voxel_object_id, process) in &mut self.active_processes {
-            if process.is_idle() {
-                continue;
-            }
-            assert!(!process.is_cancelled());
-
-            let start_time = Instant::now();
-
-            execute_process(
+        for (voxel_object_id, staged_process) in self.staged_processes.drain() {
+            let Some(active_process) = staged_process.initiate(
+                context,
+                entity_id_manager,
+                voxel_type_registry,
                 voxel_object_manager,
                 voxel_object_buffer_pool,
                 rigid_body_manager,
-                process,
+                anchor_manager,
+                &mut self.fracture_region_pool,
+                &mut self.fracture_region_buffer_pool,
+                &mut self.process_pool,
                 voxel_object_id,
-                remaining_duration,
-            );
+            ) else {
+                continue;
+            };
 
-            if process.is_complete() || process.is_cancelled() {
-                finished_voxel_object_ids.push(voxel_object_id);
+            let ActiveFracturingProcess {
+                fracture_region_object,
+                mut process,
+            } = active_process;
+
+            assert!(process.is_initialized());
+
+            if let Some(voxel_object) = fracture_region_object
+                .as_ref()
+                .map(|object| &object.voxel_object)
+                .or_else(|| {
+                    Self::get_voxel_object_for_execution(
+                        voxel_object_manager,
+                        rigid_body_manager,
+                        voxel_object_id,
+                    )
+                })
+            {
+                execute_process(
+                    voxel_object_buffer_pool,
+                    &mut process,
+                    voxel_object_id,
+                    voxel_object,
+                );
+            } else {
+                // The voxel object no longer exist, so we cancel the process
+                process.cancel();
             }
 
-            // We don't break when the remaining duration reaches zero, because
-            // we need to allow every process to regenerate enough of their
-            // invalidated objects
-            remaining_duration = remaining_duration.saturating_sub(start_time.elapsed());
-        }
-
-        for voxel_object_id in finished_voxel_object_ids {
-            let mut process = self.active_processes.remove(&voxel_object_id).unwrap();
-
-            if process.is_complete() {
-                log::debug!("Completing fracturing for voxel object: {voxel_object_id}");
-                process.complete(
-                    &self.config,
-                    context,
-                    entity_id_manager,
-                    voxel_object_manager,
-                    voxel_object_buffer_pool,
-                    rigid_body_manager,
-                    anchor_manager,
-                    voxel_object_id,
-                );
+            if process.has_processed() {
+                if let Some(fracture_region_object) = fracture_region_object {
+                    process.complete_for_fracture_region_object(
+                        &self.config,
+                        context,
+                        entity_id_manager,
+                        voxel_object_manager,
+                        voxel_object_buffer_pool,
+                        rigid_body_manager,
+                        anchor_manager,
+                        &mut self.fracture_region_buffer_pool,
+                        fracture_region_object,
+                        voxel_object_id.as_entity_id(),
+                    );
+                } else {
+                    process.complete_for_existing_object(
+                        &self.config,
+                        context,
+                        entity_id_manager,
+                        voxel_object_manager,
+                        voxel_object_buffer_pool,
+                        rigid_body_manager,
+                        anchor_manager,
+                        voxel_object_id,
+                    );
+                }
+            } else {
+                assert!(process.is_cancelled());
             }
 
             // Reset and return to pool (whether it was successfully completed
@@ -466,13 +503,12 @@ impl VoxelObjectFracturingManager {
     }
 
     /// Identifies collisions involving fragmentable objects with impulses
-    /// strong enough to cause fragmentation and initiates fracturing with
+    /// strong enough to cause fragmentation and stages fracturing with
     /// appropriately generated fracture points for those objects.
     pub fn handle_fracturing_impacts<C>(
         &mut self,
         context: &C,
         voxel_object_manager: &VoxelObjectManager,
-        absorption_manager: &mut VoxelAbsorptionManager,
         rigid_body_manager: &RigidBodyManager,
         constraint_manager: &mut ConstraintManager,
         collision_world: &CollisionWorld,
@@ -490,16 +526,10 @@ impl VoxelObjectFracturingManager {
         // impulse computation
         let mut body_manager = ConstrainedBodyManager::new_in(&arena);
 
-        // Reusable buffer for generated fracture points
+        // Reusable buffer for generated fracture region boundary points and
+        // fracture points
+        let mut fracture_region_boundary_points = AVec::new_in(&arena);
         let mut fracture_points = AVec::new_in(&arena);
-
-        // Voxels objects to initiate fracturing for
-        let mut fractured_objects =
-            HashSet::with_capacity_and_hasher_in(0, Default::default(), &arena);
-
-        // Entity pairs for collisions where one or both of the bodies were
-        // fractured
-        let mut fracture_collision_entities = AVec::new_in(&arena);
 
         let collidable_voxel_object = |id: CollidableID| {
             let object_id = VoxelObjectID::from_entity_id(id.as_entity_id());
@@ -508,17 +538,10 @@ impl VoxelObjectFracturingManager {
                 .map(|object| (object_id, object.object()))
         };
 
-        let get_fracturing_properties =
-            |fracturing_manager: &VoxelObjectFracturingManager,
-             object: Option<(VoxelObjectID, &VoxelObject)>| {
-                let (object_id, _) = object?;
-                if fracturing_manager.object_has_initiated_fracturing_process(object_id) {
-                    // Treat the object as not fracturable if there is has an
-                    // ongoing fracturing process
-                    return None;
-                }
-                context.get_fracturing_properties_for_entity(object_id.as_entity_id())
-            };
+        let get_fracturing_properties = |object: Option<(VoxelObjectID, &VoxelObject)>| {
+            let (object_id, _) = object?;
+            context.get_fracturing_properties_for_entity(object_id.as_entity_id())
+        };
 
         let inverse_time_step_duration = time_step_duration.recip();
 
@@ -528,8 +551,8 @@ impl VoxelObjectFracturingManager {
             let voxel_object_a_with_id = collidable_voxel_object(collision.collidable_a_id);
             let voxel_object_b_with_id = collidable_voxel_object(collision.collidable_b_id);
 
-            let properties_a = get_fracturing_properties(self, voxel_object_a_with_id);
-            let properties_b = get_fracturing_properties(self, voxel_object_b_with_id);
+            let properties_a = get_fracturing_properties(voxel_object_a_with_id);
+            let properties_b = get_fracturing_properties(voxel_object_b_with_id);
 
             if properties_a.is_none() && properties_b.is_none() {
                 // None of the objects can be fractured
@@ -592,17 +615,19 @@ impl VoxelObjectFracturingManager {
 
             let force_magnitude = max_impulse * inverse_time_step_duration;
 
-            let mut created_fracture = false;
+            let mut should_skip_collision_response = false;
 
-            for (voxel_object_with_id, collidable, properties, force) in [
+            for (voxel_object_with_id, other_collidable_id, collidable, properties, force) in [
                 (
                     voxel_object_a_with_id,
+                    collision.collidable_b_id,
                     collidable_a,
                     properties_a,
                     max_contact_force,
                 ),
                 (
                     voxel_object_b_with_id,
+                    collision.collidable_a_id,
                     collidable_b,
                     properties_b,
                     -max_contact_force,
@@ -612,7 +637,7 @@ impl VoxelObjectFracturingManager {
                     // The object can not be fractured
                     continue;
                 };
-                if force_magnitude <= properties.force_threshold {
+                if force_magnitude <= properties.fracturing_force {
                     // The force is insufficient to cause fracturing
                     continue;
                 }
@@ -620,6 +645,22 @@ impl VoxelObjectFracturingManager {
                     // The colliding body is not a voxel object
                     continue;
                 };
+
+                if self.object_has_staged_fracturing_process(voxel_object_id) {
+                    // There is already a fracturing process staged from another
+                    // collision, so we can't process the fracturing due to this
+                    // collision this frame. We therefore just skip the
+                    // collision response for this frame. If this collision is
+                    // still relevant next frame, we will likely re-detect it
+                    // and stage a fracturing process then.
+                    should_skip_collision_response = true;
+                    log::debug!(
+                        "Disregarding fracturing collision of voxel object {voxel_object_id} \
+                         with entity {other_collidable_id} due to already staged fracturing process",
+                    );
+                    continue;
+                }
+
                 let Collidable::VoxelObject(collidable) = collidable.collidable() else {
                     panic!("Unexpected collidable for voxel object");
                 };
@@ -629,6 +670,7 @@ impl VoxelObjectFracturingManager {
                 let world_to_object_transform = collidable.transform_to_object_space().aligned();
                 let aabb = voxel_object.compute_aabb();
 
+                fracture_region_boundary_points.clear();
                 fracture_points.clear();
 
                 let fracture_force = FractureForce {
@@ -640,6 +682,7 @@ impl VoxelObjectFracturingManager {
                 generate_impact_fracture_points(
                     &self.config.impact,
                     &arena,
+                    &mut fracture_region_boundary_points,
                     &mut fracture_points,
                     &properties,
                     voxel_object.inverse_voxel_extent(),
@@ -649,79 +692,80 @@ impl VoxelObjectFracturingManager {
                     &mut rng,
                 );
 
-                if fracture_points.is_empty() {
+                if fracture_region_boundary_points.is_empty() || fracture_points.is_empty() {
                     continue;
                 }
 
-                // Process fragments starting farthest away from the impact
-                // point since the chunks near the impact point are most likely
-                // to get invalidated if processing takes more than one frame
-                let processing_direction = (-force_direction).compact();
-
                 log::debug!(
-                    "Fracturing voxel object {voxel_object_id}: force magnitude {force_magnitude:.3e} \
-                     exceeds threshold {threshold:.3e}, \
+                    "Fracturing voxel object {voxel_object_id} due to collision with entity {other_collidable_id}: \
+                     force magnitude {force_magnitude:.3e} exceeds threshold {threshold:.3e}, \
                      direction = [{dx:.3}, {dy:.3}, {dz:.3}], \
                      {fracture_point_count} fracture point(s) generated",
-                    threshold = properties.force_threshold,
+                    threshold = properties.fracturing_force,
                     dx = force_direction.x(),
                     dy = force_direction.y(),
                     dz = force_direction.z(),
                     fracture_point_count = fracture_points.len(),
                 );
 
-                self.add_fracture_points_for_object(
-                    voxel_object_manager,
-                    voxel_object_id,
-                    &fracture_points,
-                    Some(&processing_direction),
-                )
-                .unwrap();
+                let was_staged = self
+                    .stage_fracturing_process_for_object(
+                        voxel_object_manager,
+                        voxel_object_id,
+                        Some(&fracture_region_boundary_points),
+                        &fracture_points,
+                    )
+                    .unwrap();
 
-                fractured_objects.insert(voxel_object_id);
-                created_fracture = true;
+                should_skip_collision_response |= was_staged;
             }
 
-            if created_fracture {
-                fracture_collision_entities.push([
-                    collision.collidable_a_id.as_entity_id(),
-                    collision.collidable_b_id.as_entity_id(),
-                ]);
-            }
-        }
-
-        for &object_id in &fractured_objects {
-            self.initiate_fracturing_process(voxel_object_manager, object_id)
-                .unwrap();
-        }
-
-        for entity_ids in fracture_collision_entities {
-            // Prevent the impulses from the fracturing collision from being
-            // applied until the fragments are generated
-            constraint_manager.add_collision_to_ignore_list(entity_ids);
-
-            if self
-                .config
-                .impact
-                .enable_mutual_absorption_during_processing
-            {
-                let process = MutualVoxelAbsorptionProcess {
-                    smoothness: Smoothness::new(self.config.impact.mutual_absorption_smoothness),
-                };
-
-                if entity_ids.iter().all(|&entity_id| {
-                    voxel_object_manager.has_voxel_object(VoxelObjectID::from_entity_id(entity_id))
-                }) {
-                    absorption_manager.initiate_mutual_absorption_process(entity_ids, process);
-                }
+            if should_skip_collision_response {
+                // Prevent the impulses from the fracturing collision from being
+                // applied until the fragments are generated
+                constraint_manager.skip_collision_for_steps(
+                    [
+                        collision.collidable_a_id.as_entity_id(),
+                        collision.collidable_b_id.as_entity_id(),
+                    ],
+                    1,
+                );
             }
         }
     }
 
     /// Removes all fracturing state and frees up all allocated memory.
     pub fn reset_and_free(&mut self) {
-        self.active_processes = HashMap::default();
+        self.staged_processes = HashMap::default();
+        self.fracture_region_pool = Vec::new();
+        self.fracture_region_buffer_pool = Vec::new();
         self.process_pool = Vec::new();
+    }
+
+    fn get_voxel_object_for_execution<'a>(
+        voxel_object_manager: &'a VoxelObjectManager,
+        rigid_body_manager: &RigidBodyManager,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<&'a VoxelObject> {
+        let entity_id = voxel_object_id.as_entity_id();
+        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+
+        let Some(meshed_voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id)
+        else {
+            log::warn!("Tried to execute fracturing for missing voxel object: {voxel_object_id}");
+            return None;
+        };
+        if !voxel_object_manager.has_physics_context(voxel_object_id)
+            || !rigid_body_manager.has_dynamic_rigid_body(rigid_body_id)
+        {
+            log::warn!(
+                "Tried to execute fracturing for voxel object {voxel_object_id} \
+                 without physics"
+            );
+            return None;
+        }
+
+        Some(meshed_voxel_object.object())
     }
 }
 
@@ -745,13 +789,36 @@ impl Default for VoxelFracturingConfig {
         Self {
             impact: Default::default(),
             min_relative_fragment_mass: 1e-3,
-            max_processing_duration_us: None,
         }
     }
 }
 
 impl VoxelImpactFracturingConfig {
     fn validate(&self) -> Result<()> {
+        if self.boundary_polar_grid_size < 2 {
+            bail!(
+                "Boundary polar grid size for impact fragment generation must be at least 2: {}",
+                self.boundary_polar_grid_size
+            );
+        }
+        if self.boundary_azimuthal_grid_size < 3 {
+            bail!(
+                "Boundary azimuthal grid size for impact fragment generation must be at least 3: {}",
+                self.boundary_azimuthal_grid_size
+            );
+        }
+        if self.boundary_angular_jitter < 0.0 || self.boundary_angular_jitter > 1.0 {
+            bail!(
+                "Boundary angular jitter for impact fragment generation must be between 0.0 and 1.0: {}",
+                self.boundary_angular_jitter
+            );
+        }
+        if self.boundary_radial_jitter < 0.0 || self.boundary_radial_jitter > 1.0 {
+            bail!(
+                "Boundary radial jitter for impact fragment generation must be between 0.0 and 1.0: {}",
+                self.boundary_radial_jitter
+            );
+        }
         if self.radial_falloff_power < 0.0 {
             bail!(
                 "Radial falloff power for impact fragment generation must be non-negative: {}",
@@ -776,12 +843,6 @@ impl VoxelImpactFracturingConfig {
                 self.angular_grid_size
             );
         }
-        if self.mutual_absorption_smoothness < 0.0 {
-            bail!(
-                "Mutual absorption smoothness for impact fragment generation must be at non-negative: {}",
-                self.mutual_absorption_smoothness
-            );
-        }
         Ok(())
     }
 }
@@ -789,6 +850,10 @@ impl VoxelImpactFracturingConfig {
 impl Default for VoxelImpactFracturingConfig {
     fn default() -> Self {
         Self {
+            boundary_polar_grid_size: 3,
+            boundary_azimuthal_grid_size: 6,
+            boundary_angular_jitter: 0.8,
+            boundary_radial_jitter: 0.2,
             max_fragment_count: 512,
             radial_falloff_power: 2.0,
             angular_falloff_power: 0.5,
@@ -796,9 +861,70 @@ impl Default for VoxelImpactFracturingConfig {
             angular_grid_size: 128,
             max_position_rejections_per_sample: 128,
             seed: 0,
-            enable_mutual_absorption_during_processing: true,
-            mutual_absorption_smoothness: 2.0,
         }
+    }
+}
+
+impl StagedFracturingProcess {
+    fn initiate<C>(
+        self,
+        context: &mut C,
+        entity_id_manager: &mut EntityIDManager,
+        voxel_type_registry: &VoxelTypeRegistry,
+        voxel_object_manager: &mut VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
+        rigid_body_manager: &mut RigidBodyManager,
+        anchor_manager: &mut AnchorManager,
+        fracture_region_pool: &mut Vec<DelaunayTetrahedralization>,
+        fracture_region_buffer_pool: &mut Vec<VoxelObjectBuffers>,
+        process_pool: &mut Vec<FracturingProcess>,
+        voxel_object_id: VoxelObjectID,
+    ) -> Option<ActiveFracturingProcess>
+    where
+        C: VoxelObjectInteractionContext,
+    {
+        let Self {
+            fracture_region_tetras,
+            mut process,
+        } = self;
+
+        let Some(fracture_region_tetras) = fracture_region_tetras else {
+            return Some(ActiveFracturingProcess {
+                fracture_region_object: None,
+                process,
+            });
+        };
+
+        let Some(fracture_region_object) = extract_fracture_region_object(
+            context,
+            entity_id_manager,
+            voxel_type_registry,
+            voxel_object_manager,
+            voxel_object_buffer_pool,
+            rigid_body_manager,
+            anchor_manager,
+            fracture_region_buffer_pool,
+            voxel_object_id,
+            &fracture_region_tetras,
+        ) else {
+            fracture_region_pool.push(fracture_region_tetras);
+            process.reset(voxel_object_buffer_pool);
+            process_pool.push(process);
+            return None;
+        };
+
+        fracture_region_pool.push(fracture_region_tetras);
+
+        // The fracture points were defined relative to the original object, but
+        // we now need them relative to the fracture region object
+        process.offset_tetrahedralization_to_fracture_region_object(
+            fracture_region_object.origin_offset_in_parent,
+        );
+
+        Some(ActiveFracturingProcess {
+            fracture_region_object: Some(fracture_region_object),
+            process,
+        })
     }
 }
 
@@ -806,10 +932,8 @@ impl FracturingProcess {
     fn new() -> Self {
         Self {
             state: FracturingProcessState::Idle,
-            fracture_points: Vec::new(),
-            processing_direction: None,
             tetrahedralization: DelaunayTetrahedralization::new(),
-            dual_vertex_queue: VecDeque::new(),
+            vertex_indices: Vec::new(),
             fragments: Vec::new(),
         }
     }
@@ -818,152 +942,73 @@ impl FracturingProcess {
         self.state == FracturingProcessState::Idle
     }
 
-    fn is_initiated(&self) -> bool {
-        self.state == FracturingProcessState::Initiated
+    fn is_initialized(&self) -> bool {
+        self.state == FracturingProcessState::Initialized
     }
 
     fn is_cancelled(&self) -> bool {
         self.state == FracturingProcessState::Cancelled
     }
 
-    fn is_complete(&self) -> bool {
-        self.is_initiated() && self.dual_vertex_queue.is_empty()
+    fn has_processed(&self) -> bool {
+        self.is_initialized() && self.vertex_indices.is_empty()
     }
 
-    fn add_fracture_points(
-        &mut self,
-        fracture_points: &[Point3C],
-        processing_direction: Option<&UnitVector3C>,
-    ) -> Result<()> {
-        if fracture_points.is_empty() {
-            return Ok(());
-        }
-        if !self.is_idle() {
-            bail!(
-                "Tried to add fracture points to a non-idle fracturing process: {:?}",
-                self.state
-            );
-        }
-        assert!(self.dual_vertex_queue.is_empty());
-        assert!(self.fragments.is_empty());
-
-        self.fracture_points.extend_from_slice(fracture_points);
-
-        if let Some(&dir) = processing_direction.map(UnitVector3C::as_vector) {
-            self.processing_direction = Some(
-                self.processing_direction
-                    .map_or(dir, |current| current + dir),
-            );
-        }
-
-        Ok(())
+    fn cancel(&mut self) {
+        self.state = FracturingProcessState::Cancelled;
     }
 
-    fn initiate(&mut self) -> Result<()> {
-        if !self.is_idle() {
-            bail!(
-                "Tried to initiate a non-idle fracturing process: {:?}",
-                self.state
-            );
-        }
-        assert!(self.dual_vertex_queue.is_empty());
+    fn mark_processed(&mut self) {
+        assert!(self.is_initialized());
+        self.vertex_indices.clear();
+    }
+
+    fn initialize(&mut self, fracture_points: &[Point3C]) -> Result<()> {
+        assert!(self.is_idle());
+        assert!(self.vertex_indices.is_empty());
         assert!(self.fragments.is_empty());
 
-        self.tetrahedralization.reconstruct(&self.fracture_points)?;
+        self.tetrahedralization.reconstruct(fracture_points)?;
 
         if self.tetrahedralization.n_tetrahedra() == 0 {
-            self.fracture_points.clear();
-            self.processing_direction = None;
             return Ok(());
         }
 
-        if let Some(direction) = self
-            .processing_direction
-            .and_then(|dir| UnitVector3C::normalized_from_if_above(dir, 1e-6))
-        {
-            Self::queue_vertices_sorted_along_direction(
-                &mut self.dual_vertex_queue,
-                &self.tetrahedralization,
-                &direction,
-            );
-        } else {
-            self.dual_vertex_queue
-                .extend(self.tetrahedralization.internal_vertex_indices());
-        }
+        self.vertex_indices
+            .extend(self.tetrahedralization.internal_vertex_indices());
 
-        self.state = FracturingProcessState::Initiated;
+        self.state = FracturingProcessState::Initialized;
 
         Ok(())
     }
 
-    fn queue_vertices_sorted_along_direction(
-        vertex_queue: &mut VecDeque<VertexIdx>,
-        tetrahedralization: &DelaunayTetrahedralization,
-        direction: &UnitVector3C,
+    fn offset_tetrahedralization_to_fracture_region_object(
+        &mut self,
+        origin_offset_in_parent: [usize; 3],
     ) {
-        let arena = ArenaPool::get_arena();
-
-        let vertex_range = tetrahedralization.internal_vertex_indices();
-        let mut sorted_vertices = AVec::with_capacity_in(vertex_range.len(), &arena);
-        sorted_vertices.extend(vertex_range);
-
-        sorted_vertices.sort_unstable_by(|&idx_a, &idx_b| {
-            let position_a = tetrahedralization.vertices()[idx_a as usize].point;
-            let position_b = tetrahedralization.vertices()[idx_b as usize].point;
-
-            let displacement_a = direction.dot(position_a.as_vector());
-            let displacement_b = direction.dot(position_b.as_vector());
-
-            if displacement_a < displacement_b {
-                Ordering::Less
-            } else if displacement_a > displacement_b {
-                Ordering::Greater
-            } else {
-                Ordering::Equal
-            }
-        });
-
-        vertex_queue.extend(sorted_vertices);
+        let origin_offset: Vector3C = origin_offset_in_parent.map(|offset| offset as f32).into();
+        self.tetrahedralization.displace_vertices(-origin_offset);
     }
 
     fn execute(
         &mut self,
         voxel_type_registry: &VoxelTypeRegistry,
-        voxel_object_manager: &VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
-        rigid_body_manager: &RigidBodyManager,
         voxel_object_id: VoxelObjectID,
-        max_duration: Duration,
+        voxel_object: &VoxelObject,
     ) {
-        if !self.is_initiated() {
+        if !self.is_initialized() {
             return;
         }
-
-        let Some(voxel_object) = Self::get_voxel_object_for_execution(
-            voxel_object_manager,
-            rigid_body_manager,
-            voxel_object_id,
-        ) else {
-            self.state = FracturingProcessState::Cancelled;
-            return;
-        };
 
         let aabb = voxel_object.compute_normalized_chunk_grid_bounds();
 
         let arena = ArenaPool::get_arena();
-
-        let max_remaining = self.invalidate_required_completed_objects_and_get_max_remaining(
-            voxel_object_buffer_pool,
-            &arena,
-            voxel_object,
-        );
-
         let mut polyhedron = VoronoiPolyhedron::empty_in(&arena);
 
-        let n_generated_before = self.fragments.len();
-        let start_time = Instant::now();
+        let start_time = log::log_enabled!(log::Level::Debug).then(Instant::now);
 
-        while let Some(dual_vertex_idx) = self.dual_vertex_queue.pop_front() {
+        for &dual_vertex_idx in &self.vertex_indices {
             let buffers = voxel_object_buffer_pool.take_or_create_buffers();
 
             let result = Self::generate_fragment(
@@ -985,57 +1030,37 @@ impl FracturingProcess {
                     voxel_object_buffer_pool.add_buffers(buffers);
                 }
             }
-
-            if start_time.elapsed() > max_duration && self.dual_vertex_queue.len() <= max_remaining
-            {
-                break;
-            }
         }
 
-        self.log_execution_stats(voxel_object_id, 1, n_generated_before, &start_time);
+        self.mark_processed();
+
+        if let Some(start_time) = start_time {
+            log::debug!(
+                "Generated {n_generated} fragments in {elapsed_ms:.2} ms \
+                 for voxel object {voxel_object_id}",
+                n_generated = self.fragments.len(),
+                elapsed_ms = 1e3 * start_time.elapsed().as_secs_f64()
+            );
+        }
     }
 
     fn execute_in_parallel(
         &mut self,
         thread_pool: &DynamicThreadPool,
         voxel_type_registry: &VoxelTypeRegistry,
-        voxel_object_manager: &VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
-        rigid_body_manager: &RigidBodyManager,
         voxel_object_id: VoxelObjectID,
-        max_duration: Duration,
+        voxel_object: &VoxelObject,
     ) {
-        if !self.is_initiated() {
+        if !self.is_initialized() {
             return;
         }
 
-        let Some(voxel_object) = Self::get_voxel_object_for_execution(
-            voxel_object_manager,
-            rigid_body_manager,
-            voxel_object_id,
-        ) else {
-            self.state = FracturingProcessState::Cancelled;
-            return;
-        };
+        let num_threads = thread_pool.n_workers().get();
 
         let aabb = voxel_object.compute_normalized_chunk_grid_bounds();
 
-        let arena = ArenaPool::get_arena();
-
-        let max_remaining = self.invalidate_required_completed_objects_and_get_max_remaining(
-            voxel_object_buffer_pool,
-            &arena,
-            voxel_object,
-        );
-
-        let num_threads = thread_pool.n_workers().get();
-
-        let n_generated_before = self.fragments.len();
-        let start_time = Instant::now();
-
-        let deadline_exceeded = |queue: &VecDeque<VertexIdx>| {
-            start_time.elapsed() > max_duration && queue.len() <= max_remaining
-        };
+        let start_time = log::log_enabled!(log::Level::Debug).then(Instant::now);
 
         thread_pool
             .with_scope(|scope| {
@@ -1091,11 +1116,11 @@ impl FracturingProcess {
 
                 let mut in_flight_count = 0;
 
-                'outer: while !self.dual_vertex_queue.is_empty() {
+                'outer: while !self.vertex_indices.is_empty() {
                     // Send task inputs to the workers until the input buffer is
                     // full (or we are out of vertices to process)
                     while !input_sender.is_full() {
-                        let Some(dual_vertex_idx) = self.dual_vertex_queue.pop_front() else {
+                        let Some(dual_vertex_idx) = self.vertex_indices.pop() else {
                             // We have dispatched all vertices, so break out of
                             // the outer loop so we can receive all remaining
                             // results
@@ -1110,12 +1135,6 @@ impl FracturingProcess {
 
                         input_sender.send(task_input).unwrap();
                         in_flight_count += 1;
-
-                        // Stop sending and start receiving the in-flight
-                        // results if we have run out of time
-                        if deadline_exceeded(&self.dual_vertex_queue) {
-                            break 'outer;
-                        }
                     }
 
                     // We have filled up the input buffer, now we start
@@ -1137,12 +1156,6 @@ impl FracturingProcess {
                         received_count += 1;
                     }
                     in_flight_count -= received_count;
-
-                    // Break the send-receive loop and start receiving all
-                    // in-flight results if we have run out of time
-                    if deadline_exceeded(&self.dual_vertex_queue) {
-                        break 'outer;
-                    }
                 }
 
                 // Receive all in-flight results before we exit
@@ -1163,38 +1176,16 @@ impl FracturingProcess {
             })
             .unwrap();
 
-        self.log_execution_stats(
-            voxel_object_id,
-            num_threads,
-            n_generated_before,
-            &start_time,
-        );
-    }
+        assert!(self.has_processed());
 
-    fn get_voxel_object_for_execution<'a>(
-        voxel_object_manager: &'a VoxelObjectManager,
-        rigid_body_manager: &RigidBodyManager,
-        voxel_object_id: VoxelObjectID,
-    ) -> Option<&'a VoxelObject> {
-        let entity_id = voxel_object_id.as_entity_id();
-        let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
-
-        let Some(meshed_voxel_object) = voxel_object_manager.get_voxel_object(voxel_object_id)
-        else {
-            log::warn!("Tried to execute fracturing for missing voxel object: {voxel_object_id}");
-            return None;
-        };
-        if !voxel_object_manager.has_physics_context(voxel_object_id)
-            || !rigid_body_manager.has_dynamic_rigid_body(rigid_body_id)
-        {
-            log::warn!(
-                "Tried to execute fracturing for voxel object {voxel_object_id} \
-                 without physics"
+        if let Some(start_time) = start_time {
+            log::debug!(
+                "Generated {n_generated} fragments in {elapsed_ms:.2} ms \
+                 ({num_threads} thread(s)) for voxel object {voxel_object_id}",
+                n_generated = self.fragments.len(),
+                elapsed_ms = 1e3 * start_time.elapsed().as_secs_f64()
             );
-            return None;
         }
-
-        Some(meshed_voxel_object.object())
     }
 
     fn generate_fragment<A: Allocator>(
@@ -1236,10 +1227,8 @@ impl FracturingProcess {
                     MeshedVoxelObject::create(buffers.mesh_buffers, poly_object.voxel_object);
 
                 FractureObjectGenerationResult::Generated(Fragment {
-                    dual_vertex_idx,
                     meshed_voxel_object: meshed_poly_object,
                     origin_offset_in_parent: poly_object.origin_offset_in_parent,
-                    chunk_ranges_in_parent: poly_object.chunk_ranges_in_parent,
                     inertial_property_manager: poly_inertial_property_manager,
                 })
             }
@@ -1253,90 +1242,75 @@ impl FracturingProcess {
         }
     }
 
-    fn invalidate_required_completed_objects_and_get_max_remaining(
+    fn complete_for_fracture_region_object<C>(
         &mut self,
+        config: &VoxelFracturingConfig,
+        context: &mut C,
+        entity_id_manager: &mut EntityIDManager,
+        voxel_object_manager: &mut VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
-        arena: &PoolArena,
-        voxel_object: &VoxelObject,
-    ) -> usize {
-        let original_completed_count = self.fragments.len();
+        rigid_body_manager: &mut RigidBodyManager,
+        anchor_manager: &mut AnchorManager,
+        fracture_region_buffer_pool: &mut Vec<VoxelObjectBuffers>,
+        fracture_region_object: FractureRegionObject,
+        original_entity_id: EntityID,
+    ) where
+        C: VoxelObjectInteractionContext,
+    {
+        assert!(self.has_processed());
 
-        self.invalidate_required_completed_objects(voxel_object_buffer_pool, arena, voxel_object);
-
-        // If invalidation happens faster than we can keep up, we are allowed to
-        // exceed the time budget. We require that at least twice the number of
-        // invalidated objects must be generated during each execution so that
-        // we are guaranteed to finish.
-        let invalidated_count = original_completed_count - self.fragments.len();
-        let min_generated = 2 * invalidated_count;
-        let max_remaining = self.dual_vertex_queue.len().saturating_sub(min_generated);
-
-        max_remaining
-    }
-
-    fn invalidate_required_completed_objects(
-        &mut self,
-        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
-        arena: &PoolArena,
-        voxel_object: &VoxelObject,
-    ) {
-        let mut invalidated_object_indices = AVec::new_in(arena);
-
-        for invalidated_chunk_indices in voxel_object.invalidated_mesh_chunk_indices() {
-            // Find each completed object whose chunk ranges in the parent
-            // contain the invalidated chunk and store the object's index
-            for (object_idx, fragment) in self.fragments.iter().enumerate() {
-                let chunk_ranges = fragment.chunk_ranges_in_parent.iter();
-                if chunk_ranges
-                    .zip(invalidated_chunk_indices)
-                    .all(|(range, idx)| range.contains(idx))
-                {
-                    invalidated_object_indices.push(object_idx);
-                }
-            }
-
-            // Remove the invalidated objects from the list of completed
-            // objects, return their buffers to the pool and push their vertex
-            // index to the back of the queue so it will be recreated. The
-            // reason we push to the back of the queue and not to the front is
-            // that an invalidated object is likely to be invalidated again, so
-            // we defer recreation as long as possible to limit wasted work. We
-            // iterate over the invalidated indices in descending order so that
-            // the swap-removes do not invalidate indices we have not yet
-            // processed.
-            for &object_idx in invalidated_object_indices.iter().rev() {
-                let fragment = self.fragments.swap_remove(object_idx);
-
-                voxel_object_buffer_pool.add_buffers(fragment.meshed_voxel_object.into_buffers());
-
-                self.dual_vertex_queue.push_back(fragment.dual_vertex_idx);
-            }
-
-            invalidated_object_indices.clear();
+        // We need the original voxel object entity to still exist so the
+        // fragments can inherit its components
+        if !context.entity_exists(original_entity_id) {
+            log::warn!(
+                "Tried to complete fracturing for missing voxel object entity: {original_entity_id}"
+            );
+            fracture_region_buffer_pool.push(fracture_region_object.voxel_object.into_buffers());
+            self.state = FracturingProcessState::Cancelled;
+            return;
         }
-    }
 
-    fn log_execution_stats(
-        &self,
-        voxel_object_id: VoxelObjectID,
-        num_threads: usize,
-        n_generated_before: usize,
-        start_time: &Instant,
-    ) {
-        let n_generated = self.fragments.len() - n_generated_before;
+        let original_local_center_of_mass = fracture_region_object
+            .inertial_property_manager
+            .derive_center_of_mass();
 
-        let n_total = self.tetrahedralization.internal_vertex_indices().len();
-        let n_completed_total = n_total - self.dual_vertex_queue.len();
+        let original_position = fracture_region_object.rigid_body.position().aligned();
+        let orientation = fracture_region_object.rigid_body.orientation().aligned();
+        let original_linear_velocity = fracture_region_object.rigid_body.compute_velocity();
+        let angular_velocity = fracture_region_object.rigid_body.compute_angular_velocity();
 
-        let elapsed_ms = 1e3 * start_time.elapsed().as_secs_f64();
+        let mut original_anchors = fracture_region_object.anchors;
 
-        log::debug!(
-            "Generated {n_generated} fracture objects ({n_completed_total}/{n_total} complete) \
-             in {elapsed_ms:.2} ms ({num_threads} thread(s)) for voxel object: {voxel_object_id}"
+        let min_mass =
+            config.min_relative_fragment_mass * fracture_region_object.original_object_mass;
+
+        self.complete(
+            context,
+            entity_id_manager,
+            voxel_object_manager,
+            voxel_object_buffer_pool,
+            rigid_body_manager,
+            anchor_manager,
+            original_entity_id,
+            original_local_center_of_mass,
+            original_position,
+            orientation,
+            original_linear_velocity,
+            angular_velocity,
+            &mut original_anchors,
+            min_mass,
         );
+
+        // All remaining anchors are not attached to any fragments, so we remove
+        // them
+        for (anchor_id, _) in original_anchors {
+            anchor_manager.dynamic_mut().remove(anchor_id);
+        }
+
+        fracture_region_buffer_pool.push(fracture_region_object.voxel_object.into_buffers());
     }
 
-    fn complete<C>(
+    fn complete_for_existing_object<C>(
         &mut self,
         config: &VoxelFracturingConfig,
         context: &mut C,
@@ -1349,18 +1323,20 @@ impl FracturingProcess {
     ) where
         C: VoxelObjectInteractionContext,
     {
-        assert!(self.is_complete());
+        assert!(self.has_processed());
 
         let original_entity_id = original_voxel_object_id.as_entity_id();
         let original_rigid_body_id = DynamicRigidBodyID::from_entity_id(original_entity_id);
 
-        if !voxel_object_manager.has_voxel_object(original_voxel_object_id) {
+        // We need the original voxel object entity to still exist so the
+        // fragments can inherit its components
+        if !context.entity_exists(original_entity_id) {
             log::warn!(
-                "Tried to complete fracturing for missing voxel object: {original_voxel_object_id}"
+                "Tried to complete fracturing for missing voxel object entity: {original_entity_id}"
             );
             self.state = FracturingProcessState::Cancelled;
             return;
-        };
+        }
         let Some(physics_context) =
             voxel_object_manager.get_physics_context(original_voxel_object_id)
         else {
@@ -1391,6 +1367,52 @@ impl FracturingProcess {
         let original_linear_velocity = rigid_body.compute_velocity();
         let angular_velocity = rigid_body.compute_angular_velocity();
 
+        let mut original_anchors =
+            interaction::get_all_rigid_body_anchors(anchor_manager, original_rigid_body_id);
+
+        let min_mass = config.min_relative_fragment_mass * original_mass;
+
+        self.complete(
+            context,
+            entity_id_manager,
+            voxel_object_manager,
+            voxel_object_buffer_pool,
+            rigid_body_manager,
+            anchor_manager,
+            original_entity_id,
+            original_local_center_of_mass,
+            original_position,
+            orientation,
+            original_linear_velocity,
+            angular_velocity,
+            &mut original_anchors,
+            min_mass,
+        );
+
+        context.remove_voxel_object_entity(original_entity_id);
+    }
+
+    fn complete<C>(
+        &mut self,
+        context: &mut C,
+        entity_id_manager: &mut EntityIDManager,
+        voxel_object_manager: &mut VoxelObjectManager,
+        voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
+        rigid_body_manager: &mut RigidBodyManager,
+        anchor_manager: &mut AnchorManager,
+        original_entity_id: EntityID,
+        original_local_center_of_mass: Vector3,
+        original_position: Point3,
+        orientation: UnitQuaternion,
+        original_linear_velocity: Velocity,
+        angular_velocity: AngularVelocity,
+        original_anchors: &mut Anchors,
+        min_mass: f32,
+    ) where
+        C: VoxelObjectInteractionContext,
+    {
+        assert!(self.has_processed());
+
         let mut entity_ids = Vec::with_capacity(self.fragments.len());
 
         for mut fragment in self.fragments.drain(..) {
@@ -1407,14 +1429,13 @@ impl FracturingProcess {
                 angular_velocity,
             );
 
-            if dynamics.rigid_body.mass() < config.min_relative_fragment_mass * original_mass {
+            if dynamics.rigid_body.mass() < min_mass {
                 voxel_object_buffer_pool.add_buffers(fragment.meshed_voxel_object.into_buffers());
                 continue;
             }
 
-            let anchors = interaction::get_anchors_on_extracted_voxel_object(
-                anchor_manager,
-                original_rigid_body_id,
+            let anchors = interaction::transfer_anchors_to_extracted_voxel_object(
+                original_anchors,
                 voxel_object,
                 &dynamics.coordinate_changes,
             );
@@ -1440,15 +1461,12 @@ impl FracturingProcess {
         }
 
         context.create_extracted_voxel_object_entities(entity_ids, original_entity_id);
-        context.remove_voxel_object_entity(original_entity_id);
 
         self.reset(voxel_object_buffer_pool);
     }
 
     fn reset(&mut self, voxel_object_buffer_pool: &mut VoxelObjectBufferPool) {
-        self.fracture_points.clear();
-        self.processing_direction = None;
-        self.dual_vertex_queue.clear();
+        self.vertex_indices.clear();
         self.reclaim_fragment_buffers(voxel_object_buffer_pool);
         self.state = FracturingProcessState::Idle;
     }
@@ -1458,6 +1476,12 @@ impl FracturingProcess {
             let buffers = fragment.meshed_voxel_object.into_buffers();
             voxel_object_buffer_pool.add_buffers(buffers);
         }
+    }
+}
+
+impl Default for FracturingProcess {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1510,8 +1534,173 @@ impl RandomizedGridFracturePointGenerator {
     }
 }
 
-/// Generates fracture points for a voxel object based on the force of an
-/// impact.
+fn extract_fracture_region_object<C>(
+    context: &mut C,
+    entity_id_manager: &mut EntityIDManager,
+    voxel_type_registry: &VoxelTypeRegistry,
+    voxel_object_manager: &mut VoxelObjectManager,
+    voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
+    rigid_body_manager: &mut RigidBodyManager,
+    anchor_manager: &mut AnchorManager,
+    fracture_region_buffer_pool: &mut Vec<VoxelObjectBuffers>,
+    voxel_object_id: VoxelObjectID,
+    fracture_region_tetras: &DelaunayTetrahedralization,
+) -> Option<FractureRegionObject>
+where
+    C: VoxelObjectInteractionContext,
+{
+    let entity_id = voxel_object_id.as_entity_id();
+    let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
+
+    let (Some((voxel_object, physics_context)), Some(rigid_body)) = (
+        voxel_object_manager.get_voxel_object_with_physics_context_mut(voxel_object_id),
+        rigid_body_manager.get_dynamic_rigid_body_mut(rigid_body_id),
+    ) else {
+        return None;
+    };
+
+    let arena = ArenaPool::get_arena();
+
+    let object_aabb = voxel_object.object().compute_normalized_chunk_grid_bounds();
+    let Some(fracture_region_aabb) = fracture_region_tetras
+        .compute_aabb()
+        .compute_overlap_with(&object_aabb)
+    else {
+        // If the fracture region is completely outside the object, there is
+        // nothing to do
+        return None;
+    };
+
+    // The convex hull of the boundary region points corresponds to the boundary
+    // of the Delaunay tetrahedralization
+    let normalized_face_planes = fracture_region_tetras.compute_boundary_face_planes(&arena);
+
+    let original_local_center_of_mass = physics_context
+        .inertial_property_manager
+        .derive_center_of_mass();
+
+    let original_mass = rigid_body.mass();
+    let original_position = rigid_body.position().aligned();
+    let orientation = rigid_body.orientation().aligned();
+    let original_linear_velocity = rigid_body.compute_velocity();
+    let angular_velocity = rigid_body.compute_angular_velocity();
+
+    let mut fracture_region_inertial_property_manager =
+        VoxelObjectInertialPropertyManager::zeroed();
+
+    let mut inertial_property_transferrer =
+        physics_context.inertial_property_manager.begin_transfer_to(
+            &mut fracture_region_inertial_property_manager,
+            voxel_object.object().voxel_extent(),
+            voxel_type_registry.mass_densities(),
+        );
+
+    let object_buffers = fracture_region_buffer_pool.pop().unwrap_or_default();
+
+    // We don't check the result yet, since the extraction could have modified
+    // the object regardless of whether it resulted in a significant enough
+    // extracted object, so we need to run post-removal updates regardless
+    let extraction_result = voxel_object
+        .object_mut()
+        .extract_polyhedron_with_property_transferrer(
+            object_buffers,
+            &fracture_region_aabb,
+            &normalized_face_planes,
+            &mut inertial_property_transferrer,
+        );
+
+    let VoxelRemovalOutcome {
+        original_object_empty,
+        extracted_components_for_disconnected_objects,
+        mut lost_anchors,
+    } = interaction::handle_voxel_object_after_removing_voxels(
+        &arena,
+        anchor_manager,
+        voxel_type_registry,
+        voxel_object_buffer_pool,
+        voxel_object.object_mut(),
+        &mut physics_context.inertial_property_manager,
+        rigid_body_id,
+        rigid_body,
+        original_local_center_of_mass,
+        // The removed mass was transferred to the boundary region object
+        RemovedMassFate::Transferred,
+    );
+
+    if original_object_empty {
+        context.remove_voxel_object_entity(entity_id);
+    }
+
+    let disconnected_entity_ids =
+        entity_id_manager.provide_id_vec(extracted_components_for_disconnected_objects.len());
+
+    for (disconnected_entity_id, extracted_components) in disconnected_entity_ids
+        .iter()
+        .copied()
+        .zip(extracted_components_for_disconnected_objects)
+    {
+        interaction::spawn_extracted_voxel_object(
+            voxel_object_manager,
+            rigid_body_manager,
+            anchor_manager,
+            extracted_components,
+            disconnected_entity_id,
+        );
+    }
+
+    context.create_extracted_voxel_object_entities(disconnected_entity_ids, entity_id);
+
+    let extracted_fracture_region_object = match extraction_result {
+        ExtractionResult::Extracted(extracted) => extracted,
+        ExtractionResult::NotExtracted(object_buffers) => {
+            fracture_region_buffer_pool.push(object_buffers);
+
+            // Even though no significant object was extracted, anchors could
+            // have been lost, so we must delete them before we abort
+            for (anchor_id, _) in lost_anchors {
+                anchor_manager.dynamic_mut().remove(anchor_id);
+            }
+
+            return None;
+        }
+    };
+
+    let fracture_region_object_dynamics = interaction::determine_extracted_voxel_object_dynamics(
+        &extracted_fracture_region_object.voxel_object,
+        extracted_fracture_region_object.origin_offset_in_parent,
+        &mut fracture_region_inertial_property_manager,
+        original_local_center_of_mass,
+        original_position,
+        orientation,
+        original_linear_velocity,
+        angular_velocity,
+    );
+
+    let fracture_region_object_anchors = interaction::transfer_anchors_to_extracted_voxel_object(
+        &mut lost_anchors,
+        &extracted_fracture_region_object.voxel_object,
+        &fracture_region_object_dynamics.coordinate_changes,
+    );
+
+    let fracture_region_object = FractureRegionObject {
+        voxel_object: extracted_fracture_region_object.voxel_object,
+        inertial_property_manager: fracture_region_inertial_property_manager,
+        rigid_body: fracture_region_object_dynamics.rigid_body,
+        anchors: fracture_region_object_anchors,
+        origin_offset_in_parent: extracted_fracture_region_object.origin_offset_in_parent,
+        original_object_mass: original_mass,
+    };
+
+    // Remaining anchors are not attached to anything, so we delete them
+    for (anchor_id, _) in lost_anchors {
+        anchor_manager.dynamic_mut().remove(anchor_id);
+    }
+
+    Some(fracture_region_object)
+}
+
+/// Generates fracture points and fracture region boundary points for a voxel
+/// object based on the force of an impact.
 ///
 /// The approach computes a probability density field for fracture points in the
 /// spherical coordinate frame aligned with the force and samples points using
@@ -1521,7 +1710,8 @@ impl RandomizedGridFracturePointGenerator {
 fn generate_impact_fracture_points<A: Allocator>(
     config: &VoxelImpactFracturingConfig,
     arena: &PoolArena,
-    points: &mut AVec<Point3C, A>,
+    fracture_region_boundary_points: &mut AVec<Point3C, A>,
+    fracture_points: &mut AVec<Point3C, A>,
     properties: &FracturingProperties,
     inverse_voxel_extent: f32,
     world_to_object_transform: &Isometry3,
@@ -1538,16 +1728,21 @@ fn generate_impact_fracture_points<A: Allocator>(
     let object_extent = aabb.volume().cbrt();
     assert!(object_extent > 0.0);
 
-    let relative_force = force.magnitude / properties.force_threshold;
+    let relative_force = force.magnitude / properties.fracturing_force;
 
     if relative_force <= 1.0 {
         // Force does not exceed the fracturing threshold
         return;
     }
 
-    // Scale the fracturing properties appropriately based on object extent.
-    // These scalings are set empirically to get believable but practical
-    // fragment sizes and counts as the object extent changes.
+    // By having the user specify a shattering pressure and scaling it here with
+    // the squared object extent, larger objects will naturally require a larger
+    // shattering force, which is the intuitive behavior
+    let shattering_force = properties.shattering_pressure * object_extent.powi(2);
+
+    // Scale the fragments appropriately based on object extent. These scalings
+    // are set empirically to get believable but practical fragment sizes and
+    // counts as the object extent changes.
     let fragment_scale = properties.fragment_scale * object_extent;
     let min_fragment_extent = properties.min_fragment_extent * object_extent.sqrt();
     let max_fragment_extent = properties.max_fragment_extent * object_extent;
@@ -1555,17 +1750,34 @@ fn generate_impact_fracture_points<A: Allocator>(
     let radial_power = config.radial_falloff_power;
     let angular_power = config.angular_falloff_power;
 
-    // The extent of the contact area affects how far from the impact point the
-    // load from the impact can propagate and lead to fragmentation. Since a
-    // Voronoi diagram by nature always will subdivide the whole object, we
-    // compute the contact extent ad-hoc so that the model produces fracture
-    // points across the entire object.
-    let mut contact_extent =
-        object_extent / (relative_force.powf(radial_power.recip()) - 1.0).max(0.0);
+    // Since a Voronoi diagram by nature always will subdivide the whole volume
+    // it's defined for, we will first create a fracture region representing the
+    // part of the object where the propagated force is significant enough to
+    // cause fragmentation, and then create a Voronoi diagram for fragments
+    // applied only to that region
 
-    // For small forces the computed contact extent exceeds the object extent,
-    // so we cap it to keep the value reasonable
+    // The extent of the contact area affects how far from the impact point the
+    // load from the impact can propagate and lead to fragmentation. It is
+    // implicitly specified through the provided shattering force.
+    let mut contact_extent = object_extent
+        / ((shattering_force / properties.fracturing_force).powf(radial_power.recip()) - 1.0)
+            .max(0.0);
+
+    // For small shatter to fracture ratios the computed contact extent exceeds
+    // the object extent, so we cap it to keep the value reasonable
     contact_extent = contact_extent.min(object_extent);
+
+    // The fracture region extent is the maximum distance from the impact point
+    // where the propagated force can lead to fragmentation. We will use it to
+    // create a semi-hemispherical fracture region boundary within which all
+    // fragmentation will occur.
+    let fracture_region_extent =
+        (contact_extent * (relative_force.powf(radial_power.recip()) - 1.0)).max(0.0);
+
+    if fracture_region_extent < min_fragment_extent {
+        // Fracture region is too small to contain a single valid fragment
+        return;
+    }
 
     let radial_scale = contact_extent.recip();
 
@@ -1581,7 +1793,7 @@ fn generate_impact_fracture_points<A: Allocator>(
     // dimensions in the spherical coordinate system aligned with the force. The
     // model assumes azimuthal symmetry around the force vector, so we don't
     // need an azimuthal dimension.
-    let dr = object_extent / (nr - 1) as f32;
+    let dr = fracture_region_extent / (nr - 1) as f32;
     let du = 1.0 / (nu - 1) as f32;
 
     // Grid for the fragment number density times the spherical volume element
@@ -1590,9 +1802,8 @@ fn generate_impact_fracture_points<A: Allocator>(
     // density field for rejection sampling of fracture points.
     let mut n_dv_grid = avec![in arena; 0.0; nr * nu];
 
-    // Grid for the minimum squared distance between fracture points as a
-    // function of `r` and `u`, in units of voxels rather than world units
-    let mut min_squared_norm_dist_grid = avec![in arena; 0.0; nr * nu];
+    // Grid for the fragment extent as a function of `r` and `u`
+    let mut fragment_extent_grid = avec![in arena; 0.0; nr * nu];
 
     let grid_idx = |r_idx, u_idx| u_idx * nr + r_idx;
     let r_coord = |r_idx| dr * r_idx as f32;
@@ -1626,11 +1837,7 @@ fn generate_impact_fracture_points<A: Allocator>(
             let idx = grid_idx(r_idx, u_idx);
 
             n_dv_grid[idx] = n_dv;
-
-            // We use the local fragment extent as the limit on how close a
-            // neighboring fracure point is allowed to be. We divide by voxel
-            // extent here to get normalized units.
-            min_squared_norm_dist_grid[idx] = (fragment_extent * inverse_voxel_extent).powi(2);
+            fragment_extent_grid[idx] = fragment_extent;
         }
     }
 
@@ -1662,7 +1869,7 @@ fn generate_impact_fracture_points<A: Allocator>(
     let mut sample_count = 0;
     let mut position_rejection_count = 0;
 
-    let start_point_count = points.len();
+    let start_point_count = fracture_points.len();
 
     'sampling: while sample_count < max_sample_count
         && position_rejection_count < max_position_rejections
@@ -1678,11 +1885,20 @@ fn generate_impact_fracture_points<A: Allocator>(
             continue;
         }
 
+        let fragment_extent = fragment_extent_grid[idx];
+
+        let r = r_coord(r_idx);
+
+        // Reject if the fragment (roughly) would protrude from the fracture
+        // region
+        if fracture_region_extent - r < 0.5 * fragment_extent {
+            position_rejection_count += 1;
+            continue;
+        }
+
         // Draw a uniformly random azimuthal angle for the point
         let phi = f32::TWO_PI * rng.random_f32_fraction();
         let (sin_phi, cos_phi) = phi.sin_cos();
-
-        let r = r_coord(r_idx);
 
         let cos_theta = u_coord(u_idx);
         let sin_theta = (1.0 - cos_theta.powi(2)).max(0.0).sqrt();
@@ -1708,17 +1924,92 @@ fn generate_impact_fracture_points<A: Allocator>(
         // Now normalize to voxel units
         let sample_point = (object_sample_point * inverse_voxel_extent).compact();
 
-        let min_squared_norm_dist = min_squared_norm_dist_grid[idx];
+        // We use the local fragment extent as the limit on how close a
+        // neighboring fracure point is allowed to be. We divide by voxel extent
+        // here to get normalized units.
+        let min_squared_norm_dist = (fragment_extent * inverse_voxel_extent).powi(2);
 
         // Check the distance to each already generated point and reject if too close
-        for point in &points[start_point_count..] {
+        for point in &fracture_points[start_point_count..] {
             if Point3C::squared_distance_between(&sample_point, point) < min_squared_norm_dist {
                 position_rejection_count += 1;
                 continue 'sampling;
             }
         }
 
-        points.push(sample_point);
+        fracture_points.push(sample_point);
         sample_count += 1;
     }
+
+    generate_impact_fracture_region_boundary_points(
+        config,
+        fracture_region_boundary_points,
+        force_to_object_transform,
+        inverse_voxel_extent,
+        fracture_region_extent,
+        rng,
+    );
+}
+
+/// Generates boundary points by stratified sampling on a hemispherical grid (in
+/// the frame of the impact force) with radius `fracture_region_extent`.
+fn generate_impact_fracture_region_boundary_points<A: Allocator>(
+    config: &VoxelImpactFracturingConfig,
+    fracture_region_boundary_points: &mut AVec<Point3C, A>,
+    force_to_object_transform: Isometry3,
+    inverse_voxel_extent: f32,
+    fracture_region_extent: f32,
+    rng: &mut Rng,
+) {
+    let mut add_point = |force_boundary_point: Point3C| {
+        let object_boundary_point =
+            force_to_object_transform.transform_point(&force_boundary_point.aligned());
+
+        let boundary_point = (object_boundary_point * inverse_voxel_extent).compact();
+
+        fracture_region_boundary_points.push(boundary_point);
+    };
+
+    // Polar coordinates are regular in u = cos(theta)
+    let nu = config.boundary_polar_grid_size;
+    let nphi = config.boundary_azimuthal_grid_size;
+
+    // By not subtracting 1 in the denominator we avoid duplicate coordinates
+    // (at u = 1) and (phi = 0 and 2π)
+    let du = 1.0 / nu as f32;
+    let dphi = f32::TWO_PI / nphi as f32;
+
+    let u_jitter = du * config.boundary_angular_jitter;
+    let phi_jitter = dphi * config.boundary_angular_jitter;
+    let r_jitter = fracture_region_extent * config.boundary_radial_jitter;
+
+    let u_center_coord = |u_idx| du * (u_idx as f32 + 0.5);
+    let phi_center_coord = |phi_idx| dphi * (phi_idx as f32 + 0.5);
+
+    for u_idx in 0..nu {
+        let u_center = u_center_coord(u_idx);
+        for phi_idx in 0..nphi {
+            let phi_center = phi_center_coord(phi_idx);
+
+            let u = u_center + u_jitter * (0.5 - rng.random_f32_fraction());
+            let phi = phi_center + phi_jitter * (0.5 - rng.random_f32_fraction());
+            let r = fracture_region_extent + r_jitter * (0.5 - rng.random_f32_fraction());
+
+            let cos_theta = u.clamp(0.0, 1.0);
+            let sin_theta = f32::sqrt((1.0 - u.powi(2)).max(0.0));
+
+            let (sin_phi, cos_phi) = phi.sin_cos();
+
+            add_point(Point3C::new(
+                r * sin_theta * cos_phi,
+                r * sin_theta * sin_phi,
+                r * cos_theta,
+            ));
+        }
+    }
+
+    // Add a final point at the apex of the opposite hemisphere to close the
+    // shape in a way that doesn't lead to sharp artifacts if the impact point
+    // lies in a concavity
+    add_point(Point3C::new(0.0, 0.0, -fracture_region_extent));
 }

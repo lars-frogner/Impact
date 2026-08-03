@@ -740,13 +740,14 @@ impl Engine {
         let mut fracture_points = AVec::new_in(&arena);
         fracture_point_generator.add_fracture_points(&mut fracture_points, &aabb, seed);
 
-        fracturing_manager.add_fracture_points_for_object(
-            voxel_object_manager,
-            voxel_object_id,
-            &fracture_points,
-            None,
-        )?;
-        fracturing_manager.initiate_fracturing_process(voxel_object_manager, voxel_object_id)
+        fracturing_manager
+            .stage_fracturing_process_for_object(
+                voxel_object_manager,
+                voxel_object_id,
+                None,
+                &fracture_points,
+            )
+            .map(|_| ())
     }
 
     pub fn with_absorbed_voxels_for_sphere<R>(

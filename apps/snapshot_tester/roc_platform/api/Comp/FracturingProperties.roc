@@ -1,5 +1,5 @@
-# Hash: 06847e31002a03bb
-# Generated: 2026-07-24T21:48:36.019586593
+# Hash: e85590ccade3e553
+# Generated: 2026-08-03T13:31:08.054240428
 # Rust type: impact_voxel::interaction::fracturing::FracturingProperties
 # Type category: Component
 module [
@@ -23,7 +23,11 @@ import core.Builtin
 FracturingProperties : {
     ## The minimum collisional force (assumed constant during the
     ## collision) required for an impact to cause fracturing.
-    force_threshold : F32,
+    fracturing_force : F32,
+    ## The collisional force per object surface area (approximated by the
+    ## square of the object extent) required for the object to shatter (the
+    ## fracturing radius reaching the characteristic size of the object).
+    shattering_pressure : F32,
     ## The characteristic length scale of generated fragments, relative to
     ## the extent of the object.
     fragment_scale : F32,
@@ -33,7 +37,7 @@ FracturingProperties : {
     ## size.
     min_fragment_extent : F32,
     ## The target maximum extent of generated fragments, relative to the
-    ## extent of the object. Should be ~0.5 in most cases.
+    ## extent of the object.
     max_fragment_extent : F32,
 }
 
@@ -91,7 +95,7 @@ set_for_entity! = |value, entity_id|
 write_packet : List U8, FracturingProperties -> List U8
 write_packet = |bytes, val|
     type_id = 14765750072787839469
-    size = 16
+    size = 20
     alignment = 4
     bytes
     |> List.reserve(24 + size)
@@ -103,7 +107,7 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List FracturingProperties -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 14765750072787839469
-    size = 16
+    size = 20
     alignment = 4
     count = List.len(vals)
     bytes_with_header =
@@ -124,8 +128,9 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, FracturingProperties -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(16)
-    |> Builtin.write_bytes_f32(value.force_threshold)
+    |> List.reserve(20)
+    |> Builtin.write_bytes_f32(value.fracturing_force)
+    |> Builtin.write_bytes_f32(value.shattering_pressure)
     |> Builtin.write_bytes_f32(value.fragment_scale)
     |> Builtin.write_bytes_f32(value.min_fragment_extent)
     |> Builtin.write_bytes_f32(value.max_fragment_extent)
@@ -136,16 +141,17 @@ from_bytes : List U8 -> Result FracturingProperties _
 from_bytes = |bytes|
     Ok(
         {
-            force_threshold: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
-            fragment_scale: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
-            min_fragment_extent: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
-            max_fragment_extent: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
+            fracturing_force: bytes |> List.sublist({ start: 0, len: 4 }) |> Builtin.from_bytes_f32?,
+            shattering_pressure: bytes |> List.sublist({ start: 4, len: 4 }) |> Builtin.from_bytes_f32?,
+            fragment_scale: bytes |> List.sublist({ start: 8, len: 4 }) |> Builtin.from_bytes_f32?,
+            min_fragment_extent: bytes |> List.sublist({ start: 12, len: 4 }) |> Builtin.from_bytes_f32?,
+            max_fragment_extent: bytes |> List.sublist({ start: 16, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 16 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 20 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then
