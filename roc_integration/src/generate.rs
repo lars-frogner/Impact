@@ -758,8 +758,8 @@ impl ModuleHeader {
 
 impl fmt::Display for ModuleHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "# Hash: {}", &self.code_hash)?;
-        writeln!(f, "# Generated: {}", &self.timestamp)?;
+        writeln!(f, "# Hash: {}", self.code_hash)?;
+        writeln!(f, "# Generated: {}", self.timestamp)?;
         writeln!(
             f,
             "# Rust type: {}",

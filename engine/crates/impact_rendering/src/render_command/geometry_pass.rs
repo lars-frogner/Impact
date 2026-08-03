@@ -220,7 +220,7 @@ impl GeometryPass {
                         &self.push_constant_ranges,
                         &format!(
                             "Geometry pass render pipeline layout for shader: {:?}",
-                            &shader_template
+                            shader_template
                         ),
                     );
 

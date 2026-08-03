@@ -219,7 +219,7 @@ impl<A: Allocator> Mipmapper<A> {
             graphics_device
                 .device()
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some(&format!("{} mipmap command encoder", &self.label)),
+                    label: Some(&format!("{} mipmap command encoder", self.label)),
                 });
         self.encode_mipmap_passes(&mut command_encoder);
         graphics_device
@@ -256,7 +256,7 @@ impl<A: Allocator> Mipmapper<A> {
                         depth_stencil_attachment: None,
                         timestamp_writes: None,
                         occlusion_query_set: None,
-                        label: Some(&format!("{} mipmap render pass", &self.label)),
+                        label: Some(&format!("{} mipmap render pass", self.label)),
                     });
 
                 render_pass.set_pipeline(&self.pipeline);

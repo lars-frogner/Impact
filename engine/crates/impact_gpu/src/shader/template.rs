@@ -148,7 +148,7 @@ impl<'a> ShaderTemplate<'a> {
             if !self.flags.contains(&flag) {
                 bail!(
                     "Not all flags to set are present in the template (present flags: {:?})",
-                    &self.flags,
+                    self.flags,
                 );
             }
         }
@@ -687,7 +687,7 @@ pub fn validate_template(template: &impl SpecificShaderTemplate) {
 
     let source = template.resolve();
 
-    println!("{}\n", &source);
+    println!("{}\n", source);
     let module = naga::front::wgsl::parse_str(&source).expect("Parsing resolved template failed");
     validate_module(&module);
 }

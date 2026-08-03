@@ -197,12 +197,9 @@ impl PropertyAccess for PlyVertex {
                 property,
             ) => panic!(
                 "Unsupported format for vertex property `{}` in PLY file: {:?}",
-                &property_name, property
+                property_name, property
             ),
-            _ => panic!(
-                "Unsupported vertex property in PLY file: {}",
-                &property_name
-            ),
+            _ => panic!("Unsupported vertex property in PLY file: {}", property_name),
         }
     }
 }
@@ -259,7 +256,7 @@ impl PropertyAccess for PlyTriangleVertexIndices {
             }
             _ => panic!(
                 "Tried to set unexpected property for PlyTriangleVertexIndices: {}",
-                &property_name
+                property_name
             ),
         }
     }

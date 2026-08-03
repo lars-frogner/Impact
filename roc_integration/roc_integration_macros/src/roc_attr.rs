@@ -1342,21 +1342,19 @@ fn generate_containable_type(
                 #crate_root::ir::Containable::List(#ty)
             });
         }
-        syn::Type::Tuple(syn::TypeTuple { elems, .. }) => {
-            if elems.len() == 2 || elems.len() == 3 {
-                let tuple_len = elems.len();
+        syn::Type::Tuple(syn::TypeTuple { elems, .. }) if elems.len() == 2 || elems.len() == 3 => {
+            let tuple_len = elems.len();
 
-                let tuple_type_ident = format_ident!("Tuple{tuple_len}");
+            let tuple_type_ident = format_ident!("Tuple{tuple_len}");
 
-                let types = elems
-                    .iter()
-                    .map(|ty| generate_contained_type(Box::new(ty.clone()), crate_root))
-                    .collect::<syn::Result<Vec<_>>>()?;
+            let types = elems
+                .iter()
+                .map(|ty| generate_contained_type(Box::new(ty.clone()), crate_root))
+                .collect::<syn::Result<Vec<_>>>()?;
 
-                return Ok(quote! {
-                    #crate_root::ir::Containable::#tuple_type_ident(#(#types, )*)
-                });
-            }
+            return Ok(quote! {
+                #crate_root::ir::Containable::#tuple_type_ident(#(#types, )*)
+            });
         }
         _ => {}
     }
