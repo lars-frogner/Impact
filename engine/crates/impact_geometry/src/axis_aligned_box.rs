@@ -46,20 +46,21 @@ impl AxisAlignedBox {
     }
 
     /// Creates the axis-aligned bounding box for the set of points in the given
-    /// slice.
+    /// iterator.
     ///
     /// # Panics
-    /// If the point slice is empty.
-    pub fn aabb_for_points(points: &[Point3C]) -> Self {
-        assert!(
-            !points.is_empty(),
-            "Tried to create AABB for empty point slice"
-        );
+    /// If the point iterator is empty.
+    pub fn aabb_for_points<'a>(points: impl IntoIterator<Item = &'a Point3C>) -> Self {
+        let mut points = points.into_iter();
 
-        let mut lower_corner = points[0].aligned();
+        let first_point = points
+            .next()
+            .expect("Tried to create AABB for empty point slice");
+
+        let mut lower_corner = first_point.aligned();
         let mut upper_corner = lower_corner;
 
-        for point in &points[1..] {
+        for point in points {
             let point = point.aligned();
             lower_corner = lower_corner.min_with(&point);
             upper_corner = upper_corner.max_with(&point);
