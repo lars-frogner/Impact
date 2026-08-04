@@ -880,15 +880,6 @@ impl VoxelObject {
 
                                     let planes_signed_distance = max_signed_dists_for_row[k];
 
-                                    if voxel.signed_distance.is_negative()
-                                        && planes_signed_distance.is_negative()
-                                    {
-                                        property_transferrer.transfer_voxel(
-                                            &[obj_i, obj_j, obj_k],
-                                            voxel.voxel_type(),
-                                        );
-                                    }
-
                                     // The original object keeps the complement
                                     // of the polyhedron. We can't use plain
                                     // negation here, since a voxel whose center
@@ -902,15 +893,24 @@ impl VoxelObject {
                                     poly_voxel.signed_distance =
                                         poly_voxel.signed_distance.max(planes_signed_distance);
 
-                                    let voxel_is_non_empty = voxel.signed_distance.is_negative();
                                     let poly_voxel_is_non_empty =
                                         poly_voxel.signed_distance.is_negative();
 
-                                    voxel.flags.set(VoxelFlags::IS_EMPTY, !voxel_is_non_empty);
+                                    if poly_voxel_is_non_empty {
+                                        property_transferrer.transfer_voxel(
+                                            &[obj_i, obj_j, obj_k],
+                                            voxel.voxel_type(),
+                                        );
 
-                                    poly_voxel
-                                        .flags
-                                        .set(VoxelFlags::IS_EMPTY, !poly_voxel_is_non_empty);
+                                        // Original voxel was non-empty, now
+                                        // it's empty and the polyhedron voxel
+                                        // is non-empty
+                                        voxel.flags |= VoxelFlags::IS_EMPTY;
+                                        poly_voxel.flags -= VoxelFlags::IS_EMPTY;
+                                    } else {
+                                        // The original voxel did not change emptiness
+                                        poly_voxel.flags |= VoxelFlags::IS_EMPTY;
+                                    }
 
                                     poly_voxels.push(poly_voxel);
 
