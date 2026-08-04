@@ -19,10 +19,7 @@ use crate::{
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
 use impact_geometry::{AxisAlignedBox, Plane, PlaneC};
-use impact_math::{
-    point::Point3C,
-    vector::{Vector3, Vector3C},
-};
+use impact_math::{point::Point3C, vector::Vector3C};
 use std::{array, cmp::Ordering, ops::Range};
 
 /// Represents a helper for keeping track of the transferral of some aggregate
@@ -625,6 +622,8 @@ impl VoxelObject {
         normalized_face_planes: &[PlaneC],
         property_transferrer: &mut impl PropertyTransferrer,
     ) -> ExtractionResult {
+        #![allow(clippy::needless_range_loop)]
+
         // Outside the exterior margin of the polyhedron, all voxels will be
         // void
         const EXTERIOR_MARGIN: f32 = VoxelSignedDistance::MAX_F32;
@@ -745,7 +744,7 @@ impl VoxelObject {
                     intersecting_planes.clear();
                     for (plane_idx, inner_plane) in inner_planes.iter().enumerate() {
                         if !chunk_aabb.lies_in_negative_halfspace_of_plane(inner_plane) {
-                            intersecting_planes.push(normalized_face_planes[plane_idx].aligned());
+                            intersecting_planes.push(normalized_face_planes[plane_idx]);
                         }
                     }
 
@@ -841,7 +840,14 @@ impl VoxelObject {
 
                         let chunk_start_voxel_indices = chunk_indices.map(|idx| idx * CHUNK_SIZE);
 
-                        let lower_voxel_pos = chunk_aabb.lower_corner() + Vector3::same(0.5);
+                        // Position of the center of voxel in the chunk's lower corner
+                        let lower_voxel_pos =
+                            chunk_aabb.lower_corner().compact() + Vector3C::same(0.5);
+
+                        // The maximum signed distance from the planes will be
+                        // computed vectorized for one row at a time
+                        let mut max_signed_dists_for_row =
+                            [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
                         let mut voxel_idx = 0;
 
@@ -851,25 +857,21 @@ impl VoxelObject {
                             for j in 0..CHUNK_SIZE {
                                 let obj_j = chunk_start_voxel_indices[1] + j;
 
+                                Self::compute_max_plane_signed_dists_for_row(
+                                    &mut max_signed_dists_for_row,
+                                    &intersecting_planes,
+                                    &lower_voxel_pos,
+                                    i,
+                                    j,
+                                );
+
                                 for k in 0..CHUNK_SIZE {
                                     let obj_k = chunk_start_voxel_indices[2] + k;
 
                                     let voxel = &mut chunk_voxels[voxel_idx];
                                     let mut poly_voxel = *voxel;
 
-                                    let position = lower_voxel_pos
-                                        + Vector3::new(i as f32, j as f32, k as f32);
-
-                                    let mut planes_signed_distance =
-                                        intersecting_planes[0].compute_signed_distance(&position);
-
-                                    for plane in &intersecting_planes[1..] {
-                                        planes_signed_distance = planes_signed_distance
-                                            .max(plane.compute_signed_distance(&position));
-                                    }
-
-                                    let planes_signed_distance =
-                                        VoxelSignedDistance::from_f32(planes_signed_distance);
+                                    let planes_signed_distance = max_signed_dists_for_row[k];
 
                                     if voxel.signed_distance.is_negative()
                                         && planes_signed_distance.is_negative()
