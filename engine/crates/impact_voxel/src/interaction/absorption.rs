@@ -834,7 +834,8 @@ fn apply_sphere_absorption(
 
             voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
-                    inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                    inertial_property_updater
+                        .remove_voxel(&object_voxel_indices, voxel.voxel_type());
                     tracker.register_absorbed_voxel(voxel_volume, *voxel);
                 }
             });
@@ -878,7 +879,8 @@ fn apply_capsule_absorption(
 
             voxel.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
-                    inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                    inertial_property_updater
+                        .remove_voxel(&object_voxel_indices, voxel.voxel_type());
                     tracker.register_absorbed_voxel(voxel_volume, *voxel);
                 }
             });
@@ -988,7 +990,7 @@ pub fn apply_mutual_absorption(
 
             voxel_a.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
-                    inertial_property_updater_a.remove_voxel(&[i_a, j_a, k_a], *voxel);
+                    inertial_property_updater_a.remove_voxel(&[i_a, j_a, k_a], voxel.voxel_type());
                 }
             });
 
@@ -1067,7 +1069,7 @@ pub fn apply_mutual_absorption(
 
             voxel_b.set_signed_distance(new_signed_distance, &mut |voxel| {
                 if !was_empty {
-                    inertial_property_updater_b.remove_voxel(&[i_b, j_b, k_b], *voxel);
+                    inertial_property_updater_b.remove_voxel(&[i_b, j_b, k_b], voxel.voxel_type());
                 }
             });
 
