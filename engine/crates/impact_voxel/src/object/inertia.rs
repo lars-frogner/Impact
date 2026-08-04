@@ -4,6 +4,7 @@ use super::chunk_voxels;
 use crate::{
     Voxel,
     object::{CHUNK_SIZE, ChunkRanges, VoxelChunk, VoxelObject, extraction},
+    voxel_types::VoxelType,
 };
 use approx::{AbsDiffEq, RelativeEq};
 use impact_math::{matrix::Matrix3, point::Point3, vector::Vector3};
@@ -96,7 +97,7 @@ impl VoxelChunk {
                 ) = compute_moments_for_uniform_chunk(
                     voxel_extent,
                     voxel_type_densities,
-                    chunk.voxel,
+                    chunk.voxel.voxel_type(),
                     chunk_indices,
                 );
                 *mass += chunk_mass;
@@ -366,7 +367,7 @@ impl VoxelObjectInertialPropertyUpdater<'_, '_> {
     /// Updates the inertial properties to account for the given voxel being
     /// removed.
     #[inline]
-    pub fn remove_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
+    pub fn remove_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType) {
         let (voxel_mass, voxel_moments, voxel_moments_of_inertia, voxel_products_of_inertia) =
             compute_moments_for_voxel(
                 self.voxel_extent,
@@ -374,7 +375,7 @@ impl VoxelObjectInertialPropertyUpdater<'_, '_> {
                 self.voxel_extent_pow_3,
                 self.voxel_type_densities,
                 object_voxel_indices,
-                voxel,
+                voxel_type,
             );
         self.parent.mass -= voxel_mass;
         self.parent.moments -= voxel_moments;
@@ -388,7 +389,7 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
     /// object to account for the given voxel being transferred from the
     /// source to the destination.
     #[inline]
-    pub fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
+    pub fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType) {
         let (voxel_mass, voxel_moments, voxel_moments_of_inertia, voxel_products_of_inertia) =
             compute_moments_for_voxel(
                 self.voxel_extent,
@@ -396,7 +397,7 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
                 self.voxel_extent_pow_3,
                 self.voxel_type_densities,
                 object_voxel_indices,
-                voxel,
+                voxel_type,
             );
 
         self.source.mass -= voxel_mass;
@@ -440,12 +441,12 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
     /// Updates the inertial properties of both the source and destination
     /// object to account for the given whole uniform chunk being transferred
     /// from the source to the destination.
-    pub fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
+    pub fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], voxel_type: VoxelType) {
         let (chunk_mass, chunk_moments, chunk_moments_of_inertia, chunk_products_of_inertia) =
             compute_moments_for_uniform_chunk(
                 self.voxel_extent,
                 self.voxel_type_densities,
-                chunk_voxel,
+                voxel_type,
                 chunk_indices,
             );
 
@@ -463,8 +464,8 @@ impl VoxelObjectInertialPropertyTransferrer<'_, '_> {
 
 impl extraction::PropertyTransferrer for VoxelObjectInertialPropertyTransferrer<'_, '_> {
     #[inline]
-    fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
-        self.transfer_voxel(object_voxel_indices, voxel);
+    fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType) {
+        self.transfer_voxel(object_voxel_indices, voxel_type);
     }
 
     #[inline]
@@ -473,8 +474,8 @@ impl extraction::PropertyTransferrer for VoxelObjectInertialPropertyTransferrer<
     }
 
     #[inline]
-    fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
-        self.transfer_uniform_chunk(chunk_indices, chunk_voxel);
+    fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], voxel_type: VoxelType) {
+        self.transfer_uniform_chunk(chunk_indices, voxel_type);
     }
 }
 
@@ -483,7 +484,7 @@ impl VoxelObjectInertialPropertyComputer<'_, '_> {
     /// destination object to account for the given voxel being copied from a
     /// source to the destination.
     #[inline]
-    pub fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
+    pub fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType) {
         let (voxel_mass, voxel_moments, voxel_moments_of_inertia, voxel_products_of_inertia) =
             compute_moments_for_voxel(
                 self.voxel_extent,
@@ -491,7 +492,7 @@ impl VoxelObjectInertialPropertyComputer<'_, '_> {
                 self.voxel_extent_pow_3,
                 self.voxel_type_densities,
                 object_voxel_indices,
-                voxel,
+                voxel_type,
             );
 
         self.destination.mass += voxel_mass;
@@ -525,12 +526,12 @@ impl VoxelObjectInertialPropertyComputer<'_, '_> {
     /// Computes and applies the change in inertial properties for the
     /// destination object to account for the given whole uniform chunk being
     /// copied from the a to the destination.
-    pub fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
+    pub fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], voxel_type: VoxelType) {
         let (chunk_mass, chunk_moments, chunk_moments_of_inertia, chunk_products_of_inertia) =
             compute_moments_for_uniform_chunk(
                 self.voxel_extent,
                 self.voxel_type_densities,
-                chunk_voxel,
+                voxel_type,
                 chunk_indices,
             );
 
@@ -543,8 +544,8 @@ impl VoxelObjectInertialPropertyComputer<'_, '_> {
 
 impl extraction::PropertyComputer for VoxelObjectInertialPropertyComputer<'_, '_> {
     #[inline]
-    fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel) {
-        self.compute_for_voxel(object_voxel_indices, voxel);
+    fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType) {
+        self.compute_for_voxel(object_voxel_indices, voxel_type);
     }
 
     #[inline]
@@ -557,8 +558,8 @@ impl extraction::PropertyComputer for VoxelObjectInertialPropertyComputer<'_, '_
     }
 
     #[inline]
-    fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel) {
-        self.compute_for_uniform_chunk(chunk_indices, chunk_voxel);
+    fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], voxel_type: VoxelType) {
+        self.compute_for_uniform_chunk(chunk_indices, voxel_type);
     }
 }
 
@@ -570,9 +571,9 @@ fn compute_moments_for_voxel(
     voxel_extent_pow_3: f32,
     voxel_type_densities: &[f32],
     object_voxel_indices: &[usize; 3],
-    voxel: Voxel,
+    voxel_type: VoxelType,
 ) -> (f32, Vector3, Vector3, Vector3) {
-    let voxel_density = voxel_type_densities[voxel.voxel_type().idx()];
+    let voxel_density = voxel_type_densities[voxel_type.idx()];
 
     let lower_coords = Vector3::from(object_voxel_indices.map(|index| voxel_extent * index as f32));
     let upper_coords = lower_coords + Vector3::same(voxel_extent);
@@ -692,10 +693,10 @@ fn compute_moments_for_non_uniform_chunk(
 fn compute_moments_for_uniform_chunk(
     voxel_extent: f32,
     voxel_type_densities: &[f32],
-    chunk_voxel: Voxel,
+    voxel_type: VoxelType,
     chunk_indices: &[usize; 3],
 ) -> (f32, Vector3, Vector3, Vector3) {
-    let density = voxel_type_densities[chunk_voxel.voxel_type().idx()];
+    let density = voxel_type_densities[voxel_type.idx()];
 
     let chunk_extent = (CHUNK_SIZE as f32) * voxel_extent;
 
@@ -797,7 +798,8 @@ mod tests {
     #[test]
     fn full_non_uniform_chunk_has_same_inertial_properties_as_uniform_chunk() {
         let voxel_extent = 0.1;
-        let voxel = Voxel::maximally_inside(VoxelType::from_idx(0));
+        let voxel_type = VoxelType::from_idx(0);
+        let voxel = Voxel::maximally_inside(voxel_type);
         let voxels = vec![voxel; CHUNK_VOXEL_COUNT];
         let voxel_type_densities = [0.5];
         let chunk_indices = [1, 2, 3];
@@ -810,7 +812,7 @@ mod tests {
         ) = compute_moments_for_uniform_chunk(
             voxel_extent,
             &voxel_type_densities,
-            voxel,
+            voxel_type,
             &chunk_indices,
         );
 
@@ -927,7 +929,7 @@ mod tests {
                     let object_voxel_indices = array::from_fn(|dim| {
                         chunk_lower_object_voxel_indices[dim] + voxel_indices[dim]
                     });
-                    updater.remove_voxel(&object_voxel_indices, *voxel);
+                    updater.remove_voxel(&object_voxel_indices, voxel.voxel_type());
                 },
             );
         } // <- `updater` drops here

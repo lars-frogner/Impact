@@ -1004,7 +1004,8 @@ pub mod fuzzing {
 
                 voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
                     if !was_empty {
-                        inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                        inertial_property_updater
+                            .remove_voxel(&object_voxel_indices, voxel.voxel_type());
                     }
                 });
             },
@@ -1048,7 +1049,8 @@ pub mod fuzzing {
 
                     voxel.increase_signed_distance(signed_distance_delta, &mut |voxel| {
                         if !was_empty {
-                            inertial_property_updater.remove_voxel(&object_voxel_indices, *voxel);
+                            inertial_property_updater
+                                .remove_voxel(&object_voxel_indices, voxel.voxel_type());
                         }
                     });
                 },

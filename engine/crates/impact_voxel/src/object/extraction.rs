@@ -15,6 +15,7 @@ use crate::{
         },
     },
     utils::{Dimension, Faces},
+    voxel_types::VoxelType,
 };
 use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashSet;
@@ -25,21 +26,21 @@ use std::{array, cmp::Ordering, ops::Range};
 /// Represents a helper for keeping track of the transferral of some aggregate
 /// voxel property when a voxel object is extracted from another.
 pub trait PropertyTransferrer {
-    fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel);
+    fn transfer_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType);
 
     fn transfer_non_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxels: &[Voxel]);
 
-    fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel);
+    fn transfer_uniform_chunk(&mut self, chunk_indices: &[usize; 3], voxel_type: VoxelType);
 }
 
 /// Represents a helper for incrementally computing some aggregate voxel
 /// property when a voxel object is extracted from another.
 pub trait PropertyComputer {
-    fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel: Voxel);
+    fn compute_for_voxel(&mut self, object_voxel_indices: &[usize; 3], voxel_type: VoxelType);
 
     fn compute_for_non_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxels: &[Voxel]);
 
-    fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], chunk_voxel: Voxel);
+    fn compute_for_uniform_chunk(&mut self, chunk_indices: &[usize; 3], voxel_type: VoxelType);
 }
 
 /// A [`VoxelObject`] that has been extracted from a larger object.
@@ -409,8 +410,10 @@ impl VoxelObject {
                                                     // with an empty voxel in the original object
                                                     let region_voxel = *voxel;
 
-                                                    property_transferrer
-                                                        .transfer_voxel(&[i, j, k], region_voxel);
+                                                    property_transferrer.transfer_voxel(
+                                                        &[i, j, k],
+                                                        region_voxel.voxel_type(),
+                                                    );
 
                                                     *voxel = Voxel::maximally_outside();
 
@@ -511,8 +514,10 @@ impl VoxelObject {
                                 // overwrite the data offset with the correct value for the
                                 // extracted object
 
-                                property_transferrer
-                                    .transfer_uniform_chunk(&chunk_indices, chunk.voxel);
+                                property_transferrer.transfer_uniform_chunk(
+                                    &chunk_indices,
+                                    chunk.voxel.voxel_type(),
+                                );
 
                                 chunk.split_detection.data_offset =
                                     region_uniform_chunk_data_offset;
@@ -811,8 +816,10 @@ impl VoxelObject {
                                 // data offset with the correct value for the
                                 // polyhedron object
 
-                                property_transferrer
-                                    .transfer_uniform_chunk(&chunk_indices, chunk.voxel);
+                                property_transferrer.transfer_uniform_chunk(
+                                    &chunk_indices,
+                                    chunk.voxel.voxel_type(),
+                                );
 
                                 chunk.split_detection.data_offset = poly_uniform_chunk_count as u32;
                                 poly_uniform_chunk_count += 1;
@@ -876,8 +883,10 @@ impl VoxelObject {
                                     if voxel.signed_distance.is_negative()
                                         && planes_signed_distance.is_negative()
                                     {
-                                        property_transferrer
-                                            .transfer_voxel(&[obj_i, obj_j, obj_k], *voxel);
+                                        property_transferrer.transfer_voxel(
+                                            &[obj_i, obj_j, obj_k],
+                                            voxel.voxel_type(),
+                                        );
                                     }
 
                                     // The original object keeps the complement
@@ -1259,8 +1268,10 @@ impl VoxelObject {
                                 poly_non_uniform_chunk_count += 1;
                             }
                             VoxelChunk::Uniform(chunk) => {
-                                property_computer
-                                    .compute_for_uniform_chunk(&chunk_indices, chunk.voxel);
+                                property_computer.compute_for_uniform_chunk(
+                                    &chunk_indices,
+                                    chunk.voxel.voxel_type(),
+                                );
 
                                 let poly_chunk = UniformVoxelChunk {
                                     voxel: chunk.voxel,
@@ -1369,8 +1380,10 @@ impl VoxelObject {
                                         lower_occupied_k = lower_occupied_k.min(k);
                                         upper_occupied_k = upper_occupied_k.max(k);
 
-                                        property_computer
-                                            .compute_for_voxel(&[obj_i, obj_j, obj_k], *poly_voxel);
+                                        property_computer.compute_for_voxel(
+                                            &[obj_i, obj_j, obj_k],
+                                            poly_voxel.voxel_type(),
+                                        );
 
                                         // Voxels inside the planes will always retain their
                                         // emptiness status. Sufficiently far inside the
@@ -1938,16 +1951,16 @@ impl VoxelObject {
 }
 
 impl PropertyTransferrer for NoPropertyTransferrer {
-    fn transfer_voxel(&mut self, _object_voxel_indices: &[usize; 3], _voxel: Voxel) {}
+    fn transfer_voxel(&mut self, _object_voxel_indices: &[usize; 3], _voxel_type: VoxelType) {}
 
     fn transfer_non_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxels: &[Voxel]) {
     }
 
-    fn transfer_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxel: Voxel) {}
+    fn transfer_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _voxel_type: VoxelType) {}
 }
 
 impl PropertyComputer for NoPropertyComputer {
-    fn compute_for_voxel(&mut self, _object_voxel_indices: &[usize; 3], _voxel: Voxel) {}
+    fn compute_for_voxel(&mut self, _object_voxel_indices: &[usize; 3], _voxel_type: VoxelType) {}
 
     fn compute_for_non_uniform_chunk(
         &mut self,
@@ -1956,7 +1969,7 @@ impl PropertyComputer for NoPropertyComputer {
     ) {
     }
 
-    fn compute_for_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _chunk_voxel: Voxel) {}
+    fn compute_for_uniform_chunk(&mut self, _chunk_indices: &[usize; 3], _voxel_type: VoxelType) {}
 }
 
 #[cfg(feature = "fuzzing")]
