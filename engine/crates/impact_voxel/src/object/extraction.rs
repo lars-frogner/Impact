@@ -845,6 +845,9 @@ impl VoxelObject {
 
                         let chunk_voxels = chunk_voxels_mut(&mut self.voxels, chunk.data_offset);
 
+                        poly_voxels.extend_from_slice(chunk_voxels);
+                        let poly_chunk_voxels = &mut poly_voxels[start_poly_voxel_idx..];
+
                         let chunk_start_voxel_indices = chunk_indices.map(|idx| idx * CHUNK_SIZE);
 
                         // Position of the center of voxel in the chunk's lower corner
@@ -856,13 +859,33 @@ impl VoxelObject {
                         let mut max_signed_dists_for_row =
                             [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
+                        let mut lower_occupied_voxels = [CHUNK_SIZE; 3];
+                        let mut upper_occupied_voxels = [0; 3];
+
+                        let mut poly_lower_occupied_voxels = [CHUNK_SIZE; 3];
+                        let mut poly_upper_occupied_voxels = [0; 3];
+
+                        let mut face_empty_counts = FaceEmptyCounts::zero();
+                        let mut chunk_has_only_empty_voxels = true;
+                        let mut chunk_is_void = true;
+
+                        let mut poly_face_empty_counts = FaceEmptyCounts::zero();
+                        let mut poly_chunk_has_only_empty_voxels = true;
+                        let mut poly_chunk_is_void = true;
+
                         let mut voxel_idx = 0;
 
                         for i in 0..CHUNK_SIZE {
                             let obj_i = chunk_start_voxel_indices[0] + i;
 
+                            let on_lower_x_face = i == 0;
+                            let on_upper_x_face = i == CHUNK_SIZE - 1;
+
                             for j in 0..CHUNK_SIZE {
                                 let obj_j = chunk_start_voxel_indices[1] + j;
+
+                                let on_lower_y_face = j == 0;
+                                let on_upper_y_face = j == CHUNK_SIZE - 1;
 
                                 Self::compute_max_plane_signed_dists_for_row(
                                     &mut max_signed_dists_for_row,
@@ -872,87 +895,237 @@ impl VoxelObject {
                                     j,
                                 );
 
+                                let mut lower_occupied_k = CHUNK_SIZE;
+                                let mut upper_occupied_k = 0;
+                                let mut row_empty_count = 0;
+
+                                let mut poly_lower_occupied_k = CHUNK_SIZE;
+                                let mut poly_upper_occupied_k = 0;
+                                let mut poly_row_empty_count = 0;
+
                                 for k in 0..CHUNK_SIZE {
                                     let obj_k = chunk_start_voxel_indices[2] + k;
 
-                                    let voxel = &mut chunk_voxels[voxel_idx];
+                                    let voxel = NonUniformVoxelChunk::get_voxel_mut(
+                                        chunk_voxels,
+                                        voxel_idx,
+                                    );
                                     let mut poly_voxel = *voxel;
 
                                     let planes_signed_distance = max_signed_dists_for_row[k];
 
-                                    // The original object keeps the complement
-                                    // of the polyhedron. We can't use plain
-                                    // negation here, since a voxel whose center
-                                    // falls exactly on the polyhedron boundary
-                                    // has zero signed distance, and would thus
-                                    // end up empty in both objects
-                                    voxel.signed_distance = voxel
+                                    // The original object keeps the complement of the
+                                    // polyhedron. We can't use plain negation here, since a
+                                    // voxel whose center falls exactly on the polyhedron
+                                    // boundary has zero signed distance, and would thus end
+                                    // up empty in both objects.
+                                    let voxel_signed_distance = voxel
                                         .signed_distance
                                         .max(planes_signed_distance.complement());
 
-                                    poly_voxel.signed_distance =
+                                    // The signed distance of the polyhedron voxel is the
+                                    // maximum of the original signed distance and the signed
+                                    // distance from the planes
+                                    let poly_voxel_signed_distance =
                                         poly_voxel.signed_distance.max(planes_signed_distance);
 
-                                    let poly_voxel_is_non_empty =
-                                        poly_voxel.signed_distance.is_negative();
+                                    voxel.signed_distance = voxel_signed_distance;
+                                    poly_voxel.signed_distance = poly_voxel_signed_distance;
 
-                                    if poly_voxel_is_non_empty {
-                                        property_transferrer.transfer_voxel(
-                                            &[obj_i, obj_j, obj_k],
-                                            voxel.voxel_type(),
-                                        );
-
+                                    if poly_voxel_signed_distance.is_negative() {
                                         // Original voxel was non-empty, now
                                         // it's empty and the polyhedron voxel
                                         // is non-empty
                                         voxel.flags |= VoxelFlags::IS_EMPTY;
                                         poly_voxel.flags -= VoxelFlags::IS_EMPTY;
+
+                                        poly_chunk_has_only_empty_voxels = false;
+                                        poly_chunk_is_void = false;
+
+                                        poly_lower_occupied_k = poly_lower_occupied_k.min(k);
+                                        poly_upper_occupied_k = poly_upper_occupied_k.max(k);
+
+                                        row_empty_count += 1;
+
+                                        if k == 0 {
+                                            face_empty_counts.increment_z_dn();
+                                        } else if k == CHUNK_SIZE - 1 {
+                                            face_empty_counts.increment_z_up();
+                                        }
+
+                                        if !voxel_signed_distance.is_void() {
+                                            chunk_is_void = false;
+                                        }
+
+                                        property_transferrer.transfer_voxel(
+                                            &[obj_i, obj_j, obj_k],
+                                            voxel.voxel_type(),
+                                        );
+
+                                        Self::update_adjacencies_for_empty_voxel(
+                                            chunk_voxels,
+                                            [i, j, k],
+                                        );
+
+                                        Self::update_lower_adjacencies_for_non_empty_voxel(
+                                            poly_chunk_voxels,
+                                            &mut poly_voxel,
+                                            [i, j, k],
+                                        );
                                     } else {
                                         // The original voxel did not change emptiness
                                         poly_voxel.flags |= VoxelFlags::IS_EMPTY;
+
+                                        poly_row_empty_count += 1;
+
+                                        if k == 0 {
+                                            poly_face_empty_counts.increment_z_dn();
+                                        } else if k == CHUNK_SIZE - 1 {
+                                            poly_face_empty_counts.increment_z_up();
+                                        }
+
+                                        if !poly_voxel_signed_distance.is_void() {
+                                            poly_chunk_is_void = false;
+                                        }
+
+                                        Self::update_lower_adjacencies_for_empty_voxel(
+                                            poly_chunk_voxels,
+                                            [i, j, k],
+                                        );
+
+                                        if voxel_signed_distance.is_negative() {
+                                            chunk_has_only_empty_voxels = false;
+                                            chunk_is_void = false;
+
+                                            lower_occupied_k = lower_occupied_k.min(k);
+                                            upper_occupied_k = upper_occupied_k.max(k);
+                                        } else {
+                                            row_empty_count += 1;
+
+                                            if k == 0 {
+                                                face_empty_counts.increment_z_dn();
+                                            } else if k == CHUNK_SIZE - 1 {
+                                                face_empty_counts.increment_z_up();
+                                            }
+
+                                            if !voxel_signed_distance.is_void() {
+                                                chunk_is_void = false;
+                                            }
+                                        }
                                     }
 
-                                    poly_voxels.push(poly_voxel);
+                                    *NonUniformVoxelChunk::get_voxel_mut(
+                                        poly_chunk_voxels,
+                                        voxel_idx,
+                                    ) = poly_voxel;
 
                                     voxel_idx += 1;
+                                }
+
+                                if lower_occupied_k <= upper_occupied_k {
+                                    lower_occupied_voxels[0] = lower_occupied_voxels[0].min(i);
+                                    upper_occupied_voxels[0] = upper_occupied_voxels[0].max(i);
+                                    lower_occupied_voxels[1] = lower_occupied_voxels[1].min(j);
+                                    upper_occupied_voxels[1] = upper_occupied_voxels[1].max(j);
+                                    lower_occupied_voxels[2] =
+                                        lower_occupied_voxels[2].min(lower_occupied_k);
+                                    upper_occupied_voxels[2] =
+                                        upper_occupied_voxels[2].max(upper_occupied_k);
+                                }
+
+                                if poly_lower_occupied_k <= poly_upper_occupied_k {
+                                    poly_lower_occupied_voxels[0] =
+                                        poly_lower_occupied_voxels[0].min(i);
+                                    poly_upper_occupied_voxels[0] =
+                                        poly_upper_occupied_voxels[0].max(i);
+                                    poly_lower_occupied_voxels[1] =
+                                        poly_lower_occupied_voxels[1].min(j);
+                                    poly_upper_occupied_voxels[1] =
+                                        poly_upper_occupied_voxels[1].max(j);
+                                    poly_lower_occupied_voxels[2] =
+                                        poly_lower_occupied_voxels[2].min(poly_lower_occupied_k);
+                                    poly_upper_occupied_voxels[2] =
+                                        poly_upper_occupied_voxels[2].max(poly_upper_occupied_k);
+                                }
+
+                                if on_lower_x_face {
+                                    face_empty_counts.add_x_dn(row_empty_count);
+                                    poly_face_empty_counts.add_x_dn(poly_row_empty_count);
+                                } else if on_upper_x_face {
+                                    face_empty_counts.add_x_up(row_empty_count);
+                                    poly_face_empty_counts.add_x_up(poly_row_empty_count);
+                                }
+                                if on_lower_y_face {
+                                    face_empty_counts.add_y_dn(row_empty_count);
+                                    poly_face_empty_counts.add_y_dn(poly_row_empty_count);
+                                } else if on_upper_y_face {
+                                    face_empty_counts.add_y_up(row_empty_count);
+                                    poly_face_empty_counts.add_y_up(poly_row_empty_count);
                                 }
                             }
                         }
 
-                        invalidated_faces = Faces::all();
+                        if chunk_is_void {
+                            self.chunks[chunk_idx] = VoxelChunk::Void;
+                        } else {
+                            chunk.face_distributions =
+                                face_empty_counts.to_chunk_face_distributions();
 
-                        // The original chunk's face distributions, internal
-                        // adjacencies and connected regions data are
-                        // invalidated, so we recompute it all
-                        chunk.update_all_internal_state_and_determine_sparseness(&mut self.voxels);
+                            if chunk_has_only_empty_voxels {
+                                chunk.flags |= VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS;
 
-                        self.split_detector
-                            .update_local_connected_regions_for_chunk(
-                                &self.voxels,
-                                chunk,
-                                chunk_idx as u32,
-                            );
+                                self.split_detector
+                                    .update_local_connected_regions_for_chunk_with_single_region(
+                                        &self.voxels,
+                                        chunk,
+                                        chunk_idx as u32,
+                                    );
+                            } else {
+                                chunk.flags -= VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS;
 
-                        let mut poly_chunk = NonUniformVoxelChunk {
-                            data_offset: poly_non_uniform_chunk_count as u32,
-                            ..Default::default()
-                        };
+                                let occupied_chunk_voxel_ranges: [_; 3] = array::from_fn(|dim| {
+                                    lower_occupied_voxels[dim]
+                                        ..(upper_occupied_voxels[dim] + 1).min(CHUNK_SIZE)
+                                });
+                                self.split_detector
+                                .update_local_connected_regions_within_occupied_ranges_for_chunk(
+                                    &self.voxels,
+                                    chunk,
+                                    chunk_idx as u32,
+                                    &occupied_chunk_voxel_ranges,
+                                );
+                            }
+                        }
 
-                        // We have filled this chunk of the extracted object, so we
-                        // go ahead and compute the face distributions and internal
-                        // adjacencies for the chunk
-                        let sparseness = poly_chunk
-                            .update_all_internal_state_and_determine_sparseness(&mut poly_voxels);
-
-                        if sparseness.is_void {
+                        if poly_chunk_is_void {
                             poly_voxels.truncate(start_poly_voxel_idx);
                             poly_chunks.push(VoxelChunk::Void);
                         } else {
-                            non_uniform_chunks_intersecting.push(poly_chunks.len());
+                            let poly_chunk = NonUniformVoxelChunk {
+                                data_offset: poly_non_uniform_chunk_count as u32,
+                                face_distributions: poly_face_empty_counts
+                                    .to_chunk_face_distributions(),
+                                flags: if poly_chunk_has_only_empty_voxels {
+                                    VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS
+                                } else {
+                                    VoxelChunkFlags::empty()
+                                },
+                                ..Default::default()
+                            };
+
+                            let poly_occupied_chunk_voxel_ranges: [_; 3] = array::from_fn(|dim| {
+                                poly_lower_occupied_voxels[dim]
+                                    ..(poly_upper_occupied_voxels[dim] + 1).min(CHUNK_SIZE)
+                            });
+
+                            non_uniform_chunks_intersecting
+                                .push((poly_chunks.len(), poly_occupied_chunk_voxel_ranges));
 
                             poly_chunks.push(VoxelChunk::NonUniform(poly_chunk));
                             poly_non_uniform_chunk_count += 1;
                         }
+
+                        invalidated_faces = Faces::all();
                     }
 
                     if !invalidated_faces.is_empty() {
@@ -1021,14 +1194,16 @@ impl VoxelObject {
             }
         }
 
-        for poly_chunk_idx in non_uniform_chunks_intersecting {
+        for (poly_chunk_idx, occupied_chunk_voxel_ranges) in non_uniform_chunks_intersecting {
             let poly_chunk = &mut poly_chunks[poly_chunk_idx];
             if let VoxelChunk::NonUniform(poly_chunk) = poly_chunk {
-                poly_split_detector.update_local_connected_regions_for_chunk(
-                    &poly_voxels,
-                    poly_chunk,
-                    poly_chunk_idx as u32,
-                );
+                poly_split_detector
+                    .update_local_connected_regions_within_occupied_ranges_for_chunk(
+                        &poly_voxels,
+                        poly_chunk,
+                        poly_chunk_idx as u32,
+                        &occupied_chunk_voxel_ranges,
+                    );
             }
         }
 
@@ -1665,6 +1840,35 @@ impl VoxelObject {
     }
 
     #[inline]
+    fn update_adjacencies_for_empty_voxel(chunk_voxels: &mut [Voxel], [i, j, k]: [usize; 3]) {
+        let mut update_adjacencies = |adjacent_indices, flag_for_adjacent| {
+            let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+            let adjacent_voxel = NonUniformVoxelChunk::get_voxel_mut(chunk_voxels, adjacent_idx);
+
+            adjacent_voxel.remove_flags(flag_for_adjacent);
+        };
+
+        if i > 0 {
+            update_adjacencies([i - 1, j, k], VoxelFlags::HAS_ADJACENT_X_UP);
+        }
+        if i + 1 < CHUNK_SIZE {
+            update_adjacencies([i + 1, j, k], VoxelFlags::HAS_ADJACENT_X_DN);
+        }
+        if j > 0 {
+            update_adjacencies([i, j - 1, k], VoxelFlags::HAS_ADJACENT_Y_UP);
+        }
+        if j + 1 < CHUNK_SIZE {
+            update_adjacencies([i, j + 1, k], VoxelFlags::HAS_ADJACENT_Y_DN);
+        }
+        if k > 0 {
+            update_adjacencies([i, j, k - 1], VoxelFlags::HAS_ADJACENT_Z_UP);
+        }
+        if k + 1 < CHUNK_SIZE {
+            update_adjacencies([i, j, k + 1], VoxelFlags::HAS_ADJACENT_Z_DN);
+        }
+    }
+
+    #[inline]
     fn complete_extracted_voxel_object(
         voxel_extent: f32,
         parent_origin_offset_in_root: &[usize; 3],
@@ -2199,7 +2403,7 @@ pub mod fuzzing {
     }
 }
 
-#[cfg(not(miri))]
+// #[cfg(not(miri))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2209,10 +2413,116 @@ mod tests {
             sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
+        object::inertia::VoxelObjectInertialPropertyManager,
         voxel_types::VoxelType,
     };
+    use approx::assert_relative_eq;
     use impact_alloc::Global;
     use impact_math::vector::Vector3;
+    use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
+
+    #[test]
+    fn fuzz_failure() {
+        let mut graph = SDFGraph::new_in(Global);
+        graph.add_node(SDFNode::new_capsule(15.752526, 15.777199));
+        let sdf_generator = graph.build_in(Global).unwrap();
+
+        let generator = SDFVoxelGenerator::new(
+            7.83997,
+            sdf_generator,
+            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
+        );
+
+        let points = [
+            Point3C::new(-47.719997, 39.660004, 40.100006),
+            Point3C::new(-47.280003, 39.660004, 39.660004),
+            Point3C::new(39.660004, 42.660004, 10.580002),
+            Point3C::new(10.580002, 5.5199966, 10.580002),
+            Point3C::new(-47.280003, -52.86, -54.14),
+            Point3C::new(-49.5, 10.580002, 10.580002),
+            Point3C::new(10.580002, 10.580002, 10.580002),
+            Point3C::new(-87.22, -47.280003, -52.86),
+            Point3C::new(19.500008, -52.86, 53.98001),
+        ];
+
+        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
+
+        let voxel_type_densities = [1.0; 256];
+        let original_inertial_property_manager =
+            VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
+        let mut inertial_property_manager = original_inertial_property_manager.clone();
+
+        let mut aggregate_poly_inertial_property_manager =
+            VoxelObjectInertialPropertyManager::zeroed();
+
+        let aabb = object.compute_normalized_chunk_grid_bounds();
+
+        let points = bytemuck::cast_slice(&points);
+        let tetrahedralization = DelaunayTetrahedralization::construct(points).unwrap();
+
+        let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
+
+        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
+            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
+            let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
+                continue;
+            };
+
+            let mut poly_inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
+
+            let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
+                &mut poly_inertial_property_manager,
+                object.voxel_extent(),
+                &voxel_type_densities,
+            );
+
+            let ExtractionResult::Extracted(copied_object) = object
+                .extract_polyhedron_with_property_transferrer(
+                    VoxelObjectBuffers::new(),
+                    &polyhedron_aabb,
+                    &polyhedron.face_planes,
+                    &mut inertial_property_transferrer,
+                )
+            else {
+                continue;
+            };
+
+            let ExtractedVoxelObject {
+                voxel_object: poly_object,
+                origin_offset_in_parent: origin_offset,
+            } = copied_object;
+
+            poly_object.validate_adjacencies();
+            poly_object.validate_chunk_obscuredness();
+            poly_object.validate_sdf();
+            poly_object.validate_region_count();
+            assert!(!poly_object.is_effectively_empty());
+
+            object.validate_adjacencies();
+            object.validate_chunk_obscuredness();
+            object.validate_sdf();
+            object.validate_region_count();
+
+            aggregate_poly_inertial_property_manager =
+                aggregate_poly_inertial_property_manager.add(&poly_inertial_property_manager);
+
+            // The tolerance has to accomodate the `f32` rounding accumulated
+            // over the transfer of every individual voxel, which is why we use
+            // the same tolerance as `validate_for_object`
+            assert_relative_eq!(
+                &inertial_property_manager.add(&aggregate_poly_inertial_property_manager),
+                &original_inertial_property_manager,
+                epsilon = 1e-4,
+                max_relative = 1e-4,
+            );
+
+            poly_inertial_property_manager.offset_reference_point_by(&Vector3::from(
+                origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
+            ));
+
+            poly_inertial_property_manager.validate_for_object(&poly_object, &voxel_type_densities);
+        }
+    }
 
     #[test]
     fn connected_region_count_is_correct_for_single_voxel() {
