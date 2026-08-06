@@ -227,6 +227,13 @@ impl VoxelSignedDistance {
         self.encoded.is_negative()
     }
 
+    /// Returns a byte that is 0xFF when the signed distance is strictly
+    /// negative and 0x00 when not.
+    #[inline]
+    pub const fn is_negative_mask(self) -> u8 {
+        (self.encoded >> 7) as u8
+    }
+
     /// Whether the signed distance is maximally inside the object.
     #[inline]
     pub const fn is_maximally_inside(self) -> bool {
@@ -332,6 +339,11 @@ impl VoxelFlags {
         ];
         let n_blocked_faces = (self.bits() & 0b11111100).count_ones();
         PLACEMENTS[n_blocked_faces as usize]
+    }
+
+    #[inline]
+    const fn and_masked(self, mask: u8) -> Self {
+        Self::from_bits_retain(self.bits() & mask)
     }
 }
 
