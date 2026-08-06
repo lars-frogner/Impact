@@ -187,10 +187,10 @@ bitflags! {
     }
 }
 
-/// Helper struct for keeping track of the number of empty voxels on each face
-/// of a chunk.
+/// Helper struct for keeping track of the number of empty or non-empty voxels
+/// on each face of a chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct FaceEmptyCounts([[usize; 2]; 3]);
+struct FaceCounts([[usize; 2]; 3]);
 
 pub type LoopForChunkVoxels = Loop3<CHUNK_SIZE>;
 pub type LoopOverChunkVoxelData<'a, 'b> = DataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
@@ -1906,7 +1906,7 @@ impl VoxelChunk {
         let mut first_voxel = chunk_voxels[0];
         let mut is_uniform = true;
 
-        let mut face_empty_counts = FaceEmptyCounts::zero();
+        let mut face_empty_counts = FaceCounts::zero();
 
         LoopOverChunkVoxelData::new(&LoopForChunkVoxels::over_all(), chunk_voxels).execute(
             &mut |&[i_in_chunk, j_in_chunk, k_in_chunk], voxel| {
@@ -1952,7 +1952,7 @@ impl VoxelChunk {
 
             Self::Uniform(chunk)
         } else {
-            let face_distributions = face_empty_counts.to_chunk_face_distributions();
+            let face_distributions = face_empty_counts.empty_counts_to_chunk_face_distributions();
 
             Self::NonUniform(NonUniformVoxelChunk {
                 face_distributions,
@@ -2754,7 +2754,7 @@ impl NonUniformVoxelChunk {
         // out-of-bounds if trying to access voxels outside the chunk
         let chunk_voxels = chunk_voxels_mut(voxels, self.data_offset);
 
-        let mut face_empty_counts = FaceEmptyCounts::zero();
+        let mut face_empty_counts = FaceCounts::zero();
         let mut chunk_has_only_empty_voxels = true;
         let mut chunk_is_void = true;
 
@@ -2847,7 +2847,7 @@ impl NonUniformVoxelChunk {
             }
         }
 
-        self.face_distributions = face_empty_counts.to_chunk_face_distributions();
+        self.face_distributions = face_empty_counts.empty_counts_to_chunk_face_distributions();
 
         if chunk_has_only_empty_voxels {
             self.flags |= VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS;
@@ -2886,7 +2886,7 @@ impl FaceVoxelDistribution {
     }
 }
 
-impl FaceEmptyCounts {
+impl FaceCounts {
     #[inline]
     const fn zero() -> Self {
         Self([[0; 2]; 3])
@@ -2935,17 +2935,41 @@ impl FaceEmptyCounts {
     }
 
     #[inline]
-    fn to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
-        self.to_face_distributions(CHUNK_SIZE_SQUARED)
+    fn empty_counts_to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
+        self.empty_counts_to_face_distributions(CHUNK_SIZE_SQUARED)
     }
 
     #[inline]
-    fn to_face_distributions(&self, full_face_count: usize) -> [[FaceVoxelDistribution; 2]; 3] {
+    fn non_empty_counts_to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
+        self.non_empty_counts_to_face_distributions(CHUNK_SIZE_SQUARED)
+    }
+
+    #[inline]
+    fn empty_counts_to_face_distributions(
+        &self,
+        full_face_count: usize,
+    ) -> [[FaceVoxelDistribution; 2]; 3] {
         self.map(&|empty_count| {
             if empty_count == full_face_count {
                 FaceVoxelDistribution::Empty
             } else if empty_count == 0 {
                 FaceVoxelDistribution::Full
+            } else {
+                FaceVoxelDistribution::Mixed
+            }
+        })
+    }
+
+    #[inline]
+    fn non_empty_counts_to_face_distributions(
+        &self,
+        full_face_count: usize,
+    ) -> [[FaceVoxelDistribution; 2]; 3] {
+        self.map(&|non_empty_count| {
+            if non_empty_count == full_face_count {
+                FaceVoxelDistribution::Full
+            } else if non_empty_count == 0 {
+                FaceVoxelDistribution::Empty
             } else {
                 FaceVoxelDistribution::Mixed
             }

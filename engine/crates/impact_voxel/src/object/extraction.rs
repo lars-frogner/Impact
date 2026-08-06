@@ -3,7 +3,7 @@
 use crate::{
     Voxel, VoxelFlags, VoxelSignedDistance,
     object::{
-        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkRanges, FaceEmptyCounts, FaceVoxelDistribution,
+        CHUNK_SIZE, CHUNK_VOXEL_COUNT, ChunkRanges, FaceCounts, FaceVoxelDistribution,
         NON_EMPTY_VOXEL_THRESHOLD, NonUniformVoxelChunk, UniformVoxelChunk, VoxelChunk,
         VoxelChunkFlags, VoxelObject, VoxelObjectBuffers, chunk_range_encompassing_voxel_range,
         chunk_voxels, chunk_voxels_mut, determine_occupied_voxel_ranges,
@@ -865,11 +865,11 @@ impl VoxelObject {
                         let mut poly_lower_occupied_voxels = [CHUNK_SIZE; 3];
                         let mut poly_upper_occupied_voxels = [0; 3];
 
-                        let mut face_empty_counts = FaceEmptyCounts::zero();
+                        let mut face_empty_counts = FaceCounts::zero();
                         let mut chunk_has_only_empty_voxels = true;
                         let mut chunk_is_void = true;
 
-                        let mut poly_face_empty_counts = FaceEmptyCounts::zero();
+                        let mut poly_face_empty_counts = FaceCounts::zero();
                         let mut poly_chunk_has_only_empty_voxels = true;
                         let mut poly_chunk_is_void = true;
 
@@ -1069,7 +1069,7 @@ impl VoxelObject {
                             self.chunks[chunk_idx] = VoxelChunk::Void;
                         } else {
                             chunk.face_distributions =
-                                face_empty_counts.to_chunk_face_distributions();
+                                face_empty_counts.empty_counts_to_chunk_face_distributions();
 
                             if chunk_has_only_empty_voxels {
                                 chunk.flags |= VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS;
@@ -1104,7 +1104,7 @@ impl VoxelObject {
                             let poly_chunk = NonUniformVoxelChunk {
                                 data_offset: poly_non_uniform_chunk_count as u32,
                                 face_distributions: poly_face_empty_counts
-                                    .to_chunk_face_distributions(),
+                                    .empty_counts_to_chunk_face_distributions(),
                                 flags: if poly_chunk_has_only_empty_voxels {
                                     VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS
                                 } else {
@@ -1497,7 +1497,7 @@ impl VoxelObject {
                         let mut lower_occupied_voxel_indices = [CHUNK_SIZE; 3];
                         let mut upper_occupied_voxel_indices = [0; 3];
 
-                        let mut face_empty_counts = FaceEmptyCounts::zero();
+                        let mut face_empty_counts = FaceCounts::zero();
                         let mut chunk_has_only_empty_voxels = true;
                         let mut chunk_is_void = true;
 
@@ -1646,7 +1646,8 @@ impl VoxelObject {
                         } else {
                             let poly_chunk = NonUniformVoxelChunk {
                                 data_offset: poly_data_offset,
-                                face_distributions: face_empty_counts.to_chunk_face_distributions(),
+                                face_distributions: face_empty_counts
+                                    .empty_counts_to_chunk_face_distributions(),
                                 flags: if chunk_has_only_empty_voxels {
                                     VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS
                                 } else {
