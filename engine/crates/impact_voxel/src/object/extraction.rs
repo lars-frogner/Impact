@@ -1484,12 +1484,10 @@ impl VoxelObject {
                         let mut max_signed_dists_for_row =
                             [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
-                        let mut lower_occupied_voxel_indices = [CHUNK_SIZE; 3];
-                        let mut upper_occupied_voxel_indices = [0; 3];
+                        let mut lower_occupied_voxels = [CHUNK_SIZE; 3];
+                        let mut upper_occupied_voxels = [0; 3];
 
-                        let mut face_empty_counts = FaceCounts::zero();
-                        let mut chunk_has_only_empty_voxels = true;
-                        let mut chunk_is_void = true;
+                        let mut face_occupied_counts = FaceCounts::zero();
 
                         let mut voxel_idx = 0;
 
@@ -1516,7 +1514,7 @@ impl VoxelObject {
                                 let mut lower_occupied_k = CHUNK_SIZE;
                                 let mut upper_occupied_k = 0;
 
-                                let mut row_empty_count = 0;
+                                let mut row_occupied_count = 0;
 
                                 for k in 0..CHUNK_SIZE {
                                     let obj_k = k + chunk_start_voxel_indices[2];
@@ -1539,11 +1537,17 @@ impl VoxelObject {
 
                                     if poly_voxel_is_non_empty {
                                         poly_voxel.flags -= VoxelFlags::IS_EMPTY;
-                                        chunk_has_only_empty_voxels = false;
-                                        chunk_is_void = false;
 
                                         lower_occupied_k = lower_occupied_k.min(k);
                                         upper_occupied_k = upper_occupied_k.max(k);
+
+                                        row_occupied_count += 1;
+
+                                        if k == 0 {
+                                            face_occupied_counts.increment_z_dn();
+                                        } else if k == CHUNK_SIZE - 1 {
+                                            face_occupied_counts.increment_z_up();
+                                        }
 
                                         property_computer.compute_for_voxel(
                                             &[obj_i, obj_j, obj_k],
@@ -1570,32 +1574,22 @@ impl VoxelObject {
                                             ) = poly_voxel;
                                         }
                                     } else {
-                                        poly_voxel.flags |= VoxelFlags::IS_EMPTY;
-
-                                        row_empty_count += 1;
-
-                                        if k == 0 {
-                                            face_empty_counts.increment_z_dn();
-                                        } else if k == CHUNK_SIZE - 1 {
-                                            face_empty_counts.increment_z_up();
-                                        }
-
-                                        if !poly_voxel.signed_distance.is_void() {
-                                            chunk_is_void = false;
-                                        }
-
                                         // Voxels outside the planes will always be
                                         // emptied. Sufficiently far outside the planes,
                                         // we know that all adjacent voxels will be
                                         // empty, so we can just clear the adjacency
                                         // flags.
                                         if planes_signed_distance.is_maximally_outside() {
-                                            poly_voxel.flags &= VoxelFlags::IS_EMPTY;
-                                        } else if !planes_signed_distance.is_maximally_inside() {
-                                            Self::update_lower_adjacencies_for_empty_voxel(
-                                                poly_chunk_voxels,
-                                                [i, j, k],
-                                            );
+                                            poly_voxel.flags = VoxelFlags::IS_EMPTY;
+                                        } else {
+                                            poly_voxel.flags |= VoxelFlags::IS_EMPTY;
+
+                                            if !planes_signed_distance.is_maximally_inside() {
+                                                Self::update_lower_adjacencies_for_empty_voxel(
+                                                    poly_chunk_voxels,
+                                                    [i, j, k],
+                                                );
+                                            }
                                         }
                                     }
 
@@ -1603,32 +1597,38 @@ impl VoxelObject {
                                 }
 
                                 if lower_occupied_k <= upper_occupied_k {
-                                    lower_occupied_voxel_indices[0] =
-                                        lower_occupied_voxel_indices[0].min(i);
-                                    upper_occupied_voxel_indices[0] =
-                                        upper_occupied_voxel_indices[0].max(i);
-                                    lower_occupied_voxel_indices[1] =
-                                        lower_occupied_voxel_indices[1].min(j);
-                                    upper_occupied_voxel_indices[1] =
-                                        upper_occupied_voxel_indices[1].max(j);
-                                    lower_occupied_voxel_indices[2] =
-                                        lower_occupied_voxel_indices[2].min(lower_occupied_k);
-                                    upper_occupied_voxel_indices[2] =
-                                        upper_occupied_voxel_indices[2].max(upper_occupied_k);
+                                    lower_occupied_voxels[0] = lower_occupied_voxels[0].min(i);
+                                    upper_occupied_voxels[0] = upper_occupied_voxels[0].max(i);
+                                    lower_occupied_voxels[1] = lower_occupied_voxels[1].min(j);
+                                    upper_occupied_voxels[1] = upper_occupied_voxels[1].max(j);
+                                    lower_occupied_voxels[2] =
+                                        lower_occupied_voxels[2].min(lower_occupied_k);
+                                    upper_occupied_voxels[2] =
+                                        upper_occupied_voxels[2].max(upper_occupied_k);
                                 }
 
                                 if on_lower_x_face {
-                                    face_empty_counts.add_x_dn(row_empty_count);
+                                    face_occupied_counts.add_x_dn(row_occupied_count);
                                 } else if on_upper_x_face {
-                                    face_empty_counts.add_x_up(row_empty_count);
+                                    face_occupied_counts.add_x_up(row_occupied_count);
                                 }
                                 if on_lower_y_face {
-                                    face_empty_counts.add_y_dn(row_empty_count);
+                                    face_occupied_counts.add_y_dn(row_occupied_count);
                                 } else if on_upper_y_face {
-                                    face_empty_counts.add_y_up(row_empty_count);
+                                    face_occupied_counts.add_y_up(row_occupied_count);
                                 }
                             }
                         }
+
+                        let chunk_has_only_empty_voxels = lower_occupied_voxels
+                            .iter()
+                            .zip(&upper_occupied_voxels)
+                            .all(|(&lower, &upper)| lower > upper);
+
+                        let chunk_is_void = chunk_has_only_empty_voxels
+                            && poly_chunk_voxels
+                                .iter()
+                                .all(|voxel| voxel.signed_distance.is_void());
 
                         if chunk_is_void {
                             poly_voxels.truncate(start_voxel_idx);
@@ -1636,8 +1636,8 @@ impl VoxelObject {
                         } else {
                             let poly_chunk = NonUniformVoxelChunk {
                                 data_offset: poly_data_offset,
-                                face_distributions: face_empty_counts
-                                    .empty_counts_to_chunk_face_distributions(),
+                                face_distributions: face_occupied_counts
+                                    .non_empty_counts_to_chunk_face_distributions(),
                                 flags: if chunk_has_only_empty_voxels {
                                     VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS
                                 } else {
@@ -1647,8 +1647,8 @@ impl VoxelObject {
                             };
 
                             let occupied_chunk_voxel_ranges: [_; 3] = array::from_fn(|dim| {
-                                lower_occupied_voxel_indices[dim]
-                                    ..(upper_occupied_voxel_indices[dim] + 1).min(CHUNK_SIZE)
+                                lower_occupied_voxels[dim]
+                                    ..(upper_occupied_voxels[dim] + 1).min(CHUNK_SIZE)
                             });
 
                             non_uniform_chunks_intersecting
