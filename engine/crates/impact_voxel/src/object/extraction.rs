@@ -2268,11 +2268,14 @@ pub mod fuzzing {
                 origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
             ));
 
-            disconnected_inertial_property_manager
-                .validate_for_object(&disconnected_object, &voxel_type_densities);
+            disconnected_inertial_property_manager.validate_for_object(
+                &disconnected_object,
+                &voxel_type_densities,
+                1e-3,
+            );
         }
 
-        inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
+        inertial_property_manager.validate_for_object(&object, &voxel_type_densities, 1e-3);
     }
 
     pub fn fuzz_test_voxel_object_extract_polyhedron(input: ExtractPolyhedronInput) {
@@ -2334,7 +2337,11 @@ pub mod fuzzing {
                 origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
             ));
 
-            poly_inertial_property_manager.validate_for_object(&poly_object, &voxel_type_densities);
+            poly_inertial_property_manager.validate_for_object(
+                &poly_object,
+                &voxel_type_densities,
+                1e-3,
+            );
         }
     }
 
@@ -2385,7 +2392,11 @@ pub mod fuzzing {
                 origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
             ));
 
-            poly_inertial_property_manager.validate_for_object(&poly_object, &voxel_type_densities);
+            poly_inertial_property_manager.validate_for_object(
+                &poly_object,
+                &voxel_type_densities,
+                1e-3,
+            );
         }
     }
 

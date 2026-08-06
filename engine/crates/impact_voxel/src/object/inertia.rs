@@ -270,9 +270,19 @@ impl VoxelObjectInertialPropertyManager {
     /// computed from scratch for the given voxel object. This is for validating
     /// that incremental updates produce the correct result.
     #[cfg(any(test, feature = "fuzzing"))]
-    pub fn validate_for_object(&self, object: &VoxelObject, voxel_type_densities: &[f32]) {
+    pub fn validate_for_object(
+        &self,
+        object: &VoxelObject,
+        voxel_type_densities: &[f32],
+        tolerance: f32,
+    ) {
         let from_scratch = Self::initialized_from(object, voxel_type_densities);
-        approx::assert_relative_eq!(self, &from_scratch, epsilon = 1e-3, max_relative = 1e-3);
+        approx::assert_relative_eq!(
+            self,
+            &from_scratch,
+            epsilon = tolerance,
+            max_relative = tolerance
+        );
     }
 
     fn compute_inertial_properties_from_moments(
