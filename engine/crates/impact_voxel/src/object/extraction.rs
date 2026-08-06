@@ -859,29 +859,34 @@ impl VoxelObject {
                         let mut max_signed_dists_for_row =
                             [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
-                        let mut lower_occupied_voxels = [CHUNK_SIZE; 3];
+                        const CHUNK_SIZE_U32: u32 = CHUNK_SIZE as u32;
+
+                        let mut lower_occupied_voxels = [CHUNK_SIZE_U32; 3];
                         let mut upper_occupied_voxels = [0; 3];
 
-                        let mut poly_lower_occupied_voxels = [CHUNK_SIZE; 3];
+                        let mut poly_lower_occupied_voxels = [CHUNK_SIZE_U32; 3];
                         let mut poly_upper_occupied_voxels = [0; 3];
 
                         let mut face_occupied_counts = FaceCounts::zero();
 
                         let mut poly_face_occupied_counts = FaceCounts::zero();
 
+                        let voxel_indices =
+                            |i: u32, j: u32, k: u32| [i as usize, j as usize, k as usize];
+
                         let mut voxel_idx = 0;
 
-                        for i in 0..CHUNK_SIZE {
-                            let obj_i = chunk_start_voxel_indices[0] + i;
+                        for i in 0..CHUNK_SIZE_U32 {
+                            let obj_i = chunk_start_voxel_indices[0] + i as usize;
 
                             let on_lower_x_face = i == 0;
-                            let on_upper_x_face = i == CHUNK_SIZE - 1;
+                            let on_upper_x_face = i == CHUNK_SIZE_U32 - 1;
 
-                            for j in 0..CHUNK_SIZE {
-                                let obj_j = chunk_start_voxel_indices[1] + j;
+                            for j in 0..CHUNK_SIZE_U32 {
+                                let obj_j = chunk_start_voxel_indices[1] + j as usize;
 
                                 let on_lower_y_face = j == 0;
-                                let on_upper_y_face = j == CHUNK_SIZE - 1;
+                                let on_upper_y_face = j == CHUNK_SIZE_U32 - 1;
 
                                 Self::compute_max_plane_signed_dists_for_row(
                                     &mut max_signed_dists_for_row,
@@ -891,16 +896,16 @@ impl VoxelObject {
                                     j,
                                 );
 
-                                let mut lower_occupied_k = CHUNK_SIZE;
+                                let mut lower_occupied_k = CHUNK_SIZE_U32;
                                 let mut upper_occupied_k = 0;
                                 let mut row_occupied_count = 0;
 
-                                let mut poly_lower_occupied_k = CHUNK_SIZE;
+                                let mut poly_lower_occupied_k = CHUNK_SIZE_U32;
                                 let mut poly_upper_occupied_k = 0;
                                 let mut poly_row_occupied_count = 0;
 
-                                for k in 0..CHUNK_SIZE {
-                                    let obj_k = chunk_start_voxel_indices[2] + k;
+                                for k in 0..CHUNK_SIZE_U32 {
+                                    let obj_k = chunk_start_voxel_indices[2] + k as usize;
 
                                     let voxel = NonUniformVoxelChunk::get_voxel_mut(
                                         chunk_voxels,
@@ -908,7 +913,8 @@ impl VoxelObject {
                                     );
                                     let mut poly_voxel = *voxel;
 
-                                    let planes_signed_distance = max_signed_dists_for_row[k];
+                                    let planes_signed_distance =
+                                        max_signed_dists_for_row[k as usize];
 
                                     // The original object keeps the complement of the
                                     // polyhedron. We can't use plain negation here, since a
@@ -942,7 +948,7 @@ impl VoxelObject {
 
                                         if k == 0 {
                                             poly_face_occupied_counts.increment_z_dn();
-                                        } else if k == CHUNK_SIZE - 1 {
+                                        } else if k == CHUNK_SIZE_U32 - 1 {
                                             poly_face_occupied_counts.increment_z_up();
                                         }
 
@@ -953,13 +959,13 @@ impl VoxelObject {
 
                                         Self::update_adjacencies_for_empty_voxel(
                                             chunk_voxels,
-                                            [i, j, k],
+                                            voxel_indices(i, j, k),
                                         );
 
                                         Self::update_lower_adjacencies_for_non_empty_voxel(
                                             poly_chunk_voxels,
                                             &mut poly_voxel,
-                                            [i, j, k],
+                                            voxel_indices(i, j, k),
                                         );
                                     } else {
                                         // The original voxel did not change emptiness
@@ -967,7 +973,7 @@ impl VoxelObject {
 
                                         Self::update_lower_adjacencies_for_empty_voxel(
                                             poly_chunk_voxels,
-                                            [i, j, k],
+                                            voxel_indices(i, j, k),
                                         );
 
                                         if voxel_signed_distance.is_negative() {
@@ -978,7 +984,7 @@ impl VoxelObject {
 
                                             if k == 0 {
                                                 face_occupied_counts.increment_z_dn();
-                                            } else if k == CHUNK_SIZE - 1 {
+                                            } else if k == CHUNK_SIZE_U32 {
                                                 face_occupied_counts.increment_z_up();
                                             }
                                         }
@@ -1064,8 +1070,8 @@ impl VoxelObject {
                                 chunk.flags -= VoxelChunkFlags::HAS_ONLY_EMPTY_VOXELS;
 
                                 let occupied_chunk_voxel_ranges: [_; 3] = array::from_fn(|dim| {
-                                    lower_occupied_voxels[dim]
-                                        ..(upper_occupied_voxels[dim] + 1).min(CHUNK_SIZE)
+                                    lower_occupied_voxels[dim] as usize
+                                        ..(upper_occupied_voxels[dim] as usize + 1).min(CHUNK_SIZE)
                                 });
                                 self.split_detector
                                 .update_local_connected_regions_within_occupied_ranges_for_chunk(
@@ -1104,8 +1110,8 @@ impl VoxelObject {
                             };
 
                             let poly_occupied_chunk_voxel_ranges: [_; 3] = array::from_fn(|dim| {
-                                poly_lower_occupied_voxels[dim]
-                                    ..(poly_upper_occupied_voxels[dim] + 1).min(CHUNK_SIZE)
+                                poly_lower_occupied_voxels[dim] as usize
+                                    ..(poly_upper_occupied_voxels[dim] as usize + 1).min(CHUNK_SIZE)
                             });
 
                             non_uniform_chunks_intersecting
@@ -1484,24 +1490,29 @@ impl VoxelObject {
                         let mut max_signed_dists_for_row =
                             [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
-                        let mut lower_occupied_voxels = [CHUNK_SIZE; 3];
+                        const CHUNK_SIZE_U32: u32 = CHUNK_SIZE as u32;
+
+                        let mut lower_occupied_voxels = [CHUNK_SIZE_U32; 3];
                         let mut upper_occupied_voxels = [0; 3];
 
                         let mut face_occupied_counts = FaceCounts::zero();
 
+                        let voxel_indices =
+                            |i: u32, j: u32, k: u32| [i as usize, j as usize, k as usize];
+
                         let mut voxel_idx = 0;
 
-                        for i in 0..CHUNK_SIZE {
-                            let obj_i = i + chunk_start_voxel_indices[0];
+                        for i in 0..CHUNK_SIZE_U32 {
+                            let obj_i = chunk_start_voxel_indices[0] + i as usize;
 
                             let on_lower_x_face = i == 0;
-                            let on_upper_x_face = i == CHUNK_SIZE - 1;
+                            let on_upper_x_face = i == CHUNK_SIZE_U32 - 1;
 
-                            for j in 0..CHUNK_SIZE {
-                                let obj_j = j + chunk_start_voxel_indices[1];
+                            for j in 0..CHUNK_SIZE_U32 {
+                                let obj_j = chunk_start_voxel_indices[1] + j as usize;
 
                                 let on_lower_y_face = j == 0;
-                                let on_upper_y_face = j == CHUNK_SIZE - 1;
+                                let on_upper_y_face = j == CHUNK_SIZE_U32 - 1;
 
                                 Self::compute_max_plane_signed_dists_for_row(
                                     &mut max_signed_dists_for_row,
@@ -1511,20 +1522,21 @@ impl VoxelObject {
                                     j,
                                 );
 
-                                let mut lower_occupied_k = CHUNK_SIZE;
+                                let mut lower_occupied_k = CHUNK_SIZE_U32;
                                 let mut upper_occupied_k = 0;
 
                                 let mut row_occupied_count = 0;
 
-                                for k in 0..CHUNK_SIZE {
-                                    let obj_k = k + chunk_start_voxel_indices[2];
+                                for k in 0..CHUNK_SIZE_U32 {
+                                    let obj_k = chunk_start_voxel_indices[2] + k as usize;
 
                                     let poly_voxel = NonUniformVoxelChunk::get_voxel_mut(
                                         poly_chunk_voxels,
                                         voxel_idx,
                                     );
 
-                                    let planes_signed_distance = max_signed_dists_for_row[k];
+                                    let planes_signed_distance =
+                                        max_signed_dists_for_row[k as usize];
 
                                     // The signed distance of the polyhedron voxel is the
                                     // maximum of the original signed distance and the signed
@@ -1545,7 +1557,7 @@ impl VoxelObject {
 
                                         if k == 0 {
                                             face_occupied_counts.increment_z_dn();
-                                        } else if k == CHUNK_SIZE - 1 {
+                                        } else if k == CHUNK_SIZE_U32 - 1 {
                                             face_occupied_counts.increment_z_up();
                                         }
 
@@ -1565,7 +1577,7 @@ impl VoxelObject {
                                             Self::update_lower_adjacencies_for_non_empty_voxel(
                                                 poly_chunk_voxels,
                                                 &mut poly_voxel,
-                                                [i, j, k],
+                                                voxel_indices(i, j, k),
                                             );
 
                                             *NonUniformVoxelChunk::get_voxel_mut(
@@ -1587,7 +1599,7 @@ impl VoxelObject {
                                             if !planes_signed_distance.is_maximally_inside() {
                                                 Self::update_lower_adjacencies_for_empty_voxel(
                                                     poly_chunk_voxels,
-                                                    [i, j, k],
+                                                    voxel_indices(i, j, k),
                                                 );
                                             }
                                         }
@@ -1647,8 +1659,8 @@ impl VoxelObject {
                             };
 
                             let occupied_chunk_voxel_ranges: [_; 3] = array::from_fn(|dim| {
-                                lower_occupied_voxels[dim]
-                                    ..(upper_occupied_voxels[dim] + 1).min(CHUNK_SIZE)
+                                lower_occupied_voxels[dim] as usize
+                                    ..(upper_occupied_voxels[dim] as usize + 1).min(CHUNK_SIZE)
                             });
 
                             non_uniform_chunks_intersecting
