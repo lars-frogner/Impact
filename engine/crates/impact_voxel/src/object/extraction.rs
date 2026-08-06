@@ -1787,17 +1787,22 @@ impl VoxelObject {
         voxel: &mut Voxel,
         [i, j, k]: [usize; 3],
     ) {
-        let mut update_adjacencies = |adjacent_indices, flag_for_current, flag_for_adjacent| {
-            let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
-            let adjacent_voxel = NonUniformVoxelChunk::get_voxel_mut(chunk_voxels, adjacent_idx);
+        let mut update_adjacencies =
+            |adjacent_indices, flag_for_current: VoxelFlags, flag_for_adjacent: VoxelFlags| {
+                let adjacent_idx = linear_voxel_idx_within_chunk(&adjacent_indices);
+                let adjacent_voxel =
+                    NonUniformVoxelChunk::get_voxel_mut(chunk_voxels, adjacent_idx);
 
-            if adjacent_voxel.signed_distance.is_negative() {
-                voxel.flags |= flag_for_current;
-                adjacent_voxel.flags |= flag_for_adjacent;
-            } else {
-                voxel.flags -= flag_for_current;
-            }
-        };
+                let is_negative_mask = adjacent_voxel.signed_distance.is_negative_mask();
+
+                // Set `flag_for_current` if signed distance is negative, unset
+                // it otherwise
+                voxel.flags = voxel.flags.difference(flag_for_current)
+                    | flag_for_current.and_masked(is_negative_mask);
+
+                // Set `flag_for_adjacent` if signed distance is negative
+                adjacent_voxel.flags |= flag_for_adjacent.and_masked(is_negative_mask);
+            };
 
         if i > 0 {
             update_adjacencies(
