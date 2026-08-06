@@ -2727,6 +2727,18 @@ impl NonUniformVoxelChunk {
                                 let adjacent_voxel =
                                     Self::get_voxel_mut(chunk_voxels, adjacent_idx);
 
+                                // let is_negative_mask = (adjacent_voxel.flags.bits() & 1) - 1;
+
+                                // // Set `flag_for_current` if signed distance is
+                                // // negative, unset it otherwise
+                                // flags = flags.difference(flag_for_current)
+                                //     | flag_for_current.and_masked(is_negative_mask);
+
+                                // // Set `flag_for_adjacent` if signed distance is
+                                // // negative
+                                // adjacent_voxel.flags |=
+                                //     flag_for_adjacent.and_masked(is_negative_mask);
+
                                 if adjacent_voxel.is_empty() {
                                     flags -= flag_for_current;
                                 } else {
@@ -2932,6 +2944,14 @@ impl FaceCounts {
     #[inline]
     fn add_y_up(&mut self, count: usize) {
         self.0[1][1] += count;
+    }
+    #[inline]
+    fn add_z_dn(&mut self, count: usize) {
+        self.0[2][0] += count;
+    }
+    #[inline]
+    fn add_z_up(&mut self, count: usize) {
+        self.0[2][1] += count;
     }
 
     #[inline]

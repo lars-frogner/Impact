@@ -34,6 +34,8 @@
 
 - Improve physics stability (avoid crash when small pieces explode with NaN).
 
+- Decouple time stepping from rendering to allow adjusting time step without affecting perceived simulation speed.
+
 ## Voxels
 
 - Per surface voxel state (e.g. temperature).
@@ -44,6 +46,8 @@
 
 ## Performance
 
+- Pool per-object voxel GPU buffers into shared arenas to enable one culling dispatch and one multi-draw per view (see `docs/voxel_gpu_buffer_pooling.md`).
+
 - Use single bind group for G-buffer attachments.
 
 - Investigate ways to improve shadow map update performance (check out multiview render passes).
@@ -52,13 +56,9 @@
 
 - Handle rendering of single-chunk voxel objects separately in a more lightweight manner.
 
-- Investigate where arena allocation could be beneficial.
-
 - Add custom allocator support for `AlignedByteVec`.
 
 - Make relevant `impact_ecs` types accept allocator.
-
-- Make `VoxelObjectManager` maintain pool of reusable `VoxelObjectBuffers`.
 
 ## ECS
 

@@ -76,24 +76,31 @@ setup! = |_|
     Entity.create_with_id!(omnidirectional_light, entity_ids.omnidirectional_light)?
     Entity.create_with_id!(unidirectional_light, entity_ids.unidirectional_light)?
 
-    setup_experiment!(DroppedBox)
+    setup_experiment!(RotationalImpact)
 
 setup_experiment! = |experiment|
     when experiment is
         DroppedBox ->
             setup_dropped_box!({})
+
         DroppedSphere ->
             setup_dropped_sphere!({})
+
         HeadOnSpheres ->
             setup_colliding_spheres!(0)
+
         OffsetSpheres ->
             setup_colliding_spheres!(0.5)
+
         BoxImpactingSphere ->
             setup_box_impacting_sphere!({})
+
         SimultaneousSideImpacts ->
             setup_simultaneous_side_impacts!({})
+
         BulletImpactingTargets ->
             setup_bullet_impacting_targets!({})
+
         RotationalImpact ->
             setup_rotational_impact!({})
 
@@ -138,7 +145,8 @@ setup_colliding_spheres! = |y_offset|
         dynamic_friction_coef: 0.5,
     }
     fracturing_props = default_fracturing_props(1e5, 5e6)
-    sphere =  base_object(response_params, fracturing_props)
+    sphere =
+        base_object(response_params, fracturing_props)
         |> Setup.VoxelSphere.add_new(0.04, 20)
 
     rel_speed = 10
@@ -151,7 +159,7 @@ setup_colliding_spheres! = |y_offset|
 
     sphere
     |> Comp.ReferenceFrame.add_unoriented((3, 1 + y_offset / 2, 4))
-    |> Comp.Motion.add_linear((-rel_speed / 2, 0, 0))
+    |> Comp.Motion.add_linear(((-rel_speed) / 2, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})
 
@@ -162,7 +170,7 @@ setup_box_impacting_sphere! = |{}|
         dynamic_friction_coef: 0.5,
     }
     fracturing_props = default_fracturing_props(5e4, 2e6)
-    base =  base_object(response_params, fracturing_props)
+    base = base_object(response_params, fracturing_props)
 
     y_offset = 0.8
     speed = 8
@@ -189,7 +197,7 @@ setup_simultaneous_side_impacts! = |{}|
     }
     fracturing_props = default_fracturing_props(1e5, 2e6)
 
-    sphere =  base_object(response_params, fracturing_props)
+    sphere = base_object(response_params, fracturing_props)
 
     rel_speed = 12
 
@@ -210,7 +218,7 @@ setup_simultaneous_side_impacts! = |{}|
     sphere
     |> Setup.VoxelSphere.add_new(0.04, 15)
     |> Comp.ReferenceFrame.add_unoriented((3, 1, 4))
-    |> Comp.Motion.add_linear((-rel_speed / 2, 0, 0))
+    |> Comp.Motion.add_linear(((-rel_speed) / 2, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})
 
@@ -221,7 +229,7 @@ setup_bullet_impacting_targets! = |{}|
         dynamic_friction_coef: 0.5,
     }
     fracturing_props = default_fracturing_props(1e5, 1e7)
-    base =  base_object(response_params, fracturing_props)
+    base = base_object(response_params, fracturing_props)
 
     speed = 12
 
@@ -269,7 +277,7 @@ setup_rotational_impact! = |{}|
         dynamic_friction_coef: 0.5,
     }
     fracturing_props = default_fracturing_props(5e4, 1e6)
-    base =  base_object(response_params, fracturing_props)
+    base = base_object(response_params, fracturing_props)
 
     base
     |> Setup.VoxelSphere.add_new(0.04, 20)
@@ -288,14 +296,13 @@ setup_rotational_impact! = |{}|
     |> Entity.create!
     |> Result.map_ok(|_| {})
 
-default_fracturing_props = |fracturing_force, shattering_pressure|
-    {
-        fracturing_force,
-        shattering_pressure,
-        fragment_scale : 0.3,
-        min_fragment_extent : 0.15,
-        max_fragment_extent : 1.0,
-    }
+default_fracturing_props = |fracturing_force, shattering_pressure| {
+    fracturing_force,
+    shattering_pressure,
+    fragment_scale: 0.3,
+    min_fragment_extent: 0.15,
+    max_fragment_extent: 1.0,
+}
 
 base_object = |response_params, fracturing_props|
     Entity.new_component_data
