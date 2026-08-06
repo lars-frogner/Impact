@@ -1001,6 +1001,18 @@ impl SplitDetector {
             region.adjacent_region_connection_count = 0;
         }
 
+        let max_adjacent_region_connections_per_region =
+            max_adjacent_region_connections_per_region(this_chunk.boundary_region_count);
+
+        for (region_idx, boundary_region) in these_regions
+            .iter_mut()
+            .take(this_chunk.boundary_region_count as usize)
+            .enumerate()
+        {
+            boundary_region.adjacent_region_connection_start_idx =
+                region_idx as LocalRegionCount * max_adjacent_region_connections_per_region;
+        }
+
         for region_idx in this_chunk.boundary_region_count..this_chunk.region_count {
             these_regions[region_idx as usize].parent_label =
                 GlobalRegionLabel::new(this_chunk_idx, u32::from(region_idx));
