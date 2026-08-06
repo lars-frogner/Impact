@@ -1019,7 +1019,7 @@ pub mod fuzzing {
             object.validate_sdf();
             object.validate_region_count();
 
-            inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
+            inertial_property_manager.validate_for_object(&object, &voxel_type_densities, 1e-3);
         }
     }
 
@@ -1065,7 +1065,7 @@ pub mod fuzzing {
             object.validate_sdf();
             object.validate_region_count();
 
-            inertial_property_manager.validate_for_object(&object, &voxel_type_densities);
+            inertial_property_manager.validate_for_object(&object, &voxel_type_densities, 1e-3);
 
             mesh.sync_with_voxel_object(&object);
             let mesh_from_scratch = VoxelObjectMesh::create(&object);
