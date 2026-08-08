@@ -190,7 +190,7 @@ bitflags! {
 /// Helper struct for keeping track of the number of empty or non-empty voxels
 /// on each face of a chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct FaceCounts([[usize; 2]; 3]);
+struct FaceCounts([[u32; 2]; 3]);
 
 pub type LoopForChunkVoxels = Loop3<CHUNK_SIZE>;
 pub type LoopOverChunkVoxelData<'a, 'b> = DataLoop3<'a, 'b, Voxel, CHUNK_SIZE>;
@@ -2918,36 +2918,44 @@ impl FaceCounts {
     }
 
     #[inline]
-    fn add_x_dn(&mut self, count: usize) {
+    fn add_x_dn(&mut self, count: u32) {
         self.0[0][0] += count;
     }
     #[inline]
-    fn add_x_up(&mut self, count: usize) {
+    fn add_x_up(&mut self, count: u32) {
         self.0[0][1] += count;
     }
     #[inline]
-    fn add_y_dn(&mut self, count: usize) {
+    fn add_y_dn(&mut self, count: u32) {
         self.0[1][0] += count;
     }
     #[inline]
-    fn add_y_up(&mut self, count: usize) {
+    fn add_y_up(&mut self, count: u32) {
         self.0[1][1] += count;
+    }
+    #[inline]
+    fn add_z_dn(&mut self, count: u32) {
+        self.0[2][0] += count;
+    }
+    #[inline]
+    fn add_z_up(&mut self, count: u32) {
+        self.0[2][1] += count;
     }
 
     #[inline]
     fn empty_counts_to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
-        self.empty_counts_to_face_distributions(CHUNK_SIZE_SQUARED)
+        self.empty_counts_to_face_distributions(CHUNK_SIZE_SQUARED as u32)
     }
 
     #[inline]
     fn non_empty_counts_to_chunk_face_distributions(&self) -> [[FaceVoxelDistribution; 2]; 3] {
-        self.non_empty_counts_to_face_distributions(CHUNK_SIZE_SQUARED)
+        self.non_empty_counts_to_face_distributions(CHUNK_SIZE_SQUARED as u32)
     }
 
     #[inline]
     fn empty_counts_to_face_distributions(
         &self,
-        full_face_count: usize,
+        full_face_count: u32,
     ) -> [[FaceVoxelDistribution; 2]; 3] {
         self.map(&|empty_count| {
             if empty_count == full_face_count {
@@ -2963,7 +2971,7 @@ impl FaceCounts {
     #[inline]
     fn non_empty_counts_to_face_distributions(
         &self,
-        full_face_count: usize,
+        full_face_count: u32,
     ) -> [[FaceVoxelDistribution; 2]; 3] {
         self.map(&|non_empty_count| {
             if non_empty_count == full_face_count {
@@ -2977,7 +2985,7 @@ impl FaceCounts {
     }
 
     #[inline]
-    fn map<T>(&self, f: &impl Fn(usize) -> T) -> [[T; 2]; 3] {
+    fn map<T>(&self, f: &impl Fn(u32) -> T) -> [[T; 2]; 3] {
         self.0.map(|counts| counts.map(f))
     }
 }

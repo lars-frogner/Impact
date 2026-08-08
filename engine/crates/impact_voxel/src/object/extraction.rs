@@ -860,6 +860,7 @@ impl VoxelObject {
                             [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
                         const CHUNK_SIZE_U32: u32 = CHUNK_SIZE as u32;
+                        const MAX_IJK: u32 = CHUNK_SIZE_U32 - 1;
 
                         let mut lower_occupied_voxels = [CHUNK_SIZE_U32; 3];
                         let mut upper_occupied_voxels = [0; 3];
@@ -871,6 +872,9 @@ impl VoxelObject {
 
                         let mut poly_face_occupied_counts = FaceCounts::zero();
 
+                        let mut chunk_has_only_empty_voxels = true;
+                        let mut poly_chunk_has_only_empty_voxels = true;
+
                         let voxel_indices =
                             |i: u32, j: u32, k: u32| [i as usize, j as usize, k as usize];
 
@@ -880,13 +884,13 @@ impl VoxelObject {
                             let obj_i = chunk_start_voxel_indices[0] + i as usize;
 
                             let on_lower_x_face = i == 0;
-                            let on_upper_x_face = i == CHUNK_SIZE_U32 - 1;
+                            let on_upper_x_face = i == MAX_IJK;
 
                             for j in 0..CHUNK_SIZE_U32 {
                                 let obj_j = chunk_start_voxel_indices[1] + j as usize;
 
                                 let on_lower_y_face = j == 0;
-                                let on_upper_y_face = j == CHUNK_SIZE_U32 - 1;
+                                let on_upper_y_face = j == MAX_IJK;
 
                                 Self::compute_max_plane_signed_dists_for_row(
                                     &mut max_signed_dists_for_row,
@@ -896,13 +900,8 @@ impl VoxelObject {
                                     j,
                                 );
 
-                                let mut lower_occupied_k = CHUNK_SIZE_U32;
-                                let mut upper_occupied_k = 0;
-                                let mut row_occupied_count = 0;
-
-                                let mut poly_lower_occupied_k = CHUNK_SIZE_U32;
-                                let mut poly_upper_occupied_k = 0;
-                                let mut poly_row_occupied_count = 0;
+                                let mut occupied_mask: u16 = 0;
+                                let mut poly_occupied_mask: u16 = 0;
 
                                 for k in 0..CHUNK_SIZE_U32 {
                                     let obj_k = chunk_start_voxel_indices[2] + k as usize;
@@ -941,16 +940,7 @@ impl VoxelObject {
                                         voxel.flags |= VoxelFlags::IS_EMPTY;
                                         poly_voxel.flags -= VoxelFlags::IS_EMPTY;
 
-                                        poly_row_occupied_count += 1;
-
-                                        poly_lower_occupied_k = poly_lower_occupied_k.min(k);
-                                        poly_upper_occupied_k = poly_upper_occupied_k.max(k);
-
-                                        if k == 0 {
-                                            poly_face_occupied_counts.increment_z_dn();
-                                        } else if k == CHUNK_SIZE_U32 - 1 {
-                                            poly_face_occupied_counts.increment_z_up();
-                                        }
+                                        poly_occupied_mask |= 1 << k;
 
                                         property_transferrer.transfer_voxel(
                                             &[obj_i, obj_j, obj_k],
@@ -977,16 +967,7 @@ impl VoxelObject {
                                         );
 
                                         if voxel_signed_distance.is_negative() {
-                                            row_occupied_count += 1;
-
-                                            lower_occupied_k = lower_occupied_k.min(k);
-                                            upper_occupied_k = upper_occupied_k.max(k);
-
-                                            if k == 0 {
-                                                face_occupied_counts.increment_z_dn();
-                                            } else if k == CHUNK_SIZE_U32 {
-                                                face_occupied_counts.increment_z_up();
-                                            }
+                                            occupied_mask |= 1 << k;
                                         }
                                     }
 
@@ -998,18 +979,29 @@ impl VoxelObject {
                                     voxel_idx += 1;
                                 }
 
-                                if lower_occupied_k <= upper_occupied_k {
+                                if occupied_mask != 0 {
+                                    chunk_has_only_empty_voxels = false;
+
                                     lower_occupied_voxels[0] = lower_occupied_voxels[0].min(i);
                                     upper_occupied_voxels[0] = upper_occupied_voxels[0].max(i);
                                     lower_occupied_voxels[1] = lower_occupied_voxels[1].min(j);
                                     upper_occupied_voxels[1] = upper_occupied_voxels[1].max(j);
+
+                                    let lower_occupied_k = occupied_mask.trailing_zeros();
+                                    let upper_occupied_k = MAX_IJK - occupied_mask.leading_zeros();
+
                                     lower_occupied_voxels[2] =
                                         lower_occupied_voxels[2].min(lower_occupied_k);
                                     upper_occupied_voxels[2] =
                                         upper_occupied_voxels[2].max(upper_occupied_k);
                                 }
 
-                                if poly_lower_occupied_k <= poly_upper_occupied_k {
+                                face_occupied_counts.add_z_dn(u32::from(occupied_mask & 1));
+                                face_occupied_counts.add_z_up(u32::from(occupied_mask >> MAX_IJK));
+
+                                if poly_occupied_mask != 0 {
+                                    poly_chunk_has_only_empty_voxels = false;
+
                                     poly_lower_occupied_voxels[0] =
                                         poly_lower_occupied_voxels[0].min(i);
                                     poly_upper_occupied_voxels[0] =
@@ -1018,11 +1010,24 @@ impl VoxelObject {
                                         poly_lower_occupied_voxels[1].min(j);
                                     poly_upper_occupied_voxels[1] =
                                         poly_upper_occupied_voxels[1].max(j);
+
+                                    let poly_lower_occupied_k = poly_occupied_mask.trailing_zeros();
+                                    let poly_upper_occupied_k =
+                                        MAX_IJK - poly_occupied_mask.leading_zeros();
+
                                     poly_lower_occupied_voxels[2] =
                                         poly_lower_occupied_voxels[2].min(poly_lower_occupied_k);
                                     poly_upper_occupied_voxels[2] =
                                         poly_upper_occupied_voxels[2].max(poly_upper_occupied_k);
                                 }
+
+                                poly_face_occupied_counts
+                                    .add_z_dn(u32::from(poly_occupied_mask & 1));
+                                poly_face_occupied_counts
+                                    .add_z_up(u32::from(poly_occupied_mask >> MAX_IJK));
+
+                                let row_occupied_count = occupied_mask.count_ones();
+                                let poly_row_occupied_count = poly_occupied_mask.count_ones();
 
                                 if on_lower_x_face {
                                     face_occupied_counts.add_x_dn(row_occupied_count);
@@ -1040,11 +1045,6 @@ impl VoxelObject {
                                 }
                             }
                         }
-
-                        let chunk_has_only_empty_voxels = lower_occupied_voxels
-                            .iter()
-                            .zip(&upper_occupied_voxels)
-                            .all(|(&lower, &upper)| lower > upper);
 
                         let chunk_is_void = chunk_has_only_empty_voxels
                             && chunk_voxels
@@ -1082,11 +1082,6 @@ impl VoxelObject {
                                 );
                             }
                         }
-
-                        let poly_chunk_has_only_empty_voxels = poly_lower_occupied_voxels
-                            .iter()
-                            .zip(&poly_upper_occupied_voxels)
-                            .all(|(&lower, &upper)| lower > upper);
 
                         let poly_chunk_is_void = poly_chunk_has_only_empty_voxels
                             && poly_chunk_voxels
@@ -1491,6 +1486,7 @@ impl VoxelObject {
                             [VoxelSignedDistance::maximally_inside(); CHUNK_SIZE];
 
                         const CHUNK_SIZE_U32: u32 = CHUNK_SIZE as u32;
+                        const MAX_IJK: u32 = CHUNK_SIZE_U32 - 1;
 
                         let mut lower_occupied_voxels = [CHUNK_SIZE_U32; 3];
                         let mut upper_occupied_voxels = [0; 3];
@@ -1506,13 +1502,13 @@ impl VoxelObject {
                             let obj_i = chunk_start_voxel_indices[0] + i as usize;
 
                             let on_lower_x_face = i == 0;
-                            let on_upper_x_face = i == CHUNK_SIZE_U32 - 1;
+                            let on_upper_x_face = i == MAX_IJK;
 
                             for j in 0..CHUNK_SIZE_U32 {
                                 let obj_j = chunk_start_voxel_indices[1] + j as usize;
 
                                 let on_lower_y_face = j == 0;
-                                let on_upper_y_face = j == CHUNK_SIZE_U32 - 1;
+                                let on_upper_y_face = j == MAX_IJK;
 
                                 Self::compute_max_plane_signed_dists_for_row(
                                     &mut max_signed_dists_for_row,
@@ -1522,10 +1518,7 @@ impl VoxelObject {
                                     j,
                                 );
 
-                                let mut lower_occupied_k = CHUNK_SIZE_U32;
-                                let mut upper_occupied_k = 0;
-
-                                let mut row_occupied_count = 0;
+                                let mut occupied_mask: u16 = 0;
 
                                 for k in 0..CHUNK_SIZE_U32 {
                                     let obj_k = chunk_start_voxel_indices[2] + k as usize;
@@ -1550,16 +1543,7 @@ impl VoxelObject {
                                     if poly_voxel_is_non_empty {
                                         poly_voxel.flags -= VoxelFlags::IS_EMPTY;
 
-                                        lower_occupied_k = lower_occupied_k.min(k);
-                                        upper_occupied_k = upper_occupied_k.max(k);
-
-                                        row_occupied_count += 1;
-
-                                        if k == 0 {
-                                            face_occupied_counts.increment_z_dn();
-                                        } else if k == CHUNK_SIZE_U32 - 1 {
-                                            face_occupied_counts.increment_z_up();
-                                        }
+                                        occupied_mask |= 1 << k;
 
                                         property_computer.compute_for_voxel(
                                             &[obj_i, obj_j, obj_k],
@@ -1608,16 +1592,26 @@ impl VoxelObject {
                                     voxel_idx += 1;
                                 }
 
-                                if lower_occupied_k <= upper_occupied_k {
+                                if occupied_mask != 0 {
                                     lower_occupied_voxels[0] = lower_occupied_voxels[0].min(i);
                                     upper_occupied_voxels[0] = upper_occupied_voxels[0].max(i);
                                     lower_occupied_voxels[1] = lower_occupied_voxels[1].min(j);
                                     upper_occupied_voxels[1] = upper_occupied_voxels[1].max(j);
+
+                                    let lower_occupied_k = occupied_mask.trailing_zeros();
+                                    let upper_occupied_k = MAX_IJK - occupied_mask.leading_zeros();
+
                                     lower_occupied_voxels[2] =
                                         lower_occupied_voxels[2].min(lower_occupied_k);
                                     upper_occupied_voxels[2] =
                                         upper_occupied_voxels[2].max(upper_occupied_k);
+
+                                    face_occupied_counts.add_z_dn(u32::from(occupied_mask & 1));
+                                    face_occupied_counts
+                                        .add_z_up(u32::from(occupied_mask >> MAX_IJK));
                                 }
+
+                                let row_occupied_count = occupied_mask.count_ones();
 
                                 if on_lower_x_face {
                                     face_occupied_counts.add_x_dn(row_occupied_count);
@@ -1750,8 +1744,8 @@ impl VoxelObject {
         max_signed_dists_for_row: &mut [VoxelSignedDistance; CHUNK_SIZE],
         planes: &[PlaneC],
         lower_voxel_pos: &Point3C,
-        i: usize,
-        j: usize,
+        i: u32,
+        j: u32,
     ) {
         #![allow(clippy::needless_range_loop)]
 
