@@ -745,6 +745,7 @@ impl Engine {
                 voxel_object_manager,
                 voxel_object_id,
                 None,
+                None,
                 &fracture_points,
             )
             .map(|_| ())

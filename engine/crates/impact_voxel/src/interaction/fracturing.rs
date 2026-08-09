@@ -1,11 +1,11 @@
 //! Voxel object fracturing.
 
 use crate::{
-    VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager,
+    VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager, VoxelSignedDistance,
     collidable::{Collidable, CollisionWorld},
     interaction::{
-        self, Anchors, RemovedMassFate, SpawnableVoxelObject, VoxelObjectInteractionContext,
-        VoxelObjectUpdateOutcome, VoxelRemoval,
+        self, Anchors, DynamicExtractedVoxelObject, RemovedMassFate, SpawnableVoxelObject,
+        VoxelObjectInteractionContext, VoxelObjectUpdateOutcome, VoxelRemoval,
     },
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
     object::{
@@ -48,7 +48,7 @@ use impact_thread::{
     pool::{DynamicTask, DynamicThreadPool},
 };
 use roc_integration::roc;
-use std::time::Instant;
+use std::{array, time::Instant};
 
 pub trait VoxelObjectFracturingContext {
     /// Returns the fracturing properties of the given entity if they exist.
@@ -159,6 +159,7 @@ pub struct VoxelImpactFracturingConfig {
 #[derive(Debug)]
 struct StagedFracturingProcess {
     fracture_region_tetras: Option<DelaunayTetrahedralization>,
+    fracture_region_selection_point: Option<Point3>,
     process: FracturingProcess,
 }
 
@@ -239,14 +240,16 @@ impl VoxelObjectFracturingManager {
 
     /// Stages a fracturing process for the given voxel object. If boundary
     /// points for the fracture region are specified, their convex hull will be
-    /// used as the boundary of the fractured region. If not specified, the
-    /// fracture region will be the whole object. The fragments within the
-    /// fracture region will be the Voronoi cells centered on the given fracture
-    /// points.
+    /// used as the boundary of the fractured region. If the fracture region
+    /// consists of multiple disconnected parts and a selection point is
+    /// specified, only the part touching the selection point is fractured. If
+    /// boundary points are not specified, the fracture region will be the whole
+    /// object. The fragments within the fracture region will be the Voronoi
+    /// cells centered on the given fracture points.
     ///
-    /// Note that both the fracture region boundary points and fracture points
-    /// should be specified in the normalized space of the voxel object (where
-    /// distance is in units of voxels).
+    /// Note that the fracture region boundary points, selection point and
+    /// fracture points should all be specified in the normalized space of the
+    /// voxel object (where distance is in units of voxels).
     ///
     /// Call [`Self::execute_fracturing_processes`] to execute the staged
     /// fracturing processes.
@@ -266,6 +269,7 @@ impl VoxelObjectFracturingManager {
         voxel_object_manager: &VoxelObjectManager,
         voxel_object_id: VoxelObjectID,
         fracture_region_boundary_points: Option<&[Point3C]>,
+        fracture_region_selection_point: Option<Point3>,
         fracture_points: &[Point3C],
     ) -> Result<bool> {
         if !voxel_object_manager.has_voxel_object(voxel_object_id) {
@@ -319,6 +323,7 @@ impl VoxelObjectFracturingManager {
 
         let staged_process = StagedFracturingProcess {
             fracture_region_tetras,
+            fracture_region_selection_point,
             process,
         };
 
@@ -471,6 +476,7 @@ impl VoxelObjectFracturingManager {
                         &self.config,
                         context,
                         entity_id_manager,
+                        voxel_type_registry,
                         voxel_object_manager,
                         voxel_object_buffer_pool,
                         rigid_body_manager,
@@ -484,6 +490,7 @@ impl VoxelObjectFracturingManager {
                         &self.config,
                         context,
                         entity_id_manager,
+                        voxel_type_registry,
                         voxel_object_manager,
                         voxel_object_buffer_pool,
                         rigid_body_manager,
@@ -708,11 +715,19 @@ impl VoxelObjectFracturingManager {
                     fracture_point_count = fracture_points.len(),
                 );
 
+                // Use the impact point to select which part of the full
+                // fracture region to fracture if it turns out to consist of
+                // multiple disconnected parts
+                let fracture_region_selection_point = world_to_object_transform
+                    .transform_point(&fracture_force.position)
+                    * voxel_object.inverse_voxel_extent();
+
                 let was_staged = self
                     .stage_fracturing_process_for_object(
                         voxel_object_manager,
                         voxel_object_id,
                         Some(&fracture_region_boundary_points),
+                        Some(fracture_region_selection_point),
                         &fracture_points,
                     )
                     .unwrap();
@@ -885,6 +900,7 @@ impl StagedFracturingProcess {
     {
         let Self {
             fracture_region_tetras,
+            fracture_region_selection_point,
             mut process,
         } = self;
 
@@ -906,6 +922,7 @@ impl StagedFracturingProcess {
             fracture_region_buffer_pool,
             voxel_object_id,
             &fracture_region_tetras,
+            fracture_region_selection_point,
         ) else {
             fracture_region_pool.push(fracture_region_tetras);
             process.reset(voxel_object_buffer_pool);
@@ -1247,6 +1264,7 @@ impl FracturingProcess {
         config: &VoxelFracturingConfig,
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
+        voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &mut VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
@@ -1287,6 +1305,7 @@ impl FracturingProcess {
         self.complete(
             context,
             entity_id_manager,
+            voxel_type_registry,
             voxel_object_manager,
             voxel_object_buffer_pool,
             rigid_body_manager,
@@ -1315,6 +1334,7 @@ impl FracturingProcess {
         config: &VoxelFracturingConfig,
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
+        voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &mut VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
@@ -1375,6 +1395,7 @@ impl FracturingProcess {
         self.complete(
             context,
             entity_id_manager,
+            voxel_type_registry,
             voxel_object_manager,
             voxel_object_buffer_pool,
             rigid_body_manager,
@@ -1396,6 +1417,7 @@ impl FracturingProcess {
         &mut self,
         context: &mut C,
         entity_id_manager: &mut EntityIDManager,
+        voxel_type_registry: &VoxelTypeRegistry,
         voxel_object_manager: &mut VoxelObjectManager,
         voxel_object_buffer_pool: &mut VoxelObjectBufferPool,
         rigid_body_manager: &mut RigidBodyManager,
@@ -1415,10 +1437,12 @@ impl FracturingProcess {
 
         let mut entity_ids = Vec::with_capacity(self.fragments.len());
 
+        let arena = ArenaPool::get_arena();
+
         for mut fragment in self.fragments.drain(..) {
             let voxel_object = fragment.meshed_voxel_object.object();
 
-            let dynamics = interaction::determine_extracted_voxel_object_dynamics(
+            let mut dynamics = interaction::determine_extracted_voxel_object_dynamics(
                 voxel_object,
                 fragment.origin_offset_in_parent,
                 &mut fragment.inertial_property_manager,
@@ -1434,11 +1458,52 @@ impl FracturingProcess {
                 continue;
             }
 
-            let anchors = interaction::transfer_anchors_to_extracted_voxel_object(
+            let mut anchors = interaction::transfer_anchors_to_extracted_voxel_object(
                 original_anchors,
                 voxel_object,
                 &dynamics.coordinate_changes,
             );
+
+            let fragment_local_center_of_mass =
+                fragment.inertial_property_manager.derive_center_of_mass();
+
+            // The fragment could contain disconnected regions, so we have to
+            // check for that and spawn any disconnected parts in addition to
+            // the original fragment
+            let VoxelObjectUpdateOutcome {
+                original_object_empty,
+                extracted_disconnected_objects,
+                lost_anchors,
+            } = interaction::update_modified_or_disconnected_voxel_object(
+                &arena,
+                voxel_type_registry,
+                voxel_object_buffer_pool,
+                fragment.meshed_voxel_object.object_mut(),
+                &mut fragment.inertial_property_manager,
+                &mut dynamics.rigid_body,
+                &mut anchors,
+                fragment_local_center_of_mass,
+                VoxelRemoval::None,
+            );
+
+            for (anchor_id, _) in lost_anchors {
+                anchor_manager.dynamic_mut().remove(anchor_id);
+            }
+
+            if original_object_empty {
+                voxel_object_buffer_pool.add_buffers(fragment.meshed_voxel_object.into_buffers());
+
+                for disconnected_object in extracted_disconnected_objects {
+                    voxel_object_buffer_pool.add_buffers(MeshedVoxelObjectBuffers {
+                        object_buffers: disconnected_object.voxel_object.into_buffers(),
+                        mesh_buffers: disconnected_object.mesh_buffers,
+                    });
+                    for (anchor_id, _) in disconnected_object.anchors {
+                        anchor_manager.dynamic_mut().remove(anchor_id);
+                    }
+                }
+                continue;
+            }
 
             let spawnable_object = SpawnableVoxelObject {
                 meshed_voxel_object: fragment.meshed_voxel_object,
@@ -1458,6 +1523,32 @@ impl FracturingProcess {
             );
 
             entity_ids.push(entity_id);
+
+            // Handle disconnected parts
+            for disconnected_object in extracted_disconnected_objects {
+                if disconnected_object.rigid_body.mass() < min_mass {
+                    voxel_object_buffer_pool.add_buffers(MeshedVoxelObjectBuffers {
+                        object_buffers: disconnected_object.voxel_object.into_buffers(),
+                        mesh_buffers: disconnected_object.mesh_buffers,
+                    });
+                    for (anchor_id, _) in disconnected_object.anchors {
+                        anchor_manager.dynamic_mut().remove(anchor_id);
+                    }
+                    continue;
+                }
+
+                let disconnected_entity_id = entity_id_manager.provide_id();
+
+                interaction::spawn_extracted_voxel_object(
+                    voxel_object_manager,
+                    rigid_body_manager,
+                    anchor_manager,
+                    disconnected_object.into_spawnable(),
+                    disconnected_entity_id,
+                );
+
+                entity_ids.push(disconnected_entity_id);
+            }
         }
 
         context.create_extracted_voxel_object_entities(entity_ids, original_entity_id);
@@ -1545,6 +1636,7 @@ fn extract_fracture_region_object<C>(
     fracture_region_buffer_pool: &mut Vec<VoxelObjectBuffers>,
     voxel_object_id: VoxelObjectID,
     fracture_region_tetras: &DelaunayTetrahedralization,
+    fracture_region_selection_point: Option<Point3>,
 ) -> Option<FractureRegionObject>
 where
     C: VoxelObjectInteractionContext,
@@ -1687,7 +1779,12 @@ where
         &fracture_region_object_dynamics.coordinate_changes,
     );
 
-    let fracture_region_object = FractureRegionObject {
+    // Remaining anchors are not attached to anything, so we delete them
+    for (anchor_id, _) in lost_anchors {
+        anchor_manager.dynamic_mut().remove(anchor_id);
+    }
+
+    let mut fracture_region_object = FractureRegionObject {
         voxel_object: extracted_fracture_region_object.voxel_object,
         inertial_property_manager: fracture_region_inertial_property_manager,
         rigid_body: fracture_region_object_dynamics.rigid_body,
@@ -1696,12 +1793,166 @@ where
         original_object_mass: original_mass,
     };
 
-    // Remaining anchors are not attached to anything, so we delete them
-    for (anchor_id, _) in lost_anchors {
-        anchor_manager.dynamic_mut().remove(anchor_id);
+    if let Some(selection_point) = fracture_region_selection_point {
+        let fracture_region_local_center_of_mass = fracture_region_object
+            .inertial_property_manager
+            .derive_center_of_mass();
+
+        let VoxelObjectUpdateOutcome {
+            extracted_disconnected_objects,
+            lost_anchors,
+            ..
+        } = interaction::update_modified_or_disconnected_voxel_object(
+            &arena,
+            voxel_type_registry,
+            voxel_object_buffer_pool,
+            &mut fracture_region_object.voxel_object,
+            &mut fracture_region_object.inertial_property_manager,
+            &mut fracture_region_object.rigid_body,
+            &mut fracture_region_object.anchors,
+            fracture_region_local_center_of_mass,
+            VoxelRemoval::None,
+        );
+
+        for (anchor_id, _) in lost_anchors {
+            anchor_manager.dynamic_mut().remove(anchor_id);
+        }
+
+        Some(select_part_to_fracture_and_spawn_remaining(
+            context,
+            entity_id_manager,
+            voxel_object_manager,
+            rigid_body_manager,
+            anchor_manager,
+            entity_id,
+            fracture_region_object,
+            extracted_disconnected_objects,
+            selection_point,
+        ))
+    } else {
+        // The fracture region could consist of disconnected parts, but we don't
+        // have to account for this here since the final fragments will be split
+        // if they are disconnected
+        Some(fracture_region_object)
+    }
+}
+
+fn select_part_to_fracture_and_spawn_remaining<C, A: Allocator>(
+    context: &mut C,
+    entity_id_manager: &mut EntityIDManager,
+    voxel_object_manager: &mut VoxelObjectManager,
+    rigid_body_manager: &mut RigidBodyManager,
+    anchor_manager: &mut AnchorManager,
+    original_entity_id: EntityID,
+    original_fracture_region_object: FractureRegionObject,
+    extracted_disconnected_objects: AVec<DynamicExtractedVoxelObject, A>,
+    selection_point_relative_to_parent: Point3,
+) -> FractureRegionObject
+where
+    C: VoxelObjectInteractionContext,
+{
+    if extracted_disconnected_objects.is_empty() {
+        return original_fracture_region_object;
     }
 
-    Some(fracture_region_object)
+    let offset_from_parent = |origin_offset_in_parent: [usize; 3], point: Point3| {
+        let origin_offset: Vector3 = origin_offset_in_parent.map(|offset| offset as f32).into();
+        point - origin_offset
+    };
+
+    let selection_point = offset_from_parent(
+        original_fracture_region_object.origin_offset_in_parent,
+        selection_point_relative_to_parent,
+    );
+
+    let mut best_signed_dist = VoxelSignedDistance::maximally_outside();
+    let mut best_disconnected_idx = usize::MAX;
+
+    if let Some(voxel) = original_fracture_region_object
+        .voxel_object
+        .get_voxel_at_grid_coords(selection_point.as_vector())
+    {
+        best_signed_dist = voxel.signed_distance();
+    }
+
+    // If a disconnected object is closer to the selection point, pick that as
+    // the new fracture region object
+    for (idx, object) in extracted_disconnected_objects.iter().enumerate() {
+        // Account for the offset of the disconnected object relative to the
+        // fracture region object
+        let coords = offset_from_parent(object.origin_offset_in_parent, selection_point);
+
+        if let Some(voxel) = object
+            .voxel_object
+            .get_voxel_at_grid_coords(coords.as_vector())
+        {
+            let signed_dist = voxel.signed_distance();
+            if signed_dist < best_signed_dist {
+                best_signed_dist = signed_dist;
+                best_disconnected_idx = idx;
+            }
+        }
+    }
+
+    let mut fracture_region_object = original_fracture_region_object;
+
+    let disconnected_entity_ids =
+        entity_id_manager.provide_id_vec(extracted_disconnected_objects.len());
+
+    for (idx, (disconnected_entity_id, disconnected_object)) in disconnected_entity_ids
+        .iter()
+        .copied()
+        .zip(extracted_disconnected_objects)
+        .enumerate()
+    {
+        let spawnable_disconnected_object = if idx == best_disconnected_idx {
+            // Swap the disconnected object with the fracture region object
+
+            let spawnable_object = SpawnableVoxelObject {
+                meshed_voxel_object: MeshedVoxelObject::create(
+                    disconnected_object.mesh_buffers,
+                    fracture_region_object.voxel_object,
+                ),
+                inertial_property_manager: fracture_region_object.inertial_property_manager,
+                rigid_body: fracture_region_object.rigid_body,
+                anchors: fracture_region_object.anchors,
+            };
+
+            // Since the origin offset of the disconnected object is relative
+            // the the fracture region object, we must add the offset of the
+            // latter to get the offset relative to the original object (the
+            // fracture region's parent)
+            let origin_offset_in_parent = array::from_fn(|dim| {
+                disconnected_object.origin_offset_in_parent[dim]
+                    + fracture_region_object.origin_offset_in_parent[dim]
+            });
+
+            fracture_region_object = FractureRegionObject {
+                voxel_object: disconnected_object.voxel_object,
+                inertial_property_manager: disconnected_object.inertial_property_manager,
+                rigid_body: disconnected_object.rigid_body,
+                anchors: disconnected_object.anchors,
+                origin_offset_in_parent,
+                original_object_mass: fracture_region_object.original_object_mass,
+            };
+
+            spawnable_object
+        } else {
+            disconnected_object.into_spawnable()
+        };
+
+        interaction::spawn_extracted_voxel_object(
+            voxel_object_manager,
+            rigid_body_manager,
+            anchor_manager,
+            spawnable_disconnected_object,
+            disconnected_entity_id,
+        );
+    }
+
+    context.create_extracted_voxel_object_entities(disconnected_entity_ids, original_entity_id);
+
+    fracture_region_object
 }
 
 /// Generates fracture points and fracture region boundary points for a voxel
