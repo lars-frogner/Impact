@@ -933,7 +933,23 @@ impl VoxelObject {
                                     voxel.signed_distance = voxel_signed_distance;
                                     poly_voxel.signed_distance = poly_voxel_signed_distance;
 
-                                    if poly_voxel_signed_distance.is_negative() {
+                                    let poly_voxel_is_empty =
+                                        !poly_voxel_signed_distance.is_negative();
+
+                                    if poly_voxel_is_empty {
+                                        // The original voxel did not change emptiness
+
+                                        poly_voxel.flags |= VoxelFlags::IS_EMPTY;
+
+                                        Self::update_lower_adjacencies_for_empty_voxel(
+                                            poly_chunk_voxels,
+                                            voxel_indices(i, j, k),
+                                        );
+
+                                        if voxel_signed_distance.is_negative() {
+                                            occupied_mask |= 1 << k;
+                                        }
+                                    } else {
                                         // Original voxel was non-empty, now
                                         // it's empty and the polyhedron voxel
                                         // is non-empty
@@ -957,18 +973,6 @@ impl VoxelObject {
                                             &mut poly_voxel,
                                             voxel_indices(i, j, k),
                                         );
-                                    } else {
-                                        // The original voxel did not change emptiness
-                                        poly_voxel.flags |= VoxelFlags::IS_EMPTY;
-
-                                        Self::update_lower_adjacencies_for_empty_voxel(
-                                            poly_chunk_voxels,
-                                            voxel_indices(i, j, k),
-                                        );
-
-                                        if voxel_signed_distance.is_negative() {
-                                            occupied_mask |= 1 << k;
-                                        }
                                     }
 
                                     *NonUniformVoxelChunk::get_voxel_mut(
@@ -1537,10 +1541,28 @@ impl VoxelObject {
                                     poly_voxel.signed_distance =
                                         poly_voxel.signed_distance.max(planes_signed_distance);
 
-                                    let poly_voxel_is_non_empty =
-                                        poly_voxel.signed_distance.is_negative();
+                                    let poly_voxel_is_empty =
+                                        !poly_voxel.signed_distance.is_negative();
 
-                                    if poly_voxel_is_non_empty {
+                                    if poly_voxel_is_empty {
+                                        // Voxels outside the planes will always be
+                                        // emptied. Sufficiently far outside the planes,
+                                        // we know that all adjacent voxels will be
+                                        // empty, so we can just clear the adjacency
+                                        // flags.
+                                        if planes_signed_distance.is_maximally_outside() {
+                                            poly_voxel.flags = VoxelFlags::IS_EMPTY;
+                                        } else {
+                                            poly_voxel.flags |= VoxelFlags::IS_EMPTY;
+
+                                            if !planes_signed_distance.is_maximally_inside() {
+                                                Self::update_lower_adjacencies_for_empty_voxel(
+                                                    poly_chunk_voxels,
+                                                    voxel_indices(i, j, k),
+                                                );
+                                            }
+                                        }
+                                    } else {
                                         poly_voxel.flags -= VoxelFlags::IS_EMPTY;
 
                                         occupied_mask |= 1 << k;
@@ -1568,24 +1590,6 @@ impl VoxelObject {
                                                 poly_chunk_voxels,
                                                 voxel_idx,
                                             ) = poly_voxel;
-                                        }
-                                    } else {
-                                        // Voxels outside the planes will always be
-                                        // emptied. Sufficiently far outside the planes,
-                                        // we know that all adjacent voxels will be
-                                        // empty, so we can just clear the adjacency
-                                        // flags.
-                                        if planes_signed_distance.is_maximally_outside() {
-                                            poly_voxel.flags = VoxelFlags::IS_EMPTY;
-                                        } else {
-                                            poly_voxel.flags |= VoxelFlags::IS_EMPTY;
-
-                                            if !planes_signed_distance.is_maximally_inside() {
-                                                Self::update_lower_adjacencies_for_empty_voxel(
-                                                    poly_chunk_voxels,
-                                                    voxel_indices(i, j, k),
-                                                );
-                                            }
                                         }
                                     }
 
