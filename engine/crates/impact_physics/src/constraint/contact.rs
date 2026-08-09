@@ -94,6 +94,12 @@ pub struct ContactImpulses {
     bitangent: f32,
 }
 
+// For slower impacts than this, we always use a restitution coefficient
+// of zero so that resting contacts become less jittery
+const NORMAL_SPEED_FOR_BOUNCE: f32 = 0.4;
+
+const SQUARED_SLIP_SPEED_FOR_DYNAMIC_FRICTION: f32 = 1e-4;
+
 impl ContactImpulses {
     /// The impulse magnitude along the contact normal.
     #[inline]
@@ -231,12 +237,6 @@ impl TwoBodyConstraint for Contact {
     type Prepared = PreparedContact;
 
     fn prepare(&self, body_a: &ConstrainedBody, body_b: &ConstrainedBody) -> Self::Prepared {
-        // For slower impacts than this, we always use a restitution coefficient
-        // of zero so that resting contacts become less jittery
-        const NORMAL_SPEED_FOR_BOUNCE: f32 = 0.4;
-
-        const SQUARED_SLIP_SPEED_FOR_DYNAMIC_FRICTION: f32 = 1e-4;
-
         let body_a_position = body_a.position.aligned();
         let body_b_position = body_b.position.aligned();
 
@@ -251,14 +251,14 @@ impl TwoBodyConstraint for Contact {
         let disp_b = self.geometry.position - body_b_position;
 
         let normal = self.geometry.surface_normal;
-        let (tangent_1, tangent_2) = construct_tangent_vectors(&normal);
+        let (tangent, bitangent) = construct_tangent_vectors(&normal);
 
         let compute_effective_mass =
             |direction| compute_effective_mass(body_a, body_b, &disp_a, &disp_b, direction);
 
         let effective_mass_normal = compute_effective_mass(&normal);
-        let effective_mass_tangent_1 = compute_effective_mass(&tangent_1);
-        let effective_mass_tangent_2 = compute_effective_mass(&tangent_2);
+        let effective_mass_tangent = compute_effective_mass(&tangent);
+        let effective_mass_bitangent = compute_effective_mass(&bitangent);
 
         let ContactResponseParameters {
             restitution_coef,
@@ -281,29 +281,26 @@ impl TwoBodyConstraint for Contact {
             0.0
         };
 
-        // We need the speed at which the surfaces of the two bodies are
-        // slipping at the contact point to determine whether to apply static
-        // or dynamic friction. Note that the body velocities have not yet been
-        // advanced based on non-constraint forces for this frame, which is
-        // crucial for correctly identifying the kind of friction to use.
-        let slip_speed_squared =
-            relative_velocity.dot(&tangent_1).powi(2) + relative_velocity.dot(&tangent_2).powi(2);
-
-        let friction_coef = if slip_speed_squared >= SQUARED_SLIP_SPEED_FOR_DYNAMIC_FRICTION {
-            dynamic_friction_coef
-        } else {
-            static_friction_coef
-        };
+        // Note that the body velocities have not yet been advanced based on
+        // non-constraint forces for this frame, which is crucial for correctly
+        // identifying the kind of friction to use
+        let friction_coef = select_friction_coef(
+            dynamic_friction_coef,
+            static_friction_coef,
+            &tangent,
+            &bitangent,
+            &relative_velocity,
+        );
 
         PreparedContact {
             local_position_on_a: local_position_on_a.compact(),
             local_position_on_b: local_position_on_b.compact(),
             normal: normal.compact(),
-            tangent: tangent_1.compact(),
-            bitangent: tangent_2.compact(),
+            tangent: tangent.compact(),
+            bitangent: bitangent.compact(),
             effective_mass_normal,
-            effective_mass_tangent: effective_mass_tangent_1,
-            effective_mass_bitangent: effective_mass_tangent_2,
+            effective_mass_tangent,
+            effective_mass_bitangent,
             friction_coef,
             target_separating_velocity,
         }
@@ -369,31 +366,7 @@ impl PreparedTwoBodyConstraint for PreparedContact {
     }
 
     fn clamp_impulses(&self, impulses: ContactImpulses) -> ContactImpulses {
-        // This ensures that the total normal impulse can only push the bodies apart
-        let clamped_normal_impulse = f32::max(0.0, impulses.normal);
-
-        // The impulse version of Coulomb's friction law determines the maximum
-        // frictional impulse
-        let max_tangent_impulse_magnitude = self.friction_coef * clamped_normal_impulse;
-
-        let tangent_impulse_magnitude =
-            f32::sqrt(impulses.tangent.powi(2) + impulses.bitangent.powi(2));
-
-        // The tangential impulse must be scaled down if it exceeds the maximum
-        let tangent_impulse_scaling = if tangent_impulse_magnitude > max_tangent_impulse_magnitude {
-            max_tangent_impulse_magnitude / tangent_impulse_magnitude
-        } else {
-            1.0
-        };
-
-        let clamped_tangent_impulse = impulses.tangent * tangent_impulse_scaling;
-        let clamped_bitangent_impulse = impulses.bitangent * tangent_impulse_scaling;
-
-        ContactImpulses {
-            normal: clamped_normal_impulse,
-            tangent: clamped_tangent_impulse,
-            bitangent: clamped_bitangent_impulse,
-        }
+        clamp_impulses(self.friction_coef, impulses)
     }
 
     fn apply_impulses_to_body_pair(
@@ -590,13 +563,134 @@ impl Contact {
 
         let separating_velocity = normal.dot(&relative_velocity);
 
-        let normal_impulse =
-            -effective_mass * (1.0 + self.response_params.restitution_coef) * separating_velocity;
+        let target_separating_velocity =
+            -self.response_params.restitution_coef * separating_velocity;
+
+        let normal_impulse = -effective_mass * (separating_velocity - target_separating_velocity);
 
         // This ensures that the normal impulse can only push the bodies apart
         let clamped_normal_impulse = f32::max(0.0, normal_impulse);
 
         clamped_normal_impulse
+    }
+
+    /// Computes the impulse vector containing the change in momentum for body A
+    /// caused by this contact with body B. The corresponding momentum change
+    /// for B is the reverse vector.
+    pub fn compute_impulse_vector(
+        &self,
+        body_a: &ConstrainedBody,
+        body_b: &ConstrainedBody,
+    ) -> Vector3 {
+        // World space displacements from the center of mass of each body to
+        // the reference contact point (taken to be on body B)
+        let disp_a = self.geometry.position_on_b() - body_a.position.aligned();
+        let disp_b = self.geometry.position_on_b() - body_b.position.aligned();
+
+        let normal = self.geometry.surface_normal;
+        let (tangent, bitangent) = construct_tangent_vectors(&normal);
+
+        let compute_effective_mass =
+            |direction| compute_effective_mass(body_a, body_b, &disp_a, &disp_b, direction);
+
+        let effective_mass_normal = compute_effective_mass(&normal);
+        let effective_mass_tangent = compute_effective_mass(&tangent);
+        let effective_mass_bitangent = compute_effective_mass(&bitangent);
+
+        let ContactResponseParameters {
+            restitution_coef,
+            static_friction_coef,
+            dynamic_friction_coef,
+        } = self.response_params;
+
+        let velocity_a = compute_point_velocity(body_a, &disp_a);
+        let velocity_b = compute_point_velocity(body_b, &disp_b);
+
+        let relative_velocity = velocity_a - velocity_b;
+
+        let separating_velocity = normal.dot(&relative_velocity);
+
+        let target_separating_velocity = if separating_velocity.abs() >= NORMAL_SPEED_FOR_BOUNCE {
+            -restitution_coef * separating_velocity
+        } else {
+            0.0
+        };
+
+        let friction_coef = select_friction_coef(
+            dynamic_friction_coef,
+            static_friction_coef,
+            &tangent,
+            &bitangent,
+            &relative_velocity,
+        );
+
+        let normal_impulse =
+            -effective_mass_normal * (separating_velocity - target_separating_velocity);
+
+        let tangent_impulse = -effective_mass_tangent * tangent.dot(&relative_velocity);
+        let bitangent_impulse = -effective_mass_bitangent * bitangent.dot(&relative_velocity);
+
+        let clamped = clamp_impulses(
+            friction_coef,
+            ContactImpulses {
+                normal: normal_impulse,
+                tangent: tangent_impulse,
+                bitangent: bitangent_impulse,
+            },
+        );
+
+        let total_impulse_vector =
+            clamped.normal * normal + clamped.tangent * tangent + clamped.bitangent * bitangent;
+
+        total_impulse_vector
+    }
+}
+
+fn select_friction_coef(
+    dynamic_friction_coef: f32,
+    static_friction_coef: f32,
+    tangent: &UnitVector3,
+    bitangent: &UnitVector3,
+    relative_velocity: &Velocity,
+) -> f32 {
+    // We need the speed at which the surfaces of the two bodies are slipping at
+    // the contact point to determine whether to apply static or dynamic
+    // friction
+    let slip_speed_squared =
+        relative_velocity.dot(tangent).powi(2) + relative_velocity.dot(bitangent).powi(2);
+
+    if slip_speed_squared >= SQUARED_SLIP_SPEED_FOR_DYNAMIC_FRICTION {
+        dynamic_friction_coef
+    } else {
+        static_friction_coef
+    }
+}
+
+fn clamp_impulses(friction_coef: f32, impulses: ContactImpulses) -> ContactImpulses {
+    // This ensures that the total normal impulse can only push the bodies apart
+    let clamped_normal_impulse = f32::max(0.0, impulses.normal);
+
+    // The impulse version of Coulomb's friction law determines the maximum
+    // frictional impulse
+    let max_tangent_impulse_magnitude = friction_coef * clamped_normal_impulse;
+
+    let tangent_impulse_magnitude =
+        f32::sqrt(impulses.tangent.powi(2) + impulses.bitangent.powi(2));
+
+    // The tangential impulse must be scaled down if it exceeds the maximum
+    let tangent_impulse_scaling = if tangent_impulse_magnitude > max_tangent_impulse_magnitude {
+        max_tangent_impulse_magnitude / tangent_impulse_magnitude
+    } else {
+        1.0
+    };
+
+    let clamped_tangent_impulse = impulses.tangent * tangent_impulse_scaling;
+    let clamped_bitangent_impulse = impulses.bitangent * tangent_impulse_scaling;
+
+    ContactImpulses {
+        normal: clamped_normal_impulse,
+        tangent: clamped_tangent_impulse,
+        bitangent: clamped_bitangent_impulse,
     }
 }
 
