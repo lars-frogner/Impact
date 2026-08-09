@@ -4,7 +4,7 @@ use crate::{
     VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager,
     collidable::{Collidable, CollisionWorld},
     interaction::{
-        self, Anchors, ExtractedComponents, RemovedMassFate, VoxelObjectInteractionContext,
+        self, Anchors, RemovedMassFate, SpawnableVoxelObject, VoxelObjectInteractionContext,
         VoxelObjectUpdateOutcome, VoxelRemoval,
     },
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
@@ -1440,7 +1440,7 @@ impl FracturingProcess {
                 &dynamics.coordinate_changes,
             );
 
-            let extracted_components = ExtractedComponents {
+            let spawnable_object = SpawnableVoxelObject {
                 meshed_voxel_object: fragment.meshed_voxel_object,
                 inertial_property_manager: fragment.inertial_property_manager,
                 rigid_body: dynamics.rigid_body,
@@ -1453,7 +1453,7 @@ impl FracturingProcess {
                 voxel_object_manager,
                 rigid_body_manager,
                 anchor_manager,
-                extracted_components,
+                spawnable_object,
                 entity_id,
             );
 
@@ -1613,7 +1613,7 @@ where
 
     let VoxelObjectUpdateOutcome {
         original_object_empty,
-        extracted_components_for_disconnected_objects,
+        extracted_disconnected_objects,
         mut lost_anchors,
     } = interaction::update_modified_or_disconnected_voxel_object(
         &arena,
@@ -1637,18 +1637,18 @@ where
     }
 
     let disconnected_entity_ids =
-        entity_id_manager.provide_id_vec(extracted_components_for_disconnected_objects.len());
+        entity_id_manager.provide_id_vec(extracted_disconnected_objects.len());
 
-    for (disconnected_entity_id, extracted_components) in disconnected_entity_ids
+    for (disconnected_entity_id, disconnected_object) in disconnected_entity_ids
         .iter()
         .copied()
-        .zip(extracted_components_for_disconnected_objects)
+        .zip(extracted_disconnected_objects)
     {
         interaction::spawn_extracted_voxel_object(
             voxel_object_manager,
             rigid_body_manager,
             anchor_manager,
-            extracted_components,
+            disconnected_object.into_spawnable(),
             disconnected_entity_id,
         );
     }

@@ -9,7 +9,7 @@ pub mod systems;
 use crate::{
     VoxelObjectBufferPool, VoxelObjectID, VoxelObjectManager, VoxelObjectPhysicsContext,
     interaction::fracturing::VoxelFracturingConfig,
-    mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
+    mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers, VoxelObjectMeshBuffers},
     object::{
         VoxelObject, extraction::ExtractionResult, inertia::VoxelObjectInertialPropertyManager,
     },
@@ -106,21 +106,35 @@ pub struct VoxelAbsorbingCapsuleEntity {
 #[derive(Debug)]
 struct VoxelObjectUpdateOutcome<A: Allocator> {
     original_object_empty: bool,
-    extracted_components_for_disconnected_objects: AVec<ExtractedComponents, A>,
+    extracted_disconnected_objects: AVec<DynamicExtractedVoxelObject, A>,
     lost_anchors: Anchors,
 }
 
 #[derive(Debug)]
 struct ExtractedDisconnectedObjects<A: Allocator> {
-    extracted_components: AVec<ExtractedComponents, A>,
-    coordinate_changes: AVec<ExtractedVoxelObjectCoordinateChanges, A>,
+    objects: AVec<DynamicExtractedVoxelObject, A>,
     /// There could be disconnections even though no disconnected region was big
     /// enough to be extracted into a separate object.
     had_disconnections: bool,
 }
 
+/// An extracted voxel object together with the dynamic state it needs to become
+/// a standalone voxel object entity.
 #[derive(Debug)]
-struct ExtractedComponents {
+struct DynamicExtractedVoxelObject {
+    voxel_object: VoxelObject,
+    mesh_buffers: VoxelObjectMeshBuffers,
+    inertial_property_manager: VoxelObjectInertialPropertyManager,
+    rigid_body: DynamicRigidBody,
+    anchors: Anchors,
+    origin_offset_in_parent: [usize; 3],
+    coordinate_changes: ExtractedVoxelObjectCoordinateChanges,
+}
+
+/// A meshed voxel object along with the state required to spawn it as a
+/// standalone voxel object entity.
+#[derive(Debug)]
+struct SpawnableVoxelObject {
     meshed_voxel_object: MeshedVoxelObject,
     inertial_property_manager: VoxelObjectInertialPropertyManager,
     rigid_body: DynamicRigidBody,
@@ -268,7 +282,7 @@ fn update_modified_or_disconnected_voxel_object<A: Allocator>(
     if voxel_removal != VoxelRemoval::None && voxel_object.is_effectively_empty() {
         return VoxelObjectUpdateOutcome {
             original_object_empty: true,
-            extracted_components_for_disconnected_objects: AVec::new_in(alloc),
+            extracted_disconnected_objects: AVec::new_in(alloc),
             lost_anchors: mem::take(anchors),
         };
     }
@@ -296,13 +310,12 @@ fn update_modified_or_disconnected_voxel_object<A: Allocator>(
         // its dynamic state are still consistent
         return VoxelObjectUpdateOutcome {
             original_object_empty: false,
-            extracted_components_for_disconnected_objects: disconnected_objects
-                .extracted_components,
+            extracted_disconnected_objects: disconnected_objects.objects,
             lost_anchors: Anchors::new(),
         };
     }
 
-    if disconnected_objects.extracted_components.is_empty() {
+    if disconnected_objects.objects.is_empty() {
         // If the object had disconnected regions but none were significant
         // enough to produce a new object, we have to re-evaluate the emptiness
         // of the original object since the disconnection attempt could have
@@ -346,8 +359,7 @@ fn update_modified_or_disconnected_voxel_object<A: Allocator>(
 
         return VoxelObjectUpdateOutcome {
             original_object_empty,
-            extracted_components_for_disconnected_objects: disconnected_objects
-                .extracted_components,
+            extracted_disconnected_objects: disconnected_objects.objects,
             lost_anchors,
         };
     }
@@ -377,21 +389,18 @@ fn update_modified_or_disconnected_voxel_object<A: Allocator>(
         )
     };
 
-    for (extracted_components, coordinate_changes) in disconnected_objects
-        .extracted_components
-        .iter_mut()
-        .zip(disconnected_objects.coordinate_changes)
-    {
-        extracted_components.anchors = transfer_anchors_to_extracted_voxel_object(
+    for extracted_object in &mut disconnected_objects.objects {
+        let anchors = transfer_anchors_to_extracted_voxel_object(
             &mut lost_anchors,
-            extracted_components.meshed_voxel_object.object(),
-            &coordinate_changes,
+            &extracted_object.voxel_object,
+            &extracted_object.coordinate_changes,
         );
+        extracted_object.anchors = anchors;
     }
 
     VoxelObjectUpdateOutcome {
         original_object_empty,
-        extracted_components_for_disconnected_objects: disconnected_objects.extracted_components,
+        extracted_disconnected_objects: disconnected_objects.objects,
         lost_anchors,
     }
 }
@@ -405,8 +414,7 @@ fn extract_all_disconnected_objects<A: Allocator>(
     rigid_body: &mut DynamicRigidBody,
     original_local_center_of_mass: Vector3,
 ) -> ExtractedDisconnectedObjects<A> {
-    let mut extracted_components = AVec::new_in(alloc);
-    let mut coordinate_changes = AVec::new_in(alloc);
+    let mut objects = AVec::new_in(alloc);
 
     let mut had_disconnections = false;
 
@@ -448,18 +456,15 @@ fn extract_all_disconnected_objects<A: Allocator>(
                     angular_velocity,
                 );
 
-                let meshed_disconnected_object = MeshedVoxelObject::create(
-                    buffers.mesh_buffers,
-                    disconnected_voxel_object.voxel_object,
-                );
-
-                extracted_components.push(ExtractedComponents {
-                    meshed_voxel_object: meshed_disconnected_object,
+                objects.push(DynamicExtractedVoxelObject {
+                    voxel_object: disconnected_voxel_object.voxel_object,
+                    mesh_buffers: buffers.mesh_buffers,
                     inertial_property_manager: disconnected_object_inertial_property_manager,
                     rigid_body: disconnected_object_dynamics.rigid_body,
                     anchors: Anchors::new(),
+                    origin_offset_in_parent: disconnected_voxel_object.origin_offset_in_parent,
+                    coordinate_changes: disconnected_object_dynamics.coordinate_changes,
                 });
-                coordinate_changes.push(disconnected_object_dynamics.coordinate_changes);
             }
             ExtractionResult::NotExtracted(object_buffers) => {
                 // Return the buffers to the pool
@@ -472,8 +477,7 @@ fn extract_all_disconnected_objects<A: Allocator>(
     }
 
     ExtractedDisconnectedObjects {
-        extracted_components,
-        coordinate_changes,
+        objects,
         had_disconnections,
     }
 }
@@ -561,10 +565,10 @@ fn spawn_extracted_voxel_object(
     voxel_object_manager: &mut VoxelObjectManager,
     rigid_body_manager: &mut RigidBodyManager,
     anchor_manager: &mut AnchorManager,
-    extracted_components: ExtractedComponents,
+    spawnable_object: SpawnableVoxelObject,
     entity_id: EntityID,
 ) {
-    let meshed_voxel_object = extracted_components.meshed_voxel_object;
+    let meshed_voxel_object = spawnable_object.meshed_voxel_object;
 
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
@@ -574,11 +578,11 @@ fn spawn_extracted_voxel_object(
         .unwrap();
 
     rigid_body_manager
-        .add_dynamic_rigid_body(rigid_body_id, extracted_components.rigid_body)
+        .add_dynamic_rigid_body(rigid_body_id, spawnable_object.rigid_body)
         .unwrap();
 
     let physics_context = VoxelObjectPhysicsContext {
-        inertial_property_manager: extracted_components.inertial_property_manager,
+        inertial_property_manager: spawnable_object.inertial_property_manager,
     };
 
     voxel_object_manager
@@ -587,7 +591,7 @@ fn spawn_extracted_voxel_object(
 
     // Update the anchors that have moved from the original object
     // to the extracted object
-    for (anchor_id, point) in extracted_components.anchors {
+    for (anchor_id, point) in spawnable_object.anchors {
         anchor_manager.dynamic_mut().replace(
             anchor_id,
             DynamicRigidBodyAnchor {
@@ -674,6 +678,17 @@ fn determine_extracted_voxel_object_dynamics(
     ExtractedVoxelObjectDynamics {
         rigid_body,
         coordinate_changes,
+    }
+}
+
+impl DynamicExtractedVoxelObject {
+    fn into_spawnable(self) -> SpawnableVoxelObject {
+        SpawnableVoxelObject {
+            meshed_voxel_object: MeshedVoxelObject::create(self.mesh_buffers, self.voxel_object),
+            inertial_property_manager: self.inertial_property_manager,
+            rigid_body: self.rigid_body,
+            anchors: self.anchors,
+        }
     }
 }
 

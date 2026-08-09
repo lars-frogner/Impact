@@ -640,7 +640,7 @@ pub fn apply_absorption<C>(
 
             let VoxelObjectUpdateOutcome {
                 original_object_empty,
-                extracted_components_for_disconnected_objects,
+                extracted_disconnected_objects,
                 lost_anchors,
             } = interaction::update_modified_or_disconnected_voxel_object(
                 &arena,
@@ -668,19 +668,19 @@ pub fn apply_absorption<C>(
                 context.remove_voxel_object_entity(entity_id);
             }
 
-            let disconnected_entity_ids = entity_id_manager
-                .provide_id_vec(extracted_components_for_disconnected_objects.len());
+            let disconnected_entity_ids =
+                entity_id_manager.provide_id_vec(extracted_disconnected_objects.len());
 
-            for (disconnected_entity_id, extracted_components) in disconnected_entity_ids
+            for (disconnected_entity_id, disconnected_object) in disconnected_entity_ids
                 .iter()
                 .copied()
-                .zip(extracted_components_for_disconnected_objects)
+                .zip(extracted_disconnected_objects)
             {
                 interaction::spawn_extracted_voxel_object(
                     voxel_object_manager,
                     rigid_body_manager,
                     anchor_manager,
-                    extracted_components,
+                    disconnected_object.into_spawnable(),
                     disconnected_entity_id,
                 );
             }
