@@ -711,10 +711,15 @@ impl SplitDetector {
                             if i < CHUNK_SIZE - 1
                                 && voxel.flags().contains(VoxelFlags::HAS_ADJACENT_X_UP)
                             {
-                                assign_parent_to_voxel(
+                                // Due to iteration order, adjacent voxels
+                                // upward in x will not have been visited yet,
+                                // so they are always their own root still. We
+                                // can thus assign the root to their parent slot
+                                // directly.
+                                set_maybe_unchecked(
                                     &mut parents,
                                     linear_voxel_idx_within_chunk(&[i + 1, j, k]),
-                                    root_idx,
+                                    root_idx as u16,
                                 );
                             }
                             if j < CHUNK_SIZE - 1
@@ -1783,64 +1788,21 @@ fn assign_parent_to_voxel(parents: &mut [u16], voxel_idx: usize, parent_idx: usi
 
 /// Walks the tree of parent voxels for the voxel with the given index until
 /// the root voxel index representing the local region is found.
-#[cfg(not(feature = "unchecked"))]
 #[inline]
 fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
-    let parent_idx = parents[idx] as usize;
+    let parent_idx = *get_maybe_unchecked(parents, idx) as usize;
 
-    // If the parent is the same entry, this is a root
-    if parent_idx == idx {
-        return parent_idx;
-    }
+    // We could check whether `parent_idx == idx` (the voxel is a root) and make
+    // an early return, but in most cases this will not be true, so dropping the
+    // branch and doing the next check unconditionally tends to be slightly
+    // faster
 
-    let root_idx = find_root_for_voxel(parents, parent_idx);
-
-    // Compress the path to the root by making the root the direct parent
-    parents[idx] = root_idx as u16;
-
-    root_idx
-}
-
-/// Walks the tree of parent voxels for the voxel with the given index until
-/// the root voxel index representing the local region is found.
-#[cfg(feature = "unchecked")]
-#[inline]
-fn find_root_for_voxel(parents: &mut [u16], idx: usize) -> usize {
-    let parent_idx = unsafe { *parents.get_unchecked(idx) as usize };
-
-    // If the parent is the same entry, this is a root
-    if parent_idx == idx {
-        return parent_idx;
-    }
-
-    // Unroll the recursion once to reduce call overhead
-    let root_idx = {
-        let grandparent_idx = unsafe { *parents.get_unchecked(parent_idx) as usize };
-        if grandparent_idx == parent_idx {
-            grandparent_idx
-        } else {
-            find_root_for_voxel_alternating_compression(parents, grandparent_idx)
-            // <- Skipping path compression at this point tends to be faster
-        }
-    };
-
-    // Compress the path to the root by making the root the direct parent
-    unsafe {
-        *parents.get_unchecked_mut(idx) = root_idx as u16;
-    }
-
-    root_idx
-}
-
-#[cfg(feature = "unchecked")]
-fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) -> usize {
-    let parent_idx = unsafe { *parents.get_unchecked(idx) as usize };
-
-    if parent_idx == idx {
-        return parent_idx;
-    }
-
-    let grandparent_idx = unsafe { *parents.get_unchecked(parent_idx) as usize };
+    // Check the parent before entering the recursive function. In the vast
+    // majority of cases, the root is the voxel itself or (more likely) its
+    // parent, so putting the remaining checks in an un-inlined call that will
+    // mostly not be taken reduces instruction count without incurring a
+    // significant overhead.
+    let grandparent_idx = *get_maybe_unchecked(parents, parent_idx) as usize;
 
     if grandparent_idx == parent_idx {
         return grandparent_idx;
@@ -1848,28 +1810,60 @@ fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) 
 
     let root_idx = find_root_for_voxel_alternating_compression(parents, grandparent_idx);
 
-    unsafe {
-        *parents.get_unchecked_mut(parent_idx) = root_idx as u16;
+    // Compress the path to the root for the original voxel by making the root
+    // the direct parent
+    set_maybe_unchecked(parents, idx, root_idx as u16);
+
+    root_idx
+}
+
+/// Alternating compression strikes a balance between flattening the parent tree
+/// and reducing memory writes.
+fn find_root_for_voxel_alternating_compression(parents: &mut [u16], idx: usize) -> usize {
+    let parent_idx = *get_maybe_unchecked(parents, idx) as usize;
+
+    if parent_idx == idx {
+        return parent_idx;
     }
+
+    let grandparent_idx = *get_maybe_unchecked(parents, parent_idx) as usize;
+
+    if grandparent_idx == parent_idx {
+        return grandparent_idx;
+    }
+
+    let root_idx = find_root_for_voxel_alternating_compression(parents, grandparent_idx);
+
+    set_maybe_unchecked(parents, parent_idx, root_idx as u16);
 
     root_idx
 }
 
 #[inline]
-fn find_root_for_voxel_without_compression(parents: &[u16], idx: usize) -> usize {
+fn find_root_for_voxel_without_compression(parents: &[u16], mut idx: usize) -> usize {
+    // If the parent is the same entry, this is a root
     let parent_idx = *get_maybe_unchecked(parents, idx) as usize;
 
-    // If the parent is the same entry, this is a root
-    if parent_idx == idx {
-        return parent_idx;
-    }
+    // We could check whether `parent_idx == idx` (the voxel is a root) and make
+    // an early return, but in most cases this will not be true, so dropping the
+    // branch and doing the next check unconditionally tends to be slightly
+    // faster
 
-    // Unroll the recursion once to reduce call overhead
+    // Also check the parent before entering the loop, which will let most calls
+    // complete without loop overhead
     let grandparent_idx = *get_maybe_unchecked(parents, parent_idx) as usize;
+
     if grandparent_idx == parent_idx {
-        grandparent_idx
-    } else {
-        find_root_for_voxel_without_compression(parents, grandparent_idx)
+        return grandparent_idx;
+    }
+    idx = grandparent_idx;
+
+    loop {
+        let parent_idx = *get_maybe_unchecked(parents, idx) as usize;
+        if parent_idx == idx {
+            return parent_idx;
+        }
+        idx = parent_idx;
     }
 }
 
