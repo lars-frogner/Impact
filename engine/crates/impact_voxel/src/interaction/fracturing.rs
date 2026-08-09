@@ -5,7 +5,7 @@ use crate::{
     collidable::{Collidable, CollisionWorld},
     interaction::{
         self, Anchors, ExtractedComponents, RemovedMassFate, VoxelObjectInteractionContext,
-        VoxelRemovalOutcome,
+        VoxelObjectUpdateOutcome, VoxelRemoval,
     },
     mesh::{MeshedVoxelObject, MeshedVoxelObjectBuffers},
     object::{
@@ -1609,23 +1609,28 @@ where
             &mut inertial_property_transferrer,
         );
 
-    let VoxelRemovalOutcome {
+    let mut anchors = interaction::get_all_rigid_body_anchors(anchor_manager, rigid_body_id);
+
+    let VoxelObjectUpdateOutcome {
         original_object_empty,
         extracted_components_for_disconnected_objects,
         mut lost_anchors,
-    } = interaction::handle_voxel_object_after_removing_voxels(
+    } = interaction::update_modified_or_disconnected_voxel_object(
         &arena,
-        anchor_manager,
         voxel_type_registry,
         voxel_object_buffer_pool,
         voxel_object.object_mut(),
         &mut physics_context.inertial_property_manager,
-        rigid_body_id,
         rigid_body,
+        &mut anchors,
         original_local_center_of_mass,
         // The removed mass was transferred to the boundary region object
-        RemovedMassFate::Transferred,
+        VoxelRemoval::Occurred(RemovedMassFate::Transferred),
     );
+
+    // The anchors still attached to the original object have been made relative
+    // to its new center of mass
+    interaction::apply_anchors_to_rigid_body(anchor_manager, rigid_body_id, &anchors);
 
     if original_object_empty {
         context.remove_voxel_object_entity(entity_id);

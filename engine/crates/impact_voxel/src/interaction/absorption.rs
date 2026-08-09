@@ -3,7 +3,10 @@
 use crate::{
     Voxel, VoxelManager, VoxelObjectID, VoxelObjectManager, VoxelSignedDistance,
     generation::sdf::{Smoothness, hard_sdf_subtraction, sdf_subtraction},
-    interaction::{self, RemovedMassFate, VoxelObjectInteractionContext, VoxelRemovalOutcome},
+    interaction::{
+        self, RemovedMassFate, VoxelObjectInteractionContext, VoxelObjectUpdateOutcome,
+        VoxelRemoval,
+    },
     object::{self, CHUNK_SIZE, VoxelObject, inertia::VoxelObjectInertialPropertyUpdater, sdf},
     voxel_types::VoxelTypeRegistry,
 };
@@ -632,22 +635,28 @@ pub fn apply_absorption<C>(
 
             let arena = ArenaPool::get_arena();
 
-            let VoxelRemovalOutcome {
+            let mut anchors =
+                interaction::get_all_rigid_body_anchors(anchor_manager, rigid_body_id);
+
+            let VoxelObjectUpdateOutcome {
                 original_object_empty,
                 extracted_components_for_disconnected_objects,
                 lost_anchors,
-            } = interaction::handle_voxel_object_after_removing_voxels(
+            } = interaction::update_modified_or_disconnected_voxel_object(
                 &arena,
-                anchor_manager,
                 voxel_type_registry,
                 voxel_object_buffer_pool,
                 voxel_object,
                 &mut physics_context.inertial_property_manager,
-                rigid_body_id,
                 rigid_body,
+                &mut anchors,
                 original_local_center_of_mass,
-                RemovedMassFate::Destroyed,
+                VoxelRemoval::Occurred(RemovedMassFate::Destroyed),
             );
+
+            // The anchors still attached to the original object have been made
+            // relative to its new center of mass
+            interaction::apply_anchors_to_rigid_body(anchor_manager, rigid_body_id, &anchors);
 
             // All lost anchors not inherited by a disconnected object should be
             // deleted
