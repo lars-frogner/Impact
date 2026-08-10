@@ -100,8 +100,8 @@
         interaction: (
             fracturing: (
                 impact: (
-                    boundary_polar_grid_size: 3,
-                    boundary_azimuthal_grid_size: 6,
+                    boundary_polar_grid_size: 16,
+                    boundary_azimuthal_grid_size: 32,
                     boundary_angular_jitter: 0.8,
                     boundary_radial_jitter: 0.2,
                     max_fragment_count: 512,

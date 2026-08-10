@@ -22,12 +22,15 @@ import pf.Comp.ReferenceFrame
 import pf.Comp.Motion
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Setup.GeneratedVoxelObject
-import pf.Setup.SameVoxelType
+# import pf.Setup.SameVoxelType
+import pf.Setup.GradientNoiseVoxelTypes
 import pf.Setup.DynamicVoxels
 import pf.Setup.VoxelCollidable
 import pf.Physics.ContactResponseParameters
+import pf.Comp.FracturingProperties
 import pf.Comp.DynamicGravity
 import pf.Comp.AmbientEmission
+import pf.Comp.UnidirectionalEmission
 import pf.Comp.ShadowableUnidirectionalEmission
 
 import Entities.Player as Player
@@ -38,6 +41,7 @@ entity_ids = {
     ambient_light: Entity.id("ambient_light"),
     star_light: Entity.id("star_light"),
     asteroid: Entity.id("asteroid"),
+    asteroid2: Entity.id("asteroid2"),
 }
 
 skybox = {
@@ -46,11 +50,11 @@ skybox = {
 }
 
 ambient_light = {
-    illuminance: 3e2,
+    illuminance: 1e3,
 }
 
 star = {
-    illuminance: 1e4,
+    illuminance: 5e4,
     angular_extent: 2.0,
 }
 
@@ -63,10 +67,12 @@ setup! = |ctx|
 
     Entity.create_with_id!(ambient_light_ent, entity_ids.ambient_light)?
     Entity.create_with_id!(star_light_ent, entity_ids.star_light)?
+    _ = Entity.create!(fill_light_ent)?
 
     Entity.create_with_id!(asteroid_ent, entity_ids.asteroid)?
+    Entity.create_with_id!(asteroid2_ent, entity_ids.asteroid2)?
 
-    player_position = (0.0, 0.0, -50)
+    player_position = (0.0, 0.0, -80)
     player_orientation = UnitQuaternion.identity
     player_velocity = Vector3.zeros
 
@@ -97,20 +103,53 @@ star_light_ent =
     Entity.new_component_data
     |> Comp.ShadowableUnidirectionalEmission.add_new(
         Vector3.same(star.illuminance),
-        UnitVector3.from((1.0, 0.0, 0.0)),
+        UnitVector3.from((1.0, 0.0, 0.6)),
+        star.angular_extent,
+    )
+
+fill_light_ent =
+    Entity.new_component_data
+    |> Comp.UnidirectionalEmission.add_new(
+        Vector3.same(0.2 * star.illuminance),
+        UnitVector3.from((-1.0, -0.2, 0.5)),
         star.angular_extent,
     )
 
 asteroid_ent =
     Entity.new_component_data
     |> Comp.DistanceTriggeredRules.add_removal(Player.entity_ids.player, 2e3)
-    |> Comp.ReferenceFrame.add_unoriented((0, 0, 0))
+    |> Comp.ReferenceFrame.add_new((0, 0, 0), UnitQuaternion.from_axis_angle(UnitVector3.unit_y, -8))
     |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 1.0, 0)
-    |> Setup.SameVoxelType.add_new("Default")
-    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(0)))
+    # |> Setup.SameVoxelType.add_new("Default")
+    |> Setup.GradientNoiseVoxelTypes.add_new(["Rock"], 2e-2, 1, 0)
+    |> Comp.Motion.add_new((-3.5, -1, 0), AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(-20)))
     |> Setup.DynamicVoxels.add
-    |> Setup.VoxelCollidable.add_new(
-        Dynamic,
-        Physics.ContactResponseParameters.new(0.1, 0.01, 0.01),
-    )
+    |> Setup.VoxelCollidable.add_new(Dynamic, response_params)
+    |> Comp.FracturingProperties.add(fracturing_props)
     |> Comp.DynamicGravity.add
+
+asteroid2_ent =
+    Entity.new_component_data
+    |> Comp.DistanceTriggeredRules.add_removal(Player.entity_ids.player, 2e3)
+    |> Comp.ReferenceFrame.add_unoriented((-100, 9, -40))
+    |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 0.5, 2)
+    # |> Setup.SameVoxelType.add_new("Default")
+    |> Setup.GradientNoiseVoxelTypes.add_new(["Rock"], 2e-2, 1, 1)
+    |> Comp.Motion.add_new(
+        (35.5, 3, 10),
+        AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(-35)),
+    )
+    |> Setup.DynamicVoxels.add
+    |> Setup.VoxelCollidable.add_new(Dynamic, response_params)
+    |> Comp.FracturingProperties.add(fracturing_props)
+    |> Comp.DynamicGravity.add
+
+response_params = Physics.ContactResponseParameters.new(0.1, 0.7, 0.5)
+
+fracturing_props = {
+    fracturing_force: 1e6,
+    shattering_pressure: 1.5e8,
+    fragment_scale: 0.2,
+    min_fragment_extent: 0.1,
+    max_fragment_extent: 0.8,
+}
