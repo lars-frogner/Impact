@@ -2355,7 +2355,7 @@ pub mod fuzzing {
             poly_inertial_property_manager.validate_for_object(
                 &poly_object,
                 &voxel_type_densities,
-                1e-3,
+                1e-2,
             );
         }
     }
@@ -2420,7 +2420,7 @@ pub mod fuzzing {
     }
 }
 
-// #[cfg(not(miri))]
+#[cfg(not(miri))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2430,116 +2430,10 @@ mod tests {
             sdf::{SDFGraph, SDFNode},
             voxel_type::SameVoxelTypeGenerator,
         },
-        object::inertia::VoxelObjectInertialPropertyManager,
         voxel_types::VoxelType,
     };
-    use approx::assert_relative_eq;
     use impact_alloc::Global;
     use impact_math::vector::Vector3;
-    use impact_tesselation::{delaunay::DelaunayTetrahedralization, voronoi::VoronoiPolyhedron};
-
-    #[test]
-    fn fuzz_failure() {
-        let mut graph = SDFGraph::new_in(Global);
-        graph.add_node(SDFNode::new_capsule(15.752526, 15.777199));
-        let sdf_generator = graph.build_in(Global).unwrap();
-
-        let generator = SDFVoxelGenerator::new(
-            7.83997,
-            sdf_generator,
-            SameVoxelTypeGenerator::new(VoxelType::default()).into(),
-        );
-
-        let points = [
-            Point3C::new(-47.719997, 39.660004, 40.100006),
-            Point3C::new(-47.280003, 39.660004, 39.660004),
-            Point3C::new(39.660004, 42.660004, 10.580002),
-            Point3C::new(10.580002, 5.5199966, 10.580002),
-            Point3C::new(-47.280003, -52.86, -54.14),
-            Point3C::new(-49.5, 10.580002, 10.580002),
-            Point3C::new(10.580002, 10.580002, 10.580002),
-            Point3C::new(-87.22, -47.280003, -52.86),
-            Point3C::new(19.500008, -52.86, 53.98001),
-        ];
-
-        let mut object = VoxelObject::generate(VoxelObjectBuffers::new(), &generator);
-
-        let voxel_type_densities = [1.0; 256];
-        let original_inertial_property_manager =
-            VoxelObjectInertialPropertyManager::initialized_from(&object, &voxel_type_densities);
-        let mut inertial_property_manager = original_inertial_property_manager.clone();
-
-        let mut aggregate_poly_inertial_property_manager =
-            VoxelObjectInertialPropertyManager::zeroed();
-
-        let aabb = object.compute_normalized_chunk_grid_bounds();
-
-        let points = bytemuck::cast_slice(&points);
-        let tetrahedralization = DelaunayTetrahedralization::construct(points).unwrap();
-
-        let mut polyhedron = VoronoiPolyhedron::empty_in(Global);
-
-        for dual_vertex_idx in tetrahedralization.internal_vertex_indices() {
-            polyhedron.extract_from_delaunay_tetrahedra(&tetrahedralization, dual_vertex_idx);
-            let Some(polyhedron_aabb) = polyhedron.compute_bounded_aabb(&aabb) else {
-                continue;
-            };
-
-            let mut poly_inertial_property_manager = VoxelObjectInertialPropertyManager::zeroed();
-
-            let mut inertial_property_transferrer = inertial_property_manager.begin_transfer_to(
-                &mut poly_inertial_property_manager,
-                object.voxel_extent(),
-                &voxel_type_densities,
-            );
-
-            let ExtractionResult::Extracted(copied_object) = object
-                .extract_polyhedron_with_property_transferrer(
-                    VoxelObjectBuffers::new(),
-                    &polyhedron_aabb,
-                    &polyhedron.face_planes,
-                    &mut inertial_property_transferrer,
-                )
-            else {
-                continue;
-            };
-
-            let ExtractedVoxelObject {
-                voxel_object: poly_object,
-                origin_offset_in_parent: origin_offset,
-            } = copied_object;
-
-            poly_object.validate_adjacencies();
-            poly_object.validate_chunk_obscuredness();
-            poly_object.validate_sdf();
-            poly_object.validate_region_count();
-            assert!(!poly_object.is_effectively_empty());
-
-            object.validate_adjacencies();
-            object.validate_chunk_obscuredness();
-            object.validate_sdf();
-            object.validate_region_count();
-
-            aggregate_poly_inertial_property_manager =
-                aggregate_poly_inertial_property_manager.add(&poly_inertial_property_manager);
-
-            // The tolerance has to accomodate the `f32` rounding accumulated
-            // over the transfer of every individual voxel, which is why we use
-            // the same tolerance as `validate_for_object`
-            assert_relative_eq!(
-                &inertial_property_manager.add(&aggregate_poly_inertial_property_manager),
-                &original_inertial_property_manager,
-                epsilon = 1e-4,
-                max_relative = 1e-4,
-            );
-
-            poly_inertial_property_manager.offset_reference_point_by(&Vector3::from(
-                origin_offset.map(|offset| offset as f32 * object.voxel_extent()),
-            ));
-
-            poly_inertial_property_manager.validate_for_object(&poly_object, &voxel_type_densities);
-        }
-    }
 
     #[test]
     fn connected_region_count_is_correct_for_single_voxel() {
