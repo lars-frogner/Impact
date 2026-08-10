@@ -31,7 +31,7 @@ Voxel based objects have first-class support. The shape of these objects are def
 
 The engine includes a graph‑based system for procedurally generating signed distance fields (SDFs), which are used to define the shape of voxel objects. Each node in an SDF graph represents a simple operation, such as creating a primitive shape (sphere, capsule, box), applying a geometric transformation, adding gradient noise, or combining fields using smooth Boolean operators.
 
-In most cases, SDF graphs are not authored directly. Instead, they are generated from higher‑level *meta graphs*. Meta nodes provide more convenient and expressive building blocks, like creating multiple instances of a shape, arranging them in structured patterns (grids, sphere surfaces), or modifying shapes based on other fields (for example snapping to a surface or aligning to a gradient). Most node parameters can be randomized using different distributions, and parameters can also depend on each other.
+In most cases, SDF graphs are not authored directly. Instead, they are generated from higher‑level _meta graphs_. Meta nodes provide more convenient and expressive building blocks, like creating multiple instances of a shape, arranging them in structured patterns (grids, sphere surfaces), or modifying shapes based on other fields (for example snapping to a surface or aligning to a gradient). Most node parameters can be randomized using different distributions, and parameters can also depend on each other.
 
 A visual editor is available for creating and editing graphs while viewing the results in real time. One of the videos below shows how the editor can be used to generate asteroids with crater distributions informed by real physical processes and empiric measurements.
 
@@ -52,6 +52,8 @@ The [How applications work](#how-applications-work) section describes how Roc is
 The engine currently has a simple [`egui`](https://github.com/emilk/egui)-driven development GUI.
 
 ## Showcase
+
+![asteroid_impact](showcase/asteroid_impact.gif "Asteroid Impact")
 
 ![voxel_asteroid](showcase/voxel_asteroid.gif "Voxel Asteroid")
 
@@ -90,7 +92,7 @@ The `basic_app` application has a handful of simple scenes and physics experimen
 - Audio.
 - Let's see when we get here...
 
-A game is also being developed in parallel with the engine. 
+A game is also being developed in parallel with the engine.
 
 ## How applications work
 
