@@ -146,7 +146,6 @@ impl CameraManager {
     pub fn reset_and_free(&mut self) {
         self.active_camera = None;
         self.inactive_cameras = HashMap::default();
-        self.active_camera_version = 0;
     }
 
     /// Sets the ratio of width to height of the camera's view plane.

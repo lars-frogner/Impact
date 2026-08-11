@@ -214,11 +214,13 @@ where
         self.change_tracker.reset();
     }
 
-    /// Removes all the uniforms from the buffer, resets the change tracker and
-    /// frees up all allocated memory.
+    /// Removes all the uniforms from the buffer and frees up all allocated
+    /// memory.
     pub fn reset_and_free(&mut self) {
+        self.raw_buffer = Vec::new();
         self.index_map = KeyIndexMapper::new();
         self.change_tracker = CollectionChangeTracker::default();
+        self.change_tracker.notify_count_change();
     }
 
     /// Removes all the uniforms from the buffer.
