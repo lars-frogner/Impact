@@ -354,7 +354,7 @@ impl UnitQuaternion {
     /// given up direction.
     #[inline]
     pub fn look_to_rh(dir: &UnitVector3, up: &UnitVector3) -> Self {
-        Self::wrap(glam::Quat::look_to_rh(
+        Self::wrap(glam::camera::rh::view::look_to_quat(
             dir.unwrap().to_vec3(),
             up.unwrap().to_vec3(),
         ))
