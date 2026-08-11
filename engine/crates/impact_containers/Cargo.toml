@@ -13,7 +13,7 @@ serde = ["hashbrown/serde"]
 anyhow = { workspace = true }
 atomic_enum = "0.3"
 bytemuck = { workspace = true }
-hashbrown = "0.16"
+hashbrown = "0.17"
 impact_alloc = { path = "../impact_alloc" }
 inventory = { workspace = true, optional = true }
 nohash-hasher = { workspace = true }
