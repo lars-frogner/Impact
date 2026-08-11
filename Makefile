@@ -36,7 +36,7 @@ DENY_MANIFESTS := \
 
 .DEFAULT_GOAL := help
 
-.PHONY: fmt clippy test deny udeps update clean generate-roc help
+.PHONY: fmt clippy test deny udeps outdated update clean generate-roc help
 
 fmt:
 	@for manifest in $(ALL_MANIFESTS); do \
@@ -66,6 +66,12 @@ udeps:
 	@for manifest in $(ALL_MANIFESTS); do \
 		echo "=== udeps: $$manifest ==="; \
 		RUSTFLAGS="-Awarnings" cargo +nightly udeps --quiet --manifest-path $$manifest --workspace --all-targets || true; \
+	done
+
+outdated:
+	@for manifest in $(ALL_MANIFESTS); do \
+		echo "=== outdated: $$manifest ==="; \
+		cargo outdated --manifest-path $$manifest --workspace --depth 1 || true; \
 	done
 
 update:
@@ -103,6 +109,7 @@ help:
 	@echo "  test          - Run tests across all workspaces"
 	@echo "  deny          - Check dependencies with cargo-deny"
 	@echo "  udeps         - Check for unused dependencies (nightly + cargo-udeps)"
+	@echo "  outdated      - Check for outdated dependencies (cargo-outdated)"
 	@echo "  update        - Update all Cargo.lock files"
 	@echo "  clean         - Remove all Cargo build artifacts"
 	@echo "  generate-roc  - Generate Roc code for all apps"
