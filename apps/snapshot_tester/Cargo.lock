@@ -372,7 +372,7 @@ name = "dynamic_lib"
 version = "0.1.0"
 dependencies = [
  "libloading 0.9.0",
- "log 0.4.33",
+ "log",
  "parking_lot",
  "thiserror 2.0.20",
 ]
@@ -401,7 +401,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217"
 dependencies = [
- "log 0.4.33",
+ "log",
  "regex",
 ]
 
@@ -415,7 +415,7 @@ dependencies = [
  "anstyle",
  "env_filter",
  "jiff",
- "log 0.4.33",
+ "log",
 ]
 
 [[package]]
@@ -548,7 +548,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
 dependencies = [
- "log 0.4.33",
+ "log",
  "presser",
  "thiserror 1.0.69",
  "windows",
@@ -688,7 +688,7 @@ dependencies = [
  "impact_thread",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "pollster",
@@ -826,7 +826,7 @@ dependencies = [
  "impact_scene",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "roc_integration",
  "serde",
  "tinyvec",
@@ -843,7 +843,7 @@ dependencies = [
  "impact_containers",
  "impact_math",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "naga",
  "parking_lot",
  "serde",
@@ -885,7 +885,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "impact_alloc",
- "log 0.1.0",
+ "log",
  "memmap2",
  "png",
  "ron",
@@ -934,7 +934,7 @@ dependencies = [
  "impact_resource",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "roc_integration",
  "serde",
@@ -974,7 +974,7 @@ dependencies = [
  "impact_math",
  "impact_resource",
  "inventory",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
  "serde",
@@ -1013,7 +1013,7 @@ dependencies = [
  "impact_math",
  "impact_profiling",
  "inventory",
- "log 0.1.0",
+ "log",
  "postcard",
  "roc_integration",
  "serde",
@@ -1025,6 +1025,7 @@ name = "impact_profiling"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "parking_lot",
 ]
 
@@ -1048,7 +1049,7 @@ dependencies = [
  "impact_scene",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
  "serde",
@@ -1089,7 +1090,7 @@ dependencies = [
  "impact_profiling",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -1104,8 +1105,9 @@ dependencies = [
  "impact_alloc",
  "impact_containers",
  "impact_math",
+ "impact_profiling",
  "impact_thread",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "tinyvec",
 ]
@@ -1138,7 +1140,7 @@ dependencies = [
  "impact_math",
  "impact_resource",
  "inventory",
- "log 0.1.0",
+ "log",
  "postcard",
  "roc_integration",
  "serde",
@@ -1151,7 +1153,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "parking_lot",
 ]
 
@@ -1183,7 +1185,7 @@ dependencies = [
  "impact_texture",
  "impact_thread",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -1235,7 +1237,7 @@ dependencies = [
  "defmt",
  "jiff-core",
  "jiff-static",
- "log 0.4.33",
+ "log",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
@@ -1322,13 +1324,6 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.1.0"
-dependencies = [
- "log 0.4.33",
-]
-
-[[package]]
-name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
@@ -1367,7 +1362,7 @@ dependencies = [
  "block",
  "core-graphics-types",
  "foreign-types",
- "log 0.4.33",
+ "log",
  "objc",
  "paste",
 ]
@@ -1409,7 +1404,7 @@ dependencies = [
  "hexf-parse",
  "indexmap",
  "libm",
- "log 0.4.33",
+ "log",
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
@@ -1855,7 +1850,7 @@ dependencies = [
  "image-compare",
  "impact",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "roc_platform_core",
  "serde",
@@ -2113,7 +2108,7 @@ dependencies = [
  "cfg_aliases",
  "document-features",
  "hashbrown 0.16.1",
- "log 0.4.33",
+ "log",
  "naga",
  "parking_lot",
  "portable-atomic",
@@ -2141,7 +2136,7 @@ dependencies = [
  "document-features",
  "hashbrown 0.16.1",
  "indexmap",
- "log 0.4.33",
+ "log",
  "naga",
  "once_cell",
  "parking_lot",
@@ -2198,7 +2193,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "libc",
  "libloading 0.8.9",
- "log 0.4.33",
+ "log",
  "metal",
  "naga",
  "objc",
@@ -2227,7 +2222,7 @@ dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
  "js-sys",
- "log 0.4.33",
+ "log",
  "serde",
  "thiserror 2.0.20",
  "web-sys",

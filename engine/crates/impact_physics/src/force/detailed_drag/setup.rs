@@ -121,7 +121,7 @@ fn generate_map<'a>(
 ) -> Result<DragLoadMap> {
     log::info!("Generating drag load map: {drag_load_map_id}");
 
-    let map = log::with_timing_info_logging!(
+    let map = impact_profiling::with_timing_info_logging!(
         "Generating drag load map with resolution {} and smoothness {} for {} using {} direction samples",
         config.n_theta_coords,
         drag_load_map_id,

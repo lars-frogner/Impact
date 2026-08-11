@@ -509,7 +509,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "impact_alloc",
- "log 0.1.0",
+ "log",
  "memmap2",
  "ron",
  "serde",
@@ -570,13 +570,6 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "log"
-version = "0.1.0"
-dependencies = [
- "log 0.4.33",
-]
-
-[[package]]
-name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
@@ -613,7 +606,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "465500e14ea162429d264d44189adc38b199b62b1c21eea9f69e4b73cb03bbf2"
 dependencies = [
  "libc",
- "log 0.4.33",
+ "log",
  "openssl",
  "openssl-probe",
  "openssl-sys",
@@ -1073,7 +1066,7 @@ checksum = "972d7902c8735f2695410b8aed7df6ed12a47394aa1c8d7af49f0497b731a94d"
 dependencies = [
  "base64",
  "der",
- "log 0.4.33",
+ "log",
  "native-tls",
  "percent-encoding",
  "rustls-pki-types",
@@ -1091,7 +1084,7 @@ dependencies = [
  "base64",
  "http",
  "httparse",
- "log 0.4.33",
+ "log",
 ]
 
 [[package]]

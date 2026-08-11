@@ -75,7 +75,7 @@ dependencies = [
  "cc",
  "jni",
  "libc",
- "log 0.4.33",
+ "log",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -331,7 +331,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b99da2f8558ca23c71f4fd15dc57c906239752dd27ff3c00a1d56b685b7cbfec"
 dependencies = [
  "bitflags 2.13.1",
- "log 0.4.33",
+ "log",
  "polling",
  "rustix 0.38.44",
  "slab",
@@ -753,7 +753,7 @@ dependencies = [
  "bitflags 2.13.1",
  "emath",
  "epaint",
- "log 0.4.33",
+ "log",
  "nohash-hasher",
  "profiling",
  "smallvec",
@@ -771,7 +771,7 @@ dependencies = [
  "document-features",
  "egui",
  "epaint",
- "log 0.4.33",
+ "log",
  "profiling",
  "thiserror 2.0.20",
  "type-map",
@@ -787,7 +787,7 @@ checksum = "ec6687e5bb551702f4ad10ac428bab12acf9d53047ebb1082d4a0ed8c6251a29"
 dependencies = [
  "bytemuck",
  "egui",
- "log 0.4.33",
+ "log",
  "objc2",
  "objc2-foundation",
  "objc2-ui-kit",
@@ -806,7 +806,7 @@ dependencies = [
  "ahash",
  "egui",
  "enum-map",
- "log 0.4.33",
+ "log",
  "mime_guess2",
  "profiling",
 ]
@@ -870,7 +870,7 @@ dependencies = [
  "ecolor",
  "emath",
  "epaint_default_fonts",
- "log 0.4.33",
+ "log",
  "nohash-hasher",
  "parking_lot",
  "profiling",
@@ -1016,7 +1016,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "libc",
- "log 0.4.33",
+ "log",
  "rustversion",
  "windows-link",
  "windows-result 0.4.1",
@@ -1098,7 +1098,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
 dependencies = [
- "log 0.4.33",
+ "log",
  "presser",
  "thiserror 1.0.69",
  "windows",
@@ -1232,7 +1232,7 @@ dependencies = [
  "impact_thread",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "pollster",
@@ -1393,7 +1393,7 @@ dependencies = [
  "impact_scene",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "roc_integration",
  "serde",
  "tinyvec",
@@ -1411,7 +1411,7 @@ dependencies = [
  "impact_containers",
  "impact_math",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "naga",
  "parking_lot",
  "serde",
@@ -1455,7 +1455,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "impact_alloc",
- "log 0.1.0",
+ "log",
  "memmap2",
  "png",
  "ron",
@@ -1505,7 +1505,7 @@ dependencies = [
  "impact_resource",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "roc_integration",
  "serde",
@@ -1546,7 +1546,7 @@ dependencies = [
  "impact_math",
  "impact_resource",
  "inventory",
- "log 0.1.0",
+ "log",
  "pastey",
  "ply-rs",
  "roc_integration",
@@ -1590,7 +1590,7 @@ dependencies = [
  "impact_mesh",
  "impact_profiling",
  "inventory",
- "log 0.1.0",
+ "log",
  "postcard",
  "proptest",
  "roc_integration",
@@ -1604,6 +1604,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "criterion",
+ "log",
  "parking_lot",
  "tracy-client",
 ]
@@ -1629,7 +1630,7 @@ dependencies = [
  "impact_scene",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
  "serde",
@@ -1671,7 +1672,7 @@ dependencies = [
  "impact_profiling",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -1686,8 +1687,9 @@ dependencies = [
  "impact_alloc",
  "impact_containers",
  "impact_math",
+ "impact_profiling",
  "impact_thread",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "tinyvec",
 ]
@@ -1722,7 +1724,7 @@ dependencies = [
  "impact_math",
  "impact_resource",
  "inventory",
- "log 0.1.0",
+ "log",
  "postcard",
  "roc_integration",
  "serde",
@@ -1735,7 +1737,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "parking_lot",
 ]
 
@@ -1768,7 +1770,7 @@ dependencies = [
  "impact_texture",
  "impact_thread",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -1827,7 +1829,7 @@ dependencies = [
  "combine",
  "jni-macros",
  "jni-sys 0.4.1",
- "log 0.4.33",
+ "log",
  "simd_cesu8",
  "thiserror 2.0.20",
  "walkdir",
@@ -1971,13 +1973,6 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.1.0"
-dependencies = [
- "log 0.4.33",
-]
-
-[[package]]
-name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
@@ -2038,7 +2033,7 @@ dependencies = [
  "block",
  "core-graphics-types 0.2.0",
  "foreign-types",
- "log 0.4.33",
+ "log",
  "objc",
  "paste",
 ]
@@ -2088,7 +2083,7 @@ dependencies = [
  "hexf-parse",
  "indexmap",
  "libm",
- "log 0.4.33",
+ "log",
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
@@ -2105,7 +2100,7 @@ checksum = "c3f42e7bbe13d351b6bead8286a43aac9534b82bd3cc43e47037f012ebfd62d4"
 dependencies = [
  "bitflags 2.13.1",
  "jni-sys 0.3.1",
- "log 0.4.33",
+ "log",
  "ndk-sys",
  "num_enum",
  "raw-window-handle",
@@ -3094,7 +3089,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6277f0217056f77f1d8f49f2950ac6c278c0d607c45f5ee99328d792ede24ec"
 dependencies = [
  "ab_glyph",
- "log 0.4.33",
+ "log",
  "memmap2",
  "smithay-client-toolkit",
  "tiny-skia",
@@ -3252,7 +3247,7 @@ dependencies = [
  "calloop-wayland-source",
  "cursor-icon",
  "libc",
- "log 0.4.33",
+ "log",
  "memmap2",
  "rustix 0.38.44",
  "thiserror 1.0.69",
@@ -3435,7 +3430,7 @@ dependencies = [
  "arrayvec",
  "bytemuck",
  "cfg-if",
- "log 0.4.33",
+ "log",
  "tiny-skia-path",
 ]
 
@@ -3540,7 +3535,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
 dependencies = [
- "log 0.4.33",
+ "log",
  "once_cell",
  "tracing-core",
 ]
@@ -3840,7 +3835,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8eab23fefc9e41f8e841df4a9c707e8a8c4ed26e944ef69297184de2785e3be"
 dependencies = [
  "dlib",
- "log 0.4.33",
+ "log",
  "once_cell",
  "pkg-config",
 ]
@@ -3877,7 +3872,7 @@ dependencies = [
  "cfg_aliases",
  "document-features",
  "hashbrown 0.16.1",
- "log 0.4.33",
+ "log",
  "naga",
  "parking_lot",
  "portable-atomic",
@@ -3905,7 +3900,7 @@ dependencies = [
  "document-features",
  "hashbrown 0.16.1",
  "indexmap",
- "log 0.4.33",
+ "log",
  "naga",
  "once_cell",
  "parking_lot",
@@ -3962,7 +3957,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "libc",
  "libloading",
- "log 0.4.33",
+ "log",
  "metal",
  "naga",
  "objc",
@@ -3991,7 +3986,7 @@ dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
  "js-sys",
- "log 0.4.33",
+ "log",
  "serde",
  "thiserror 2.0.20",
  "web-sys",
@@ -4312,7 +4307,7 @@ checksum = "d039de8032a9a8856a6be89cea3e5d12fdd82306ab7c94d74e6deab2460651c5"
 dependencies = [
  "bitflags 2.13.1",
  "dlib",
- "log 0.4.33",
+ "log",
  "once_cell",
  "xkeysym",
 ]

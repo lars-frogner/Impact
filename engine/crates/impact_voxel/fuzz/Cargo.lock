@@ -398,7 +398,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
 dependencies = [
- "log 0.4.33",
+ "log",
  "presser",
  "thiserror 1.0.69",
  "windows",
@@ -571,7 +571,7 @@ dependencies = [
  "impact_containers",
  "impact_math",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "naga",
  "parking_lot",
  "serde",
@@ -610,7 +610,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "impact_alloc",
- "log 0.1.0",
+ "log",
  "memmap2",
  "serde",
 ]
@@ -651,7 +651,7 @@ dependencies = [
  "impact_model",
  "impact_resource",
  "impact_texture",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "roc_integration",
 ]
@@ -688,7 +688,7 @@ dependencies = [
  "impact_gpu",
  "impact_math",
  "impact_resource",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
 ]
@@ -723,7 +723,7 @@ dependencies = [
  "impact_io",
  "impact_math",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "roc_integration",
  "tinyvec",
 ]
@@ -733,6 +733,7 @@ name = "impact_profiling"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "parking_lot",
 ]
 
@@ -756,7 +757,7 @@ dependencies = [
  "impact_model",
  "impact_scene",
  "impact_texture",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
 ]
@@ -795,7 +796,7 @@ dependencies = [
  "impact_model",
  "impact_profiling",
  "impact_texture",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -830,7 +831,7 @@ dependencies = [
  "impact_io",
  "impact_math",
  "impact_resource",
- "log 0.1.0",
+ "log",
  "postcard",
  "roc_integration",
  "serde",
@@ -843,7 +844,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "parking_lot",
 ]
 
@@ -875,7 +876,7 @@ dependencies = [
  "impact_tesselation",
  "impact_texture",
  "impact_thread",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -980,13 +981,6 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.1.0"
-dependencies = [
- "log 0.4.33",
-]
-
-[[package]]
-name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
@@ -1025,7 +1019,7 @@ dependencies = [
  "block",
  "core-graphics-types",
  "foreign-types",
- "log 0.4.33",
+ "log",
  "objc",
  "paste",
 ]
@@ -1047,7 +1041,7 @@ dependencies = [
  "hexf-parse",
  "indexmap",
  "libm",
- "log 0.4.33",
+ "log",
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
@@ -1563,7 +1557,7 @@ dependencies = [
  "cfg_aliases",
  "document-features",
  "hashbrown 0.16.1",
- "log 0.4.33",
+ "log",
  "naga",
  "parking_lot",
  "portable-atomic",
@@ -1591,7 +1585,7 @@ dependencies = [
  "document-features",
  "hashbrown 0.16.1",
  "indexmap",
- "log 0.4.33",
+ "log",
  "naga",
  "once_cell",
  "parking_lot",
@@ -1648,7 +1642,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "libc",
  "libloading",
- "log 0.4.33",
+ "log",
  "metal",
  "naga",
  "objc",
@@ -1677,7 +1671,7 @@ dependencies = [
  "bitflags",
  "bytemuck",
  "js-sys",
- "log 0.4.33",
+ "log",
  "serde",
  "thiserror 2.0.20",
  "web-sys",

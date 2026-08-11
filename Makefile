@@ -19,7 +19,6 @@ EXTRA_MANIFESTS := \
     roc_integration/Cargo.toml \
     interop/dynamic_lib/Cargo.toml \
     interop/hashing/Cargo.toml \
-    interop/log/Cargo.toml \
     tools/asset_fetcher/Cargo.toml
 
 ALL_MANIFESTS := \

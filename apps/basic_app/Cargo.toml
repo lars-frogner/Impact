@@ -137,9 +137,9 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 dynamic_lib = { path = "../../interop/dynamic_lib" }
 env_logger = "0.11"
 impact = { path = "../../engine", features = ["egui"] }
-log = { path = "../../interop/log" }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 inventory = "0.3"
+log = "0.4"
 parking_lot = "0.12"
 roc_integration = { path = "../../roc_integration" }
 roc_platform_core = { path = "../../roc_platform/core" }

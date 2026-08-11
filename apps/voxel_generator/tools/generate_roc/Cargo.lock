@@ -59,7 +59,7 @@ dependencies = [
  "cc",
  "jni",
  "libc",
- "log 0.4.33",
+ "log",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -282,7 +282,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b99da2f8558ca23c71f4fd15dc57c906239752dd27ff3c00a1d56b685b7cbfec"
 dependencies = [
  "bitflags 2.13.1",
- "log 0.4.33",
+ "log",
  "polling",
  "rustix 0.38.44",
  "slab",
@@ -564,7 +564,7 @@ name = "dynamic_lib"
 version = "0.1.0"
 dependencies = [
  "libloading 0.9.0",
- "log 0.4.33",
+ "log",
  "parking_lot",
  "thiserror 2.0.20",
 ]
@@ -589,7 +589,7 @@ dependencies = [
  "bitflags 2.13.1",
  "emath",
  "epaint",
- "log 0.4.33",
+ "log",
  "nohash-hasher",
  "profiling",
  "smallvec",
@@ -607,7 +607,7 @@ dependencies = [
  "document-features",
  "egui",
  "epaint",
- "log 0.4.33",
+ "log",
  "profiling",
  "thiserror 2.0.20",
  "type-map",
@@ -623,7 +623,7 @@ checksum = "ec6687e5bb551702f4ad10ac428bab12acf9d53047ebb1082d4a0ed8c6251a29"
 dependencies = [
  "bytemuck",
  "egui",
- "log 0.4.33",
+ "log",
  "objc2",
  "objc2-foundation",
  "objc2-ui-kit",
@@ -642,7 +642,7 @@ dependencies = [
  "ahash",
  "egui",
  "enum-map",
- "log 0.4.33",
+ "log",
  "mime_guess2",
  "profiling",
 ]
@@ -694,7 +694,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217"
 dependencies = [
- "log 0.4.33",
+ "log",
  "regex",
 ]
 
@@ -708,7 +708,7 @@ dependencies = [
  "anstyle",
  "env_filter",
  "jiff",
- "log 0.4.33",
+ "log",
 ]
 
 [[package]]
@@ -723,7 +723,7 @@ dependencies = [
  "ecolor",
  "emath",
  "epaint_default_fonts",
- "log 0.4.33",
+ "log",
  "nohash-hasher",
  "parking_lot",
  "profiling",
@@ -893,7 +893,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c151a2a5ef800297b4e79efa4f4bec035c5f51d5ae587287c9b952bdf734cacd"
 dependencies = [
- "log 0.4.33",
+ "log",
  "presser",
  "thiserror 1.0.69",
  "windows",
@@ -1025,7 +1025,7 @@ dependencies = [
  "impact_thread",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "pollster",
@@ -1181,7 +1181,7 @@ dependencies = [
  "impact_scene",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "roc_integration",
  "serde",
  "tinyvec",
@@ -1198,7 +1198,7 @@ dependencies = [
  "impact_containers",
  "impact_math",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "naga",
  "parking_lot",
  "serde",
@@ -1240,7 +1240,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "impact_alloc",
- "log 0.1.0",
+ "log",
  "memmap2",
  "ron",
  "serde",
@@ -1287,7 +1287,7 @@ dependencies = [
  "impact_resource",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "roc_integration",
  "serde",
@@ -1327,7 +1327,7 @@ dependencies = [
  "impact_math",
  "impact_resource",
  "inventory",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
  "serde",
@@ -1366,7 +1366,7 @@ dependencies = [
  "impact_math",
  "impact_profiling",
  "inventory",
- "log 0.1.0",
+ "log",
  "postcard",
  "roc_integration",
  "serde",
@@ -1378,6 +1378,7 @@ name = "impact_profiling"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "parking_lot",
 ]
 
@@ -1401,7 +1402,7 @@ dependencies = [
  "impact_scene",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "pastey",
  "roc_integration",
  "serde",
@@ -1442,7 +1443,7 @@ dependencies = [
  "impact_profiling",
  "impact_texture",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -1457,8 +1458,9 @@ dependencies = [
  "impact_alloc",
  "impact_containers",
  "impact_math",
+ "impact_profiling",
  "impact_thread",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "tinyvec",
 ]
@@ -1491,7 +1493,7 @@ dependencies = [
  "impact_math",
  "impact_resource",
  "inventory",
- "log 0.1.0",
+ "log",
  "postcard",
  "roc_integration",
  "serde",
@@ -1504,7 +1506,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "impact_profiling",
- "log 0.1.0",
+ "log",
  "parking_lot",
 ]
 
@@ -1536,7 +1538,7 @@ dependencies = [
  "impact_texture",
  "impact_thread",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "pastey",
  "roc_integration",
@@ -1579,7 +1581,7 @@ dependencies = [
  "defmt",
  "jiff-core",
  "jiff-static",
- "log 0.4.33",
+ "log",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
@@ -1616,7 +1618,7 @@ dependencies = [
  "combine",
  "jni-macros",
  "jni-sys 0.4.1",
- "log 0.4.33",
+ "log",
  "simd_cesu8",
  "thiserror 2.0.20",
  "walkdir",
@@ -1758,13 +1760,6 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.1.0"
-dependencies = [
- "log 0.4.33",
-]
-
-[[package]]
-name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
@@ -1803,7 +1798,7 @@ dependencies = [
  "block",
  "core-graphics-types 0.2.0",
  "foreign-types",
- "log 0.4.33",
+ "log",
  "objc",
  "paste",
 ]
@@ -1843,7 +1838,7 @@ dependencies = [
  "hexf-parse",
  "indexmap",
  "libm",
- "log 0.4.33",
+ "log",
  "num-traits",
  "once_cell",
  "rustc-hash 1.1.0",
@@ -1860,7 +1855,7 @@ checksum = "c3f42e7bbe13d351b6bead8286a43aac9534b82bd3cc43e47037f012ebfd62d4"
 dependencies = [
  "bitflags 2.13.1",
  "jni-sys 0.3.1",
- "log 0.4.33",
+ "log",
  "ndk-sys",
  "num_enum",
  "raw-window-handle",
@@ -2995,7 +2990,7 @@ dependencies = [
  "impact_io",
  "impact_voxel",
  "inventory",
- "log 0.1.0",
+ "log",
  "parking_lot",
  "roc_platform_core",
  "serde",
@@ -3100,7 +3095,7 @@ dependencies = [
  "cfg_aliases",
  "document-features",
  "hashbrown 0.16.1",
- "log 0.4.33",
+ "log",
  "naga",
  "parking_lot",
  "portable-atomic",
@@ -3128,7 +3123,7 @@ dependencies = [
  "document-features",
  "hashbrown 0.16.1",
  "indexmap",
- "log 0.4.33",
+ "log",
  "naga",
  "once_cell",
  "parking_lot",
@@ -3185,7 +3180,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "libc",
  "libloading 0.8.9",
- "log 0.4.33",
+ "log",
  "metal",
  "naga",
  "objc",
@@ -3214,7 +3209,7 @@ dependencies = [
  "bitflags 2.13.1",
  "bytemuck",
  "js-sys",
- "log 0.4.33",
+ "log",
  "serde",
  "thiserror 2.0.20",
  "web-sys",
@@ -3484,7 +3479,7 @@ checksum = "d039de8032a9a8856a6be89cea3e5d12fdd82306ab7c94d74e6deab2460651c5"
 dependencies = [
  "bitflags 2.13.1",
  "dlib",
- "log 0.4.33",
+ "log",
  "once_cell",
  "xkeysym",
 ]

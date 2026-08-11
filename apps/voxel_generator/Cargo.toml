@@ -131,9 +131,9 @@ impact = { path = "../../engine", features = ["egui"] }
 impact_containers = { path = "../../engine/crates/impact_containers", features = ["serde"] }
 impact_dev_ui = { path = "../../engine/crates/impact_dev_ui" }
 impact_io = { path = "../../engine/crates/impact_io", features = ["ron"] }
-log = { path = "../../interop/log" }
 impact_voxel = { path = "../../engine/crates/impact_voxel" }
 inventory = "0.3"
+log = "0.4"
 parking_lot = "0.12"
 roc_platform_core = { path = "../../roc_platform/core" }
 serde = { version = "1.0", features = ["derive"] }

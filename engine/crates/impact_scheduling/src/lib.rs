@@ -425,7 +425,7 @@ where
             // Execute the task only if it thinks it should be based on the
             // current execution tags
             if task.should_execute(execution_tags.as_ref()) {
-                log::with_trace_logging!("Executing task `{}`", task.id();
+                impact_profiling::with_trace_logging!("Executing task `{}`", task.id();
                 {
                     if let Err(error) = task.execute(state.external_state()) {
                         // Register the error and return immediately if the task
@@ -466,7 +466,7 @@ where
                     .task(ready_dependent_task_idx)
                     .task()
                     .id();
-                log::with_trace_logging!("Scheduling execution of task `{}`", task_id; {
+                impact_profiling::with_trace_logging!("Scheduling execution of task `{}`", task_id; {
                     if let Err(err) = channel.send_execute_instruction(Self::create_message(
                         &state,
                         &execution_tags,
