@@ -77,7 +77,8 @@ impl ComputePass {
                     .create_and_get_render_attachment_texture_bind_group_layouts(
                         graphics_device,
                         &input_render_attachments,
-                    ),
+                    )
+                    .map(Some),
             );
         }
 
@@ -90,7 +91,7 @@ impl ComputePass {
                 )
             })?;
 
-        bind_group_layouts.push(gpu_resource_group.bind_group_layout());
+        bind_group_layouts.push(Some(gpu_resource_group.bind_group_layout()));
 
         let pipeline_layout = create_compute_pipeline_layout(
             graphics_device.device(),
@@ -207,7 +208,7 @@ impl ComputePass {
 
 pub fn create_compute_pipeline_layout(
     device: &wgpu::Device,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     immediate_size: u32,
     label: &str,
 ) -> wgpu::PipelineLayout {

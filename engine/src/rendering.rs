@@ -4,9 +4,7 @@ pub mod render_command;
 pub mod resource;
 pub mod screen_capture;
 
-use crate::{
-    lock_order::OrderedRwLock, resource::ResourceManager, tasks::RenderToSurface, ui::UserInterface,
-};
+use crate::{lock_order::OrderedRwLock, resource::ResourceManager, ui::UserInterface};
 use anyhow::Result;
 use impact_camera::CameraManager;
 use impact_gpu::{
@@ -30,10 +28,9 @@ use impact_rendering::{
         Postprocessor, ambient_occlusion::AmbientOcclusionConfig, capturing::CapturingCameraConfig,
         temporal_anti_aliasing::TemporalAntiAliasingConfig,
     },
-    surface::RenderingSurface,
+    surface::{RenderingSurface, SurfaceAcquisition},
 };
 use impact_scene::model::ModelInstanceManager;
-use impact_scheduling::{Task, TaskErrors};
 use impact_voxel::VoxelObjectManager;
 use parking_lot::RwLock;
 use render_command::RenderCommandManager;
@@ -375,11 +372,32 @@ impl RenderingSystem {
     /// attached to a window. This function may have to wait for the next
     /// surface texture from the swap chain to be ready.
     ///
+    /// Returns [`None`] if the surface is not available for this frame, in
+    /// which case the frame should be skipped.
+    ///
     /// # Errors
     /// Return an error if obtaining the surface texture fails.
-    pub fn obtain_surface(&mut self) -> Result<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)> {
-        self.rendering_surface
-            .get_texture_view_with_presentable_texture()
+    pub fn obtain_surface(
+        &mut self,
+    ) -> Result<Option<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)>> {
+        match self
+            .rendering_surface
+            .acquire_surface(&self.graphics_device)?
+        {
+            SurfaceAcquisition::Acquired {
+                texture_view,
+                presentable_texture,
+            } => Ok(Some((texture_view, presentable_texture))),
+            SurfaceAcquisition::Skip => {
+                self.staging_belt.recall();
+                Ok(None)
+            }
+            SurfaceAcquisition::Invalidated => {
+                self.staging_belt.recall();
+                self.recreate_render_attachment_textures();
+                Ok(None)
+            }
+        }
     }
 
     /// Records and submits the final render commands that write into the
@@ -466,9 +484,25 @@ impl RenderingSystem {
         self.recreate_render_attachment_textures();
     }
 
-    pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
-        self.rendering_surface
-            .update_pixels_per_point(pixels_per_point);
+    /// Recreates the rendering surface and render attachment textures if the
+    /// surface was lost when it was last acquired. Returns whether the surface
+    /// was recreated.
+    ///
+    /// Must be called on the thread owning the window if the surface is attached
+    /// to a window.
+    pub fn recreate_rendering_surface_if_lost(&mut self) -> Result<bool> {
+        if !self
+            .rendering_surface
+            .recreate_if_lost(&self.graphics_device)?
+        {
+            return Ok(false);
+        }
+
+        log::info!("Recreated lost rendering surface");
+
+        self.recreate_render_attachment_textures();
+
+        Ok(true)
     }
 
     pub fn set_wireframe_mode_enabled(&mut self, enabled: bool) {
@@ -507,11 +541,6 @@ impl RenderingSystem {
         }
     }
 
-    fn handle_surface_lost(&self) {
-        self.rendering_surface
-            .reinitialize_lost_surface(self.graphics_device());
-    }
-
     fn create_render_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render encoder"),
@@ -530,16 +559,5 @@ impl RenderingSystem {
         self.render_attachment_texture_manager
             .owrite()
             .recreate_textures(&self.graphics_device, &self.rendering_surface);
-    }
-
-    /// Identifies rendering-related errors that need special handling in the
-    /// given set of task errors and handles them.
-    pub fn handle_task_errors(&self, task_errors: &mut TaskErrors) {
-        if let Some(render_error) = task_errors.get_error_of(RenderToSurface.id())
-            && let Some(wgpu::SurfaceError::Lost) = render_error.downcast_ref()
-        {
-            self.handle_surface_lost();
-            task_errors.clear_error_of(RenderToSurface.id());
-        }
     }
 }

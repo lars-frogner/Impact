@@ -83,7 +83,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[&omnidirectional_light_bind_group_layout],
+            &[Some(&omnidirectional_light_bind_group_layout)],
             immediates.total_size(),
             "Omnidirectional light shadow map update render pipeline layout",
         );
@@ -449,7 +449,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[&unidirectional_light_bind_group_layout],
+            &[Some(&unidirectional_light_bind_group_layout)],
             immediates.total_size(),
             "Unidirectional light shadow map update render pipeline layout",
         );
@@ -799,8 +799,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 pub fn depth_stencil_state_for_shadow_map_update() -> wgpu::DepthStencilState {
     wgpu::DepthStencilState {
         format: SHADOW_MAP_FORMAT,
-        depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::Less,
+        depth_write_enabled: Some(true),
+        depth_compare: Some(wgpu::CompareFunction::Less),
         stencil: wgpu::StencilState::default(),
         // Biasing is applied manually in shader
         bias: wgpu::DepthBiasState::default(),

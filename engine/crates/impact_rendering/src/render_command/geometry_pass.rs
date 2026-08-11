@@ -204,14 +204,14 @@ impl GeometryPass {
 
                     let vertex_attributes = shader_template.input().vertex_attributes;
 
-                    let mut bind_group_layouts = vec![&camera_bind_group_layout];
+                    let mut bind_group_layouts = vec![Some(&camera_bind_group_layout)];
 
                     if let Some(bind_group_layout) = gpu_resources
                         .material_template()
                         .get(material.template_id)
                         .and_then(GPUMaterialTemplate::bind_group_layout)
                     {
-                        bind_group_layouts.push(bind_group_layout);
+                        bind_group_layouts.push(Some(bind_group_layout));
                     }
 
                     let pipeline_layout = render_command::create_render_pipeline_layout(

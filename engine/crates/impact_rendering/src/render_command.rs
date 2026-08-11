@@ -33,7 +33,7 @@ pub const INVERTED_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Cw;
 
 pub fn create_render_pipeline_layout(
     device: &wgpu::Device,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     immediate_size: u32,
     label: &str,
 ) -> wgpu::PipelineLayout {
@@ -144,8 +144,8 @@ pub fn create_line_list_render_pipeline(
 pub fn depth_stencil_state_for_depth_test_without_write() -> wgpu::DepthStencilState {
     wgpu::DepthStencilState {
         format: RenderAttachmentQuantity::depth_texture_format(),
-        depth_write_enabled: false,
-        depth_compare: wgpu::CompareFunction::Less,
+        depth_write_enabled: Some(false),
+        depth_compare: Some(wgpu::CompareFunction::Less),
         stencil: wgpu::StencilState::default(),
         bias: wgpu::DepthBiasState::default(),
     }
@@ -154,8 +154,8 @@ pub fn depth_stencil_state_for_depth_test_without_write() -> wgpu::DepthStencilS
 pub fn depth_stencil_state_for_depth_stencil_write() -> wgpu::DepthStencilState {
     wgpu::DepthStencilState {
         format: RenderAttachmentQuantity::depth_texture_format(),
-        depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::Less,
+        depth_write_enabled: Some(true),
+        depth_compare: Some(wgpu::CompareFunction::Less),
         // Write the reference stencil value to the stencil map
         // whenever the depth test passes
         stencil: wgpu::StencilState {
@@ -185,8 +185,8 @@ pub fn depth_stencil_state_for_stencil_testing(
     // stencil value with the reference value passes
     wgpu::DepthStencilState {
         format: RenderAttachmentQuantity::depth_texture_format(),
-        depth_write_enabled: false,
-        depth_compare: wgpu::CompareFunction::Always,
+        depth_write_enabled: Some(false),
+        depth_compare: Some(wgpu::CompareFunction::Always),
         stencil: wgpu::StencilState {
             front: wgpu::StencilFaceState {
                 compare,

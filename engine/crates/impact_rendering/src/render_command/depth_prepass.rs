@@ -57,7 +57,7 @@ impl DepthPrepass {
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[&camera_bind_group_layout],
+            &[Some(&camera_bind_group_layout)],
             immediates.total_size(),
             "Depth prepass render pipeline layout",
         );

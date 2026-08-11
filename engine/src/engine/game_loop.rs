@@ -38,13 +38,8 @@ impl Engine {
 
         let execution_result = task_scheduler.execute_and_wait(&ALL_SYSTEMS)?;
 
-        if let Err(mut task_errors) = execution_result {
-            self.handle_task_errors(&mut task_errors);
-
-            // Pass any unhandled errors to caller
-            if task_errors.n_errors() > 0 {
-                return Err(task_errors.into());
-            }
+        if let Err(task_errors) = execution_result {
+            return Err(task_errors.into());
         }
 
         let mut game_loop_controller = self.game_loop_controller.owrite();

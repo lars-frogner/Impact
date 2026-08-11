@@ -54,10 +54,12 @@ impl AmbientLightPass {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        let mut bind_group_layouts = vec![CameraGPUResource::get_or_create_bind_group_layout(
+        let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
             bind_group_layout_registry,
-        )];
+        );
+
+        let mut bind_group_layouts = vec![Some(&camera_bind_group_layout)];
 
         bind_group_layouts.extend(
             render_attachment_texture_manager
@@ -65,31 +67,30 @@ impl AmbientLightPass {
                     graphics_device,
                     &input_render_attachments,
                 )
-                .cloned(),
+                .map(Some),
         );
 
-        bind_group_layouts.push(
+        let light_bind_group_layout =
             LightGPUResources::get_or_create_ambient_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
-            ),
-        );
+            );
+
+        bind_group_layouts.push(Some(&light_bind_group_layout));
 
         let specular_ggx_reflectance_table = resource_registries
             .lookup_table()
             .get(lookup_tables::specular_ggx_reflectance::lookup_table_id())
             .expect("Missing specular GGX reflectance lookup table");
 
-        bind_group_layouts.push(
-            specular_ggx_reflectance_table
-                .get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry),
-        );
+        let specular_ggx_reflectance_table_bind_group_layout = specular_ggx_reflectance_table
+            .get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry);
 
-        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
-            bind_group_layouts.iter().collect();
+        bind_group_layouts.push(Some(&specular_ggx_reflectance_table_bind_group_layout));
+
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &bind_group_layout_refs,
+            &bind_group_layouts,
             immediates.total_size(),
             "Ambient light pass render pipeline layout",
         );

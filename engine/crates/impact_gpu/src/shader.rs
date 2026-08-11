@@ -50,6 +50,18 @@ pub struct EntryPointNames {
     /// Name of the task entry point function, or [`None`] if there is no
     /// task entry point.
     pub task: Option<Cow<'static, str>>,
+    /// Name of the ray generation entry point function, or [`None`] if there is
+    /// no ray generation entry point.
+    pub ray_generation: Option<Cow<'static, str>>,
+    /// Name of the miss entry point function, or [`None`] if there is no miss
+    /// entry point.
+    pub miss: Option<Cow<'static, str>>,
+    /// Name of the any hit entry point function, or [`None`] if there is no
+    /// any hit entry point.
+    pub any_hit: Option<Cow<'static, str>>,
+    /// Name of the closest hit entry point function, or [`None`] if there is no
+    /// closest hit entry point.
+    pub closest_hit: Option<Cow<'static, str>>,
 }
 
 impl ShaderManager {
@@ -343,6 +355,10 @@ impl EntryPointNames {
             compute: None,
             mesh: None,
             task: None,
+            ray_generation: None,
+            miss: None,
+            any_hit: None,
+            closest_hit: None,
         };
         for entry_point in &module.entry_points {
             match entry_point.stage {
@@ -360,6 +376,18 @@ impl EntryPointNames {
                 }
                 ShaderStage::Task => {
                     entry_point_names.task = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::RayGeneration => {
+                    entry_point_names.ray_generation = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::Miss => {
+                    entry_point_names.miss = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::AnyHit => {
+                    entry_point_names.any_hit = Some(Cow::Owned(entry_point.name.clone()));
+                }
+                ShaderStage::ClosestHit => {
+                    entry_point_names.closest_hit = Some(Cow::Owned(entry_point.name.clone()));
                 }
             }
         }

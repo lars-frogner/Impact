@@ -20,7 +20,7 @@ pub fn initialize_for_headless_rendering(
     width: NonZeroU32,
     height: NonZeroU32,
 ) -> Result<GraphicsContext> {
-    let wgpu_instance = create_wgpu_instance();
+    let wgpu_instance = create_wgpu_instance(None);
 
     let mut rendering_surface = RenderingSurface::new_headless(width, height);
 
@@ -41,9 +41,11 @@ pub fn initialize_for_headless_rendering(
 /// See [`RenderingSurface::new_for_window`] and [`GraphicsDevice::connect`].
 #[cfg(feature = "window")]
 pub fn initialize_for_window_rendering(window: &crate::window::Window) -> Result<GraphicsContext> {
-    let wgpu_instance = create_wgpu_instance();
+    let display_handle = window.display_handle().clone();
+    let wgpu_instance = create_wgpu_instance(Some(Box::new(display_handle)));
 
-    let mut rendering_surface = RenderingSurface::new_for_window(&wgpu_instance, window)?;
+    let mut rendering_surface =
+        RenderingSurface::new_for_window(&wgpu_instance, std::sync::Arc::new(window.clone()))?;
 
     let graphics_device =
         connect_to_graphics_device_for_rendering(&wgpu_instance, &mut rendering_surface)?;
@@ -55,8 +57,11 @@ pub fn initialize_for_window_rendering(window: &crate::window::Window) -> Result
 }
 
 /// Creates a new instance of `wgpu`.
-pub fn create_wgpu_instance() -> wgpu::Instance {
-    wgpu::Instance::new(&wgpu::InstanceDescriptor {
+pub fn create_wgpu_instance(
+    display: Option<Box<dyn wgpu::wgt::WgpuHasDisplayHandle + 'static>>,
+) -> wgpu::Instance {
+    wgpu::Instance::new(wgpu::InstanceDescriptor {
+        display,
         backends: wgpu::Backends::all(),
         flags: wgpu::InstanceFlags::default(),
         memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),

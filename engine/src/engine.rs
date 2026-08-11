@@ -39,7 +39,6 @@ use impact_gpu::device::GraphicsDevice;
 use impact_id::EntityIDManager;
 use impact_profiling::TaskTimer;
 use impact_scene::model::ModelInstanceManager;
-use impact_scheduling::TaskErrors;
 use impact_texture::{SamplerRegistry, TextureRegistry};
 use impact_thread::pool::DynamicThreadPool;
 use impact_voxel::{VoxelConfig, voxel_types::VoxelTypeRegistry};
@@ -317,8 +316,8 @@ impl Engine {
             )
     }
 
-    /// Sets a new size for the rendering surface and updates
-    /// the aspect ratio of all cameras.
+    /// Sets a new size for the rendering surface and updates the aspect ratio
+    /// of all cameras.
     pub(crate) fn resize_rendering_surface(&self, new_width: NonZeroU32, new_height: NonZeroU32) {
         let mut renderer = self.renderer().owrite();
 
@@ -333,10 +332,27 @@ impl Engine {
             .handle_aspect_ratio_changed(new_aspect_ratio);
     }
 
-    pub(crate) fn update_pixels_per_point(&self, pixels_per_point: f64) {
-        self.renderer()
-            .owrite()
-            .update_pixels_per_point(pixels_per_point);
+    /// Recreates the rendering surface if it was lost during the last game loop
+    /// iteration, and updates the aspect ratio of all cameras if it was.
+    ///
+    /// Must be called on the thread owning the window if the surface is attached
+    /// to a window.
+    pub(crate) fn recreate_rendering_surface_if_lost(&self) -> Result<()> {
+        let mut renderer = self.renderer().owrite();
+
+        if !renderer.recreate_rendering_surface_if_lost()? {
+            return Ok(());
+        }
+
+        let new_aspect_ratio = renderer.rendering_surface().surface_aspect_ratio();
+
+        drop(renderer);
+
+        self.scene()
+            .oread()
+            .handle_aspect_ratio_changed(new_aspect_ratio);
+
+        Ok(())
     }
 
     pub(crate) fn handle_queued_input_events(&self) -> Result<()> {
@@ -561,12 +577,6 @@ impl Engine {
             .admin
             .system
             .try_execute_commands(|command| command::execute_system_admin_command(self, command))
-    }
-
-    /// Identifies errors that need special handling in the given set of task
-    /// errors and handles them.
-    pub(crate) fn handle_task_errors(&self, task_errors: &mut TaskErrors) {
-        self.renderer.oread().handle_task_errors(task_errors);
     }
 }
 

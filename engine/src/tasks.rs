@@ -122,9 +122,14 @@ define_task!(
             return Ok(());
         }
 
-        let (surface_texture_view, surface_texture) = instrument_task!("Obtaining surface", engine.task_timer(), {
+        let surface = instrument_task!("Obtaining surface", engine.task_timer(), {
             renderer.obtain_surface()
         })?;
+
+        // Skip the frame if the surface is currently unavailable
+        let Some((surface_texture_view, surface_texture)) = surface else {
+            return Ok(());
+        };
 
         instrument_task!("Rendering to surface", engine.task_timer(), {
             renderer.render_to_surface(

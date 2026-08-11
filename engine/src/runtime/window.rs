@@ -160,7 +160,11 @@ where
 
         match event {
             WindowEvent::RedrawRequested => {
-                let result = runtime.perform_game_loop_iteration();
+                // A surface lost during the iteration must be recreated here,
+                // since creating a surface requires access to the window
+                let result = runtime
+                    .perform_game_loop_iteration()
+                    .and_then(|()| runtime.recreate_rendering_surface_if_lost());
 
                 if let Err(error) = result {
                     log::error!("Aborting due to fatal error: {error:#}");
@@ -180,14 +184,18 @@ where
                     log::error!("Tried resizing window to zero size");
                     event_loop.exit();
                 } else {
-                    runtime.resize_rendering_surface(
-                        NonZeroU32::new(new_size.width).unwrap(),
-                        NonZeroU32::new(new_size.height).unwrap(),
-                    );
+                    let new_width = NonZeroU32::new(new_size.width).unwrap();
+                    let new_height = NonZeroU32::new(new_size.height).unwrap();
+
+                    // The window must be informed of the new dimensions before
+                    // they can be read from the rendering thread
+                    window.handle_resize(new_width, new_height);
+
+                    runtime.resize_rendering_surface(new_width, new_height);
                 }
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                runtime.update_pixels_per_point(scale_factor);
+                window.handle_scale_factor_change(scale_factor);
             }
             _ => {}
         }

@@ -125,10 +125,11 @@ impl DirectionalLightPass {
             &ShadowableUnidirectionalLightShaderTemplate::output_render_attachment_quantity()
         );
 
-        let mut bind_group_layouts = vec![CameraGPUResource::get_or_create_bind_group_layout(
-            graphics_device,
-            bind_group_layout_registry,
-        )];
+        let mut bind_group_layouts =
+            vec![Some(CameraGPUResource::get_or_create_bind_group_layout(
+                graphics_device,
+                bind_group_layout_registry,
+            ))];
 
         bind_group_layouts.extend(
             render_attachment_texture_manager
@@ -136,7 +137,7 @@ impl DirectionalLightPass {
                     graphics_device,
                     &input_render_attachments,
                 )
-                .cloned(),
+                .map(|layout| Some(layout.clone())),
         );
 
         let immediate_size = immediates.total_size();
@@ -651,7 +652,7 @@ impl OmnidirectionalLightPipeline {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
+        mut bind_group_layouts: Vec<Option<wgpu::BindGroupLayout>>,
         immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
@@ -661,15 +662,17 @@ impl OmnidirectionalLightPipeline {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        bind_group_layouts.push(
+        bind_group_layouts.push(Some(
             LightGPUResources::get_or_create_omnidirectional_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
-        );
+        ));
 
-        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
-            bind_group_layouts.iter().collect();
+        let bind_group_layout_refs: Vec<Option<&wgpu::BindGroupLayout>> = bind_group_layouts
+            .iter()
+            .map(|layout| layout.as_ref())
+            .collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
@@ -732,7 +735,7 @@ impl ShadowableOmnidirectionalLightPipeline {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
+        mut bind_group_layouts: Vec<Option<wgpu::BindGroupLayout>>,
         immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
@@ -742,22 +745,24 @@ impl ShadowableOmnidirectionalLightPipeline {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        bind_group_layouts.push(
+        bind_group_layouts.push(Some(
             LightGPUResources::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
-        );
+        ));
 
-        bind_group_layouts.push(
+        bind_group_layouts.push(Some(
             OmnidirectionalLightShadowMapManager::get_or_create_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
-        );
+        ));
 
-        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
-            bind_group_layouts.iter().collect();
+        let bind_group_layout_refs: Vec<Option<&wgpu::BindGroupLayout>> = bind_group_layouts
+            .iter()
+            .map(|layout| layout.as_ref())
+            .collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
@@ -821,7 +826,7 @@ impl UnidirectionalLightPipeline {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
+        mut bind_group_layouts: Vec<Option<wgpu::BindGroupLayout>>,
         immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
@@ -831,15 +836,17 @@ impl UnidirectionalLightPipeline {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        bind_group_layouts.push(
+        bind_group_layouts.push(Some(
             LightGPUResources::get_or_create_unidirectional_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
-        );
+        ));
 
-        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
-            bind_group_layouts.iter().collect();
+        let bind_group_layout_refs: Vec<Option<&wgpu::BindGroupLayout>> = bind_group_layouts
+            .iter()
+            .map(|layout| layout.as_ref())
+            .collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
@@ -902,7 +909,7 @@ impl ShadowableUnidirectionalLightPipeline {
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
-        mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
+        mut bind_group_layouts: Vec<Option<wgpu::BindGroupLayout>>,
         immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
@@ -912,22 +919,24 @@ impl ShadowableUnidirectionalLightPipeline {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        bind_group_layouts.push(
+        bind_group_layouts.push(Some(
             LightGPUResources::get_or_create_shadowable_unidirectional_light_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
-        );
+        ));
 
-        bind_group_layouts.push(
+        bind_group_layouts.push(Some(
             UnidirectionalLightShadowMapManager::get_or_create_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
             ),
-        );
+        ));
 
-        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
-            bind_group_layouts.iter().collect();
+        let bind_group_layout_refs: Vec<Option<&wgpu::BindGroupLayout>> = bind_group_layouts
+            .iter()
+            .map(|layout| layout.as_ref())
+            .collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,

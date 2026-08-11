@@ -280,7 +280,7 @@ impl VoxelChunkCullingPass {
 
         let pipeline_layout = compute::create_compute_pipeline_layout(
             graphics_device.device(),
-            &[&bind_group_layout],
+            &[Some(&bind_group_layout)],
             immediates.total_size(),
             "Voxel chunk culling pass compute pipeline layout",
         );
@@ -633,9 +633,9 @@ impl VoxelGeometryPipeline {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[
-                &camera_bind_group_layout,
-                &material_bind_group_layout,
-                &position_and_normal_buffer_bind_group_layout,
+                Some(&camera_bind_group_layout),
+                Some(&material_bind_group_layout),
+                Some(&position_and_normal_buffer_bind_group_layout),
             ],
             immediates.total_size(),
             "Voxel geometry pass render pipeline layout",

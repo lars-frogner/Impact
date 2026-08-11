@@ -66,11 +66,15 @@ impl PostprocessingRenderPass {
 
         let mut bind_group_layouts = Vec::with_capacity(8);
 
-        if uses_camera {
-            bind_group_layouts.push(CameraGPUResource::get_or_create_bind_group_layout(
+        let camera_bind_group_layout = uses_camera.then(|| {
+            CameraGPUResource::get_or_create_bind_group_layout(
                 graphics_device,
                 bind_group_layout_registry,
-            ));
+            )
+        });
+
+        if let Some(layout) = camera_bind_group_layout.as_ref() {
+            bind_group_layouts.push(Some(layout));
         }
 
         if !input_render_attachments.is_empty() {
@@ -80,7 +84,7 @@ impl PostprocessingRenderPass {
                         graphics_device,
                         &input_render_attachments,
                     )
-                    .cloned(),
+                    .map(Some),
             );
         }
 
@@ -94,14 +98,12 @@ impl PostprocessingRenderPass {
                     )
                 })?;
 
-            bind_group_layouts.push(gpu_resource_group.bind_group_layout().clone());
+            bind_group_layouts.push(Some(gpu_resource_group.bind_group_layout()));
         }
 
-        let bind_group_layout_refs: Vec<&wgpu::BindGroupLayout> =
-            bind_group_layouts.iter().collect();
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &bind_group_layout_refs,
+            &bind_group_layouts,
             immediates.total_size(),
             &format!("Postprocessing pass render pipeline layout ({label})"),
         );
@@ -402,7 +404,7 @@ impl PostprocessingRenderPass {
 
 pub fn create_postprocessing_render_pipeline_layout(
     device: &wgpu::Device,
-    bind_group_layouts: &[&wgpu::BindGroupLayout],
+    bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
     immediate_size: u32,
     label: &str,
 ) -> wgpu::PipelineLayout {

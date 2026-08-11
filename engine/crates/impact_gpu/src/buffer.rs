@@ -675,8 +675,12 @@ impl CountedGPUBuffer {
             let mut mapped_memory = buffer_slice.get_mapped_range_mut();
 
             // Write count to beginning, followed by actual data after the count padding
-            mapped_memory[0..mem::size_of::<Count>()].copy_from_slice(bytemuck::bytes_of(&count));
-            mapped_memory[padded_count_size..].copy_from_slice(bytes);
+            mapped_memory
+                .slice(0..mem::size_of::<Count>())
+                .copy_from_slice(bytemuck::bytes_of(&count));
+            mapped_memory
+                .slice(padded_count_size..)
+                .copy_from_slice(bytes);
         }
 
         buffer.unmap();

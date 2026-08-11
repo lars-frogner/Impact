@@ -156,7 +156,7 @@ impl BloomRenderCommands {
 
         let blurring_pipeline_layout = create_postprocessing_render_pipeline_layout(
             graphics_device.device(),
-            &[bind_group_layout],
+            &[Some(bind_group_layout)],
             immediate_size,
             "bloom blurring",
         );
@@ -165,7 +165,7 @@ impl BloomRenderCommands {
         // original luminance and one for the blurred luminance
         let blending_pipeline_layout = create_postprocessing_render_pipeline_layout(
             graphics_device.device(),
-            &[bind_group_layout; 2],
+            &[Some(bind_group_layout); 2],
             immediate_size,
             "bloom blending",
         );

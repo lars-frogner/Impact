@@ -72,7 +72,7 @@ impl GizmoPasses {
 
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
-            &[&camera_bind_group_layout],
+            &[Some(&camera_bind_group_layout)],
             0,
             "Gizmo pass render pipeline layout",
         );
@@ -306,10 +306,10 @@ impl GizmoPassPipeline {
         let depth_stencil_state = match obscurability {
             GizmoObscurability::Obscurable => Some(wgpu::DepthStencilState {
                 format: RenderAttachmentQuantity::depth_texture_format(),
-                depth_write_enabled: false,
+                depth_write_enabled: Some(false),
                 // Allow equality to avoid discarding geometry flattened onto
                 // the far plane due to `GizmoDepthClipping::Disabled`
-                depth_compare: wgpu::CompareFunction::LessEqual,
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),

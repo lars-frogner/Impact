@@ -18,6 +18,24 @@ pub enum RenderingSurface {
     Window(window::WindowRenderingSurface),
 }
 
+/// The outcome of attempting to acquire the surface to render into for a frame.
+#[derive(Debug)]
+pub enum SurfaceAcquisition {
+    Acquired {
+        /// The view to render into.
+        texture_view: wgpu::TextureView,
+        /// The texture to present after rendering, if the surface is attached
+        /// to a window.
+        presentable_texture: Option<wgpu::SurfaceTexture>,
+    },
+    /// The surface is temporarily unavailable, so the frame should be skipped.
+    Skip,
+    /// The surface was reconfigured or recreated with new dimensions. The frame
+    /// should be skipped, and everything derived from the surface dimensions
+    /// must be recreated before the next frame.
+    Invalidated,
+}
+
 impl RenderingSurface {
     /// Creates a headless rendering surface with the given dimensions in
     /// physical pixels.
@@ -32,7 +50,7 @@ impl RenderingSurface {
     #[cfg(feature = "window")]
     pub fn new_for_window(
         wgpu_instance: &wgpu::Instance,
-        window: &impl window::SurfaceWindow,
+        window: std::sync::Arc<dyn window::SurfaceWindow>,
     ) -> Result<Self> {
         window::WindowRenderingSurface::new(wgpu_instance, window).map(Self::Window)
     }
@@ -46,17 +64,44 @@ impl RenderingSurface {
         }
     }
 
-    /// Call when the surface has been lost to re-initialize it.
+    /// Acquires the surface to render into for the current frame.
+    ///
+    /// # Errors
+    /// Returns an error if the surface is in a state we can not recover from.
     ///
     /// # Panics
     /// If this is a window surface and [`Self::initialize_for_device`] has not
     /// been called.
     #[allow(unused_variables)]
-    pub fn reinitialize_lost_surface(&self, graphics_device: &GraphicsDevice) {
+    pub fn acquire_surface(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+    ) -> Result<SurfaceAcquisition> {
         match self {
-            Self::Headless(_) => {}
+            Self::Headless(surface) => Ok(SurfaceAcquisition::Acquired {
+                texture_view: surface.create_surface_texture_view(),
+                presentable_texture: None,
+            }),
             #[cfg(feature = "window")]
-            Self::Window(surface) => surface.configure_surface_for_device(graphics_device),
+            Self::Window(surface) => surface.acquire_surface(graphics_device),
+        }
+    }
+
+    /// Recreates the surface if it was lost when it was last acquired. Returns
+    /// whether the surface was recreated, in which case everything derived from
+    /// the surface dimensions must be recreated.
+    ///
+    /// Must be called on the thread owning the window if this is a window
+    /// surface, since creating a surface requires access to the window.
+    ///
+    /// # Errors
+    /// Returns an error if surface creation fails.
+    #[allow(unused_variables)]
+    pub fn recreate_if_lost(&mut self, graphics_device: &GraphicsDevice) -> Result<bool> {
+        match self {
+            Self::Headless(_) => Ok(false),
+            #[cfg(feature = "window")]
+            Self::Window(surface) => surface.recreate_if_lost(graphics_device),
         }
     }
 
@@ -67,21 +112,6 @@ impl RenderingSurface {
             Self::Headless(_) => None,
             #[cfg(feature = "window")]
             Self::Window(surface) => Some(surface.surface()),
-        }
-    }
-
-    /// Returns a view of the surface texture, along with the
-    /// [`wgpu::SurfaceTexture`] to present after rendering if the surface is
-    /// attached to a window.
-    pub fn get_texture_view_with_presentable_texture(
-        &self,
-    ) -> Result<(wgpu::TextureView, Option<wgpu::SurfaceTexture>)> {
-        match self {
-            Self::Headless(surface) => Ok((surface.create_surface_texture_view(), None)),
-            #[cfg(feature = "window")]
-            Self::Window(surface) => surface
-                .get_current_surface_texture_with_view()
-                .map(|(texture, view)| (view, Some(texture))),
         }
     }
 
@@ -139,16 +169,6 @@ impl RenderingSurface {
             Self::Headless(surface) => surface.resize(graphics_device, new_width, new_height),
             #[cfg(feature = "window")]
             Self::Window(surface) => surface.resize(graphics_device, new_width, new_height),
-        }
-    }
-
-    /// Informs the surface of a new number of pixels per point.
-    #[allow(unused_variables)]
-    pub fn update_pixels_per_point(&mut self, pixels_per_point: f64) {
-        match self {
-            Self::Headless(_) => {}
-            #[cfg(feature = "window")]
-            Self::Window(surface) => surface.update_pixels_per_point(pixels_per_point),
         }
     }
 

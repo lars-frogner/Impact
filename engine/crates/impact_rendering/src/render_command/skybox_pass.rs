@@ -82,8 +82,8 @@ impl SkyboxPass {
                 let pipeline_layout = render_command::create_render_pipeline_layout(
                     graphics_device.device(),
                     &[
-                        &camera_bind_group_layout,
-                        skybox_gpu_resources.bind_group_layout(),
+                        Some(&camera_bind_group_layout),
+                        Some(skybox_gpu_resources.bind_group_layout()),
                     ],
                     self.immediate_size,
                     "Skybox pass render pipeline layout",

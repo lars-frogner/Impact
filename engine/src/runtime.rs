@@ -107,8 +107,8 @@ impl<UI> Runtime<UI> {
         self.engine.resize_rendering_surface(new_width, new_height);
     }
 
-    pub fn update_pixels_per_point(&self, pixels_per_point: f64) {
-        self.engine.update_pixels_per_point(pixels_per_point);
+    pub fn recreate_rendering_surface_if_lost(&self) -> Result<()> {
+        self.engine.recreate_rendering_surface_if_lost()
     }
 
     pub fn shutdown_requested(&self) -> bool {
