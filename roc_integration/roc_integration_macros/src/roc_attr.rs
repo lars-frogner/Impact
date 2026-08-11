@@ -70,7 +70,7 @@ pub(super) fn apply_impl_attribute(
             "the `roc` attribute does not support generic impl blocks",
         ));
     }
-    if let Some((_, trait_, _)) = block.trait_.as_ref() {
+    if let Some((trait_, _)) = block.trait_.as_ref() {
         return Err(syn::Error::new_spanned(
             trait_,
             "the `roc` attribute does not support trait impl blocks",
@@ -1224,27 +1224,33 @@ fn generate_function_arguments<const MAX_ARGS: usize>(
         .iter()
         .map(|input| match input {
             syn::FnArg::Receiver(syn::Receiver {
-                reference,
-                mutability,
-                colon_token,
-                ..
+                mutability, kind, ..
             }) => {
-                if colon_token.is_some() {
-                    return Err(syn::Error::new_spanned(
-                        colon_token,
-                        "the `roc` attribute does not support receivers with explicit types",
-                    ));
-                }
                 if mutability.is_some() {
                     return Err(syn::Error::new_spanned(
                         mutability,
                         "the `roc` attribute does not support mutable methods",
                     ));
                 }
-                let receiver = if reference.is_some() {
-                    quote! { #crate_root::ir::MethodReceiver::RefSelf }
-                } else {
-                    quote! { #crate_root::ir::MethodReceiver::OwnedSelf }
+                let receiver = match kind {
+                    syn::ReceiverKind::Reference(_, _, _) => {
+                        quote! { #crate_root::ir::MethodReceiver::RefSelf }
+                    }
+                    syn::ReceiverKind::Value => {
+                        quote! { #crate_root::ir::MethodReceiver::OwnedSelf }
+                    }
+                    syn::ReceiverKind::Typed(colon_token, _) => {
+                        return Err(syn::Error::new_spanned(
+                            colon_token,
+                            "the `roc` attribute does not support receivers with explicit types",
+                        ));
+                    }
+                    _ => {
+                        return Err(syn::Error::new_spanned(
+                            input,
+                            "the `roc` attribute does not support this receiver kind",
+                        ));
+                    }
                 };
                 Ok(quote! {
                     Some(#crate_root::ir::FunctionArgument::Receiver(#receiver)),
