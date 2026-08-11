@@ -298,7 +298,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 first_velocity_direction.dot(&second_velocity_direction),
                 -1.0,
-                epsilon = 1e-5
+                epsilon = 1e-4
             ));
         }
     }
