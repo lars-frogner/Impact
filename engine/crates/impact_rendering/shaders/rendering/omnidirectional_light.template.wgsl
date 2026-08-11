@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     // Split up inverseWindowDimensions to avoid padding
     inverseWindowWidth: f32,
     inverseWindowHeight: f32,
@@ -44,7 +44,7 @@ struct FragmentOutput {
     @location(0) preExposedReflectedLuminance: vec4f,
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -87,7 +87,7 @@ fn rotateVectorWithQuaternion(quaternion: vec4f, vector: vec3f) -> vec3f {
 }
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return framebufferPosition.xy * vec2f(pushConstants.inverseWindowWidth, pushConstants.inverseWindowHeight);
+    return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
 }
 
 fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3f) -> vec3f {
@@ -401,7 +401,7 @@ fn mainVS(
 ) -> VertexOutput {
     var output: VertexOutput;
 
-    let omnidirectionalLight = omnidirectionalLights.lights[pushConstants.activeLightIdx];
+    let omnidirectionalLight = omnidirectionalLights.lights[immediates.activeLightIdx];
 
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
 
@@ -444,7 +444,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let normalIncidenceSpecularReflectance = computeRGBSpecularReflectance(materialColor, materialProperties);
     let roughness = materialProperties.y;
 
-    let omnidirectionalLight = omnidirectionalLights.lights[pushConstants.activeLightIdx];
+    let omnidirectionalLight = omnidirectionalLights.lights[immediates.activeLightIdx];
 
     let lightPosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz;
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
@@ -459,7 +459,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
         roughness,
-        pushConstants.exposure,
+        immediates.exposure,
     );
 #else
     let lightQuantities = computeLightQuantities(
@@ -468,7 +468,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         cameraSpacePosition,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
-        pushConstants.exposure,
+        immediates.exposure,
     );
 #endif
 

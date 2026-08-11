@@ -136,6 +136,9 @@ impl RenderingSystem {
             ExternalGPUProfiler::None
         });
 
+        let staging_belt =
+            wgpu::util::StagingBelt::new(graphics_device.device().clone(), 1024 * 1024);
+
         Ok(Self {
             graphics_device,
             rendering_surface,
@@ -148,7 +151,7 @@ impl RenderingSystem {
             storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
             bind_group_layout_registry,
-            staging_belt: wgpu::util::StagingBelt::new(1024 * 1024),
+            staging_belt,
             render_command_manager,
             timestamp_query_manager,
             frame_counter: 0,

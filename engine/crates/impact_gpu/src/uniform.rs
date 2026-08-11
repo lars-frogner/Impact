@@ -434,7 +434,6 @@ impl MultiUniformGPUBuffer {
                 };
 
                 self.gpu_buffer.encode_update_of_valid_bytes(
-                    graphics_device,
                     staging_belt,
                     command_encoder,
                     bytemuck::cast_slice(valid_uniforms),

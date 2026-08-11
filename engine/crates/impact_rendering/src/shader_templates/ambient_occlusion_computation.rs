@@ -10,7 +10,7 @@ use crate::{
     postprocessing::{
         PostprocessingShaderTemplate, ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
     },
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::StencilValue,
     rendering_template_source,
 };
@@ -32,7 +32,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct AmbientOcclusionComputationShaderTemplate {
     samples_resource_group_id: GPUResourceGroupID,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -45,9 +45,9 @@ impl AmbientOcclusionComputationShaderTemplate {
     /// Creates a new ambient occlusion computation shader template using the
     /// given resource group for the ambient occlusion sample uniform.
     pub fn new(samples_resource_group_id: GPUResourceGroupID) -> Self {
-        let push_constants = BasicPushConstantGroup::for_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-            BasicPushConstantVariant::FrameCounter,
+        let immediates = BasicImmediateGroup::from_iter([
+            BasicImmediate::InverseWindowDimensions,
+            BasicImmediate::FrameCounter,
         ]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
@@ -62,7 +62,7 @@ impl AmbientOcclusionComputationShaderTemplate {
 
         Self {
             samples_resource_group_id,
-            push_constants,
+            immediates,
             input_render_attachments,
             output_render_attachments,
         }
@@ -98,8 +98,8 @@ impl SpecificShaderTemplate for AmbientOcclusionComputationShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for AmbientOcclusionComputationShaderTemplate {
-    fn push_constants(&self) -> BasicPushConstantGroup {
-        self.push_constants.clone()
+    fn immediates(&self) -> BasicImmediateGroup {
+        self.immediates.clone()
     }
 
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet {

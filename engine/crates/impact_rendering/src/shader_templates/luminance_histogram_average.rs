@@ -4,7 +4,7 @@ use crate::{
     attachment::RenderAttachmentInputDescriptionSet,
     compute::ComputeShaderTemplate,
     compute_template_source,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_gpu::{
     resource_group::GPUResourceGroupID,
@@ -26,7 +26,7 @@ use std::{num::NonZeroU32, sync::LazyLock};
 pub struct LuminanceHistogramAverageShaderTemplate {
     bin_count: usize,
     gpu_resource_group_id: GPUResourceGroupID,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
 }
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> = LazyLock::new(|| {
@@ -39,12 +39,11 @@ impl LuminanceHistogramAverageShaderTemplate {
     /// given resource group for the parameter uniform, histogram buffer and
     /// result buffer.
     pub fn new(bin_count: usize, gpu_resource_group_id: GPUResourceGroupID) -> Self {
-        let push_constants =
-            BasicPushConstantGroup::for_compute([BasicPushConstantVariant::PixelCount]);
+        let immediates = BasicImmediateGroup::from_iter([BasicImmediate::PixelCount]);
         Self {
             bin_count,
             gpu_resource_group_id,
-            push_constants,
+            immediates,
         }
     }
 }
@@ -76,8 +75,8 @@ impl SpecificShaderTemplate for LuminanceHistogramAverageShaderTemplate {
 }
 
 impl ComputeShaderTemplate for LuminanceHistogramAverageShaderTemplate {
-    fn push_constants(&self) -> BasicPushConstantGroup {
-        self.push_constants.clone()
+    fn immediates(&self) -> BasicImmediateGroup {
+        self.immediates.clone()
     }
 
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet {

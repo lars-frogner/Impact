@@ -76,7 +76,7 @@ pub fn connect_to_graphics_device_for_rendering(
 ) -> Result<GraphicsDevice> {
     let graphics_device = pollster::block_on(GraphicsDevice::connect(
         wgpu_instance,
-        wgpu::Features::PUSH_CONSTANTS
+        wgpu::Features::IMMEDIATES
             | wgpu::Features::DEPTH32FLOAT_STENCIL8
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgpu::Features::FLOAT32_FILTERABLE
@@ -87,7 +87,7 @@ pub fn connect_to_graphics_device_for_rendering(
             | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
         wgpu::Limits {
             max_bind_groups: 7,
-            max_push_constant_size: 256,
+            max_immediate_size: 256,
             max_color_attachment_bytes_per_sample: 64,
             max_vertex_attributes: vertex_attribute_ranges::TOTAL_LOCATIONS,
             ..wgpu::Limits::default()

@@ -2,19 +2,19 @@
 
 use crate::{
     gpu_resource::{
-        VoxelMaterialGPUResources, VoxelMeshVertexAttributeLocation, VoxelPushConstantGroup,
-        VoxelPushConstantVariant,
+        VoxelImmediate, VoxelImmediateGroup, VoxelMaterialGPUResources,
+        VoxelMeshVertexAttributeLocation,
     },
     rendering_template_source,
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
-    push_constant::PushConstantGroup,
+    push_constant::ImmediateGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
 use impact_model::transform::InstanceModelViewTransformWithPrevious;
-use impact_rendering::push_constant::BasicPushConstantVariant;
+use impact_rendering::push_constant::BasicImmediate;
 use std::sync::LazyLock;
 
 /// Shader template for the voxel geometry pass, which extracts the relevant
@@ -42,13 +42,13 @@ impl VoxelGeometryShaderTemplate {
         }
     }
 
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> VoxelPushConstantGroup {
-        PushConstantGroup::for_vertex_fragment([
-            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::InverseWindowDimensions),
-            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::FrameCounter),
-            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::Exposure),
-            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::GenericVec3f32), // Offsets for texture coordinates
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> VoxelImmediateGroup {
+        ImmediateGroup::from_iter([
+            VoxelImmediate::Rendering(BasicImmediate::InverseWindowDimensions),
+            VoxelImmediate::Rendering(BasicImmediate::FrameCounter),
+            VoxelImmediate::Rendering(BasicImmediate::Exposure),
+            VoxelImmediate::Rendering(BasicImmediate::GenericVec3f32), // Offsets for texture coordinates
         ])
     }
 }

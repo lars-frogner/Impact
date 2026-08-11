@@ -10,7 +10,7 @@ use crate::{
         PostprocessingShaderTemplate,
         gaussian_blur::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS},
     },
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_gpu::{
@@ -29,7 +29,7 @@ pub struct GaussianBlurShaderTemplate {
     samples_resource_group_id: GPUResourceGroupID,
     input_render_attachment_quantity: RenderAttachmentQuantity,
     direction: GaussianBlurDirection,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -49,9 +49,7 @@ impl GaussianBlurShaderTemplate {
         blending: Blending,
         direction: GaussianBlurDirection,
     ) -> Self {
-        let push_constants = BasicPushConstantGroup::for_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-        ]);
+        let immediates = BasicImmediateGroup::from_iter([BasicImmediate::InverseWindowDimensions]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::with_defaults(
             input_render_attachment_quantity.flag(),
@@ -66,7 +64,7 @@ impl GaussianBlurShaderTemplate {
             samples_resource_group_id,
             input_render_attachment_quantity,
             direction,
-            push_constants,
+            immediates,
             input_render_attachments,
             output_render_attachments,
         }
@@ -94,8 +92,8 @@ impl SpecificShaderTemplate for GaussianBlurShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for GaussianBlurShaderTemplate {
-    fn push_constants(&self) -> BasicPushConstantGroup {
-        self.push_constants.clone()
+    fn immediates(&self) -> BasicImmediateGroup {
+        self.immediates.clone()
     }
 
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet {

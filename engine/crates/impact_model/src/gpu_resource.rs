@@ -204,7 +204,6 @@ impl InstanceFeatureGPUBuffer {
             );
         } else {
             self.feature_gpu_buffer.encode_update_of_valid_bytes(
-                graphics_device,
                 staging_belt,
                 command_encoder,
                 valid_bytes,

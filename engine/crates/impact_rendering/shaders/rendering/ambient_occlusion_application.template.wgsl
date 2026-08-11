@@ -6,7 +6,11 @@ struct FragmentOutput {
     @location(0) luminance: vec4f,
 }
 
-var<push_constant> inverseWindowDimensions: vec2f;
+struct Immediates {
+    inverseWindowDimensions: vec2f,
+}
+
+var<immediate> immediates: Immediates;
 
 @group({{linear_depth_texture_group}}) @binding({{linear_depth_texture_binding}})
 var linearDepthTexture: texture_2d<f32>;
@@ -24,7 +28,7 @@ var occlusionTexture: texture_2d<f32>;
 var occlusionSampler: sampler;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return (framebufferPosition.xy * inverseWindowDimensions);
+    return (framebufferPosition.xy * immediates.inverseWindowDimensions);
 }
 
 fn computeOccludedAmbientReflectedLuminance(
@@ -36,7 +40,7 @@ fn computeOccludedAmbientReflectedLuminance(
 
     let maxDepthDifference = 1e-4;
 
-    let halfSampleAreaDimensions = 0.5 * inverseWindowDimensions * f32(sqrtTotalSampleCount - 1u);
+    let halfSampleAreaDimensions = 0.5 * immediates.inverseWindowDimensions * f32(sqrtTotalSampleCount - 1u);
     let lowerTextureCoords = centerTextureCoords - halfSampleAreaDimensions;
 
     let centerDepth = textureSampleLevel(linearDepthTexture, linearDepthSampler, centerTextureCoords, 0.0).x;
@@ -45,9 +49,9 @@ fn computeOccludedAmbientReflectedLuminance(
     var acceptedSampleCount: u32 = 0u;
 
     for (var i: u32 = 0u; i < sqrtTotalSampleCount; i++) {
-        let u = lowerTextureCoords.x + f32(i) * inverseWindowDimensions.x;
+        let u = lowerTextureCoords.x + f32(i) * immediates.inverseWindowDimensions.x;
         for (var j: u32 = 0u; j < sqrtTotalSampleCount; j++) {
-            let v = lowerTextureCoords.y + f32(j) * inverseWindowDimensions.y;
+            let v = lowerTextureCoords.y + f32(j) * immediates.inverseWindowDimensions.y;
             let textureCoords = vec2f(u, v);
 
             let depth = textureSampleLevel(linearDepthTexture, linearDepthSampler, textureCoords, 0.0).x;

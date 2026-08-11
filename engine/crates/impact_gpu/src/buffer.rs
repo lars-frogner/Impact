@@ -156,7 +156,6 @@ impl GPUBuffer {
             &buffer_label,
         );
         encode_write_to_buffer_via_staging_belt(
-            graphics_device.device(),
             staging_belt,
             command_encoder,
             &buffer,
@@ -271,7 +270,6 @@ impl GPUBuffer {
     /// the buffer.
     pub fn encode_update_of_bytes_from_offset(
         &self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         byte_offset: usize,
@@ -285,7 +283,6 @@ impl GPUBuffer {
         }
 
         encode_write_to_buffer_via_staging_belt(
-            graphics_device.device(),
             staging_belt,
             command_encoder,
             self.buffer(),
@@ -325,7 +322,6 @@ impl GPUBuffer {
     /// buffer.
     pub fn encode_update_of_valid_bytes(
         &self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         updated_bytes: &[u8],
@@ -333,7 +329,6 @@ impl GPUBuffer {
         self.set_n_valid_bytes(updated_bytes.len());
 
         encode_write_to_buffer_via_staging_belt(
-            graphics_device.device(),
             staging_belt,
             command_encoder,
             self.buffer(),
@@ -364,18 +359,12 @@ impl GPUBuffer {
     /// the buffer.
     pub fn encode_update_of_all_bytes(
         &self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         updated_bytes: &[u8],
     ) {
         assert_eq!(updated_bytes.len(), self.buffer_size());
-        self.encode_update_of_valid_bytes(
-            graphics_device,
-            staging_belt,
-            command_encoder,
-            updated_bytes,
-        );
+        self.encode_update_of_valid_bytes(staging_belt, command_encoder, updated_bytes);
     }
 
     /// Queues a write of the given slice of bytes to the existing buffer,
@@ -406,7 +395,6 @@ impl GPUBuffer {
     /// the buffer.
     pub fn encode_update_of_first_bytes(
         &self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         updated_bytes: &[u8],
@@ -414,7 +402,6 @@ impl GPUBuffer {
         assert!(updated_bytes.len() <= self.n_valid_bytes());
 
         encode_write_to_buffer_via_staging_belt(
-            graphics_device.device(),
             staging_belt,
             command_encoder,
             self.buffer(),
@@ -606,7 +593,6 @@ impl CountedGPUBuffer {
     /// exceeds the total size of the buffer.
     pub fn encode_update_of_valid_bytes(
         &self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         updated_bytes: &[u8],
@@ -618,7 +604,6 @@ impl CountedGPUBuffer {
         );
 
         Self::encode_writes_to_counted_buffer_via_staging_belt(
-            graphics_device.device(),
             staging_belt,
             command_encoder,
             self.buffer(),
@@ -717,7 +702,6 @@ impl CountedGPUBuffer {
     }
 
     fn encode_writes_to_counted_buffer_via_staging_belt(
-        device: &wgpu::Device,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         buffer: &wgpu::Buffer,
@@ -728,7 +712,6 @@ impl CountedGPUBuffer {
     ) {
         // Write actual data starting just after the padded count
         encode_write_to_buffer_via_staging_belt(
-            device,
             staging_belt,
             command_encoder,
             buffer,
@@ -740,7 +723,6 @@ impl CountedGPUBuffer {
         // Update the count if needed
         if let Some(count) = count {
             encode_write_to_buffer_via_staging_belt(
-                device,
                 staging_belt,
                 command_encoder,
                 buffer,
@@ -868,7 +850,6 @@ fn queue_write_to_buffer(
 }
 
 fn encode_write_to_buffer_via_staging_belt(
-    device: &wgpu::Device,
     staging_belt: &mut wgpu::util::StagingBelt,
     command_encoder: &mut wgpu::CommandEncoder,
     buffer: &wgpu::Buffer,
@@ -891,7 +872,6 @@ fn encode_write_to_buffer_via_staging_belt(
         buffer,
         byte_offset as wgpu::BufferAddress,
         wgpu::BufferSize::new(bytes.len() as u64).unwrap(),
-        device,
     );
 
     view.copy_from_slice(bytes);

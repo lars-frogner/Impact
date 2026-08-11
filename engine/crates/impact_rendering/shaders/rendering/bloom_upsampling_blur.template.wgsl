@@ -8,9 +8,13 @@ struct FragmentOutput {
     @location(0) color: vec4f,
 }
 
-// The output texture should be the next lower mip level (twice the size)
-// relative to the input texture
-var<push_constant> inverseOutputTextureDimensions: vec2f;
+struct Immediates {
+    // The output texture should be the next lower mip level (twice the size)
+    // relative to the input texture
+    inverseOutputTextureDimensions: vec2f,
+}
+
+var<immediate> immediates: Immediates;
 
 @group(0) @binding({{input_texture_binding}}) var inputTexture: texture_2d<f32>;
 @group(0) @binding({{input_sampler_binding}}) var inputSampler: sampler;
@@ -30,7 +34,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
 
     // Current coordinates in input texture
-    let texCoords = input.projectedPosition.xy * inverseOutputTextureDimensions;
+    let texCoords = input.projectedPosition.xy * immediates.inverseOutputTextureDimensions;
 
     // Take 9 samples around current texel `e`:
     // a - b - c

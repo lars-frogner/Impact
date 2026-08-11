@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     inverseWindowDimensions: vec2f,
     frameCounter: u32,
 }
@@ -26,7 +26,7 @@ struct VertexOutput {
 
 const JITTER_COUNT: u32 = {{jitter_count}};
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -47,10 +47,10 @@ fn rotateVectorWithQuaternion(quaternion: vec4<f32>, vector: vec3<f32>) -> vec3<
 
 fn obtainProjectionMatrix() -> mat4x4f {
     var matrix = projectionUniform.projection;
-    let jitterIndex = pushConstants.frameCounter % JITTER_COUNT;
+    let jitterIndex = immediates.frameCounter % JITTER_COUNT;
     let jitterOffsets = projectionUniform.jitterOffsets[jitterIndex];
-    matrix[2][0] += jitterOffsets.x * pushConstants.inverseWindowDimensions.x;
-    matrix[2][1] += jitterOffsets.y * pushConstants.inverseWindowDimensions.y;
+    matrix[2][0] += jitterOffsets.x * immediates.inverseWindowDimensions.x;
+    matrix[2][1] += jitterOffsets.y * immediates.inverseWindowDimensions.y;
     return matrix;
 }
 

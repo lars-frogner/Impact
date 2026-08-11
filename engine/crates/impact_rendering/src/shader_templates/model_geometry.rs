@@ -3,7 +3,7 @@
 use crate::rendering_template_source;
 use crate::{
     attachment::{RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantitySet},
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
@@ -70,12 +70,12 @@ impl ModelGeometryShaderTemplate {
         Self { input }
     }
 
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> BasicPushConstantGroup {
-        BasicPushConstantGroup::for_vertex_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-            BasicPushConstantVariant::FrameCounter,
-            BasicPushConstantVariant::Exposure,
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> BasicImmediateGroup {
+        BasicImmediateGroup::from_iter([
+            BasicImmediate::InverseWindowDimensions,
+            BasicImmediate::FrameCounter,
+            BasicImmediate::Exposure,
         ])
     }
 

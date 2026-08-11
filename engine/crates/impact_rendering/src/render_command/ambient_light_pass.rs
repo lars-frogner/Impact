@@ -7,7 +7,7 @@ use crate::{
     },
     lookup_tables,
     postprocessing::Postprocessor,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::{BasicGPUResources, BasicResourceRegistries},
     shader_templates::ambient_light::AmbientLightShaderTemplate,
@@ -26,7 +26,7 @@ use std::borrow::Cow;
 /// Pass for computing reflected luminance due to ambient light.
 #[derive(Debug)]
 pub struct AmbientLightPass {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
@@ -44,7 +44,7 @@ impl AmbientLightPass {
         resource_registries: &impl BasicResourceRegistries,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
-        let push_constants = AmbientLightShaderTemplate::push_constants();
+        let immediates = AmbientLightShaderTemplate::immediates();
         let input_render_attachments = AmbientLightShaderTemplate::input_render_attachments();
         let output_render_attachments = AmbientLightShaderTemplate::output_render_attachments();
 
@@ -90,7 +90,7 @@ impl AmbientLightPass {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             "Ambient light pass render pipeline layout",
         );
 
@@ -113,7 +113,7 @@ impl AmbientLightPass {
         );
 
         Self {
-            push_constants,
+            immediates,
             input_render_attachments,
             output_render_attachments,
             color_target_states,
@@ -227,25 +227,23 @@ impl AmbientLightPass {
         }
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::Exposure,
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
     }
 
     pub fn record(
@@ -281,7 +279,7 @@ impl AmbientLightPass {
 
         render_pass.set_stencil_reference(StencilValue::PhysicalModel as u32);
 
-        self.set_push_constants(&mut render_pass, rendering_surface, postprocessor);
+        self.set_immediates(&mut render_pass, rendering_surface, postprocessor);
 
         render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 

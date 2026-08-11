@@ -186,7 +186,6 @@ impl CameraManager {
         if let Some(camera) = self.active_camera() {
             if let Some(camera_gpu_resources) = camera_gpu_resources {
                 camera_gpu_resources.sync_with_camera_manager(
-                    graphics_device,
                     staging_belt,
                     command_encoder,
                     camera,

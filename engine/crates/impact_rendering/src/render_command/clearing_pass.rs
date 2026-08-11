@@ -109,6 +109,7 @@ impl AttachmentClearingPass {
                     depth_stencil_attachment,
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                     label: Some(&format!("Clearing pass {idx}")),
                 });
             }

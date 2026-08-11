@@ -7,7 +7,7 @@ use crate::{
         RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
         RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
     },
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{
         additive_blend_state,
         postprocessing_pass::{
@@ -62,7 +62,7 @@ pub struct BloomConfig {
 pub(super) struct BloomRenderCommands {
     n_downsamplings: usize,
     n_upsamplings: usize,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_descriptions: RenderAttachmentInputDescriptionSet,
     downsampling_pipeline: wgpu::RenderPipeline,
     upsampling_blur_pipeline: wgpu::RenderPipeline,
@@ -121,10 +121,8 @@ impl BloomRenderCommands {
 
         // This is not necessarily the full window dimensions, but the dimensions of the
         // mip level we are outputting to
-        let push_constants = BasicPushConstantGroup::for_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-        ]);
-        let push_constant_ranges = push_constants.create_ranges();
+        let immediates = BasicImmediateGroup::from_iter([BasicImmediate::InverseWindowDimensions]);
+        let immediate_size = immediates.total_size();
 
         let mut input_descriptions =
             RenderAttachmentInputDescriptionSet::with_capacity(n_downsamplings as usize + 1);
@@ -159,7 +157,7 @@ impl BloomRenderCommands {
         let blurring_pipeline_layout = create_postprocessing_render_pipeline_layout(
             graphics_device.device(),
             &[bind_group_layout],
-            &push_constant_ranges,
+            immediate_size,
             "bloom blurring",
         );
 
@@ -168,7 +166,7 @@ impl BloomRenderCommands {
         let blending_pipeline_layout = create_postprocessing_render_pipeline_layout(
             graphics_device.device(),
             &[bind_group_layout; 2],
-            &push_constant_ranges,
+            immediate_size,
             "bloom blending",
         );
 
@@ -258,7 +256,7 @@ impl BloomRenderCommands {
         Self {
             n_downsamplings: n_downsamplings as usize,
             n_upsamplings: n_upsamplings as usize,
-            push_constants,
+            immediates,
             input_descriptions,
             downsampling_pipeline,
             upsampling_blur_pipeline,
@@ -359,6 +357,7 @@ impl BloomRenderCommands {
                 depth_stencil_attachment: None,
                 timestamp_writes,
                 occlusion_query_set: None,
+                multiview_mask: None,
                 label: Some(&format!(
                     "Bloom downsampling pass from mip level {input_mip_level} to {output_mip_level}"
                 )),
@@ -366,7 +365,7 @@ impl BloomRenderCommands {
 
             render_pass.set_pipeline(&self.downsampling_pipeline);
 
-            self.set_push_constants(
+            self.set_immediates(
                 &mut render_pass,
                 blurred_luminance_texture,
                 output_mip_level,
@@ -438,6 +437,7 @@ impl BloomRenderCommands {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
                 label: Some(&format!(
                     "Bloom upsampling and blur pass from mip level {input_mip_level} to {output_mip_level}"
                 )),
@@ -445,7 +445,7 @@ impl BloomRenderCommands {
 
             render_pass.set_pipeline(&self.upsampling_blur_pipeline);
 
-            self.set_push_constants(
+            self.set_immediates(
                 &mut render_pass,
                 blurred_luminance_texture,
                 output_mip_level,
@@ -505,12 +505,13 @@ impl BloomRenderCommands {
             depth_stencil_attachment: None,
             timestamp_writes: last_timestamp_writes,
             occlusion_query_set: None,
+            multiview_mask: None,
             label: Some("Bloom blending pass"),
         });
 
         render_pass.set_pipeline(&self.blending_pipeline);
 
-        self.set_push_constants(&mut render_pass, blurred_luminance_texture, 0);
+        self.set_immediates(&mut render_pass, blurred_luminance_texture, 0);
 
         let luminance_bind_group = render_attachment_texture_manager
             .get_render_attachment_texture_bind_group(&self.input_descriptions.descriptions()[0])
@@ -554,18 +555,17 @@ impl BloomRenderCommands {
         Ok(())
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         texture: &RenderAttachmentTexture,
         output_mip_level: u32,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || Self::compute_inverse_output_view_size(texture, output_mip_level),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || Self::compute_inverse_output_view_size(texture, output_mip_level),
+        );
     }
 
     fn upsampling_blur_shader_template_id() -> ShaderID {

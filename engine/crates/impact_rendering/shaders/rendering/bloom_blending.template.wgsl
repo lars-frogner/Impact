@@ -6,7 +6,11 @@ struct FragmentOutput {
     @location(0) blendedLuminance: vec4f,
 }
 
-var<push_constant> inverseWindowDimensions: vec2f;
+struct Immediates {
+    inverseWindowDimensions: vec2f,
+}
+
+var<immediate> immediates: Immediates;
 
 @group({{luminance_texture_group}}) @binding({{luminance_texture_binding}})
 var luminanceTexture: texture_2d<f32>;
@@ -24,7 +28,7 @@ const LUMINANCE_WEIGHT: f32 = 1.0 - BLURRED_LUMINANCE_WEIGHT;
 const NORMALIZED_BLURRED_LUMINANCE_WEIGHT: f32 = BLURRED_LUMINANCE_NORMALIZATION * BLURRED_LUMINANCE_WEIGHT;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return framebufferPosition.xy * inverseWindowDimensions;
+    return framebufferPosition.xy * immediates.inverseWindowDimensions;
 }
 
 @vertex

@@ -55,7 +55,7 @@ impl MipmapperGenerator {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             label: Some("Mipmap sampler"),
             ..Default::default()
         });
@@ -83,7 +83,7 @@ impl MipmapperGenerator {
                     },
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                     label: Some("Mipmap pipeline"),
                 });
@@ -256,6 +256,7 @@ impl<A: Allocator> Mipmapper<A> {
                         depth_stencil_attachment: None,
                         timestamp_writes: None,
                         occlusion_query_set: None,
+                        multiview_mask: None,
                         label: Some(&format!("{} mipmap render pass", self.label)),
                     });
 

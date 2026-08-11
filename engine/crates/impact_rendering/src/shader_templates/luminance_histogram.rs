@@ -7,7 +7,7 @@ use crate::{
     },
     compute::ComputeShaderTemplate,
     compute_template_source,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_gpu::{
     resource_group::GPUResourceGroupID,
@@ -26,7 +26,7 @@ use std::{num::NonZeroU32, sync::LazyLock};
 pub struct LuminanceHistogramShaderTemplate {
     threads_per_side: usize,
     gpu_resource_group_id: GPUResourceGroupID,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
 }
 
@@ -41,8 +41,7 @@ impl LuminanceHistogramShaderTemplate {
     pub fn new(log2_threads_per_side: usize, gpu_resource_group_id: GPUResourceGroupID) -> Self {
         let threads_per_side = 1 << log2_threads_per_side;
 
-        let push_constants =
-            BasicPushConstantGroup::for_compute([BasicPushConstantVariant::InverseExposure]);
+        let immediates = BasicImmediateGroup::from_iter([BasicImmediate::InverseExposure]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::single(
             RenderAttachmentInputDescription::default_for(RenderAttachmentQuantity::Luminance)
@@ -52,7 +51,7 @@ impl LuminanceHistogramShaderTemplate {
         Self {
             threads_per_side,
             gpu_resource_group_id,
-            push_constants,
+            immediates,
             input_render_attachments,
         }
     }
@@ -89,8 +88,8 @@ impl SpecificShaderTemplate for LuminanceHistogramShaderTemplate {
 }
 
 impl ComputeShaderTemplate for LuminanceHistogramShaderTemplate {
-    fn push_constants(&self) -> BasicPushConstantGroup {
-        self.push_constants.clone()
+    fn immediates(&self) -> BasicImmediateGroup {
+        self.immediates.clone()
     }
 
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet {

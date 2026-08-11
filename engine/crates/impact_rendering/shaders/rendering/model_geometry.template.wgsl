@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     // Split up inverseWindowDimensions to avoid padding
     inverseWindowWidth: f32,
     inverseWindowHeight: f32,
@@ -86,7 +86,7 @@ struct FragmentOutput {
 
 const JITTER_COUNT: u32 = {{jitter_count}};
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -173,10 +173,10 @@ fn applyRotationToTangentSpaceQuaternion(
 
 fn obtainProjectionMatrix() -> mat4x4f {
     var matrix = projectionUniform.projection;
-    let jitterIndex = pushConstants.frameCounter % JITTER_COUNT;
+    let jitterIndex = immediates.frameCounter % JITTER_COUNT;
     let jitterOffsets = projectionUniform.jitterOffsets[jitterIndex];
-    matrix[2][0] += jitterOffsets.x * pushConstants.inverseWindowWidth;
-    matrix[2][1] += jitterOffsets.y * pushConstants.inverseWindowHeight;
+    matrix[2][0] += jitterOffsets.x * immediates.inverseWindowWidth;
+    matrix[2][1] += jitterOffsets.y * immediates.inverseWindowHeight;
     return matrix;
 }
 
@@ -334,7 +334,7 @@ fn computeGGXRoughnessFromPerceptuallyLinearRoughness(linearRoughness: f32) -> f
 }
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2<f32> {
-    return framebufferPosition.xy * vec2f(pushConstants.inverseWindowWidth, pushConstants.inverseWindowHeight);
+    return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
 }
 
 fn computeMotionVector(
@@ -504,7 +504,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
 #else
     emissiveLuminance = fragment.emissiveLuminance;
 #endif
-    let preExposedEmissiveLuminance = emissiveLuminance * pushConstants.exposure;
+    let preExposedEmissiveLuminance = emissiveLuminance * immediates.exposure;
 
     output.materialProperties = vec4f(specularReflectance, roughness, metalness, preExposedEmissiveLuminance);
 

@@ -6,7 +6,7 @@ use crate::{
         RenderAttachmentTextureManager,
     },
     postprocessing::Postprocessor,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::{
@@ -36,7 +36,7 @@ use std::borrow::Cow;
 /// Pass for computing reflected luminance due to directional lights.
 #[derive(Debug)]
 pub struct DirectionalLightPass {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachment_quantity: RenderAttachmentQuantity,
     color_target_state: wgpu::ColorTargetState,
@@ -82,15 +82,15 @@ impl DirectionalLightPass {
         render_attachment_texture_manager: &mut RenderAttachmentTextureManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
     ) -> Self {
-        let push_constants = OmnidirectionalLightShaderTemplate::push_constants();
+        let immediates = OmnidirectionalLightShaderTemplate::immediates();
         let input_render_attachments =
             OmnidirectionalLightShaderTemplate::input_render_attachments();
         let output_render_attachment_quantity =
             OmnidirectionalLightShaderTemplate::output_render_attachment_quantity();
 
         assert_eq!(
-            &push_constants,
-            &ShadowableOmnidirectionalLightShaderTemplate::push_constants()
+            &immediates,
+            &ShadowableOmnidirectionalLightShaderTemplate::immediates()
         );
         assert_eq!(
             &input_render_attachments,
@@ -101,8 +101,8 @@ impl DirectionalLightPass {
             &ShadowableOmnidirectionalLightShaderTemplate::output_render_attachment_quantity()
         );
         assert_eq!(
-            &push_constants,
-            &UnidirectionalLightShaderTemplate::push_constants()
+            &immediates,
+            &UnidirectionalLightShaderTemplate::immediates()
         );
         assert_eq!(
             &input_render_attachments,
@@ -113,8 +113,8 @@ impl DirectionalLightPass {
             &UnidirectionalLightShaderTemplate::output_render_attachment_quantity()
         );
         assert_eq!(
-            &push_constants,
-            &ShadowableUnidirectionalLightShaderTemplate::push_constants()
+            &immediates,
+            &ShadowableUnidirectionalLightShaderTemplate::immediates()
         );
         assert_eq!(
             &input_render_attachments,
@@ -139,7 +139,7 @@ impl DirectionalLightPass {
                 .cloned(),
         );
 
-        let push_constant_ranges = push_constants.create_ranges();
+        let immediate_size = immediates.total_size();
 
         let color_target_state = Self::color_target_state(output_render_attachment_quantity);
 
@@ -150,7 +150,7 @@ impl DirectionalLightPass {
             shader_manager,
             bind_group_layout_registry,
             bind_group_layouts.clone(),
-            &push_constant_ranges,
+            immediate_size,
             &[Some(color_target_state.clone())],
             Some(depth_stencil_state.clone()),
         );
@@ -160,7 +160,7 @@ impl DirectionalLightPass {
             shader_manager,
             bind_group_layout_registry,
             bind_group_layouts.clone(),
-            &push_constant_ranges,
+            immediate_size,
             &[Some(color_target_state.clone())],
             Some(depth_stencil_state.clone()),
         );
@@ -170,7 +170,7 @@ impl DirectionalLightPass {
             shader_manager,
             bind_group_layout_registry,
             bind_group_layouts.clone(),
-            &push_constant_ranges,
+            immediate_size,
             &[Some(color_target_state.clone())],
             Some(depth_stencil_state.clone()),
         );
@@ -180,13 +180,13 @@ impl DirectionalLightPass {
             shader_manager,
             bind_group_layout_registry,
             bind_group_layouts,
-            &push_constant_ranges,
+            immediate_size,
             &[Some(color_target_state.clone())],
             Some(depth_stencil_state.clone()),
         );
 
         Self {
-            push_constants,
+            immediates,
             input_render_attachments,
             output_render_attachment_quantity,
             color_target_state,
@@ -310,34 +310,31 @@ impl DirectionalLightPass {
         }
     }
 
-    fn set_constant_push_constants(
+    fn set_constant_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::Exposure,
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
     }
 
-    fn set_light_idx_push_constant(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::LightIdx,
-                || light_idx,
-            );
+    fn set_light_idx_immediate(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::LightIdx,
+            || light_idx,
+        );
     }
 
     pub fn record(
@@ -407,7 +404,7 @@ impl DirectionalLightPass {
         if n_omnidirectional_lights > 0 {
             render_pass.set_pipeline(&self.omnidirectional_light_pipeline.pipeline);
 
-            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
+            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -447,10 +444,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_push_constant(
-                    &mut render_pass,
-                    u32::try_from(light_idx).unwrap(),
-                );
+                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
 
                 render_pass.draw_indexed(0..n_indices, 0, 0..1);
                 draw_call_count += 1;
@@ -461,7 +455,7 @@ impl DirectionalLightPass {
         if n_shadowable_omnidirectional_lights > 0 {
             render_pass.set_pipeline(&self.shadowable_omnidirectional_light_pipeline.pipeline);
 
-            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
+            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -512,10 +506,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_push_constant(
-                    &mut render_pass,
-                    u32::try_from(light_idx).unwrap(),
-                );
+                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
 
                 render_pass.set_bind_group(
                     shadow_map_bind_group_index,
@@ -532,7 +523,7 @@ impl DirectionalLightPass {
         if n_unidirectional_lights > 0 {
             render_pass.set_pipeline(&self.unidirectional_light_pipeline.pipeline);
 
-            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
+            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -572,10 +563,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_push_constant(
-                    &mut render_pass,
-                    u32::try_from(light_idx).unwrap(),
-                );
+                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
 
                 render_pass.draw_indexed(0..n_indices, 0, 0..1);
                 draw_call_count += 1;
@@ -586,7 +574,7 @@ impl DirectionalLightPass {
         if n_shadowable_unidirectional_lights > 0 {
             render_pass.set_pipeline(&self.shadowable_unidirectional_light_pipeline.pipeline);
 
-            self.set_constant_push_constants(&mut render_pass, rendering_surface, postprocessor);
+            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -637,10 +625,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_push_constant(
-                    &mut render_pass,
-                    u32::try_from(light_idx).unwrap(),
-                );
+                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
 
                 render_pass.set_bind_group(
                     shadow_map_bind_group_index,
@@ -667,7 +652,7 @@ impl OmnidirectionalLightPipeline {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
     ) -> OmnidirectionalLightPipeline {
@@ -688,7 +673,7 @@ impl OmnidirectionalLightPipeline {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
-            push_constant_ranges,
+            immediate_size,
             "Omnidirectional light pass render pipeline layout",
         );
 
@@ -748,7 +733,7 @@ impl ShadowableOmnidirectionalLightPipeline {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
     ) -> ShadowableOmnidirectionalLightPipeline {
@@ -776,7 +761,7 @@ impl ShadowableOmnidirectionalLightPipeline {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
-            push_constant_ranges,
+            immediate_size,
             "Shadowable omnidirectional light pass render pipeline layout",
         );
 
@@ -837,7 +822,7 @@ impl UnidirectionalLightPipeline {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
     ) -> UnidirectionalLightPipeline {
@@ -858,7 +843,7 @@ impl UnidirectionalLightPipeline {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
-            push_constant_ranges,
+            immediate_size,
             "Unidirectional light pass render pipeline layout",
         );
 
@@ -918,7 +903,7 @@ impl ShadowableUnidirectionalLightPipeline {
         shader_manager: &mut ShaderManager,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         mut bind_group_layouts: Vec<wgpu::BindGroupLayout>,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
         color_target_states: &[Option<wgpu::ColorTargetState>],
         depth_stencil_state: Option<wgpu::DepthStencilState>,
     ) -> ShadowableUnidirectionalLightPipeline {
@@ -946,7 +931,7 @@ impl ShadowableUnidirectionalLightPipeline {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
-            push_constant_ranges,
+            immediate_size,
             "Shadowable unidirectional light pass render pipeline layout",
         );
 

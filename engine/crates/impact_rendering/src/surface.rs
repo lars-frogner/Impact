@@ -152,9 +152,9 @@ impl RenderingSurface {
         }
     }
 
-    /// Returns the data for the push constant containing the reciprocals of the
+    /// Returns the data for the immediate containing the reciprocals of the
     /// window dimensions in pixels.
-    pub fn inverse_window_dimensions_push_constant(&self) -> [f32; 2] {
+    pub fn inverse_window_dimensions_immediate(&self) -> [f32; 2] {
         let (width, height) = self.surface_dimensions();
         [
             1.0 / (u32::from(width) as f32),
@@ -162,9 +162,9 @@ impl RenderingSurface {
         ]
     }
 
-    /// Returns the data for the push constant containing the total surface
-    /// pixel count.
-    pub fn pixel_count_push_constant(&self) -> f32 {
+    /// Returns the data for the immediate containing the total surface pixel
+    /// count.
+    pub fn pixel_count_immediate(&self) -> f32 {
         let (width, height) = self.surface_dimensions();
         (u32::from(width) as f32) * (u32::from(height) as f32)
     }

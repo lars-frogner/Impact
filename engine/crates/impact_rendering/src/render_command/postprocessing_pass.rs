@@ -6,7 +6,7 @@ use crate::{
         RenderAttachmentQuantity, RenderAttachmentTextureManager,
     },
     postprocessing::{PostprocessingShaderTemplate, Postprocessor},
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     surface::RenderingSurface,
@@ -27,7 +27,7 @@ use std::borrow::Cow;
 /// Generic pass for postprocessing effects.
 #[derive(Debug)]
 pub struct PostprocessingRenderPass {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
     uses_camera: bool,
@@ -53,7 +53,7 @@ impl PostprocessingRenderPass {
         shader_template: &impl PostprocessingShaderTemplate,
         label: Cow<'static, str>,
     ) -> Result<Self> {
-        let push_constants = shader_template.push_constants();
+        let immediates = shader_template.immediates();
         let input_render_attachments = shader_template.input_render_attachments();
         let output_render_attachments = shader_template.output_render_attachments();
         let uses_camera = shader_template.uses_camera();
@@ -102,7 +102,7 @@ impl PostprocessingRenderPass {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &bind_group_layout_refs,
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             &format!("Postprocessing pass render pipeline layout ({label})"),
         );
 
@@ -130,7 +130,7 @@ impl PostprocessingRenderPass {
         );
 
         Ok(Self {
-            push_constants,
+            immediates,
             input_render_attachments,
             output_render_attachments,
             uses_camera,
@@ -250,51 +250,46 @@ impl PostprocessingRenderPass {
         }
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
         frame_counter: u32,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::PixelCount,
-                || rendering_surface.pixel_count_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::PixelCount,
+            || rendering_surface.pixel_count_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::Exposure,
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseExposure,
-                || {
-                    postprocessor
-                        .capturing_camera()
-                        .inverse_exposure_push_constant()
-                },
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseExposure,
+            || {
+                postprocessor
+                    .capturing_camera()
+                    .inverse_exposure_immediate()
+            },
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::FrameCounter,
-                || frame_counter,
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::FrameCounter,
+            || frame_counter,
+        );
     }
 
     /// Records the render pass into the given command encoder.
@@ -333,7 +328,7 @@ impl PostprocessingRenderPass {
             render_pass.set_stencil_reference(stencil_value as u32);
         }
 
-        self.set_push_constants(
+        self.set_immediates(
             &mut render_pass,
             rendering_surface,
             postprocessor,
@@ -408,12 +403,12 @@ impl PostprocessingRenderPass {
 pub fn create_postprocessing_render_pipeline_layout(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
-    push_constant_ranges: &[wgpu::PushConstantRange],
+    immediate_size: u32,
     label: &str,
 ) -> wgpu::PipelineLayout {
     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts,
-        push_constant_ranges,
+        immediate_size,
         label: Some(&format!(
             "Postprocessing pass render pipeline layout ({label})"
         )),

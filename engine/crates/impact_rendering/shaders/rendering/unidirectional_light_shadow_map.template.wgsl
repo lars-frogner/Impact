@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     activeLightIdx: u32,
     activeCascadeIdx: u32,
 }
@@ -34,7 +34,7 @@ struct FragmentOutput {
     @location(0) fragmentDepth: f32,
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
 var<uniform> unidirectionalLights: UnidirectionalLights;
@@ -77,8 +77,8 @@ fn mainVS(
 
     // Note: `var` is required here instead of `let` to make the
     // `orthographicTransforms` array indexable with a dynamic index
-    var unidirectionalLight = unidirectionalLights.lights[pushConstants.activeLightIdx];
-    let lightOrthographicTransform = unidirectionalLight.orthographicTransforms[pushConstants.activeCascadeIdx];
+    var unidirectionalLight = unidirectionalLights.lights[immediates.activeLightIdx];
+    let lightOrthographicTransform = unidirectionalLight.orthographicTransforms[immediates.activeCascadeIdx];
 
     let lightClipSpacePosition = applyOrthographicProjectionToPosition(
         lightOrthographicTransform.translation,

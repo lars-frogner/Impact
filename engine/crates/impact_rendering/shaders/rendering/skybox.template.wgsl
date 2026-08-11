@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     cameraRotationQuaternion: vec4f,
     exposure: f32,
 }
@@ -20,7 +20,7 @@ struct FragmentOutput {
     @location(0) preExposedLuminance: vec4f
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -45,7 +45,7 @@ fn mainVS(
     var output: VertexOutput;
 
     let untranslatedCameraSpacePosition = rotateVectorWithQuaternion(
-        pushConstants.cameraRotationQuaternion,
+        immediates.cameraRotationQuaternion,
         modelSpacePosition,
     );
     output.projectedPosition = (projectionUniform.projection * vec4f(untranslatedCameraSpacePosition, 1.0)).xyww;
@@ -59,7 +59,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
 
     let sample = textureSample(skyboxTexture, skyboxSampler, input.modelSpacePosition);
-    output.preExposedLuminance = (pushConstants.exposure * skyboxProperties.maxLuminance) * sample;
+    output.preExposedLuminance = (immediates.exposure * skyboxProperties.maxLuminance) * sample;
 
     return output;
 }

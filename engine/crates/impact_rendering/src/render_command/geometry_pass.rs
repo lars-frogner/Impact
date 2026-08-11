@@ -7,7 +7,7 @@ use crate::{
         RenderAttachmentTextureManager,
     },
     postprocessing::Postprocessor,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::model_geometry::{ModelGeometryShaderInput, ModelGeometryShaderTemplate},
@@ -32,9 +32,9 @@ use std::borrow::Cow;
 /// Pass for filling the G-buffer attachments and the depth and stencil map.
 #[derive(Debug)]
 pub struct GeometryPass {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
-    push_constant_ranges: Vec<wgpu::PushConstantRange>,
+    immediate_size: u32,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     depth_stencil_state: wgpu::DepthStencilState,
     polygon_mode: wgpu::PolygonMode,
@@ -53,10 +53,10 @@ struct GeometryPassPipeline {
 
 impl GeometryPass {
     pub fn new(config: &BasicRenderingConfig) -> Self {
-        let push_constants = ModelGeometryShaderTemplate::push_constants();
+        let immediates = ModelGeometryShaderTemplate::immediates();
         let output_render_attachments = ModelGeometryShaderTemplate::output_render_attachments();
 
-        let push_constant_ranges = push_constants.create_ranges();
+        let immediate_size = immediates.total_size();
 
         let color_target_states = Self::create_color_target_states(&output_render_attachments);
 
@@ -69,9 +69,9 @@ impl GeometryPass {
         };
 
         Self {
-            push_constants,
+            immediates,
             output_render_attachments,
-            push_constant_ranges,
+            immediate_size,
             color_target_states,
             depth_stencil_state,
             polygon_mode,
@@ -217,7 +217,7 @@ impl GeometryPass {
                     let pipeline_layout = render_command::create_render_pipeline_layout(
                         graphics_device.device(),
                         &bind_group_layouts,
-                        &self.push_constant_ranges,
+                        self.immediate_size,
                         &format!(
                             "Geometry pass render pipeline layout for shader: {:?}",
                             shader_template
@@ -402,33 +402,30 @@ impl GeometryPass {
         }
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
         frame_counter: u32,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::FrameCounter,
-                || frame_counter,
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::FrameCounter,
+            || frame_counter,
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::Exposure,
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
     }
 
     pub fn record<'a>(
@@ -465,7 +462,7 @@ impl GeometryPass {
         for pipeline in self.model_pipelines.values() {
             render_pass.set_pipeline(&pipeline.pipeline);
 
-            self.set_push_constants(
+            self.set_immediates(
                 &mut render_pass,
                 rendering_surface,
                 postprocessor,

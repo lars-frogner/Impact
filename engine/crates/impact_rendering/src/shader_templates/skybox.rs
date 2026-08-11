@@ -6,7 +6,7 @@ use crate::{
         Blending, RenderAttachmentDescription, RenderAttachmentOutputDescription,
         RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
     },
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
@@ -27,11 +27,11 @@ static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
     LazyLock::new(|| ShaderTemplate::new(rendering_template_source!("skybox")).unwrap());
 
 impl SkyboxShaderTemplate {
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> BasicPushConstantGroup {
-        BasicPushConstantGroup::for_vertex_fragment([
-            BasicPushConstantVariant::CameraRotationQuaternion,
-            BasicPushConstantVariant::Exposure,
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> BasicImmediateGroup {
+        BasicImmediateGroup::from_iter([
+            BasicImmediate::CameraRotationQuaternion,
+            BasicImmediate::Exposure,
         ])
     }
 

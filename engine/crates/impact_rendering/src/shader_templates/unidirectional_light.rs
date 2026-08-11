@@ -10,7 +10,7 @@ use crate::{
         },
         RenderAttachmentQuantitySet,
     },
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
@@ -42,15 +42,12 @@ impl UnidirectionalLightShaderTemplate {
         Self { max_light_count }
     }
 
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> BasicPushConstantGroup {
-        // Although we only access the push constants in the fragment state, we include
-        // the vertex stage here so that we can use the same push constant group as the
-        // `OmnidirectionalLightShaderTemplate`
-        BasicPushConstantGroup::for_vertex_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-            BasicPushConstantVariant::LightIdx,
-            BasicPushConstantVariant::Exposure,
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> BasicImmediateGroup {
+        BasicImmediateGroup::from_iter([
+            BasicImmediate::InverseWindowDimensions,
+            BasicImmediate::LightIdx,
+            BasicImmediate::Exposure,
         ])
     }
 

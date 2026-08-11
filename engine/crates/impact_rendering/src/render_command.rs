@@ -34,12 +34,12 @@ pub const INVERTED_FRONT_FACE: wgpu::FrontFace = wgpu::FrontFace::Cw;
 pub fn create_render_pipeline_layout(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
-    push_constant_ranges: &[wgpu::PushConstantRange],
+    immediate_size: u32,
     label: &str,
 ) -> wgpu::PipelineLayout {
     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts,
-        push_constant_ranges,
+        immediate_size,
         label: Some(label),
     })
 }
@@ -88,7 +88,7 @@ pub fn create_render_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        multiview: None,
+        multiview_mask: None,
         cache: None,
         label: Some(label),
     })
@@ -135,7 +135,7 @@ pub fn create_line_list_render_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        multiview: None,
+        multiview_mask: None,
         cache: None,
         label: Some(label),
     })
@@ -231,6 +231,7 @@ pub fn begin_single_render_pass<'a>(
         depth_stencil_attachment,
         timestamp_writes,
         occlusion_query_set: None,
+        multiview_mask: None,
         label: Some(&label),
     });
 

@@ -11,7 +11,7 @@ use crate::{
         RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity, RenderAttachmentTextureManager,
     },
-    push_constant::BasicPushConstantGroup,
+    push_constant::BasicImmediateGroup,
     render_command::StencilValue,
     resource::BasicGPUResources,
     surface::RenderingSurface,
@@ -34,8 +34,8 @@ use temporal_anti_aliasing::{TemporalAntiAliasingConfig, TemporalAntiAliasingRen
 /// Specific shader template that can be resolved to generate a postprocessing
 /// shader.
 pub trait PostprocessingShaderTemplate: SpecificShaderTemplate {
-    /// Returns the group of push constants used by the shader.
-    fn push_constants(&self) -> BasicPushConstantGroup;
+    /// Returns the group of immediates used by the shader.
+    fn immediates(&self) -> BasicImmediateGroup;
 
     /// Returns the set of render attachments used as input by the shader.
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet;

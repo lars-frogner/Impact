@@ -11,7 +11,11 @@ struct Parameters {
     varianceClippingThreshold: f32,
 }
 
-var<push_constant> inverseWindowDimensions: vec2f;
+struct Immediates {
+    inverseWindowDimensions: vec2f,
+}
+
+var<immediate> immediates: Immediates;
 
 @group({{linear_depth_texture_group}}) @binding({{linear_depth_texture_binding}})
 var linearDepthTexture: texture_2d<f32>;
@@ -40,7 +44,7 @@ fn convertFramebufferPositionToPixelIndices(framebufferPosition: vec4f) -> vec2i
 }
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return (framebufferPosition.xy * inverseWindowDimensions);
+    return (framebufferPosition.xy * immediates.inverseWindowDimensions);
 }
 
 // Samples the given texture using an optimized version of Catmul-Rom filtering.

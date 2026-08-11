@@ -6,9 +6,13 @@ struct Parameters {
     minLog2Luminance: f32,
     log2LuminanceRange: f32,
     currentFrameWeight: f32,
-};
+}
 
-var<push_constant> pixelCount: f32;
+struct Immediates {
+    pixelCount: f32,
+}
+
+var<immediate> immediates: Immediates;
 
 @group({{params_group}}) @binding({{params_binding}}) var<uniform> params: Parameters;
 @group({{histogram_group}}) @binding({{histogram_binding}}) var<storage, read_write> histogram: array<u32>;
@@ -44,7 +48,7 @@ fn main(
     if (localIndex == 0) {
         // Since localIndex == 0, `countForThisBin` holds the number of
         // zero-luminance pixels
-        let pixelsWithNonZeroLuminance = max(pixelCount - f32(countForThisBin), 1.0);
+        let pixelsWithNonZeroLuminance = max(immediates.pixelCount - f32(countForThisBin), 1.0);
 
         let averageBinIndex = f32(weightedCountBuffer[0]) / pixelsWithNonZeroLuminance;
 

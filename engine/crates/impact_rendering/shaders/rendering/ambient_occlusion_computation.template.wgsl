@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     inverseWindowDimensions: vec2f,
     frameCounter: u32,
 }
@@ -31,7 +31,7 @@ struct FragmentOutput {
     @location(0) occlusion: f32,
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}}) var<uniform> projectionUniform: ProjectionUniform;
 
@@ -44,7 +44,7 @@ var<push_constant> pushConstants: PushConstants;
 @group({{samples_group}}) @binding({{samples_binding}}) var<uniform> ambientOcclusionSamples: AmbientOcclusionSamples;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return (framebufferPosition.xy * pushConstants.inverseWindowDimensions);
+    return (framebufferPosition.xy * immediates.inverseWindowDimensions);
 }
 
 // From [0, 1] to [-1, 1]
@@ -73,7 +73,7 @@ fn generateRandomAngle(cameraFramebufferPosition: vec4f) -> f32 {
 // Returns a random number between 0 and 1 based on the pixel coordinates and
 // the current frame counter
 fn generateInterleavedGradientNoiseFactor(cameraFramebufferPosition: vec4f) -> f32 {
-    let timeOffset = pushConstants.frameCounter % 8u;
+    let timeOffset = immediates.frameCounter % 8u;
     let timeOffsetPosition = vec2f(cameraFramebufferPosition.x + f32(timeOffset), cameraFramebufferPosition.y);
     let magic = vec3f(0.06711056, 0.00583715, 52.9829189);
     return fract(magic.z * fract(dot(magic.xy, timeOffsetPosition)));

@@ -141,7 +141,7 @@ pub struct DetailedTextureFilteringConfig {
     /// How to filter the texture when it needs to be minified.
     pub min_filter: wgpu::FilterMode,
     /// How to filter between mipmap levels.
-    pub mipmap_filter: wgpu::FilterMode,
+    pub mipmap_filter: wgpu::MipmapFilterMode,
     /// Minimum level of detail (i.e. mip level) to use.
     pub lod_min_clamp: f32,
     /// Maximum level of detail (i.e. mip level) to use.
@@ -567,7 +567,7 @@ impl DetailedTextureFilteringConfig {
         filtering_enabled: true,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,
         anisotropy_clamp: 1,
@@ -577,7 +577,7 @@ impl DetailedTextureFilteringConfig {
         filtering_enabled: true,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,
         anisotropy_clamp: 2,
@@ -602,7 +602,7 @@ impl DetailedTextureFilteringConfig {
         filtering_enabled: false,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         lod_min_clamp: 0.0,
         lod_max_clamp: f32::MAX,
         anisotropy_clamp: 1,

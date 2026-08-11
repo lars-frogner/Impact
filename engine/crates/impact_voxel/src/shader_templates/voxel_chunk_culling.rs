@@ -2,13 +2,13 @@
 
 use crate::{
     compute_template_source,
-    gpu_resource::{VoxelPushConstantGroup, VoxelPushConstantVariant},
+    gpu_resource::{VoxelImmediate, VoxelImmediateGroup},
 };
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_rendering::push_constant::BasicPushConstantVariant;
+use impact_rendering::push_constant::BasicImmediate;
 use std::sync::LazyLock;
 
 /// Shader template for a voxel chunk culling compute pass, which determines
@@ -36,12 +36,12 @@ impl VoxelChunkCullingShaderTemplate {
         [chunk_count.div_ceil(Self::workgroup_size()), 1, 1]
     }
 
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> VoxelPushConstantGroup {
-        VoxelPushConstantGroup::for_compute([
-            VoxelPushConstantVariant::CullingFrustum,
-            VoxelPushConstantVariant::ChunkCount,
-            VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::InstanceIdx),
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> VoxelImmediateGroup {
+        VoxelImmediateGroup::from_iter([
+            VoxelImmediate::CullingFrustum,
+            VoxelImmediate::ChunkCount,
+            VoxelImmediate::Rendering(BasicImmediate::InstanceIdx),
         ])
     }
 }

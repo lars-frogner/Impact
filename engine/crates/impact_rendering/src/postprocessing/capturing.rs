@@ -247,13 +247,13 @@ impl CapturingCamera {
         })
     }
 
-    /// Returns the exposure push constant.
-    pub fn exposure_push_constant(&self) -> f32 {
+    /// Returns the exposure immediate value.
+    pub fn exposure_immediate(&self) -> f32 {
         self.exposure
     }
 
-    /// Returns the inverse exposure push constant.
-    pub fn inverse_exposure_push_constant(&self) -> f32 {
+    /// Returns the inverse exposure immediate value.
+    pub fn inverse_exposure_immediate(&self) -> f32 {
         self.exposure.recip()
     }
 

@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     activeLightIdx: u32,
 }
 
@@ -33,7 +33,7 @@ struct FragmentOutput {
     @location(0) fragmentDepth: f32,
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
 var<uniform> omnidirectionalLights: OmnidirectionalLights;
@@ -101,7 +101,7 @@ fn mainVS(
 fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
 
-    let omnidirectionalLight = omnidirectionalLights.lights[pushConstants.activeLightIdx];
+    let omnidirectionalLight = omnidirectionalLights.lights[immediates.activeLightIdx];
 
     let minShadowShellRadius = omnidirectionalLight.lightSphere.minShadowShellRadius;
     let inverseShadowShellRadialSpan = omnidirectionalLight.lightSphere.inverseShadowShellRadialSpan;

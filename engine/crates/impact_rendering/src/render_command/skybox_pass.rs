@@ -3,7 +3,7 @@
 use crate::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::skybox::SkyboxShaderTemplate,
@@ -21,9 +21,9 @@ use std::borrow::Cow;
 /// Pass for filling in emitted luminance from the skybox.
 #[derive(Debug)]
 pub struct SkyboxPass {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     output_render_attachment_quantity: RenderAttachmentQuantity,
-    push_constant_ranges: Vec<wgpu::PushConstantRange>,
+    immediate_size: u32,
     color_target_state: wgpu::ColorTargetState,
     depth_stencil_state: wgpu::DepthStencilState,
     pipeline: Option<wgpu::RenderPipeline>,
@@ -32,11 +32,11 @@ pub struct SkyboxPass {
 
 impl SkyboxPass {
     pub fn new(graphics_device: &GraphicsDevice, shader_manager: &mut ShaderManager) -> Self {
-        let push_constants = SkyboxShaderTemplate::push_constants();
+        let immediates = SkyboxShaderTemplate::immediates();
         let output_render_attachment_quantity =
             SkyboxShaderTemplate::output_render_attachment_quantity();
 
-        let push_constant_ranges = push_constants.create_ranges();
+        let immediate_size = immediates.total_size();
         let color_target_state = Self::color_target_state(output_render_attachment_quantity);
         let depth_stencil_state = render_command::depth_stencil_state_for_equal_stencil_testing();
 
@@ -45,9 +45,9 @@ impl SkyboxPass {
             .get_or_create_rendering_shader_from_template(graphics_device, &SkyboxShaderTemplate);
 
         Self {
-            push_constants,
+            immediates,
             output_render_attachment_quantity,
-            push_constant_ranges,
+            immediate_size,
             color_target_state,
             depth_stencil_state,
             pipeline: None,
@@ -85,7 +85,7 @@ impl SkyboxPass {
                         &camera_bind_group_layout,
                         skybox_gpu_resources.bind_group_layout(),
                     ],
-                    &self.push_constant_ranges,
+                    self.immediate_size,
                     "Skybox pass render pipeline layout",
                 );
 
@@ -152,25 +152,23 @@ impl SkyboxPass {
         }
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         postprocessor: &Postprocessor,
         camera_gpu_resources: &CameraGPUResource,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::Exposure,
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::CameraRotationQuaternion,
-                || camera_gpu_resources.camera_rotation_quaternion_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::CameraRotationQuaternion,
+            || camera_gpu_resources.camera_rotation_quaternion_immediate(),
+        );
     }
 
     pub fn record(
@@ -208,7 +206,7 @@ impl SkyboxPass {
 
         render_pass.set_stencil_reference(StencilValue::Background as u32);
 
-        self.set_push_constants(&mut render_pass, postprocessor, camera_gpu_resources);
+        self.set_immediates(&mut render_pass, postprocessor, camera_gpu_resources);
 
         render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 

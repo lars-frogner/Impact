@@ -9,12 +9,12 @@ use crate::{
         },
         RenderAttachmentQuantitySet,
     },
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
-    push_constant::PushConstantGroup,
+    push_constant::ImmediateGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
@@ -46,11 +46,11 @@ impl AmbientLightShaderTemplate {
         Self { max_light_count }
     }
 
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> BasicPushConstantGroup {
-        PushConstantGroup::for_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-            BasicPushConstantVariant::Exposure,
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> BasicImmediateGroup {
+        ImmediateGroup::from_iter([
+            BasicImmediate::InverseWindowDimensions,
+            BasicImmediate::Exposure,
         ])
     }
 

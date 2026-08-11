@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     // Split up inverseWindowDimensions to avoid padding
     inverseWindowWidth: f32,
     inverseWindowHeight: f32,
@@ -60,7 +60,7 @@ const FACE_NORMAL_TRANSITION_START_ALIGNMENT: f32 = 0.8;
 const FACE_NORMAL_TRANSITION_END_ALIGNMENT: f32 = 0.6;
 const FACE_NORMAL_TRANSITION_NORM: f32 = 1.0 / (FACE_NORMAL_TRANSITION_START_ALIGNMENT - FACE_NORMAL_TRANSITION_END_ALIGNMENT);
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -105,15 +105,15 @@ fn rotateVectorWithQuaternion(quaternion: vec4f, vector: vec3f) -> vec3f {
 
 fn obtainProjectionMatrix() -> mat4x4f {
     var matrix = projectionUniform.projection;
-    let jitterIndex = pushConstants.frameCounter % JITTER_COUNT;
+    let jitterIndex = immediates.frameCounter % JITTER_COUNT;
     let jitterOffsets = projectionUniform.jitterOffsets[jitterIndex];
-    matrix[2][0] += jitterOffsets.x * pushConstants.inverseWindowWidth;
-    matrix[2][1] += jitterOffsets.y * pushConstants.inverseWindowHeight;
+    matrix[2][0] += jitterOffsets.x * immediates.inverseWindowWidth;
+    matrix[2][1] += jitterOffsets.y * immediates.inverseWindowHeight;
     return matrix;
 }
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2<f32> {
-    return framebufferPosition.xy * vec2f(pushConstants.inverseWindowWidth, pushConstants.inverseWindowHeight);
+    return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
 }
 
 fn computeMotionVector(
@@ -295,9 +295,9 @@ fn mainVS(
     // shift along with the origin during splitting, causing the textures to
     // change abruptly
     output.offsetModelSpacePosition = vec3f(
-        pushConstants.originOffsetInRootX,
-        pushConstants.originOffsetInRootY,
-        pushConstants.originOffsetInRootZ,
+        immediates.originOffsetInRootX,
+        immediates.originOffsetInRootY,
+        immediates.originOffsetInRootZ,
     ) + modelSpacePosition;
 
     return output;
@@ -386,7 +386,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     roughness = computeGGXRoughnessFromPerceptuallyLinearRoughness(roughness);
 
     let metalness = materialProperties.z;
-    let preExposedEmissiveLuminance = pushConstants.exposure * materialProperties.w;
+    let preExposedEmissiveLuminance = immediates.exposure * materialProperties.w;
 
     output.materialProperties = vec4f(specularReflectance, roughness, metalness, preExposedEmissiveLuminance);
 

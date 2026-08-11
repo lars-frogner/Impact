@@ -6,7 +6,7 @@ use crate::{
         RenderAttachmentQuantity,
     },
     postprocessing::PostprocessingShaderTemplate,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_gpu::{
@@ -21,7 +21,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct RenderAttachmentVisualizationShaderTemplate {
     render_attachment_quantity: RenderAttachmentQuantity,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
 }
 
@@ -32,16 +32,14 @@ impl RenderAttachmentVisualizationShaderTemplate {
     /// Creates a new visualization shader template for the given render
     /// attachment quantity.
     pub fn new(render_attachment_quantity: RenderAttachmentQuantity) -> Self {
-        let push_constants = BasicPushConstantGroup::for_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-        ]);
+        let immediates = BasicImmediateGroup::from_iter([BasicImmediate::InverseWindowDimensions]);
 
         let input_render_attachments =
             RenderAttachmentInputDescriptionSet::with_defaults(render_attachment_quantity.flag());
 
         Self {
             render_attachment_quantity,
-            push_constants,
+            immediates,
             input_render_attachments,
         }
     }
@@ -63,8 +61,8 @@ impl SpecificShaderTemplate for RenderAttachmentVisualizationShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for RenderAttachmentVisualizationShaderTemplate {
-    fn push_constants(&self) -> BasicPushConstantGroup {
-        self.push_constants.clone()
+    fn immediates(&self) -> BasicImmediateGroup {
+        self.immediates.clone()
     }
 
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet {

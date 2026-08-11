@@ -6,13 +6,17 @@ struct FragmentOutput {
     @location(0) color: vec4f,
 }
 
-var<push_constant> inverseWindowDimensions: vec2f;
+struct Immediates {
+    inverseWindowDimensions: vec2f,
+}
+
+var<immediate> immediates: Immediates;
 
 @group(0) @binding({{input_texture_binding}}) var inputColorTexture: texture_2d<f32>;
 @group(0) @binding({{input_sampler_binding}}) var inputColorSampler: sampler;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return (framebufferPosition.xy * inverseWindowDimensions);
+    return (framebufferPosition.xy * immediates.inverseWindowDimensions);
 }
 
 @vertex

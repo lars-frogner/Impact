@@ -73,7 +73,7 @@ impl GizmoPasses {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[&camera_bind_group_layout],
-            &[],
+            0,
             "Gizmo pass render pipeline layout",
         );
 

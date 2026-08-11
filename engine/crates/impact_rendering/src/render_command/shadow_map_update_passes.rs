@@ -1,7 +1,7 @@
 //! Passes for filling shadow maps.
 
 use crate::{
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::{
@@ -32,7 +32,7 @@ use std::borrow::Cow;
 /// Passes for filling the faces of each omnidirectional light shadow cubemap.
 #[derive(Debug)]
 pub struct OmnidirectionalLightShadowMapUpdatePasses {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
@@ -43,7 +43,7 @@ pub struct OmnidirectionalLightShadowMapUpdatePasses {
 /// Passes for filling the cascades of each unidirectional light shadow map.
 #[derive(Debug)]
 pub struct UnidirectionalLightShadowMapUpdatePasses {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
@@ -73,7 +73,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        let push_constants = OmnidirectionalLightShadowMapShaderTemplate::push_constants();
+        let immediates = OmnidirectionalLightShadowMapShaderTemplate::immediates();
 
         let omnidirectional_light_bind_group_layout =
             LightGPUResources::get_or_create_shadowable_omnidirectional_light_bind_group_layout(
@@ -84,7 +84,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[&omnidirectional_light_bind_group_layout],
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             "Omnidirectional light shadow map update render pipeline layout",
         );
 
@@ -110,7 +110,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         );
 
         Self {
-            push_constants,
+            immediates,
             color_target_states,
             pipeline_layout,
             pipeline,
@@ -233,13 +233,12 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         })]
     }
 
-    fn set_light_idx_push_constant(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::LightIdx,
-                || light_idx,
-            );
+    fn set_light_idx_immediate(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::LightIdx,
+            || light_idx,
+        );
     }
 
     pub fn record<R>(
@@ -337,10 +336,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
 
                 render_pass.set_pipeline(&self.pipeline);
 
-                self.set_light_idx_push_constant(
-                    &mut render_pass,
-                    u32::try_from(light_idx).unwrap(),
-                );
+                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
 
                 render_pass.set_bind_group(
                     0,
@@ -443,7 +439,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let (_, shader) = shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        let push_constants = UnidirectionalLightShadowMapShaderTemplate::push_constants();
+        let immediates = UnidirectionalLightShadowMapShaderTemplate::immediates();
 
         let unidirectional_light_bind_group_layout =
             LightGPUResources::get_or_create_shadowable_unidirectional_light_bind_group_layout(
@@ -454,7 +450,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[&unidirectional_light_bind_group_layout],
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             "Unidirectional light shadow map update render pipeline layout",
         );
 
@@ -478,7 +474,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         );
 
         Self {
-            push_constants,
+            immediates,
             color_target_states,
             pipeline_layout,
             pipeline,
@@ -601,25 +597,23 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         })]
     }
 
-    fn set_light_and_cascade_idx_push_constants(
+    fn set_light_and_cascade_idx_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         light_idx: u32,
         cascade_idx: CascadeIdx,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::LightIdx,
-                || light_idx,
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::LightIdx,
+            || light_idx,
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::ShadowMapArrayIdx,
-                || cascade_idx,
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::ShadowMapArrayIdx,
+            || cascade_idx,
+        );
     }
 
     pub fn record<R>(
@@ -714,7 +708,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
 
                 render_pass.set_pipeline(&self.pipeline);
 
-                self.set_light_and_cascade_idx_push_constants(
+                self.set_light_and_cascade_idx_immediates(
                     &mut render_pass,
                     u32::try_from(light_idx).unwrap(),
                     cascade_idx,

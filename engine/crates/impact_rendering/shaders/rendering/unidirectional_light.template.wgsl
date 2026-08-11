@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     // Split up inverseWindowDimensions to avoid padding
     inverseWindowWidth: f32,
     inverseWindowHeight: f32,
@@ -43,7 +43,7 @@ struct FragmentOutput {
     @location(0) preExposedReflectedLuminance: vec4f,
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -72,7 +72,7 @@ var materialPropertiesSampler: sampler;
 var<uniform> unidirectionalLights: UnidirectionalLights;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return framebufferPosition.xy * vec2f(pushConstants.inverseWindowWidth, pushConstants.inverseWindowHeight);
+    return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
 }
 
 fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3f) -> vec3f {
@@ -406,7 +406,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let normalIncidenceSpecularReflectance = computeRGBSpecularReflectance(materialColor, materialProperties);
     let roughness = materialProperties.y;
 
-    let unidirectionalLight = unidirectionalLights.lights[pushConstants.activeLightIdx];
+    let unidirectionalLight = unidirectionalLights.lights[immediates.activeLightIdx];
 
     let cameraSpaceLightDirection = unidirectionalLight.cameraSpaceDirection;
 
@@ -421,7 +421,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
         roughness,
-        pushConstants.exposure,
+        immediates.exposure,
     );
 #else
     let lightQuantities = computeLightQuantities(
@@ -429,7 +429,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
         lightPerpendicularIlluminance,
         cameraSpaceNormalVector,
         cameraSpaceViewDirection,
-        pushConstants.exposure,
+        immediates.exposure,
     );
 #endif
 

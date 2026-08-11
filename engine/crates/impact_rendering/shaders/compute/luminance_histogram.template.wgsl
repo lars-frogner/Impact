@@ -7,9 +7,13 @@ const BIN_COUNT_MINUS_TWO: f32 = f32(BIN_COUNT - 2u);
 struct Parameters {
     minLog2Luminance: f32,
     inverseLog2LuminanceRange: f32,
-};
+}
 
-var<push_constant> inverseExposure: f32;
+struct Immediates {
+    inverseExposure: f32,
+}
+
+var<immediate> immediates: Immediates;
 
 @group({{texture_group}}) @binding({{texture_binding}}) var preExposedLuminanceTexture: texture_2d<f32>;
 @group({{params_group}}) @binding({{params_binding}}) var<uniform> params: Parameters;
@@ -27,7 +31,7 @@ fn computeScalarLuminanceFromColor(color: vec3f) -> f32 {
 fn determineBinIndexForPreExposedLuminanceColor(preExposedLuminanceColor: vec3f) -> u32 {
     let preExposedLuminance = computeScalarLuminanceFromColor(preExposedLuminanceColor);
 
-    let luminance = inverseExposure * preExposedLuminance;
+    let luminance = immediates.inverseExposure * preExposedLuminance;
 
     let normalizedLog2Luminance = (log2(luminance) - params.minLog2Luminance) * params.inverseLog2LuminanceRange;
 

@@ -1,6 +1,6 @@
 //! Shader template for unidirectional light shadow map update passes.
 
-use crate::push_constant::{BasicPushConstantGroup, BasicPushConstantVariant};
+use crate::push_constant::{BasicImmediate, BasicImmediateGroup};
 use crate::rendering_template_source;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
@@ -34,11 +34,11 @@ impl UnidirectionalLightShadowMapShaderTemplate {
         Self { max_light_count }
     }
 
-    /// Returns the group of push constants used by the shader.
-    pub fn push_constants() -> BasicPushConstantGroup {
-        BasicPushConstantGroup::for_vertex([
-            BasicPushConstantVariant::LightIdx,
-            BasicPushConstantVariant::ShadowMapArrayIdx,
+    /// Returns the group of immediates used by the shader.
+    pub fn immediates() -> BasicImmediateGroup {
+        BasicImmediateGroup::from_iter([
+            BasicImmediate::LightIdx,
+            BasicImmediate::ShadowMapArrayIdx,
         ])
     }
 }

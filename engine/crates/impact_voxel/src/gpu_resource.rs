@@ -17,7 +17,7 @@ use impact_gpu::{
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
     indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
-    push_constant::{PushConstant, PushConstantGroup, PushConstantVariant},
+    push_constant::{Immediate, ImmediateGroup},
     storage,
     texture::{self, ColorSpace, Sampler, TexelDescription, Texture},
     uniform::{self, UniformBufferable},
@@ -32,7 +32,7 @@ use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
-use impact_rendering::push_constant::BasicPushConstantVariant;
+use impact_rendering::push_constant::BasicImmediate;
 use impact_scene::model::{ModelID, ModelInstanceManager};
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::{borrow::Cow, mem, ops::Range, sync::LazyLock};
@@ -102,15 +102,14 @@ pub enum VoxelMeshVertexAttributeLocation {
     MaterialIndices = MeshVertexAttributeLocation::NormalVector as u32 + 3,
 }
 
-pub type VoxelPushConstant = PushConstant<VoxelPushConstantVariant>;
-pub type VoxelPushConstantGroup = PushConstantGroup<VoxelPushConstantVariant>;
+pub type VoxelImmediateGroup = ImmediateGroup<VoxelImmediate>;
 
-/// The meaning of a push constant used for voxel rendering
+/// The meaning of a piece of immediate data used for voxel rendering
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum VoxelPushConstantVariant {
+pub enum VoxelImmediate {
     CullingFrustum,
     ChunkCount,
-    Rendering(BasicPushConstantVariant),
+    Rendering(BasicImmediate),
 }
 
 impl VoxelMaterialGPUResources {
@@ -736,7 +735,6 @@ impl VoxelObjectGPUBuffers {
             // If the only modifications are removed chunks, we just copy over the new chunk
             // buffer and call it a day
             self.chunk_submesh_buffer.encode_update_of_valid_bytes(
-                graphics_device,
                 staging_belt,
                 command_encoder,
                 bytemuck::cast_slice(mesh.chunk_submeshes()),
@@ -787,7 +785,6 @@ impl VoxelObjectGPUBuffers {
             for ranges in updated_data_ranges {
                 let vertex_range = ranges.vertex_range.clone();
                 Self::update_buffer_range(
-                    graphics_device,
                     staging_belt,
                     command_encoder,
                     &self.position_buffer,
@@ -795,7 +792,6 @@ impl VoxelObjectGPUBuffers {
                     vertex_range.clone(),
                 );
                 Self::update_buffer_range(
-                    graphics_device,
                     staging_belt,
                     command_encoder,
                     &self.normal_vector_buffer,
@@ -830,7 +826,6 @@ impl VoxelObjectGPUBuffers {
             for ranges in updated_data_ranges {
                 let index_range = ranges.index_range.clone();
                 Self::update_buffer_range(
-                    graphics_device,
                     staging_belt,
                     command_encoder,
                     &self.index_material_buffer,
@@ -838,7 +833,6 @@ impl VoxelObjectGPUBuffers {
                     index_range.clone(),
                 );
                 Self::update_buffer_range(
-                    graphics_device,
                     staging_belt,
                     command_encoder,
                     &self.index_buffer,
@@ -901,7 +895,6 @@ impl VoxelObjectGPUBuffers {
             // the existing chunk buffer with the new data (since this buffer is relatively
             // small, we don't bother writing only the parts that actually changed)
             self.chunk_submesh_buffer.encode_update_of_valid_bytes(
-                graphics_device,
                 staging_belt,
                 command_encoder,
                 bytemuck::cast_slice(mesh.chunk_submeshes()),
@@ -1147,7 +1140,6 @@ impl VoxelObjectGPUBuffers {
     }
 
     fn update_buffer_range<T: Pod>(
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         buffer: &GPUBuffer,
@@ -1157,7 +1149,6 @@ impl VoxelObjectGPUBuffers {
         let byte_offset = mem::size_of::<T>().checked_mul(range.start).unwrap();
 
         buffer.encode_update_of_bytes_from_offset(
-            graphics_device,
             staging_belt,
             command_encoder,
             byte_offset,
@@ -1213,7 +1204,7 @@ impl VertexBufferable for VoxelMeshIndex {
         ]);
 }
 
-impl PushConstantVariant for VoxelPushConstantVariant {
+impl Immediate for VoxelImmediate {
     fn size(&self) -> u32 {
         match self {
             Self::CullingFrustum => mem::size_of::<CullingFrustum>() as u32,

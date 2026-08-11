@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     inverseWindowDimensions: vec2f,
     exposure: f32,
 }
@@ -27,7 +27,7 @@ struct FragmentOutput {
     @location(1) preExposedAmbientReflectedLuminance: vec4f,
 }
 
-var<push_constant> pushConstants: PushConstants;
+var<immediate> immediates: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
 var<uniform> projectionUniform: ProjectionUniform;
@@ -61,7 +61,7 @@ var specularGGXReflectanceLookupTexture: texture_2d_array<f32>;
 var specularGGXReflectanceLookupSampler: sampler;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return (framebufferPosition.xy * pushConstants.inverseWindowDimensions);
+    return (framebufferPosition.xy * immediates.inverseWindowDimensions);
 }
 
 fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3f) -> vec3f {
@@ -206,7 +206,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let ambientReflectedLuminance = ambientDiffuseReflectedLuminance + ambientSpecularReflectedLuminance;
 
-    let preExposedAmbientReflectedLuminance = ambientReflectedLuminance * pushConstants.exposure;
+    let preExposedAmbientReflectedLuminance = ambientReflectedLuminance * immediates.exposure;
 
     output.preExposedEmissiveLuminance = vec4f(preExposedEmissiveLuminance, 1.0);
     output.preExposedAmbientReflectedLuminance = vec4f(preExposedAmbientReflectedLuminance, 1.0);

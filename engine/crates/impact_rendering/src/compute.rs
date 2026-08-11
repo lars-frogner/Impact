@@ -3,7 +3,7 @@
 use crate::{
     attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
     postprocessing::Postprocessor,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};
@@ -18,8 +18,8 @@ use std::{borrow::Cow, num::NonZeroU32};
 
 /// Specific shader template that can be resolved to generate a compute shader.
 pub trait ComputeShaderTemplate: SpecificShaderTemplate + Send + Sync {
-    /// Returns the group of push constants used by the compute shader.
-    fn push_constants(&self) -> BasicPushConstantGroup;
+    /// Returns the group of immediates used by the compute shader.
+    fn immediates(&self) -> BasicImmediateGroup;
 
     /// Returns the set of render attachments used as input by the compute
     /// shader.
@@ -41,7 +41,7 @@ pub trait ComputeShaderTemplate: SpecificShaderTemplate + Send + Sync {
 #[derive(Debug)]
 pub struct ComputePass {
     shader_template: Box<dyn ComputeShaderTemplate>,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     gpu_resource_group_id: GPUResourceGroupID,
     label: Cow<'static, str>,
@@ -62,7 +62,7 @@ impl ComputePass {
         shader_template: impl ComputeShaderTemplate + 'static,
         label: Cow<'static, str>,
     ) -> Result<Self> {
-        let push_constants = shader_template.push_constants();
+        let immediates = shader_template.immediates();
         let input_render_attachments = shader_template.input_render_attachments();
         let gpu_resource_group_id = shader_template.gpu_resource_group_id();
 
@@ -95,7 +95,7 @@ impl ComputePass {
         let pipeline_layout = create_compute_pipeline_layout(
             graphics_device.device(),
             &bind_group_layouts,
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             &format!("Compute pipeline layout ({label})"),
         );
 
@@ -108,7 +108,7 @@ impl ComputePass {
 
         Ok(Self {
             shader_template: Box::new(shader_template),
-            push_constants,
+            immediates,
             input_render_attachments,
             gpu_resource_group_id,
             label,
@@ -140,7 +140,7 @@ impl ComputePass {
 
         compute_pass.set_pipeline(&self.pipeline);
 
-        self.set_push_constants(&mut compute_pass, rendering_surface, postprocessor);
+        self.set_immediates(&mut compute_pass, rendering_surface, postprocessor);
 
         let mut bind_group_index = 0;
 
@@ -169,55 +169,51 @@ impl ComputePass {
         Ok(())
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         compute_pass: &mut wgpu::ComputePass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
     ) {
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                BasicPushConstantVariant::PixelCount,
-                || rendering_surface.pixel_count_push_constant(),
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            BasicImmediate::PixelCount,
+            || rendering_surface.pixel_count_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                BasicPushConstantVariant::Exposure,
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            BasicImmediate::Exposure,
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                BasicPushConstantVariant::InverseExposure,
-                || {
-                    postprocessor
-                        .capturing_camera()
-                        .inverse_exposure_push_constant()
-                },
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            BasicImmediate::InverseExposure,
+            || {
+                postprocessor
+                    .capturing_camera()
+                    .inverse_exposure_immediate()
+            },
+        );
     }
 }
 
 pub fn create_compute_pipeline_layout(
     device: &wgpu::Device,
     bind_group_layouts: &[&wgpu::BindGroupLayout],
-    push_constant_ranges: &[wgpu::PushConstantRange],
+    immediate_size: u32,
     label: &str,
 ) -> wgpu::PipelineLayout {
     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts,
-        push_constant_ranges,
+        immediate_size,
         label: Some(label),
     })
 }

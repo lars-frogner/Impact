@@ -1,4 +1,4 @@
-struct PushConstants {
+struct Immediates {
     frustumPlane0: array<f32, 4>,
     frustumPlane1: array<f32, 4>,
     frustumPlane2: array<f32, 4>,
@@ -37,7 +37,7 @@ struct IndirectDrawArgs {
 }
 #endif
 
-var<push_constant> pcs: PushConstants;
+var<immediate> imms: Immediates;
 
 @group({{chunk_submesh_group}}) @binding({{chunk_submesh_binding}})
 var<storage, read> chunkSubmeshes: array<ChunkSubmesh>;
@@ -70,12 +70,12 @@ fn chunkIsOutsideFrustum(lowerCorner: vec3f) -> bool {
         vec3f(1.0, 1.0, 1.0),
     );
     return (
-        signedDistance(pcs.frustumPlane0, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[0]]) < CULLING_THRESHOLD ||
-        signedDistance(pcs.frustumPlane1, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[1]]) < CULLING_THRESHOLD ||
-        signedDistance(pcs.frustumPlane2, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[2]]) < CULLING_THRESHOLD ||
-        signedDistance(pcs.frustumPlane3, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[3]]) < CULLING_THRESHOLD ||
-        signedDistance(pcs.frustumPlane4, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[4]]) < CULLING_THRESHOLD ||
-        signedDistance(pcs.frustumPlane5, lowerCorner + CORNERS_OFFSETS[pcs.mostInsideCorners[5]]) < CULLING_THRESHOLD
+        signedDistance(imms.frustumPlane0, lowerCorner + CORNERS_OFFSETS[imms.mostInsideCorners[0]]) < CULLING_THRESHOLD ||
+        signedDistance(imms.frustumPlane1, lowerCorner + CORNERS_OFFSETS[imms.mostInsideCorners[1]]) < CULLING_THRESHOLD ||
+        signedDistance(imms.frustumPlane2, lowerCorner + CORNERS_OFFSETS[imms.mostInsideCorners[2]]) < CULLING_THRESHOLD ||
+        signedDistance(imms.frustumPlane3, lowerCorner + CORNERS_OFFSETS[imms.mostInsideCorners[3]]) < CULLING_THRESHOLD ||
+        signedDistance(imms.frustumPlane4, lowerCorner + CORNERS_OFFSETS[imms.mostInsideCorners[4]]) < CULLING_THRESHOLD ||
+        signedDistance(imms.frustumPlane5, lowerCorner + CORNERS_OFFSETS[imms.mostInsideCorners[5]]) < CULLING_THRESHOLD
     );
 }
 
@@ -90,7 +90,7 @@ fn chunkIsObscured(chunkSubmesh: ChunkSubmesh, lowerCorner: vec3f) -> bool {
 
     // Compute the unnormalized direction from the frustum apex to the center
     // of the chunk
-    let viewDirection = lowerCorner + vec3f(0.5) - vec3f(pcs.apexPosition[0], pcs.apexPosition[1], pcs.apexPosition[2]);
+    let viewDirection = lowerCorner + vec3f(0.5) - vec3f(imms.apexPosition[0], imms.apexPosition[1], imms.apexPosition[2]);
 
     // For each axis, the sign of the view direction determines the
     // corresponding index into the table (positive -> 0, negative -> 1)
@@ -107,8 +107,8 @@ fn main(
 ) {
     let globalIdx = globalID.x;
 
-    let chunkCount = pcs.chunkCount;
-    let instanceIdx = pcs.instanceIdx;
+    let chunkCount = imms.chunkCount;
+    let instanceIdx = imms.instanceIdx;
 
     if (globalIdx < chunkCount) {
         let chunkSubmesh = chunkSubmeshes[globalIdx];

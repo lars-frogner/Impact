@@ -3,7 +3,7 @@
 use crate::{
     BasicRenderingConfig,
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,
@@ -28,7 +28,7 @@ use std::borrow::Cow;
 /// Pass for filling the depth and stencil map.
 #[derive(Debug)]
 pub struct DepthPrepass {
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     models: HashSet<ModelID>,
@@ -48,7 +48,7 @@ impl DepthPrepass {
             &ModelDepthPrepassShaderTemplate,
         );
 
-        let push_constants = ModelDepthPrepassShaderTemplate::push_constants();
+        let immediates = ModelDepthPrepassShaderTemplate::immediates();
 
         let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
@@ -58,7 +58,7 @@ impl DepthPrepass {
         let pipeline_layout = render_command::create_render_pipeline_layout(
             graphics_device.device(),
             &[&camera_bind_group_layout],
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             "Depth prepass render pipeline layout",
         );
 
@@ -66,7 +66,7 @@ impl DepthPrepass {
             Self::create_pipeline(graphics_device, shader_manager, &pipeline_layout, config);
 
         Self {
-            push_constants,
+            immediates,
             pipeline_layout,
             pipeline,
             models: HashSet::default(),
@@ -160,25 +160,23 @@ impl DepthPrepass {
         }
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         frame_counter: u32,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::InverseWindowDimensions,
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::InverseWindowDimensions,
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                BasicPushConstantVariant::FrameCounter,
-                || frame_counter,
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            BasicImmediate::FrameCounter,
+            || frame_counter,
+        );
     }
 
     pub fn record(
@@ -213,7 +211,7 @@ impl DepthPrepass {
 
         render_pass.set_stencil_reference(self.write_stencil_value as u32);
 
-        self.set_push_constants(&mut render_pass, rendering_surface, frame_counter);
+        self.set_immediates(&mut render_pass, rendering_surface, frame_counter);
 
         render_pass.set_bind_group(0, camera_gpu_resources.bind_group(), &[]);
 

@@ -3,8 +3,8 @@
 use crate::{
     VoxelObjectID,
     gpu_resource::{
-        VOXEL_MODEL_ID, VoxelGPUResources, VoxelMaterialGPUResources, VoxelObjectGPUBuffers,
-        VoxelPushConstantGroup, VoxelPushConstantVariant, VoxelResourceRegistries,
+        VOXEL_MODEL_ID, VoxelGPUResources, VoxelImmediate, VoxelImmediateGroup,
+        VoxelMaterialGPUResources, VoxelObjectGPUBuffers, VoxelResourceRegistries,
     },
     mesh::{CullingFrustum, VoxelMeshIndex, VoxelMeshIndexMaterials},
     shader_templates::{
@@ -34,7 +34,7 @@ use impact_model::{
 use impact_rendering::{
     BasicRenderingConfig, compute,
     postprocessing::Postprocessor,
-    push_constant::BasicPushConstantVariant,
+    push_constant::BasicImmediate,
     render_command::{self, STANDARD_FRONT_FACE, geometry_pass::GeometryPass},
     resource::BasicGPUResources,
     surface::RenderingSurface,
@@ -52,7 +52,7 @@ pub struct VoxelRenderCommands {
 /// indirect draw call arguments for the chunks accordingly.
 #[derive(Debug)]
 struct VoxelChunkCullingPass {
-    push_constants: VoxelPushConstantGroup,
+    immediates: VoxelImmediateGroup,
     pipeline_for_non_indexed: wgpu::ComputePipeline,
     pipeline_for_indexed: wgpu::ComputePipeline,
 }
@@ -63,7 +63,7 @@ struct VoxelChunkCullingPass {
 #[derive(Debug)]
 pub struct VoxelGeometryPipeline {
     shader_template: VoxelGeometryShaderTemplate,
-    push_constants: VoxelPushConstantGroup,
+    immediates: VoxelImmediateGroup,
     color_target_states: Vec<Option<wgpu::ColorTargetState>>,
     depth_stencil_state: Option<wgpu::DepthStencilState>,
     pipeline_layout: wgpu::PipelineLayout,
@@ -276,12 +276,12 @@ impl VoxelChunkCullingPass {
                 bind_group_layout_registry,
             );
 
-        let push_constants = VoxelChunkCullingShaderTemplate::push_constants();
+        let immediates = VoxelChunkCullingShaderTemplate::immediates();
 
         let pipeline_layout = compute::create_compute_pipeline_layout(
             graphics_device.device(),
             &[&bind_group_layout],
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             "Voxel chunk culling pass compute pipeline layout",
         );
 
@@ -315,39 +315,36 @@ impl VoxelChunkCullingPass {
         );
 
         Self {
-            push_constants,
+            immediates,
             pipeline_for_non_indexed,
             pipeline_for_indexed,
         }
     }
 
-    fn set_push_constants(
+    fn set_immediates(
         &self,
         compute_pass: &mut wgpu::ComputePass<'_>,
         culling_frustum: CullingFrustum,
         chunk_count: u32,
         instance_idx: u32,
     ) {
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                VoxelPushConstantVariant::CullingFrustum,
-                || culling_frustum,
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            VoxelImmediate::CullingFrustum,
+            || culling_frustum,
+        );
 
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                VoxelPushConstantVariant::ChunkCount,
-                || chunk_count,
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            VoxelImmediate::ChunkCount,
+            || chunk_count,
+        );
 
-        self.push_constants
-            .set_push_constant_for_compute_pass_if_present(
-                compute_pass,
-                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::InstanceIdx),
-                || instance_idx,
-            );
+        self.immediates.set_immediate_for_compute_pass_if_present(
+            compute_pass,
+            VoxelImmediate::Rendering(BasicImmediate::InstanceIdx),
+            || instance_idx,
+        );
     }
 
     fn record_for_geometry_pass<GR>(
@@ -563,7 +560,7 @@ impl VoxelChunkCullingPass {
             let frustum_planes =
                 obtain_frustum_planes_in_voxel_object_space(&frustum_to_voxel_object_transform);
 
-            self.set_push_constants(&mut compute_pass, frustum_planes, chunk_count, instance_idx);
+            self.set_immediates(&mut compute_pass, frustum_planes, chunk_count, instance_idx);
 
             compute_pass.set_bind_group(
                 0,
@@ -615,7 +612,7 @@ impl VoxelGeometryPipeline {
         shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);
 
-        let push_constants = VoxelGeometryShaderTemplate::push_constants();
+        let immediates = VoxelGeometryShaderTemplate::immediates();
 
         let camera_bind_group_layout = CameraGPUResource::get_or_create_bind_group_layout(
             graphics_device,
@@ -640,7 +637,7 @@ impl VoxelGeometryPipeline {
                 &material_bind_group_layout,
                 &position_and_normal_buffer_bind_group_layout,
             ],
-            &push_constants.create_ranges(),
+            immediates.total_size(),
             "Voxel geometry pass render pipeline layout",
         );
 
@@ -656,7 +653,7 @@ impl VoxelGeometryPipeline {
 
         Self {
             shader_template,
-            push_constants,
+            immediates,
             color_target_states,
             depth_stencil_state,
             pipeline_layout,
@@ -717,48 +714,42 @@ impl VoxelGeometryPipeline {
         );
     }
 
-    fn set_constant_push_constants(
+    fn set_constant_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
         frame_counter: u32,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                VoxelPushConstantVariant::Rendering(
-                    BasicPushConstantVariant::InverseWindowDimensions,
-                ),
-                || rendering_surface.inverse_window_dimensions_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            VoxelImmediate::Rendering(BasicImmediate::InverseWindowDimensions),
+            || rendering_surface.inverse_window_dimensions_immediate(),
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::FrameCounter),
-                || frame_counter,
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            VoxelImmediate::Rendering(BasicImmediate::FrameCounter),
+            || frame_counter,
+        );
 
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::Exposure),
-                || postprocessor.capturing_camera().exposure_push_constant(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            VoxelImmediate::Rendering(BasicImmediate::Exposure),
+            || postprocessor.capturing_camera().exposure_immediate(),
+        );
     }
 
-    fn set_per_object_push_constants(
+    fn set_per_object_immediates(
         &self,
         render_pass: &mut wgpu::RenderPass<'_>,
         voxel_object_buffers: &VoxelObjectGPUBuffers,
     ) {
-        self.push_constants
-            .set_push_constant_for_render_pass_if_present(
-                render_pass,
-                VoxelPushConstantVariant::Rendering(BasicPushConstantVariant::GenericVec3f32),
-                || voxel_object_buffers.origin_offset_in_root(),
-            );
+        self.immediates.set_immediate_for_render_pass_if_present(
+            render_pass,
+            VoxelImmediate::Rendering(BasicImmediate::GenericVec3f32),
+            || voxel_object_buffers.origin_offset_in_root(),
+        );
     }
 
     pub fn record<GR>(
@@ -804,12 +795,7 @@ impl VoxelGeometryPipeline {
 
         render_pass.set_bind_group(1, material_gpu_resources.bind_group(), &[]);
 
-        self.set_constant_push_constants(
-            render_pass,
-            rendering_surface,
-            postprocessor,
-            frame_counter,
-        );
+        self.set_constant_immediates(render_pass, rendering_surface, postprocessor, frame_counter);
 
         // All draw calls share the same transform buffer
         render_pass.set_vertex_buffer(
@@ -828,7 +814,7 @@ impl VoxelGeometryPipeline {
                 continue;
             };
 
-            self.set_per_object_push_constants(render_pass, voxel_object_buffers);
+            self.set_per_object_immediates(render_pass, voxel_object_buffers);
 
             let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 

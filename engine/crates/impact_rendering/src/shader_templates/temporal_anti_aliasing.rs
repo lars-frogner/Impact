@@ -10,7 +10,7 @@ use crate::{
         RenderAttachmentQuantitySet, RenderAttachmentSampler,
     },
     postprocessing::PostprocessingShaderTemplate,
-    push_constant::{BasicPushConstantGroup, BasicPushConstantVariant},
+    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::StencilValue,
     rendering_template_source,
 };
@@ -31,7 +31,7 @@ use std::sync::LazyLock;
 #[derive(Clone, Debug)]
 pub struct TemporalAntiAliasingShaderTemplate {
     params_resource_group_id: GPUResourceGroupID,
-    push_constants: BasicPushConstantGroup,
+    immediates: BasicImmediateGroup,
     input_render_attachments: RenderAttachmentInputDescriptionSet,
     output_render_attachments: RenderAttachmentOutputDescriptionSet,
 }
@@ -44,9 +44,7 @@ impl TemporalAntiAliasingShaderTemplate {
     /// Creates a new temporal anti-aliasing shader template using the given
     /// resource group ID for the temporal anti-aliasing parameters.
     pub fn new(params_resource_group_id: GPUResourceGroupID) -> Self {
-        let push_constants = BasicPushConstantGroup::for_fragment([
-            BasicPushConstantVariant::InverseWindowDimensions,
-        ]);
+        let immediates = BasicImmediateGroup::from_iter([BasicImmediate::InverseWindowDimensions]);
 
         let input_render_attachments = RenderAttachmentInputDescriptionSet::new(vec![
             RenderAttachmentInputDescription::default_for(LinearDepth),
@@ -63,7 +61,7 @@ impl TemporalAntiAliasingShaderTemplate {
 
         Self {
             params_resource_group_id,
-            push_constants,
+            immediates,
             input_render_attachments,
             output_render_attachments,
         }
@@ -102,8 +100,8 @@ impl SpecificShaderTemplate for TemporalAntiAliasingShaderTemplate {
 }
 
 impl PostprocessingShaderTemplate for TemporalAntiAliasingShaderTemplate {
-    fn push_constants(&self) -> BasicPushConstantGroup {
-        self.push_constants.clone()
+    fn immediates(&self) -> BasicImmediateGroup {
+        self.immediates.clone()
     }
 
     fn input_render_attachments(&self) -> RenderAttachmentInputDescriptionSet {

@@ -146,7 +146,6 @@ impl CameraGPUResource {
     /// Ensures that the GPU buffer is in sync with the camera manager.
     pub fn sync_with_camera_manager(
         &mut self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         camera: &Camera,
@@ -159,7 +158,7 @@ impl CameraGPUResource {
             || camera.jitter_enabled() != self.jitter_enabled
         {
             self.view_frustum = camera.projection().view_frustum().clone();
-            self.sync_gpu_buffer(graphics_device, staging_belt, command_encoder, camera);
+            self.sync_gpu_buffer(staging_belt, command_encoder, camera);
             self.jitter_enabled = camera.jitter_enabled();
 
             self.camera_version = camera_version;
@@ -167,8 +166,8 @@ impl CameraGPUResource {
         }
     }
 
-    /// Returns the camera rotation quaternion push constant.
-    pub fn camera_rotation_quaternion_push_constant(&self) -> UnitQuaternionC {
+    /// Returns the camera rotation quaternion immediate.
+    pub fn camera_rotation_quaternion_immediate(&self) -> UnitQuaternionC {
         self.view_transform.rotation().compact()
     }
 
@@ -208,7 +207,6 @@ impl CameraGPUResource {
 
     fn sync_gpu_buffer(
         &self,
-        graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         camera: &Camera,
@@ -216,7 +214,6 @@ impl CameraGPUResource {
         let projection_uniform = CameraProjectionUniform::new(camera);
         self.projection_uniform_gpu_buffer
             .encode_update_of_valid_bytes(
-                graphics_device,
                 staging_belt,
                 command_encoder,
                 bytemuck::bytes_of(&projection_uniform),

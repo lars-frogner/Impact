@@ -11,7 +11,11 @@ struct FragmentOutput {
     @location(0) color: vec4f,
 }
 
-var<push_constant> inverseWindowDimensions: vec2f;
+struct Immediates {
+    inverseWindowDimensions: vec2f,
+}
+
+var<immediate> immediates: Immediates;
 
 @group({{input_texture_group}}) @binding({{input_texture_binding}}) var inputTexture: texture_2d<f32>;
 @group({{input_texture_group}}) @binding({{input_sampler_binding}}) var inputSampler: sampler;
@@ -29,13 +33,13 @@ fn computeSymmetricGaussianBlurSampleColor(fragmentCoords: vec2f, offset: f32, w
 }
 
 fn computeHorizontalGaussianBlurSampleColor(fragmentCoords: vec2f, offset: f32, weight: f32) -> vec4f {
-    let sampleTextureCoords = (fragmentCoords + vec2(offset, 0.0)) * inverseWindowDimensions;
+    let sampleTextureCoords = (fragmentCoords + vec2(offset, 0.0)) * immediates.inverseWindowDimensions;
     let sampledInputColor = textureSampleLevel(inputTexture, inputSampler, sampleTextureCoords, 0.0);
     return sampledInputColor * weight;
 }
 
 fn computeVerticalGaussianBlurSampleColor(fragmentCoords: vec2f, offset: f32, weight: f32) -> vec4f {
-    let sampleTextureCoords = (fragmentCoords + vec2(0.0, offset)) * inverseWindowDimensions;
+    let sampleTextureCoords = (fragmentCoords + vec2(0.0, offset)) * immediates.inverseWindowDimensions;
     let sampledInputColor = textureSampleLevel(inputTexture, inputSampler, sampleTextureCoords, 0.0);
     return sampledInputColor * weight;
 }
