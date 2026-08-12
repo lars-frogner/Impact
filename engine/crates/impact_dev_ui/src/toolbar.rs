@@ -20,7 +20,7 @@ impl Toolbar {
             .frame(Frame {
                 ..Frame::side_top_panel(ui.style())
             })
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.toggle_value(&mut config.show_ui_options, "UI options");
 

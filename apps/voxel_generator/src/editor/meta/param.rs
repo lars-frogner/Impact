@@ -1,3 +1,4 @@
+use impact::egui::AsIdSalt;
 use impact::egui::{ComboBox, DragValue, Response, Ui, emath::Numeric};
 use impact::impact_math::hash::Hash64;
 use impact_dev_ui::option_panels::{
@@ -6,7 +7,7 @@ use impact_dev_ui::option_panels::{
 };
 use impact_voxel::generation::sdf::meta::params::{self as core, ParamIdx};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Write, hash::Hash};
+use std::fmt::Write;
 use tinyvec::TinyVec;
 
 #[derive(Clone, Debug)]
@@ -1000,7 +1001,7 @@ impl ParamValueMappingVariant {
 fn distribution_combobox(
     ui: &mut Ui,
     value_type: ParamValueType,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     selected_variant: &mut DistributionVariant,
     changed: &mut bool,
 ) {
@@ -1028,7 +1029,7 @@ fn distribution_combobox(
 
 fn source_controls(
     ui: &mut Ui,
-    id_salt: impl Hash + Copy,
+    id_salt: impl AsIdSalt + Copy,
     source: &mut ValueSource,
     value_type: ParamValueType,
     min_value: f32,
@@ -1082,7 +1083,7 @@ fn source_controls(
 
 fn source_combobox(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     selected_variant: &mut ValueSourceVariant,
     changed: &mut bool,
 ) {
@@ -1110,7 +1111,7 @@ fn source_combobox(
 
 fn param_combobox(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     selected_param_idx: &mut ParamIdx,
     invalid_param_idx: ParamIdx,
     param_names: &[&'static str],
@@ -1147,7 +1148,7 @@ fn param_combobox(
 
 fn mapping_combobox(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     selected_variant: &mut ParamValueMappingVariant,
     changed: &mut bool,
 ) {

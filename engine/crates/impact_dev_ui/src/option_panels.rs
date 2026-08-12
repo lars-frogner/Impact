@@ -4,10 +4,11 @@ pub mod rendering;
 pub mod ui;
 
 use impact::egui::{
-    Align, Color32, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Panel, Response,
-    RichText, ScrollArea, Separator, Slider, Ui, ecolor::linear_u8_from_linear_f32, emath::Numeric,
+    Align, AsIdSalt, Color32, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Panel,
+    Response, RichText, ScrollArea, Separator, Slider, Ui, ecolor::linear_u8_from_linear_f32,
+    emath::Numeric,
 };
-use std::{hash::Hash, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
 #[derive(Clone, Debug)]
 pub struct LabelAndHoverText {
@@ -44,7 +45,7 @@ pub fn option_panel(
             inner_margin,
             ..frame
         })
-        .show_inside(ui, |ui| {
+        .show(ui, |ui| {
             ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {
@@ -54,7 +55,7 @@ pub fn option_panel(
         });
 }
 
-pub fn option_group(ui: &mut Ui, name: impl Hash, add_contents: impl FnOnce(&mut Ui)) {
+pub fn option_group(ui: &mut Ui, name: impl AsIdSalt, add_contents: impl FnOnce(&mut Ui)) {
     with_left_space(ui, LEFT_MARGIN, |ui| {
         ui.spacing_mut().item_spacing.y = SPACING;
         Grid::new(name).show(ui, |ui| {

@@ -18,5 +18,5 @@ fn timing_panel(
         .frame(Frame { fill, ..frame })
         .resizable(false)
         .default_size(default_size)
-        .show_inside(ui, add_contents);
+        .show(ui, add_contents);
 }
