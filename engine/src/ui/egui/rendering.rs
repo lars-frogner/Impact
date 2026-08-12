@@ -51,8 +51,10 @@ impl EguiRenderer {
         let screen_descriptor = Self::screen_descriptor(rendering_surface);
 
         for (texture_id, image_delta) in &input.textures_delta.set {
-            self.renderer
-                .update_texture(device, queue, *texture_id, image_delta);
+            for delta in image_delta {
+                self.renderer
+                    .update_texture(device, queue, *texture_id, delta);
+            }
         }
 
         self.renderer.update_buffers(
