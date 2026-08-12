@@ -73,7 +73,7 @@ impl GraphicsDevice {
         &self.device
     }
 
-    /// Returns  a reference tothe underlying [`wgpu::Queue`].
+    /// Returns a reference to the underlying [`wgpu::Queue`].
     pub fn queue(&self) -> &wgpu::Queue {
         &self.queue
     }
@@ -105,6 +105,7 @@ impl GraphicsDevice {
                 force_fallback_adapter: false,
                 power_preference,
                 compatible_surface,
+                ..Default::default()
             })
             .await;
 
@@ -115,6 +116,7 @@ impl GraphicsDevice {
                     force_fallback_adapter: true,
                     power_preference,
                     compatible_surface,
+                    ..Default::default()
                 })
                 .await
         } else {

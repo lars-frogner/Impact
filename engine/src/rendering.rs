@@ -247,7 +247,7 @@ impl RenderingSystem {
     /// there is no texture to present.
     pub fn present(&mut self) {
         if let Some(surface_texture) = self.surface_texture_to_present.take() {
-            surface_texture.present();
+            self.graphics_device.queue().present(surface_texture);
         }
     }
 

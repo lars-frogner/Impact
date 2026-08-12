@@ -95,8 +95,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
             &pipeline_layout,
             shader,
             &[
-                InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
-                VertexPosition::BUFFER_LAYOUT,
+                Some(InstanceModelLightTransform::BUFFER_LAYOUT.unwrap()),
+                Some(VertexPosition::BUFFER_LAYOUT),
             ],
             &color_target_states,
             // The cubemap projection does not flip the z-axis, so the front
@@ -189,8 +189,8 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 &self.pipeline_layout,
                 shader,
                 &[
-                    InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
-                    VertexPosition::BUFFER_LAYOUT,
+                    Some(InstanceModelLightTransform::BUFFER_LAYOUT.unwrap()),
+                    Some(VertexPosition::BUFFER_LAYOUT),
                 ],
                 &self.color_target_states,
                 INVERTED_FRONT_FACE,
@@ -461,8 +461,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
             &pipeline_layout,
             shader,
             &[
-                InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
-                VertexPosition::BUFFER_LAYOUT,
+                Some(InstanceModelLightTransform::BUFFER_LAYOUT.unwrap()),
+                Some(VertexPosition::BUFFER_LAYOUT),
             ],
             &color_target_states,
             STANDARD_FRONT_FACE,
@@ -553,8 +553,8 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 &self.pipeline_layout,
                 shader,
                 &[
-                    InstanceModelLightTransform::BUFFER_LAYOUT.unwrap(),
-                    VertexPosition::BUFFER_LAYOUT,
+                    Some(InstanceModelLightTransform::BUFFER_LAYOUT.unwrap()),
+                    Some(VertexPosition::BUFFER_LAYOUT),
                 ],
                 &self.color_target_states,
                 STANDARD_FRONT_FACE,

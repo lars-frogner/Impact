@@ -672,7 +672,9 @@ impl CountedGPUBuffer {
         // them
         {
             let buffer_slice = buffer.slice(..);
-            let mut mapped_memory = buffer_slice.get_mapped_range_mut();
+            let mut mapped_memory = buffer_slice
+                .get_mapped_range_mut()
+                .expect("Buffer slice should be valid before mapping");
 
             // Write count to beginning, followed by actual data after the count padding
             mapped_memory
@@ -822,7 +824,7 @@ pub fn map_buffer_slice_to_cpu<'a>(
 
     map_result_receiver.lock().take().unwrap()?;
 
-    Ok(buffer_slice.get_mapped_range())
+    Ok(buffer_slice.get_mapped_range()?)
 }
 
 fn queue_write_to_buffer(

@@ -50,7 +50,7 @@ fn main(
     @builtin(local_invocation_index) localIndex: u32,
 ) {
     // Initialize the bin for this thread to 0
-    workgroupHistogram[localIndex] = 0u;
+    atomicStore(&workgroupHistogram[localIndex], 0u);
     workgroupBarrier();
 
     let dim = vec2u(textureDimensions(preExposedLuminanceTexture));
@@ -71,5 +71,5 @@ fn main(
 
     // Technically there's no chance that two threads write to the same bin
     // here, but different work groups might
-    atomicAdd(&histogram[localIndex], workgroupHistogram[localIndex]);
+    atomicAdd(&histogram[localIndex], atomicLoad(&workgroupHistogram[localIndex]));
 }

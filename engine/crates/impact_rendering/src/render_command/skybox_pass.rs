@@ -93,7 +93,7 @@ impl SkyboxPass {
                     graphics_device.device(),
                     &pipeline_layout,
                     shader,
-                    &[VertexPosition::BUFFER_LAYOUT],
+                    &[Some(VertexPosition::BUFFER_LAYOUT)],
                     &[Some(self.color_target_state.clone())],
                     STANDARD_FRONT_FACE,
                     Some(wgpu::Face::Back),

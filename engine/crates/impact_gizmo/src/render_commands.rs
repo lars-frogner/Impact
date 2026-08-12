@@ -101,11 +101,11 @@ impl GizmoPasses {
         }
     }
 
-    const fn vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 3] {
+    const fn vertex_buffer_layouts() -> [Option<wgpu::VertexBufferLayout<'static>>; 3] {
         [
-            GizmoInstanceFeatures::BUFFER_LAYOUT.unwrap(),
-            VertexPosition::BUFFER_LAYOUT,
-            VertexColor::BUFFER_LAYOUT,
+            Some(GizmoInstanceFeatures::BUFFER_LAYOUT.unwrap()),
+            Some(VertexPosition::BUFFER_LAYOUT),
+            Some(VertexColor::BUFFER_LAYOUT),
         ]
     }
 
@@ -152,7 +152,7 @@ impl GizmoPass {
         graphics_device: &GraphicsDevice,
         pipeline_layout: &wgpu::PipelineLayout,
         shader: &Shader,
-        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
+        vertex_buffer_layouts: &[Option<wgpu::VertexBufferLayout<'_>>],
         color_target_states: &[Option<wgpu::ColorTargetState>],
         obscurability: GizmoObscurability,
     ) -> Self {
@@ -297,7 +297,7 @@ impl GizmoPassPipeline {
         graphics_device: &GraphicsDevice,
         pipeline_layout: &wgpu::PipelineLayout,
         shader: &Shader,
-        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
+        vertex_buffer_layouts: &[Option<wgpu::VertexBufferLayout<'_>>],
         color_target_states: &[Option<wgpu::ColorTargetState>],
         obscurability: GizmoObscurability,
         depth_clipping: GizmoDepthClipping,

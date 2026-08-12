@@ -44,7 +44,7 @@ pub struct GeometryPass {
 #[derive(Debug)]
 struct GeometryPassPipeline {
     shader_template: ModelGeometryShaderTemplate,
-    vertex_buffer_layouts: Vec<wgpu::VertexBufferLayout<'static>>,
+    vertex_buffer_layouts: Vec<Option<wgpu::VertexBufferLayout<'static>>>,
     pipeline_layout: wgpu::PipelineLayout,
     pipeline: wgpu::RenderPipeline,
     vertex_attributes: VertexAttributeSet,
@@ -263,7 +263,7 @@ impl GeometryPass {
         shader_manager: &ShaderManager,
         shader_template: &ModelGeometryShaderTemplate,
         pipeline_layout: &wgpu::PipelineLayout,
-        vertex_buffer_layouts: &[wgpu::VertexBufferLayout<'_>],
+        vertex_buffer_layouts: &[Option<wgpu::VertexBufferLayout<'_>>],
         color_target_states: &[Option<wgpu::ColorTargetState>],
         polygon_mode: wgpu::PolygonMode,
         depth_stencil_state: wgpu::DepthStencilState,
@@ -289,7 +289,7 @@ impl GeometryPass {
         gpu_resources: &impl BasicGPUResources,
         model_id: &ModelID,
         vertex_attributes: VertexAttributeSet,
-    ) -> Result<Vec<wgpu::VertexBufferLayout<'static>>> {
+    ) -> Result<Vec<Option<wgpu::VertexBufferLayout<'static>>>> {
         let mut layouts = Vec::with_capacity(8);
 
         let instance_feature_buffers = gpu_resources
@@ -297,7 +297,9 @@ impl GeometryPass {
             .get_model_buffers(model_id)
             .ok_or_else(|| anyhow!("Missing instance GPU buffers for model {}", model_id))?;
 
-        layouts.push(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap());
+        layouts.push(Some(
+            InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap(),
+        ));
 
         if let Some(material_property_values_feature_type_id) = gpu_resources
             .material()
@@ -315,7 +317,9 @@ impl GeometryPass {
                 })
                 .ok_or_else(|| anyhow!("Missing material GPU buffer for model {}", model_id))?;
 
-            layouts.push(material_property_buffer.vertex_buffer_layout().clone());
+            layouts.push(Some(
+                material_property_buffer.vertex_buffer_layout().clone(),
+            ));
         }
 
         let mesh_id = model_id.triangle_mesh_id();
@@ -325,7 +329,11 @@ impl GeometryPass {
             .get(mesh_id)
             .ok_or_else(|| anyhow!("Missing GPU resources for mesh {}", mesh_id))?;
 
-        layouts.extend(mesh_gpu_resources.request_vertex_buffer_layouts(vertex_attributes)?);
+        layouts.extend(
+            mesh_gpu_resources
+                .request_vertex_buffer_layouts(vertex_attributes)?
+                .map(Some),
+        );
 
         Ok(layouts)
     }

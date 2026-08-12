@@ -323,6 +323,7 @@ impl WindowRenderingSurface {
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: Vec::new(),
+            color_space: wgpu::SurfaceColorSpace::Auto,
             desired_maximum_frame_latency: 2,
         })
     }

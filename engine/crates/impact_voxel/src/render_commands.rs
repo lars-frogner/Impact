@@ -673,9 +673,9 @@ impl VoxelGeometryPipeline {
         let shader = &shader_manager.rendering_shaders[&shader_template.shader_id()];
 
         let vertex_buffer_layouts = &[
-            InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap(),
-            VoxelMeshIndex::BUFFER_LAYOUT,
-            VoxelMeshIndexMaterials::BUFFER_LAYOUT,
+            Some(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap()),
+            Some(VoxelMeshIndex::BUFFER_LAYOUT),
+            Some(VoxelMeshIndexMaterials::BUFFER_LAYOUT),
         ];
 
         render_command::create_render_pipeline(

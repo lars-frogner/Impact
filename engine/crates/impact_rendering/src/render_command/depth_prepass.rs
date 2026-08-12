@@ -88,8 +88,8 @@ impl DepthPrepass {
             pipeline_layout,
             shader,
             &[
-                InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap(),
-                VertexPosition::BUFFER_LAYOUT,
+                Some(InstanceModelViewTransformWithPrevious::BUFFER_LAYOUT.unwrap()),
+                Some(VertexPosition::BUFFER_LAYOUT),
             ],
             &[],
             STANDARD_FRONT_FACE,
