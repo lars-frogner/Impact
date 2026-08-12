@@ -1,6 +1,7 @@
 [advisories]
 ignore = [
     { id = "RUSTSEC-2024-0436", reason = "some dependencies still use old paste crate" },
+    { id = "RUSTSEC-2026-0192", reason = "some dependencies still use old ttf-parser crate" },
 ]
 
 [licenses]
@@ -11,7 +12,6 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
-    "CC0-1.0",
     "Zlib",
     "OFL-1.1",
     "Ubuntu-font-1.0",

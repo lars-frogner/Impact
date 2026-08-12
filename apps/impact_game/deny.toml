@@ -1,6 +1,7 @@
 [advisories]
 ignore = [
     { id = "RUSTSEC-2024-0436", reason = "some dependencies still use old paste crate" },
+    { id = "RUSTSEC-2026-0192", reason = "some dependencies still use old ttf-parser crate" },
 ]
 
 [licenses]

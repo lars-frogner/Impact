@@ -1,9 +1,9 @@
 [licenses]
 allow = [
     "Apache-2.0",
+    "bzip2-1.0.6",
     "MIT",
     "Unicode-3.0",
-    "BSD-3-Clause",
     "CC0-1.0",
     "Zlib",
     "CDLA-Permissive-2.0",

@@ -10,7 +10,6 @@ allow = [
     "Unicode-3.0",
     "BSD-2-Clause",
     "ISC",
-    "CC0-1.0",
     "Zlib",
     "UPL-1.0",
 ]
