@@ -16,7 +16,7 @@ use impact_math::{
     point::{Point3, Point3C},
     quaternion::UnitQuaternion,
     transform::Similarity3,
-    vector::{UnitVector3, Vector3},
+    vector::{UnitVector3, Vector2, Vector3},
 };
 use simdnoise::{NoiseBuilder, Settings, SimplexSettings};
 use std::{f32, mem};
@@ -65,6 +65,7 @@ pub enum SDFNode {
     Sphere(SphereSDF),
     Capsule(CapsuleSDF),
     Box(BoxSDF),
+    Tetrahedron(TetrahedronSDF),
 
     // Transforms
     Translation(SDFTranslation),
@@ -121,6 +122,14 @@ pub struct CapsuleSDF {
 #[derive(Clone, Debug)]
 pub struct BoxSDF {
     half_extents: Vector3,
+}
+
+/// Generator for a signed distance field representing a tetrahedron with two
+/// opposite horizontal edges: one along the x-axis at `y = 0` and another along
+/// the z-axis at `y = height`. Both edges have a length of `2 * height`.
+#[derive(Clone, Debug)]
+pub struct TetrahedronSDF {
+    half_height: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -280,7 +289,10 @@ impl<A: Allocator> SDFGenerator<A> {
                             operation_stack.push(BuildOperation::Process(node_id));
 
                             match &nodes[node_idx] {
-                                SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {}
+                                SDFNode::Sphere(_)
+                                | SDFNode::Capsule(_)
+                                | SDFNode::Box(_)
+                                | SDFNode::Tetrahedron(_) => {}
                                 SDFNode::Translation(SDFTranslation { child_id, .. })
                                 | SDFNode::Rotation(SDFRotation { child_id, .. })
                                 | SDFNode::Scaling(SDFScaling { child_id, .. })
@@ -339,6 +351,10 @@ impl<A: Allocator> SDFGenerator<A> {
                             }
                             SDFNode::Box(box_generator) => {
                                 domains[node_idx] = box_generator.domain_bounds();
+                                leaf_counts[node_idx] = 1;
+                            }
+                            SDFNode::Tetrahedron(tetrahedron_generator) => {
+                                domains[node_idx] = tetrahedron_generator.domain_bounds();
                                 leaf_counts[node_idx] = 1;
                             }
                             &SDFNode::Translation(SDFTranslation {
@@ -459,7 +475,10 @@ impl<A: Allocator> SDFGenerator<A> {
                     // Keep track of where the top of an operation stack would
                     // be during an unrolled traversal from children to parents
                     match node {
-                        SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {
+                        SDFNode::Sphere(_)
+                        | SDFNode::Capsule(_)
+                        | SDFNode::Box(_)
+                        | SDFNode::Tetrahedron(_) => {
                             stack_top += 1;
                             if stack_top > max_stack_top {
                                 max_stack_top = stack_top;
@@ -521,7 +540,10 @@ impl<A: Allocator> SDFGenerator<A> {
             node.domain_with_margin = node.domain_with_margin.expanded_about_center(margin);
 
             match &node.node {
-                SDFNode::Sphere(_) | SDFNode::Capsule(_) | SDFNode::Box(_) => {
+                SDFNode::Sphere(_)
+                | SDFNode::Capsule(_)
+                | SDFNode::Box(_)
+                | SDFNode::Tetrahedron(_) => {
                     stack_top = stack_top.saturating_sub(1);
                 }
                 SDFNode::Translation(SDFTranslation { translation, .. }) => {
@@ -742,6 +764,34 @@ impl<A: Allocator> SDFGenerator<A> {
 
                     stack_top += 1;
                 }
+                SDFNode::Tetrahedron(tetrahedron_generator) => {
+                    let block_aabb_in_node_space =
+                        block_aabb_in_root_space.aabb_of_transformed(&node.transform_to_node_space);
+
+                    if node
+                        .domain_with_margin
+                        .box_lies_outside(&block_aabb_in_node_space)
+                    {
+                        buffers.signed_distance_stack[stack_top].fill(node.domain_margin);
+                    } else if tetrahedron_generator
+                        .expanded_interior_domain_bounds(-node.domain_margin)
+                        .contains_box(&block_aabb_in_node_space)
+                    {
+                        buffers.signed_distance_stack[stack_top].fill(-node.domain_margin);
+                    } else {
+                        update_signed_distances_for_block::<SIZE, COUNT>(
+                            &mut buffers.signed_distance_stack[stack_top],
+                            &node.transform_to_node_space,
+                            block_origin_in_root_space,
+                            &|signed_distance, position_in_node_space| {
+                                *signed_distance = tetrahedron_generator
+                                    .compute_signed_distance(position_in_node_space);
+                            },
+                        );
+                    }
+
+                    stack_top += 1;
+                }
                 SDFNode::Translation(_) | SDFNode::Rotation(_) => {}
                 SDFNode::Scaling(SDFScaling { scaling, .. }) => {
                     debug_assert!(stack_top >= 1);
@@ -936,6 +986,19 @@ impl<A: Allocator> SDFGenerator<A> {
 
                     stack_top += 1;
                 }
+                SDFNode::Tetrahedron(tetrahedron_generator) => {
+                    update_signed_distances_for_block::<SIZE, COUNT>(
+                        &mut buffers.signed_distance_stack[stack_top],
+                        &node.transform_to_node_space,
+                        block_origin_in_root_space,
+                        &|signed_distance, position_in_node_space| {
+                            *signed_distance = tetrahedron_generator
+                                .compute_signed_distance(position_in_node_space);
+                        },
+                    );
+
+                    stack_top += 1;
+                }
                 SDFNode::Translation(_) | SDFNode::Rotation(_) => {}
                 SDFNode::Scaling(SDFScaling { scaling, .. }) => {
                     debug_assert!(stack_top >= 1);
@@ -1071,6 +1134,11 @@ impl SDFNode {
     #[inline]
     pub fn new_box(extents: [f32; 3]) -> Self {
         Self::Box(BoxSDF::new(extents))
+    }
+
+    #[inline]
+    pub fn new_tetrahedron(height: f32) -> Self {
+        Self::Tetrahedron(TetrahedronSDF::new(height))
     }
 
     #[inline]
@@ -1287,7 +1355,63 @@ impl BoxSDF {
     #[inline]
     pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
         let q = position_in_node_space.as_vector().component_abs() - self.half_extents;
-        q.component_max(&Vector3::zeros()).norm() + f32::min(q.max_component(), 0.0)
+        q.component_max(&Vector3::zeros()).norm() + q.max_component().min(0.0)
+    }
+}
+
+impl TetrahedronSDF {
+    /// Creates a new generator for a tetrahedron with the given height (in
+    /// voxels).
+    #[inline]
+    pub fn new(height: f32) -> Self {
+        assert!(height >= 0.0);
+        Self {
+            half_height: 0.5 * height,
+        }
+    }
+
+    #[inline]
+    pub fn height(&self) -> f32 {
+        2.0 * self.half_height
+    }
+
+    #[inline]
+    pub fn domain_bounds(&self) -> AxisAlignedBox {
+        let height = self.height();
+        AxisAlignedBox::new(
+            Point3::new(-height, 0.0, -height),
+            Point3::new(height, height, height),
+        )
+    }
+
+    #[inline]
+    fn expanded_interior_domain_bounds(&self, margin: f32) -> AxisAlignedBox {
+        // The box spans the middle third of the height, where the tetrahedron
+        // is widest in both horizontal directions at once: the faces meeting at
+        // the top edge are `height / 3` away along z at `y = height / 3`, and
+        // the faces meeting at the base edge are `height / 3` away along x at
+        // `y = 2 * height / 3`. The signed distance below grows by one per unit
+        // along z but only by one per two units along x, hence the asymmetric
+        // margins.
+        let height = self.height();
+        let third_height = height / 3.0;
+        let half_x_extent = third_height + 2.0 * margin;
+        let half_z_extent = third_height + margin;
+        AxisAlignedBox::new(
+            Point3::new(-half_x_extent, third_height, -half_z_extent),
+            Point3::new(half_x_extent, 2.0 * third_height, half_z_extent),
+        )
+    }
+
+    #[inline]
+    pub fn compute_signed_distance(&self, position_in_node_space: &Point3) -> f32 {
+        let q = position_in_node_space.as_vector().component_abs();
+        let y = position_in_node_space.y();
+        let d1 = q.z() - y.max(0.0);
+        let d2 =
+            (0.5 * q.xy().component_sum()).max(0.0) - self.half_height.min(self.half_height + y);
+        let d = Vector2::new(d1, d2);
+        d.component_max(&Vector2::same(0.005)).norm() + d.max_component().min(0.0)
     }
 }
 

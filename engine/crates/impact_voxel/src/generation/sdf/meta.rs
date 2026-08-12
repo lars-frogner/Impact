@@ -19,7 +19,7 @@ use impact_containers::FixedQueue;
 use impact_geometry::{Sphere, compute_uniformly_distributed_radial_directions};
 use impact_math::{
     angle::{Angle, Degrees},
-    consts::f32::{PI, TWO_PI},
+    consts::f32::{FRAC_1_SQRT_2, PI, TWO_PI},
     point::Point3,
     quaternion::UnitQuaternion,
     random::splitmix,
@@ -42,6 +42,7 @@ pub enum MetaSDFNode {
     Spheres(MetaSpheres),
     Capsules(MetaCapsules),
     Boxes(MetaBoxes),
+    Tetrahedra(MetaTetrahedra),
 
     // Basic instance transforms
     Translation(MetaTranslation),
@@ -112,6 +113,7 @@ enum InstanceShape {
     Sphere(SphereShape),
     Capsule(CapsuleShape),
     Box(BoxShape),
+    Tetrahedron(TetrahedronShape),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -136,6 +138,14 @@ struct BoxShape {
     extent_x: f32,
     extent_y: f32,
     extent_z: f32,
+    center_x: f32,
+    center_y: f32,
+    center_z: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TetrahedronShape {
+    height: f32,
     center_x: f32,
     center_y: f32,
     center_z: f32,
@@ -253,6 +263,39 @@ define_meta_node_params! {
         extent_x: f32,
         extent_y: f32,
         extent_z: f32,
+        center_x: f32,
+        center_y: f32,
+        center_z: f32,
+    }
+}
+
+/// A set of tetrahedron instances, each having an identity transform.
+///
+/// Output: `Instances`
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct MetaTetrahedra {
+    /// Height from the base edge to the top edge, in voxels.
+    pub height: ContParamSpec,
+    /// Tetrahedron base edge center x-coordinate, in voxels.
+    pub center_x: ContParamSpec,
+    /// Tetrahedron base edge center y-coordinate, in voxels.
+    pub center_y: ContParamSpec,
+    /// Tetrahedron base edge center z-coordinate, in voxels.
+    pub center_z: ContParamSpec,
+    /// Number of tetrahedra to generate.
+    pub count: u32,
+    /// Seed for generating randomized height values.
+    pub seed: u32,
+    /// How to sample parameters from distributions when there are multiple
+    /// instances.
+    pub sampling: ParameterSamplingMode,
+}
+
+define_meta_node_params! {
+    MetaTetrahedra,
+    struct MetaTetrahedronInstanceParams {
+        height: f32,
         center_x: f32,
         center_y: f32,
         center_z: f32,
@@ -792,7 +835,8 @@ impl<A: Allocator> MetaSDFGraph<A> {
                                 MetaSDFNode::Points(_)
                                 | MetaSDFNode::Spheres(_)
                                 | MetaSDFNode::Capsules(_)
-                                | MetaSDFNode::Boxes(_) => {}
+                                | MetaSDFNode::Boxes(_)
+                                | MetaSDFNode::Tetrahedra(_) => {}
                                 MetaSDFNode::Translation(MetaTranslation { child_id, .. })
                                 | MetaSDFNode::Rotation(MetaRotation { child_id, .. })
                                 | MetaSDFNode::Scaling(MetaScaling { child_id, .. })
@@ -1029,6 +1073,7 @@ impl MetaSDFNode {
             Self::Spheres(MetaSpheres { seed, .. }) => combine_seeded_leaf(0x01, seed),
             Self::Capsules(MetaCapsules { seed, .. }) => combine_seeded_leaf(0x02, seed),
             Self::Boxes(MetaBoxes { seed, .. }) => combine_seeded_leaf(0x03, seed),
+            Self::Tetrahedra(MetaTetrahedra { seed, .. }) => combine_seeded_leaf(0x04, seed),
             Self::Translation(MetaTranslation { seed, child_id, .. }) => {
                 combine_seeded_unary(0x10, seed, child_id)
             }
@@ -1115,6 +1160,9 @@ impl MetaSDFNode {
             Self::Boxes(node) => node
                 .resolve(arena, scale_factor, seed)
                 .context("Failed to resolve Boxes node"),
+            Self::Tetrahedra(node) => node
+                .resolve(arena, scale_factor, seed)
+                .context("Failed to resolve Tetrahedra node"),
             Self::Translation(node) => node
                 .resolve(arena, outputs, scale_factor, seed)
                 .context("Failed to resolve Translation node"),
@@ -1285,6 +1333,39 @@ impl MetaBoxes {
                     extent_x: params.extent_x * scale_factor,
                     extent_y: params.extent_y * scale_factor,
                     extent_z: params.extent_z * scale_factor,
+                    center_x: params.center_x * scale_factor,
+                    center_y: params.center_y * scale_factor,
+                    center_z: params.center_z * scale_factor,
+                }),
+                transform: Similarity3::identity(),
+            });
+
+            if self.sampling == ParameterSamplingMode::PerInstance && idx + 1 < self.count {
+                params = self.sample_params(&mut rng)?;
+            }
+        }
+
+        Ok(MetaSDFNodeOutput::Instances(instances))
+    }
+}
+
+impl MetaTetrahedra {
+    fn resolve<A: Allocator>(
+        &self,
+        arena: A,
+        scale_factor: f32,
+        seed: u64,
+    ) -> Result<MetaSDFNodeOutput<A>> {
+        let mut rng = create_param_rng(seed);
+
+        let mut instances = AVec::with_capacity_in(self.count as usize, arena);
+
+        let mut params = self.sample_params(&mut rng)?;
+
+        for idx in 0..self.count {
+            instances.push(Instance {
+                shape: InstanceShape::Tetrahedron(TetrahedronShape {
+                    height: params.height * scale_factor,
                     center_x: params.center_x * scale_factor,
                     center_y: params.center_y * scale_factor,
                     center_z: params.center_z * scale_factor,
@@ -1762,6 +1843,16 @@ impl MetaRayTranslationToSurface {
                 let radius = 0.5 * extent_x.min(extent_y).min(extent_z);
                 Sphere::new(Point3::new(0.0, 0.5 * extent_y - radius, 0.0), radius)
             }
+            &InstanceShape::Tetrahedron(TetrahedronShape { height, .. }) => {
+                // Use the largest inscribed sphere rather than the actual
+                // tetrahedron. It is centered halfway up, where the slanted
+                // faces meeting at the base edge are equally far away as those
+                // meeting at the top edge.
+                Sphere::new(
+                    Point3::new(0.0, 0.5 * height, 0.0),
+                    0.5 * FRAC_1_SQRT_2 * height,
+                )
+            }
         };
 
         let mut translated_subject_instances =
@@ -1975,6 +2066,15 @@ impl MetaSDFInstantiation {
                     center_z,
                 }) => (
                     graph.add_node(SDFNode::new_box([extent_x, extent_y, extent_z])),
+                    Point3::new(center_x, center_y, center_z),
+                ),
+                InstanceShape::Tetrahedron(TetrahedronShape {
+                    height,
+                    center_x,
+                    center_y,
+                    center_z,
+                }) => (
+                    graph.add_node(SDFNode::new_tetrahedron(height)),
                     Point3::new(center_x, center_y, center_z),
                 ),
             };

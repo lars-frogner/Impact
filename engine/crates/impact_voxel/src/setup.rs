@@ -136,6 +136,21 @@ define_setup_type! {
 }
 
 define_setup_type! {
+    /// An object made of voxels in a tetrahedral configuration. The tetrahedron
+    /// has a base edge aligned with the x-axis and a top edge aligned with the
+    /// z-axis, both twice as long as the height.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct VoxelTetrahedron {
+        /// The extent of a single voxel.
+        pub voxel_extent: f32,
+        /// The number of voxels from the base edge to the top edge.
+        pub height: f32,
+    }
+}
+
+define_setup_type! {
     /// An object made of voxels in a configuration described by the smooth
     /// union of two spheres.
     #[roc(parents = "Setup")]
@@ -459,6 +474,46 @@ impl VoxelCapsule {
             self.segment_length_in_voxels(),
             self.radius_in_voxels(),
         ))
+    }
+}
+
+#[roc]
+impl VoxelTetrahedron {
+    /// Defines a tetrahedron with the given voxel extent and number of voxels
+    /// from its base edge to its top edge. The base edge is aligned with the
+    /// x-axis and the top edge with the z-axis, and both are twice as long as
+    /// the height.
+    ///
+    /// # Panics
+    /// - If the voxel extent is negative.
+    /// - If the height is negative.
+    #[roc(body = r#"
+    # These can be uncommented once https://github.com/roc-lang/roc/issues/5680 is fixed
+    # expect voxel_extent > 0.0
+    # expect height >= 0.0
+    {
+        voxel_extent,
+        height,
+    }"#)]
+    pub fn new(voxel_extent: f32, height: f32) -> Self {
+        assert!(voxel_extent > 0.0);
+        assert!(height >= 0.0);
+        Self {
+            voxel_extent,
+            height,
+        }
+    }
+
+    pub fn voxel_extent(&self) -> f32 {
+        self.voxel_extent
+    }
+
+    pub fn height_in_voxels(&self) -> f32 {
+        self.height
+    }
+
+    pub fn add<A: Allocator>(&self, graph: &mut SDFGraph<A>) -> SDFNodeID {
+        graph.add_node(SDFNode::new_tetrahedron(self.height_in_voxels()))
     }
 }
 

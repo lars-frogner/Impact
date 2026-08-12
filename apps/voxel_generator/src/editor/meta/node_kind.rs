@@ -14,8 +14,8 @@ use impact_voxel::generation::sdf::meta::{
     MetaRotationToGradient, MetaSDFGroupUnion, MetaSDFInstantiation, MetaSDFIntersection,
     MetaSDFNode, MetaSDFNodeID, MetaSDFSubtraction, MetaSDFUnion, MetaScaling, MetaSimilarity,
     MetaSphereSurfaceTransforms, MetaSpheres, MetaStochasticSelection,
-    MetaStratifiedGridTransforms, MetaTransformApplication, MetaTranslation, ParameterSamplingMode,
-    RayTranslationAnchor, SphereSurfaceRotation,
+    MetaStratifiedGridTransforms, MetaTetrahedra, MetaTransformApplication, MetaTranslation,
+    ParameterSamplingMode, RayTranslationAnchor, SphereSurfaceRotation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +40,7 @@ pub enum MetaNodeKind {
     Spheres,
     Capsules,
     Boxes,
+    Tetrahedra,
     Translation,
     Rotation,
     Scaling,
@@ -422,6 +423,92 @@ impl SpecificMetaNodeKind for MetaBoxes {
             count: (&params[6]).into(),
             seed: (&params[7]).into(),
             sampling: ParameterSamplingMode::try_from_str(params[8].enum_value()).unwrap(),
+        }))
+    }
+}
+
+impl SpecificMetaNodeKind for MetaTetrahedra {
+    const LABEL: LabelAndHoverText = LabelAndHoverText {
+        label: "Tetrahedra",
+        hover_text: "A set of tetrahedron instances, each having an identity transform. Each tetrahedron has a base edge along the x-axis and a top edge along the z-axis, both with a length of twice the height.",
+    };
+    const PARENT_PORT_KIND: MetaParentPortKind = MetaParentPortKind::Instances;
+    const CHILD_PORT_KINDS: MetaChildPortKinds = leaf_child_port_kind();
+
+    fn params() -> MetaNodeParams {
+        let mut params = MetaNodeParams::new();
+        params.push(
+            MetaDistributedParam::new_fixed_constant_continuous_value(
+                LabelAndHoverText {
+                    label: "Height",
+                    hover_text: "Height from the base edge to the top edge, in voxels.",
+                },
+                60.0,
+            )
+            .with_min_value(0.0),
+        );
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center x",
+                hover_text: "Tetrahedron base edge center x-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center y",
+                hover_text: "Tetrahedron base edge center y-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaDistributedParam::new_fixed_constant_continuous_value(
+            LabelAndHoverText {
+                label: "Center z",
+                hover_text: "Tetrahedron base edge center z-coordinate, in voxels.",
+            },
+            0.0,
+        ));
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Count",
+                hover_text: "Number of tetrahedra to generate.",
+            },
+            1,
+        ));
+        params.push(MetaUIntParam::new(
+            LabelAndHoverText {
+                label: "Seed",
+                hover_text: "Seed for generating randomized height values.",
+            },
+            0,
+        ));
+        params.push(
+            MetaEnumParam::new(
+                LabelAndHoverText {
+                    label: "Sampling",
+                    hover_text: "How to sample parameters from distributions when there are multiple instances.",
+                },
+                 EnumParamVariants::from_iter(["Only once", "Per instance"]),
+                "Only once",
+            )
+        );
+        params
+    }
+
+    fn build<A: Allocator>(
+        _id_map: &NoHashMap<MetaNodeID, MetaSDFNodeID, A>,
+        _children: &[Option<MetaNodeLink>],
+        params: &[MetaNodeParam],
+    ) -> Option<MetaSDFNode> {
+        assert_eq!(params.len(), 7);
+        Some(MetaSDFNode::Tetrahedra(MetaTetrahedra {
+            height: (&params[0]).into(),
+            center_x: (&params[1]).into(),
+            center_y: (&params[2]).into(),
+            center_z: (&params[3]).into(),
+            count: (&params[4]).into(),
+            seed: (&params[5]).into(),
+            sampling: ParameterSamplingMode::try_from_str(params[6].enum_value()).unwrap(),
         }))
     }
 }
@@ -1463,12 +1550,13 @@ impl SpecificMetaNodeKind for MetaSDFGroupUnion {
 }
 
 impl MetaNodeKind {
-    pub const fn all_non_root() -> [Self; 21] {
+    pub const fn all_non_root() -> [Self; 22] {
         [
             Self::Points,
             Self::Spheres,
             Self::Capsules,
             Self::Boxes,
+            Self::Tetrahedra,
             Self::Translation,
             Self::Rotation,
             Self::Scaling,
@@ -1496,7 +1584,7 @@ impl MetaNodeKind {
     pub const fn group(&self) -> MetaNodeKindGroup {
         match self {
             Self::Output => MetaNodeKindGroup::Root,
-            Self::Points | Self::Spheres | Self::Capsules | Self::Boxes => {
+            Self::Points | Self::Spheres | Self::Capsules | Self::Boxes | Self::Tetrahedra => {
                 MetaNodeKindGroup::InstancePrimitives
             }
             Self::Translation | Self::Rotation | Self::Scaling | Self::Similarity => {
@@ -1526,6 +1614,7 @@ impl MetaNodeKind {
             Self::Spheres => MetaSpheres::LABEL,
             Self::Capsules => MetaCapsules::LABEL,
             Self::Boxes => MetaBoxes::LABEL,
+            Self::Tetrahedra => MetaTetrahedra::LABEL,
             Self::Translation => MetaTranslation::LABEL,
             Self::Rotation => MetaRotation::LABEL,
             Self::Scaling => MetaScaling::LABEL,
@@ -1553,6 +1642,7 @@ impl MetaNodeKind {
             Self::Spheres => MetaSpheres::PARENT_PORT_KIND,
             Self::Capsules => MetaCapsules::PARENT_PORT_KIND,
             Self::Boxes => MetaBoxes::PARENT_PORT_KIND,
+            Self::Tetrahedra => MetaTetrahedra::PARENT_PORT_KIND,
             Self::Translation => MetaTranslation::PARENT_PORT_KIND,
             Self::Rotation => MetaRotation::PARENT_PORT_KIND,
             Self::Scaling => MetaScaling::PARENT_PORT_KIND,
@@ -1582,6 +1672,7 @@ impl MetaNodeKind {
             Self::Spheres => MetaSpheres::CHILD_PORT_KINDS,
             Self::Capsules => MetaCapsules::CHILD_PORT_KINDS,
             Self::Boxes => MetaBoxes::CHILD_PORT_KINDS,
+            Self::Tetrahedra => MetaTetrahedra::CHILD_PORT_KINDS,
             Self::Translation => MetaTranslation::CHILD_PORT_KINDS,
             Self::Rotation => MetaRotation::CHILD_PORT_KINDS,
             Self::Scaling => MetaScaling::CHILD_PORT_KINDS,
@@ -1623,6 +1714,7 @@ impl MetaNodeKind {
             Self::Spheres => MetaSpheres::params(),
             Self::Capsules => MetaCapsules::params(),
             Self::Boxes => MetaBoxes::params(),
+            Self::Tetrahedra => MetaTetrahedra::params(),
             Self::Translation => MetaTranslation::params(),
             Self::Rotation => MetaRotation::params(),
             Self::Scaling => MetaScaling::params(),
@@ -1655,6 +1747,7 @@ impl MetaNodeKind {
             Self::Spheres => MetaSpheres::build(id_map, children, params),
             Self::Capsules => MetaCapsules::build(id_map, children, params),
             Self::Boxes => MetaBoxes::build(id_map, children, params),
+            Self::Tetrahedra => MetaTetrahedra::build(id_map, children, params),
             Self::Translation => MetaTranslation::build(id_map, children, params),
             Self::Rotation => MetaRotation::build(id_map, children, params),
             Self::Scaling => MetaScaling::build(id_map, children, params),

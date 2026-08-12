@@ -376,7 +376,7 @@ pub mod fuzzing {
     use super::*;
     use crate::{
         generation::{
-            sdf::{BoxSDF, CapsuleSDF, SDFNode, SphereSDF},
+            sdf::{BoxSDF, CapsuleSDF, SDFNode, SphereSDF, TetrahedronSDF},
             voxel_type::{GradientNoiseVoxelTypeGenerator, SameVoxelTypeGenerator},
         },
         voxel_types::VoxelTypeRegistry,
@@ -393,6 +393,7 @@ pub mod fuzzing {
         Sphere(SphereSDF),
         Capsule(CapsuleSDF),
         Box(BoxSDF),
+        Tetrahedron(TetrahedronSDF),
     }
 
     impl<'a> Arbitrary<'a> for SDFVoxelGenerator<Global> {
@@ -424,6 +425,9 @@ pub mod fuzzing {
                 ArbitrarySDFGeneratorNode::Sphere(generator) => SDFNode::Sphere(generator),
                 ArbitrarySDFGeneratorNode::Capsule(generator) => SDFNode::Capsule(generator),
                 ArbitrarySDFGeneratorNode::Box(generator) => SDFNode::Box(generator),
+                ArbitrarySDFGeneratorNode::Tetrahedron(generator) => {
+                    SDFNode::Tetrahedron(generator)
+                }
             };
             Ok(Self::new_in(Global, &[primitive], 0).unwrap())
         }
@@ -474,6 +478,19 @@ pub mod fuzzing {
 
         fn size_hint(_depth: usize) -> (usize, Option<usize>) {
             let size = 6 * mem::size_of::<usize>();
+            (size, Some(size))
+        }
+    }
+
+    impl Arbitrary<'_> for TetrahedronSDF {
+        fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
+            let height =
+                u.arbitrary_len::<usize>()?.clamp(1, MAX_SIZE - 1) as f32 + arbitrary_norm_f32(u)?;
+            Ok(Self::new(height))
+        }
+
+        fn size_hint(_depth: usize) -> (usize, Option<usize>) {
+            let size = 2 * mem::size_of::<usize>();
             (size, Some(size))
         }
     }

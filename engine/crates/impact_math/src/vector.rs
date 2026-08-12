@@ -206,6 +206,12 @@ impl Vector2 {
         Self::wrap(self.inner.abs())
     }
 
+    /// Computes the sum of the two vector components.
+    #[inline]
+    pub fn component_sum(&self) -> f32 {
+        self.inner.element_sum()
+    }
+
     /// Multiplies each component by the corresponding component in another
     /// vector.
     #[inline]

@@ -1,13 +1,14 @@
 use super::{AtomicFloatParam, AtomicNode, AtomicNodeParams, AtomicPortConfig, AtomicUIntParam};
 use impact_voxel::generation::sdf::{
     BoxSDF, CapsuleSDF, MultifractalNoiseSDFModifier, SDFIntersection, SDFRotation, SDFScaling,
-    SDFSubtraction, SDFTranslation, SDFUnion, SphereSDF,
+    SDFSubtraction, SDFTranslation, SDFUnion, SphereSDF, TetrahedronSDF,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AtomicNodeKind {
     Output,
     Box,
+    Tetrahedron,
     Sphere,
     Capsule,
     Translation,
@@ -40,6 +41,12 @@ impl AtomicNode {
         params.push(AtomicFloatParam::new("Extent y", extents[1]).into());
         params.push(AtomicFloatParam::new("Extent z", extents[2]).into());
         Self::new_leaf(AtomicNodeKind::Box, params)
+    }
+
+    pub fn for_tetrahedron(node: &TetrahedronSDF) -> Self {
+        let mut params = AtomicNodeParams::new();
+        params.push(AtomicFloatParam::new("Height", node.height()).into());
+        Self::new_leaf(AtomicNodeKind::Tetrahedron, params)
     }
 
     pub fn for_translation(node: &SDFTranslation) -> Self {
@@ -117,6 +124,7 @@ impl AtomicNodeKind {
             Self::Sphere => "Sphere",
             Self::Capsule => "Capsule",
             Self::Box => "Box",
+            Self::Tetrahedron => "Tetrahedron",
             Self::Translation => "Translation",
             Self::Rotation => "Rotation",
             Self::Scaling => "Scaling",
@@ -130,7 +138,9 @@ impl AtomicNodeKind {
     pub fn port_config(&self) -> AtomicPortConfig {
         match self {
             Self::Output => AtomicPortConfig::root(),
-            Self::Sphere | Self::Capsule | Self::Box => AtomicPortConfig::leaf(),
+            Self::Sphere | Self::Capsule | Self::Box | Self::Tetrahedron => {
+                AtomicPortConfig::leaf()
+            }
             Self::Translation | Self::Rotation | Self::Scaling | Self::MultifractalNoise => {
                 AtomicPortConfig::unary()
             }
