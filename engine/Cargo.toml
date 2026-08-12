@@ -247,11 +247,11 @@ arbitrary = { workspace = true, optional = true }
 bitflags = { workspace = true }
 bytemuck = { workspace = true }
 clap = { workspace = true, optional = true }
-egui = { version = "0.33", optional = true }
-egui-wgpu = { version = "0.33", optional = true, default-features = false, features = [
+egui = { version = "0.34", optional = true }
+egui-wgpu = { version = "0.34", optional = true, default-features = false, features = [
     "macos-window-resize-jitter-fix",
 ] }
-egui-winit = { version = "0.33", optional = true, default-features = false }
+egui-winit = { version = "0.34", optional = true, default-features = false }
 impact_alloc = { path = "crates/impact_alloc" }
 impact_camera = { path = "crates/impact_camera", features = ["ecs"] }
 impact_containers = { path = "crates/impact_containers" }

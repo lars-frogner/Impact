@@ -4,9 +4,8 @@ pub mod rendering;
 pub mod ui;
 
 use impact::egui::{
-    Align, Color32, Context, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Response,
-    RichText, ScrollArea, Separator, SidePanel, Slider, Ui, ecolor::linear_u8_from_linear_f32,
-    emath::Numeric,
+    Align, Color32, CursorIcon, DragValue, Frame, Grid, Id, Layout, Margin, Panel, Response,
+    RichText, ScrollArea, Separator, Slider, Ui, ecolor::linear_u8_from_linear_f32, emath::Numeric,
 };
 use std::{hash::Hash, ops::RangeInclusive};
 
@@ -30,22 +29,22 @@ impl LabelAndHoverText {
 }
 
 pub fn option_panel(
-    ctx: &Context,
+    ui: &mut Ui,
     name: impl Into<Id>,
     alpha: f32,
     add_contents: impl FnOnce(&mut Ui),
 ) {
-    let frame = Frame::side_top_panel(&ctx.style());
+    let frame = Frame::side_top_panel(ui.style());
     let fill = Color32::from_black_alpha(linear_u8_from_linear_f32(alpha).max(1));
     let inner_margin = Margin::ZERO;
 
-    SidePanel::left(name)
+    Panel::left(name)
         .frame(Frame {
             fill,
             inner_margin,
             ..frame
         })
-        .show(ctx, |ui| {
+        .show_inside(ui, |ui| {
             ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {

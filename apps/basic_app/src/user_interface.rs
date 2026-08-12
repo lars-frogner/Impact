@@ -61,11 +61,11 @@ impl CustomElements for AppOptions {
         ui.toggle_value(&mut self.show_app_options, "App options");
     }
 
-    fn run_option_panels(&mut self, ctx: &egui::Context, alpha: f32) {
+    fn run_option_panels(&mut self, ui: &mut egui::Ui, alpha: f32) {
         if !self.show_app_options {
             return;
         }
-        option_panel(ctx, "app_option_panel", alpha, |ui| {
+        option_panel(ui, "app_option_panel", alpha, |ui| {
             option_group(ui, "app_options", |ui| {
                 self.run_app_options(ui);
             });

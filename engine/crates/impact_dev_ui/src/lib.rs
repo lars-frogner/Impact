@@ -68,9 +68,9 @@ pub struct UserInterfaceConfig {
 pub trait CustomElements {
     fn run_toolbar_buttons(&mut self, _ui: &mut Ui) {}
 
-    fn run_option_panels(&mut self, _ctx: &Context, _alpha: f32) {}
+    fn run_option_panels(&mut self, _ui: &mut Ui, _alpha: f32) {}
 
-    fn run_overlays(&mut self, _ctx: &Context) {}
+    fn run_overlays(&mut self, _ui: &mut Ui) {}
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -128,7 +128,7 @@ impl UserInterface {
         command_queue: &UICommandQueue,
         custom_elements: &mut impl CustomElements,
     ) -> FullOutput {
-        let mut output = ctx.run(input, |ctx| {
+        let mut output = ctx.run_ui(input, |ui| {
             if self.handle_requested_screenshot(engine) == RequestedScreenshotAction::HideUI {
                 // Return without adding any output
                 return;
@@ -138,14 +138,14 @@ impl UserInterface {
 
             if self.config.interactive {
                 self.toolbar
-                    .run(ctx, &mut self.config, engine, custom_elements);
+                    .run(ui, &mut self.config, engine, custom_elements);
 
                 if self.config.show_ui_options {
-                    self.ui_option_panel.run(ctx, &mut self.config);
+                    self.ui_option_panel.run(ui, &mut self.config);
                 }
                 if self.config.show_rendering_options {
                     self.rendering_option_panel.run(
-                        ctx,
+                        ui,
                         &mut self.config,
                         engine,
                         &mut self.screenshot_requested,
@@ -153,29 +153,29 @@ impl UserInterface {
                 }
                 if self.config.show_physics_options {
                     self.physics_option_panel.run(
-                        ctx,
+                        ui,
                         &self.config,
                         engine,
                         &mut self.single_step_requested,
                     );
                 }
                 if self.config.show_gizmo_options {
-                    self.gizmo_option_panel.run(ctx, &self.config, engine);
+                    self.gizmo_option_panel.run(ui, &self.config, engine);
                 }
                 if self.config.show_task_timings {
-                    self.task_timing_panel.run(ctx, &self.config, engine);
+                    self.task_timing_panel.run(ui, &self.config, engine);
                 }
                 if self.config.show_render_pass_timings {
-                    self.render_pass_timing_panel.run(ctx, &self.config, engine);
+                    self.render_pass_timing_panel.run(ui, &self.config, engine);
                 }
-                custom_elements.run_option_panels(ctx, self.config.alpha);
+                custom_elements.run_option_panels(ui, self.config.alpha);
             }
 
             if self.config.show_time_overlay {
-                self.time_overlay.run(ctx, engine);
+                self.time_overlay.run(ui, engine);
             }
 
-            custom_elements.run_overlays(ctx);
+            custom_elements.run_overlays(ui);
 
             // Re-disable the simulation if we requested a single step in the
             // previous frame

@@ -5,10 +5,7 @@ mod util;
 
 use atomic::canvas::AtomicGraphCanvas;
 use impact::{
-    egui::{
-        Button, ComboBox, Context, CursorIcon, PointerButton, Pos2, Rect, Response, TextEdit, Ui,
-        Vec2,
-    },
+    egui::{Button, ComboBox, CursorIcon, PointerButton, Pos2, Rect, Response, TextEdit, Ui, Vec2},
     impact_alloc::{Allocator, arena::ArenaPool},
 };
 use impact_dev_ui::{
@@ -304,7 +301,7 @@ impl CustomElements for Editor {
         ui.toggle_value(&mut self.config.show_editor, "Voxel editor");
     }
 
-    fn run_option_panels(&mut self, ctx: &Context, alpha: f32) {
+    fn run_option_panels(&mut self, ui: &mut Ui, alpha: f32) {
         if !self.config.show_editor {
             return;
         }
@@ -321,7 +318,7 @@ impl CustomElements for Editor {
             });
         }
 
-        option_panel(ctx, "Editor panel", alpha, |ui| {
+        option_panel(ui, "Editor panel", alpha, |ui| {
             if let Some(path) = &self.last_graph_path {
                 option_group(ui, "file", |ui| {
                     ui.label(path.file_stem_string.trim_end_matches(".graph"))
@@ -594,7 +591,7 @@ impl CustomElements for Editor {
             }
 
             self.meta_graph_canvas.show(
-                ctx,
+                ui,
                 &self.graph_status,
                 pending_node_operations,
                 layout_requested,
@@ -604,7 +601,7 @@ impl CustomElements for Editor {
             );
 
             if self.config.show_atomic_graph {
-                self.atomic_graph_canvas.show(ctx, layout_requested);
+                self.atomic_graph_canvas.show(ui, layout_requested);
             }
 
             self.graph_needs_compilation = self.graph_needs_compilation

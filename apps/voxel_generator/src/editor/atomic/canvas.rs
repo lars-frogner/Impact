@@ -6,7 +6,7 @@ use crate::editor::{
 };
 use impact::{
     egui::{
-        Color32, Context, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Vec2, Window,
+        Color32, CursorIcon, Id, PointerButton, Pos2, Rect, Sense, Ui, Vec2, Window,
         epaint::PathStroke, pos2, vec2,
     },
     impact_alloc::{AVec, Allocator, arena::ArenaPool},
@@ -76,13 +76,13 @@ impl AtomicGraphCanvas {
         self.is_panning || self.dragging_node_id.is_some()
     }
 
-    pub fn show(&mut self, ctx: &Context, layout_requested: bool) {
+    pub fn show(&mut self, ui: &mut Ui, layout_requested: bool) {
         Window::new("Compiled SDF graph")
             .default_pos(CANVAS_DEFAULT_POS)
             .default_size(CANVAS_DEFAULT_SIZE)
             .vscroll(false)
             .hscroll(false)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let (canvas_rect, canvas_response) =
                     ui.allocate_exact_size(ui.available_size(), Sense::drag());
 

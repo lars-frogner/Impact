@@ -122,18 +122,18 @@ impl<'a> CustomElements for GameUserInterface<'a> {
         ui.toggle_value(&mut self.options.show_game_options, "Game options");
     }
 
-    fn run_option_panels(&mut self, ctx: &egui::Context, alpha: f32) {
+    fn run_option_panels(&mut self, ui: &mut egui::Ui, alpha: f32) {
         if !self.options.show_game_options {
             return;
         }
-        option_panel(ctx, "game_option_panel", alpha, |ui| {
+        option_panel(ui, "game_option_panel", alpha, |ui| {
             option_group(ui, "game_options", |ui| {
                 self.run_game_options(ui);
             });
         });
     }
 
-    fn run_overlays(&mut self, ctx: &egui::Context) {
+    fn run_overlays(&mut self, ui: &mut egui::Ui) {
         if self.currently_interactive {
             return;
         }
@@ -160,7 +160,7 @@ impl<'a> CustomElements for GameUserInterface<'a> {
             .corner(Corner::BottomLeft)
             .offset(egui::vec2(10.0, 10.0))
             .show_lines(
-                ctx,
+                ui,
                 &[
                     &alignment_direction_text,
                     &acceleration_x_text,

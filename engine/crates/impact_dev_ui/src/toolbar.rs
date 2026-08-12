@@ -1,7 +1,7 @@
 use crate::{CustomElements, UserInterfaceConfig};
 use impact::{
     command::{AdminCommand, instrumentation::InstrumentationAdminCommand, utils::ToActiveState},
-    egui::{Context, Frame, TopBottomPanel},
+    egui::{Frame, Panel, Ui},
     engine::Engine,
 };
 
@@ -11,16 +11,16 @@ pub struct Toolbar;
 impl Toolbar {
     pub fn run(
         &mut self,
-        ctx: &Context,
+        ui: &mut Ui,
         config: &mut UserInterfaceConfig,
         engine: &Engine,
         custom_panels: &mut impl CustomElements,
     ) {
-        TopBottomPanel::top("toolbar_panel")
+        Panel::top("toolbar_panel")
             .frame(Frame {
-                ..Frame::side_top_panel(&ctx.style())
+                ..Frame::side_top_panel(ui.style())
             })
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.toggle_value(&mut config.show_ui_options, "UI options");
 

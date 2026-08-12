@@ -1,13 +1,13 @@
 use super::{LabelAndHoverText, option_checkbox, option_drag_value, option_group, option_panel};
 use crate::UserInterfaceConfig;
-use impact::egui::{Context, DragValue, Ui};
+use impact::egui::{DragValue, Ui};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UIOptionPanel;
 
 impl UIOptionPanel {
-    pub fn run(&mut self, ctx: &Context, config: &mut UserInterfaceConfig) {
-        option_panel(ctx, "ui_option_panel", config.alpha, |ui| {
+    pub fn run(&mut self, ui: &mut Ui, config: &mut UserInterfaceConfig) {
+        option_panel(ui, "ui_option_panel", config.alpha, |ui| {
             option_group(ui, "ui_options", |ui| {
                 ui_options(ui, config);
             });

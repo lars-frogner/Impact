@@ -6,7 +6,7 @@ use impact::{
         physics::{PhysicsAdminCommand, ToSimulationSpeedMultiplier, ToSubstepCount},
         utils::ToActiveState,
     },
-    egui::{Context, Slider, Ui},
+    egui::{Slider, Ui},
     engine::Engine,
 };
 
@@ -104,12 +104,12 @@ pub struct PhysicsOptionPanel;
 impl PhysicsOptionPanel {
     pub fn run(
         &mut self,
-        ctx: &Context,
+        ui: &mut Ui,
         config: &UserInterfaceConfig,
         engine: &Engine,
         single_step_requested: &mut bool,
     ) {
-        option_panel(ctx, "physics_option_panel", config.alpha, |ui| {
+        option_panel(ui, "physics_option_panel", config.alpha, |ui| {
             option_group(ui, "simulation_options", |ui| {
                 simulation_options(ui, engine, single_step_requested);
             });

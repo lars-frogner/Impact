@@ -1,6 +1,6 @@
 //! General-purpose text overlay helper.
 
-use impact::egui::{Align2, Area, Context, Id, Pos2, TextStyle, Vec2, vec2};
+use impact::egui::{Align2, Area, Id, Pos2, TextStyle, Ui, Vec2, vec2};
 use tinyvec::TinyVec;
 
 /// Corner anchor for overlay positioning.
@@ -72,12 +72,12 @@ impl TextOverlay {
     }
 
     /// Shows the overlay with a single line of text.
-    pub fn show(self, ctx: &Context, text: &str) {
-        self.show_lines(ctx, &[text]);
+    pub fn show(self, ui: &mut Ui, text: &str) {
+        self.show_lines(ui, &[text]);
     }
 
     /// Shows the overlay with multiple lines of text.
-    pub fn show_lines(self, ctx: &Context, lines: &[&str]) {
+    pub fn show_lines(self, ui: &mut Ui, lines: &[&str]) {
         let (anchor, sign) = match self.corner {
             Corner::TopLeft => (Align2::LEFT_TOP, vec2(1.0, 1.0)),
             Corner::TopRight => (Align2::RIGHT_TOP, vec2(-1.0, 1.0)),
@@ -90,7 +90,7 @@ impl TextOverlay {
         Area::new(self.id)
             .anchor(anchor, offset)
             .interactable(false)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let font_id = self.text_style.resolve(ui.style());
                 let color = ui.visuals().text_color();
 
@@ -99,7 +99,7 @@ impl TextOverlay {
                     Corner::TopRight | Corner::BottomRight => Align2::RIGHT_TOP,
                 };
 
-                let galleys: TinyVec<[_; 16]> = ctx.fonts_mut(|f| {
+                let galleys: TinyVec<[_; 16]> = ui.fonts_mut(|f| {
                     lines
                         .iter()
                         .map(|line| {

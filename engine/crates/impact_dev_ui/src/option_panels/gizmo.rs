@@ -2,7 +2,7 @@ use super::{LabelAndHoverText, option_checkbox, option_group, option_panel, opti
 use crate::{UserInterfaceConfig, option_panels::option_drag_value};
 use impact::{
     command::{AdminCommand, gizmo::GizmoAdminCommand},
-    egui::{Context, DragValue, Response, Slider, Ui},
+    egui::{DragValue, Response, Slider, Ui},
     engine::Engine,
     impact_gizmo::{GizmoParameters, GizmoType, GizmoVisibility},
     impact_voxel::VoxelSignedDistance,
@@ -172,8 +172,8 @@ fn gizmo_parameter_options(
 pub struct GizmoOptionPanel;
 
 impl GizmoOptionPanel {
-    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        option_panel(ctx, "gizmo_option_panel", config.alpha, |ui| {
+    pub fn run(&mut self, ui: &mut Ui, config: &UserInterfaceConfig, engine: &Engine) {
+        option_panel(ui, "gizmo_option_panel", config.alpha, |ui| {
             option_group(ui, "gizmo_options", |ui| {
                 gizmo_options(ui, engine);
             });

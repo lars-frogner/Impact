@@ -17,8 +17,8 @@ use anyhow::{Context as _, Result, bail};
 use bitflags::bitflags;
 use impact::{
     egui::{
-        Align, Color32, Context, CursorIcon, Direction, Id, Key, Label, Painter, PointerButton,
-        Pos2, Rect, Sense, Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
+        Align, Color32, CursorIcon, Direction, Id, Key, Label, Painter, PointerButton, Pos2, Rect,
+        Sense, Ui, Vec2, Window, epaint::PathStroke, pos2, vec2,
     },
     impact_alloc::{AVec, Allocator, arena::ArenaPool},
 };
@@ -621,7 +621,7 @@ impl MetaGraphCanvas {
 
     pub fn show(
         &mut self,
-        ctx: &Context,
+        ui: &mut Ui,
         graph_status: &MetaGraphStatus,
         pending_node_operations: PendingNodeOperations,
         layout_requested: bool,
@@ -656,7 +656,7 @@ impl MetaGraphCanvas {
             .default_size(CANVAS_DEFAULT_SIZE)
             .vscroll(false)
             .hscroll(false)
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                 let arena = ArenaPool::get_arena();
                 let mut search_scratch = SearchScratch::new_in(&arena);
                 let mut subgraph_node_ids = AVec::new_in(&arena);
@@ -1278,7 +1278,7 @@ impl MetaGraphCanvas {
                 }
                 if let Some(node_id) = self.selected_node_id
                     && ui.input(|i| i.key_pressed(Key::Delete))
-                    && !ui.ctx().wants_keyboard_input()
+                    && !ui.ctx().egui_wants_keyboard_input()
                 {
                     self.remove_node(node_id, changes);
                 }

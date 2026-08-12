@@ -10,7 +10,7 @@ use impact::{
         rendering::{RenderingAdminCommand, postprocessing::ToRenderAttachmentQuantity},
         utils::ToActiveState,
     },
-    egui::{ComboBox, Context, Slider, Ui},
+    egui::{ComboBox, Slider, Ui},
     engine::Engine,
     impact_light::shadow_map::UnidirectionalLightShadowMapBoundingMode,
 };
@@ -297,13 +297,13 @@ enum ExposureMode {
 impl RenderingOptionPanel {
     pub fn run(
         &mut self,
-        ctx: &Context,
+        ui: &mut Ui,
         config: &mut UserInterfaceConfig,
         engine: &Engine,
         screenshot_requested: &mut bool,
     ) {
         let mut hide_ui_during_screenshots = config.hide_ui_during_screenshots;
-        option_panel(ctx, "rendering_option_panel", config.alpha, |ui| {
+        option_panel(ui, "rendering_option_panel", config.alpha, |ui| {
             option_group(ui, "shadow_mapping_options", |ui| {
                 shadow_mapping_options(ui, engine);
             });

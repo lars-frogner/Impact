@@ -2,7 +2,7 @@ use super::timing_panel;
 use crate::UserInterfaceConfig;
 use egui_extras::{Column, TableBuilder};
 use impact::{
-    egui::{Context, TextStyle, TextWrapMode},
+    egui::{TextStyle, TextWrapMode, Ui},
     engine::Engine,
 };
 use impact_alloc::{AVec, arena::ArenaPool};
@@ -14,18 +14,18 @@ const NUM_LABEL_COL_CHARS: usize = 24;
 const NUM_TIMING_COL_CHARS: usize = 8;
 
 impl RenderPassTimingPanel {
-    pub fn run(&mut self, ctx: &Context, config: &UserInterfaceConfig, engine: &Engine) {
-        let style = ctx.style();
-        let body_font = TextStyle::Body.resolve(&style);
-        let mono_font = TextStyle::Monospace.resolve(&style);
+    pub fn run(&mut self, ui: &mut Ui, config: &UserInterfaceConfig, engine: &Engine) {
+        let style = ui.style();
+        let body_font = TextStyle::Body.resolve(style);
+        let mono_font = TextStyle::Monospace.resolve(style);
 
-        let mono_char_width = ctx.fonts_mut(|fonts| fonts.glyph_width(&mono_font, '0'));
+        let mono_char_width = ui.fonts_mut(|fonts| fonts.glyph_width(&mono_font, '0'));
         let timing_col_width = (NUM_TIMING_COL_CHARS as f32 * mono_char_width) + 2.0;
 
         let default_panel_width = timing_col_width + NUM_LABEL_COL_CHARS as f32 * body_font.size;
 
         timing_panel(
-            ctx,
+            ui,
             config,
             "render_pass_timing_panel",
             default_panel_width,
