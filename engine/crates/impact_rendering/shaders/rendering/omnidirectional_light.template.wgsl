@@ -11,11 +11,6 @@ struct ProjectionUniform {
     frustumFarPlaneCorners: array<vec4f, 4>,
 }
 
-struct OmnidirectionalLights {
-    numLights: u32,
-    lights: array<OmnidirectionalLight, {{max_light_count}}>,
-}
-
 struct OmnidirectionalLight {
     cameraSpacePositionAndMaxReach: vec4f,
     luminousIntensityAndEmissiveRadius: vec4f,
@@ -70,7 +65,7 @@ var materialPropertiesTexture: texture_2d<f32>;
 var materialPropertiesSampler: sampler;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
-var<uniform> omnidirectionalLights: OmnidirectionalLights;
+var<uniform> omnidirectionalLights: array<OmnidirectionalLight, {{max_light_count}}>;
 
 fn transformPosition(
     rotationQuaternion: vec4f,
@@ -401,7 +396,7 @@ fn mainVS(
 ) -> VertexOutput {
     var output: VertexOutput;
 
-    let omnidirectionalLight = omnidirectionalLights.lights[immediates.activeLightIdx];
+    let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
 
@@ -444,7 +439,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let normalIncidenceSpecularReflectance = computeRGBSpecularReflectance(materialColor, materialProperties);
     let roughness = materialProperties.y;
 
-    let omnidirectionalLight = omnidirectionalLights.lights[immediates.activeLightIdx];
+    let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
     let lightPosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz;
     let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;

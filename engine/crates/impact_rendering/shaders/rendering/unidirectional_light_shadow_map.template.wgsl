@@ -8,11 +8,6 @@ struct ModelToLightTransform {
     @location({{model_light_transform_translation_location}}) translationAndScaling: vec4f,
 }
 
-struct UnidirectionalLights {
-    numLights: u32,
-    lights: array<UnidirectionalLight, {{max_light_count}}>,
-}
-
 struct UnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cameraSpaceDirection: vec3f,
@@ -37,7 +32,7 @@ struct FragmentOutput {
 var<immediate> immediates: Immediates;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
-var<uniform> unidirectionalLights: UnidirectionalLights;
+var<uniform> unidirectionalLights: array<UnidirectionalLight, {{max_light_count}}>;
 
 fn transformPosition(
     rotationQuaternion: vec4f,
@@ -77,7 +72,7 @@ fn mainVS(
 
     // Note: `var` is required here instead of `let` to make the
     // `orthographicTransforms` array indexable with a dynamic index
-    var unidirectionalLight = unidirectionalLights.lights[immediates.activeLightIdx];
+    var unidirectionalLight = unidirectionalLights[immediates.activeLightIdx];
     let lightOrthographicTransform = unidirectionalLight.orthographicTransforms[immediates.activeCascadeIdx];
 
     let lightClipSpacePosition = applyOrthographicProjectionToPosition(

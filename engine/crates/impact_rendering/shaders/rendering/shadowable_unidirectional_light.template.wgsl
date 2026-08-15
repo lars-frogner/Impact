@@ -11,11 +11,6 @@ struct ProjectionUniform {
     frustumFarPlaneCorners: array<vec4f, 4>,
 }
 
-struct UnidirectionalLights {
-    numLights: u32,
-    lights: array<UnidirectionalLight, {{max_light_count}}>,
-}
-
 struct UnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cameraSpaceDirection: vec3f,
@@ -79,7 +74,7 @@ var materialPropertiesTexture: texture_2d<f32>;
 var materialPropertiesSampler: sampler;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
-var<uniform> unidirectionalLights: UnidirectionalLights;
+var<uniform> unidirectionalLights: array<UnidirectionalLight, {{max_light_count}}>;
 
 @group({{shadow_map_texture_group}}) @binding({{shadow_map_texture_binding}})
 var cascadedShadowMapTexture: texture_2d_array<f32>;
@@ -687,7 +682,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     // Note: `var` is required here instead of `let` to make the
     // `orthographicTransforms` array indexable with a dynamic index
-    var unidirectionalLight = unidirectionalLights.lights[immediates.activeLightIdx];
+    var unidirectionalLight = unidirectionalLights[immediates.activeLightIdx];
 
     let cameraSpaceLightDirection = unidirectionalLight.cameraSpaceDirection;
 

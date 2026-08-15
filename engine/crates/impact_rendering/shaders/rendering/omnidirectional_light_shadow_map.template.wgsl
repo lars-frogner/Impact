@@ -7,11 +7,6 @@ struct ModelToCubemapFaceSpaceTransform {
     @location({{model_light_transform_translation_location}}) translationAndScaling: vec4f,
 }
 
-struct OmnidirectionalLights {
-    numLights: u32,
-    lights: array<OmnidirectionalLight, {{max_light_count}}>,
-}
-
 struct OmnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cubemapFaceSpacePosition: vec3f,
@@ -36,7 +31,7 @@ struct FragmentOutput {
 var<immediate> immediates: Immediates;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
-var<uniform> omnidirectionalLights: OmnidirectionalLights;
+var<uniform> omnidirectionalLights: array<OmnidirectionalLight, {{max_light_count}}>;
 
 fn transformPosition(
     rotationQuaternion: vec4f,
@@ -101,7 +96,7 @@ fn mainVS(
 fn mainFS(input: VertexOutput) -> FragmentOutput {
     var output: FragmentOutput;
 
-    let omnidirectionalLight = omnidirectionalLights.lights[immediates.activeLightIdx];
+    let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
     let minShadowShellRadius = omnidirectionalLight.lightSphere.minShadowShellRadius;
     let inverseShadowShellRadialSpan = omnidirectionalLight.lightSphere.inverseShadowShellRadialSpan;

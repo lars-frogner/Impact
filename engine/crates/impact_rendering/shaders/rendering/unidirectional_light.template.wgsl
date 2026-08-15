@@ -11,11 +11,6 @@ struct ProjectionUniform {
     frustumFarPlaneCorners: array<vec4f, 4>,
 }
 
-struct UnidirectionalLights {
-    numLights: u32,
-    lights: array<UnidirectionalLight, {{max_light_count}}>,
-}
-
 struct UnidirectionalLight {
     cameraSpaceDirection: vec3f,
     perpendicularIlluminanceAndTanAngularRadius: vec4f,
@@ -69,7 +64,7 @@ var materialPropertiesTexture: texture_2d<f32>;
 var materialPropertiesSampler: sampler;
 
 @group({{light_uniform_group}}) @binding({{light_uniform_binding}})
-var<uniform> unidirectionalLights: UnidirectionalLights;
+var<uniform> unidirectionalLights: array<UnidirectionalLight, {{max_light_count}}>;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
     return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
@@ -406,7 +401,7 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
     let normalIncidenceSpecularReflectance = computeRGBSpecularReflectance(materialColor, materialProperties);
     let roughness = materialProperties.y;
 
-    let unidirectionalLight = unidirectionalLights.lights[immediates.activeLightIdx];
+    let unidirectionalLight = unidirectionalLights[immediates.activeLightIdx];
 
     let cameraSpaceLightDirection = unidirectionalLight.cameraSpaceDirection;
 

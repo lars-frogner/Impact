@@ -15,7 +15,8 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     uniform::{
-        self, MultiUniformGPUBuffer, UniformBuffer, UniformBufferable, UniformTransferResult,
+        self, CountedMultiUniformGPUBuffer, MultiUniformGPUBuffer, UncountedMultiUniformGPUBuffer,
+        UniformBuffer, UniformBufferable, UniformTransferResult,
     },
     wgpu,
 };
@@ -26,14 +27,11 @@ use std::{fmt, hash::Hash};
 /// shadow maps, with associated bind groups.
 #[derive(Debug)]
 pub struct LightGPUResources {
-    ambient_light_gpu_buffer: UniformGPUBufferWithLightMetadata<AmbientLightID>,
-    omnidirectional_light_gpu_buffer:
-        UniformGPUBufferWithLightMetadata<OmnidirectionalLightMetadata>,
-    shadowable_omnidirectional_light_gpu_buffer:
-        UniformGPUBufferWithLightMetadata<ShadowableOmnidirectionalLightMetadata>,
-    unidirectional_light_gpu_buffer: UniformGPUBufferWithLightMetadata<UnidirectionalLightMetadata>,
-    shadowable_unidirectional_light_gpu_buffer:
-        UniformGPUBufferWithLightMetadata<ShadowableUnidirectionalLightMetadata>,
+    ambient_light_gpu_buffer: AmbientLightGPUBuffer,
+    omnidirectional_light_gpu_buffer: OmnidirectionalLightGPUBuffer,
+    shadowable_omnidirectional_light_gpu_buffer: ShadowableOmnidirectionalLightGPUBuffer,
+    unidirectional_light_gpu_buffer: UnidirectionalLightGPUBuffer,
+    shadowable_unidirectional_light_gpu_buffer: ShadowableUnidirectionalLightGPUBuffer,
     ambient_light_bind_group: wgpu::BindGroup,
     omnidirectional_light_bind_group: wgpu::BindGroup,
     shadowable_omnidirectional_light_bind_group: wgpu::BindGroup,
@@ -42,6 +40,25 @@ pub struct LightGPUResources {
     omnidirectional_light_shadow_map_manager: OmnidirectionalLightShadowMapManager,
     unidirectional_light_shadow_map_manager: UnidirectionalLightShadowMapManager,
 }
+
+type AmbientLightGPUBuffer =
+    UniformGPUBufferWithLightMetadata<AmbientLightID, CountedMultiUniformGPUBuffer>;
+
+type OmnidirectionalLightGPUBuffer =
+    UniformGPUBufferWithLightMetadata<OmnidirectionalLightMetadata, UncountedMultiUniformGPUBuffer>;
+
+type ShadowableOmnidirectionalLightGPUBuffer = UniformGPUBufferWithLightMetadata<
+    ShadowableOmnidirectionalLightMetadata,
+    UncountedMultiUniformGPUBuffer,
+>;
+
+type UnidirectionalLightGPUBuffer =
+    UniformGPUBufferWithLightMetadata<UnidirectionalLightMetadata, UncountedMultiUniformGPUBuffer>;
+
+type ShadowableUnidirectionalLightGPUBuffer = UniformGPUBufferWithLightMetadata<
+    ShadowableUnidirectionalLightMetadata,
+    UncountedMultiUniformGPUBuffer,
+>;
 
 /// Manager of the [`ShadowCubemapTexture`]s used by all omnidirectional lights.
 #[derive(Debug)]
@@ -61,8 +78,8 @@ pub struct UnidirectionalLightShadowMapManager {
 }
 
 #[derive(Debug)]
-struct UniformGPUBufferWithLightMetadata<M> {
-    uniform_gpu_buffer: MultiUniformGPUBuffer,
+struct UniformGPUBufferWithLightMetadata<M, B> {
+    uniform_gpu_buffer: B,
     light_metadata: Vec<M>,
 }
 
@@ -145,33 +162,27 @@ impl LightGPUResources {
         light_manager: &LightManager,
         shadow_mapping_config: &ShadowMappingConfig,
     ) -> Self {
-        let ambient_light_gpu_buffer = UniformGPUBufferWithLightMetadata::for_uniform_buffer(
+        let ambient_light_gpu_buffer = AmbientLightGPUBuffer::for_uniform_buffer(
             graphics_device,
             light_manager.ambient_light_buffer(),
-            Self::AMBIENT_LIGHT_VISIBILITY,
         );
-        let omnidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightMetadata::for_uniform_buffer(
-                graphics_device,
-                light_manager.omnidirectional_light_buffer(),
-                Self::OMNIDIRECTIONAL_LIGHT_VISIBILITY,
-            );
+        let omnidirectional_light_gpu_buffer = OmnidirectionalLightGPUBuffer::for_uniform_buffer(
+            graphics_device,
+            light_manager.omnidirectional_light_buffer(),
+        );
         let shadowable_omnidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightMetadata::for_uniform_buffer(
+            ShadowableOmnidirectionalLightGPUBuffer::for_uniform_buffer(
                 graphics_device,
                 light_manager.shadowable_omnidirectional_light_buffer(),
-                Self::SHADOWABLE_OMNIDIRECTIONAL_LIGHT_VISIBILITY,
             );
-        let unidirectional_light_gpu_buffer = UniformGPUBufferWithLightMetadata::for_uniform_buffer(
+        let unidirectional_light_gpu_buffer = UnidirectionalLightGPUBuffer::for_uniform_buffer(
             graphics_device,
             light_manager.unidirectional_light_buffer(),
-            Self::UNIDIRECTIONAL_LIGHT_VISIBILITY,
         );
         let shadowable_unidirectional_light_gpu_buffer =
-            UniformGPUBufferWithLightMetadata::for_uniform_buffer(
+            ShadowableUnidirectionalLightGPUBuffer::for_uniform_buffer(
                 graphics_device,
                 light_manager.shadowable_unidirectional_light_buffer(),
-                Self::SHADOWABLE_UNIDIRECTIONAL_LIGHT_VISIBILITY,
             );
 
         let ambient_light_bind_group_layout = Self::get_or_create_ambient_light_bind_group_layout(
@@ -677,9 +688,9 @@ impl LightGPUResources {
         })
     }
 
-    fn create_light_bind_group<M: LightMetadata>(
+    fn create_light_bind_group<M: LightMetadata, B: MultiUniformGPUBuffer>(
         device: &wgpu::Device,
-        light_gpu_buffer: &UniformGPUBufferWithLightMetadata<M>,
+        light_gpu_buffer: &UniformGPUBufferWithLightMetadata<M, B>,
         layout: &wgpu::BindGroupLayout,
         label: &str,
     ) -> wgpu::BindGroup {
@@ -823,22 +834,17 @@ impl UnidirectionalLightShadowMapManager {
     }
 }
 
-impl<M: LightMetadata> UniformGPUBufferWithLightMetadata<M> {
+impl<M: LightMetadata, B: MultiUniformGPUBuffer> UniformGPUBufferWithLightMetadata<M, B> {
     /// Creates a new uniform GPU buffer together with a metadata about each
     /// light, initialized from the given uniform buffer of light sources.
     fn for_uniform_buffer(
         graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<M::ID, M::Source>,
-        visibility: wgpu::ShaderStages,
     ) -> Self {
         let mut light_metadata = Vec::new();
         Self::copy_metadata_from_uniform_buffer(&mut light_metadata, uniform_buffer);
         Self {
-            uniform_gpu_buffer: MultiUniformGPUBuffer::for_uniform_buffer(
-                graphics_device,
-                uniform_buffer,
-                visibility,
-            ),
+            uniform_gpu_buffer: B::for_uniform_buffer(graphics_device, uniform_buffer),
             light_metadata,
         }
     }
@@ -847,7 +853,7 @@ impl<M: LightMetadata> UniformGPUBufferWithLightMetadata<M> {
         self.light_metadata.len()
     }
 
-    fn buffer(&self) -> &MultiUniformGPUBuffer {
+    fn buffer(&self) -> &B {
         &self.uniform_gpu_buffer
     }
 

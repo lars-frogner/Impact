@@ -25,6 +25,50 @@ pub trait UniformBufferable: Pod {
     ) -> wgpu::BindGroupLayoutEntry;
 }
 
+/// Represents a GPU buffer for multiple uniforms of the same type.
+pub trait MultiUniformGPUBuffer {
+    /// Creates a new uniform GPU buffer initialized from the given uniform
+    /// buffer.
+    fn for_uniform_buffer<ID, U>(
+        graphics_device: &GraphicsDevice,
+        uniform_buffer: &UniformBuffer<ID, U>,
+    ) -> Self
+    where
+        ID: Copy + Hash + Eq + Debug,
+        U: UniformBufferable;
+
+    /// Returns the maximum number of uniforms that can fit in the buffer.
+    fn max_uniform_count(&self) -> usize;
+
+    /// Creates the bind group entry for the uniform buffer, assigned to the
+    /// given binding.
+    fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_>;
+
+    /// Writes the valid uniforms in the given uniform buffer into the uniform
+    /// GPU buffer if the uniform buffer has changed (recreating the GPU buffer
+    /// if required). When the existing GPU buffer can be reused, the update is
+    /// encoded via the given staging belt to avoid allocating a new staging
+    /// buffer.
+    ///
+    /// # Returns
+    /// A [`UniformTransferResult`] indicating whether the GPU buffer had to
+    /// be reallocated, in which case its bind group should also be recreated.
+    ///
+    /// # Panics
+    /// If the given uniform buffer stores a different type of uniform than the
+    /// GPU buffer.
+    fn transfer_uniforms_to_gpu_buffer<ID, U>(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        uniform_buffer: &UniformBuffer<ID, U>,
+    ) -> UniformTransferResult
+    where
+        ID: Copy + Hash + Eq + Debug,
+        U: UniformBufferable;
+}
+
 /// A buffer for uniforms.
 ///
 /// The buffer is grown on demand, but never shrunk. Instead, a counter keeps
@@ -48,10 +92,19 @@ pub struct SingleUniformGPUBuffer {
 
 /// GPU buffer for multiple uniforms of the same type.
 #[derive(Debug)]
-pub struct MultiUniformGPUBuffer {
+pub struct UncountedMultiUniformGPUBuffer {
+    gpu_buffer: GPUBuffer,
+    uniform_type_id: ConstStringHash64,
+    item_size: usize,
+}
+
+/// GPU buffer for multiple uniforms of the same type, with an embedded count at
+/// the beginning of the buffer representing the number of valid elements
+/// contained in the buffer.
+#[derive(Debug)]
+pub struct CountedMultiUniformGPUBuffer {
     gpu_buffer: CountedGPUBuffer,
     uniform_type_id: ConstStringHash64,
-    template_bind_group_layout_entry: wgpu::BindGroupLayoutEntry,
 }
 
 /// Indicates whether a new GPU buffer had to be created in order to hold all
@@ -319,13 +372,111 @@ impl SingleUniformGPUBuffer {
     }
 }
 
-impl MultiUniformGPUBuffer {
-    /// Creates a new uniform GPU buffer initialized from the given uniform
-    /// buffer.
-    pub fn for_uniform_buffer<ID, U>(
+impl UncountedMultiUniformGPUBuffer {
+    /// Returns the GPU buffer of uniforms.
+    pub fn gpu_buffer(&self) -> &GPUBuffer {
+        &self.gpu_buffer
+    }
+}
+
+impl MultiUniformGPUBuffer for UncountedMultiUniformGPUBuffer {
+    fn for_uniform_buffer<ID, U>(
         graphics_device: &GraphicsDevice,
         uniform_buffer: &UniformBuffer<ID, U>,
-        visibility: wgpu::ShaderStages,
+    ) -> Self
+    where
+        ID: Copy + Hash + Eq + Debug,
+        U: UniformBufferable,
+    {
+        let uniform_type_id = U::ID;
+
+        let gpu_buffer = GPUBuffer::new_uniform_buffer(
+            graphics_device,
+            uniform_buffer.raw_buffer(),
+            uniform_buffer.n_valid_uniforms(),
+            Cow::Borrowed(uniform_type_id.string()),
+        );
+
+        let item_size = mem::size_of::<U>();
+
+        Self {
+            gpu_buffer,
+            uniform_type_id,
+            item_size,
+        }
+    }
+
+    fn max_uniform_count(&self) -> usize {
+        self.gpu_buffer.buffer_size() / self.item_size
+    }
+
+    fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+        self.gpu_buffer().create_bind_group_entry(binding)
+    }
+
+    fn transfer_uniforms_to_gpu_buffer<ID, U>(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        uniform_buffer: &UniformBuffer<ID, U>,
+    ) -> UniformTransferResult
+    where
+        ID: Copy + Hash + Eq + Debug,
+        U: UniformBufferable,
+    {
+        assert_eq!(U::ID, self.uniform_type_id);
+
+        let change = uniform_buffer.change();
+
+        let result = if change != CollectionChange::None {
+            let valid_uniforms = uniform_buffer.valid_uniforms();
+            let n_valid_uniforms = valid_uniforms.len();
+
+            let n_valid_uniform_bytes = mem::size_of::<U>().checked_mul(n_valid_uniforms).unwrap();
+
+            if n_valid_uniform_bytes > self.gpu_buffer.buffer_size() {
+                // If the number of valid uniforms exceeds the capacity of the
+                // existing buffer, we create a new one that is large enough for
+                // all the uniforms (also the ones not currently valid)
+                self.gpu_buffer = GPUBuffer::new_uniform_buffer(
+                    graphics_device,
+                    uniform_buffer.raw_buffer(),
+                    n_valid_uniforms,
+                    self.gpu_buffer.label().clone(),
+                );
+
+                UniformTransferResult::CreatedNewBuffer
+            } else {
+                self.gpu_buffer.encode_update_of_valid_bytes(
+                    staging_belt,
+                    command_encoder,
+                    bytemuck::cast_slice(valid_uniforms),
+                );
+
+                UniformTransferResult::UpdatedExistingBuffer
+            }
+        } else {
+            UniformTransferResult::NothingToTransfer
+        };
+
+        uniform_buffer.reset_change_tracking();
+
+        result
+    }
+}
+
+impl CountedMultiUniformGPUBuffer {
+    /// Returns the GPU buffer of uniforms.
+    pub fn gpu_buffer(&self) -> &CountedGPUBuffer {
+        &self.gpu_buffer
+    }
+}
+
+impl MultiUniformGPUBuffer for CountedMultiUniformGPUBuffer {
+    fn for_uniform_buffer<ID, U>(
+        graphics_device: &GraphicsDevice,
+        uniform_buffer: &UniformBuffer<ID, U>,
     ) -> Self
     where
         ID: Copy + Hash + Eq + Debug,
@@ -340,58 +491,21 @@ impl MultiUniformGPUBuffer {
             Cow::Borrowed(uniform_type_id.string()),
         );
 
-        // The binding of 0 is just a placeholder, as the actual binding will be
-        // assigned when calling [`Self::create_bind_group_layout_entry`]
-        let template_bind_group_layout_entry = U::create_bind_group_layout_entry(0, visibility);
-
         Self {
             gpu_buffer,
-            template_bind_group_layout_entry,
             uniform_type_id,
         }
     }
 
-    /// Returns the maximum number of uniforms that can fit in the buffer.
-    pub fn max_uniform_count(&self) -> usize {
+    fn max_uniform_count(&self) -> usize {
         self.gpu_buffer.max_item_count()
     }
 
-    /// Creates a bind group layout entry for the uniform buffer.
-    pub fn create_bind_group_layout_entry(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
-        let mut bind_group_layout_entry = self.template_bind_group_layout_entry;
-        bind_group_layout_entry.binding = binding;
-        bind_group_layout_entry
-    }
-
-    /// Creates the bind group entry for the currently valid part of the uniform
-    /// buffer, assigned to the given binding.
-    ///
-    /// # Warning
-    /// This binding will be out of date as soon as the number of valid uniforms
-    /// changes.
-    pub fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
+    fn create_bind_group_entry(&self, binding: u32) -> wgpu::BindGroupEntry<'_> {
         self.gpu_buffer().create_bind_group_entry(binding)
     }
 
-    /// Returns the GPU buffer of uniforms.
-    pub fn gpu_buffer(&self) -> &CountedGPUBuffer {
-        &self.gpu_buffer
-    }
-
-    /// Writes the valid uniforms in the given uniform buffer into the uniform
-    /// GPU buffer if the uniform buffer has changed (recreating the GPU buffer
-    /// if required). When the existing GPU buffer can be reused, the update is
-    /// encoded via the given staging belt to avoid allocating a new staging
-    /// buffer.
-    ///
-    /// # Returns
-    /// A [`UniformTransferResult`] indicating whether the GPU buffer had to
-    /// be reallocated, in which case its bind group should also be recreated.
-    ///
-    /// # Panics
-    /// If the given uniform buffer stores a different type of uniform than the
-    /// GPU buffer.
-    pub fn transfer_uniforms_to_gpu_buffer<ID, U>(
+    fn transfer_uniforms_to_gpu_buffer<ID, U>(
         &mut self,
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
