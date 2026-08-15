@@ -6,7 +6,7 @@ macro_rules! shader_template_replacements {
 }
 
 #[macro_export]
-macro_rules! assert_uniform_valid {
+macro_rules! assert_uniform_item_valid {
     ($uniform:ident < $( $inner:ty ),+ >) => {
         pastey::item! {
             #[allow(non_upper_case_globals)]

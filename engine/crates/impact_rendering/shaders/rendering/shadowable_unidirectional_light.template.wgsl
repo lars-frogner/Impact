@@ -14,7 +14,8 @@ struct ProjectionUniform {
 struct UnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cameraSpaceDirection: vec3f,
-    perpendicularIlluminanceAndTanAngularRadius: vec4f,
+    perpendicularIlluminance: vec3f,
+    tanAngularRadius: f32,
     orthographicTransforms: array<OrthographicTransform, {{cascade_count}}>,
     partitionDepths: vec4f,
     padding: vec4f,
@@ -686,8 +687,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let cameraSpaceLightDirection = unidirectionalLight.cameraSpaceDirection;
 
-    let lightPerpendicularIlluminance = unidirectionalLight.perpendicularIlluminanceAndTanAngularRadius.xyz;
-    let tanAngularLightRadius = unidirectionalLight.perpendicularIlluminanceAndTanAngularRadius.w;
+    let lightPerpendicularIlluminance = unidirectionalLight.perpendicularIlluminance;
+    let tanAngularLightRadius = unidirectionalLight.tanAngularRadius;
 
     let cascadeIdx = determineCascadeIdxMax{{cascade_count}}(unidirectionalLight.partitionDepths, depth);
 

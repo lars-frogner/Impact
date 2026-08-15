@@ -627,10 +627,6 @@ impl GPUBuffer {
     }
 
     /// Creates a GPU buffer containing the data of the given uniform.
-    ///
-    /// # Panics
-    /// If the size of the uniform is not a multiple of 16 (the minimum required
-    /// uniform alignment).
     pub fn new_buffer_for_single_uniform<U>(
         graphics_device: &GraphicsDevice,
         uniform: &U,
@@ -648,20 +644,11 @@ impl GPUBuffer {
 
     /// Creates a GPU buffer containing the given bytes representing a single
     /// uniform.
-    ///
-    /// # Panics
-    /// If the size of the uniform is not a multiple of 16 (the minimum required
-    /// uniform alignment).
     pub fn new_buffer_for_single_uniform_bytes(
         graphics_device: &GraphicsDevice,
         uniform_bytes: &[u8],
         label: Cow<'static, str>,
     ) -> Self {
-        assert!(
-            Alignment::SIXTEEN.is_aligned(uniform_bytes.len()),
-            "Tried to create uniform GPU buffer with invalid uniform size \
-            (must be a multiple of 16)"
-        );
         assert!(
             !uniform_bytes.is_empty(),
             "Tried to create uniform GPU buffer for a single zero-sized uniform"

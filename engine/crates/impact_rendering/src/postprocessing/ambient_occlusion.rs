@@ -16,7 +16,6 @@ use anyhow::Result;
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
-    assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -69,9 +68,6 @@ pub struct AmbientOcclusionRenderCommands {
 /// Uniform holding horizontal offsets for the ambient occlusion samples. Only
 /// the first `sample_count` offsets in the array will be computed. The uniform
 /// also contains the ambient occlusion parameters needed in the shader.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct AmbientOcclusionSamples {
@@ -273,7 +269,6 @@ impl UniformBufferable for AmbientOcclusionSamples {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(AmbientOcclusionSamples);
 
 impl AmbientOcclusionConfig {
     fn new_config_requires_resource_update(&self, other: &Self) -> bool {

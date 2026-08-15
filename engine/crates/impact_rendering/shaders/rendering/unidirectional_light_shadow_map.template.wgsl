@@ -14,6 +14,7 @@ struct UnidirectionalLight {
     perpendicularIlluminanceAndTanAngularRadius: vec4f,
     orthographicTransforms: array<OrthographicTransform, {{cascade_count}}>,
     partitionDepths: vec4f,
+    padding: vec4f,
 }
 
 struct OrthographicTransform {

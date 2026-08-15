@@ -12,7 +12,7 @@ use anyhow::{Result, anyhow};
 use bytemuck::Pod;
 use impact_containers::HashMap;
 use impact_gpu::{
-    assert_uniform_valid,
+    assert_uniform_item_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
@@ -1167,7 +1167,7 @@ impl UniformBufferable for FixedVoxelMaterialProperties {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(FixedVoxelMaterialProperties);
+assert_uniform_item_valid!(FixedVoxelMaterialProperties);
 
 impl VertexBufferable for VoxelMeshVertexPosition {
     const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> =

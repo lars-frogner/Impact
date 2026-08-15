@@ -177,7 +177,7 @@ define_component_type! {
 ///
 /// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms.
+/// size is a multiple of 16 bytes as required for uniform array items.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct AmbientLight {
@@ -192,8 +192,9 @@ pub struct AmbientLight {
 ///
 /// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms, and the fields that
-/// will be accessed on the GPU are aligned to 16-byte boundaries.
+/// size is a multiple of 16 bytes as required for uniform array items, and the
+/// fields that will be accessed on the GPU are aligned to their required byte
+/// boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -201,13 +202,9 @@ pub struct AmbientLight {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct OmnidirectionalLight {
-    // Camera space position and max reach are treated as a single 4-component
-    // vector in the shader
     camera_space_position: Point3C,
     max_reach: f32,
-    // Luminous intensity and emissive radius are treated as a single
-    // 4-component vector in the shader
-    luminous_intensity: LuminousIntensity,
+    luminous_intensity: LuminousIntensity, // 16-byte aligned for shader
     emissive_radius: f32,
     flags: LightFlags,
     // Padding to make size multiple of 16-bytes
@@ -223,8 +220,9 @@ pub struct OmnidirectionalLight {
 ///
 /// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms, and the fields that
-/// will be accessed on the GPU are aligned to 16-byte boundaries.
+/// size is a multiple of 16 bytes as required for uniform array items, and the
+/// fields that will be accessed on the GPU are aligned to their required byte
+/// boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -237,12 +235,8 @@ pub struct ShadowableOmnidirectionalLight {
     // Padding to obtain 16-byte alignment for next field
     flags: LightFlags, // Use some of the padding for bitflags
     _padding_1: [u8; 3],
-    // Luminous intensity and emissive radius are treated as a single
-    // 4-component vector in the shader
     luminous_intensity: LuminousIntensity,
     emissive_radius: f32,
-    // The four next fields are accessed as a struct in a single field in the
-    // shader
     inner_shadow_shell_radius: f32,
     inverse_shadow_shell_radial_span: f32,
     outer_shadow_shell_radius: f32,
@@ -254,8 +248,9 @@ pub struct ShadowableOmnidirectionalLight {
 ///
 /// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms, and the fields that
-/// will be accessed on the GPU are aligned to 16-byte boundaries.
+/// size is a multiple of 16 bytes as required for uniform array items, and the
+/// fields that will be accessed on the GPU are aligned to their required byte
+/// boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -267,8 +262,6 @@ pub struct UnidirectionalLight {
     // Padding to obtain 16-byte alignment for next field
     flags: LightFlags, // Use some of the padding for bitflags
     _padding: [u8; 3],
-    // Illuminance and angular radius are treated as a single 4-component vector
-    // in the shader
     perpendicular_illuminance: Illumninance,
     tan_angular_radius: f32,
 }
@@ -285,8 +278,9 @@ pub struct UnidirectionalLight {
 ///
 /// This struct is intended to be stored in a [`LightManager`], and its data
 /// will be passed directly to the GPU in a uniform buffer. Importantly, its
-/// size is a multiple of 16 bytes as required for uniforms, and the fields that
-/// will be accessed on the GPU are aligned to 16-byte boundaries.
+/// size is a multiple of 16 bytes as required for uniform array items, and the
+/// fields that will be accessed on the GPU are aligned to their required byte
+/// boundaries.
 ///
 /// # Warning
 /// The fields must not be reordered, as this ordering is expected by the
@@ -298,8 +292,6 @@ pub struct ShadowableUnidirectionalLight {
     camera_space_direction: UnitVector3C,
     // Padding to obtain 16-byte alignment for next field
     near_partition_depth: f32,
-    // Illuminance and angular radius are treated as a single 4-component vector
-    // in the shader
     perpendicular_illuminance: Illumninance,
     tan_angular_radius: f32,
     orthographic_transforms: [OrthographicTranslationAndScaling; MAX_SHADOW_MAP_CASCADES_USIZE],

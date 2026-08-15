@@ -3,7 +3,6 @@
 use bytemuck::{Pod, Zeroable};
 use impact_geometry::Frustum;
 use impact_gpu::{
-    assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     buffer::GPUBuffer,
     device::GraphicsDevice,
@@ -49,9 +48,6 @@ pub struct CameraGPUResource {
 /// the far plane of the view frustum in camera space, the inverse far-plane
 /// z-coordinate and the sequence of jitter offsets to apply to the projection
 /// for temporal anti-aliasing.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct CameraProjectionUniform {
@@ -291,4 +287,3 @@ impl UniformBufferable for CameraProjectionUniform {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(CameraProjectionUniform);

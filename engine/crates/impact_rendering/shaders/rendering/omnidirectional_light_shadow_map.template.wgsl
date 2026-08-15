@@ -10,13 +10,12 @@ struct ModelToCubemapFaceSpaceTransform {
 struct OmnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cubemapFaceSpacePosition: vec3f,
-    luminousIntensityAndEmissiveRadius: vec4f,
-    lightSphere: LightSphere,
-}
-
-struct LightSphere {
+    luminousIntensity: vec3f,
+    emissiveRadius: f32,
     minShadowShellRadius: f32,
     inverseShadowShellRadialSpan: f32,
+    maxShadowShellRadius: f32,
+    maxReach: f32,
 }
 
 struct VertexOutput {
@@ -98,8 +97,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
-    let minShadowShellRadius = omnidirectionalLight.lightSphere.minShadowShellRadius;
-    let inverseShadowShellRadialSpan = omnidirectionalLight.lightSphere.inverseShadowShellRadialSpan;
+    let minShadowShellRadius = omnidirectionalLight.minShadowShellRadius;
+    let inverseShadowShellRadialSpan = omnidirectionalLight.inverseShadowShellRadialSpan;
 
     output.fragmentDepth = computeShadowMapFragmentDepth(
         minShadowShellRadius,

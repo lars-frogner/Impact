@@ -15,7 +15,6 @@ use anyhow::{Result, bail};
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
-    assert_uniform_valid,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
     shader::ShaderManager,
@@ -67,29 +66,21 @@ pub(super) struct AverageLuminanceComputeCommands {
 
 /// Uniform holding parameters needed in the shader for computing the luminance
 /// histogram.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct LuminanceHistogramParameters {
     min_log2_luminance: f32,
     inverse_log2_luminance_range: f32,
-    _pad: [u8; 8],
 }
 
 /// Uniform holding parameters needed in the shader for computing the average of
 /// the luminance histogram.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct LuminanceHistogramAverageParameters {
     min_log2_luminance: f32,
     log2_luminance_range: f32,
     current_frame_weight: f32,
-    _pad: [u8; 4],
 }
 
 const LOG2_HISTOGRAM_THREADS_PER_SIDE: usize = 4;
@@ -312,7 +303,6 @@ impl LuminanceHistogramParameters {
         Self {
             min_log2_luminance: log2_lower_bound,
             inverse_log2_luminance_range: (log2_upper_bound - log2_lower_bound).recip(),
-            _pad: [0; 8],
         }
     }
 }
@@ -327,7 +317,6 @@ impl UniformBufferable for LuminanceHistogramParameters {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(LuminanceHistogramParameters);
 
 impl LuminanceHistogramAverageParameters {
     fn new(luminance_bounds: &UpperExclusiveBounds<f32>, current_frame_weight: f32) -> Self {
@@ -337,7 +326,6 @@ impl LuminanceHistogramAverageParameters {
             min_log2_luminance: log2_lower_bound,
             log2_luminance_range: log2_upper_bound - log2_lower_bound,
             current_frame_weight,
-            _pad: [0; 4],
         }
     }
 }
@@ -352,7 +340,6 @@ impl UniformBufferable for LuminanceHistogramAverageParameters {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(LuminanceHistogramAverageParameters);
 
 pub(super) fn load_computed_luminance_histogram(
     graphics_device: &GraphicsDevice,

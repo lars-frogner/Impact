@@ -11,7 +11,7 @@ use crate::{
 use impact_containers::tracking::CollectionChange;
 use impact_geometry::{AxisAlignedBox, Frustum, OrientedBox, projection::CubeMapper};
 use impact_gpu::{
-    assert_uniform_valid,
+    assert_uniform_item_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     uniform::{
@@ -909,7 +909,7 @@ impl UniformBufferable for AmbientLight {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(AmbientLight);
+assert_uniform_item_valid!(AmbientLight);
 
 impl UniformBufferable for OmnidirectionalLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Omnidirectional light");
@@ -921,7 +921,7 @@ impl UniformBufferable for OmnidirectionalLight {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(OmnidirectionalLight);
+assert_uniform_item_valid!(OmnidirectionalLight);
 
 impl UniformBufferable for ShadowableOmnidirectionalLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Shadowable omnidirectional light");
@@ -933,7 +933,7 @@ impl UniformBufferable for ShadowableOmnidirectionalLight {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(ShadowableOmnidirectionalLight);
+assert_uniform_item_valid!(ShadowableOmnidirectionalLight);
 
 impl UniformBufferable for UnidirectionalLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Unidirectional light");
@@ -945,7 +945,7 @@ impl UniformBufferable for UnidirectionalLight {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(UnidirectionalLight);
+assert_uniform_item_valid!(UnidirectionalLight);
 
 impl UniformBufferable for ShadowableUnidirectionalLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Shadowable unidirectional light");
@@ -957,7 +957,7 @@ impl UniformBufferable for ShadowableUnidirectionalLight {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(ShadowableUnidirectionalLight);
+assert_uniform_item_valid!(ShadowableUnidirectionalLight);
 
 impl LightMetadata for AmbientLightID {
     type ID = Self;

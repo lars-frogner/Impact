@@ -8,7 +8,6 @@ struct ProjectionUniform {
     frustumFarPlaneCorners: array<vec4f, 4>,
 }
 
-// TODO: Could there be alignment issues here?
 struct AmbientOcclusionSamples {
     sampleOffsets: array<vec4f, {{max_samples}}>,
     sampleCount: u32,

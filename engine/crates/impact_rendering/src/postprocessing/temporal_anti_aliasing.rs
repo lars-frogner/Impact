@@ -15,7 +15,6 @@ use anyhow::Result;
 use approx::abs_diff_ne;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
-    assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -54,15 +53,11 @@ pub struct TemporalAntiAliasingRenderCommands {
 
 /// Uniform holding parameters needed in the shader for applying temporal
 /// anti-aliasing.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct TemporalAntiAliasingParameters {
     current_frame_weight: f32,
     variance_clipping_threshold: f32,
-    _pad: [u8; 8],
 }
 
 impl TemporalAntiAliasingConfig {
@@ -183,7 +178,6 @@ impl TemporalAntiAliasingParameters {
         Self {
             current_frame_weight,
             variance_clipping_threshold,
-            _pad: [0; 8],
         }
     }
 }
@@ -198,7 +192,6 @@ impl UniformBufferable for TemporalAntiAliasingParameters {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(TemporalAntiAliasingParameters);
 
 /// Creates a [`RenderAttachmentTextureCopyCommand`] that copies the auxiliary
 /// luminance attachment to the luminance history attachment.

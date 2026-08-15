@@ -13,10 +13,7 @@ use impact_gpu::{
     },
 };
 use impact_io::image::{Image, ImageMetadata, PixelFormat};
-use impact_math::{
-    hash::Hash32,
-    vector::{Vector3C, Vector4C},
-};
+use impact_math::{hash::Hash32, vector::Vector3C};
 use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
     TextureRegistry,
@@ -91,7 +88,10 @@ pub struct VoxelTypeRegistry {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct FixedVoxelMaterialProperties {
-    properties: Vector4C,
+    pub specular_reflectance: f32,
+    pub roughness_scale: f32,
+    pub metalness: f32,
+    pub emissive_luminance: f32,
 }
 
 #[cfg_attr(
@@ -472,12 +472,12 @@ impl VoxelTypeSpecifications {
 
             names.push(name);
             mass_densities.push(mass_density);
-            fixed_material_properties.push(FixedVoxelMaterialProperties::new(
+            fixed_material_properties.push(FixedVoxelMaterialProperties {
                 specular_reflectance,
                 roughness_scale,
                 metalness,
                 emissive_luminance,
-            ));
+            });
             color_texture_sources.push(color_texture_source);
             roughness_texture_sources.push(roughness_texture_source);
             normal_texture_sources.push(normal_texture_source);
@@ -494,28 +494,14 @@ impl VoxelTypeSpecifications {
     }
 }
 
-impl FixedVoxelMaterialProperties {
-    /// Combines the given fixed properties for a voxel material.
-    pub fn new(
-        specular_reflectance: f32,
-        roughness_scale: f32,
-        metalness: f32,
-        emissive_luminance: f32,
-    ) -> Self {
-        Self {
-            properties: Vector4C::new(
-                specular_reflectance,
-                roughness_scale,
-                metalness,
-                emissive_luminance,
-            ),
-        }
-    }
-}
-
 impl Default for FixedVoxelMaterialProperties {
     fn default() -> Self {
-        Self::new(0.5, 0.5, 0.0, 0.0)
+        Self {
+            specular_reflectance: 0.5,
+            roughness_scale: 0.5,
+            metalness: 0.0,
+            emissive_luminance: 0.0,
+        }
     }
 }
 

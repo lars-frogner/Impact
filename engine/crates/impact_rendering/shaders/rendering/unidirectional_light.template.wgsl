@@ -13,7 +13,8 @@ struct ProjectionUniform {
 
 struct UnidirectionalLight {
     cameraSpaceDirection: vec3f,
-    perpendicularIlluminanceAndTanAngularRadius: vec4f,
+    perpendicularIlluminance: vec3f,
+    tanAngularRadius: f32,
 }
 
 struct LightQuantities {
@@ -405,8 +406,8 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let cameraSpaceLightDirection = unidirectionalLight.cameraSpaceDirection;
 
-    let lightPerpendicularIlluminance = unidirectionalLight.perpendicularIlluminanceAndTanAngularRadius.xyz;
-    let tanAngularLightRadius = unidirectionalLight.perpendicularIlluminanceAndTanAngularRadius.w;
+    let lightPerpendicularIlluminance = unidirectionalLight.perpendicularIlluminance;
+    let tanAngularLightRadius = unidirectionalLight.tanAngularRadius;
 
 #if (emulate_area_light_reflection)
     let lightQuantities = computeAreaLightQuantities(

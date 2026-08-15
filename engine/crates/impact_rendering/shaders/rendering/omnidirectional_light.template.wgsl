@@ -12,8 +12,10 @@ struct ProjectionUniform {
 }
 
 struct OmnidirectionalLight {
-    cameraSpacePositionAndMaxReach: vec4f,
-    luminousIntensityAndEmissiveRadius: vec4f,
+    cameraSpacePosition: vec3f,
+    maxReach: f32,
+    luminousIntensity: vec3f,
+    emissiveRadius: f32,
     padding: vec4f,
 }
 
@@ -398,18 +400,18 @@ fn mainVS(
 
     let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
-    let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
+    let lightLuminousIntensity = omnidirectionalLight.luminousIntensity;
 
     let cameraFarDistance = -projectionUniform.frustumFarPlaneCorners[0].z;
 
     // Clamp light volume radius to less than camera far distance to prevent
     // culling
     let lightVolumeRadius = min(
-        omnidirectionalLight.cameraSpacePositionAndMaxReach.w,
+        omnidirectionalLight.maxReach,
         cameraFarDistance * 0.99
     );
 
-    let cameraSpacePosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz + lightVolumeRadius * modelSpacePosition;
+    let cameraSpacePosition = omnidirectionalLight.cameraSpacePosition + lightVolumeRadius * modelSpacePosition;
     output.projectedPosition = projectionUniform.projectionMatrix * vec4f(cameraSpacePosition, 1.0);
     output.cameraSpacePosition = cameraSpacePosition;
 
@@ -441,9 +443,9 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
-    let lightPosition = omnidirectionalLight.cameraSpacePositionAndMaxReach.xyz;
-    let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
-    let lightEmissiveRadius = omnidirectionalLight.luminousIntensityAndEmissiveRadius.w;
+    let lightPosition = omnidirectionalLight.cameraSpacePosition;
+    let lightLuminousIntensity = omnidirectionalLight.luminousIntensity;
+    let lightEmissiveRadius = omnidirectionalLight.emissiveRadius;
 
 #if (emulate_area_light_reflection)
     let lightQuantities = computeAreaLightQuantities(

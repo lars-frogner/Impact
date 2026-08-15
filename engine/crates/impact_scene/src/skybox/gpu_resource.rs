@@ -4,7 +4,6 @@ use crate::skybox::Skybox;
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
-    assert_uniform_valid,
     device::GraphicsDevice,
     resource_group::GPUResourceGroup,
     uniform::{self, SingleUniformGPUBuffer, UniformBufferable},
@@ -115,22 +114,15 @@ impl SkyboxGPUResource {
 }
 
 /// Uniform holding the maximum possible luminance from a skybox.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 struct SkyboxProperties {
     max_luminance: f32,
-    _pad: [u8; 12],
 }
 
 impl SkyboxProperties {
     fn new(max_luminance: f32) -> Self {
-        Self {
-            max_luminance,
-            _pad: [0; 12],
-        }
+        Self { max_luminance }
     }
 }
 
@@ -144,4 +136,3 @@ impl UniformBufferable for SkyboxProperties {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(SkyboxProperties);

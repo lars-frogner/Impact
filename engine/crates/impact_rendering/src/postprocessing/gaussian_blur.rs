@@ -9,7 +9,6 @@ use crate::{
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use impact_gpu::{
-    assert_uniform_valid,
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     resource_group::{GPUResourceGroup, GPUResourceGroupID, GPUResourceGroupManager},
@@ -37,9 +36,6 @@ pub enum GaussianBlurDirection {
 /// computed. Since the weights and offsets are symmetrical around the center of
 /// the 1D Gaussian kernel, only the values for the center and the positive
 /// offset side are included.
-///
-/// The size of this struct has to be a multiple of 16 bytes as required for
-/// uniforms.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Zeroable, Pod)]
 pub struct GaussianBlurSamples {
@@ -50,6 +46,8 @@ pub struct GaussianBlurSamples {
     sample_offsets_and_weights: [Vector4C; MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS],
     sample_count: u32,
     truncated_tail_samples: u32,
+    // Padding to make size match shader struct (required because this struct
+    // has 4-byte alignment but the shader struct has 16-byte alignment)
     _pad: [u8; 8],
 }
 
@@ -166,7 +164,6 @@ impl UniformBufferable for GaussianBlurSamples {
         uniform::create_uniform_buffer_bind_group_layout_entry(binding, visibility)
     }
 }
-assert_uniform_valid!(GaussianBlurSamples);
 
 /// Creates a [`PostprocessingRenderPass`] that applies a Gaussian blur in the
 /// given direction to the given input attachment and writes the result to the

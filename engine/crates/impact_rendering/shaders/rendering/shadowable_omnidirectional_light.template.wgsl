@@ -14,11 +14,8 @@ struct ProjectionUniform {
 struct OmnidirectionalLight {
     cameraToLightRotationQuaternion: vec4f,
     cameraSpacePosition: vec3f,
-    luminousIntensityAndEmissiveRadius: vec4f,
-    lightSphere: LightSphere,
-}
-
-struct LightSphere {
+    luminousIntensity: vec3f,
+    emissiveRadius: f32,
     minShadowShellRadius: f32,
     inverseShadowShellRadialSpan: f32,
     maxShadowShellRadius: f32,
@@ -641,14 +638,14 @@ fn mainVS(
 
     let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
-    let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
+    let lightLuminousIntensity = omnidirectionalLight.luminousIntensity;
 
     let cameraFarDistance = -projectionUniform.frustumFarPlaneCorners[0].z;
 
     // Clamp light volume radius to less than camera far distance to prevent
     // culling
     let lightVolumeRadius = min(
-        omnidirectionalLight.lightSphere.maxReach,
+        omnidirectionalLight.maxReach,
         cameraFarDistance * 0.99
     );
 
@@ -685,11 +682,11 @@ fn mainFS(input: VertexOutput) -> FragmentOutput {
 
     let omnidirectionalLight = omnidirectionalLights[immediates.activeLightIdx];
 
-    let lightLuminousIntensity = omnidirectionalLight.luminousIntensityAndEmissiveRadius.xyz;
-    let lightEmissiveRadius = omnidirectionalLight.luminousIntensityAndEmissiveRadius.w;
+    let lightLuminousIntensity = omnidirectionalLight.luminousIntensity;
+    let lightEmissiveRadius = omnidirectionalLight.emissiveRadius;
 
-    let minShadowShellRadius = omnidirectionalLight.lightSphere.minShadowShellRadius;
-    let inverseShadowShellRadialSpan = omnidirectionalLight.lightSphere.inverseShadowShellRadialSpan;
+    let minShadowShellRadius = omnidirectionalLight.minShadowShellRadius;
+    let inverseShadowShellRadialSpan = omnidirectionalLight.inverseShadowShellRadialSpan;
 
 #if (emulate_area_light_reflection)
     let lightQuantities = computeAreaLightQuantities(
