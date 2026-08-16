@@ -6,19 +6,20 @@ pub const MAX_TOTAL_IMMEDIATE_SIZE: usize = 256;
 
 /// Represents the meaning and size of an immediate value.
 pub trait Immediate: Copy + PartialEq {
-    /// Returns the size in bytes of the immediate.
-    fn size(&self) -> u32;
+    /// Returns the size in bytes of the immediate and the alignment of the type
+    /// that will be used to represent the immediate in the shader.
+    fn size_and_alignment(&self) -> (u32, u32);
+
+    fn size(&self) -> u32 {
+        self.size_and_alignment().0
+    }
 }
 
 /// Specification for a collection of immediates that can be passed to the GPU
 /// together.
 ///
 /// # Note
-/// The order of the immediates must match the order in the shader. Also be
-/// careful with alignment: implicit padding requirements between fields in the
-/// immediate struct in the shader may cause the fields to be mapped to
-/// unexpected offsets. In a two-field immediate struct, this can be avoided by
-/// putting the larger immediate first.
+/// The order of the immediates must match the order in the shader.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ImmediateGroup<I> {
     immediates: Vec<I>,
@@ -63,12 +64,20 @@ impl<I: Immediate> ImmediateGroup<I> {
         &self.immediates
     }
 
-    /// Returns the total size of all the immediates in the group.
+    /// Returns the total size of the struct that will represent the immediate
+    /// group in the shader, including implicit padding between fields and at
+    /// the end due to alignment requirements.
     pub fn total_size(&self) -> u32 {
-        self.immediates
-            .iter()
-            .map(|immediate| immediate.size())
-            .sum()
+        let mut total_size = 0_u32;
+        let mut max_alignment = 1;
+        for immediate in &self.immediates {
+            let (size, alignment) = immediate.size_and_alignment();
+            max_alignment = max_alignment.max(alignment);
+            total_size = total_size.next_multiple_of(alignment);
+            total_size += size;
+        }
+        total_size = total_size.next_multiple_of(max_alignment);
+        total_size
     }
 
     /// Creates an [`ImmediateStager`] that can be used to stage and set
@@ -84,8 +93,8 @@ impl<I: Immediate> ImmediateGroup<I> {
     ///
     /// # Panics
     /// - If the same immediate is already present.
-    /// - If the total size of all immediates exceeds
-    ///   [`MAX_TOTAL_IMMEDIATE_SIZE`].
+    /// - If the immediate data would extend past
+    ///   [`MAX_TOTAL_IMMEDIATE_SIZE`] bytes.
     pub fn add_immediate(&mut self, immediate: I) {
         assert!(!self.immediates.contains(&immediate));
         self.immediates.push(immediate);
@@ -98,29 +107,30 @@ impl<I: Immediate> ImmediateGroup<I> {
         immediate: I,
         get_immediate_value: impl FnOnce() -> T,
     ) {
-        let mut offset = 0;
+        let mut offset = 0_u32;
         let mut found = false;
 
         for existing_immediate in &self.immediates {
+            let (size, alignment) = existing_immediate.size_and_alignment();
+            offset = offset.next_multiple_of(alignment);
             if existing_immediate == &immediate {
                 found = true;
                 break;
             }
-            offset += existing_immediate.size() as usize;
+            offset += size;
         }
 
         if !found {
             return;
         }
 
+        let offset = offset as usize;
+
         let value = get_immediate_value();
         let data = bytemuck::bytes_of(&value);
         assert_eq!(data.len(), immediate.size() as usize);
 
-        let end = offset + data.len();
-        assert!(end <= MAX_TOTAL_IMMEDIATE_SIZE);
-
-        immediate_data[offset..end].copy_from_slice(data);
+        immediate_data[offset..offset + data.len()].copy_from_slice(data);
     }
 }
 
@@ -193,10 +203,10 @@ mod tests {
     }
 
     impl Immediate for TestImmediate {
-        fn size(&self) -> u32 {
+        fn size_and_alignment(&self) -> (u32, u32) {
             match self {
-                Self::Const4A | Self::Const4B | Self::Const4C | Self::Const4D => 4,
-                Self::Const8A => 8,
+                Self::Const4A | Self::Const4B | Self::Const4C | Self::Const4D => (4, 4),
+                Self::Const8A => (8, 8),
             }
         }
     }
@@ -286,11 +296,11 @@ mod tests {
     }
 
     #[test]
-    fn total_size_of_group_is_sum_of_immediate_sizes() {
-        let group: ImmediateGroup<_> = [Const8A, Const4D, Const4B].into_iter().collect();
+    fn total_size_of_group_is_correct_with_implicit_padding() {
+        let group: ImmediateGroup<_> = [Const4D, Const8A, Const4B].into_iter().collect();
         assert_eq!(
             group.total_size(),
-            Const8A.size() + Const4D.size() + Const4B.size()
+            Const8A.size() + 4 + Const4D.size() + Const4B.size() + 4
         );
     }
 
@@ -320,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn setting_first_immediate_in_group_uses_zero_offset() {
+    fn setting_first_immediate_in_group_works() {
         let group: ImmediateGroup<_> = [Const8A, Const4B, Const4C].into_iter().collect();
         let mut pass = MockPass::new();
 
@@ -336,8 +346,10 @@ mod tests {
     }
 
     #[test]
-    fn setting_immediates_in_group_uses_offsets_of_preceding_immediates() {
-        let group: ImmediateGroup<_> = [Const8A, Const4B, Const4C, Const4A].into_iter().collect();
+    fn setting_multiple_immediates_in_group_works() {
+        let group: ImmediateGroup<_> = [Const8A, Const4B, Const4C, Const4A, Const4D]
+            .into_iter()
+            .collect();
         let mut pass = MockPass::new();
 
         let mut stager = group.create_data_stager();
@@ -348,13 +360,37 @@ mod tests {
 
         assert_eq!(
             pass.n_bytes(),
-            Const8A.size() + Const4B.size() + Const4C.size() + Const4A.size()
+            Const8A.size() + Const4B.size() + Const4C.size() + Const4A.size() + Const4D.size()
         );
         assert_eq!(pass.get_value(Const8A.size()), Some(1_u32));
         assert_eq!(pass.get_value(Const8A.size() + Const4B.size()), Some(5_f32));
         assert_eq!(
             pass.get_value(Const8A.size() + Const4B.size() + Const4C.size()),
             Some(3_u32)
+        );
+    }
+
+    #[test]
+    fn setting_multiple_immediates_in_group_with_implicit_padding_works() {
+        let group: ImmediateGroup<_> = [Const4B, Const8A, Const4C].into_iter().collect();
+        let mut pass = MockPass::new();
+
+        let mut stager = group.create_data_stager();
+        stager.stage_immediate_data_if_present(Const4B, || 1_u32);
+        stager.stage_immediate_data_if_present(Const8A, || 3_u64);
+        stager.stage_immediate_data_if_present(Const4C, || 5_f32);
+        stager.set_staged_immediate_data(&mut pass);
+
+        assert_eq!(
+            pass.n_bytes(),
+            Const4B.size() + 4 + Const8A.size() + Const4C.size() + 4
+        );
+        assert_eq!(pass.get_value(0), Some(1_u32));
+        assert_eq!(pass.get_value(Const4B.size()), Some(0_u32)); // Padding
+        assert_eq!(pass.get_value(Const4B.size() + 4), Some(3_u64));
+        assert_eq!(
+            pass.get_value(Const4B.size() + 4 + Const8A.size()),
+            Some(5_f32)
         );
     }
 

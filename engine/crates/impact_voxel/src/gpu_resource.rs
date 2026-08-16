@@ -1205,11 +1205,11 @@ impl VertexBufferable for VoxelMeshIndex {
 }
 
 impl Immediate for VoxelImmediate {
-    fn size(&self) -> u32 {
+    fn size_and_alignment(&self) -> (u32, u32) {
         match self {
-            Self::CullingFrustum => mem::size_of::<CullingFrustum>() as u32,
-            Self::ChunkCount => mem::size_of::<u32>() as u32,
-            Self::Rendering(variant) => variant.size(),
+            Self::CullingFrustum => (mem::size_of::<CullingFrustum>() as u32, 16), // Contains 16-byte aligned vec4f and vec3f
+            Self::ChunkCount => (4, 4),                                            // u32,
+            Self::Rendering(variant) => variant.size_and_alignment(),
         }
     }
 }

@@ -126,9 +126,13 @@ pub struct VoxelMeshModifications<'a> {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Zeroable, Pod)]
 pub struct CullingFrustum {
+    // Represented by 6 4-component vectors in shader
     pub planes: [FrustumPlane; 6],
-    pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
     pub apex_position: Point3C,
+    // Padding to make next field 16-byte aligned
+    _padding: [u8; 4],
+    // Represented by 3 2-component vectors in shader
+    pub largest_signed_dist_aab_corner_indices_for_planes: [u32; 6],
 }
 
 #[repr(C)]
@@ -651,8 +655,9 @@ impl CullingFrustum {
         });
         Self {
             planes,
-            largest_signed_dist_aab_corner_indices_for_planes,
             apex_position,
+            _padding: [0; 4],
+            largest_signed_dist_aab_corner_indices_for_planes,
         }
     }
 

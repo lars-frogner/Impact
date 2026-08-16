@@ -1,8 +1,6 @@
 //! Immediate data for rendering.
 
 use impact_gpu::immediate::{Immediate, ImmediateGroup};
-use impact_math::quaternion::UnitQuaternionC;
-use std::mem;
 
 pub type BasicImmediateGroup = ImmediateGroup<BasicImmediate>;
 
@@ -22,15 +20,16 @@ pub enum BasicImmediate {
 }
 
 impl Immediate for BasicImmediate {
-    fn size(&self) -> u32 {
-        (match self {
+    #[allow(clippy::match_same_arms)]
+    fn size_and_alignment(&self) -> (u32, u32) {
+        match self {
             Self::FrameCounter | Self::LightIdx | Self::ShadowMapArrayIdx | Self::InstanceIdx => {
-                mem::size_of::<u32>()
+                (4, 4) // u32
             }
-            Self::InverseWindowDimensions => mem::size_of::<[f32; 2]>(),
-            Self::Exposure | Self::InverseExposure | Self::PixelCount => mem::size_of::<f32>(),
-            Self::CameraRotationQuaternion => mem::size_of::<UnitQuaternionC>(),
-            Self::GenericVec3f32 => mem::size_of::<[f32; 3]>(),
-        }) as u32
+            Self::Exposure | Self::InverseExposure | Self::PixelCount => (4, 4), // f32
+            Self::InverseWindowDimensions => (8, 8),                             // vec2f
+            Self::CameraRotationQuaternion => (16, 16),                          // vec4f
+            Self::GenericVec3f32 => (12, 16), // vec3f (yes, vec3f is 16-aligned)
+        }
     }
 }
