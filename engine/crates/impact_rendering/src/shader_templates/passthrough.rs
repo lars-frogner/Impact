@@ -6,8 +6,8 @@ use crate::{
         RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity,
     },
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::PostprocessingShaderTemplate,
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::StencilValue,
     rendering_template_source,
 };

@@ -6,7 +6,7 @@ use crate::{
         Blending, RenderAttachmentDescription, RenderAttachmentOutputDescription,
         RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantity,
     },
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{

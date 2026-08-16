@@ -7,7 +7,7 @@ use crate::{
         RenderAttachmentQuantity::{self, Luminance, LuminanceAux},
         RenderAttachmentSampler, RenderAttachmentTexture, RenderAttachmentTextureManager,
     },
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
     render_command::{
         additive_blend_state,
         postprocessing_pass::{

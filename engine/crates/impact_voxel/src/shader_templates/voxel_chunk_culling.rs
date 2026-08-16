@@ -8,7 +8,7 @@ use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
-use impact_rendering::push_constant::BasicImmediate;
+use impact_rendering::immediate::BasicImmediate;
 use std::sync::LazyLock;
 
 /// Shader template for a voxel chunk culling compute pass, which determines

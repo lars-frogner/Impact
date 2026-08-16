@@ -33,8 +33,8 @@ use impact_model::{
 };
 use impact_rendering::{
     BasicRenderingConfig, compute,
+    immediate::BasicImmediate,
     postprocessing::Postprocessor,
-    push_constant::BasicImmediate,
     render_command::{self, STANDARD_FRONT_FACE, geometry_pass::GeometryPass},
     resource::BasicGPUResources,
     surface::RenderingSurface,

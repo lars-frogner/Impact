@@ -3,7 +3,7 @@
 use crate::rendering_template_source;
 use crate::{
     attachment::{RenderAttachmentOutputDescriptionSet, RenderAttachmentQuantitySet},
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{

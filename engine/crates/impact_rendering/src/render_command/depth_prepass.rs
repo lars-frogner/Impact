@@ -3,7 +3,7 @@
 use crate::{
     BasicRenderingConfig,
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::model_depth_prepass::ModelDepthPrepassShaderTemplate,

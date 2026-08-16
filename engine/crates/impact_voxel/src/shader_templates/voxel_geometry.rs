@@ -9,12 +9,12 @@ use crate::{
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
-    push_constant::ImmediateGroup,
+    immediate::ImmediateGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };
 use impact_model::transform::InstanceModelViewTransformWithPrevious;
-use impact_rendering::push_constant::BasicImmediate;
+use impact_rendering::immediate::BasicImmediate;
 use std::sync::LazyLock;
 
 /// Shader template for the voxel geometry pass, which extracts the relevant

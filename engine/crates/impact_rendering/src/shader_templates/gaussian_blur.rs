@@ -6,11 +6,11 @@ use crate::{
         RenderAttachmentOutputDescription, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity,
     },
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::{
         PostprocessingShaderTemplate,
         gaussian_blur::{GaussianBlurDirection, MAX_GAUSSIAN_BLUR_UNIQUE_WEIGHTS},
     },
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_gpu::{

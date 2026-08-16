@@ -1,6 +1,6 @@
 //! Shader template for the model depth prepass.
 
-use crate::push_constant::{BasicImmediate, BasicImmediateGroup};
+use crate::immediate::{BasicImmediate, BasicImmediateGroup};
 use crate::rendering_template_source;
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{

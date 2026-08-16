@@ -16,8 +16,8 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     buffer::{GPUBuffer, GPUBufferType},
     device::GraphicsDevice,
+    immediate::{Immediate, ImmediateGroup},
     indirect::{DrawIndexedIndirectArgs, DrawIndirectArgs},
-    push_constant::{Immediate, ImmediateGroup},
     storage,
     texture::{self, ColorSpace, Sampler, TexelDescription, Texture},
     uniform::{self, UniformBufferable},
@@ -32,7 +32,7 @@ use impact_model::{
     InstanceFeature, InstanceFeatureBufferRangeID, InstanceFeatureBufferRangeMap,
     transform::{InstanceModelLightTransform, InstanceModelViewTransformWithPrevious},
 };
-use impact_rendering::push_constant::BasicImmediate;
+use impact_rendering::immediate::BasicImmediate;
 use impact_scene::model::{ModelID, ModelInstanceManager};
 use impact_texture::gpu_resource::{SamplerMap, TextureMap};
 use std::{borrow::Cow, mem, ops::Range, sync::LazyLock};

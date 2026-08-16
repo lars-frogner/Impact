@@ -3,9 +3,9 @@
 pub mod attachment;
 pub mod brdf;
 pub mod compute;
+pub mod immediate;
 pub mod lookup_tables;
 pub mod postprocessing;
-pub mod push_constant;
 pub mod render_command;
 pub mod resource;
 pub mod shader_templates;

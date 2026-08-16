@@ -1,6 +1,6 @@
 //! Shader template for unidirectional light shadow map update passes.
 
-use crate::push_constant::{BasicImmediate, BasicImmediateGroup};
+use crate::immediate::{BasicImmediate, BasicImmediateGroup};
 use crate::rendering_template_source;
 use impact_gpu::{
     shader::template::{ShaderTemplate, SpecificShaderTemplate},

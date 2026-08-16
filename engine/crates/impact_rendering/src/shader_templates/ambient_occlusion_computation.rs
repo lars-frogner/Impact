@@ -7,10 +7,10 @@ use crate::{
         RenderAttachmentQuantity::{LinearDepth, NormalVector},
         RenderAttachmentQuantitySet, RenderAttachmentSampler,
     },
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::{
         PostprocessingShaderTemplate, ambient_occlusion::MAX_AMBIENT_OCCLUSION_SAMPLE_COUNT,
     },
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::StencilValue,
     rendering_template_source,
 };

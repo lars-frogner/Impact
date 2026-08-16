@@ -5,8 +5,8 @@ use crate::{
         RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity,
     },
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::PostprocessingShaderTemplate,
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_gpu::{

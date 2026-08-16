@@ -7,7 +7,7 @@ use crate::{
     },
     compute::ComputeShaderTemplate,
     compute_template_source,
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
 };
 use impact_gpu::{
     resource_group::GPUResourceGroupID,

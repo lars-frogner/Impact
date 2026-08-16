@@ -1,6 +1,6 @@
 //! Immediate data for rendering.
 
-use impact_gpu::push_constant::{Immediate, ImmediateGroup};
+use impact_gpu::immediate::{Immediate, ImmediateGroup};
 use impact_math::quaternion::UnitQuaternionC;
 use std::mem;
 

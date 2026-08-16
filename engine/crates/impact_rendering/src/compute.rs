@@ -2,8 +2,8 @@
 
 use crate::{
     attachment::{RenderAttachmentInputDescriptionSet, RenderAttachmentTextureManager},
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::Postprocessor,
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     surface::RenderingSurface,
 };
 use anyhow::{Result, anyhow};

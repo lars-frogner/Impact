@@ -2,8 +2,8 @@
 
 use crate::{
     attachment::{RenderAttachmentQuantity, RenderAttachmentTextureManager},
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::Postprocessor,
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, STANDARD_FRONT_FACE, StencilValue, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::skybox::SkyboxShaderTemplate,

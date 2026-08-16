@@ -9,12 +9,12 @@ use crate::{
         },
         RenderAttachmentQuantitySet,
     },
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_camera::gpu_resource::CameraProjectionUniform;
 use impact_gpu::{
-    push_constant::ImmediateGroup,
+    immediate::ImmediateGroup,
     shader::template::{ShaderTemplate, SpecificShaderTemplate},
     shader_template_replacements,
 };

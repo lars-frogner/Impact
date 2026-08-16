@@ -1,7 +1,7 @@
 //! Passes for filling shadow maps.
 
 use crate::{
-    push_constant::{BasicImmediate, BasicImmediateGroup},
+    immediate::{BasicImmediate, BasicImmediateGroup},
     render_command::{self, INVERTED_FRONT_FACE, STANDARD_FRONT_FACE, begin_single_render_pass},
     resource::BasicGPUResources,
     shader_templates::{

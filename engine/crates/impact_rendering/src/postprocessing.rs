@@ -11,7 +11,7 @@ use crate::{
         RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity, RenderAttachmentTextureManager,
     },
-    push_constant::BasicImmediateGroup,
+    immediate::BasicImmediateGroup,
     render_command::StencilValue,
     resource::BasicGPUResources,
     surface::RenderingSurface,

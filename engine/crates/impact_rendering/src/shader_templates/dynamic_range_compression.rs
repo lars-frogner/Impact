@@ -5,10 +5,10 @@ use crate::{
         RenderAttachmentInputDescriptionSet, RenderAttachmentOutputDescriptionSet,
         RenderAttachmentQuantity,
     },
+    immediate::{BasicImmediate, BasicImmediateGroup},
     postprocessing::{
         PostprocessingShaderTemplate, capturing::dynamic_range_compression::ToneMappingMethod,
     },
-    push_constant::{BasicImmediate, BasicImmediateGroup},
     rendering_template_source,
 };
 use impact_gpu::{
