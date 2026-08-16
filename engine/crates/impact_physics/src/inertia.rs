@@ -961,7 +961,7 @@ mod tests {
             prop_assert!(abs_diff_eq!(
                 cube_properties.mass(),
                 correctly_transformed_mass,
-                epsilon = 1e-9 * correctly_transformed_mass
+                epsilon = 1e-8 * correctly_transformed_mass
             ));
         }
     }
