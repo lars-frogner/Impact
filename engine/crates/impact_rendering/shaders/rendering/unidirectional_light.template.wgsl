@@ -1,7 +1,5 @@
 struct Immediates {
-    // Split up inverseWindowDimensions to avoid padding
-    inverseWindowWidth: f32,
-    inverseWindowHeight: f32,
+    inverseWindowDimensions: vec2f,
     activeLightIdx: u32,
     exposure: f32,
 }
@@ -68,7 +66,7 @@ var materialPropertiesSampler: sampler;
 var<uniform> unidirectionalLights: array<UnidirectionalLight, {{max_light_count}}>;
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2f {
-    return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
+    return framebufferPosition.xy * immediates.inverseWindowDimensions;
 }
 
 fn computePositionFromLinearDepth(linearDepth: f32, frustumFarPlanePoint: vec3f) -> vec3f {

@@ -1,7 +1,5 @@
 struct Immediates {
-    // Split up inverseWindowDimensions to avoid padding
-    inverseWindowWidth: f32,
-    inverseWindowHeight: f32,
+    inverseWindowDimensions: vec2f,
     frameCounter: u32,
     exposure: f32,
 }
@@ -175,8 +173,8 @@ fn obtainProjectionMatrix() -> mat4x4f {
     var matrix = projectionUniform.projection;
     let jitterIndex = immediates.frameCounter % JITTER_COUNT;
     let jitterOffsets = projectionUniform.jitterOffsets[jitterIndex];
-    matrix[2][0] += jitterOffsets.x * immediates.inverseWindowWidth;
-    matrix[2][1] += jitterOffsets.y * immediates.inverseWindowHeight;
+    matrix[2][0] += jitterOffsets.x * immediates.inverseWindowDimensions.x;
+    matrix[2][1] += jitterOffsets.y * immediates.inverseWindowDimensions.y;
     return matrix;
 }
 
@@ -334,7 +332,7 @@ fn computeGGXRoughnessFromPerceptuallyLinearRoughness(linearRoughness: f32) -> f
 }
 
 fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2<f32> {
-    return framebufferPosition.xy * vec2f(immediates.inverseWindowWidth, immediates.inverseWindowHeight);
+    return framebufferPosition.xy * immediates.inverseWindowDimensions;
 }
 
 fn computeMotionVector(
