@@ -561,11 +561,11 @@ impl BloomRenderCommands {
         texture: &RenderAttachmentTexture,
         output_mip_level: u32,
     ) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::InverseWindowDimensions,
-            || Self::compute_inverse_output_view_size(texture, output_mip_level),
-        );
+        let mut stager = self.immediates.create_data_stager();
+        stager.stage_immediate_data_if_present(BasicImmediate::InverseWindowDimensions, || {
+            Self::compute_inverse_output_view_size(texture, output_mip_level)
+        });
+        stager.set_staged_immediate_data(render_pass);
     }
 
     fn upsampling_blur_shader_template_id() -> ShaderID {

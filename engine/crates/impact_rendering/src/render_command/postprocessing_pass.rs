@@ -259,39 +259,29 @@ impl PostprocessingRenderPass {
         postprocessor: &Postprocessor,
         frame_counter: u32,
     ) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::InverseWindowDimensions,
-            || rendering_surface.inverse_window_dimensions_immediate(),
-        );
+        let mut stager = self.immediates.create_data_stager();
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::PixelCount,
-            || rendering_surface.pixel_count_immediate(),
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::InverseWindowDimensions, || {
+            rendering_surface.inverse_window_dimensions_immediate()
+        });
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::Exposure,
-            || postprocessor.capturing_camera().exposure_immediate(),
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::PixelCount, || {
+            rendering_surface.pixel_count_immediate()
+        });
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::InverseExposure,
-            || {
-                postprocessor
-                    .capturing_camera()
-                    .inverse_exposure_immediate()
-            },
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::Exposure, || {
+            postprocessor.capturing_camera().exposure_immediate()
+        });
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::FrameCounter,
-            || frame_counter,
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::InverseExposure, || {
+            postprocessor
+                .capturing_camera()
+                .inverse_exposure_immediate()
+        });
+
+        stager.stage_immediate_data_if_present(BasicImmediate::FrameCounter, || frame_counter);
+
+        stager.set_staged_immediate_data(render_pass);
     }
 
     /// Records the render pass into the given command encoder.

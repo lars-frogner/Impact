@@ -234,11 +234,9 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
     }
 
     fn set_light_idx_immediate(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::LightIdx,
-            || light_idx,
-        );
+        let mut stager = self.immediates.create_data_stager();
+        stager.stage_immediate_data_if_present(BasicImmediate::LightIdx, || light_idx);
+        stager.set_staged_immediate_data(render_pass);
     }
 
     pub fn record<R>(
@@ -603,17 +601,13 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         light_idx: u32,
         cascade_idx: CascadeIdx,
     ) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::LightIdx,
-            || light_idx,
-        );
+        let mut stager = self.immediates.create_data_stager();
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::ShadowMapArrayIdx,
-            || cascade_idx,
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::LightIdx, || light_idx);
+
+        stager.stage_immediate_data_if_present(BasicImmediate::ShadowMapArrayIdx, || cascade_idx);
+
+        stager.set_staged_immediate_data(render_pass);
     }
 
     pub fn record<R>(

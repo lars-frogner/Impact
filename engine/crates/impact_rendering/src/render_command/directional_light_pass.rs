@@ -20,8 +20,8 @@ use crate::{
 use anyhow::{Result, anyhow};
 use impact_camera::gpu_resource::CameraGPUResource;
 use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, shader::ShaderManager,
-    timestamp_query::TimestampQueryRegistry, wgpu,
+    bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, immediate::ImmediateStager,
+    shader::ShaderManager, timestamp_query::TimestampQueryRegistry, wgpu,
 };
 use impact_light::{
     LightFlags, LightManager,
@@ -312,30 +312,21 @@ impl DirectionalLightPass {
     }
 
     fn set_constant_immediates(
-        &self,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        stager: &mut ImmediateStager<'_, BasicImmediate>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
     ) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::InverseWindowDimensions,
-            || rendering_surface.inverse_window_dimensions_immediate(),
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::InverseWindowDimensions, || {
+            rendering_surface.inverse_window_dimensions_immediate()
+        });
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::Exposure,
-            || postprocessor.capturing_camera().exposure_immediate(),
-        );
+        stager.stage_immediate_data_if_present(BasicImmediate::Exposure, || {
+            postprocessor.capturing_camera().exposure_immediate()
+        });
     }
 
-    fn set_light_idx_immediate(&self, render_pass: &mut wgpu::RenderPass<'_>, light_idx: u32) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
-            BasicImmediate::LightIdx,
-            || light_idx,
-        );
+    fn set_light_idx_immediate(stager: &mut ImmediateStager<'_, BasicImmediate>, light_idx: u32) {
+        stager.stage_immediate_data_if_present(BasicImmediate::LightIdx, || light_idx);
     }
 
     pub fn record(
@@ -405,7 +396,8 @@ impl DirectionalLightPass {
         if n_omnidirectional_lights > 0 {
             render_pass.set_pipeline(&self.omnidirectional_light_pipeline.pipeline);
 
-            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
+            let mut immediate_stager = self.immediates.create_data_stager();
+            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -445,7 +437,11 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
+                Self::set_light_idx_immediate(
+                    &mut immediate_stager,
+                    u32::try_from(light_idx).unwrap(),
+                );
+                immediate_stager.set_staged_immediate_data(&mut render_pass);
 
                 render_pass.draw_indexed(0..n_indices, 0, 0..1);
                 draw_call_count += 1;
@@ -456,7 +452,8 @@ impl DirectionalLightPass {
         if n_shadowable_omnidirectional_lights > 0 {
             render_pass.set_pipeline(&self.shadowable_omnidirectional_light_pipeline.pipeline);
 
-            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
+            let mut immediate_stager = self.immediates.create_data_stager();
+            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -507,7 +504,11 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
+                Self::set_light_idx_immediate(
+                    &mut immediate_stager,
+                    u32::try_from(light_idx).unwrap(),
+                );
+                immediate_stager.set_staged_immediate_data(&mut render_pass);
 
                 render_pass.set_bind_group(
                     shadow_map_bind_group_index,
@@ -524,7 +525,8 @@ impl DirectionalLightPass {
         if n_unidirectional_lights > 0 {
             render_pass.set_pipeline(&self.unidirectional_light_pipeline.pipeline);
 
-            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
+            let mut immediate_stager = self.immediates.create_data_stager();
+            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -564,7 +566,11 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
+                Self::set_light_idx_immediate(
+                    &mut immediate_stager,
+                    u32::try_from(light_idx).unwrap(),
+                );
+                immediate_stager.set_staged_immediate_data(&mut render_pass);
 
                 render_pass.draw_indexed(0..n_indices, 0, 0..1);
                 draw_call_count += 1;
@@ -575,7 +581,8 @@ impl DirectionalLightPass {
         if n_shadowable_unidirectional_lights > 0 {
             render_pass.set_pipeline(&self.shadowable_unidirectional_light_pipeline.pipeline);
 
-            self.set_constant_immediates(&mut render_pass, rendering_surface, postprocessor);
+            let mut immediate_stager = self.immediates.create_data_stager();
+            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -626,7 +633,11 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                self.set_light_idx_immediate(&mut render_pass, u32::try_from(light_idx).unwrap());
+                Self::set_light_idx_immediate(
+                    &mut immediate_stager,
+                    u32::try_from(light_idx).unwrap(),
+                );
+                immediate_stager.set_staged_immediate_data(&mut render_pass);
 
                 render_pass.set_bind_group(
                     shadow_map_bind_group_index,

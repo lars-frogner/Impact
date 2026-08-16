@@ -1,5 +1,7 @@
 use anyhow::Result;
-use impact_gpu::{device::GraphicsDevice, vertex_attribute_ranges, wgpu};
+use impact_gpu::{
+    device::GraphicsDevice, immediate::MAX_TOTAL_IMMEDIATE_SIZE, vertex_attribute_ranges, wgpu,
+};
 use impact_rendering::surface::RenderingSurface;
 use std::num::NonZeroU32;
 
@@ -92,7 +94,7 @@ pub fn connect_to_graphics_device_for_rendering(
             | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
         wgpu::Limits {
             max_bind_groups: 7,
-            max_immediate_size: 256,
+            max_immediate_size: MAX_TOTAL_IMMEDIATE_SIZE as u32,
             max_color_attachment_bytes_per_sample: 64,
             max_vertex_attributes: vertex_attribute_ranges::TOTAL_LOCATIONS,
             ..wgpu::Limits::default()

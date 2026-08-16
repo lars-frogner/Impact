@@ -18,6 +18,7 @@ use impact_geometry::{Frustum, OrientedBox};
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
+    immediate::ImmediateStager,
     shader::{ShaderManager, template::SpecificShaderTemplate},
     timestamp_query::TimestampQueryRegistry,
     wgpu,
@@ -328,23 +329,18 @@ impl VoxelChunkCullingPass {
         chunk_count: u32,
         instance_idx: u32,
     ) {
-        self.immediates.set_immediate_for_compute_pass_if_present(
-            compute_pass,
-            VoxelImmediate::CullingFrustum,
-            || culling_frustum,
-        );
+        let mut stager = self.immediates.create_data_stager();
 
-        self.immediates.set_immediate_for_compute_pass_if_present(
-            compute_pass,
-            VoxelImmediate::ChunkCount,
-            || chunk_count,
-        );
+        stager.stage_immediate_data_if_present(VoxelImmediate::CullingFrustum, || culling_frustum);
 
-        self.immediates.set_immediate_for_compute_pass_if_present(
-            compute_pass,
+        stager.stage_immediate_data_if_present(VoxelImmediate::ChunkCount, || chunk_count);
+
+        stager.stage_immediate_data_if_present(
             VoxelImmediate::Rendering(BasicImmediate::InstanceIdx),
             || instance_idx,
         );
+
+        stager.set_staged_immediate_data(compute_pass);
     }
 
     fn record_for_geometry_pass<GR>(
@@ -715,38 +711,32 @@ impl VoxelGeometryPipeline {
     }
 
     fn set_constant_immediates(
-        &self,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        stager: &mut ImmediateStager<'_, VoxelImmediate>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
         frame_counter: u32,
     ) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
+        stager.stage_immediate_data_if_present(
             VoxelImmediate::Rendering(BasicImmediate::InverseWindowDimensions),
             || rendering_surface.inverse_window_dimensions_immediate(),
         );
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
+        stager.stage_immediate_data_if_present(
             VoxelImmediate::Rendering(BasicImmediate::FrameCounter),
             || frame_counter,
         );
 
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
+        stager.stage_immediate_data_if_present(
             VoxelImmediate::Rendering(BasicImmediate::Exposure),
             || postprocessor.capturing_camera().exposure_immediate(),
         );
     }
 
     fn set_per_object_immediates(
-        &self,
-        render_pass: &mut wgpu::RenderPass<'_>,
+        stager: &mut ImmediateStager<'_, VoxelImmediate>,
         voxel_object_buffers: &VoxelObjectGPUBuffers,
     ) {
-        self.immediates.set_immediate_for_render_pass_if_present(
-            render_pass,
+        stager.stage_immediate_data_if_present(
             VoxelImmediate::Rendering(BasicImmediate::GenericVec3f32),
             || voxel_object_buffers.origin_offset_in_root(),
         );
@@ -795,7 +785,13 @@ impl VoxelGeometryPipeline {
 
         render_pass.set_bind_group(1, material_gpu_resources.bind_group(), &[]);
 
-        self.set_constant_immediates(render_pass, rendering_surface, postprocessor, frame_counter);
+        let mut immediate_stager = self.immediates.create_data_stager();
+        Self::set_constant_immediates(
+            &mut immediate_stager,
+            rendering_surface,
+            postprocessor,
+            frame_counter,
+        );
 
         // All draw calls share the same transform buffer
         render_pass.set_vertex_buffer(
@@ -814,7 +810,8 @@ impl VoxelGeometryPipeline {
                 continue;
             };
 
-            self.set_per_object_immediates(render_pass, voxel_object_buffers);
+            Self::set_per_object_immediates(&mut immediate_stager, voxel_object_buffers);
+            immediate_stager.set_staged_immediate_data(render_pass);
 
             let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();
 
