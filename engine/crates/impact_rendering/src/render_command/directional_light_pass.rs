@@ -311,7 +311,7 @@ impl DirectionalLightPass {
         }
     }
 
-    fn set_constant_immediates(
+    fn stage_constant_immediates(
         stager: &mut ImmediateStager<'_, BasicImmediate>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
@@ -325,7 +325,7 @@ impl DirectionalLightPass {
         });
     }
 
-    fn set_light_idx_immediate(stager: &mut ImmediateStager<'_, BasicImmediate>, light_idx: u32) {
+    fn stage_light_idx_immediate(stager: &mut ImmediateStager<'_, BasicImmediate>, light_idx: u32) {
         stager.stage_immediate_data_if_present(BasicImmediate::LightIdx, || light_idx);
     }
 
@@ -397,7 +397,11 @@ impl DirectionalLightPass {
             render_pass.set_pipeline(&self.omnidirectional_light_pipeline.pipeline);
 
             let mut immediate_stager = self.immediates.create_data_stager();
-            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
+            Self::stage_constant_immediates(
+                &mut immediate_stager,
+                rendering_surface,
+                postprocessor,
+            );
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -437,7 +441,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                Self::set_light_idx_immediate(
+                Self::stage_light_idx_immediate(
                     &mut immediate_stager,
                     u32::try_from(light_idx).unwrap(),
                 );
@@ -453,7 +457,11 @@ impl DirectionalLightPass {
             render_pass.set_pipeline(&self.shadowable_omnidirectional_light_pipeline.pipeline);
 
             let mut immediate_stager = self.immediates.create_data_stager();
-            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
+            Self::stage_constant_immediates(
+                &mut immediate_stager,
+                rendering_surface,
+                postprocessor,
+            );
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -504,7 +512,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                Self::set_light_idx_immediate(
+                Self::stage_light_idx_immediate(
                     &mut immediate_stager,
                     u32::try_from(light_idx).unwrap(),
                 );
@@ -526,7 +534,11 @@ impl DirectionalLightPass {
             render_pass.set_pipeline(&self.unidirectional_light_pipeline.pipeline);
 
             let mut immediate_stager = self.immediates.create_data_stager();
-            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
+            Self::stage_constant_immediates(
+                &mut immediate_stager,
+                rendering_surface,
+                postprocessor,
+            );
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -566,7 +578,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                Self::set_light_idx_immediate(
+                Self::stage_light_idx_immediate(
                     &mut immediate_stager,
                     u32::try_from(light_idx).unwrap(),
                 );
@@ -582,7 +594,11 @@ impl DirectionalLightPass {
             render_pass.set_pipeline(&self.shadowable_unidirectional_light_pipeline.pipeline);
 
             let mut immediate_stager = self.immediates.create_data_stager();
-            Self::set_constant_immediates(&mut immediate_stager, rendering_surface, postprocessor);
+            Self::stage_constant_immediates(
+                &mut immediate_stager,
+                rendering_surface,
+                postprocessor,
+            );
 
             render_pass.set_bind_group(
                 light_bind_group_index,
@@ -633,7 +649,7 @@ impl DirectionalLightPass {
                     continue;
                 }
 
-                Self::set_light_idx_immediate(
+                Self::stage_light_idx_immediate(
                     &mut immediate_stager,
                     u32::try_from(light_idx).unwrap(),
                 );
