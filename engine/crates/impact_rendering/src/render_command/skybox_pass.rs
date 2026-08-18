@@ -55,7 +55,7 @@ impl SkyboxPass {
         }
     }
 
-    pub fn sync_with_render_resources(
+    pub fn sync_with_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,

@@ -9,7 +9,7 @@ use impact_gpu::{device::GraphicsDevice, wgpu};
     derive(serde::Serialize, serde::Deserialize),
     serde(default)
 )]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ShadowMappingConfig {
     /// Whether shadow mapping is enabled.
     pub enabled: bool,

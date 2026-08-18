@@ -1,6 +1,6 @@
 //! Screen capture.
 
-use crate::{lock_order::OrderedRwLock, rendering::RenderingSystem};
+use crate::{gpu::GraphicsSystem, lock_order::OrderedRwLock, rendering::RenderingSystem};
 use anyhow::Result;
 use impact_geometry::projection::CubemapFace;
 use impact_light::MAX_SHADOW_MAP_CASCADES;
@@ -142,7 +142,7 @@ impl ScreenCapturer {
     #[allow(unused_variables)]
     pub fn save_omnidirectional_light_shadow_maps_if_requested(
         &self,
-        renderer: &RwLock<RenderingSystem>,
+        graphics_system: &RwLock<GraphicsSystem>,
         frame_number: u64,
     ) -> Result<()> {
         if self
@@ -156,10 +156,10 @@ impl ScreenCapturer {
 
             log::info!("Saving omnidirectional light shadow maps for frame {frame_number}");
 
-            let renderer = renderer.oread();
-            let render_resource_manager = renderer.render_resource_manager().oread();
+            let graphics_system = graphics_system.oread();
+            let gpu_resource_manager = graphics_system.gpu_resource_manager().oread();
 
-            if let Some(light_gpu_resources) = render_resource_manager.light() {
+            if let Some(light_gpu_resources) = gpu_resource_manager.light() {
                 for (light_idx, texture) in light_gpu_resources
                     .omnidirectional_light_shadow_map_manager()
                     .textures()
@@ -176,7 +176,7 @@ impl ScreenCapturer {
 
                         #[cfg(feature = "png")]
                         texture.save_face_as_png_file(
-                            renderer.graphics_device(),
+                            graphics_system.graphics_device(),
                             face,
                             output_path,
                         )?;
@@ -198,7 +198,7 @@ impl ScreenCapturer {
     #[allow(unused_variables)]
     pub fn save_unidirectional_light_shadow_maps_if_requested(
         &self,
-        renderer: &RwLock<RenderingSystem>,
+        graphics_system: &RwLock<GraphicsSystem>,
         frame_number: u64,
     ) -> Result<()> {
         if self
@@ -212,10 +212,10 @@ impl ScreenCapturer {
 
             log::info!("Saving unidirectional light shadow maps for frame {frame_number}");
 
-            let renderer = renderer.oread();
-            let render_resource_manager = renderer.render_resource_manager().oread();
+            let graphics_system = graphics_system.oread();
+            let gpu_resource_manager = graphics_system.gpu_resource_manager().oread();
 
-            if let Some(light_gpu_resources) = render_resource_manager.light() {
+            if let Some(light_gpu_resources) = gpu_resource_manager.light() {
                 for (light_idx, texture) in light_gpu_resources
                     .unidirectional_light_shadow_map_manager()
                     .textures()
@@ -232,7 +232,7 @@ impl ScreenCapturer {
 
                         #[cfg(feature = "png")]
                         texture.save_cascade_as_png_file(
-                            renderer.graphics_device(),
+                            graphics_system.graphics_device(),
                             cascade_idx,
                             output_path,
                         )?;

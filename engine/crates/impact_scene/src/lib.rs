@@ -18,7 +18,7 @@ use graph::SceneGraph;
 use impact_camera::Camera;
 use impact_id::EntityID;
 use impact_intersection::IntersectionManager;
-use impact_light::{LightManager, shadow_map::ShadowMappingConfig};
+use impact_light::LightManager;
 use impact_material::MaterialRegistry;
 use impact_profiling::{TaskTimer, instrument_task};
 use model::ModelInstanceManager;
@@ -166,7 +166,6 @@ pub fn buffer_model_instances_and_bound_lights(
     scene_graph: &SceneGraph,
     camera: &Camera,
     current_frame_number: u32,
-    shadow_mapping_config: &ShadowMappingConfig,
 ) {
     let Some(ModelInstanceBufferingResult {
         world_space_aabb_for_visible_models,
@@ -197,7 +196,6 @@ pub fn buffer_model_instances_and_bound_lights(
                 scene_graph,
                 camera,
                 &world_space_aabb_for_visible_models,
-                shadow_mapping_config,
             );
         }
     );
@@ -213,7 +211,6 @@ pub fn buffer_model_instances_and_bound_lights(
                 scene_graph,
                 camera,
                 &camera_space_aabb_for_visible_models,
-                shadow_mapping_config,
             );
         }
     );

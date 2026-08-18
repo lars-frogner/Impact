@@ -39,6 +39,7 @@ pub struct LightGPUResources {
     shadowable_unidirectional_light_bind_group: wgpu::BindGroup,
     omnidirectional_light_shadow_map_manager: OmnidirectionalLightShadowMapManager,
     unidirectional_light_shadow_map_manager: UnidirectionalLightShadowMapManager,
+    shadow_mapping_enabled: bool,
 }
 
 type AmbientLightGPUBuffer =
@@ -160,7 +161,6 @@ impl LightGPUResources {
         graphics_device: &GraphicsDevice,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_manager: &LightManager,
-        shadow_mapping_config: &ShadowMappingConfig,
     ) -> Self {
         let ambient_light_gpu_buffer = AmbientLightGPUBuffer::for_uniform_buffer(
             graphics_device,
@@ -241,6 +241,8 @@ impl LightGPUResources {
             "Shadowable unidirectional light bind group",
         );
 
+        let shadow_mapping_config = &light_manager.config().shadow_mapping;
+
         let omnidirectional_light_shadow_map_manager = OmnidirectionalLightShadowMapManager::new(
             graphics_device,
             shadow_mapping_config,
@@ -266,6 +268,7 @@ impl LightGPUResources {
             shadowable_unidirectional_light_bind_group,
             omnidirectional_light_shadow_map_manager,
             unidirectional_light_shadow_map_manager,
+            shadow_mapping_enabled: shadow_mapping_config.enabled,
         }
     }
 
@@ -414,6 +417,11 @@ impl LightGPUResources {
             .max_uniform_count()
     }
 
+    /// Whether shadow mapping is currently enabled.
+    pub fn shadow_mapping_enabled(&self) -> bool {
+        self.shadow_mapping_enabled
+    }
+
     /// Ensures that the light uniform buffers are in sync with the light data
     /// in the given light manager. Will also recreate the required bind groups
     /// if any of the GPU buffers had to be reallocated.
@@ -425,6 +433,8 @@ impl LightGPUResources {
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_manager: &LightManager,
     ) {
+        self.shadow_mapping_enabled = light_manager.config().shadow_mapping.enabled;
+
         let shadowable_omnidirectional_light_buffer_change = light_manager
             .shadowable_omnidirectional_light_buffer()
             .change();

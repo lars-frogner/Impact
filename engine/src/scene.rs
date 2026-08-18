@@ -5,7 +5,7 @@ use anyhow::Result;
 use impact_camera::{CameraContext, CameraManager};
 use impact_id::EntityIDManager;
 use impact_intersection::IntersectionManager;
-use impact_light::LightManager;
+use impact_light::{LightConfig, LightManager};
 use impact_scene::{
     graph::{SceneGraph, SceneGroupID},
     model::{ModelInstanceManager, ModelInstanceManagerState},
@@ -33,6 +33,7 @@ impl Scene {
         entity_id_manager: &mut EntityIDManager,
         camera_context: CameraContext,
         model_instance_manager: ModelInstanceManager,
+        light_config: LightConfig,
         voxel_config: VoxelConfig,
     ) -> Result<Self> {
         let scene_graph_root_node_id = SceneGroupID::from_entity_id(entity_id_manager.provide_id());
@@ -40,7 +41,7 @@ impl Scene {
         Ok(Self {
             skybox: RwLock::new(None),
             camera_manager: RwLock::new(CameraManager::new(camera_context)),
-            light_manager: RwLock::new(LightManager::new()),
+            light_manager: RwLock::new(LightManager::new(light_config)),
             voxel_manager: RwLock::new(VoxelManager::new(voxel_config)?),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,

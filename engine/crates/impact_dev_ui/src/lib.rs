@@ -59,7 +59,7 @@ pub struct UserInterfaceConfig {
     pub show_physics_options: bool,
     pub show_gizmo_options: bool,
     pub show_task_timings: bool,
-    pub show_render_pass_timings: bool,
+    pub show_gpu_pass_timings: bool,
     pub show_time_overlay: bool,
     pub disable_cursor_capture: bool,
     pub hide_ui_during_screenshots: bool,
@@ -104,8 +104,8 @@ impl UserInterface {
             )),
         ));
         engine.enqueue_admin_command(AdminCommand::Instrumentation(
-            InstrumentationAdminCommand::SetRenderPassTimings(ToActiveState::from_enabled(
-                self.config.show_render_pass_timings,
+            InstrumentationAdminCommand::SetGPUPassTimings(ToActiveState::from_enabled(
+                self.config.show_gpu_pass_timings,
             )),
         ));
     }
@@ -165,7 +165,7 @@ impl UserInterface {
                 if self.config.show_task_timings {
                     self.task_timing_panel.run(ui, &self.config, engine);
                 }
-                if self.config.show_render_pass_timings {
+                if self.config.show_gpu_pass_timings {
                     self.render_pass_timing_panel.run(ui, &self.config, engine);
                 }
                 custom_elements.run_option_panels(ui, self.config.alpha);
@@ -240,7 +240,7 @@ impl Default for UserInterfaceConfig {
             show_physics_options: false,
             show_gizmo_options: false,
             show_task_timings: false,
-            show_render_pass_timings: false,
+            show_gpu_pass_timings: false,
             show_time_overlay: true,
             disable_cursor_capture: false,
             hide_ui_during_screenshots: true,

@@ -119,7 +119,7 @@ impl DepthPrepass {
         );
     }
 
-    pub fn sync_with_render_resources_for_non_physical_models(
+    pub fn sync_with_gpu_resources_for_non_physical_models(
         &mut self,
         gpu_resources: &impl BasicGPUResources,
     ) {

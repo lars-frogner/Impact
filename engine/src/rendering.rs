@@ -1,26 +1,13 @@
 //! Graphics rendering.
 
 pub mod render_command;
-pub mod resource;
 pub mod screen_capture;
 
-use crate::{lock_order::OrderedRwLock, resource::ResourceManager, ui::UserInterface};
-use anyhow::Result;
-use impact_camera::CameraManager;
-use impact_gpu::{
-    bind_group_layout::BindGroupLayoutRegistry,
-    device::GraphicsDevice,
-    resource_group::GPUResourceGroupManager,
-    shader::ShaderManager,
-    storage::StorageGPUBufferManager,
-    texture::mipmap::MipmapperGenerator,
-    timestamp_query::{
-        TimestampQueryManager,
-        external::{ExternalGPUProfiler, TracyGPUProfiler},
-    },
-    wgpu,
+use crate::{
+    gpu::GraphicsSystem, lock_order::OrderedRwLock, resource::ResourceManager, ui::UserInterface,
 };
-use impact_light::{LightManager, shadow_map::ShadowMappingConfig};
+use anyhow::Result;
+use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::RenderAttachmentTextureManager,
@@ -30,11 +17,8 @@ use impact_rendering::{
     },
     surface::{RenderingSurface, SurfaceAcquisition},
 };
-use impact_scene::model::ModelInstanceManager;
-use impact_voxel::VoxelObjectManager;
 use parking_lot::RwLock;
 use render_command::RenderCommandManager;
-use resource::RenderResourceManager;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, sync::Arc};
 
@@ -44,20 +28,11 @@ pub struct RenderingSystem {
     graphics_device: Arc<GraphicsDevice>,
     rendering_surface: RenderingSurface,
     surface_texture_to_present: Option<wgpu::SurfaceTexture>,
-    mipmapper_generator: Arc<MipmapperGenerator>,
-    render_resource_manager: RwLock<RenderResourceManager>,
-    shader_manager: RwLock<ShaderManager>,
     render_attachment_texture_manager: RwLock<RenderAttachmentTextureManager>,
-    gpu_resource_group_manager: RwLock<GPUResourceGroupManager>,
-    storage_gpu_buffer_manager: RwLock<StorageGPUBufferManager>,
     postprocessor: RwLock<Postprocessor>,
-    bind_group_layout_registry: BindGroupLayoutRegistry,
-    staging_belt: wgpu::util::StagingBelt,
     render_command_manager: RenderCommandManager,
-    timestamp_query_manager: TimestampQueryManager,
     frame_counter: u64,
     basic_config: BasicRenderingConfig,
-    shadow_mapping_config: ShadowMappingConfig,
 }
 
 /// Rendering configuration options.
@@ -65,7 +40,6 @@ pub struct RenderingSystem {
 #[serde(default)]
 pub struct RenderingConfig {
     pub basic: BasicRenderingConfig,
-    pub shadow_mapping: ShadowMappingConfig,
     pub ambient_occlusion: AmbientOcclusionConfig,
     pub temporal_anti_aliasing: TemporalAntiAliasingConfig,
     pub capturing_camera: CapturingCameraConfig,
@@ -79,20 +53,16 @@ impl RenderingSystem {
         graphics_device: Arc<GraphicsDevice>,
         rendering_surface: RenderingSurface,
         resource_manager: &ResourceManager,
+        graphics_system: &GraphicsSystem,
     ) -> Result<Self> {
         config.basic.make_compatible_with_device(&graphics_device);
-
-        let mipmapper_generator = Arc::new(MipmapperGenerator::new(
-            &graphics_device,
-            MipmapperGenerator::DEFAULT_SUPPORTED_FORMATS,
-        ));
-
-        let mut shader_manager = ShaderManager::new();
 
         let mut render_attachment_texture_manager =
             RenderAttachmentTextureManager::new(&graphics_device, &rendering_surface);
 
-        let bind_group_layout_registry = BindGroupLayoutRegistry::new();
+        let mut shader_manager = graphics_system.shader_manager().owrite();
+        let mut gpu_resource_group_manager = graphics_system.gpu_resource_group_manager().owrite();
+        let mut storage_gpu_buffer_manager = graphics_system.storage_gpu_buffer_manager().owrite();
 
         let render_command_manager = RenderCommandManager::new(
             &graphics_device,
@@ -100,13 +70,9 @@ impl RenderingSystem {
             &mut shader_manager,
             &mut render_attachment_texture_manager,
             resource_manager,
-            &bind_group_layout_registry,
+            graphics_system.bind_group_layout_registry(),
             &config.basic,
         );
-
-        let mut gpu_resource_group_manager = GPUResourceGroupManager::new();
-
-        let mut storage_gpu_buffer_manager = StorageGPUBufferManager::new();
 
         let postprocessor = Postprocessor::new(
             config.ambient_occlusion,
@@ -118,42 +84,18 @@ impl RenderingSystem {
             &mut render_attachment_texture_manager,
             &mut gpu_resource_group_manager,
             &mut storage_gpu_buffer_manager,
-            &bind_group_layout_registry,
+            graphics_system.bind_group_layout_registry(),
         )?;
-
-        let mut timestamp_query_manager = TimestampQueryManager::new(
-            &graphics_device,
-            NonZeroU32::new(128).unwrap(),
-            config.basic.timings_enabled,
-        );
-
-        timestamp_query_manager.set_external_profiler(if cfg!(feature = "tracy") {
-            ExternalGPUProfiler::Tracy(TracyGPUProfiler::new(&graphics_device, Some("Rendering"))?)
-        } else {
-            ExternalGPUProfiler::None
-        });
-
-        let staging_belt =
-            wgpu::util::StagingBelt::new(graphics_device.device().clone(), 1024 * 1024);
 
         Ok(Self {
             graphics_device,
             rendering_surface,
             surface_texture_to_present: None,
-            mipmapper_generator,
-            render_resource_manager: RwLock::new(RenderResourceManager::new()),
-            shader_manager: RwLock::new(shader_manager),
             render_attachment_texture_manager: RwLock::new(render_attachment_texture_manager),
-            gpu_resource_group_manager: RwLock::new(gpu_resource_group_manager),
-            storage_gpu_buffer_manager: RwLock::new(storage_gpu_buffer_manager),
             postprocessor: RwLock::new(postprocessor),
-            bind_group_layout_registry,
-            staging_belt,
             render_command_manager,
-            timestamp_query_manager,
             frame_counter: 0,
             basic_config: config.basic,
-            shadow_mapping_config: config.shadow_mapping,
         })
     }
 
@@ -167,38 +109,10 @@ impl RenderingSystem {
         &self.rendering_surface
     }
 
-    /// Returns a reference counting pointer to the [`MipmapperGenerator`].
-    pub fn mipmapper_generator(&self) -> &Arc<MipmapperGenerator> {
-        &self.mipmapper_generator
-    }
-
-    /// Returns a reference to the [`RenderResourceManager`], guarded
-    /// by a [`RwLock`].
-    pub fn render_resource_manager(&self) -> &RwLock<RenderResourceManager> {
-        &self.render_resource_manager
-    }
-
-    /// Returns a reference to the [`ShaderManager`], guarded by a [`RwLock`].
-    pub fn shader_manager(&self) -> &RwLock<ShaderManager> {
-        &self.shader_manager
-    }
-
     /// Returns a reference to the [`RenderAttachmentTextureManager`], guarded
     /// by a [`RwLock`].
     pub fn render_attachment_texture_manager(&self) -> &RwLock<RenderAttachmentTextureManager> {
         &self.render_attachment_texture_manager
-    }
-
-    /// Returns a reference to the [`GPUResourceGroupManager`], guarded by a
-    /// [`RwLock`].
-    pub fn gpu_resource_group_manager(&self) -> &RwLock<GPUResourceGroupManager> {
-        &self.gpu_resource_group_manager
-    }
-
-    /// Returns a reference to the [`StorageGPUBufferManager`], guarded by a
-    /// [`RwLock`].
-    pub fn storage_gpu_buffer_manager(&self) -> &RwLock<StorageGPUBufferManager> {
-        &self.storage_gpu_buffer_manager
     }
 
     /// Returns a reference to the [`Postprocessor`], guarded by a [`RwLock`].
@@ -206,19 +120,9 @@ impl RenderingSystem {
         &self.postprocessor
     }
 
-    /// Returns a reference to the [`BindGroupLayoutRegistry`].
-    pub fn bind_group_layout_registry(&self) -> &BindGroupLayoutRegistry {
-        &self.bind_group_layout_registry
-    }
-
     /// Returns a reference to the [`RenderCommandManager`].
     pub fn render_command_manager(&self) -> &RenderCommandManager {
         &self.render_command_manager
-    }
-
-    /// Returns a reference to the [`TimestampQueryManager`].
-    pub fn timestamp_query_manager(&self) -> &TimestampQueryManager {
-        &self.timestamp_query_manager
     }
 
     pub fn is_initial_frame(&self) -> bool {
@@ -235,14 +139,6 @@ impl RenderingSystem {
         &self.basic_config
     }
 
-    pub fn shadow_mapping_config(&self) -> &ShadowMappingConfig {
-        &self.shadow_mapping_config
-    }
-
-    pub fn shadow_mapping_config_mut(&mut self) -> &mut ShadowMappingConfig {
-        &mut self.shadow_mapping_config
-    }
-
     /// Presents the last surface texture that was rendered to. Does nothing if
     /// there is no texture to present.
     pub fn present(&mut self) {
@@ -251,80 +147,18 @@ impl RenderingSystem {
         }
     }
 
-    /// Records and submits commands for synchronizing dynamic GPU resources
-    /// (resources that benefit from a staging belt).
-    pub fn sync_dynamic_gpu_resources(
-        &mut self,
-        camera_manager: &CameraManager,
-        light_manager: &LightManager,
-        voxel_object_manager: &mut VoxelObjectManager,
-        model_instance_manager: &mut ModelInstanceManager,
-    ) {
-        let mut command_encoder =
-            Self::create_render_command_encoder(self.graphics_device.device());
-
-        let mut render_resource_manager = self.render_resource_manager.owrite();
-
-        camera_manager.sync_gpu_resources(
-            &self.graphics_device,
-            &mut self.staging_belt,
-            &mut command_encoder,
-            &self.bind_group_layout_registry,
-            &mut render_resource_manager.camera,
-        );
-
-        // TODO: All light uniform GPU buffers are updated every frame in
-        // practice because the primitive change detection in the uniform
-        // buffers gets triggered even when the contents have not changed.
-        light_manager.sync_gpu_resources(
-            &self.graphics_device,
-            &mut self.staging_belt,
-            &mut command_encoder,
-            &self.bind_group_layout_registry,
-            &mut render_resource_manager.lights,
-            &self.shadow_mapping_config,
-        );
-
-        voxel_object_manager.sync_gpu_resources(
-            &self.graphics_device,
-            &mut self.staging_belt,
-            &mut command_encoder,
-            &self.bind_group_layout_registry,
-            model_instance_manager,
-            &mut render_resource_manager.voxel_objects,
-        );
-
-        // TODO: Most instance feature GPU buffers are also updated every frame
-        // because the instance feature buffers are cleared and repopulated
-        // every frame.
-        model_instance_manager.sync_gpu_buffers(
-            &self.graphics_device,
-            &mut self.staging_belt,
-            &mut command_encoder,
-            &mut render_resource_manager.model_instance_buffers,
-        );
-
-        drop(render_resource_manager);
-
-        self.staging_belt.finish();
-
-        self.graphics_device
-            .queue()
-            .submit(std::iter::once(command_encoder.finish()));
-    }
-
-    /// Synchronizes the render commands with the current render resources.
+    /// Synchronizes the render commands with the current GPU resources.
     ///
     /// # Errors
     /// Returns an error if synchronization fails due to missing resources.
-    pub fn synchronize_render_commands(&mut self) -> Result<()> {
-        let render_resource_manager = self.render_resource_manager.oread();
-        let mut shader_manager = self.shader_manager.owrite();
-        self.render_command_manager.sync_with_render_resources(
+    pub fn synchronize_render_commands(&mut self, graphics_system: &GraphicsSystem) -> Result<()> {
+        let mut shader_manager = graphics_system.shader_manager().owrite();
+        let gpu_resource_manager = graphics_system.gpu_resource_manager().oread();
+        self.render_command_manager.sync_with_gpu_resources(
             &self.graphics_device,
             &mut shader_manager,
-            &**render_resource_manager,
-            &self.bind_group_layout_registry,
+            &gpu_resource_manager,
+            graphics_system.bind_group_layout_registry(),
         )
     }
 
@@ -333,32 +167,39 @@ impl RenderingSystem {
     ///
     /// # Errors
     /// Returns an error if recording a render commands fails.
-    pub fn render_before_surface(&mut self) -> Result<()> {
+    pub fn render_before_surface(&mut self, graphics_system: &GraphicsSystem) -> Result<()> {
         self.render_attachment_texture_manager
             .owrite()
             .swap_previous_and_current_attachment_variants(&self.graphics_device);
 
-        let mut timestamp_recorder = self
-            .timestamp_query_manager
-            .create_timestamp_query_registry();
-
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
-        self.render_command_manager.record_before_surface(
-            &self.rendering_surface,
-            &**self.render_resource_manager.oread(),
-            &self.render_attachment_texture_manager.oread(),
-            &self.gpu_resource_group_manager.oread(),
-            &self.storage_gpu_buffer_manager.oread(),
-            &self.postprocessor.oread(),
-            &self.shadow_mapping_config,
-            self.frame_counter as u32,
-            &mut timestamp_recorder,
-            &mut command_encoder,
-        )?;
+        {
+            let mut timestamp_query_manager = graphics_system.timestamp_query_manager().owrite();
+            let mut timestamp_recorder = timestamp_query_manager.create_timestamp_query_registry();
 
-        timestamp_recorder.finish(&mut command_encoder);
+            let gpu_resource_manager = graphics_system.gpu_resource_manager().oread();
+            let gpu_resource_group_manager = graphics_system.gpu_resource_group_manager().oread();
+            let storage_gpu_buffer_manager = graphics_system.storage_gpu_buffer_manager().oread();
+
+            let render_attachment_texture_manager = self.render_attachment_texture_manager.oread();
+            let postprocessor = self.postprocessor.oread();
+
+            self.render_command_manager.record_before_surface(
+                &self.rendering_surface,
+                &gpu_resource_manager,
+                &render_attachment_texture_manager,
+                &gpu_resource_group_manager,
+                &storage_gpu_buffer_manager,
+                &postprocessor,
+                self.frame_counter as u32,
+                &mut timestamp_recorder,
+                &mut command_encoder,
+            )?;
+
+            timestamp_recorder.finish(&mut command_encoder);
+        }
 
         self.graphics_device
             .queue()
@@ -388,12 +229,8 @@ impl RenderingSystem {
                 texture_view,
                 presentable_texture,
             } => Ok(Some((texture_view, presentable_texture))),
-            SurfaceAcquisition::Skip => {
-                self.staging_belt.recall();
-                Ok(None)
-            }
+            SurfaceAcquisition::Skip => Ok(None),
             SurfaceAcquisition::Invalidated => {
-                self.staging_belt.recall();
                 self.recreate_render_attachment_textures();
                 Ok(None)
             }
@@ -408,44 +245,50 @@ impl RenderingSystem {
     /// Returns an error if recording a render commands fails.
     pub fn render_to_surface(
         &mut self,
+        graphics_system: &GraphicsSystem,
         surface_texture_view: wgpu::TextureView,
         surface_texture: Option<wgpu::SurfaceTexture>,
         user_interface: &dyn UserInterface,
     ) -> Result<()> {
-        let mut timestamp_recorder = self
-            .timestamp_query_manager
-            .create_timestamp_query_registry();
-
         let mut command_encoder =
             Self::create_render_command_encoder(self.graphics_device.device());
 
-        self.render_command_manager.record_with_surface(
-            &self.rendering_surface,
-            &surface_texture_view,
-            &**self.render_resource_manager.oread(),
-            &self.render_attachment_texture_manager.oread(),
-            &self.gpu_resource_group_manager.oread(),
-            &self.postprocessor.oread(),
-            self.frame_counter as u32,
-            &mut timestamp_recorder,
-            &mut command_encoder,
-        )?;
+        {
+            let mut timestamp_query_manager = graphics_system.timestamp_query_manager().owrite();
+            let mut timestamp_recorder = timestamp_query_manager.create_timestamp_query_registry();
 
-        user_interface.render(
-            &self.graphics_device,
-            &self.rendering_surface,
-            &surface_texture_view,
-            &mut timestamp_recorder,
-            &mut command_encoder,
-        )?;
+            let gpu_resource_manager = graphics_system.gpu_resource_manager().oread();
+            let gpu_resource_group_manager = graphics_system.gpu_resource_group_manager().oread();
 
-        timestamp_recorder.finish(&mut command_encoder);
+            let render_attachment_texture_manager = self.render_attachment_texture_manager.oread();
+            let postprocessor = self.postprocessor.oread();
+
+            self.render_command_manager.record_with_surface(
+                &self.rendering_surface,
+                &surface_texture_view,
+                &gpu_resource_manager,
+                &render_attachment_texture_manager,
+                &gpu_resource_group_manager,
+                &postprocessor,
+                self.frame_counter as u32,
+                &mut timestamp_recorder,
+                &mut command_encoder,
+            )?;
+
+            user_interface.render(
+                &self.graphics_device,
+                &self.rendering_surface,
+                &surface_texture_view,
+                &mut timestamp_recorder,
+                &mut command_encoder,
+            )?;
+
+            timestamp_recorder.finish(&mut command_encoder);
+        }
 
         self.graphics_device
             .queue()
             .submit(std::iter::once(command_encoder.finish()));
-
-        self.staging_belt.recall();
 
         self.surface_texture_to_present = surface_texture;
         self.frame_counter = self.frame_counter.wrapping_add(1);
@@ -453,22 +296,12 @@ impl RenderingSystem {
         Ok(())
     }
 
-    /// Loads the timestamps recorded during rendering. Call after
-    /// [`Self::render_to_surface`]. This method will wait for the GPU to finish
-    /// rendering.
-    pub fn load_recorded_timing_results(&mut self) -> Result<()> {
-        self.timestamp_query_manager
-            .load_recorded_timing_results(&self.graphics_device)?;
-        self.timestamp_query_manager.reset();
-        Ok(())
-    }
-
     /// Updates the exposure based on the current settings and potentially the
     /// average incident luminance. Call after [`Self::render_to_surface`]. This
     /// method will wait for the GPU to finish rendering if it needs the average
     /// incident luminance.
-    pub fn update_exposure(&self) -> Result<()> {
-        let storage_gpu_buffer_manager = self.storage_gpu_buffer_manager.oread();
+    pub fn update_exposure(&self, graphics_system: &GraphicsSystem) -> Result<()> {
+        let storage_gpu_buffer_manager = graphics_system.storage_gpu_buffer_manager().oread();
         let mut postprocessor = self.postprocessor.owrite();
         postprocessor
             .capturing_camera_mut()
@@ -505,10 +338,10 @@ impl RenderingSystem {
         Ok(true)
     }
 
-    pub fn set_wireframe_mode_enabled(&mut self, enabled: bool) {
+    pub fn set_wireframe_mode_enabled(&mut self, graphics_system: &GraphicsSystem, enabled: bool) {
         if enabled
             && !self
-                .graphics_device()
+                .graphics_device
                 .supports_features(wgpu::Features::POLYGON_MODE_LINE)
         {
             log::warn!("Not enabling wireframe mode due to missing graphics device features");
@@ -519,38 +352,20 @@ impl RenderingSystem {
 
         if enabled != was_enabled {
             self.basic_config.wireframe_mode_on = enabled;
-            self.sync_render_command_manager_with_basic_config();
-        }
-    }
-
-    pub fn set_render_pass_timings_enabled(&mut self, enabled: bool) {
-        if enabled
-            && !self
-                .graphics_device()
-                .supports_features(wgpu::Features::TIMESTAMP_QUERY)
-        {
-            log::warn!("Not enabling timestamp queries due to missing graphics device features");
-            return;
-        }
-
-        let was_enabled = self.basic_config.timings_enabled;
-
-        if enabled != was_enabled {
-            self.basic_config.timings_enabled = enabled;
-            self.timestamp_query_manager.set_enabled(enabled);
+            self.sync_render_command_manager_with_basic_config(graphics_system);
         }
     }
 
     fn create_render_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render encoder"),
+            label: Some("Render command encoder"),
         })
     }
 
-    fn sync_render_command_manager_with_basic_config(&mut self) {
+    fn sync_render_command_manager_with_basic_config(&mut self, graphics_system: &GraphicsSystem) {
         self.render_command_manager.sync_with_config(
             &self.graphics_device,
-            &self.shader_manager.oread(),
+            &graphics_system.shader_manager().oread(),
             &self.basic_config,
         );
     }

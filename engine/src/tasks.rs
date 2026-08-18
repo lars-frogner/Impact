@@ -73,12 +73,13 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Synchronizing render commands", engine.task_timer(), {
+            let graphics_system = engine.graphics_system().oread();
             let mut renderer = engine.renderer().owrite();
             if renderer.is_initial_frame() {
                 // No previous frame to render on the first frame
                 return Ok(());
             }
-            renderer.synchronize_render_commands()
+            renderer.synchronize_render_commands(&graphics_system)
         })
     }
 );
@@ -96,11 +97,12 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Rendering before surface", engine.task_timer(), {
+            let graphics_system = engine.graphics_system().oread();
             let mut renderer = engine.renderer().owrite();
             if renderer.is_initial_frame() {
                 return Ok(());
             }
-            renderer.render_before_surface()
+            renderer.render_before_surface(&graphics_system)
         })
     }
 );
@@ -116,6 +118,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
 
+        let graphics_system = engine.graphics_system().oread();
         let mut renderer = engine.renderer().owrite();
 
         if renderer.is_initial_frame() {
@@ -133,6 +136,7 @@ define_task!(
 
         instrument_task!("Rendering to surface", engine.task_timer(), {
             renderer.render_to_surface(
+                &graphics_system,
                 surface_texture_view,
                 surface_texture,
                 ctx.user_interface(),
@@ -150,6 +154,7 @@ define_task!(
     |ctx: &RuntimeContext| {
         let engine = ctx.engine();
         instrument_task!("Performing post-rendering updates", engine.task_timer(), {
+            let graphics_system = engine.graphics_system().oread();
             let mut renderer = engine.renderer().owrite();
 
             if renderer.is_initial_frame() {
@@ -160,9 +165,9 @@ define_task!(
                 return Ok(());
             }
 
-            renderer.load_recorded_timing_results()?;
+            graphics_system.load_recorded_timing_results()?;
 
-            renderer.downgrade().update_exposure()
+            renderer.downgrade().update_exposure(&graphics_system)
         })
     }
 );
@@ -237,7 +242,7 @@ define_task!(
 
 define_task!(
     /// Executes all the current rendering and capturing commands in the queue.
-    [pub] ApplyRenderCommands,
+    [pub] ApplyRenderingCommands,
     depends_on = [
         CallApp,
         HandleInputEvents,
@@ -807,7 +812,6 @@ define_task!(
             let mut model_instance_manager = scene.model_instance_manager().owrite();
             let intersection_manager = scene.intersection_manager().oread();
             let scene_graph = scene.scene_graph().oread();
-            let shadow_mapping_config = engine.renderer().oread().shadow_mapping_config().clone();
 
             buffer_model_instances_and_bound_lights(
                 engine.task_timer(),
@@ -818,7 +822,6 @@ define_task!(
                 &scene_graph,
                 camera,
                 current_frame_number,
-                &shadow_mapping_config,
             );
         }
 
@@ -993,8 +996,8 @@ define_task!(
         // counterparts.
         BufferModelInstancesAndBoundLights,
         BufferGizmoInstances,
-        // We need to have the up-to-date rendering configuration at this point.
-        ApplyRenderCommands
+        // We need to have the up-to-date graphics configuration at this point.
+        ApplyRenderingCommands
     ],
     execute_on = [RenderingTag],
     |ctx: &RuntimeContext| {
@@ -1155,7 +1158,7 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
 
     // COMMANDS (affecting the current frame)
     task_scheduler.register_task(ApplyEngineCommands)?;
-    task_scheduler.register_task(ApplyRenderCommands)?;
+    task_scheduler.register_task(ApplyRenderingCommands)?;
 
     // ENTITY RULES (based on state from previous frame)
     task_scheduler.register_task(HandleDistanceTriggeredEntityRules)?;

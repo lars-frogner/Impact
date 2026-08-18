@@ -60,23 +60,26 @@ declare_lockable_resource!(impact_physics::constraint::ConstraintManager, 350);
 declare_lockable_resource!(impact_voxel::collidable::CollisionWorld, 360);
 
 // ============================================================================
-// RENDERING (400-499)
+// GPU (400-499)
 // ============================================================================
 
-declare_lockable_resource!(crate::rendering::RenderingSystem, 400);
+declare_lockable_resource!(crate::gpu::GraphicsSystem, 400);
 
-// RenderingSystem components (must be acquired after RenderingSystem itself)
-// Order follows rendering pipeline flow and dependency hierarchy:
-// Resources → Shaders → Render Targets → Resource Groups → Storage → Post-processing
-declare_lockable_resource!(crate::rendering::resource::RenderResourceManager, 410);
-declare_lockable_resource!(impact_gpu::shader::ShaderManager, 420);
+declare_lockable_resource!(crate::rendering::RenderingSystem, 410);
+
+// GraphicsSystem components (must be acquired after GraphicsSystem and RenderingSystem)
+declare_lockable_resource!(impact_gpu::timestamp_query::TimestampQueryManager, 420);
+declare_lockable_resource!(impact_gpu::shader::ShaderManager, 430);
+declare_lockable_resource!(crate::gpu::resource::GPUResourceManager, 440);
+declare_lockable_resource!(impact_gpu::resource_group::GPUResourceGroupManager, 450);
+declare_lockable_resource!(impact_gpu::storage::StorageGPUBufferManager, 460);
+
+// RenderingSystem components (must be acquired after GraphicsSystem components)
 declare_lockable_resource!(
     impact_rendering::attachment::RenderAttachmentTextureManager,
-    430
+    470
 );
-declare_lockable_resource!(impact_gpu::resource_group::GPUResourceGroupManager, 440);
-declare_lockable_resource!(impact_gpu::storage::StorageGPUBufferManager, 450);
-declare_lockable_resource!(impact_rendering::postprocessing::Postprocessor, 460);
+declare_lockable_resource!(impact_rendering::postprocessing::Postprocessor, 480);
 
 // ============================================================================
 // CONTROL (500-599)

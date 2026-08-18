@@ -1,12 +1,12 @@
 //! Commands for instrumentation.
 
-use crate::{command::utils::ToActiveState, rendering::RenderingSystem};
+use crate::{command::utils::ToActiveState, gpu::GraphicsSystem};
 use impact_profiling::TaskTimer;
 
 #[derive(Clone, Debug)]
 pub enum InstrumentationAdminCommand {
     SetTaskTimings(ToActiveState),
-    SetRenderPassTimings(ToActiveState),
+    SetGPUPassTimings(ToActiveState),
 }
 
 pub fn set_task_timings(task_timer: &TaskTimer, to: ToActiveState) {
@@ -16,6 +16,6 @@ pub fn set_task_timings(task_timer: &TaskTimer, to: ToActiveState) {
     }
 }
 
-pub fn set_render_pass_timings(renderer: &mut RenderingSystem, to: ToActiveState) {
-    renderer.set_render_pass_timings_enabled(to.enabled());
+pub fn set_gpu_pass_timings(graphics_system: &mut GraphicsSystem, to: ToActiveState) {
+    graphics_system.set_gpu_pass_timings_enabled(to.enabled());
 }

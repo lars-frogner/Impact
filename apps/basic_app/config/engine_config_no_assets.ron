@@ -3,16 +3,12 @@
         resource_file_path: None,
         lookup_table_dir: "../resources/lookup_tables",
     ),
+    graphics: (
+        timings_enabled: false,
+    ),
     rendering: (
         basic: (
-            enabled: true,
             wireframe_mode_on: false,
-            timings_enabled: false,
-        ),
-        shadow_mapping: (
-            enabled: true,
-            omnidirectional_light_shadow_map_resolution: 1024,
-            unidirectional_light_shadow_map_resolution: 1024,
         ),
         ambient_occlusion: (
             enabled: true,
@@ -55,6 +51,13 @@
             dynamic_range_compression: (
                 tone_mapping_method: ACES,
             ),
+        ),
+    ),
+    light: (
+        shadow_mapping: (
+            enabled: true,
+            omnidirectional_light_shadow_map_resolution: 1024,
+            unidirectional_light_shadow_map_resolution: 1024,
         ),
     ),
     physics: (

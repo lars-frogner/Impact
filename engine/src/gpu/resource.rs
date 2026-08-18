@@ -1,6 +1,7 @@
 //! GPU resource management.
 
 use impact_camera::gpu_resource::CameraGPUResource;
+use impact_gpu::{device::GraphicsDevice, wgpu};
 use impact_light::gpu_resource::LightGPUResources;
 use impact_material::gpu_resource::{
     GPUMaterialMap, GPUMaterialTemplateMap, GPUMaterialTextureGroupMap,
@@ -14,7 +15,7 @@ use impact_voxel::gpu_resource::{
 };
 
 #[derive(Debug)]
-pub struct RenderResourceManager {
+pub struct GPUResourceManager {
     pub camera: Option<CameraGPUResource>,
     pub skybox: Option<SkyboxGPUResource>,
     pub lights: Option<LightGPUResources>,
@@ -29,10 +30,14 @@ pub struct RenderResourceManager {
     pub model_instance_buffers: ModelInstanceGPUBufferMap,
     pub voxel_materials: Option<VoxelMaterialGPUResources>,
     pub voxel_objects: VoxelObjectGPUResources,
+    pub staging_belt: wgpu::util::StagingBelt,
 }
 
-impl RenderResourceManager {
-    pub fn new() -> Self {
+impl GPUResourceManager {
+    pub fn new(graphics_device: &GraphicsDevice) -> Self {
+        let staging_belt =
+            wgpu::util::StagingBelt::new(graphics_device.device().clone(), 1024 * 1024);
+
         Self {
             camera: None,
             skybox: None,
@@ -48,17 +53,12 @@ impl RenderResourceManager {
             model_instance_buffers: ModelInstanceGPUBufferMap::new(),
             voxel_materials: None,
             voxel_objects: VoxelObjectGPUResources::new(),
+            staging_belt,
         }
     }
 }
 
-impl Default for RenderResourceManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BasicGPUResources for RenderResourceManager {
+impl BasicGPUResources for GPUResourceManager {
     fn camera(&self) -> Option<&CameraGPUResource> {
         self.camera.as_ref()
     }
@@ -108,7 +108,7 @@ impl BasicGPUResources for RenderResourceManager {
     }
 }
 
-impl VoxelGPUResources for RenderResourceManager {
+impl VoxelGPUResources for GPUResourceManager {
     fn voxel_materials(&self) -> Option<&VoxelMaterialGPUResources> {
         self.voxel_materials.as_ref()
     }

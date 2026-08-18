@@ -42,12 +42,12 @@ impl Toolbar {
                     }
 
                     if ui
-                        .toggle_value(&mut config.show_render_pass_timings, "Render pass timings")
+                        .toggle_value(&mut config.show_gpu_pass_timings, "GPU pass timings")
                         .changed()
                     {
                         engine.enqueue_admin_command(AdminCommand::Instrumentation(
-                            InstrumentationAdminCommand::SetRenderPassTimings(
-                                ToActiveState::from_enabled(config.show_render_pass_timings),
+                            InstrumentationAdminCommand::SetGPUPassTimings(
+                                ToActiveState::from_enabled(config.show_gpu_pass_timings),
                             ),
                         ));
                     }

@@ -12,7 +12,7 @@ use crate::{
     application::ApplicationInterface,
     command::{self, EngineCommandQueues},
     game_loop::{GameLoopConfig, GameLoopController},
-    gpu::GraphicsContext,
+    gpu::{GraphicsConfig, GraphicsContext, GraphicsSystem},
     impact_gizmo::{self, GizmoConfig, GizmoManager},
     input::{
         InputConfig, InputEvent, InputManager,
@@ -35,8 +35,8 @@ use impact_ecs::{
     metadata::ComponentMetadataRegistry,
     world::{EntityStager, World as ECSWorld},
 };
-use impact_gpu::device::GraphicsDevice;
 use impact_id::EntityIDManager;
+use impact_light::LightConfig;
 use impact_profiling::TaskTimer;
 use impact_scene::model::ModelInstanceManager;
 use impact_texture::{SamplerRegistry, TextureRegistry};
@@ -60,7 +60,6 @@ use std::{
 pub struct Engine {
     app: Arc<dyn ApplicationInterface>,
     intra_task_thread_pool: Option<DynamicThreadPool>,
-    graphics_device: Arc<GraphicsDevice>,
     component_metadata_registry: ComponentMetadataRegistry,
     game_loop_controller: RwLock<GameLoopController>,
     input_manager: Mutex<InputManager>,
@@ -70,6 +69,7 @@ pub struct Engine {
     resource_manager: RwLock<ResourceManager>,
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
+    graphics_system: RwLock<GraphicsSystem>,
     renderer: RwLock<RenderingSystem>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
@@ -88,8 +88,10 @@ pub struct EngineConfig {
     pub game_loop: GameLoopConfig,
     pub input: InputConfig,
     pub resources: ResourceConfig,
+    pub light: LightConfig,
     pub voxel: VoxelConfig,
     pub physics: PhysicsConfig,
+    pub graphics: GraphicsConfig,
     pub rendering: RenderingConfig,
     pub controller: ControllerConfig,
     pub gizmo: GizmoConfig,
@@ -145,17 +147,22 @@ impl Engine {
             &mut entity_id_manager,
             camera_context,
             model_instance_manager,
+            config.light,
             config.voxel,
         )?;
 
         let graphics_device = Arc::new(graphics.device);
+
+        let graphics_system = GraphicsSystem::new(Arc::clone(&graphics_device), config.graphics)?;
+
         let rendering_surface = graphics.surface;
 
         let renderer = RenderingSystem::new(
             config.rendering,
-            Arc::clone(&graphics_device),
+            graphics_device,
             rendering_surface,
             &resource_manager,
+            &graphics_system,
         )?;
 
         let simulator = PhysicsSimulator::new(config.physics)?;
@@ -172,7 +179,6 @@ impl Engine {
         let engine = Self {
             app,
             intra_task_thread_pool: None,
-            graphics_device,
             component_metadata_registry,
             game_loop_controller: RwLock::new(game_loop_controller),
             input_manager: Mutex::new(input_manager),
@@ -182,6 +188,7 @@ impl Engine {
             resource_manager: RwLock::new(resource_manager),
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
+            graphics_system: RwLock::new(graphics_system),
             renderer: RwLock::new(renderer),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
@@ -206,11 +213,6 @@ impl Engine {
     /// parallelization within tasks, if it exists.
     pub(crate) fn intra_task_thread_pool(&self) -> Option<&DynamicThreadPool> {
         self.intra_task_thread_pool.as_ref()
-    }
-
-    /// Returns a reference to the [`GraphicsDevice`].
-    pub(crate) fn graphics_device(&self) -> &GraphicsDevice {
-        &self.graphics_device
     }
 
     /// Returns a reference to the [`ComponentMetadataRegistry`].
@@ -254,6 +256,11 @@ impl Engine {
     /// [`RwLock`].
     pub(crate) fn simulator(&self) -> &RwLock<PhysicsSimulator> {
         &self.simulator
+    }
+
+    /// Returns a reference to the [`GraphicsSystem`], guarded by a [`RwLock`].
+    pub(crate) fn graphics_system(&self) -> &RwLock<GraphicsSystem> {
+        &self.graphics_system
     }
 
     /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
@@ -305,13 +312,13 @@ impl Engine {
 
         self.screen_capturer
             .save_omnidirectional_light_shadow_maps_if_requested(
-                self.renderer(),
+                self.graphics_system(),
                 frame_number_for_image,
             )?;
 
         self.screen_capturer
             .save_unidirectional_light_shadow_maps_if_requested(
-                self.renderer(),
+                self.graphics_system(),
                 frame_number_for_image,
             )
     }

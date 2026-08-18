@@ -4,12 +4,13 @@ pub mod postprocessing;
 
 use crate::{
     command::utils::{ModifiedActiveState, ToActiveState},
+    gpu::GraphicsSystem,
     lock_order::OrderedRwLock,
     rendering::RenderingSystem,
-    scene::Scene,
 };
 use anyhow::Result;
-use impact_light::shadow_map::ShadowMappingConfig;
+use impact_camera::CameraManager;
+use impact_light::{LightManager, shadow_map::ShadowMappingConfig};
 use impact_rendering::{
     attachment::RenderAttachmentQuantity,
     postprocessing::{
@@ -23,7 +24,6 @@ use impact_rendering::{
         temporal_anti_aliasing::TemporalAntiAliasingConfig,
     },
 };
-use parking_lot::RwLock;
 use postprocessing::{ToExposure, ToRenderAttachmentQuantity, ToToneMappingMethod};
 
 #[derive(Clone, Debug)]
@@ -40,12 +40,15 @@ pub enum RenderingAdminCommand {
     SetVisualizedRenderAttachmentQuantity(ToRenderAttachmentQuantity),
     SetShadowMappingConfig(ShadowMappingConfig),
     SetWireframeMode(ToActiveState),
-    SetRenderPassTimings(ToActiveState),
 }
 
-pub fn set_ambient_occlusion_config(renderer: &RenderingSystem, config: AmbientOcclusionConfig) {
+pub fn set_ambient_occlusion_config(
+    graphics_system: &GraphicsSystem,
+    renderer: &RenderingSystem,
+    config: AmbientOcclusionConfig,
+) {
     log::info!("Setting ambient occlusion config to {config:?}");
-    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+    let gpu_resource_group_manager = graphics_system.gpu_resource_group_manager().oread();
     let mut postprocessor = renderer.postprocessor().owrite();
     postprocessor.set_ambient_occlusion_config(
         renderer.graphics_device(),
@@ -55,22 +58,19 @@ pub fn set_ambient_occlusion_config(renderer: &RenderingSystem, config: AmbientO
 }
 
 pub fn set_temporal_anti_aliasing_config(
-    scene: &RwLock<Scene>,
+    camera_manager: &mut CameraManager,
+    graphics_system: &GraphicsSystem,
     renderer: &RenderingSystem,
     to: TemporalAntiAliasingConfig,
 ) {
     log::info!("Setting temporal anti-aliasing config to {to:?}");
-    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+    let gpu_resource_group_manager = graphics_system.gpu_resource_group_manager().oread();
     let mut postprocessor = renderer.postprocessor().owrite();
 
     let config = postprocessor.temporal_anti_aliasing_config();
 
     if to.enabled != config.enabled {
-        let scene = scene.oread();
-        scene
-            .camera_manager()
-            .owrite()
-            .set_jitter_enabled(to.enabled);
+        camera_manager.set_jitter_enabled(to.enabled);
     }
 
     postprocessor.set_temporal_anti_aliasing_config(
@@ -80,9 +80,13 @@ pub fn set_temporal_anti_aliasing_config(
     );
 }
 
-pub fn set_bloom_config(renderer: &RenderingSystem, config: BloomConfig) {
+pub fn set_bloom_config(
+    graphics_system: &GraphicsSystem,
+    renderer: &RenderingSystem,
+    config: BloomConfig,
+) {
     log::info!("Setting bloom config to {config:?}");
-    let mut shader_manager = renderer.shader_manager().owrite();
+    let mut shader_manager = graphics_system.shader_manager().owrite();
     let mut render_attachment_texture_manager =
         renderer.render_attachment_texture_manager().owrite();
     let mut postprocessor = renderer.postprocessor().owrite();
@@ -101,11 +105,12 @@ pub fn set_camera_settings(renderer: &RenderingSystem, settings: CameraSettings)
 }
 
 pub fn set_average_luminance_computation_config(
+    graphics_system: &GraphicsSystem,
     renderer: &RenderingSystem,
     config: AverageLuminanceComputationConfig,
 ) {
     log::info!("Setting average luminance computation config to {config:?}");
-    let gpu_resource_group_manager = renderer.gpu_resource_group_manager().oread();
+    let gpu_resource_group_manager = graphics_system.gpu_resource_group_manager().oread();
     let mut postprocessor = renderer.postprocessor().owrite();
     postprocessor
         .capturing_camera_mut()
@@ -159,9 +164,9 @@ pub fn set_visualized_render_attachment_quantity(
     )
 }
 
-pub fn set_shadow_mapping_config(renderer: &mut RenderingSystem, mut to: ShadowMappingConfig) {
+pub fn set_shadow_mapping_config(light_manager: &mut LightManager, mut to: ShadowMappingConfig) {
     log::info!("Setting shadow mapping to {to:?}");
-    let config = renderer.shadow_mapping_config_mut();
+    let config = light_manager.shadow_mapping_config_mut();
 
     if to.omnidirectional_light_shadow_map_resolution
         != config.omnidirectional_light_shadow_map_resolution
@@ -182,6 +187,7 @@ pub fn set_shadow_mapping_config(renderer: &mut RenderingSystem, mut to: ShadowM
 }
 
 pub fn set_wireframe_mode(
+    graphics_system: &GraphicsSystem,
     renderer: &mut RenderingSystem,
     to: ToActiveState,
 ) -> ModifiedActiveState {
@@ -189,20 +195,7 @@ pub fn set_wireframe_mode(
     let mut enabled = renderer.basic_config().wireframe_mode_on;
     let state = to.set(&mut enabled);
     if state.changed {
-        renderer.set_wireframe_mode_enabled(enabled);
-    }
-    state
-}
-
-pub fn set_render_pass_timings(
-    renderer: &mut RenderingSystem,
-    to: ToActiveState,
-) -> ModifiedActiveState {
-    log::info!("Setting render pass timings to {to:?}");
-    let mut enabled = renderer.basic_config().timings_enabled;
-    let state = to.set(&mut enabled);
-    if state.changed {
-        renderer.set_render_pass_timings_enabled(enabled);
+        renderer.set_wireframe_mode_enabled(graphics_system, enabled);
     }
     state
 }

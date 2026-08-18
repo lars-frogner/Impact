@@ -119,17 +119,17 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         }
     }
 
-    pub fn sync_with_render_resources(
+    pub fn sync_with_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
     ) {
-        self.sync_models_with_render_resources(gpu_resources);
-        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources);
+        self.sync_models_with_gpu_resources(gpu_resources);
+        self.sync_shader_with_gpu_resources(graphics_device, shader_manager, gpu_resources);
     }
 
-    fn sync_models_with_render_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
+    fn sync_models_with_gpu_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
         fn has_features(buffers: &[InstanceFeatureGPUBuffer]) -> bool {
@@ -167,7 +167,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         }
     }
 
-    fn sync_shader_with_render_resources(
+    fn sync_shader_with_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
@@ -243,7 +243,6 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
         &self,
         gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-        shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
         record_additional_commands_before_face_update: &mut impl FnMut(
             &Frustum,
@@ -302,7 +301,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                         cubemap_face.as_idx_u64(),
                     );
 
-                if shadow_mapping_enabled {
+                if light_gpu_resources.shadow_mapping_enabled() {
                     record_additional_commands_before_face_update(
                         &positive_z_cubemap_face_frustum,
                         instance_range_id,
@@ -326,7 +325,7 @@ impl OmnidirectionalLightShadowMapUpdatePasses {
                 );
                 pass_count += 1;
 
-                if !shadow_mapping_enabled {
+                if !light_gpu_resources.shadow_mapping_enabled() {
                     // If shadow mapping is disabled, we don't do anything in the render pass,
                     // which means the shadow map textures will just be cleared
                     continue;
@@ -481,17 +480,17 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         }
     }
 
-    pub fn sync_with_render_resources(
+    pub fn sync_with_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
         gpu_resources: &impl BasicGPUResources,
     ) {
-        self.sync_models_with_render_resources(gpu_resources);
-        self.sync_shader_with_render_resources(graphics_device, shader_manager, gpu_resources);
+        self.sync_models_with_gpu_resources(gpu_resources);
+        self.sync_shader_with_gpu_resources(graphics_device, shader_manager, gpu_resources);
     }
 
-    fn sync_models_with_render_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
+    fn sync_models_with_gpu_resources(&mut self, gpu_resources: &impl BasicGPUResources) {
         // We only keep models that actually have buffered model-to-light transforms,
         // otherwise they will not be rendered into the shadow map anyway
         fn has_features(buffers: &[InstanceFeatureGPUBuffer]) -> bool {
@@ -529,7 +528,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         }
     }
 
-    fn sync_shader_with_render_resources(
+    fn sync_shader_with_gpu_resources(
         &mut self,
         graphics_device: &GraphicsDevice,
         shader_manager: &mut ShaderManager,
@@ -614,7 +613,6 @@ impl UnidirectionalLightShadowMapUpdatePasses {
         &self,
         gpu_resources: &R,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
-        shadow_mapping_enabled: bool,
         command_encoder: &mut wgpu::CommandEncoder,
         record_additional_commands_before_cascade_update: &mut impl FnMut(
             &OrientedBox,
@@ -670,7 +668,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 let cascade_frustum = unidirectional_light
                     .create_light_space_orthographic_obb_for_cascade(cascade_idx);
 
-                if shadow_mapping_enabled {
+                if light_gpu_resources.shadow_mapping_enabled() {
                     record_additional_commands_before_cascade_update(
                         &cascade_frustum,
                         instance_range_id,
@@ -694,7 +692,7 @@ impl UnidirectionalLightShadowMapUpdatePasses {
                 );
                 pass_count += 1;
 
-                if !shadow_mapping_enabled {
+                if !light_gpu_resources.shadow_mapping_enabled() {
                     // If shadow mapping is disabled, we don't do anything in the render pass, which
                     // means the shadow map textures will just be cleared
                     continue;

@@ -356,7 +356,12 @@ impl Engine {
 
         self.command_queues.reset_and_free();
 
-        self.renderer.owrite().synchronize_render_commands()?;
+        {
+            let graphics_system = self.graphics_system.oread();
+            let mut renderer = self.renderer.owrite();
+            renderer.synchronize_render_commands(&graphics_system)?;
+        }
+
         self.sync_all_gpu_resources()?;
 
         Ok(())
@@ -395,7 +400,12 @@ impl Engine {
 
     /// Returns the current shadow mapping configuration.
     pub fn shadow_mapping_config(&self) -> ShadowMappingConfig {
-        self.renderer().oread().shadow_mapping_config().clone()
+        self.scene()
+            .oread()
+            .light_manager()
+            .oread()
+            .config()
+            .shadow_mapping
     }
 
     /// Returns the current ambient occlusion configuration.
@@ -577,9 +587,10 @@ impl Engine {
         results: &mut impl Extend<(String, Duration)>,
     ) {
         results.extend(
-            self.renderer()
+            self.graphics_system()
                 .oread()
                 .timestamp_query_manager()
+                .oread()
                 .last_timing_results()
                 .iter()
                 .map(|(tag, duration)| (tag.as_ref().to_string(), *duration)),
@@ -591,9 +602,9 @@ impl Engine {
         self.task_timer().enabled()
     }
 
-    /// Returns whether render pass timings are enabled.
-    pub fn render_pass_timings_enabled(&self) -> bool {
-        self.renderer().oread().basic_config().timings_enabled
+    /// Returns whether GPU pass timings are enabled.
+    pub fn gpu_pass_timings_enabled(&self) -> bool {
+        self.graphics_system().oread().config().timings_enabled
     }
 
     pub fn with_uniform_physical_material_property_values_mut<R>(
@@ -706,9 +717,9 @@ impl Engine {
             .owrite()
             .remove_voxel_object_and_store_buffers(voxel_object_id);
 
-        self.renderer
+        self.graphics_system
             .oread()
-            .render_resource_manager()
+            .gpu_resource_manager()
             .owrite()
             .voxel_objects
             .remove_voxel_object_buffers(voxel_object_id);

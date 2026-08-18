@@ -22,7 +22,6 @@ use impact_gpu::{device::GraphicsDevice, wgpu};
 #[derive(Clone, Debug)]
 pub struct BasicRenderingConfig {
     pub wireframe_mode_on: bool,
-    pub timings_enabled: bool,
 }
 
 impl BasicRenderingConfig {
@@ -35,13 +34,6 @@ impl BasicRenderingConfig {
             log::warn!("Disabling wireframe mode due to missing device features");
             self.wireframe_mode_on = false;
         }
-
-        if self.timings_enabled
-            && !graphics_device.supports_features(wgpu::Features::TIMESTAMP_QUERY)
-        {
-            log::warn!("Disabling timestamp queries due to missing device features");
-            self.timings_enabled = false;
-        }
     }
 }
 
@@ -49,7 +41,6 @@ impl Default for BasicRenderingConfig {
     fn default() -> Self {
         Self {
             wireframe_mode_on: false,
-            timings_enabled: false,
         }
     }
 }

@@ -360,6 +360,18 @@ pub struct LightManager {
     unidirectional_light_buffer: UnidirectionalLightUniformBuffer,
     shadowable_unidirectional_light_buffer: ShadowableUnidirectionalLightUniformBuffer,
     total_ambient_luminance: Luminance,
+    config: LightConfig,
+}
+
+/// Configuration options for lights.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
+#[derive(Clone, Debug, Default)]
+pub struct LightConfig {
+    pub shadow_mapping: ShadowMappingConfig,
 }
 
 #[roc]
@@ -441,8 +453,8 @@ impl LightManager {
     /// avoid excessive buffer reallocation when the first few lights are added.
     pub const INITIAL_LIGHT_CAPACITY: usize = 5;
 
-    /// Creates a new light manager with no lights.
-    pub fn new() -> Self {
+    /// Creates a new light manager with the given configuration and no lights.
+    pub fn new(config: LightConfig) -> Self {
         Self {
             ambient_light_buffer: AmbientLightUniformBuffer::with_capacity(1),
             omnidirectional_light_buffer: OmnidirectionalLightUniformBuffer::with_capacity(
@@ -460,6 +472,7 @@ impl LightManager {
                     Self::INITIAL_LIGHT_CAPACITY,
                 ),
             total_ambient_luminance: Luminance::zeros(),
+            config,
         }
     }
 
@@ -909,7 +922,6 @@ impl LightManager {
         command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         light_gpu_resources: &mut Option<LightGPUResources>,
-        shadow_mapping_config: &ShadowMappingConfig,
     ) {
         if let Some(light_gpu_resources) = light_gpu_resources {
             light_gpu_resources.sync_with_light_manager(
@@ -924,9 +936,19 @@ impl LightManager {
                 graphics_device,
                 bind_group_layout_registry,
                 self,
-                shadow_mapping_config,
             ));
         }
+    }
+
+    /// Returns the light configuration parameters.
+    pub fn config(&self) -> &LightConfig {
+        &self.config
+    }
+
+    /// Returns a mutable reference to the shadow mapping configuration
+    /// parameters.
+    pub fn shadow_mapping_config_mut(&mut self) -> &mut ShadowMappingConfig {
+        &mut self.config.shadow_mapping
     }
 
     /// Uses the total ambient luminance to compute the maximum reach for all
@@ -974,12 +996,6 @@ impl LightManager {
                 * OmnidirectionalLight::MIN_INCIDENT_LUMINANCE_TO_AMBIENT_LUMINANCE_RATIO,
         );
         min_incident_luminance
-    }
-}
-
-impl Default for LightManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

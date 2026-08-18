@@ -213,31 +213,43 @@ pub fn execute_rendering_admin_command(
                 .map(|_| ())
         }
         RenderingAdminCommand::SetShadowMappingConfig(to) => {
-            rendering::set_shadow_mapping_config(&mut engine.renderer().owrite(), to);
+            rendering::set_shadow_mapping_config(
+                &mut engine.scene().oread().light_manager().owrite(),
+                to,
+            );
             Ok(())
         }
         RenderingAdminCommand::SetWireframeMode(to) => {
-            rendering::set_wireframe_mode(&mut engine.renderer().owrite(), to);
-            Ok(())
-        }
-        RenderingAdminCommand::SetRenderPassTimings(to) => {
-            rendering::set_render_pass_timings(&mut engine.renderer().owrite(), to);
+            rendering::set_wireframe_mode(
+                &engine.graphics_system().oread(),
+                &mut engine.renderer().owrite(),
+                to,
+            );
             Ok(())
         }
         RenderingAdminCommand::SetAmbientOcclusionConfig(config) => {
-            rendering::set_ambient_occlusion_config(&engine.renderer().oread(), config);
+            rendering::set_ambient_occlusion_config(
+                &engine.graphics_system().oread(),
+                &engine.renderer().oread(),
+                config,
+            );
             Ok(())
         }
         RenderingAdminCommand::SetTemporalAntiAliasingConfig(config) => {
             rendering::set_temporal_anti_aliasing_config(
-                engine.scene(),
+                &mut engine.scene().oread().camera_manager().owrite(),
+                &engine.graphics_system().oread(),
                 &engine.renderer().oread(),
                 config,
             );
             Ok(())
         }
         RenderingAdminCommand::SetBloomConfig(config) => {
-            rendering::set_bloom_config(&engine.renderer().oread(), config);
+            rendering::set_bloom_config(
+                &engine.graphics_system().oread(),
+                &engine.renderer().oread(),
+                config,
+            );
             Ok(())
         }
         RenderingAdminCommand::SetCameraSettings(settings) => {
@@ -245,7 +257,11 @@ pub fn execute_rendering_admin_command(
             Ok(())
         }
         RenderingAdminCommand::SetAverageLuminanceComputationConfig(config) => {
-            rendering::set_average_luminance_computation_config(&engine.renderer().oread(), config);
+            rendering::set_average_luminance_computation_config(
+                &engine.graphics_system().oread(),
+                &engine.renderer().oread(),
+                config,
+            );
             Ok(())
         }
         RenderingAdminCommand::SetDynamicRangeCompressionConfig(config) => {
@@ -309,8 +325,8 @@ pub fn execute_instrumentation_admin_command(
         InstrumentationAdminCommand::SetTaskTimings(to) => {
             instrumentation::set_task_timings(engine.task_timer(), to);
         }
-        InstrumentationAdminCommand::SetRenderPassTimings(to) => {
-            instrumentation::set_render_pass_timings(&mut engine.renderer().owrite(), to);
+        InstrumentationAdminCommand::SetGPUPassTimings(to) => {
+            instrumentation::set_gpu_pass_timings(&mut engine.graphics_system().owrite(), to);
         }
     }
     Ok(())

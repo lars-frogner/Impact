@@ -89,8 +89,9 @@ pub fn bound_omnidirectional_lights_and_buffer_shadow_casting_model_instances(
     scene_graph: &SceneGraph,
     camera: &Camera,
     world_space_aabb_for_visible_models: &AxisAlignedBox,
-    shadow_mapping_config: &ShadowMappingConfig,
 ) {
+    let shadow_mapping_config = light_manager.config().shadow_mapping;
+
     let arena = ArenaPool::get_arena();
     let mut shadowing_models =
         NoHashMap::with_capacity_and_hasher_in(0, Default::default(), &arena);
@@ -469,7 +470,6 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
     scene_graph: &SceneGraph,
     camera: &Camera,
     camera_space_aabb_for_visible_models: &AxisAlignedBox,
-    shadow_mapping_config: &ShadowMappingConfig,
 ) {
     if light_manager
         .shadowable_unidirectional_light_buffer()
@@ -478,6 +478,8 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
     {
         return;
     }
+
+    let shadow_mapping_config = light_manager.config().shadow_mapping;
 
     let arena = ArenaPool::get_arena();
     let mut shadowing_model_ids = AVec::new_in(&arena);
@@ -588,7 +590,7 @@ pub fn bound_unidirectional_lights_and_buffer_shadow_casting_model_instances(
                         snap_light_space_orthographic_aabb_extent_to_texels(
                             &world_to_light_transform,
                             &sphere_aabb,
-                            shadow_mapping_config,
+                            &shadow_mapping_config,
                         )
                     }
                 };
