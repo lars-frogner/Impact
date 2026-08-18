@@ -16,7 +16,6 @@ pub enum BasicImmediate {
     FrameCounter,
     CameraRotationQuaternion,
     InstanceIdx,
-    GenericVec3f32,
 }
 
 impl Immediate for BasicImmediate {
@@ -29,7 +28,6 @@ impl Immediate for BasicImmediate {
             Self::Exposure | Self::InverseExposure | Self::PixelCount => (4, 4), // f32
             Self::InverseWindowDimensions => (8, 8),                             // vec2f
             Self::CameraRotationQuaternion => (16, 16),                          // vec4f
-            Self::GenericVec3f32 => (12, 16), // vec3f (yes, vec3f is 16-aligned)
         }
     }
 }

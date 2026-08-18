@@ -710,7 +710,7 @@ impl VoxelGeometryPipeline {
         );
     }
 
-    fn set_constant_immediates(
+    fn stage_constant_immediates(
         stager: &mut ImmediateStager<'_, VoxelImmediate>,
         rendering_surface: &RenderingSurface,
         postprocessor: &Postprocessor,
@@ -732,14 +732,13 @@ impl VoxelGeometryPipeline {
         );
     }
 
-    fn set_per_object_immediates(
+    fn stage_per_object_immediates(
         stager: &mut ImmediateStager<'_, VoxelImmediate>,
         voxel_object_buffers: &VoxelObjectGPUBuffers,
     ) {
-        stager.stage_immediate_data_if_present(
-            VoxelImmediate::Rendering(BasicImmediate::GenericVec3f32),
-            || voxel_object_buffers.origin_offset_in_root(),
-        );
+        stager.stage_immediate_data_if_present(VoxelImmediate::OriginOffsetInRoot, || {
+            voxel_object_buffers.origin_offset_in_root()
+        });
     }
 
     pub fn record<GR>(
@@ -786,7 +785,7 @@ impl VoxelGeometryPipeline {
         render_pass.set_bind_group(1, material_gpu_resources.bind_group(), &[]);
 
         let mut immediate_stager = self.immediates.create_data_stager();
-        Self::set_constant_immediates(
+        Self::stage_constant_immediates(
             &mut immediate_stager,
             rendering_surface,
             postprocessor,
@@ -810,7 +809,7 @@ impl VoxelGeometryPipeline {
                 continue;
             };
 
-            Self::set_per_object_immediates(&mut immediate_stager, voxel_object_buffers);
+            Self::stage_per_object_immediates(&mut immediate_stager, voxel_object_buffers);
             immediate_stager.set_staged_immediate_data(render_pass);
 
             let chunk_count = u32::try_from(voxel_object_buffers.n_chunks()).unwrap();

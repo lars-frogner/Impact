@@ -109,6 +109,7 @@ pub type VoxelImmediateGroup = ImmediateGroup<VoxelImmediate>;
 pub enum VoxelImmediate {
     CullingFrustum,
     ChunkCount,
+    OriginOffsetInRoot,
     Rendering(BasicImmediate),
 }
 
@@ -1209,6 +1210,7 @@ impl Immediate for VoxelImmediate {
         match self {
             Self::CullingFrustum => (mem::size_of::<CullingFrustum>() as u32, 16), // Contains 16-byte aligned vec4f and vec3f
             Self::ChunkCount => (4, 4),                                            // u32,
+            Self::OriginOffsetInRoot => (12, 16),                                  // vec3f
             Self::Rendering(variant) => variant.size_and_alignment(),
         }
     }

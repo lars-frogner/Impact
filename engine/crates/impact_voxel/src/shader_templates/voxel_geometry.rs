@@ -45,7 +45,7 @@ impl VoxelGeometryShaderTemplate {
     /// Returns the group of immediates used by the shader.
     pub fn immediates() -> VoxelImmediateGroup {
         ImmediateGroup::from_iter([
-            VoxelImmediate::Rendering(BasicImmediate::GenericVec3f32), // Offsets for texture coordinates
+            VoxelImmediate::OriginOffsetInRoot,
             VoxelImmediate::Rendering(BasicImmediate::InverseWindowDimensions),
             VoxelImmediate::Rendering(BasicImmediate::FrameCounter),
             VoxelImmediate::Rendering(BasicImmediate::Exposure),
