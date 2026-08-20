@@ -41,7 +41,7 @@ impl EguiRenderer {
         graphics_device: &GraphicsDevice,
         rendering_surface: &RenderingSurface,
         surface_texture_view: &wgpu::TextureView,
-        input: &EguiRenderingInput,
+        mut input: EguiRenderingInput,
         timestamp_recorder: &mut TimestampQueryRegistry<'_>,
         command_encoder: &mut wgpu::CommandEncoder,
     ) {
@@ -50,10 +50,10 @@ impl EguiRenderer {
 
         let screen_descriptor = Self::screen_descriptor(rendering_surface);
 
-        for (texture_id, image_delta) in &input.textures_delta.set {
+        for (texture_id, image_delta) in input.textures_delta.set.drain() {
             for delta in image_delta {
                 self.renderer
-                    .update_texture(device, queue, *texture_id, delta);
+                    .update_texture(device, queue, texture_id, &delta);
             }
         }
 
@@ -86,8 +86,8 @@ impl EguiRenderer {
         drop(render_pass);
         drop(timestamp_span_guard);
 
-        for texture_id in &input.textures_delta.free {
-            self.renderer.free_texture(texture_id);
+        for texture_id in input.textures_delta.free.drain() {
+            self.renderer.free_texture(&texture_id);
         }
 
         log::trace!("Recorded GUI render pass");

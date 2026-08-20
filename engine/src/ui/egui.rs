@@ -115,7 +115,7 @@ impl UserInterface for EguiUserInterface {
                 graphics_device,
                 rendering_surface,
                 surface_texture_view,
-                &rendering_input,
+                rendering_input,
                 timestamp_recorder,
                 command_encoder,
             );
