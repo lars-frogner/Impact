@@ -107,6 +107,29 @@ pub struct CountedMultiUniformGPUBuffer {
     uniform_type_id: ConstStringHash64,
 }
 
+/// Wrapper for a [`MultiUniformGPUBuffer`] that also stores a piece of
+/// [`UniformMetadata`] for each uniform.
+#[derive(Debug)]
+pub struct MultiUniformGPUBufferWithMetadata<B, M> {
+    uniform_gpu_buffer: B,
+    metadata: Vec<M>,
+}
+
+/// Represents metadata for a uniform value of type `Self::Source` with an ID of
+/// type `Self::ID`.
+pub trait UniformMetadata {
+    type ID: Copy + Eq + Hash + Debug;
+    type Source: UniformBufferable;
+
+    fn from_source(source: &Self::Source, id: Self::ID) -> Self;
+}
+
+pub type CountedMultiUniformGPUBufferWithMetadata<M> =
+    MultiUniformGPUBufferWithMetadata<CountedMultiUniformGPUBuffer, M>;
+
+pub type UncountedMultiUniformGPUBufferWithMetadata<M> =
+    MultiUniformGPUBufferWithMetadata<UncountedMultiUniformGPUBuffer, M>;
+
 /// Indicates whether a new GPU buffer had to be created in order to hold all
 /// the transferred uniform data.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -563,6 +586,93 @@ impl MultiUniformGPUBuffer for CountedMultiUniformGPUBuffer {
         uniform_buffer.reset_change_tracking();
 
         result
+    }
+}
+
+impl<M: UniformMetadata, B: MultiUniformGPUBuffer> MultiUniformGPUBufferWithMetadata<B, M> {
+    /// Creates a new uniform GPU buffer together with a metadata about each
+    /// uniform, initialized from the given uniform buffer of sources.
+    pub fn for_uniform_buffer(
+        graphics_device: &GraphicsDevice,
+        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
+    ) -> Self {
+        let mut metadata = Vec::new();
+        Self::copy_metadata_from_uniform_buffer(&mut metadata, uniform_buffer);
+        Self {
+            uniform_gpu_buffer: B::for_uniform_buffer(graphics_device, uniform_buffer),
+            metadata,
+        }
+    }
+
+    /// Returns the number of valid uniforms in the buffer.
+    pub fn len(&self) -> usize {
+        self.metadata.len()
+    }
+
+    /// Whether the buffer is empty.
+    pub fn is_empty(&self) -> bool {
+        self.metadata.is_empty()
+    }
+
+    /// Returns the wrapped GPU buffer.
+    pub fn buffer(&self) -> &B {
+        &self.uniform_gpu_buffer
+    }
+
+    /// Returns a slice with the metadata of each uniform in the same order as
+    /// they are stored in the buffer.
+    pub fn metadata(&self) -> &[M] {
+        &self.metadata
+    }
+
+    /// Updates the recorded uniform metadata and writes the valid uniforms in
+    /// the given uniform buffer into the uniform GPU buffer if the uniform
+    /// buffer has changed (recreating the GPU buffer if required). When the
+    /// existing GPU buffer can be reused, the update is encoded via the given
+    /// staging belt to avoid allocating a new staging buffer.
+    ///
+    /// # Returns
+    /// A [`UniformTransferResult`] indicating whether the GPU buffer had to
+    /// be reallocated, in which case its bind group should also be recreated.
+    ///
+    /// # Panics
+    /// If the given uniform buffer stores a different type of uniform than the
+    /// GPU buffer.
+    pub fn transfer_uniforms_to_gpu_buffer(
+        &mut self,
+        graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
+    ) -> UniformTransferResult {
+        match uniform_buffer.change() {
+            CollectionChange::Count | CollectionChange::Contents => {
+                self.metadata.clear();
+                Self::copy_metadata_from_uniform_buffer(&mut self.metadata, uniform_buffer);
+            }
+            CollectionChange::None => {}
+        }
+
+        self.uniform_gpu_buffer.transfer_uniforms_to_gpu_buffer(
+            graphics_device,
+            staging_belt,
+            command_encoder,
+            uniform_buffer,
+        )
+    }
+
+    fn copy_metadata_from_uniform_buffer(
+        metadata: &mut Vec<M>,
+        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
+    ) {
+        let sources = uniform_buffer.valid_uniforms();
+        let ids = uniform_buffer.valid_uniform_ids();
+
+        metadata.reserve(sources.len());
+
+        for (source, id) in sources.iter().zip(ids) {
+            metadata.push(M::from_source(source, *id));
+        }
     }
 }
 

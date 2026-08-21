@@ -15,13 +15,13 @@ use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry,
     device::GraphicsDevice,
     uniform::{
-        self, CountedMultiUniformGPUBuffer, MultiUniformGPUBuffer, UncountedMultiUniformGPUBuffer,
-        UniformBuffer, UniformBufferable, UniformTransferResult,
+        self, CountedMultiUniformGPUBufferWithMetadata, MultiUniformGPUBuffer,
+        MultiUniformGPUBufferWithMetadata, UncountedMultiUniformGPUBufferWithMetadata,
+        UniformBufferable, UniformMetadata, UniformTransferResult,
     },
     wgpu,
 };
 use impact_math::{hash::ConstStringHash64, vector::Vector3C};
-use std::{fmt, hash::Hash};
 
 /// Contains all GPU resources for light sources, including uniform buffers and
 /// shadow maps, with associated bind groups.
@@ -42,24 +42,19 @@ pub struct LightGPUResources {
     shadow_mapping_enabled: bool,
 }
 
-type AmbientLightGPUBuffer =
-    UniformGPUBufferWithLightMetadata<AmbientLightID, CountedMultiUniformGPUBuffer>;
+type AmbientLightGPUBuffer = CountedMultiUniformGPUBufferWithMetadata<AmbientLightID>;
 
 type OmnidirectionalLightGPUBuffer =
-    UniformGPUBufferWithLightMetadata<OmnidirectionalLightMetadata, UncountedMultiUniformGPUBuffer>;
+    UncountedMultiUniformGPUBufferWithMetadata<OmnidirectionalLightMetadata>;
 
-type ShadowableOmnidirectionalLightGPUBuffer = UniformGPUBufferWithLightMetadata<
-    ShadowableOmnidirectionalLightMetadata,
-    UncountedMultiUniformGPUBuffer,
->;
+type ShadowableOmnidirectionalLightGPUBuffer =
+    UncountedMultiUniformGPUBufferWithMetadata<ShadowableOmnidirectionalLightMetadata>;
 
 type UnidirectionalLightGPUBuffer =
-    UniformGPUBufferWithLightMetadata<UnidirectionalLightMetadata, UncountedMultiUniformGPUBuffer>;
+    UncountedMultiUniformGPUBufferWithMetadata<UnidirectionalLightMetadata>;
 
-type ShadowableUnidirectionalLightGPUBuffer = UniformGPUBufferWithLightMetadata<
-    ShadowableUnidirectionalLightMetadata,
-    UncountedMultiUniformGPUBuffer,
->;
+type ShadowableUnidirectionalLightGPUBuffer =
+    UncountedMultiUniformGPUBufferWithMetadata<ShadowableUnidirectionalLightMetadata>;
 
 /// Manager of the [`ShadowCubemapTexture`]s used by all omnidirectional lights.
 #[derive(Debug)]
@@ -76,19 +71,6 @@ pub struct UnidirectionalLightShadowMapManager {
     resolution: u32,
     textures: Vec<CascadedShadowMapTexture>,
     light_count: usize,
-}
-
-#[derive(Debug)]
-struct UniformGPUBufferWithLightMetadata<M, B> {
-    uniform_gpu_buffer: B,
-    light_metadata: Vec<M>,
-}
-
-trait LightMetadata {
-    type ID: Copy + Eq + Hash + fmt::Debug;
-    type Source: UniformBufferable;
-
-    fn from_source(source: &Self::Source, id: Self::ID) -> Self;
 }
 
 #[derive(Debug)]
@@ -275,13 +257,13 @@ impl LightGPUResources {
     /// Returns the slice of IDs of all the [`AmbientLight`]s currently residing
     /// in the ambient light GPU buffer.
     pub fn ambient_light_ids(&self) -> &[AmbientLightID] {
-        self.ambient_light_gpu_buffer.light_metadata()
+        self.ambient_light_gpu_buffer.metadata()
     }
 
     /// Returns the slice of metadata for all the [`OmnidirectionalLight`]s
     /// currently residing in the omnidirectional light GPU buffer.
     pub fn omnidirectional_light_metadata(&self) -> &[OmnidirectionalLightMetadata] {
-        self.omnidirectional_light_gpu_buffer.light_metadata()
+        self.omnidirectional_light_gpu_buffer.metadata()
     }
 
     /// Returns the slice of metadata for all the
@@ -290,14 +272,13 @@ impl LightGPUResources {
     pub fn shadowable_omnidirectional_light_metadata(
         &self,
     ) -> &[ShadowableOmnidirectionalLightMetadata] {
-        self.shadowable_omnidirectional_light_gpu_buffer
-            .light_metadata()
+        self.shadowable_omnidirectional_light_gpu_buffer.metadata()
     }
 
     /// Returns the slice of metadata for all the [`UnidirectionalLight`]s
     /// currently residing in the unidirectional light GPU buffer.
     pub fn unidirectional_light_metadata(&self) -> &[UnidirectionalLightMetadata] {
-        self.unidirectional_light_gpu_buffer.light_metadata()
+        self.unidirectional_light_gpu_buffer.metadata()
     }
 
     /// Returns the slice of metadata for all the
@@ -306,8 +287,7 @@ impl LightGPUResources {
     pub fn shadowable_unidirectional_light_metadata(
         &self,
     ) -> &[ShadowableUnidirectionalLightMetadata] {
-        self.shadowable_unidirectional_light_gpu_buffer
-            .light_metadata()
+        self.shadowable_unidirectional_light_gpu_buffer.metadata()
     }
 
     /// Returns a reference to the bind group for the ambient light uniform
@@ -698,9 +678,9 @@ impl LightGPUResources {
         })
     }
 
-    fn create_light_bind_group<M: LightMetadata, B: MultiUniformGPUBuffer>(
+    fn create_light_bind_group<B: MultiUniformGPUBuffer, M: UniformMetadata>(
         device: &wgpu::Device,
-        light_gpu_buffer: &UniformGPUBufferWithLightMetadata<M, B>,
+        light_gpu_buffer: &MultiUniformGPUBufferWithMetadata<B, M>,
         layout: &wgpu::BindGroupLayout,
         label: &str,
     ) -> wgpu::BindGroup {
@@ -844,71 +824,6 @@ impl UnidirectionalLightShadowMapManager {
     }
 }
 
-impl<M: LightMetadata, B: MultiUniformGPUBuffer> UniformGPUBufferWithLightMetadata<M, B> {
-    /// Creates a new uniform GPU buffer together with a metadata about each
-    /// light, initialized from the given uniform buffer of light sources.
-    fn for_uniform_buffer(
-        graphics_device: &GraphicsDevice,
-        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
-    ) -> Self {
-        let mut light_metadata = Vec::new();
-        Self::copy_metadata_from_uniform_buffer(&mut light_metadata, uniform_buffer);
-        Self {
-            uniform_gpu_buffer: B::for_uniform_buffer(graphics_device, uniform_buffer),
-            light_metadata,
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.light_metadata.len()
-    }
-
-    fn buffer(&self) -> &B {
-        &self.uniform_gpu_buffer
-    }
-
-    fn light_metadata(&self) -> &[M] {
-        &self.light_metadata
-    }
-
-    fn transfer_uniforms_to_gpu_buffer(
-        &mut self,
-        graphics_device: &GraphicsDevice,
-        staging_belt: &mut wgpu::util::StagingBelt,
-        command_encoder: &mut wgpu::CommandEncoder,
-        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
-    ) -> UniformTransferResult {
-        match uniform_buffer.change() {
-            CollectionChange::Count | CollectionChange::Contents => {
-                self.light_metadata.clear();
-                Self::copy_metadata_from_uniform_buffer(&mut self.light_metadata, uniform_buffer);
-            }
-            CollectionChange::None => {}
-        }
-
-        self.uniform_gpu_buffer.transfer_uniforms_to_gpu_buffer(
-            graphics_device,
-            staging_belt,
-            command_encoder,
-            uniform_buffer,
-        )
-    }
-
-    fn copy_metadata_from_uniform_buffer(
-        light_metadata: &mut Vec<M>,
-        uniform_buffer: &UniformBuffer<M::ID, M::Source>,
-    ) {
-        let sources = uniform_buffer.valid_uniforms();
-        let ids = uniform_buffer.valid_uniform_ids();
-
-        light_metadata.reserve(sources.len());
-
-        for (source, id) in sources.iter().zip(ids) {
-            light_metadata.push(M::from_source(source, *id));
-        }
-    }
-}
-
 impl UniformBufferable for AmbientLight {
     const ID: ConstStringHash64 = ConstStringHash64::new("Ambient light");
 
@@ -969,7 +884,7 @@ impl UniformBufferable for ShadowableUnidirectionalLight {
 }
 assert_uniform_item_valid!(ShadowableUnidirectionalLight);
 
-impl LightMetadata for AmbientLightID {
+impl UniformMetadata for AmbientLightID {
     type ID = Self;
     type Source = AmbientLight;
 
@@ -978,7 +893,7 @@ impl LightMetadata for AmbientLightID {
     }
 }
 
-impl LightMetadata for OmnidirectionalLightMetadata {
+impl UniformMetadata for OmnidirectionalLightMetadata {
     type ID = OmnidirectionalLightID;
     type Source = OmnidirectionalLight;
 
@@ -1001,7 +916,7 @@ impl ShadowableOmnidirectionalLightMetadata {
     }
 }
 
-impl LightMetadata for ShadowableOmnidirectionalLightMetadata {
+impl UniformMetadata for ShadowableOmnidirectionalLightMetadata {
     type ID = ShadowableOmnidirectionalLightID;
     type Source = ShadowableOmnidirectionalLight;
 
@@ -1015,7 +930,7 @@ impl LightMetadata for ShadowableOmnidirectionalLightMetadata {
     }
 }
 
-impl LightMetadata for UnidirectionalLightMetadata {
+impl UniformMetadata for UnidirectionalLightMetadata {
     type ID = UnidirectionalLightID;
     type Source = UnidirectionalLight;
 
@@ -1051,7 +966,7 @@ impl ShadowableUnidirectionalLightMetadata {
     }
 }
 
-impl LightMetadata for ShadowableUnidirectionalLightMetadata {
+impl UniformMetadata for ShadowableUnidirectionalLightMetadata {
     type ID = ShadowableUnidirectionalLightID;
     type Source = ShadowableUnidirectionalLight;
 
