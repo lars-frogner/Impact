@@ -279,9 +279,8 @@ impl GPUBuffer {
     /// given values being encoded via the given staging belt.
     ///
     /// # Panics
-    /// - If `total_value_capacity` is zero.
-    /// - If the length of the `initial_values` slice exceeds
-    ///   `total_value_capacity`.
+    /// If the length of the `initial_values` slice exceeds
+    /// `total_value_capacity`.
     pub fn new_storage_buffer_with_spare_capacity_and_encoded_initialization<T: Pod>(
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
@@ -305,9 +304,6 @@ impl GPUBuffer {
     }
 
     /// Creates a storage GPU buffer initialized with the given bytes.
-    ///
-    /// # Panics
-    /// - If `bytes` is empty.
     pub fn new_storage_buffer_with_bytes(
         graphics_device: &GraphicsDevice,
         bytes: &[u8],
@@ -326,8 +322,7 @@ impl GPUBuffer {
     /// valid bytes will be written into the beginning of the buffer.
     ///
     /// # Panics
-    /// - If `buffer_size` is zero.
-    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    /// If the size of the `valid_bytes` slice exceeds `buffer_size`.
     pub fn new_storage_buffer_with_bytes_and_spare_capacity(
         graphics_device: &GraphicsDevice,
         buffer_size: usize,
@@ -348,8 +343,7 @@ impl GPUBuffer {
     /// encoded via the given staging belt.
     ///
     /// # Panics
-    /// - If `buffer_size` is zero.
-    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    /// If the size of the `valid_bytes` slice exceeds `buffer_size`.
     pub fn new_storage_buffer_with_bytes_and_spare_capacity_with_encoded_initialization(
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
@@ -374,9 +368,6 @@ impl GPUBuffer {
     /// # Warning
     /// The contents of the buffer are uninitialized, so the buffer should not
     /// be mapped for reading until it has been copied to.
-    ///
-    /// # Panics
-    /// - If `buffer_size` is zero.
     pub fn new_result_buffer(
         graphics_device: &GraphicsDevice,
         buffer_size: usize,

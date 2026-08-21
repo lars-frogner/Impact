@@ -60,7 +60,7 @@ impl GPUBuffer {
     /// into the buffer at a later point without reallocating.
     ///
     /// # Panics
-    /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
+    /// If `n_valid_bytes` exceeds the size of the `bytes` slice.
     pub fn new(
         graphics_device: &GraphicsDevice,
         bytes: &[u8],
@@ -91,7 +91,7 @@ impl GPUBuffer {
     /// valid bytes will be written into the beginning of the buffer.
     ///
     /// # Panics
-    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    /// If the size of the `valid_bytes` slice exceeds `buffer_size`.
     pub fn new_with_spare_capacity(
         graphics_device: &GraphicsDevice,
         buffer_size: usize,
@@ -129,7 +129,7 @@ impl GPUBuffer {
     /// via the given staging belt.
     ///
     /// # Panics
-    /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
+    /// If the size of the `valid_bytes` slice exceeds `buffer_size`.
     pub fn new_with_spare_capacity_and_encoded_initialization(
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
