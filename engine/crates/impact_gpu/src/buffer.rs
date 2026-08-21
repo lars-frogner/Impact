@@ -735,12 +735,11 @@ impl GPUBufferType {
         match self {
             Self::Vertex => wgpu::BufferUsages::VERTEX,
             Self::Index => wgpu::BufferUsages::INDEX,
-            Self::Uniform => wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::MAP_READ,
+            Self::Uniform => wgpu::BufferUsages::UNIFORM,
             Self::Storage => {
                 wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_SRC
                     | wgpu::BufferUsages::COPY_DST
-                    | wgpu::BufferUsages::MAP_READ
             }
             Self::Result => wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             Self::Indirect => wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
