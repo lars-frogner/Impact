@@ -55,14 +55,16 @@ ground =
     Entity.new_component_data
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(1000)
+    |> Comp.ReferenceFrame.add_unoriented((0, -1, 0))
+    |> Comp.Motion.add_stationary
+    |> Setup.UniformColor.add((0.9, 0.9, 0.9))
+    |> Setup.UniformSpecularReflectance.add(0.01)
+    |> Setup.UniformRoughness.add(0.5)
     |> Setup.PlanarCollidable.add_new(
         Static,
         Plane.new(UnitVector3.unit_y, 0.0),
         Physics.ContactResponseParameters.new(0.0, 0.0, 0.0),
     )
-    |> Setup.UniformColor.add((0.9, 0.9, 0.9))
-    |> Setup.UniformSpecularReflectance.add(0.01)
-    |> Setup.UniformRoughness.add(0.5)
 
 ambient_light =
     Entity.new_component_data
