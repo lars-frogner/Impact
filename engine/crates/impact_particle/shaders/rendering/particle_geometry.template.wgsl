@@ -1,0 +1,188 @@
+struct Immediates {
+    worldToCameraRotation: vec4f,
+    prevWorldToCameraRotation: vec4f,
+    worldToCameraTranslation: vec3f,
+    prevWorldToCameraTranslation: vec3f,
+    inverseWindowDimensions: vec2f,
+    frameCounter: u32,
+    exposure: f32,
+    timeStepDuration: f32,
+    materialIdx: u32,
+}
+
+struct ProjectionUniform {
+    projection: mat4x4f,
+    frustumFarPlaneCorners: array<vec4f, 4>,
+    inverseFarPlaneZ: vec4f,
+    jitterOffsets: array<vec4f, {{jitter_count}}>,
+}
+
+struct QuadVertex {
+    @location({{quad_texture_coords_location}}) textureCoords: vec2f,
+}
+
+struct FragmentInput {
+    @builtin(position) projectedPosition: vec4f,
+    @location(0) previousClipSpacePosition: vec4f,
+    @location(1) cameraSpacePosition: vec3f,
+    @location(2) rgbaBaseColor: vec4f,
+    @location(3) materialProperties: vec4f,
+    @location(4) textureCoords: vec2f,
+}
+
+struct FragmentOutput {
+    @location(0) linearDepth: f32,
+    @location(1) normalVector: vec4f,
+    @location(2) motionVector: vec2f,
+    @location(3) materialColor: vec4f,
+    @location(4) materialProperties: vec4f,
+}
+
+struct FixedMaterialProperties {
+    @align(16) atlasTextureUV: vec2f,
+    specularReflectance: f32,
+    roughness: f32,
+    metalness: f32,
+    emissiveLuminance: f32,
+}
+
+struct Particle {
+    rgbaBaseColor: vec4f,
+    position: vec3f,
+    remainingTime: f32,
+    velocity: vec3f,
+    extent: f32,
+}
+
+const ATLAS_TEXTURE_UV_EXTENT: f32 = {{atlas_texture_uv_extent}};
+
+const JITTER_COUNT: u32 = {{jitter_count}};
+
+var<immediate> imms: Immediates;
+
+@group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
+var<uniform> projectionUniform: ProjectionUniform;
+
+@group({{material_group}}) @binding({{fixed_material_uniform_binding}})
+var<uniform> fixedMaterialProperties: array<FixedMaterialProperties, {{n_particle_materials}}>;
+
+@group({{material_group}}) @binding({{normal_and_alpha_atlas_binding}})
+var normalAndAlphaAtlasTexture: texture_2d<f32>;
+
+@group({{material_group}}) @binding({{normal_and_alpha_sampler_binding}})
+var normalAndAlphaAtlasSampler: sampler;
+
+@group({{particle_group}}) @binding({{particle_binding}})
+var<storage, read> particles: array<Particle>;
+
+fn convertQuadTextureCoordsToPositionOffsets(textureCoords: vec2f) -> vec3f {
+    return vec3f(textureCoords.x - 0.5, 0.5 - textureCoords.y, 0.0);
+}
+
+fn transformPosition(
+    rotationQuaternion: vec4f,
+    translation: vec3f,
+    position: vec3f
+) -> vec3f {
+    return rotateVectorWithQuaternion(rotationQuaternion, position) + translation;
+}
+
+fn rotateVectorWithQuaternion(quaternion: vec4f, vector: vec3f) -> vec3f {
+    let tmp = 2.0 * cross(quaternion.xyz, vector);
+    return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
+}
+
+fn obtainProjectionMatrix() -> mat4x4f {
+    var matrix = projectionUniform.projection;
+    let jitterIndex = imms.frameCounter % JITTER_COUNT;
+    let jitterOffsets = projectionUniform.jitterOffsets[jitterIndex];
+    matrix[2][0] += jitterOffsets.x * imms.inverseWindowDimensions.x;
+    matrix[2][1] += jitterOffsets.y * imms.inverseWindowDimensions.y;
+    return matrix;
+}
+
+fn computeGGXRoughnessFromPerceptuallyLinearRoughness(linearRoughness: f32) -> f32 {
+    return linearRoughness * linearRoughness;
+}
+
+fn convertFramebufferPositionToScreenTextureCoords(framebufferPosition: vec4f) -> vec2<f32> {
+    return framebufferPosition.xy * imms.inverseWindowDimensions;
+}
+
+fn computeMotionVector(
+    screenTextureCoords: vec2f,
+    previousClipSpacePosition: vec4f,
+) -> vec2f {
+    if (previousClipSpacePosition.w < 1e-6) {
+        // The previous position is behind the camera
+        return vec2f(1.0, 1.0);
+    }
+    let previousNDCXYPosition = previousClipSpacePosition.xy / previousClipSpacePosition.w;
+    let previousScreenCoords = vec2f(0.5 * (1.0 + previousNDCXYPosition.x), 0.5 * (1.0 - previousNDCXYPosition.y));
+    return screenTextureCoords - previousScreenCoords;
+}
+
+@vertex
+fn mainVS(
+    @builtin(instance_index) particleIdx: u32,
+    quadVertex: QuadVertex,
+) -> FragmentInput {
+    var output: FragmentInput;
+
+    let particle = particles[particleIdx];
+    let materialProps = fixedMaterialProperties[imms.materialIdx];
+
+    let cameraSpaceVertexOffset = particle.extent * convertQuadTextureCoordsToPositionOffsets(quadVertex.textureCoords);
+
+    let cameraSpaceParticlePosition = transformPosition(imms.worldToCameraRotation, imms.worldToCameraTranslation, particle.position);
+    let cameraSpaceVertexPosition = cameraSpaceParticlePosition + cameraSpaceVertexOffset;
+
+    let projectionMatrix = obtainProjectionMatrix();
+
+    output.projectedPosition = projectionMatrix * vec4f(cameraSpaceVertexPosition, 1.0);
+    output.cameraSpacePosition = cameraSpaceVertexPosition;
+
+    let prevParticlePosition = particle.position - particle.velocity * imms.timeStepDuration;
+    let prevCameraSpaceParticlePosition = transformPosition(imms.prevWorldToCameraRotation, imms.prevWorldToCameraTranslation, prevParticlePosition);
+    let prevCameraSpaceVertexPosition = prevCameraSpaceParticlePosition + cameraSpaceVertexOffset;
+
+    output.previousClipSpacePosition = projectionMatrix * vec4f(prevCameraSpaceVertexPosition, 1.0);
+
+    // TODO: Transparency
+    output.rgbaBaseColor = particle.rgbaBaseColor;
+
+    let specularReflectance = materialProps.specularReflectance;
+    let roughness = computeGGXRoughnessFromPerceptuallyLinearRoughness(materialProps.roughness);
+    let metalness = materialProps.metalness;
+    let preExposedEmissiveLuminance = materialProps.emissiveLuminance * imms.exposure;
+
+    output.materialProperties = vec4f(specularReflectance, roughness, metalness, preExposedEmissiveLuminance);
+
+    output.textureCoords = materialProps.atlasTextureUV + quadVertex.textureCoords * ATLAS_TEXTURE_UV_EXTENT;
+
+    return output;
+}
+
+@fragment
+fn mainFS(fragment: FragmentInput) -> FragmentOutput {
+    var output: FragmentOutput;
+
+    let normalColorAndAlpha = textureSampleLevel(normalAndAlphaAtlasTexture, normalAndAlphaAtlasSampler, fragment.textureCoords, 0.0);
+
+    let alpha = normalColorAndAlpha.a * fragment.rgbaBaseColor.a;
+
+    output.linearDepth = projectionUniform.inverseFarPlaneZ.x * fragment.cameraSpacePosition.z;
+
+    output.normalVector = vec4f(normalColorAndAlpha.rgb, 1.0);
+
+    let screenTextureCoords = convertFramebufferPositionToScreenTextureCoords(
+        fragment.projectedPosition,
+    );
+    output.motionVector = computeMotionVector(screenTextureCoords, fragment.previousClipSpacePosition);
+
+    output.materialColor = vec4f(fragment.rgbaBaseColor.rgb, alpha);
+
+    output.materialProperties = fragment.materialProperties;
+
+    return output;
+}

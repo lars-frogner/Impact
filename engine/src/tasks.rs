@@ -583,6 +583,55 @@ define_task!(
     }
 );
 
+define_task!(
+    /// Synchronizes the physics simulation GPU commands with the current GPU
+    /// resources (which represent the state of the previous frame).
+    [pub] SyncSimulationGPUCommands,
+    depends_on = [],
+    execute_on = [PhysicsTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Synchronizing simulation GPU commands", engine.task_timer(), {
+            let simulator = engine.simulator().oread();
+            if !simulator.enabled() {
+                return Ok(());
+            }
+            drop(simulator);
+            let graphics_system = engine.graphics_system().oread();
+            let mut gpu_simulation_manager = engine.gpu_simulation_manager().owrite();
+            gpu_simulation_manager.synchronize_simulation_commands(&graphics_system)
+        })
+    }
+);
+
+define_task!(
+    /// Records and submits all GPU simulation commands for this time step.
+    [pub] ExecuteGPUSimulation,
+    depends_on = [
+        // We can't let the particle buffer be updated before the particle
+        // geometry pass is done reading from it.
+        RenderBeforeSurface,
+        // Simulation commands must be up-to-date with the current resources
+        // before we can record them.
+        SyncSimulationGPUCommands
+    ],
+    execute_on = [PhysicsTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Executing GPU simulation", engine.task_timer(), {
+            let simulator = engine.simulator().oread();
+            if !simulator.enabled() {
+                return Ok(());
+            }
+            let current_time_step = simulator.current_time_step();
+            drop(simulator);
+            let graphics_system = engine.graphics_system().oread();
+            let gpu_simulation_manager = engine.gpu_simulation_manager().oread();
+            gpu_simulation_manager.simulate_for_time_step(&graphics_system, current_time_step)
+        })
+    }
+);
+
 // =============================================================================
 // SCENE GRAPH UPDATES (for current frame)
 // =============================================================================
@@ -996,7 +1045,8 @@ define_task!(
         // counterparts.
         BufferModelInstancesAndBoundLights,
         BufferGizmoInstances,
-        // We need to have the up-to-date graphics configuration at this point.
+        // We need to have the up-to-date configuration at this point.
+        ApplyEngineCommands,
         ApplyRenderingCommands
     ],
     execute_on = [RenderingTag],
@@ -1186,6 +1236,8 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     // PHYSICS SIMULATION (updates to state for current frame)
     task_scheduler.register_task(AdvanceSimulation)?;
     task_scheduler.register_task(SyncRigidBodyComponents)?;
+    task_scheduler.register_task(SyncSimulationGPUCommands)?;
+    task_scheduler.register_task(ExecuteGPUSimulation)?;
 
     // SCENE GRAPH UPDATES (for current frame)
     task_scheduler.register_task(SyncSceneGraphNodeProperties)?;

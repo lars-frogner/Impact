@@ -164,8 +164,8 @@ impl SkyboxPass {
             postprocessor.capturing_camera().exposure_immediate()
         });
 
-        stager.stage_immediate_data_if_present(BasicImmediate::CameraRotationQuaternion, || {
-            camera_gpu_resources.camera_rotation_quaternion_immediate()
+        stager.stage_immediate_data_if_present(BasicImmediate::WorldToCameraRotation, || {
+            camera_gpu_resources.world_to_camera_rotation_immediate()
         });
 
         stager.set_staged_immediate_data(render_pass);

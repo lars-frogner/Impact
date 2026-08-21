@@ -14,8 +14,11 @@ pub enum BasicImmediate {
     Exposure,
     InverseExposure,
     FrameCounter,
-    CameraRotationQuaternion,
     InstanceIdx,
+    WorldToCameraRotation,
+    WorldToCameraTranslation,
+    PreviousWorldToCameraRotation,
+    PreviousWorldToCameraTranslation,
 }
 
 impl Immediate for BasicImmediate {
@@ -27,7 +30,8 @@ impl Immediate for BasicImmediate {
             }
             Self::Exposure | Self::InverseExposure | Self::PixelCount => (4, 4), // f32
             Self::InverseWindowDimensions => (8, 8),                             // vec2f
-            Self::CameraRotationQuaternion => (16, 16),                          // vec4f
+            Self::WorldToCameraRotation | Self::PreviousWorldToCameraRotation => (16, 16), // vec4f
+            Self::WorldToCameraTranslation | Self::PreviousWorldToCameraTranslation => (12, 16), // vec3f
         }
     }
 }

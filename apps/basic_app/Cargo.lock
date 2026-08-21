@@ -1182,6 +1182,7 @@ dependencies = [
  "impact_math",
  "impact_mesh",
  "impact_model",
+ "impact_particle",
  "impact_physics",
  "impact_profiling",
  "impact_rendering",
@@ -1525,6 +1526,30 @@ dependencies = [
  "impact_math",
  "inventory",
  "roc_integration",
+]
+
+[[package]]
+name = "impact_particle"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "impact_alloc",
+ "impact_camera",
+ "impact_containers",
+ "impact_ecs",
+ "impact_gpu",
+ "impact_id",
+ "impact_io",
+ "impact_math",
+ "impact_mesh",
+ "impact_rendering",
+ "impact_texture",
+ "inventory",
+ "log",
+ "pastey",
+ "roc_integration",
+ "serde",
 ]
 
 [[package]]

@@ -20,7 +20,7 @@ use crate::{
     },
     instrumentation::{EngineMetrics, InstrumentationConfig},
     lock_order::{OrderedMutex, OrderedRwLock},
-    physics::{PhysicsConfig, PhysicsSimulator},
+    physics::{PhysicsConfig, PhysicsSimulator, gpu::GPUSimulationManager},
     rendering::{
         RenderingConfig, RenderingSystem,
         screen_capture::{ScreenCaptureConfig, ScreenCapturer},
@@ -37,6 +37,7 @@ use impact_ecs::{
 };
 use impact_id::EntityIDManager;
 use impact_light::LightConfig;
+use impact_particle::{ParticleConfig, material::ParticleMaterialRegistry};
 use impact_profiling::TaskTimer;
 use impact_scene::model::ModelInstanceManager;
 use impact_texture::{SamplerRegistry, TextureRegistry};
@@ -70,6 +71,7 @@ pub struct Engine {
     scene: RwLock<Scene>,
     simulator: RwLock<PhysicsSimulator>,
     graphics_system: RwLock<GraphicsSystem>,
+    gpu_simulation_manager: RwLock<GPUSimulationManager>,
     renderer: RwLock<RenderingSystem>,
     motion_controller: Option<Mutex<Box<dyn MotionController>>>,
     orientation_controller: Option<Mutex<Box<dyn OrientationController>>>,
@@ -89,6 +91,7 @@ pub struct EngineConfig {
     pub input: InputConfig,
     pub resources: ResourceConfig,
     pub light: LightConfig,
+    pub particle: ParticleConfig,
     pub voxel: VoxelConfig,
     pub physics: PhysicsConfig,
     pub graphics: GraphicsConfig,
@@ -115,6 +118,12 @@ impl Engine {
         let mut texture_registry = TextureRegistry::new();
         let mut sampler_registry = SamplerRegistry::new();
 
+        let particle_material_registry = ParticleMaterialRegistry::from_config(
+            &mut texture_registry,
+            &mut sampler_registry,
+            config.particle.materials.clone(),
+        )?;
+
         let voxel_type_registry = VoxelTypeRegistry::from_config(
             &mut texture_registry,
             &mut sampler_registry,
@@ -125,6 +134,7 @@ impl Engine {
             config.resources,
             texture_registry,
             sampler_registry,
+            particle_material_registry,
             voxel_type_registry,
         );
 
@@ -154,6 +164,8 @@ impl Engine {
         let graphics_device = Arc::new(graphics.device);
 
         let graphics_system = GraphicsSystem::new(Arc::clone(&graphics_device), config.graphics)?;
+
+        let gpu_simulation_manager = GPUSimulationManager::new(&graphics_system, &resource_manager);
 
         let rendering_surface = graphics.surface;
 
@@ -189,6 +201,7 @@ impl Engine {
             scene: RwLock::new(scene),
             simulator: RwLock::new(simulator),
             graphics_system: RwLock::new(graphics_system),
+            gpu_simulation_manager: RwLock::new(gpu_simulation_manager),
             renderer: RwLock::new(renderer),
             motion_controller: motion_controller.map(Mutex::new),
             orientation_controller: orientation_controller.map(Mutex::new),
@@ -200,6 +213,12 @@ impl Engine {
             controls_enabled: AtomicBool::new(false),
             shutdown_requested: AtomicBool::new(false),
         };
+
+        // Make sure GPU resources start out synced when entering the game loop.
+        // Rendering would work anyway since it is skipped the first frame, but
+        // GPU physics simulation needs to run the first frame, so it needs the
+        // GPU resources to be fully initialized.
+        engine.sync_all_gpu_resources()?;
 
         Ok(engine)
     }
@@ -261,6 +280,12 @@ impl Engine {
     /// Returns a reference to the [`GraphicsSystem`], guarded by a [`RwLock`].
     pub(crate) fn graphics_system(&self) -> &RwLock<GraphicsSystem> {
         &self.graphics_system
+    }
+
+    /// Returns a reference to the [`GPUSimulationManager`], guarded by a
+    /// [`RwLock`].
+    pub(crate) fn gpu_simulation_manager(&self) -> &RwLock<GPUSimulationManager> {
+        &self.gpu_simulation_manager
     }
 
     /// Returns a reference to the [`RenderingSystem`], guarded by a [`RwLock`].
@@ -604,6 +629,7 @@ impl EngineConfig {
     fn resolve_paths(&mut self, root_path: &Path) {
         self.resources.resolve_paths(root_path);
         self.physics.resolve_paths(root_path);
+        self.particle.resolve_paths(root_path);
         self.voxel.resolve_paths(root_path);
     }
 }

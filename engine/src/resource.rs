@@ -6,6 +6,9 @@ use crate::resource::import::ResourceDeclarations;
 use anyhow::Result;
 use impact_material::{MaterialRegistry, MaterialTemplateRegistry, MaterialTextureGroupRegistry};
 use impact_mesh::{LineSegmentMeshRegistry, TriangleMeshRegistry};
+use impact_particle::{
+    gpu_resource::ParticleResourceRegistries, material::ParticleMaterialRegistry,
+};
 use impact_rendering::resource::BasicResourceRegistries;
 use impact_texture::{SamplerRegistry, TextureRegistry, lookup_table::LookupTableRegistry};
 use impact_voxel::{
@@ -38,6 +41,7 @@ pub struct ResourceManager {
     pub materials: MaterialRegistry,
     pub material_templates: MaterialTemplateRegistry,
     pub material_texture_groups: MaterialTextureGroupRegistry,
+    pub particle_materials: ParticleMaterialRegistry,
     pub voxel_generators: VoxelGeneratorRegistry,
     pub voxel_types: VoxelTypeRegistry,
     pub config: ResourceConfig,
@@ -76,6 +80,7 @@ impl ResourceManager {
         config: ResourceConfig,
         textures: TextureRegistry,
         samplers: SamplerRegistry,
+        particle_materials: ParticleMaterialRegistry,
         voxel_types: VoxelTypeRegistry,
     ) -> Self {
         Self {
@@ -88,6 +93,7 @@ impl ResourceManager {
             material_templates: MaterialTemplateRegistry::new(),
             material_texture_groups: MaterialTextureGroupRegistry::new(),
             voxel_generators: VoxelGeneratorRegistry::new(),
+            particle_materials,
             voxel_types,
             config,
         }
@@ -191,6 +197,12 @@ impl BasicResourceRegistries for ResourceManager {
 
     fn material_texture_group(&self) -> &MaterialTextureGroupRegistry {
         &self.material_texture_groups
+    }
+}
+
+impl ParticleResourceRegistries for ResourceManager {
+    fn particle_material(&self) -> &ParticleMaterialRegistry {
+        &self.particle_materials
     }
 }
 

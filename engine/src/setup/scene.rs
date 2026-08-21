@@ -5,6 +5,7 @@ pub mod camera;
 pub mod light;
 pub mod material;
 pub mod mesh;
+pub mod particle;
 pub mod voxel;
 
 use crate::{
@@ -42,6 +43,8 @@ pub fn setup_scene_data_for_new_entities(
     light::setup_lights_for_new_entities(scene, entities)?;
 
     material::setup_materials_for_new_entities(resource_manager, entities)?;
+
+    particle::setup_particle_emitters_for_new_entities(resource_manager, scene, entities)?;
 
     voxel::setup_voxel_objects_for_new_entities(ctx, resource_manager, scene, simulator, entities)?;
     voxel::setup_voxel_interaction_for_new_entities(scene, entities)?;
@@ -83,6 +86,8 @@ pub fn cleanup_scene_data_for_removed_entity(
     light::cleanup_light_for_removed_entity(scene, entity_id, entity);
 
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
+
+    particle::cleanup_particle_emission_for_removed_entity(scene, entity_id, entity);
 
     voxel::cleanup_voxel_state_for_removed_entity(scene, entity_id, entity);
 

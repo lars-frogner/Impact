@@ -124,6 +124,14 @@ impl Engine {
             &mut gpu_resource_manager.skybox,
         )?;
 
+        resource_manager.particle_materials.sync_gpu_resources(
+            graphics_system.graphics_device(),
+            &gpu_resource_manager.textures,
+            &gpu_resource_manager.samplers,
+            graphics_system.bind_group_layout_registry(),
+            &mut gpu_resource_manager.particle_materials,
+        )?;
+
         resource_manager.voxel_types.sync_material_gpu_resources(
             graphics_system.graphics_device(),
             &gpu_resource_manager.textures,
@@ -141,15 +149,21 @@ impl Engine {
         let scene = self.scene().oread();
         let camera_manager = scene.camera_manager().oread();
         let light_manager = scene.light_manager().oread();
+        let particle_emitter_manager = scene.particle_emitter_manager().oread();
         let mut voxel_manager = scene.voxel_manager().owrite();
         let mut model_instance_manager = scene.model_instance_manager().owrite();
+
+        let effective_time_step_duration = self.simulator().oread().effective_time_step_duration();
+
         let graphics_system = self.graphics_system().oread();
 
         graphics_system.sync_dynamic_gpu_resources(
             &camera_manager,
             &light_manager,
+            &particle_emitter_manager,
             voxel_manager.object_manager_mut(),
             &mut model_instance_manager,
+            effective_time_step_duration,
         );
         Ok(())
     }

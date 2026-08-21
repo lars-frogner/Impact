@@ -343,6 +343,7 @@ impl Engine {
     /// state and sets the simulation time to zero.
     pub fn reset_world(&self) -> Result<()> {
         log::info!("Resetting world");
+
         let mut entity_id_manager = self.entity_id_manager.olock();
         entity_id_manager.reset_and_free();
 
@@ -356,13 +357,15 @@ impl Engine {
 
         self.command_queues.reset_and_free();
 
-        {
-            let graphics_system = self.graphics_system.oread();
-            let mut renderer = self.renderer.owrite();
-            renderer.synchronize_render_commands(&graphics_system)?;
-        }
-
         self.sync_all_gpu_resources()?;
+
+        let graphics_system = self.graphics_system.oread();
+
+        let mut gpu_simulation_manager = self.gpu_simulation_manager.owrite();
+        gpu_simulation_manager.synchronize_simulation_commands(&graphics_system)?;
+
+        let mut renderer = self.renderer.owrite();
+        renderer.synchronize_render_commands(&graphics_system)?;
 
         Ok(())
     }

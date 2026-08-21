@@ -38,10 +38,11 @@ declare_lockable_resource!(crate::scene::Scene, 200);
 declare_lockable_resource!(Option<impact_scene::skybox::Skybox>, 210);
 declare_lockable_resource!(impact_camera::CameraManager, 220);
 declare_lockable_resource!(impact_light::LightManager, 230);
-declare_lockable_resource!(impact_voxel::VoxelManager, 240);
-declare_lockable_resource!(impact_scene::model::ModelInstanceManager, 250);
-declare_lockable_resource!(impact_intersection::IntersectionManager, 260);
-declare_lockable_resource!(impact_scene::graph::SceneGraph, 270);
+declare_lockable_resource!(impact_particle::ParticleEmitterManager, 240);
+declare_lockable_resource!(impact_voxel::VoxelManager, 250);
+declare_lockable_resource!(impact_scene::model::ModelInstanceManager, 260);
+declare_lockable_resource!(impact_intersection::IntersectionManager, 270);
+declare_lockable_resource!(impact_scene::graph::SceneGraph, 280);
 
 // ============================================================================
 // PHYSICS (300-399)
@@ -65,21 +66,23 @@ declare_lockable_resource!(impact_voxel::collidable::CollisionWorld, 360);
 
 declare_lockable_resource!(crate::gpu::GraphicsSystem, 400);
 
-declare_lockable_resource!(crate::rendering::RenderingSystem, 410);
+declare_lockable_resource!(crate::physics::gpu::GPUSimulationManager, 410);
+
+declare_lockable_resource!(crate::rendering::RenderingSystem, 420);
 
 // GraphicsSystem components (must be acquired after GraphicsSystem and RenderingSystem)
-declare_lockable_resource!(impact_gpu::timestamp_query::TimestampQueryManager, 420);
-declare_lockable_resource!(impact_gpu::shader::ShaderManager, 430);
-declare_lockable_resource!(crate::gpu::resource::GPUResourceManager, 440);
-declare_lockable_resource!(impact_gpu::resource_group::GPUResourceGroupManager, 450);
-declare_lockable_resource!(impact_gpu::storage::StorageGPUBufferManager, 460);
+declare_lockable_resource!(impact_gpu::timestamp_query::TimestampQueryManager, 430);
+declare_lockable_resource!(impact_gpu::shader::ShaderManager, 440);
+declare_lockable_resource!(crate::gpu::resource::GPUResourceManager, 450);
+declare_lockable_resource!(impact_gpu::resource_group::GPUResourceGroupManager, 460);
+declare_lockable_resource!(impact_gpu::storage::StorageGPUBufferManager, 470);
 
 // RenderingSystem components (must be acquired after GraphicsSystem components)
 declare_lockable_resource!(
     impact_rendering::attachment::RenderAttachmentTextureManager,
-    470
+    480
 );
-declare_lockable_resource!(impact_rendering::postprocessing::Postprocessor, 480);
+declare_lockable_resource!(impact_rendering::postprocessing::Postprocessor, 490);
 
 // ============================================================================
 // CONTROL (500-599)

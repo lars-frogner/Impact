@@ -14,7 +14,7 @@ use impact_math::{
     quaternion::UnitQuaternionC,
     random::halton::HaltonSequence,
     transform::{Isometry3, Projective3C},
-    vector::Vector4C,
+    vector::{Vector3C, Vector4C},
 };
 use std::{borrow::Cow, sync::LazyLock};
 
@@ -32,6 +32,7 @@ const JITTER_BASES: (u64, u64) = (2, 3);
 #[derive(Debug)]
 pub struct CameraGPUResource {
     view_transform: Isometry3,
+    previous_view_transform: Isometry3,
     view_frustum: Frustum,
     projection_uniform_gpu_buffer: GPUBuffer,
     bind_group: wgpu::BindGroup,
@@ -105,6 +106,7 @@ impl CameraGPUResource {
 
         Self {
             view_transform,
+            previous_view_transform: view_transform,
             view_frustum,
             projection_uniform_gpu_buffer,
             bind_group,
@@ -140,6 +142,9 @@ impl CameraGPUResource {
     }
 
     /// Ensures that the GPU buffer is in sync with the camera manager.
+    ///
+    /// Should be called exactly once per frame in order to correctly track the
+    /// previous frame's view transform.
     pub fn sync_with_camera_manager(
         &mut self,
         staging_belt: &mut wgpu::util::StagingBelt,
@@ -147,6 +152,13 @@ impl CameraGPUResource {
         camera: &Camera,
         camera_version: u64,
     ) {
+        self.previous_view_transform = if self.camera_version == camera_version {
+            self.view_transform
+        } else {
+            // Camera changed, so set previous to same as current
+            *camera.view_transform()
+        };
+
         self.view_transform = *camera.view_transform();
 
         if self.camera_version != camera_version
@@ -162,9 +174,28 @@ impl CameraGPUResource {
         }
     }
 
-    /// Returns the camera rotation quaternion immediate.
-    pub fn camera_rotation_quaternion_immediate(&self) -> UnitQuaternionC {
+    /// Returns the quaternion for the immediate representing the
+    /// world-to-camera rotation.
+    pub fn world_to_camera_rotation_immediate(&self) -> UnitQuaternionC {
         self.view_transform.rotation().compact()
+    }
+
+    /// Returns the vector for the immediate representing the world-to-camera
+    /// translation.
+    pub fn world_to_camera_translation_immediate(&self) -> Vector3C {
+        self.view_transform.translation().compact()
+    }
+
+    /// Returns the quaternion for the immediate representing the
+    /// world-to-camera rotation for the previous frame.
+    pub fn previous_world_to_camera_rotation_immediate(&self) -> UnitQuaternionC {
+        self.previous_view_transform.rotation().compact()
+    }
+
+    /// Returns the vector for the immediate representing the world-to-camera
+    /// translation for the previous frame.
+    pub fn previous_world_to_camera_translation_immediate(&self) -> Vector3C {
+        self.previous_view_transform.translation().compact()
     }
 
     /// Creates the bind group layout entry for the camera projection uniform,

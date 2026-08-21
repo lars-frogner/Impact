@@ -1,5 +1,7 @@
 //! Simulation of physics.
 
+pub mod gpu;
+
 use crate::lock_order::OrderedRwLock;
 use anyhow::{Result, bail};
 use impact_intersection::IntersectionManager;
@@ -28,9 +30,10 @@ pub struct PhysicsSimulator {
     constraint_manager: RwLock<ConstraintManager>,
     collision_world: RwLock<CollisionWorld>,
     medium: UniformMedium,
-    simulation_time: f32,
     time_step_duration: f32,
     simulation_speed_multiplier: f32,
+    time_step: u64,
+    simulation_time: f32,
 }
 
 /// Configuration parameters for physics.
@@ -100,9 +103,10 @@ impl PhysicsSimulator {
             constraint_manager: RwLock::new(ConstraintManager::new(constraint_solver_config)),
             collision_world: RwLock::new(CollisionWorld::new()),
             medium,
-            simulation_time: 0.0,
             time_step_duration,
             simulation_speed_multiplier: 1.0,
+            time_step: 0,
+            simulation_time: 0.0,
         })
     }
 
@@ -142,6 +146,21 @@ impl PhysicsSimulator {
     /// simulation speed multiplier).
     pub fn scaled_time_step_duration(&self) -> f32 {
         self.time_step_duration * self.simulation_speed_multiplier
+    }
+
+    /// Same as [`Self::scaled_time_step_duration`] except zero when the
+    /// simulation is disabled.
+    pub fn effective_time_step_duration(&self) -> f32 {
+        if self.enabled() {
+            self.scaled_time_step_duration()
+        } else {
+            0.0
+        }
+    }
+
+    /// The number of time steps the simulation has been advanced with.
+    pub fn current_time_step(&self) -> u64 {
+        self.time_step
     }
 
     /// The time that have elapsed within the simulation.
@@ -269,6 +288,7 @@ impl PhysicsSimulator {
         self.constraint_manager.owrite().reset_and_free();
         self.collision_world.owrite().reset_and_free();
         self.simulation_time = 0.0;
+        self.time_step = 0;
     }
 
     fn do_advance_simulation(
@@ -303,6 +323,7 @@ impl PhysicsSimulator {
             );
             self.simulation_time += substep_duration;
         }
+        self.time_step += 1;
 
         constraint_manager.finalize_time_step();
 

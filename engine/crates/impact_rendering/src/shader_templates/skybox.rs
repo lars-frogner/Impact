@@ -30,7 +30,7 @@ impl SkyboxShaderTemplate {
     /// Returns the group of immediates used by the shader.
     pub fn immediates() -> BasicImmediateGroup {
         BasicImmediateGroup::from_iter([
-            BasicImmediate::CameraRotationQuaternion,
+            BasicImmediate::WorldToCameraRotation,
             BasicImmediate::Exposure,
         ])
     }

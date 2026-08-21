@@ -18,7 +18,7 @@ members = [
     "crates/impact_math",
     "crates/impact_mesh",
     "crates/impact_model",
-    # "crates/impact_particle",
+    "crates/impact_particle",
     "crates/impact_physics",
     "crates/impact_profiling",
     "crates/impact_rendering",
@@ -231,7 +231,7 @@ roc_codegen = [
     "impact_math/roc_codegen",
     "impact_mesh/roc_codegen",
     "impact_model/roc_codegen",
-    # "impact_particle/roc_codegen",
+    "impact_particle/roc_codegen",
     "impact_physics/roc_codegen",
     "impact_scene/roc_codegen",
     "impact_rendering/roc_codegen",
@@ -274,7 +274,7 @@ impact_material = { path = "crates/impact_material", features = [
 impact_math = { path = "crates/impact_math", features = ["serde"] }
 impact_mesh = { path = "crates/impact_mesh", features = ["ecs", "serde"] }
 impact_model = { path = "crates/impact_model" }
-# impact_particle = { path = "crates/impact_particle", features = ["ecs"] }
+impact_particle = { path = "crates/impact_particle", features = ["ecs", "ron"] }
 impact_physics = { path = "crates/impact_physics", features = [
     "postcard",
     "ecs",

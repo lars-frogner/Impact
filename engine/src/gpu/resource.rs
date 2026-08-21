@@ -7,6 +7,9 @@ use impact_material::gpu_resource::{
     GPUMaterialMap, GPUMaterialTemplateMap, GPUMaterialTextureGroupMap,
 };
 use impact_mesh::gpu_resource::{LineSegmentMeshGPUResourceMap, TriangleMeshGPUResourceMap};
+use impact_particle::gpu_resource::{
+    ParticleGPUResources, ParticleMaterialGPUResources, ParticleSimulationGPUResources,
+};
 use impact_rendering::resource::BasicGPUResources;
 use impact_scene::{model::ModelInstanceGPUBufferMap, skybox::gpu_resource::SkyboxGPUResource};
 use impact_texture::gpu_resource::{LookupTableBindGroupMap, SamplerMap, TextureMap};
@@ -28,6 +31,8 @@ pub struct GPUResourceManager {
     pub material_templates: GPUMaterialTemplateMap,
     pub material_texture_groups: GPUMaterialTextureGroupMap,
     pub model_instance_buffers: ModelInstanceGPUBufferMap,
+    pub particle_materials: Option<ParticleMaterialGPUResources>,
+    pub particle_simulations: ParticleSimulationGPUResources,
     pub voxel_materials: Option<VoxelMaterialGPUResources>,
     pub voxel_objects: VoxelObjectGPUResources,
     pub staging_belt: wgpu::util::StagingBelt,
@@ -51,6 +56,8 @@ impl GPUResourceManager {
             material_templates: GPUMaterialTemplateMap::new(),
             material_texture_groups: GPUMaterialTextureGroupMap::new(),
             model_instance_buffers: ModelInstanceGPUBufferMap::new(),
+            particle_materials: None,
+            particle_simulations: ParticleSimulationGPUResources::new(),
             voxel_materials: None,
             voxel_objects: VoxelObjectGPUResources::new(),
             staging_belt,
@@ -105,6 +112,16 @@ impl BasicGPUResources for GPUResourceManager {
 
     fn model_instance_buffer(&self) -> &ModelInstanceGPUBufferMap {
         &self.model_instance_buffers
+    }
+}
+
+impl ParticleGPUResources for GPUResourceManager {
+    fn particle_materials(&self) -> Option<&ParticleMaterialGPUResources> {
+        self.particle_materials.as_ref()
+    }
+
+    fn particle_simulations(&self) -> &ParticleSimulationGPUResources {
+        &self.particle_simulations
     }
 }
 

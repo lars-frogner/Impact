@@ -6,6 +6,7 @@ use impact_camera::{CameraContext, CameraManager};
 use impact_id::EntityIDManager;
 use impact_intersection::IntersectionManager;
 use impact_light::{LightConfig, LightManager};
+use impact_particle::ParticleEmitterManager;
 use impact_scene::{
     graph::{SceneGraph, SceneGroupID},
     model::{ModelInstanceManager, ModelInstanceManagerState},
@@ -20,6 +21,7 @@ pub struct Scene {
     skybox: RwLock<Option<Skybox>>,
     camera_manager: RwLock<CameraManager>,
     light_manager: RwLock<LightManager>,
+    particle_emitter_manager: RwLock<ParticleEmitterManager>,
     voxel_manager: RwLock<VoxelManager>,
     model_instance_manager: RwLock<ModelInstanceManager>,
     initial_model_instance_manager_state: ModelInstanceManagerState,
@@ -42,6 +44,7 @@ impl Scene {
             skybox: RwLock::new(None),
             camera_manager: RwLock::new(CameraManager::new(camera_context)),
             light_manager: RwLock::new(LightManager::new(light_config)),
+            particle_emitter_manager: RwLock::new(ParticleEmitterManager::new()),
             voxel_manager: RwLock::new(VoxelManager::new(voxel_config)?),
             model_instance_manager: RwLock::new(model_instance_manager),
             initial_model_instance_manager_state,
@@ -64,6 +67,12 @@ impl Scene {
     /// Returns a reference to the [`LightManager`], guarded by a [`RwLock`].
     pub fn light_manager(&self) -> &RwLock<LightManager> {
         &self.light_manager
+    }
+
+    /// Returns a reference to the [`ParticleEmitterManager`], guarded by a
+    /// [`RwLock`].
+    pub fn particle_emitter_manager(&self) -> &RwLock<ParticleEmitterManager> {
+        &self.particle_emitter_manager
     }
 
     /// Returns a reference to the [`VoxelManager`], guarded by a [`RwLock`].
@@ -106,6 +115,8 @@ impl Scene {
         self.camera_manager.owrite().reset_and_free();
 
         self.light_manager.owrite().reset_and_free();
+
+        self.particle_emitter_manager.owrite().reset_and_free();
 
         self.voxel_manager.owrite().reset_and_free();
 

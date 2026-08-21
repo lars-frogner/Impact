@@ -21,6 +21,13 @@ impl RangeAllocator {
         }
     }
 
+    /// Creates a new allocator with the given free range.
+    pub fn with_free_range(range: &Range<usize>) -> Self {
+        let mut allocator = Self::fully_occupied();
+        allocator.free_range(range);
+        allocator
+    }
+
     /// Frees the given range.
     pub fn free_range(&mut self, range: &Range<usize>) {
         if !range.is_empty() {

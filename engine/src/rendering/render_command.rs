@@ -8,6 +8,7 @@ use impact_gpu::{
     resource_group::GPUResourceGroupManager, shader::ShaderManager,
     storage::StorageGPUBufferManager, timestamp_query::TimestampQueryRegistry, wgpu,
 };
+use impact_particle::render_commands::ParticleRenderCommands;
 use impact_rendering::{
     BasicRenderingConfig,
     attachment::{RenderAttachmentQuantitySet, RenderAttachmentTextureManager},
@@ -40,6 +41,7 @@ pub struct RenderCommandManager {
     ambient_light_pass: AmbientLightPass,
     directional_light_pass: DirectionalLightPass,
     skybox_pass: SkyboxPass,
+    particle_render_commands: Option<ParticleRenderCommands>,
     voxel_render_commands: Option<VoxelRenderCommands>,
     gizmo_passes: GizmoPasses,
 }
@@ -103,6 +105,15 @@ impl RenderCommandManager {
 
         let skybox_pass = SkyboxPass::new(graphics_device, shader_manager);
 
+        let particle_render_commands = ParticleRenderCommands::new(
+            graphics_device,
+            shader_manager,
+            resource_manager,
+            bind_group_layout_registry,
+            &geometry_pass,
+            config,
+        );
+
         let voxel_render_commands = VoxelRenderCommands::new(
             graphics_device,
             shader_manager,
@@ -128,6 +139,7 @@ impl RenderCommandManager {
             ambient_light_pass,
             directional_light_pass,
             skybox_pass,
+            particle_render_commands,
             voxel_render_commands,
             gizmo_passes,
         }
@@ -147,6 +159,10 @@ impl RenderCommandManager {
 
         self.geometry_pass
             .sync_with_config(graphics_device, shader_manager, config);
+
+        if let Some(particle_render_commands) = &mut self.particle_render_commands {
+            particle_render_commands.sync_with_config(graphics_device, shader_manager, config);
+        }
 
         if let Some(voxel_render_commands) = &mut self.voxel_render_commands {
             voxel_render_commands.sync_with_config(graphics_device, shader_manager, config);
@@ -254,16 +270,25 @@ impl RenderCommandManager {
             command_encoder,
         )?;
 
-        if let Some(ref mut pass) = geometry_pass
-            && let Some(voxel_render_commands) = &self.voxel_render_commands
-        {
-            voxel_render_commands.record_to_geometry_pass(
-                rendering_surface,
-                gpu_resource_manager,
-                postprocessor,
-                frame_counter,
-                pass,
-            )?;
+        if let Some(ref mut pass) = geometry_pass {
+            if let Some(particle_render_commands) = &self.particle_render_commands {
+                particle_render_commands.draw_for_geometry_pass(
+                    rendering_surface,
+                    gpu_resource_manager,
+                    postprocessor,
+                    frame_counter,
+                    pass,
+                )?;
+            }
+            if let Some(voxel_render_commands) = &self.voxel_render_commands {
+                voxel_render_commands.draw_for_geometry_pass(
+                    rendering_surface,
+                    gpu_resource_manager,
+                    postprocessor,
+                    frame_counter,
+                    pass,
+                )?;
+            }
         }
         drop(geometry_pass);
         drop(timestamp_span_guard);

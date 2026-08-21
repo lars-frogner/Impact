@@ -129,7 +129,7 @@ impl VoxelRenderCommands {
         )
     }
 
-    pub fn record_to_geometry_pass<GR>(
+    pub fn draw_for_geometry_pass<GR>(
         &self,
         rendering_surface: &RenderingSurface,
         gpu_resources: &GR,
@@ -140,7 +140,7 @@ impl VoxelRenderCommands {
     where
         GR: BasicGPUResources + VoxelGPUResources,
     {
-        self.geometry_pipeline.record(
+        self.geometry_pipeline.draw(
             rendering_surface,
             gpu_resources,
             postprocessor,
@@ -741,7 +741,7 @@ impl VoxelGeometryPipeline {
         });
     }
 
-    pub fn record<GR>(
+    fn draw<GR>(
         &self,
         rendering_surface: &RenderingSurface,
         gpu_resources: &GR,
