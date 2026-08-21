@@ -60,7 +60,6 @@ impl GPUBuffer {
     /// into the buffer at a later point without reallocating.
     ///
     /// # Panics
-    /// - If `bytes` is empty.
     /// - If `n_valid_bytes` exceeds the size of the `bytes` slice.
     pub fn new(
         graphics_device: &GraphicsDevice,
@@ -69,8 +68,6 @@ impl GPUBuffer {
         usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
-        assert!(!bytes.is_empty(), "Tried to create empty GPU buffer");
-
         let buffer_size = bytes.len();
         assert!(n_valid_bytes <= buffer_size);
 
@@ -94,7 +91,6 @@ impl GPUBuffer {
     /// valid bytes will be written into the beginning of the buffer.
     ///
     /// # Panics
-    /// - If `buffer_size` is zero.
     /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
     pub fn new_with_spare_capacity(
         graphics_device: &GraphicsDevice,
@@ -103,7 +99,6 @@ impl GPUBuffer {
         usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
-        assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
         assert!(valid_bytes.len() <= buffer_size);
 
         let buffer_label = format!("{label} GPU buffer");
@@ -134,7 +129,6 @@ impl GPUBuffer {
     /// via the given staging belt.
     ///
     /// # Panics
-    /// - If `buffer_size` is zero.
     /// - If the size of the `valid_bytes` slice exceeds `buffer_size`.
     pub fn new_with_spare_capacity_and_encoded_initialization(
         graphics_device: &GraphicsDevice,
@@ -145,7 +139,6 @@ impl GPUBuffer {
         usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
-        assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
         assert!(valid_bytes.len() <= buffer_size);
 
         let buffer_label = format!("{label} GPU buffer");
@@ -174,17 +167,12 @@ impl GPUBuffer {
 
     /// Creates an uninitialized GPU buffer of the given type with room for
     /// `buffer_size` bytes.
-    ///
-    /// # Panics
-    /// - If `buffer_size` is zero.
     pub fn new_uninitialized(
         graphics_device: &GraphicsDevice,
         buffer_size: usize,
         usage: wgpu::BufferUsages,
         label: Cow<'static, str>,
     ) -> Self {
-        assert_ne!(buffer_size, 0, "Tried to create empty GPU buffer");
-
         let buffer_label = format!("{label} GPU buffer");
         let buffer = Self::create_uninitialized_buffer(
             graphics_device.device(),
@@ -425,8 +413,9 @@ impl GPUBuffer {
         &self.buffer
     }
 
-    /// Maps the buffer from the to the CPU, calls the given closure with the
-    /// mapped bytes, unmaps the buffer and returns the result of the closure.
+    /// Maps the buffer from the GPU to the CPU, calls the given closure with
+    /// the mapped bytes, unmaps the buffer and returns the result of the
+    /// closure.
     ///
     /// # Errors
     /// Returns an error if the mapping operation fails.
@@ -746,11 +735,12 @@ impl GPUBufferType {
         match self {
             Self::Vertex => wgpu::BufferUsages::VERTEX,
             Self::Index => wgpu::BufferUsages::INDEX,
-            Self::Uniform => wgpu::BufferUsages::UNIFORM,
+            Self::Uniform => wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::MAP_READ,
             Self::Storage => {
                 wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_SRC
                     | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::MAP_READ
             }
             Self::Result => wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             Self::Indirect => wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
