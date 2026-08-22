@@ -17,7 +17,7 @@ use impact_math::hash::Hash32;
 use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureID, TextureRegistry,
     gpu_resource::{SamplerMap, TextureMap},
-    processing::ImageProcessing,
+    processing::{FormatConversion, ImageProcessing, NormalMapFormat},
 };
 use std::{
     borrow::Cow,
@@ -96,6 +96,9 @@ pub struct NormalAndAlphaAtlas {
     pub path: PathBuf,
     /// Number of textures along each axis of the atlas.
     pub textures_per_axis: NonZeroU32,
+    /// Format for the normal map component.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub normal_map_format: NormalMapFormat,
 }
 
 impl ParticleMaterialID {
@@ -170,7 +173,7 @@ impl ParticleMaterialRegistry {
         let (
             names,
             fixed_material_properties,
-            (normal_and_alpha_atlas_source, n_atlas_textures_per_axis),
+            (normal_and_alpha_atlas_source, n_atlas_textures_per_axis, normal_map_format),
         ) = particle_materials.resolve(normal_and_alpha_atlas)?;
 
         let name_lookup_table: NoHashMap<_, _> = names
@@ -191,6 +194,12 @@ impl ParticleMaterialRegistry {
         let normal_and_alpha_atlas_id =
             TextureID::from_name("particle_normal_and_alpha_texture_atlas_id");
 
+        let normal_map_processing = ImageProcessing {
+            format_conversions: vec![FormatConversion::NormalMap {
+                from: normal_map_format,
+            }],
+        };
+
         impact_texture::import::load_image_texture(
             texture_registry,
             sampler_registry,
@@ -204,7 +213,7 @@ impl ParticleMaterialRegistry {
                 addressing: TextureAddressingConfig::Clamped,
                 filtering: TextureFilteringConfig::Basic,
             }),
-            ImageProcessing::none(),
+            normal_map_processing,
         )
         .context("Failed to load particle normal and alpha texture atlas")?;
 
@@ -303,23 +312,29 @@ impl ParticleMaterialSpecifications {
     ) -> Result<(
         Vec<Cow<'static, str>>,
         Vec<FixedParticleMaterialProperties>,
-        (ImageSource, NonZeroU32),
+        (ImageSource, NonZeroU32, NormalMapFormat),
     )> {
         const FALLBACK_ATLAS_RESOLUTION: NonZeroU32 = NonZeroU32::new(256).unwrap();
 
-        let (normal_and_alpha_atlas_source, n_atlas_textures_per_axis) =
+        let (normal_and_alpha_atlas_source, n_atlas_textures_per_axis, normal_map_format) =
             if let Some(NormalAndAlphaAtlas {
                 path,
                 textures_per_axis,
+                normal_map_format,
             }) = normal_and_alpha_atlas
             {
-                (ImageSource::File(path), textures_per_axis)
+                (
+                    ImageSource::File(path),
+                    textures_per_axis,
+                    normal_map_format,
+                )
             } else {
                 (
                     ImageSource::Bytes(create_flat_opaque_normal_and_alpha_image(
                         FALLBACK_ATLAS_RESOLUTION,
                     )),
                     NonZeroU32::new(1).unwrap(),
+                    NormalMapFormat::default(),
                 )
             };
 
@@ -362,7 +377,11 @@ impl ParticleMaterialSpecifications {
         Ok((
             names,
             fixed_material_properties,
-            (normal_and_alpha_atlas_source, n_atlas_textures_per_axis),
+            (
+                normal_and_alpha_atlas_source,
+                n_atlas_textures_per_axis,
+                normal_map_format,
+            ),
         ))
     }
 }
