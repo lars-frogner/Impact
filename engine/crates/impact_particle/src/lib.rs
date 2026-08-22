@@ -218,7 +218,8 @@ impl ParticleEmitterManager {
     /// Removes all state in the manager and frees up all allocated memory.
     #[inline]
     pub fn reset_and_free(&mut self) {
-        self.basic_particle_emitters.reset_and_free();
+        self.basic_particle_emitters
+            .reset_and_free_to_capacity(Self::INITIAL_SIMULATION_CAPACITY);
         self.emitter_metadata = HashMap::default();
     }
 

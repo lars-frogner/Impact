@@ -144,18 +144,14 @@ where
     ID: Copy + Hash + Eq + Debug,
     U: Copy + Zeroable,
 {
-    /// Creates a new empty buffer for uniforms.
-    pub fn new() -> Self {
-        Self {
-            raw_buffer: Vec::new(),
-            index_map: KeyIndexMapper::new(),
-            change_tracker: CollectionChangeTracker::default(),
-        }
-    }
-
     /// Creates a new empty buffer with allocated space for the given number of
     /// uniforms.
+    ///
+    /// # Panics
+    /// If the capacity is zero. Zero-sized GPU uniform buffers are not allowed,
+    /// so to avoid that, this buffer must always have a non-zero capacity.
     pub fn with_capacity(capacity: usize) -> Self {
+        assert_ne!(capacity, 0);
         Self {
             raw_buffer: vec![U::zeroed(); capacity],
             index_map: KeyIndexMapper::new(),
@@ -291,9 +287,13 @@ where
     }
 
     /// Removes all the uniforms from the buffer and frees up all allocated
-    /// memory.
-    pub fn reset_and_free(&mut self) {
-        self.raw_buffer = Vec::new();
+    /// memory, then recreates the buffer with the given capacity.
+    ///
+    /// # Panics
+    /// If the capacity is zero.
+    pub fn reset_and_free_to_capacity(&mut self, capacity: usize) {
+        assert_ne!(capacity, 0);
+        self.raw_buffer = vec![U::zeroed(); capacity];
         self.index_map = KeyIndexMapper::new();
         self.change_tracker = CollectionChangeTracker::default();
         self.change_tracker.notify_count_change();
@@ -315,16 +315,6 @@ where
         new_buffer[0..old_buffer_length].copy_from_slice(&self.raw_buffer);
 
         self.raw_buffer = new_buffer;
-    }
-}
-
-impl<ID, U> Default for UniformBuffer<ID, U>
-where
-    ID: Copy + Hash + Eq + Debug,
-    U: Copy + Zeroable,
-{
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -870,13 +860,9 @@ mod tests {
     type ByteUniformBuffer = UniformBuffer<Id, ByteUniform>;
 
     #[test]
-    fn creating_empty_uniform_buffer_works() {
-        let buffer = ByteUniformBuffer::new();
-
-        assert_eq!(buffer.n_valid_uniforms(), 0);
-        assert!(buffer.raw_buffer().is_empty());
-        assert!(buffer.valid_uniforms().is_empty());
-        assert!(buffer.valid_uniform_ids().is_empty());
+    #[should_panic]
+    fn creating_zero_capacity_uniform_buffer_panics() {
+        let _buffer = ByteUniformBuffer::with_capacity(0);
     }
 
     #[test]
@@ -892,20 +878,20 @@ mod tests {
     #[test]
     #[should_panic]
     fn requesting_uniform_from_empty_uniform_buffer_fails() {
-        let buffer = ByteUniformBuffer::new();
+        let buffer = ByteUniformBuffer::with_capacity(1);
         buffer.uniform(5);
     }
 
     #[test]
     #[should_panic]
     fn requesting_uniform_mutably_from_empty_uniform_buffer_fails() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         buffer.uniform_mut(5);
     }
 
     #[test]
     fn adding_one_uniform_to_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         let id = 3;
         let uniform = ByteUniform(7);
 
@@ -920,7 +906,7 @@ mod tests {
 
     #[test]
     fn adding_two_uniforms_to_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         let id_1 = 3;
         let id_2 = 13;
         let uniform_1 = ByteUniform(7);
@@ -950,7 +936,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn requesting_missing_uniform_from_uniform_buffer_fails() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         buffer.add_uniform(8, ByteUniform(1));
         buffer.uniform(5);
     }
@@ -958,14 +944,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn requesting_missing_uniform_mutably_from_uniform_buffer_fails() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         buffer.add_uniform(8, ByteUniform(1));
         buffer.uniform_mut(5);
     }
 
     #[test]
     fn removing_only_uniform_from_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         let id = 8;
         buffer.add_uniform(id, ByteUniform(1));
 
@@ -979,7 +965,7 @@ mod tests {
 
     #[test]
     fn removing_second_uniform_from_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         let id_1 = 8;
         let id_2 = 0;
         let uniform_1 = ByteUniform(0);
@@ -998,7 +984,7 @@ mod tests {
 
     #[test]
     fn removing_all_uniforms_from_empty_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         buffer.remove_all_uniforms();
         assert_eq!(buffer.n_valid_uniforms(), 0);
         assert!(buffer.valid_uniforms().is_empty());
@@ -1007,7 +993,7 @@ mod tests {
 
     #[test]
     fn removing_all_uniforms_from_single_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         let id = 8;
         buffer.add_uniform(id, ByteUniform(1));
 
@@ -1020,7 +1006,7 @@ mod tests {
 
     #[test]
     fn removing_all_uniforms_from_multi_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         let id_1 = 8;
         let id_2 = 0;
         let uniform_1 = ByteUniform(0);
@@ -1038,7 +1024,7 @@ mod tests {
 
     #[test]
     fn change_tracking_in_uniform_buffer_works() {
-        let mut buffer = ByteUniformBuffer::new();
+        let mut buffer = ByteUniformBuffer::with_capacity(1);
         assert_eq!(buffer.change(), CollectionChange::None);
 
         let id = 4;

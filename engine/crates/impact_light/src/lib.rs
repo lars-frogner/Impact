@@ -904,12 +904,16 @@ impl LightManager {
 
     /// Removes all lights from the storage and frees up all allocated memory.
     pub fn reset_and_free(&mut self) {
-        self.ambient_light_buffer.reset_and_free();
-        self.omnidirectional_light_buffer.reset_and_free();
+        self.ambient_light_buffer
+            .reset_and_free_to_capacity(Self::INITIAL_LIGHT_CAPACITY);
+        self.omnidirectional_light_buffer
+            .reset_and_free_to_capacity(Self::INITIAL_LIGHT_CAPACITY);
         self.shadowable_omnidirectional_light_buffer
-            .reset_and_free();
-        self.unidirectional_light_buffer.reset_and_free();
-        self.shadowable_unidirectional_light_buffer.reset_and_free();
+            .reset_and_free_to_capacity(Self::INITIAL_LIGHT_CAPACITY);
+        self.unidirectional_light_buffer
+            .reset_and_free_to_capacity(Self::INITIAL_LIGHT_CAPACITY);
+        self.shadowable_unidirectional_light_buffer
+            .reset_and_free_to_capacity(Self::INITIAL_LIGHT_CAPACITY);
         self.total_ambient_luminance = Luminance::zeros();
     }
 
