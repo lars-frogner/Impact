@@ -389,7 +389,11 @@ impl ParticleSimulationGPUResources {
         self.emitter_metadata.retain(|emitter_id, metadata| {
             let exists = emitter_manager.has_emitter(emitter_id);
             if !exists {
-                particle_buffer.free_particle_range(&metadata.particle_range);
+                particle_buffer.free_particle_range(
+                    staging_belt,
+                    command_encoder,
+                    &metadata.particle_range,
+                );
                 particle_ranges_were_freed = true;
             }
             exists
@@ -409,6 +413,7 @@ impl ParticleSimulationGPUResources {
                         old_metadata.particle_range = particle_buffer
                             .reallocate_range_for_particles(
                                 graphics_device,
+                                staging_belt,
                                 command_encoder,
                                 bind_group_layout_registry,
                                 &old_metadata.particle_range,
@@ -519,8 +524,30 @@ impl ParticleGPUBuffer {
         self.buffer.buffer_size() / mem::size_of::<Particle>()
     }
 
-    fn free_particle_range(&mut self, range: &Range<usize>) {
+    fn free_particle_range(
+        &mut self,
+        staging_belt: &mut wgpu::util::StagingBelt,
+        command_encoder: &mut wgpu::CommandEncoder,
+        range: &Range<usize>,
+    ) {
+        if range.is_empty() {
+            return;
+        }
         assert!(range.end <= self.current_capacity());
+
+        let byte_offset = range.start * mem::size_of::<Particle>();
+        let byte_count = range.len() * mem::size_of::<Particle>();
+
+        let arena = ArenaPool::get_arena();
+        let bytes = avec![in &arena; 0; byte_count];
+
+        self.buffer.encode_update_of_bytes_from_offset(
+            staging_belt,
+            command_encoder,
+            byte_offset,
+            &bytes,
+        );
+
         self.range_allocator.free_range(range);
     }
 
@@ -602,12 +629,13 @@ impl ParticleGPUBuffer {
     fn reallocate_range_for_particles(
         &mut self,
         graphics_device: &GraphicsDevice,
+        staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         old_range: &Range<usize>,
         log2_particle_count: u32,
     ) -> Range<usize> {
-        self.free_particle_range(old_range);
+        self.free_particle_range(staging_belt, command_encoder, old_range);
         self.allocate_range_for_particles(
             graphics_device,
             command_encoder,
