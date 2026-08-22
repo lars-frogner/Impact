@@ -77,7 +77,7 @@
                 save_generated_maps: true,
                 overwrite_existing_map_files: false,
                 use_saved_maps: true,
-                directory: "resources/drag_load_maps",
+                directory: "../resources/drag_load_maps",
             ),
         ),
         constraint_solver: (
