@@ -102,11 +102,13 @@ pub struct BasicParticleSimulation {
     pub cos_max_polar_spawn_angle: f32,
     pub min_spawn_extent: f32,
     pub max_spawn_extent: f32,
+    pub min_spawn_distance: f32,
+    pub max_spawn_distance: f32,
     pub min_spawn_speed: f32,
     pub max_spawn_speed: f32,
     pub min_lifetime: f32,
     pub max_lifetime: f32,
-    _padding: [u8; 8],
+    _padding: [u8; 0],
 }
 
 type BasicSimulationUniformBuffer = UniformBuffer<BasicParticleEmitterID, BasicParticleSimulation>;

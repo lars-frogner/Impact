@@ -82,13 +82,15 @@ emitter1 =
         (0.0, 2.0, 6.0),
         UnitVector3.from((0.0, 1.0, 0.0)),
         Radians.from_degrees(0),
-        Radians.from_degrees(90),
+        Radians.from_degrees(80),
         0.2,
         0.4,
+        0.0,
+        1.0,
         2.0,
         4.0,
         2.0,
-        2.0,
+        3.0,
     )
 
 ambient_light =

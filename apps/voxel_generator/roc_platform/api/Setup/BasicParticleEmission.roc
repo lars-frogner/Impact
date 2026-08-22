@@ -1,5 +1,5 @@
-# Hash: d40d4c7625cf3007
-# Generated: 2026-08-21T14:26:13.875379212
+# Hash: 5b36d3fbb21a9fa8
+# Generated: 2026-08-22T21:11:43.112899451
 # Rust type: impact_particle::setup::BasicParticleEmission
 # Type category: Component
 module [
@@ -30,14 +30,16 @@ BasicParticleEmission : {
     cos_max_polar_spawn_angle : F32,
     min_spawn_extent : F32,
     max_spawn_extent : F32,
+    min_spawn_distance : F32,
+    max_spawn_distance : F32,
     min_spawn_speed : F32,
     max_spawn_speed : F32,
     min_lifetime : F32,
     max_lifetime : F32,
 }
 
-new : Str, U32, Point3.Point3, UnitVector3.UnitVector3, Radians.Radians, Radians.Radians, F32, F32, F32, F32, F32, F32 -> BasicParticleEmission
-new = |material_name, log2_particle_count, spawn_position, spawn_direction, min_polar_spawn_angle, max_polar_spawn_angle, min_spawn_extent, max_spawn_extent, min_spawn_speed, max_spawn_speed, min_lifetime, max_lifetime|
+new : Str, U32, Point3.Point3, UnitVector3.UnitVector3, Radians.Radians, Radians.Radians, F32, F32, F32, F32, F32, F32, F32, F32 -> BasicParticleEmission
+new = |material_name, log2_particle_count, spawn_position, spawn_direction, min_polar_spawn_angle, max_polar_spawn_angle, min_spawn_extent, max_spawn_extent, min_spawn_distance, max_spawn_distance, min_spawn_speed, max_spawn_speed, min_lifetime, max_lifetime|
     material_name_hash = Hashing.hash_str_32(material_name)
     cos_min_polar_spawn_angle = Num.cos(Num.max(0, Num.min(Num.pi, Radians.radians(min_polar_spawn_angle))))
     cos_max_polar_spawn_angle = Num.cos(Num.max(Radians.radians(min_polar_spawn_angle), Num.min(Num.pi, Radians.radians(max_polar_spawn_angle))))
@@ -50,15 +52,17 @@ new = |material_name, log2_particle_count, spawn_position, spawn_direction, min_
         cos_max_polar_spawn_angle,
         min_spawn_extent,
         max_spawn_extent: Num.max(min_spawn_extent, max_spawn_extent),
+        min_spawn_distance,
+        max_spawn_distance: Num.max(min_spawn_distance, max_spawn_distance),
         min_spawn_speed,
         max_spawn_speed: Num.max(min_spawn_speed, max_spawn_speed),
         min_lifetime,
         max_lifetime: Num.max(min_lifetime, max_lifetime),
     }
 
-add_new : Entity.ComponentData, Str, U32, Point3.Point3, UnitVector3.UnitVector3, Radians.Radians, Radians.Radians, F32, F32, F32, F32, F32, F32 -> Entity.ComponentData
-add_new = |entity_data, material_name, log2_particle_count, spawn_position, spawn_direction, min_polar_spawn_angle, max_polar_spawn_angle, min_spawn_extent, max_spawn_extent, min_spawn_speed, max_spawn_speed, min_lifetime, max_lifetime|
-    add(entity_data, new(material_name, log2_particle_count, spawn_position, spawn_direction, min_polar_spawn_angle, max_polar_spawn_angle, min_spawn_extent, max_spawn_extent, min_spawn_speed, max_spawn_speed, min_lifetime, max_lifetime))
+add_new : Entity.ComponentData, Str, U32, Point3.Point3, UnitVector3.UnitVector3, Radians.Radians, Radians.Radians, F32, F32, F32, F32, F32, F32, F32, F32 -> Entity.ComponentData
+add_new = |entity_data, material_name, log2_particle_count, spawn_position, spawn_direction, min_polar_spawn_angle, max_polar_spawn_angle, min_spawn_extent, max_spawn_extent, min_spawn_distance, max_spawn_distance, min_spawn_speed, max_spawn_speed, min_lifetime, max_lifetime|
+    add(entity_data, new(material_name, log2_particle_count, spawn_position, spawn_direction, min_polar_spawn_angle, max_polar_spawn_angle, min_spawn_extent, max_spawn_extent, min_spawn_distance, max_spawn_distance, min_spawn_speed, max_spawn_speed, min_lifetime, max_lifetime))
 
 ## Adds a value of the [BasicParticleEmission] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -84,7 +88,7 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, BasicParticleEmission -> List U8
 write_packet = |bytes, val|
     type_id = 8789485584940170758
-    size = 64
+    size = 72
     alignment = 4
     bytes
     |> List.reserve(24 + size)
@@ -96,7 +100,7 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List BasicParticleEmission -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 8789485584940170758
-    size = 64
+    size = 72
     alignment = 4
     count = List.len(vals)
     bytes_with_header =
@@ -117,7 +121,7 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, BasicParticleEmission -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(64)
+    |> List.reserve(72)
     |> Hashing.write_bytes_hash_32(value.material_name_hash)
     |> Builtin.write_bytes_u32(value.log2_particle_count)
     |> Point3.write_bytes(value.spawn_position)
@@ -126,6 +130,8 @@ write_bytes = |bytes, value|
     |> Builtin.write_bytes_f32(value.cos_max_polar_spawn_angle)
     |> Builtin.write_bytes_f32(value.min_spawn_extent)
     |> Builtin.write_bytes_f32(value.max_spawn_extent)
+    |> Builtin.write_bytes_f32(value.min_spawn_distance)
+    |> Builtin.write_bytes_f32(value.max_spawn_distance)
     |> Builtin.write_bytes_f32(value.min_spawn_speed)
     |> Builtin.write_bytes_f32(value.max_spawn_speed)
     |> Builtin.write_bytes_f32(value.min_lifetime)
@@ -145,16 +151,18 @@ from_bytes = |bytes|
             cos_max_polar_spawn_angle: bytes |> List.sublist({ start: 36, len: 4 }) |> Builtin.from_bytes_f32?,
             min_spawn_extent: bytes |> List.sublist({ start: 40, len: 4 }) |> Builtin.from_bytes_f32?,
             max_spawn_extent: bytes |> List.sublist({ start: 44, len: 4 }) |> Builtin.from_bytes_f32?,
-            min_spawn_speed: bytes |> List.sublist({ start: 48, len: 4 }) |> Builtin.from_bytes_f32?,
-            max_spawn_speed: bytes |> List.sublist({ start: 52, len: 4 }) |> Builtin.from_bytes_f32?,
-            min_lifetime: bytes |> List.sublist({ start: 56, len: 4 }) |> Builtin.from_bytes_f32?,
-            max_lifetime: bytes |> List.sublist({ start: 60, len: 4 }) |> Builtin.from_bytes_f32?,
+            min_spawn_distance: bytes |> List.sublist({ start: 48, len: 4 }) |> Builtin.from_bytes_f32?,
+            max_spawn_distance: bytes |> List.sublist({ start: 52, len: 4 }) |> Builtin.from_bytes_f32?,
+            min_spawn_speed: bytes |> List.sublist({ start: 56, len: 4 }) |> Builtin.from_bytes_f32?,
+            max_spawn_speed: bytes |> List.sublist({ start: 60, len: 4 }) |> Builtin.from_bytes_f32?,
+            min_lifetime: bytes |> List.sublist({ start: 64, len: 4 }) |> Builtin.from_bytes_f32?,
+            max_lifetime: bytes |> List.sublist({ start: 68, len: 4 }) |> Builtin.from_bytes_f32?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 64 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 72 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

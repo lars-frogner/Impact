@@ -13,6 +13,8 @@ struct Simulation {
     cosMaxPolarSpawnAngle: f32,
     minSpawnExtent: f32,
     maxSpawnExtent: f32,
+    minSpawnDistance: f32,
+    maxSpawnDistance: f32,
     minSpawnSpeed: f32,
     maxSpawnSpeed: f32,
     minLifetime: f32,
@@ -124,6 +126,10 @@ fn main(
         let extent = mix(simulation.minSpawnExtent, simulation.maxSpawnExtent, extentFactor);
 
         hash = pcgHash(hash);
+        let distanceFactor = hashToNormF32(hash);
+        let distance = mix(simulation.minSpawnDistance, simulation.maxSpawnDistance, distanceFactor);
+
+        hash = pcgHash(hash);
         let speedFactor = hashToNormF32(hash);
         let speed = mix(simulation.minSpawnSpeed, simulation.maxSpawnSpeed, speedFactor);
 
@@ -132,7 +138,7 @@ fn main(
         let lifetime = mix(simulation.minLifetime, simulation.maxLifetime, lifetimeFactor);
 
         particle.rgbaBaseColor = vec4f(1.0, 1.0, 1.0, 1.0);
-        particle.position = simulation.spawnPosition;
+        particle.position = simulation.spawnPosition + distance * direction;
         particle.velocity = speed * direction;
         particle.remainingTime = lifetime;
         particle.extent = extent;
