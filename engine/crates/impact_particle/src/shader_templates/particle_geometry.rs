@@ -19,7 +19,6 @@ use std::sync::LazyLock;
 #[derive(Clone, Copy, Debug)]
 pub struct ParticleGeometryShaderTemplate {
     n_particle_materials: u32,
-    atlas_texture_uv_extent: f32,
 }
 
 static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
@@ -27,14 +26,10 @@ static TEMPLATE: LazyLock<ShaderTemplate<'static>> =
 
 impl ParticleGeometryShaderTemplate {
     /// Creates a new particle geometry shader template for the given number of
-    /// particle materials and textures along each axis of the normal and alpha
-    /// texture atlas.
-    pub fn new(n_particle_materials: u32, n_atlas_textures_per_axis: u32) -> Self {
-        assert!(n_atlas_textures_per_axis > 0);
-        let atlas_texture_uv_extent = 1.0 / n_atlas_textures_per_axis as f32;
+    /// particle materials.
+    pub fn new(n_particle_materials: u32) -> Self {
         Self {
             n_particle_materials,
-            atlas_texture_uv_extent,
         }
     }
 
@@ -61,14 +56,13 @@ impl SpecificShaderTemplate for ParticleGeometryShaderTemplate {
                 &[],
                 shader_template_replacements!(
                     "n_particle_materials" => self.n_particle_materials,
-                    "atlas_texture_uv_extent" => self.atlas_texture_uv_extent,
                     "jitter_count" => CameraProjectionUniform::jitter_count(),
                     "quad_texture_coords_location" => 0,
                     "projection_uniform_group" => 0,
                     "projection_uniform_binding" => CameraProjectionUniform::binding(),
                     "material_group" => 1,
                     "fixed_material_uniform_binding" => ParticleMaterialGPUResources::fixed_properties_binding(),
-                    "normal_and_alpha_atlas_binding" => ParticleMaterialGPUResources::normal_and_alpha_atlas_binding(),
+                    "normal_and_alpha_texture_array_binding" => ParticleMaterialGPUResources::normal_and_alpha_texture_array_binding(),
                     "normal_and_alpha_sampler_binding" => ParticleMaterialGPUResources::normal_and_alpha_sampler_binding(),
                     "particle_group" => 2,
                     "particle_binding" => 0,
@@ -85,6 +79,6 @@ mod tests {
 
     #[test]
     fn should_resolve_to_valid_wgsl() {
-        validate_template(&ParticleGeometryShaderTemplate::new(16, 4));
+        validate_template(&ParticleGeometryShaderTemplate::new(16));
     }
 }

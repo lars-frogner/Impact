@@ -28,6 +28,7 @@ struct FragmentInput {
     @location(2) rgbaBaseColor: vec4f,
     @location(3) materialProperties: vec4f,
     @location(4) textureCoords: vec2f,
+    @location(5) @interpolate(flat) normalAndAlphaTextureIdx: u32,
 }
 
 struct FragmentOutput {
@@ -39,11 +40,11 @@ struct FragmentOutput {
 }
 
 struct FixedMaterialProperties {
-    @align(16) atlasTextureUV: vec2f,
-    specularReflectance: f32,
+    @align(16) specularReflectance: f32,
     roughness: f32,
     metalness: f32,
     emissiveLuminance: f32,
+    normalAndAlphaTextureIdx: u32,
 }
 
 struct Particle {
@@ -53,8 +54,6 @@ struct Particle {
     velocity: vec3f,
     extent: f32,
 }
-
-const ATLAS_TEXTURE_UV_EXTENT: f32 = {{atlas_texture_uv_extent}};
 
 const JITTER_COUNT: u32 = {{jitter_count}};
 
@@ -66,11 +65,11 @@ var<uniform> projectionUniform: ProjectionUniform;
 @group({{material_group}}) @binding({{fixed_material_uniform_binding}})
 var<uniform> fixedMaterialProperties: array<FixedMaterialProperties, {{n_particle_materials}}>;
 
-@group({{material_group}}) @binding({{normal_and_alpha_atlas_binding}})
-var normalAndAlphaAtlasTexture: texture_2d<f32>;
+@group({{material_group}}) @binding({{normal_and_alpha_texture_array_binding}})
+var normalAndAlphaTextures: texture_2d_array<f32>;
 
 @group({{material_group}}) @binding({{normal_and_alpha_sampler_binding}})
-var normalAndAlphaAtlasSampler: sampler;
+var normalAndAlphaSampler: sampler;
 
 @group({{particle_group}}) @binding({{particle_binding}})
 var<storage, read> particles: array<Particle>;
@@ -158,7 +157,8 @@ fn mainVS(
 
     output.materialProperties = vec4f(specularReflectance, roughness, metalness, preExposedEmissiveLuminance);
 
-    output.textureCoords = materialProps.atlasTextureUV + quadVertex.textureCoords * ATLAS_TEXTURE_UV_EXTENT;
+    output.textureCoords = quadVertex.textureCoords;
+    output.normalAndAlphaTextureIdx = materialProps.normalAndAlphaTextureIdx;
 
     return output;
 }
@@ -167,7 +167,12 @@ fn mainVS(
 fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     var output: FragmentOutput;
 
-    let normalColorAndAlpha = textureSampleLevel(normalAndAlphaAtlasTexture, normalAndAlphaAtlasSampler, fragment.textureCoords, 0.0);
+    let normalColorAndAlpha = textureSample(
+        normalAndAlphaTextures,
+        normalAndAlphaSampler,
+        fragment.textureCoords,
+        fragment.normalAndAlphaTextureIdx,
+    );
 
     let alpha = normalColorAndAlpha.a * fragment.rgbaBaseColor.a;
 

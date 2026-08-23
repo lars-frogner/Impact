@@ -134,7 +134,7 @@ impl ParticleMaterialGPUResources {
         0
     }
 
-    pub const fn normal_and_alpha_atlas_binding() -> u32 {
+    pub const fn normal_and_alpha_texture_array_binding() -> u32 {
         1
     }
 
@@ -172,19 +172,22 @@ impl ParticleMaterialGPUResources {
             Cow::Borrowed("Fixed particle material properties"),
         );
 
-        let normal_and_alpha_atlas_id = particle_material_registry
-            .normal_and_alpha_atlas_id()
+        let normal_and_alpha_texture_array_id = particle_material_registry
+            .normal_and_alpha_texture_array_id()
             .unwrap();
-        let normal_and_alpha_atlas = textures.get(normal_and_alpha_atlas_id).ok_or_else(|| {
-            anyhow!("Missing normal and alpha texture atlas for particle materials")
-        })?;
+        let normal_and_alpha_texture_array = textures
+            .get(normal_and_alpha_texture_array_id)
+            .ok_or_else(|| {
+                anyhow!("Missing normal and alpha texture array for particle materials")
+            })?;
 
-        let normal_and_alpha_sampler_id = normal_and_alpha_atlas.sampler_id.ok_or_else(|| {
-            anyhow!("Normal and alpha texture atlas for particle materials has no sampler")
-        })?;
+        let normal_and_alpha_sampler_id =
+            normal_and_alpha_texture_array.sampler_id.ok_or_else(|| {
+                anyhow!("Normal and alpha texture array for particle materials has no sampler")
+            })?;
         let normal_and_alpha_sampler =
             samplers.get(normal_and_alpha_sampler_id).ok_or_else(|| {
-                anyhow!("Missing sampler for particle material normal and alpha texture atlas")
+                anyhow!("Missing sampler for particle material normal and alpha texture array")
             })?;
 
         let bind_group_layout =
@@ -194,7 +197,7 @@ impl ParticleMaterialGPUResources {
             graphics_device.device(),
             &bind_group_layout,
             &fixed_property_buffer,
-            &normal_and_alpha_atlas.texture,
+            &normal_and_alpha_texture_array.texture,
             normal_and_alpha_sampler,
         );
 
@@ -260,10 +263,10 @@ impl ParticleMaterialGPUResources {
                     wgpu::ShaderStages::VERTEX,
                 ),
                 texture::create_texture_bind_group_layout_entry(
-                    Self::normal_and_alpha_atlas_binding(),
+                    Self::normal_and_alpha_texture_array_binding(),
                     wgpu::ShaderStages::FRAGMENT,
                     TexelDescription::Rgba8(ColorSpace::Linear).texture_format(),
-                    wgpu::TextureViewDimension::D2,
+                    wgpu::TextureViewDimension::D2Array,
                 ),
                 texture::create_sampler_bind_group_layout_entry(
                     Self::normal_and_alpha_sampler_binding(),
@@ -279,15 +282,15 @@ impl ParticleMaterialGPUResources {
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
         fixed_property_buffer: &GPUBuffer,
-        normal_and_alpha_atlas: &Texture,
+        normal_and_alpha_texture_array: &Texture,
         sampler: &Sampler,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
                 fixed_property_buffer.create_bind_group_entry(Self::fixed_properties_binding()),
-                normal_and_alpha_atlas
-                    .create_bind_group_entry(Self::normal_and_alpha_atlas_binding()),
+                normal_and_alpha_texture_array
+                    .create_bind_group_entry(Self::normal_and_alpha_texture_array_binding()),
                 sampler.create_bind_group_entry(Self::normal_and_alpha_sampler_binding()),
             ],
             label: Some("Particle material bind group"),

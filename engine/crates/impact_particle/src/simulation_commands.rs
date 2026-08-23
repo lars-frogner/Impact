@@ -42,9 +42,7 @@ impl ParticleSimulationCommands {
     ) -> Option<Self> {
         let material_registry = resource_registries.particle_material();
 
-        if material_registry.n_particle_materials() == 0
-            || material_registry.n_atlas_textures_per_axis() == 0
-        {
+        if material_registry.n_particle_materials() == 0 {
             // No materials configured, so no particle simulation needed
             return None;
         }
