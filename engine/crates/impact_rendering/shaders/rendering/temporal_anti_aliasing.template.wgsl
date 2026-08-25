@@ -93,9 +93,7 @@ fn sampleTextureCatmullRom(
 }
 
 fn computeMitchellNetravaliFilterWeight(distanceFromCenter: f32) -> f32 {
-    // Scale the distance so that the filter effectively covers the range
-    // [-1, 1] rather than [-2, 2]
-    let x = 2.0 * distanceFromCenter;
+    let x = distanceFromCenter;
 
     let x2 = x * x;
     let x3 = x2 * x;
