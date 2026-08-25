@@ -25,10 +25,11 @@ struct FragmentInput {
     @builtin(position) projectedPosition: vec4f,
     @location(0) previousClipSpacePosition: vec4f,
     @location(1) cameraSpacePosition: vec3f,
-    @location(2) rgbaBaseColor: vec4f,
-    @location(3) materialProperties: vec4f,
+    @location(2) @interpolate(flat) rgbaBaseColor: vec4f,
+    @location(3) @interpolate(flat) materialProperties: vec4f,
     @location(4) textureCoords: vec2f,
-    @location(5) @interpolate(flat) normalAndAlphaTextureIdx: u32,
+    @location(5) @interpolate(flat) particleIdx: u32,
+    @location(6) @interpolate(flat) normalAndAlphaTextureIdx: u32,
 }
 
 struct FragmentOutput {
@@ -57,6 +58,9 @@ struct Particle {
 
 const JITTER_COUNT: u32 = {{jitter_count}};
 
+const NOISE_TEXTURE_DIMS: vec2u = vec2u({{noise_texture_width}}, {{noise_texture_height}});
+const NOISE_TEXTURE_LAYERS: u32 = {{noise_texture_layers}};
+
 var<immediate> imms: Immediates;
 
 @group({{projection_uniform_group}}) @binding({{projection_uniform_binding}})
@@ -70,6 +74,9 @@ var normalAndAlphaTextures: texture_2d_array<f32>;
 
 @group({{material_group}}) @binding({{normal_and_alpha_sampler_binding}})
 var normalAndAlphaSampler: sampler;
+
+@group({{material_group}}) @binding({{noise_texture_array_binding}})
+var noiseTextures: texture_2d_array<f32>;
 
 @group({{particle_group}}) @binding({{particle_binding}})
 var<storage, read> particles: array<Particle>;
@@ -147,8 +154,8 @@ fn mainVS(
 
     output.previousClipSpacePosition = projectionMatrix * vec4f(prevCameraSpaceVertexPosition, 1.0);
 
-    // TODO: Transparency
     output.rgbaBaseColor = particle.rgbaBaseColor;
+    output.particleIdx = particleIdx;
 
     let specularReflectance = materialProps.specularReflectance;
     let roughness = computeGGXRoughnessFromPerceptuallyLinearRoughness(materialProps.roughness);
@@ -176,6 +183,21 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
 
     let alpha = normalColorAndAlpha.a * fragment.rgbaBaseColor.a;
 
+    let randomFraction = textureLoad(
+        noiseTextures,
+        vec2u(fragment.projectedPosition.xy) % NOISE_TEXTURE_DIMS,
+        imms.frameCounter % NOISE_TEXTURE_LAYERS,
+        0,
+    ).r;
+
+    // Apply Cranley-Patterson rotation with golden ratio to decorrelate across
+    // particles
+    let decorrelatedFraction = fract(randomFraction + f32(fragment.particleIdx) * 0.61803399);
+
+    if (alpha < decorrelatedFraction) {
+        discard;
+    }
+
     output.linearDepth = projectionUniform.inverseFarPlaneZ.x * fragment.cameraSpacePosition.z;
 
     output.normalVector = vec4f(normalColorAndAlpha.rgb, 1.0);
@@ -185,7 +207,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     );
     output.motionVector = computeMotionVector(screenTextureCoords, fragment.previousClipSpacePosition);
 
-    output.materialColor = vec4f(fragment.rgbaBaseColor.rgb, alpha);
+    output.materialColor = vec4f(fragment.rgbaBaseColor.rgb, 1.0);
 
     output.materialProperties = fragment.materialProperties;
 

@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use impact_gpu::texture::{SamplerConfig, TextureConfig};
+use impact_io::image::ImageMetadata;
 use std::path::{Path, PathBuf};
 
 /// Declaration of an image-based texture.
@@ -165,6 +166,9 @@ pub fn load_declared_image_texture(
 /// specified, the creation information for the sampler is stored in the sampler
 /// registry.
 ///
+/// # Returns
+/// Metadata for the image.
+///
 /// # Errors
 /// Returns an error if:
 /// - Another texture with the same name is already loaded.
@@ -179,7 +183,7 @@ pub fn load_image_texture(
     texture_config: TextureConfig,
     sampler_config: Option<SamplerConfig>,
     processing: ImageProcessing,
-) -> Result<()> {
+) -> Result<ImageMetadata> {
     if texture_registry.contains(texture_id) {
         bail!("Tried to load texture under already existing ID: {texture_id}");
     }
@@ -222,7 +226,7 @@ pub fn load_image_texture(
 
     let image_texture_info = ImageTextureCreateInfo::new(
         source,
-        metadata,
+        metadata.clone(),
         texture_config,
         sampler_config.clone(),
         processing,
@@ -238,5 +242,5 @@ pub fn load_image_texture(
         });
     }
 
-    Ok(())
+    Ok(metadata)
 }

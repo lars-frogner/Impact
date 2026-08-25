@@ -1,7 +1,7 @@
 //! Particle materials.
 
 use crate::gpu_resource::ParticleMaterialGPUResources;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use bytemuck::{Pod, Zeroable};
 use impact_alloc::arena::ArenaPool;
 use impact_containers::{HashMap, NoHashMap};
@@ -12,6 +12,7 @@ use impact_gpu::{
         ColorSpace, SamplerConfig, TextureAddressingConfig, TextureConfig, TextureFilteringConfig,
     },
 };
+use impact_io::image::PixelFormat;
 use impact_math::hash::{Hash32, Hash64};
 use impact_texture::{
     ImageSource, ImageTextureSource, SamplerRegistry, TextureArrayUsage, TextureID,
@@ -64,6 +65,8 @@ pub struct ParticleMaterialRegistry {
     names: Vec<Cow<'static, str>>,
     fixed_material_properties: Vec<FixedParticleMaterialProperties>,
     normal_and_alpha_texture_array_id: Option<TextureID>,
+    noise_texture_array_id: Option<TextureID>,
+    noise_texture_size: [u32; 3],
 }
 
 /// Specific properties of a particle material that do not change across the
@@ -81,16 +84,30 @@ pub struct FixedParticleMaterialProperties {
     _padding: [u8; 12],
 }
 
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(default)
-)]
-#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct ParticleMaterialConfig {
     /// Path to the RON file containing the specification of each particle
-    /// material. If [`None`], the particle system will be disabled.
-    pub particle_materials_path: Option<PathBuf>,
+    /// material.
+    pub particle_materials_path: PathBuf,
+    /// Identifies a sequence of 8-bit grayscale noise texture images to use for
+    /// stochastic transparency. An appropriate blue noise image sequence can be
+    /// downloaded from <https://github.com/NVIDIA-RTX/STBN>.
+    pub noise_texture_array: NoiseTextureArray,
+}
+
+/// Identifies a sequence of noise texture images to use for stochastic
+/// transparency.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct NoiseTextureArray {
+    /// Each image in the sequence must have a file name of the form
+    /// `<base_name>_<idx>.<extension>`, where `idx` ranges from `0` to
+    /// `count-1`. This parameter specifies the full path to one of the images
+    /// except that the `_<idx>` part must be omitted.
+    pub base_path: PathBuf,
+    /// The number of images in the sequence.
+    pub count: u32,
 }
 
 impl ParticleMaterialID {
@@ -117,13 +134,19 @@ impl ParticleMaterialRegistry {
     pub fn from_config(
         texture_registry: &mut TextureRegistry,
         sampler_registry: &mut SamplerRegistry,
-        particle_material_config: ParticleMaterialConfig,
+        particle_material_config: Option<ParticleMaterialConfig>,
     ) -> Result<Self> {
-        let Some(file_path) = particle_material_config.particle_materials_path else {
+        let Some(config) = particle_material_config else {
             return Ok(Self::empty());
         };
-        let particle_materials = ParticleMaterialSpecifications::from_ron_file(file_path)?;
-        Self::create(texture_registry, sampler_registry, particle_materials)
+        let particle_materials =
+            ParticleMaterialSpecifications::from_ron_file(&config.particle_materials_path)?;
+        Self::create(
+            texture_registry,
+            sampler_registry,
+            particle_materials,
+            config.noise_texture_array,
+        )
     }
 
     /// Creates a registry with no particle materials.
@@ -133,6 +156,8 @@ impl ParticleMaterialRegistry {
             names: Vec::new(),
             fixed_material_properties: Vec::new(),
             normal_and_alpha_texture_array_id: None,
+            noise_texture_array_id: None,
+            noise_texture_size: [0; 3],
         }
     }
 
@@ -143,6 +168,8 @@ impl ParticleMaterialRegistry {
     /// Returns an error if:
     /// - There are duplicate names.
     /// - The normal and alpha textures have different normal map formats.
+    /// - The noise image base path has no file name.
+    /// - The noise image pixel format is invalid.
     ///
     /// See also
     /// [`load_declared_image_texture`](impact_texture::import::load_declared_image_texture).
@@ -150,6 +177,7 @@ impl ParticleMaterialRegistry {
         texture_registry: &mut TextureRegistry,
         sampler_registry: &mut SamplerRegistry,
         particle_materials: ParticleMaterialSpecifications,
+        noise_texture_array: NoiseTextureArray,
     ) -> Result<Self> {
         if particle_materials.0.is_empty() {
             return Ok(Self::empty());
@@ -202,11 +230,43 @@ impl ParticleMaterialRegistry {
         )
         .context("Failed to load particle normal and alpha texture array")?;
 
+        let noise_texture_array_id = TextureID::from_name("particle_noise_texture_array");
+        let noise_texture_sources = noise_texture_array.create_image_sources()?;
+
+        let noise_image_metadata = impact_texture::import::load_image_texture(
+            texture_registry,
+            sampler_registry,
+            noise_texture_array_id,
+            ImageTextureSource::Array {
+                sources: noise_texture_sources,
+                usage: TextureArrayUsage::Generic,
+            },
+            TextureConfig {
+                color_space: ColorSpace::Linear,
+                max_mip_level_count: Some(1),
+            },
+            None,
+            ImageProcessing::none(),
+        )
+        .context("Failed to load noise texture array for particles")?;
+
+        if noise_image_metadata.pixel_format != PixelFormat::Luma8 {
+            bail!("Noise image pixel format must be 8-bit grayscale");
+        }
+
+        let noise_texture_size = [
+            noise_image_metadata.width,
+            noise_image_metadata.height,
+            noise_texture_array.count,
+        ];
+
         Ok(Self {
             name_lookup_table,
             names,
             fixed_material_properties,
             normal_and_alpha_texture_array_id: Some(normal_and_alpha_texture_array_id),
+            noise_texture_array_id: Some(noise_texture_array_id),
+            noise_texture_size,
         })
     }
 
@@ -255,6 +315,18 @@ impl ParticleMaterialRegistry {
     /// registered particle materials.
     pub fn normal_and_alpha_texture_array_id(&self) -> Option<TextureID> {
         self.normal_and_alpha_texture_array_id
+    }
+
+    /// Returns the ID of the texture array with the noise textures for
+    /// stochastic transparency, or [`None`] if there are no registered particle
+    /// materials.
+    pub fn noise_texture_array_id(&self) -> Option<TextureID> {
+        self.noise_texture_array_id
+    }
+
+    /// Returns the `[width, height, array_layers]` for the noise texture array.
+    pub fn noise_texture_size(&self) -> [u32; 3] {
+        self.noise_texture_size
     }
 
     /// Performs any required updates for keeping the given particle material
@@ -402,8 +474,32 @@ impl ParticleMaterialConfig {
     /// Resolves all paths in the configuration by prepending the given root
     /// path to all paths.
     pub fn resolve_paths(&mut self, root_path: &Path) {
-        if let Some(particle_materials_path) = self.particle_materials_path.as_mut() {
-            *particle_materials_path = root_path.join(&particle_materials_path);
-        }
+        self.particle_materials_path = root_path.join(&self.particle_materials_path);
+        self.noise_texture_array.base_path = root_path.join(&self.noise_texture_array.base_path);
+    }
+}
+
+impl NoiseTextureArray {
+    fn create_image_sources(&self) -> Result<Vec<ImageSource>> {
+        let stem = self
+            .base_path
+            .file_stem()
+            .ok_or_else(|| anyhow!("Missing file name for noise texture array base path"))?
+            .display();
+
+        let extension = self.base_path.extension();
+        let dot = if extension.is_some() { "." } else { "" };
+        let extension = extension.unwrap_or_default().display();
+
+        let get_image_path = |idx: u32| {
+            self.base_path
+                .with_file_name(format!("{stem}_{idx}{dot}{extension}"))
+        };
+
+        let sources = (0..self.count)
+            .map(|idx| ImageSource::File(get_image_path(idx)))
+            .collect();
+
+        Ok(sources)
     }
 }

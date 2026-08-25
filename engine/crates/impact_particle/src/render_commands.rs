@@ -121,8 +121,10 @@ impl ParticleGeometryPipeline {
         config: &BasicRenderingConfig,
     ) -> Self {
         let material_registry = resource_registries.particle_material();
-        let shader_template =
-            ParticleGeometryShaderTemplate::new(material_registry.n_particle_materials());
+        let shader_template = ParticleGeometryShaderTemplate::new(
+            material_registry.n_particle_materials(),
+            material_registry.noise_texture_size(),
+        );
 
         shader_manager
             .get_or_create_rendering_shader_from_template(graphics_device, &shader_template);

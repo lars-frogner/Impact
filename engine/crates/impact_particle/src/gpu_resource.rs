@@ -142,6 +142,10 @@ impl ParticleMaterialGPUResources {
         2
     }
 
+    pub const fn noise_texture_array_binding() -> u32 {
+        3
+    }
+
     const MATERIAL_RESOURCES_BIND_GROUP_LAYOUT_ID: ConstStringHash64 =
         ConstStringHash64::new("ParticleMaterialResources");
 
@@ -190,6 +194,11 @@ impl ParticleMaterialGPUResources {
                 anyhow!("Missing sampler for particle material normal and alpha texture array")
             })?;
 
+        let noise_texture_array_id = particle_material_registry.noise_texture_array_id().unwrap();
+        let noise_texture_array = textures
+            .get(noise_texture_array_id)
+            .ok_or_else(|| anyhow!("Missing noise texture array for particle materials"))?;
+
         let bind_group_layout =
             Self::get_or_create_bind_group_layout(graphics_device, bind_group_layout_registry);
 
@@ -199,6 +208,7 @@ impl ParticleMaterialGPUResources {
             &fixed_property_buffer,
             &normal_and_alpha_texture_array.texture,
             normal_and_alpha_sampler,
+            &noise_texture_array.texture,
         );
 
         Ok(Self {
@@ -273,6 +283,12 @@ impl ParticleMaterialGPUResources {
                     wgpu::ShaderStages::FRAGMENT,
                     wgpu::SamplerBindingType::Filtering,
                 ),
+                texture::create_texture_bind_group_layout_entry(
+                    Self::noise_texture_array_binding(),
+                    wgpu::ShaderStages::FRAGMENT,
+                    TexelDescription::Grayscale8.texture_format(),
+                    wgpu::TextureViewDimension::D2Array,
+                ),
             ],
             label: Some("Particle material bind group layout"),
         })
@@ -284,6 +300,7 @@ impl ParticleMaterialGPUResources {
         fixed_property_buffer: &GPUBuffer,
         normal_and_alpha_texture_array: &Texture,
         sampler: &Sampler,
+        noise_texture_array: &Texture,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
@@ -292,6 +309,7 @@ impl ParticleMaterialGPUResources {
                 normal_and_alpha_texture_array
                     .create_bind_group_entry(Self::normal_and_alpha_texture_array_binding()),
                 sampler.create_bind_group_entry(Self::normal_and_alpha_sampler_binding()),
+                noise_texture_array.create_bind_group_entry(Self::noise_texture_array_binding()),
             ],
             label: Some("Particle material bind group"),
         })

@@ -128,7 +128,8 @@ pub struct ParticleEmitterManager {
 )]
 #[derive(Clone, Debug, Default)]
 pub struct ParticleConfig {
-    pub materials: ParticleMaterialConfig,
+    /// If [`None`], the particle system will be disabled.
+    pub materials: Option<ParticleMaterialConfig>,
 }
 
 impl<S> ParticleEmitter<S> {
@@ -260,6 +261,8 @@ impl ParticleConfig {
     /// Resolves all paths in the configuration by prepending the given root
     /// path to all paths.
     pub fn resolve_paths(&mut self, root_path: &Path) {
-        self.materials.resolve_paths(root_path);
+        if let Some(materials) = &mut self.materials {
+            materials.resolve_paths(root_path);
+        }
     }
 }
