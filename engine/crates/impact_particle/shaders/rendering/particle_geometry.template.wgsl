@@ -51,8 +51,9 @@ struct FixedMaterialProperties {
 struct Particle {
     rgbaBaseColor: vec4f,
     position: vec3f,
-    remainingTime: f32,
+    age: f32,
     velocity: vec3f,
+    timeToLive: f32,
     extent: f32,
 }
 

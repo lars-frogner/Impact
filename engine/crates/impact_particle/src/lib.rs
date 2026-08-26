@@ -83,9 +83,11 @@ pub struct ParticleEmitterMetadata {
 pub struct Particle {
     pub rgba_base_color: Vector4C,
     pub position: Vector3C,
-    pub remaining_time: f32,
+    pub age: f32,
     pub velocity: Vector3C,
+    pub time_to_live: f32,
     pub extent: f32,
+    _padding: [u8; 12], // Total size must be a multiple of alignment, which is 16
 }
 
 /// Manager of all particle emitters in a scene.
@@ -117,6 +119,7 @@ pub struct ParticleConfig {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct BasicParticleSimulation {
+    pub rate_over_time: RateOverTime,
     pub spawn_position: Point3C,
     _padding_0: [u8; 4],
     pub spawn_velocity: Vector3C, // Aligned to 16 bytes
@@ -131,6 +134,23 @@ pub struct BasicParticleSimulation {
 }
 
 type BasicSimulationUniformBuffer = UniformBuffer<BasicParticleEmitterID, BasicParticleSimulation>;
+
+/// Piecewise linear rate of particle emission as a function of time. The rate
+/// is considered zero before `t0` and `r3` after `t3`. The times are assumed
+/// monotonic.
+#[roc(parents = "Particle")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+pub struct RateOverTime {
+    pub t0: f32,
+    pub t1: f32,
+    pub t2: f32,
+    pub t3: f32,
+    pub r0: f32,
+    pub r1: f32,
+    pub r2: f32,
+    pub r3: f32,
+}
 
 #[roc(parents = "Particle")]
 #[repr(C)]
@@ -304,5 +324,48 @@ impl SpawnDistribution {
             min_value: max_angle.radians().clamp(min_angle.radians(), PI).cos(),
             max_value: min_angle.radians().clamp(0.0, PI).cos(),
         }
+    }
+}
+
+#[roc]
+impl RateOverTime {
+    const MIN_DURATION: f32 = 1e-6;
+
+    #[roc(body = r#"
+    clamped_duration = Num.max(duration, 1e-6)
+    rate = Num.to_f32(particle_count) / clamped_duration
+    start = Num.max(delay, 0.0)
+    end = start + clamped_duration
+    {
+        t0: start,
+        t1: end,
+        t2: end,
+        t3: end,
+        r0: rate,
+        r1: rate,
+        r2: 0.0,
+        r3: 0.0,
+    }
+    "#)]
+    pub fn constant(particle_count: u32, delay: f32, duration: f32) -> Self {
+        let duration = duration.max(Self::MIN_DURATION);
+        let rate = particle_count as f32 / duration;
+        let start = delay.max(0.0);
+        let end = start + duration;
+        Self {
+            t0: start,
+            t1: end,
+            t2: end,
+            t3: end,
+            r0: rate,
+            r1: rate,
+            r2: 0.0,
+            r3: 0.0,
+        }
+    }
+
+    #[roc(body = "constant(particle_count, delay, 0.0)")]
+    pub fn burst(particle_count: u32, delay: f32) -> Self {
+        Self::constant(particle_count, delay, 0.0)
     }
 }

@@ -1,7 +1,7 @@
 //! Setup of particle emitters.
 
 use crate::{
-    BasicParticleSimulation, SpawnDistribution,
+    BasicParticleSimulation, RateOverTime, SpawnDistribution,
     material::{ParticleMaterialID, ParticleMaterialRegistry},
 };
 use anyhow::{Result, anyhow};
@@ -21,6 +21,7 @@ define_setup_type! {
     pub struct BasicParticleEmission {
         pub material_name_hash: Hash32,
         pub log2_particle_count: u32,
+        pub rate_over_time: RateOverTime,
         pub spawn_position: Point3C,
         pub spawn_velocity: Vector3C,
         pub spawn_direction: UnitVector3C,
@@ -39,6 +40,7 @@ impl BasicParticleEmission {
     {
         material_name_hash,
         log2_particle_count,
+        rate_over_time,
         spawn_position,
         spawn_velocity,
         spawn_direction,
@@ -52,6 +54,7 @@ impl BasicParticleEmission {
     pub fn new(
         material_name: &str,
         log2_particle_count: u32,
+        rate_over_time: RateOverTime,
         spawn_position: Point3C,
         spawn_velocity: Vector3C,
         spawn_direction: UnitVector3C,
@@ -64,6 +67,7 @@ impl BasicParticleEmission {
         Self {
             material_name_hash: Hash32::from_str(material_name),
             log2_particle_count,
+            rate_over_time,
             spawn_position,
             spawn_velocity,
             spawn_direction,
@@ -77,6 +81,7 @@ impl BasicParticleEmission {
 
     pub fn simulation(&self) -> BasicParticleSimulation {
         BasicParticleSimulation {
+            rate_over_time: self.rate_over_time,
             spawn_position: self.spawn_position,
             spawn_velocity: self.spawn_velocity,
             spawn_direction: self.spawn_direction,

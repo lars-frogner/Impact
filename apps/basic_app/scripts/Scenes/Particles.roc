@@ -9,6 +9,7 @@ import core.UnitQuaternion
 import core.UnitVector3
 import core.Vector3
 import pf.Entity
+import pf.Particle.RateOverTime
 import pf.Particle.SpawnDistribution
 import pf.Comp.AmbientEmission
 import pf.Comp.VelocityControl
@@ -80,6 +81,7 @@ emitter1 =
     |> Setup.BasicParticleEmission.add_new(
         "Default",
         6,
+        Particle.RateOverTime.burst(Num.pow_int(2, 6), 2.0),
         (0.0, -1.0, 6.0),
         (0.0, 0.0, 0.0),
         UnitVector3.from((0.0, 1.0, 0.0)),
@@ -92,6 +94,7 @@ emitter1 =
 # |> Setup.BasicParticleEmission.add_new(
 #    "Default",
 #    0,
+#    Particle.RateOverTime.burst(1, 0),
 #    (0.0, 2.0, 2.0),
 #    (0.0, 0.0, 0.0),
 #    UnitVector3.from((0.0, 0.0, -1.0)),

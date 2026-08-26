@@ -392,8 +392,6 @@ impl ParticleSimulationGPUResources {
         effective_time_step_duration: f32,
         emitter_manager: &ParticleEmitterManager,
     ) {
-        // TODO: Make sure particles are cleared on world reset
-
         // Cache the current time step duration so it can be accessed when
         // recording render commands
         self.effective_time_step_duration = effective_time_step_duration;

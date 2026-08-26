@@ -7,6 +7,7 @@ struct Immediates {
 }
 
 struct Simulation {
+    rateOverTime: RateOverTime,
     @size(16) spawnPosition: vec3f,
     @size(16) spawnVelocity: vec3f,
     spawnDirection: vec3f,
@@ -22,11 +23,23 @@ struct Simulation {
     maxLifetime: f32,
 }
 
+struct RateOverTime {
+    t0: f32,
+    t1: f32,
+    t2: f32,
+    t3: f32,
+    r0: f32,
+    r1: f32,
+    r2: f32,
+    r3: f32,
+}
+
 struct Particle {
     rgbaBaseColor: vec4f,
     position: vec3f,
-    remainingTime: f32,
+    age: f32,
     velocity: vec3f,
+    timeToLive: f32,
     extent: f32,
 }
 
@@ -39,6 +52,8 @@ var<uniform> simulations: array<Simulation, {{max_simulation_count}}>;
 var<storage, read_write> particles: array<Particle>;
 
 const WORKGROUP_SIZE: u32 = {{workgroup_size}};
+
+const MAX_F32: f32 = 3.4028235e38;
 
 const X_AXIS: vec3f = vec3f(1.0, 0.0, 0.0);
 const Y_AXIS: vec3f = vec3f(0.0, 1.0, 0.0);
@@ -83,6 +98,91 @@ fn rotateVectorWithQuaternion(quaternion: vec4f, vector: vec3f) -> vec3f {
     return vector + quaternion.w * tmp + cross(quaternion.xyz, tmp);
 }
 
+fn evaluateSpawningTime(rot: RateOverTime, particleIdx: u32) -> f32 {
+    // Cumulative number of particles emitted at t1, t2 and t3 (rate is
+    // implicitly 0 before t0)
+    let N1 =      0.5 * (rot.t1 - rot.t0) * (rot.r0 + rot.r1);
+    let N2 = N1 + 0.5 * (rot.t2 - rot.t1) * (rot.r1 + rot.r2);
+    let N3 = N2 + 0.5 * (rot.t3 - rot.t2) * (rot.r2 + rot.r3);
+
+    let n = f32(particleIdx);
+
+    // If the particle is not emitted until after t3 and the rate after t3 is
+    // zero, it is never emitted
+    if (n >= N3 && rot.r3 <= 0.0) {
+        return MAX_F32;
+    }
+
+    let t = array<f32, 5>(rot.t0, rot.t1, rot.t2, rot.t3, MAX_F32);
+    let r = array<f32, 5>(rot.r0, rot.r1, rot.r2, rot.r3, rot.r3);
+    let Ns = array<f32, 4>(0.0, N1, N2, N3);
+
+    // Determine emission window and place within it
+    let k = select(select(select(3, 2, n < N3), 1, n < N2), 0, n < N1);
+    let dn = n - Ns[k];
+
+    // Compute slope of emission change across window
+    let dt = t[k+1] - t[k];
+    let s = select(0.0, (r[k+1] - r[k]) / dt, dt > 0.0);
+
+    // The CDF of rate r(t) is count n(t). Obtain time of emission by evaluating
+    // its inverse t(n) for n = particle index.
+    let disc = max(0.0, r[k] * r[k] + 2.0 * s * dn);
+    let rMax = max(max(rot.r0, rot.r1), max(rot.r2, rot.r3));
+    let eps  = max(1e-9 * rMax, 1e-30);
+    return t[k] + 2.0 * dn / (r[k] + sqrt(disc) + eps);
+}
+
+fn spawnParticle(simulation: Simulation, seed: u32) -> Particle {
+    var particle: Particle;
+
+    var hash = seed;
+
+    hash = pcgHash(hash);
+    let azimuthalAngle = 6.2831853 * hashToNormF32(hash);
+    let cosAzimuthalAngle = cos(azimuthalAngle);
+    let sinAzimuthalAngle = sin(azimuthalAngle);
+
+    hash = pcgHash(hash);
+    let cosPolarAngleFactor = hashToNormF32(hash);
+    let cosPolarAngle = mix(simulation.minCosPolarSpawnAngle, simulation.maxCosPolarSpawnAngle, cosPolarAngleFactor);
+    let sinPolarAngle = sqrt(1.0 - max(0.0, cosPolarAngle * cosPolarAngle));
+
+    let dirX = cosAzimuthalAngle * sinPolarAngle;
+    let dirY = sinAzimuthalAngle * sinPolarAngle;
+    let dirZ = cosPolarAngle;
+
+    let localDirection = vec3f(dirX, dirY, dirZ);
+
+    let rotationToSpawnDirection = rotationBetweenAxes(vec3f(0.0, 0.0, 1.0), simulation.spawnDirection);
+    let direction = rotateVectorWithQuaternion(rotationToSpawnDirection, localDirection);
+
+    hash = pcgHash(hash);
+    let extentFactor = hashToNormF32(hash);
+    let extent = mix(simulation.minSpawnExtent, simulation.maxSpawnExtent, extentFactor);
+
+    hash = pcgHash(hash);
+    let distanceFactor = hashToNormF32(hash);
+    let distance = mix(simulation.minSpawnDistance, simulation.maxSpawnDistance, distanceFactor);
+
+    hash = pcgHash(hash);
+    let speedFactor = hashToNormF32(hash);
+    let speed = mix(simulation.minSpawnSpeed, simulation.maxSpawnSpeed, speedFactor);
+
+    hash = pcgHash(hash);
+    let lifetimeFactor = hashToNormF32(hash);
+    let lifetime = max(1e-3, mix(simulation.minLifetime, simulation.maxLifetime, lifetimeFactor));
+
+    particle.rgbaBaseColor = vec4f(1.0, 1.0, 1.0, 1.0);
+    particle.position = simulation.spawnPosition + distance * direction;
+    particle.age = 0.0;
+    particle.velocity = simulation.spawnVelocity + speed * direction;
+    particle.timeToLive = lifetime;
+    particle.extent = extent;
+
+    return particle;
+}
+
 @compute @workgroup_size(WORKGROUP_SIZE, 1, 1)
 fn main(
     @builtin(global_invocation_id) globalID: vec3u,
@@ -97,52 +197,43 @@ fn main(
     let simulation = simulations[imms.simulationIdx];
     var particle = particles[particleIdx];
 
-    if (particle.remainingTime > 0.0) {
-        particle.position += particle.velocity * imms.timeStepDuration;
-        particle.remainingTime -= imms.timeStepDuration;
+    // The time-to-live value will be zero at the start of the simulation, then
+    // negative until the particle has been spawned the first time, then
+    // positive
+    if (particle.timeToLive <= 0.0) {
+        // Initial spawn
+
+        // In this branch, simulation time is stored in the particle age field
+        let time = particle.age;
+
+        // If this is the start of the simulation, generate a spawning time
+        // for the particle
+        if (time <= 0.0) {
+            // Store it as a negative time-to-live value so that the initial
+            // spawning branch can be triggered again in the next time step
+            // if we don't spawn the particle now
+            particle.timeToLive = -evaluateSpawningTime(simulation.rateOverTime, particleIdx);
+        }
+
+        // Decode spawning time
+        let spawningTime = -particle.timeToLive;
+
+        // If we have passed the spawn time, spawn the particle, otherwise
+        // advance simulation time
+        if (time >= spawningTime) {
+            let seed = globalIdx + pcgHash(imms.timeStep);
+            particle = spawnParticle(simulation, seed);
+        } else {
+            particle.age += imms.timeStepDuration;
+        }
+    } else if (particle.age >= particle.timeToLive) {
+        // Respawn
+        let seed = globalIdx + pcgHash(imms.timeStep);
+        particle = spawnParticle(simulation, seed);
     } else {
-        var hash = globalIdx + pcgHash(imms.timeStep);
-
-        hash = pcgHash(hash);
-        let azimuthalAngle = 6.2831853 * hashToNormF32(hash);
-        let cosAzimuthalAngle = cos(azimuthalAngle);
-        let sinAzimuthalAngle = sin(azimuthalAngle);
-
-        hash = pcgHash(hash);
-        let cosPolarAngleFactor = hashToNormF32(hash);
-        let cosPolarAngle = mix(simulation.minCosPolarSpawnAngle, simulation.maxCosPolarSpawnAngle, cosPolarAngleFactor);
-        let sinPolarAngle = sqrt(1.0 - max(0.0, cosPolarAngle * cosPolarAngle));
-
-        let dirX = cosAzimuthalAngle * sinPolarAngle;
-        let dirY = sinAzimuthalAngle * sinPolarAngle;
-        let dirZ = cosPolarAngle;
-
-        let localDirection = vec3f(dirX, dirY, dirZ);
-
-        let rotationToSpawnDirection = rotationBetweenAxes(vec3f(0.0, 0.0, 1.0), simulation.spawnDirection);
-        let direction = rotateVectorWithQuaternion(rotationToSpawnDirection, localDirection);
-
-        hash = pcgHash(hash);
-        let extentFactor = hashToNormF32(hash);
-        let extent = mix(simulation.minSpawnExtent, simulation.maxSpawnExtent, extentFactor);
-
-        hash = pcgHash(hash);
-        let distanceFactor = hashToNormF32(hash);
-        let distance = mix(simulation.minSpawnDistance, simulation.maxSpawnDistance, distanceFactor);
-
-        hash = pcgHash(hash);
-        let speedFactor = hashToNormF32(hash);
-        let speed = mix(simulation.minSpawnSpeed, simulation.maxSpawnSpeed, speedFactor);
-
-        hash = pcgHash(hash);
-        let lifetimeFactor = hashToNormF32(hash);
-        let lifetime = mix(simulation.minLifetime, simulation.maxLifetime, lifetimeFactor);
-
-        particle.rgbaBaseColor = vec4f(1.0, 1.0, 1.0, 1.0);
-        particle.position = simulation.spawnPosition + distance * direction;
-        particle.velocity = simulation.spawnVelocity + speed * direction;
-        particle.remainingTime = lifetime;
-        particle.extent = extent;
+        // Update
+        particle.position += particle.velocity * imms.timeStepDuration;
+        particle.age += imms.timeStepDuration;
     }
 
     particles[particleIdx] = particle;
