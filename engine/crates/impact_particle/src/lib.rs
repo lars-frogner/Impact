@@ -20,6 +20,8 @@ use impact_gpu::{
 };
 use impact_id::{EntityID, define_entity_id_newtype};
 use impact_math::{
+    angle::{Angle, Radians},
+    consts::f32::PI,
     point::Point3C,
     vector::{UnitVector3C, Vector3C, Vector4C},
 };
@@ -86,33 +88,6 @@ pub struct Particle {
     pub extent: f32,
 }
 
-/// Parameters for a basic particle simulation.
-///
-/// This struct is intended to be stored in a [`ParticleEmitterManager`]
-/// (wrapped in a [`ParticleEmitter`]), and its data will be passed directly to
-/// the GPU in a uniform buffer. Importantly, its size is a multiple of 16 bytes
-/// as required for uniform array items, and the fields that will be accessed on
-/// the GPU are aligned to their required byte boundaries.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
-pub struct BasicParticleSimulation {
-    pub spawn_position: Point3C,
-    pub cos_min_polar_spawn_angle: f32,
-    pub spawn_direction: UnitVector3C, // Aligned to 16 bytes
-    pub cos_max_polar_spawn_angle: f32,
-    pub min_spawn_extent: f32,
-    pub max_spawn_extent: f32,
-    pub min_spawn_distance: f32,
-    pub max_spawn_distance: f32,
-    pub min_spawn_speed: f32,
-    pub max_spawn_speed: f32,
-    pub min_lifetime: f32,
-    pub max_lifetime: f32,
-    _padding: [u8; 0],
-}
-
-type BasicSimulationUniformBuffer = UniformBuffer<BasicParticleEmitterID, BasicParticleSimulation>;
-
 /// Manager of all particle emitters in a scene.
 #[derive(Debug)]
 pub struct ParticleEmitterManager {
@@ -130,6 +105,39 @@ pub struct ParticleEmitterManager {
 pub struct ParticleConfig {
     /// If [`None`], the particle system will be disabled.
     pub materials: Option<ParticleMaterialConfig>,
+}
+
+/// Parameters for a basic particle simulation.
+///
+/// This struct is intended to be stored in a [`ParticleEmitterManager`]
+/// (wrapped in a [`ParticleEmitter`]), and its data will be passed directly to
+/// the GPU in a uniform buffer. Importantly, its size is a multiple of 16 bytes
+/// as required for uniform array items, and the fields that will be accessed on
+/// the GPU are aligned to their required byte boundaries.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+pub struct BasicParticleSimulation {
+    pub spawn_position: Point3C,
+    _padding_0: [u8; 4],
+    pub spawn_velocity: Vector3C, // Aligned to 16 bytes
+    _padding_1: [u8; 4],
+    pub spawn_direction: UnitVector3C, // Aligned to 16 bytes
+    pub cos_polar_spawn_angle: SpawnDistribution,
+    pub spawn_extent: SpawnDistribution,
+    pub spawn_distance: SpawnDistribution,
+    pub spawn_speed: SpawnDistribution,
+    pub lifetime: SpawnDistribution,
+    _padding_end: [u8; 12],
+}
+
+type BasicSimulationUniformBuffer = UniformBuffer<BasicParticleEmitterID, BasicParticleSimulation>;
+
+#[roc(parents = "Particle")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+pub struct SpawnDistribution {
+    pub min_value: f32,
+    pub max_value: f32,
 }
 
 impl<S> ParticleEmitter<S> {
@@ -263,6 +271,38 @@ impl ParticleConfig {
     pub fn resolve_paths(&mut self, root_path: &Path) {
         if let Some(materials) = &mut self.materials {
             materials.resolve_paths(root_path);
+        }
+    }
+}
+
+#[roc(dependencies = [Radians])]
+impl SpawnDistribution {
+    #[roc(body = "{ min_value: value, max_value: value }")]
+    pub fn same(value: f32) -> Self {
+        Self {
+            min_value: value,
+            max_value: value,
+        }
+    }
+
+    #[roc(body = "{ min_value, max_value: Num.max(min_value, max_value) }")]
+    pub fn uniform(min_value: f32, max_value: f32) -> Self {
+        Self {
+            min_value,
+            max_value: max_value.max(min_value),
+        }
+    }
+
+    #[roc(body = r#"
+    {
+        min_value: Num.cos(Num.max(Radians.radians(min_angle), Num.min(Num.pi, Radians.radians(max_angle)))),
+        max_value: Num.cos(Num.max(0, Num.min(Num.pi, Radians.radians(min_angle))))
+    }
+    "#)]
+    pub fn uniform_in_cos(min_angle: Radians, max_angle: Radians) -> Self {
+        Self {
+            min_value: max_angle.radians().clamp(min_angle.radians(), PI).cos(),
+            max_value: min_angle.radians().clamp(0.0, PI).cos(),
         }
     }
 }

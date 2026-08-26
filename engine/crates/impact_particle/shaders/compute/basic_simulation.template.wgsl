@@ -7,10 +7,11 @@ struct Immediates {
 }
 
 struct Simulation {
-    spawnPosition: vec3f,
-    cosMinPolarSpawnAngle: f32,
+    @size(16) spawnPosition: vec3f,
+    @size(16) spawnVelocity: vec3f,
     spawnDirection: vec3f,
-    cosMaxPolarSpawnAngle: f32,
+    minCosPolarSpawnAngle: f32,
+    maxCosPolarSpawnAngle: f32,
     minSpawnExtent: f32,
     maxSpawnExtent: f32,
     minSpawnDistance: f32,
@@ -109,7 +110,7 @@ fn main(
 
         hash = pcgHash(hash);
         let cosPolarAngleFactor = hashToNormF32(hash);
-        let cosPolarAngle = mix(simulation.cosMaxPolarSpawnAngle, simulation.cosMinPolarSpawnAngle, cosPolarAngleFactor);
+        let cosPolarAngle = mix(simulation.minCosPolarSpawnAngle, simulation.maxCosPolarSpawnAngle, cosPolarAngleFactor);
         let sinPolarAngle = sqrt(1.0 - max(0.0, cosPolarAngle * cosPolarAngle));
 
         let dirX = cosAzimuthalAngle * sinPolarAngle;
@@ -139,7 +140,7 @@ fn main(
 
         particle.rgbaBaseColor = vec4f(1.0, 1.0, 1.0, 1.0);
         particle.position = simulation.spawnPosition + distance * direction;
-        particle.velocity = speed * direction;
+        particle.velocity = simulation.spawnVelocity + speed * direction;
         particle.remainingTime = lifetime;
         particle.extent = extent;
     }

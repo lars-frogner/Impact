@@ -9,6 +9,7 @@ import core.UnitQuaternion
 import core.UnitVector3
 import core.Vector3
 import pf.Entity
+import pf.Particle.SpawnDistribution
 import pf.Comp.AmbientEmission
 import pf.Comp.VelocityControl
 import pf.Comp.AngularVelocityControl
@@ -78,20 +79,28 @@ emitter1 =
     Entity.new_component_data
     |> Setup.BasicParticleEmission.add_new(
         "Default",
-        13,
-        (0.0, 2.0, 6.0),
+        6,
+        (0.0, -1.0, 6.0),
+        (0.0, 0.0, 0.0),
         UnitVector3.from((0.0, 1.0, 0.0)),
-        Radians.from_degrees(0),
-        Radians.from_degrees(80),
-        0.2,
-        0.4,
-        0.0,
-        1.0,
-        2.0,
-        4.0,
-        2.0,
-        3.0,
+        Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(60)),
+        Particle.SpawnDistribution.uniform(0.2, 0.4),
+        Particle.SpawnDistribution.uniform(0.0, 1.0),
+        Particle.SpawnDistribution.uniform(1.0, 2.0),
+        Particle.SpawnDistribution.uniform(20.0, 20.0),
     )
+# |> Setup.BasicParticleEmission.add_new(
+#    "Default",
+#    0,
+#    (0.0, 2.0, 2.0),
+#    (0.0, 0.0, 0.0),
+#    UnitVector3.from((0.0, 0.0, -1.0)),
+#    Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(90)),
+#    Particle.SpawnDistribution.uniform(1.0, 1.0),
+#    Particle.SpawnDistribution.uniform(0.0, 0.4),
+#    Particle.SpawnDistribution.uniform(0.0, 0.0),
+#    Particle.SpawnDistribution.same(999990.0),
+# )
 
 ambient_light =
     Entity.new_component_data
