@@ -1,5 +1,5 @@
-# Hash: 2f189badbc62d484
-# Generated: 2026-08-27T20:19:04.380965657
+# Hash: a742bff264cac541
+# Generated: 2026-08-27T21:30:30.118585643
 # Rust type: impact_particle::setup::BasicParticleEmission
 # Type category: Component
 module [
@@ -36,13 +36,15 @@ BasicParticleEmission : {
     spawn_extent : Particle.SpawnDistribution.SpawnDistribution,
     spawn_distance : Particle.SpawnDistribution.SpawnDistribution,
     spawn_speed : Particle.SpawnDistribution.SpawnDistribution,
+    spawn_angle : Particle.SpawnDistribution.SpawnDistribution,
+    spawn_angular_velocity : Particle.SpawnDistribution.SpawnDistribution,
     lifetime : Particle.SpawnDistribution.SpawnDistribution,
     color_over_lifetime : Particle.ColorOverLifetime.ColorOverLifetime,
     scale_over_lifetime : Particle.ScaleOverLifetime.ScaleOverLifetime,
 }
 
-new : Str, U32, Particle.RateOverTime.RateOverTime, Point3.Point3, Vector3.Vector3, UnitVector3.UnitVector3, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.ColorOverLifetime.ColorOverLifetime, Particle.ScaleOverLifetime.ScaleOverLifetime -> BasicParticleEmission
-new = |material_name, log2_particle_count, rate_over_time, spawn_position, spawn_velocity, spawn_direction, cos_polar_spawn_angle, spawn_extent, spawn_distance, spawn_speed, lifetime, color_over_lifetime, scale_over_lifetime|
+new : Str, U32, Particle.RateOverTime.RateOverTime, Point3.Point3, Vector3.Vector3, UnitVector3.UnitVector3, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.ColorOverLifetime.ColorOverLifetime, Particle.ScaleOverLifetime.ScaleOverLifetime -> BasicParticleEmission
+new = |material_name, log2_particle_count, rate_over_time, spawn_position, spawn_velocity, spawn_direction, cos_polar_spawn_angle, spawn_extent, spawn_distance, spawn_speed, spawn_angle, spawn_angular_velocity, lifetime, color_over_lifetime, scale_over_lifetime|
     material_name_hash = Hashing.hash_str_32(material_name)
     {
         material_name_hash,
@@ -55,14 +57,16 @@ new = |material_name, log2_particle_count, rate_over_time, spawn_position, spawn
         spawn_extent,
         spawn_distance,
         spawn_speed,
+        spawn_angle,
+        spawn_angular_velocity,
         lifetime,
         color_over_lifetime,
         scale_over_lifetime,
     }
 
-add_new : Entity.ComponentData, Str, U32, Particle.RateOverTime.RateOverTime, Point3.Point3, Vector3.Vector3, UnitVector3.UnitVector3, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.ColorOverLifetime.ColorOverLifetime, Particle.ScaleOverLifetime.ScaleOverLifetime -> Entity.ComponentData
-add_new = |entity_data, material_name, log2_particle_count, rate_over_time, spawn_position, spawn_velocity, spawn_direction, cos_polar_spawn_angle, spawn_extent, spawn_distance, spawn_speed, lifetime, color_over_lifetime, scale_over_lifetime|
-    add(entity_data, new(material_name, log2_particle_count, rate_over_time, spawn_position, spawn_velocity, spawn_direction, cos_polar_spawn_angle, spawn_extent, spawn_distance, spawn_speed, lifetime, color_over_lifetime, scale_over_lifetime))
+add_new : Entity.ComponentData, Str, U32, Particle.RateOverTime.RateOverTime, Point3.Point3, Vector3.Vector3, UnitVector3.UnitVector3, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.SpawnDistribution.SpawnDistribution, Particle.ColorOverLifetime.ColorOverLifetime, Particle.ScaleOverLifetime.ScaleOverLifetime -> Entity.ComponentData
+add_new = |entity_data, material_name, log2_particle_count, rate_over_time, spawn_position, spawn_velocity, spawn_direction, cos_polar_spawn_angle, spawn_extent, spawn_distance, spawn_speed, spawn_angle, spawn_angular_velocity, lifetime, color_over_lifetime, scale_over_lifetime|
+    add(entity_data, new(material_name, log2_particle_count, rate_over_time, spawn_position, spawn_velocity, spawn_direction, cos_polar_spawn_angle, spawn_extent, spawn_distance, spawn_speed, spawn_angle, spawn_angular_velocity, lifetime, color_over_lifetime, scale_over_lifetime))
 
 ## Adds a value of the [BasicParticleEmission] component to an entity's data.
 ## Note that an entity never should have more than a single value of
@@ -88,7 +92,7 @@ add_multiple = |entity_data, comp_values|
 write_packet : List U8, BasicParticleEmission -> List U8
 write_packet = |bytes, val|
     type_id = 8789485584940170758
-    size = 228
+    size = 244
     alignment = 4
     bytes
     |> List.reserve(24 + size)
@@ -100,7 +104,7 @@ write_packet = |bytes, val|
 write_multi_packet : List U8, List BasicParticleEmission -> List U8
 write_multi_packet = |bytes, vals|
     type_id = 8789485584940170758
-    size = 228
+    size = 244
     alignment = 4
     count = List.len(vals)
     bytes_with_header =
@@ -121,7 +125,7 @@ write_multi_packet = |bytes, vals|
 write_bytes : List U8, BasicParticleEmission -> List U8
 write_bytes = |bytes, value|
     bytes
-    |> List.reserve(228)
+    |> List.reserve(244)
     |> Hashing.write_bytes_hash_32(value.material_name_hash)
     |> Builtin.write_bytes_u32(value.log2_particle_count)
     |> Particle.RateOverTime.write_bytes(value.rate_over_time)
@@ -132,6 +136,8 @@ write_bytes = |bytes, value|
     |> Particle.SpawnDistribution.write_bytes(value.spawn_extent)
     |> Particle.SpawnDistribution.write_bytes(value.spawn_distance)
     |> Particle.SpawnDistribution.write_bytes(value.spawn_speed)
+    |> Particle.SpawnDistribution.write_bytes(value.spawn_angle)
+    |> Particle.SpawnDistribution.write_bytes(value.spawn_angular_velocity)
     |> Particle.SpawnDistribution.write_bytes(value.lifetime)
     |> Particle.ColorOverLifetime.write_bytes(value.color_over_lifetime)
     |> Particle.ScaleOverLifetime.write_bytes(value.scale_over_lifetime)
@@ -152,15 +158,17 @@ from_bytes = |bytes|
             spawn_extent: bytes |> List.sublist({ start: 84, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
             spawn_distance: bytes |> List.sublist({ start: 92, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
             spawn_speed: bytes |> List.sublist({ start: 100, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
-            lifetime: bytes |> List.sublist({ start: 108, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
-            color_over_lifetime: bytes |> List.sublist({ start: 116, len: 80 }) |> Particle.ColorOverLifetime.from_bytes?,
-            scale_over_lifetime: bytes |> List.sublist({ start: 196, len: 32 }) |> Particle.ScaleOverLifetime.from_bytes?,
+            spawn_angle: bytes |> List.sublist({ start: 108, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
+            spawn_angular_velocity: bytes |> List.sublist({ start: 116, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
+            lifetime: bytes |> List.sublist({ start: 124, len: 8 }) |> Particle.SpawnDistribution.from_bytes?,
+            color_over_lifetime: bytes |> List.sublist({ start: 132, len: 80 }) |> Particle.ColorOverLifetime.from_bytes?,
+            scale_over_lifetime: bytes |> List.sublist({ start: 212, len: 32 }) |> Particle.ScaleOverLifetime.from_bytes?,
         },
     )
 
 test_roundtrip : {} -> Result {} _
 test_roundtrip = |{}|
-    bytes = List.range({ start: At 0, end: Length 228 }) |> List.map(|b| Num.to_u8(b))
+    bytes = List.range({ start: At 0, end: Length 244 }) |> List.map(|b| Num.to_u8(b))
     decoded = from_bytes(bytes)?
     encoded = write_bytes([], decoded)
     if List.len(bytes) == List.len(encoded) and List.map2(bytes, encoded, |a, b| a == b) |> List.all(|eq| eq) then

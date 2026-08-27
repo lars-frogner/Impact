@@ -56,6 +56,8 @@ struct Particle {
     lifetime: f32,
     extent: f32,
     scale: f32,
+    angle: f32,
+    angularVelocity: f32,
 }
 
 const JITTER_COUNT: u32 = {{jitter_count}};
@@ -85,6 +87,13 @@ var<storage, read> particles: array<Particle>;
 
 fn convertQuadTextureCoordsToPositionOffsets(textureCoords: vec2f) -> vec3f {
     return vec3f(textureCoords.x - 0.5, 0.5 - textureCoords.y, 0.0);
+}
+
+fn rotateQuadTextureCoords(textureCoords: vec2f, angle: f32) -> vec2f {
+    let cosAngle = cos(angle);
+    let sinAngle = sin(angle);
+    let rotation = mat2x2f(cosAngle, sinAngle, -sinAngle, cosAngle);
+    return rotation * (textureCoords - vec2f(0.5, 0.5)) + vec2f(0.5, 0.5);
 }
 
 fn transformPosition(
@@ -166,7 +175,7 @@ fn mainVS(
 
     output.materialProperties = vec4f(specularReflectance, roughness, metalness, preExposedEmissiveLuminance);
 
-    output.textureCoords = quadVertex.textureCoords;
+    output.textureCoords = rotateQuadTextureCoords(quadVertex.textureCoords, particle.angle);
     output.normalAndAlphaTextureIdx = materialProps.normalAndAlphaTextureIdx;
 
     return output;

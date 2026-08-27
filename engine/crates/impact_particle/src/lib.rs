@@ -88,7 +88,8 @@ pub struct Particle {
     pub lifetime: f32,
     pub extent: f32,
     pub scale: f32,
-    _padding: [u8; 8], // Total size must be a multiple of alignment, which is 16
+    pub angle: f32,
+    pub angular_velocity: f32,
 }
 
 /// Manager of all particle emitters in a scene.
@@ -132,6 +133,8 @@ pub struct BasicParticleSimulation {
     pub spawn_extent: SpawnDistribution,
     pub spawn_distance: SpawnDistribution,
     pub spawn_speed: SpawnDistribution,
+    pub spawn_angle: SpawnDistribution,
+    pub spawn_angular_velocity: SpawnDistribution,
     pub lifetime: SpawnDistribution,
     _padding_end: [u8; 12],
 }

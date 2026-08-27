@@ -21,6 +21,10 @@ struct Simulation {
     maxSpawnDistance: f32,
     minSpawnSpeed: f32,
     maxSpawnSpeed: f32,
+    minSpawnAngle: f32,
+    maxSpawnAngle: f32,
+    minSpawnAngularVelocity: f32,
+    maxSpawnAngularVelocity: f32,
     minLifetime: f32,
     maxLifetime: f32,
 }
@@ -66,6 +70,8 @@ struct Particle {
     lifetime: f32,
     extent: f32,
     scale: f32,
+    angle: f32,
+    angularVelocity: f32,
 }
 
 var<immediate> imms: Immediates;
@@ -195,14 +201,24 @@ fn spawnParticle(simulation: Simulation, seed: u32) -> Particle {
     let speed = mix(simulation.minSpawnSpeed, simulation.maxSpawnSpeed, speedFactor);
 
     hash = pcgHash(hash);
+    let angleFactor = hashToNormF32(hash);
+    let angle = mix(simulation.minSpawnAngle, simulation.maxSpawnAngle, angleFactor);
+
+    hash = pcgHash(hash);
+    let angularVelocityFactor = hashToNormF32(hash);
+    let angularVelocity = mix(simulation.minSpawnAngularVelocity, simulation.maxSpawnAngularVelocity, angularVelocityFactor);
+
+    hash = pcgHash(hash);
     let lifetimeFactor = hashToNormF32(hash);
     let lifetime = max(1e-3, mix(simulation.minLifetime, simulation.maxLifetime, lifetimeFactor));
 
-    particle.position = simulation.spawnPosition + distance * direction;
     particle.age = 0.0;
-    particle.velocity = simulation.spawnVelocity + speed * direction;
     particle.lifetime = lifetime;
+    particle.position = simulation.spawnPosition + distance * direction;
+    particle.velocity = simulation.spawnVelocity + speed * direction;
     particle.extent = extent;
+    particle.angle = angle;
+    particle.angularVelocity = angularVelocity;
 
     particle.color = evaluateColorAtLifetimeFraction(simulation.colorOverLifetime, 0.0);
     particle.scale = evaluateScaleAtLifetimeFraction(simulation.scaleOverLifetime, 0.0);
@@ -285,6 +301,7 @@ fn main(
         particle.scale = evaluateScaleAtLifetimeFraction(simulation.scaleOverLifetime, lifetimeFraction);
 
         particle.position += particle.velocity * imms.timeStepDuration;
+        particle.angle += particle.angularVelocity * imms.timeStepDuration;
         particle.age += imms.timeStepDuration;
     }
 
