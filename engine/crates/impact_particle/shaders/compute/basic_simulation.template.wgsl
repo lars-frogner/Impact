@@ -8,6 +8,8 @@ struct Immediates {
 
 struct Simulation {
     rateOverTime: RateOverTime,
+    colorOverLifetime: ColorOverLifetime,
+    scaleOverLifetime: ScaleOverLifetime,
     @size(16) spawnPosition: vec3f,
     @size(16) spawnVelocity: vec3f,
     spawnDirection: vec3f,
@@ -34,13 +36,36 @@ struct RateOverTime {
     r3: f32,
 }
 
+struct ColorOverLifetime {
+    t0: f32,
+    t1: f32,
+    t2: f32,
+    t3: f32,
+    c0: vec4f,
+    c1: vec4f,
+    c2: vec4f,
+    c3: vec4f,
+}
+
+struct ScaleOverLifetime {
+    t0: f32,
+    t1: f32,
+    t2: f32,
+    t3: f32,
+    s0: f32,
+    s1: f32,
+    s2: f32,
+    s3: f32,
+}
+
 struct Particle {
-    rgbaBaseColor: vec4f,
+    color: vec4f,
     position: vec3f,
     age: f32,
     velocity: vec3f,
-    timeToLive: f32,
+    lifetime: f32,
     extent: f32,
+    scale: f32,
 }
 
 var<immediate> imms: Immediates;
@@ -53,7 +78,7 @@ var<storage, read_write> particles: array<Particle>;
 
 const WORKGROUP_SIZE: u32 = {{workgroup_size}};
 
-const MAX_F32: f32 = 3.4028235e38;
+const MAX_F32: f32 = 3.40282347e38;
 
 const X_AXIS: vec3f = vec3f(1.0, 0.0, 0.0);
 const Y_AXIS: vec3f = vec3f(0.0, 1.0, 0.0);
@@ -173,14 +198,36 @@ fn spawnParticle(simulation: Simulation, seed: u32) -> Particle {
     let lifetimeFactor = hashToNormF32(hash);
     let lifetime = max(1e-3, mix(simulation.minLifetime, simulation.maxLifetime, lifetimeFactor));
 
-    particle.rgbaBaseColor = vec4f(1.0, 1.0, 1.0, 1.0);
     particle.position = simulation.spawnPosition + distance * direction;
     particle.age = 0.0;
     particle.velocity = simulation.spawnVelocity + speed * direction;
-    particle.timeToLive = lifetime;
+    particle.lifetime = lifetime;
     particle.extent = extent;
 
+    particle.color = evaluateColorAtLifetimeFraction(simulation.colorOverLifetime, 0.0);
+    particle.scale = evaluateScaleAtLifetimeFraction(simulation.scaleOverLifetime, 0.0);
+
     return particle;
+}
+
+fn evaluateColorAtLifetimeFraction(colt: ColorOverLifetime, lf: f32) -> vec4f {
+    let t =   array<f32, 6>(0.0,     colt.t0, colt.t1, colt.t2, colt.t3, MAX_F32);
+    let c = array<vec4f, 6>(colt.c0, colt.c0, colt.c1, colt.c2, colt.c3, colt.c3);
+
+    let k = select(select(select(select(4, 3, lf < colt.t3), 2, lf < colt.t2), 1, lf < colt.t1), 0, lf < colt.t0);
+    let interp = lf - t[k] / (t[k+1] - t[k]);
+
+    return (1.0 - interp) * c[k] + interp * c[k+1];
+}
+
+fn evaluateScaleAtLifetimeFraction(solt: ScaleOverLifetime, lf: f32) -> f32 {
+    let t = array<f32, 6>(0.0,     solt.t0, solt.t1, solt.t2, solt.t3, MAX_F32);
+    let s = array<f32, 6>(solt.s0, solt.s0, solt.s1, solt.s2, solt.s3, solt.s3);
+
+    let k = select(select(select(select(4, 3, lf < solt.t3), 2, lf < solt.t2), 1, lf < solt.t1), 0, lf < solt.t0);
+    let interp = lf - t[k] / (t[k+1] - t[k]);
+
+    return (1.0 - interp) * s[k] + interp * s[k+1];
 }
 
 @compute @workgroup_size(WORKGROUP_SIZE, 1, 1)
@@ -197,10 +244,10 @@ fn main(
     let simulation = simulations[imms.simulationIdx];
     var particle = particles[particleIdx];
 
-    // The time-to-live value will be zero at the start of the simulation, then
+    // The lifetime value will be zero at the start of the simulation, then
     // negative until the particle has been spawned the first time, then
     // positive
-    if (particle.timeToLive <= 0.0) {
+    if (particle.lifetime <= 0.0) {
         // Initial spawn
 
         // In this branch, simulation time is stored in the particle age field
@@ -209,14 +256,14 @@ fn main(
         // If this is the start of the simulation, generate a spawning time
         // for the particle
         if (time <= 0.0) {
-            // Store it as a negative time-to-live value so that the initial
-            // spawning branch can be triggered again in the next time step
-            // if we don't spawn the particle now
-            particle.timeToLive = -evaluateSpawningTime(simulation.rateOverTime, particleIdx);
+            // Store it as a negative lifetime value so that the initial
+            // spawning branch can be triggered again in the next time step if
+            // we don't spawn the particle now
+            particle.lifetime = -evaluateSpawningTime(simulation.rateOverTime, particleIdx);
         }
 
         // Decode spawning time
-        let spawningTime = -particle.timeToLive;
+        let spawningTime = -particle.lifetime;
 
         // If we have passed the spawn time, spawn the particle, otherwise
         // advance simulation time
@@ -226,12 +273,17 @@ fn main(
         } else {
             particle.age += imms.timeStepDuration;
         }
-    } else if (particle.age >= particle.timeToLive) {
+    } else if (particle.age >= particle.lifetime) {
         // Respawn
         let seed = globalIdx + pcgHash(imms.timeStep);
         particle = spawnParticle(simulation, seed);
     } else {
         // Update
+
+        let lifetimeFraction = particle.age / particle.lifetime;
+        particle.color = evaluateColorAtLifetimeFraction(simulation.colorOverLifetime, lifetimeFraction);
+        particle.scale = evaluateScaleAtLifetimeFraction(simulation.scaleOverLifetime, lifetimeFraction);
+
         particle.position += particle.velocity * imms.timeStepDuration;
         particle.age += imms.timeStepDuration;
     }

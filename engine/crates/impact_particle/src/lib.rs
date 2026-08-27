@@ -81,13 +81,14 @@ pub struct ParticleEmitterMetadata {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct Particle {
-    pub rgba_base_color: Vector4C,
+    pub color: Vector4C,
     pub position: Vector3C,
     pub age: f32,
     pub velocity: Vector3C,
-    pub time_to_live: f32,
+    pub lifetime: f32,
     pub extent: f32,
-    _padding: [u8; 12], // Total size must be a multiple of alignment, which is 16
+    pub scale: f32,
+    _padding: [u8; 8], // Total size must be a multiple of alignment, which is 16
 }
 
 /// Manager of all particle emitters in a scene.
@@ -120,6 +121,8 @@ pub struct ParticleConfig {
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct BasicParticleSimulation {
     pub rate_over_time: RateOverTime,
+    pub color_over_lifetime: ColorOverLifetime,
+    pub scale_over_lifetime: ScaleOverLifetime,
     pub spawn_position: Point3C,
     _padding_0: [u8; 4],
     pub spawn_velocity: Vector3C, // Aligned to 16 bytes
@@ -150,6 +153,42 @@ pub struct RateOverTime {
     pub r1: f32,
     pub r2: f32,
     pub r3: f32,
+}
+
+/// Piecewise linear RGBA base color as a function of fractional time relative
+/// to the lifetime of the particle (so the full lifetime spans `t = [0.0,
+/// 1.0)`). The color is considered `c0` before `t0` and `c3` after `t3`. The
+/// fractional times are assumed non-negative and monotonic.
+#[roc(parents = "Particle")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+pub struct ColorOverLifetime {
+    pub t0: f32,
+    pub t1: f32,
+    pub t2: f32,
+    pub t3: f32,
+    pub c0: Vector4C,
+    pub c1: Vector4C,
+    pub c2: Vector4C,
+    pub c3: Vector4C,
+}
+
+/// Piecewise linear scale as a function of fractional time relative to the
+/// lifetime of the particle (so the full lifetime spans `t = [0.0, 1.0)`). The
+/// scale is considered `s0` before `t0` and `s3` after `t3`. The fractional
+/// times are assumed non-negative and monotonic.
+#[roc(parents = "Particle")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+pub struct ScaleOverLifetime {
+    pub t0: f32,
+    pub t1: f32,
+    pub t2: f32,
+    pub t3: f32,
+    pub s0: f32,
+    pub s1: f32,
+    pub s2: f32,
+    pub s3: f32,
 }
 
 #[roc(parents = "Particle")]
@@ -295,38 +334,6 @@ impl ParticleConfig {
     }
 }
 
-#[roc(dependencies = [Radians])]
-impl SpawnDistribution {
-    #[roc(body = "{ min_value: value, max_value: value }")]
-    pub fn same(value: f32) -> Self {
-        Self {
-            min_value: value,
-            max_value: value,
-        }
-    }
-
-    #[roc(body = "{ min_value, max_value: Num.max(min_value, max_value) }")]
-    pub fn uniform(min_value: f32, max_value: f32) -> Self {
-        Self {
-            min_value,
-            max_value: max_value.max(min_value),
-        }
-    }
-
-    #[roc(body = r#"
-    {
-        min_value: Num.cos(Num.max(Radians.radians(min_angle), Num.min(Num.pi, Radians.radians(max_angle)))),
-        max_value: Num.cos(Num.max(0, Num.min(Num.pi, Radians.radians(min_angle))))
-    }
-    "#)]
-    pub fn uniform_in_cos(min_angle: Radians, max_angle: Radians) -> Self {
-        Self {
-            min_value: max_angle.radians().clamp(min_angle.radians(), PI).cos(),
-            max_value: min_angle.radians().clamp(0.0, PI).cos(),
-        }
-    }
-}
-
 #[roc]
 impl RateOverTime {
     const MIN_DURATION: f32 = 1e-6;
@@ -367,5 +374,122 @@ impl RateOverTime {
     #[roc(body = "constant(particle_count, delay, 0.0)")]
     pub fn burst(particle_count: u32, delay: f32) -> Self {
         Self::constant(particle_count, delay, 0.0)
+    }
+}
+
+#[roc(dependencies = [Vector3C])]
+impl ColorOverLifetime {
+    #[roc(body = r#"
+    {
+        t0: 0.0,
+        t1: 1.0,
+        t2: 1.0,
+        t3: 1.0,
+        c0: start_color,
+        c1: end_color,
+        c2: end_color,
+        c3: end_color,
+    }
+    "#)]
+    pub fn linear(start_color: Vector4C, end_color: Vector4C) -> Self {
+        Self {
+            t0: 0.0,
+            t1: 1.0,
+            t2: 1.0,
+            t3: 1.0,
+            c0: start_color,
+            c1: end_color,
+            c2: end_color,
+            c3: end_color,
+        }
+    }
+
+    #[roc(body = r#"
+    start_color = (color.0, color.1, color.2, start_alpha)
+    end_color = (color.0, color.1, color.2, end_alpha)
+    linear(start_color, end_color)
+    "#)]
+    pub fn linear_alpha(color: Vector3C, start_alpha: f32, end_alpha: f32) -> Self {
+        Self::linear(color.extended(start_alpha), color.extended(end_alpha))
+    }
+
+    #[roc(body = "linear_alpha(color, 1.0, 0.0)")]
+    pub fn linear_fade(color: Vector3C) -> Self {
+        Self::linear_alpha(color, 1.0, 0.0)
+    }
+
+    #[roc(body = "linear(color, color)")]
+    pub fn constant(color: Vector4C) -> Self {
+        Self::linear(color, color)
+    }
+}
+
+#[roc]
+impl ScaleOverLifetime {
+    #[roc(body = r#"
+    {
+        t0: 0.0,
+        t1: 1.0,
+        t2: 1.0,
+        t3: 1.0,
+        s0: start_scale,
+        s1: end_scale,
+        s2: end_scale,
+        s3: end_scale,
+    }
+    "#)]
+    pub fn linear(start_scale: f32, end_scale: f32) -> Self {
+        Self {
+            t0: 0.0,
+            t1: 1.0,
+            t2: 1.0,
+            t3: 1.0,
+            s0: start_scale,
+            s1: end_scale,
+            s2: end_scale,
+            s3: end_scale,
+        }
+    }
+
+    #[roc(body = "linear(1.0, 0.0)")]
+    pub fn linear_shrink() -> Self {
+        Self::linear(1.0, 0.0)
+    }
+
+    #[roc(body = "linear(scale, scale)")]
+    pub fn constant(scale: f32) -> Self {
+        Self::linear(scale, scale)
+    }
+}
+
+#[roc(dependencies = [Radians])]
+impl SpawnDistribution {
+    #[roc(body = "{ min_value: value, max_value: value }")]
+    pub fn same(value: f32) -> Self {
+        Self {
+            min_value: value,
+            max_value: value,
+        }
+    }
+
+    #[roc(body = "{ min_value, max_value: Num.max(min_value, max_value) }")]
+    pub fn uniform(min_value: f32, max_value: f32) -> Self {
+        Self {
+            min_value,
+            max_value: max_value.max(min_value),
+        }
+    }
+
+    #[roc(body = r#"
+    {
+        min_value: Num.cos(Num.max(Radians.radians(min_angle), Num.min(Num.pi, Radians.radians(max_angle)))),
+        max_value: Num.cos(Num.max(0, Num.min(Num.pi, Radians.radians(min_angle))))
+    }
+    "#)]
+    pub fn uniform_in_cos(min_angle: Radians, max_angle: Radians) -> Self {
+        Self {
+            min_value: max_angle.radians().clamp(min_angle.radians(), PI).cos(),
+            max_value: min_angle.radians().clamp(0.0, PI).cos(),
+        }
     }
 }

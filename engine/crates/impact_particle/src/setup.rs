@@ -1,7 +1,7 @@
 //! Setup of particle emitters.
 
 use crate::{
-    BasicParticleSimulation, RateOverTime, SpawnDistribution,
+    BasicParticleSimulation, ColorOverLifetime, RateOverTime, ScaleOverLifetime, SpawnDistribution,
     material::{ParticleMaterialID, ParticleMaterialRegistry},
 };
 use anyhow::{Result, anyhow};
@@ -30,6 +30,8 @@ define_setup_type! {
         pub spawn_distance: SpawnDistribution,
         pub spawn_speed: SpawnDistribution,
         pub lifetime: SpawnDistribution,
+        pub color_over_lifetime: ColorOverLifetime,
+        pub scale_over_lifetime: ScaleOverLifetime,
     }
 }
 
@@ -49,6 +51,8 @@ impl BasicParticleEmission {
         spawn_distance,
         spawn_speed,
         lifetime,
+        color_over_lifetime,
+        scale_over_lifetime,
     }
     "#)]
     pub fn new(
@@ -63,6 +67,8 @@ impl BasicParticleEmission {
         spawn_distance: SpawnDistribution,
         spawn_speed: SpawnDistribution,
         lifetime: SpawnDistribution,
+        color_over_lifetime: ColorOverLifetime,
+        scale_over_lifetime: ScaleOverLifetime,
     ) -> Self {
         Self {
             material_name_hash: Hash32::from_str(material_name),
@@ -76,12 +82,16 @@ impl BasicParticleEmission {
             spawn_distance,
             spawn_speed,
             lifetime,
+            color_over_lifetime,
+            scale_over_lifetime,
         }
     }
 
     pub fn simulation(&self) -> BasicParticleSimulation {
         BasicParticleSimulation {
             rate_over_time: self.rate_over_time,
+            color_over_lifetime: self.color_over_lifetime,
+            scale_over_lifetime: self.scale_over_lifetime,
             spawn_position: self.spawn_position,
             spawn_velocity: self.spawn_velocity,
             spawn_direction: self.spawn_direction,

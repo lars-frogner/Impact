@@ -25,7 +25,7 @@ struct FragmentInput {
     @builtin(position) projectedPosition: vec4f,
     @location(0) previousClipSpacePosition: vec4f,
     @location(1) cameraSpacePosition: vec3f,
-    @location(2) @interpolate(flat) rgbaBaseColor: vec4f,
+    @location(2) @interpolate(flat) baseColor: vec4f,
     @location(3) @interpolate(flat) materialProperties: vec4f,
     @location(4) textureCoords: vec2f,
     @location(5) @interpolate(flat) particleIdx: u32,
@@ -49,12 +49,13 @@ struct FixedMaterialProperties {
 }
 
 struct Particle {
-    rgbaBaseColor: vec4f,
+    color: vec4f,
     position: vec3f,
     age: f32,
     velocity: vec3f,
-    timeToLive: f32,
+    lifetime: f32,
     extent: f32,
+    scale: f32,
 }
 
 const JITTER_COUNT: u32 = {{jitter_count}};
@@ -139,7 +140,7 @@ fn mainVS(
     let particle = particles[particleIdx];
     let materialProps = fixedMaterialProperties[imms.materialIdx];
 
-    let cameraSpaceVertexOffset = particle.extent * convertQuadTextureCoordsToPositionOffsets(quadVertex.textureCoords);
+    let cameraSpaceVertexOffset = (particle.scale * particle.extent) * convertQuadTextureCoordsToPositionOffsets(quadVertex.textureCoords);
 
     let cameraSpaceParticlePosition = transformPosition(imms.worldToCameraRotation, imms.worldToCameraTranslation, particle.position);
     let cameraSpaceVertexPosition = cameraSpaceParticlePosition + cameraSpaceVertexOffset;
@@ -155,7 +156,7 @@ fn mainVS(
 
     output.previousClipSpacePosition = projectionMatrix * vec4f(prevCameraSpaceVertexPosition, 1.0);
 
-    output.rgbaBaseColor = particle.rgbaBaseColor;
+    output.baseColor = particle.color;
     output.particleIdx = particleIdx;
 
     let specularReflectance = materialProps.specularReflectance;
@@ -182,7 +183,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
         fragment.normalAndAlphaTextureIdx,
     );
 
-    let alpha = normalColorAndAlpha.a * fragment.rgbaBaseColor.a;
+    let alpha = normalColorAndAlpha.a * fragment.baseColor.a;
 
     let randomFraction = textureLoad(
         noiseTextures,
@@ -201,6 +202,10 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
 
     output.linearDepth = projectionUniform.inverseFarPlaneZ.x * fragment.cameraSpacePosition.z;
 
+    // The billboard is view plane-aligned, so the sampled normal vector is
+    // already in camera space. If we ever change from view plane-aligned to
+    // viewpoint-oriented billboarding, remember to transform the sampled normal
+    // vector.
     output.normalVector = vec4f(normalColorAndAlpha.rgb, 1.0);
 
     let screenTextureCoords = convertFramebufferPositionToScreenTextureCoords(
@@ -208,7 +213,7 @@ fn mainFS(fragment: FragmentInput) -> FragmentOutput {
     );
     output.motionVector = computeMotionVector(screenTextureCoords, fragment.previousClipSpacePosition);
 
-    output.materialColor = vec4f(fragment.rgbaBaseColor.rgb, 1.0);
+    output.materialColor = vec4f(fragment.baseColor.rgb, 1.0);
 
     output.materialProperties = fragment.materialProperties;
 

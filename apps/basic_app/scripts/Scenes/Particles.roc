@@ -10,6 +10,9 @@ import core.UnitVector3
 import core.Vector3
 import pf.Entity
 import pf.Particle.RateOverTime
+import pf.Particle.ColorOverLifetime
+import pf.Particle.ScaleOverLifetime
+import pf.Particle.RateOverTime
 import pf.Particle.SpawnDistribution
 import pf.Comp.AmbientEmission
 import pf.Comp.VelocityControl
@@ -81,7 +84,7 @@ emitter1 =
     |> Setup.BasicParticleEmission.add_new(
         "Default",
         6,
-        Particle.RateOverTime.burst(Num.pow_int(2, 6), 2.0),
+        Particle.RateOverTime.burst(Num.pow_int(2, 6), 0.0),
         (0.0, -1.0, 6.0),
         (0.0, 0.0, 0.0),
         UnitVector3.from((0.0, 1.0, 0.0)),
@@ -89,7 +92,9 @@ emitter1 =
         Particle.SpawnDistribution.uniform(0.2, 0.4),
         Particle.SpawnDistribution.uniform(0.0, 1.0),
         Particle.SpawnDistribution.uniform(1.0, 2.0),
-        Particle.SpawnDistribution.uniform(20.0, 20.0),
+        Particle.SpawnDistribution.uniform(5.0, 5.0),
+        Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
+        Particle.ScaleOverLifetime.linear_shrink({}),
     )
 # |> Setup.BasicParticleEmission.add_new(
 #    "Default",
@@ -102,7 +107,9 @@ emitter1 =
 #    Particle.SpawnDistribution.uniform(1.0, 1.0),
 #    Particle.SpawnDistribution.uniform(0.0, 0.4),
 #    Particle.SpawnDistribution.uniform(0.0, 0.0),
-#    Particle.SpawnDistribution.same(999990.0),
+#    Particle.SpawnDistribution.same(10.0),
+#    Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
+#    Particle.ScaleOverLifetime.linear_shrink({}),
 # )
 
 ambient_light =

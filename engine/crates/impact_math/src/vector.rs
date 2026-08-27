@@ -1965,6 +1965,7 @@ impl_roc_for_library_provided_primitives! {
     Vector2      => core, None,    Vector2,     Vector2,     None,    PrecisionIrrelevant,
     Vector3C     => core, None,    Vector3,     Vector3,     None,    PrecisionIrrelevant,
     UnitVector3C => core, None,    UnitVector3, UnitVector3, None,    PrecisionIrrelevant,
+    Vector4C     => core, None,    Vector4,     Vector4,     None,    PrecisionIrrelevant,
 }
 
 #[cfg(feature = "arbitrary")]
