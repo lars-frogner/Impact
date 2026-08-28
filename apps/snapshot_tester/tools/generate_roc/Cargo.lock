@@ -970,6 +970,7 @@ dependencies = [
  "impact_io",
  "impact_math",
  "impact_mesh",
+ "impact_physics",
  "impact_rendering",
  "impact_texture",
  "inventory",

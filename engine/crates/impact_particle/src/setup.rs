@@ -1,16 +1,13 @@
 //! Setup of particle emitters.
 
 use crate::{
-    BasicParticleSimulation, ColorOverLifetime, RateOverTime, ScaleOverLifetime, SpawnDistribution,
+    BasicParticleSimulation, ColorOverLifetime, EmitterFrame, RateOverTime, ScaleOverLifetime,
+    SpawnDistribution,
     material::{ParticleMaterialID, ParticleMaterialRegistry},
 };
 use anyhow::{Result, anyhow};
 use bytemuck::{Pod, Zeroable};
-use impact_math::{
-    hash::Hash32,
-    point::Point3C,
-    vector::{UnitVector3C, Vector3C},
-};
+use impact_math::hash::Hash32;
 use roc_integration::roc;
 
 define_setup_type! {
@@ -22,9 +19,6 @@ define_setup_type! {
         pub material_name_hash: Hash32,
         pub log2_particle_count: u32,
         pub rate_over_time: RateOverTime,
-        pub spawn_position: Point3C,
-        pub spawn_velocity: Vector3C,
-        pub spawn_direction: UnitVector3C,
         pub cos_polar_spawn_angle: SpawnDistribution,
         pub spawn_extent: SpawnDistribution,
         pub spawn_distance: SpawnDistribution,
@@ -45,9 +39,6 @@ impl BasicParticleEmission {
         material_name_hash,
         log2_particle_count,
         rate_over_time,
-        spawn_position,
-        spawn_velocity,
-        spawn_direction,
         cos_polar_spawn_angle,
         spawn_extent,
         spawn_distance,
@@ -63,9 +54,6 @@ impl BasicParticleEmission {
         material_name: &str,
         log2_particle_count: u32,
         rate_over_time: RateOverTime,
-        spawn_position: Point3C,
-        spawn_velocity: Vector3C,
-        spawn_direction: UnitVector3C,
         cos_polar_spawn_angle: SpawnDistribution,
         spawn_extent: SpawnDistribution,
         spawn_distance: SpawnDistribution,
@@ -80,9 +68,6 @@ impl BasicParticleEmission {
             material_name_hash: Hash32::from_str(material_name),
             log2_particle_count,
             rate_over_time,
-            spawn_position,
-            spawn_velocity,
-            spawn_direction,
             cos_polar_spawn_angle,
             spawn_extent,
             spawn_distance,
@@ -95,14 +80,14 @@ impl BasicParticleEmission {
         }
     }
 
-    pub fn simulation(&self) -> BasicParticleSimulation {
+    pub fn simulation(&self, emitter_frame: EmitterFrame) -> BasicParticleSimulation {
         BasicParticleSimulation {
             rate_over_time: self.rate_over_time,
             color_over_lifetime: self.color_over_lifetime,
             scale_over_lifetime: self.scale_over_lifetime,
-            spawn_position: self.spawn_position,
-            spawn_velocity: self.spawn_velocity,
-            spawn_direction: self.spawn_direction,
+            spawn_position: emitter_frame.position,
+            spawn_velocity: emitter_frame.velocity,
+            spawn_direction: emitter_frame.direction,
             cos_polar_spawn_angle: self.cos_polar_spawn_angle,
             spawn_extent: self.spawn_extent,
             spawn_distance: self.spawn_distance,

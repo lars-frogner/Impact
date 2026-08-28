@@ -74,6 +74,11 @@ pub fn perform_cleanup_for_removed_entity(
     entity: &EntityEntry<'_>,
 ) -> Result<()> {
     physics::cleanup_physics_for_removed_entity(engine.simulator(), entity_id, entity);
-    scene::cleanup_scene_data_for_removed_entity(engine.scene(), entity_id, entity);
+    scene::cleanup_scene_data_for_removed_entity(
+        engine.scene(),
+        engine.simulator(),
+        entity_id,
+        entity,
+    );
     Ok(())
 }

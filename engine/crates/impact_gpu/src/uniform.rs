@@ -175,16 +175,15 @@ where
         self.index_map.contains_key(uniform_id)
     }
 
-    /// Returns a reference to the uniform with the given ID. If the entity does
-    /// not have this component, [`None`] is returned.
+    /// Returns a reference to the uniform with the given ID if it is present.
     pub fn get_uniform(&self, uniform_id: ID) -> Option<&U> {
         self.index_map
             .get(uniform_id)
             .map(|idx| &self.raw_buffer[idx])
     }
 
-    /// Returns a mutable reference to the uniform with the given ID. If the
-    /// entity does not have this component, [`None`] is returned.
+    /// Returns a mutable reference to the uniform with the given ID if it is
+    /// present.
     pub fn get_uniform_mut(&mut self, uniform_id: ID) -> Option<&mut U> {
         self.change_tracker.notify_content_change();
         self.index_map

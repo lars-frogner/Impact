@@ -28,14 +28,17 @@ import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
 import pf.Comp.RigidMotion
 import pf.Physics.ContactResponseParameters
+import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Setup.BasicParticleEmission
 import pf.Setup.SphereMesh
 import pf.Setup.UniformEmissiveLuminance
 import pf.Comp.ShadowableOmnidirectionalEmission
+import pf.Comp.ParentEntity
 
 entity_ids = {
     player: Entity.id("player"),
     ground: Entity.id("ground"),
+    parent: Entity.id("parent"),
     emitter1: Entity.id("emitter1"),
     ambient_light: Entity.id("ambient_light"),
     omnidirectional_light: Entity.id("omnidirectional_light"),
@@ -46,6 +49,7 @@ setup! : {} => Result {} Str
 setup! = |_|
     Entity.create_with_id!(player, entity_ids.player)?
     Entity.create_with_id!(ground, entity_ids.ground)?
+    Entity.create_with_id!(parent, entity_ids.parent)?
     Entity.create_with_id!(emitter1, entity_ids.emitter1)?
     Entity.create_with_id!(ambient_light, entity_ids.ambient_light)?
     Entity.create_with_id!(omnidirectional_light, entity_ids.omnidirectional_light)?
@@ -79,16 +83,29 @@ ground =
         Physics.ContactResponseParameters.new(0.0, 0.0, 0.0),
     )
 
+parent =
+    Entity.new_component_data
+    |> Comp.ReferenceFrame.add_new(
+        (0.0, 2.0, 6.0),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, 0.0),
+    )
+    |> Comp.RigidMotion.add_new(
+        (0.0, 0, 0),
+        AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(100.0)),
+    )
+
 emitter1 =
     Entity.new_component_data
+    |> Comp.ParentEntity.add(entity_ids.parent)
+    |> Comp.ReferenceFrame.add_new(
+        (0.0, 0.5, 0.0),
+        UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
+    )
     |> Setup.BasicParticleEmission.add_new(
         "Default",
-        6,
-        Particle.RateOverTime.burst(Num.pow_int(2, 6), 0.0),
-        (0.0, -1.0, 6.0),
-        (0.0, 0.0, 0.0),
-        UnitVector3.from((0.0, 1.0, 0.0)),
-        Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(60)),
+        8,
+        Particle.RateOverTime.constant(Num.pow_int(2, 8), 0.0, 5.0),
+        Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(30)),
         Particle.SpawnDistribution.uniform(0.2, 0.4),
         Particle.SpawnDistribution.uniform(0.0, 1.0),
         Particle.SpawnDistribution.uniform(1.0, 2.0),
@@ -98,13 +115,14 @@ emitter1 =
         Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
         Particle.ScaleOverLifetime.linear_shrink({}),
     )
+# |> Comp.ReferenceFrame.add_new(
+#    (0.0, 2.0, 2.0),
+#    UnitQuaternion.from_axis_angle(UnitVector3.unit_x, -Num.pi),
+# )
 # |> Setup.BasicParticleEmission.add_new(
 #    "Default",
 #    0,
 #    Particle.RateOverTime.burst(1, 0),
-#    (0.0, 2.0, 2.0),
-#    (0.0, 0.0, 0.0),
-#    UnitVector3.from((0.0, 0.0, -1.0)),
 #    Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(90)),
 #    Particle.SpawnDistribution.uniform(1.0, 1.0),
 #    Particle.SpawnDistribution.uniform(0.0, 0.4),

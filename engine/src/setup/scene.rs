@@ -44,7 +44,12 @@ pub fn setup_scene_data_for_new_entities(
 
     material::setup_materials_for_new_entities(resource_manager, entities)?;
 
-    particle::setup_particle_emitters_for_new_entities(resource_manager, scene, entities)?;
+    particle::setup_particle_emitters_for_new_entities(
+        resource_manager,
+        scene,
+        simulator,
+        entities,
+    )?;
 
     voxel::setup_voxel_objects_for_new_entities(ctx, resource_manager, scene, simulator, entities)?;
     voxel::setup_voxel_interaction_for_new_entities(scene, entities)?;
@@ -78,6 +83,7 @@ pub fn add_new_entities_to_scene_graph(
 /// the given entity is removed.
 pub fn cleanup_scene_data_for_removed_entity(
     scene: &RwLock<Scene>,
+    simulator: &RwLock<PhysicsSimulator>,
     entity_id: EntityID,
     entity: &EntityEntry<'_>,
 ) {
@@ -87,7 +93,7 @@ pub fn cleanup_scene_data_for_removed_entity(
 
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
-    particle::cleanup_particle_emission_for_removed_entity(scene, entity_id, entity);
+    particle::cleanup_particle_emission_for_removed_entity(scene, simulator, entity_id, entity);
 
     voxel::cleanup_voxel_state_for_removed_entity(scene, entity_id, entity);
 

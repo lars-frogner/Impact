@@ -510,16 +510,16 @@ impl DynamicRigidBody {
         transform_vector_from_body_to_world_space(&self.orientation.aligned(), vector)
     }
 
-    /// Transforms a direction from the body-fixed frame to world space.
-    #[inline]
-    pub fn transform_direction_from_body_to_world_space(&self, vector: &Direction) -> Direction {
-        transform_direction_from_body_to_world_space(&self.orientation.aligned(), vector)
-    }
-
     /// Transforms a vector from world space to the body-fixed frame.
     #[inline]
     pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_world_to_body_space(&self.orientation.aligned(), vector)
+    }
+
+    /// Transforms a direction from the body-fixed frame to world space.
+    #[inline]
+    pub fn transform_direction_from_body_to_world_space(&self, vector: &Direction) -> Direction {
+        transform_direction_from_body_to_world_space(&self.orientation.aligned(), vector)
     }
 
     /// Transforms a direction from world space to the body-fixed frame.
@@ -834,6 +834,18 @@ impl KinematicRigidBody {
     #[inline]
     pub fn transform_vector_from_world_to_body_space(&self, vector: &Vector3) -> Vector3 {
         transform_vector_from_world_to_body_space(&self.orientation.aligned(), vector)
+    }
+
+    /// Transforms a direction from the body-fixed frame to world space.
+    #[inline]
+    pub fn transform_direction_from_body_to_world_space(&self, vector: &Direction) -> Direction {
+        transform_direction_from_body_to_world_space(&self.orientation.aligned(), vector)
+    }
+
+    /// Transforms a direction from world space to the body-fixed frame.
+    #[inline]
+    pub fn transform_direction_from_world_to_body_space(&self, direction: &Direction) -> Direction {
+        transform_direction_from_world_to_body_space(&self.orientation.aligned(), direction)
     }
 
     /// Transforms a point from the body-fixed frame to world space.

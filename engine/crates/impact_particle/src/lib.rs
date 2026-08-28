@@ -13,6 +13,7 @@ pub mod simulation_commands;
 use anyhow::{Result, bail};
 use bytemuck::{Pod, Zeroable};
 use gpu_resource::ParticleSimulationGPUResources;
+use impact_alloc::{AVec, arena::ArenaPool};
 use impact_containers::HashMap;
 use impact_gpu::{
     bind_group_layout::BindGroupLayoutRegistry, device::GraphicsDevice, uniform::UniformBuffer,
@@ -25,59 +26,19 @@ use impact_math::{
     point::Point3C,
     vector::{UnitVector3C, Vector3C, Vector4C},
 };
+use impact_physics::{
+    anchor::{AnchorManager, TypedRigidBodyAnchorID},
+    rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager},
+};
 use material::{ParticleMaterialConfig, ParticleMaterialID};
 use roc_integration::roc;
 use std::path::Path;
 
-define_entity_id_newtype! {
-    /// Identifier for a particle emitter in the [`ParticleEmitterManager`]
-    /// using a [`BasicParticleSimulation`].
-    [pub] BasicParticleEmitterID
-}
-
-define_component_type! {
-    /// Marks that an entity has a particle emitter using a
-    /// [`BasicParticleSimulation`], identified by a [`BasicParticleEmitterID`].
-    ///
-    /// Use [`BasicParticleEmitterID::from_entity_id`] to obtain the particle
-    /// emitter ID from the entity ID.
-    #[roc(parents = "Comp")]
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
-    pub struct HasBasicParticleEmitter;
-}
-
-/// The type of particle simulation used by a particle emitter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ParticleSimulationType {
-    Basic,
-}
-
-/// A particle emitter, specified by a particle material, particle count and
-/// simulation parameters.
-#[derive(Debug, Clone)]
-pub struct ParticleEmitter<S> {
-    pub material_id: ParticleMaterialID,
-    pub log2_particle_count: u32,
-    pub simulation: S,
-}
-
-/// ID for a generic particle emitter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParticleEmitterID {
-    entity_id: EntityID,
-    simulation_type: ParticleSimulationType,
-}
-
-/// Metadata for a generic particle emitter.
-#[derive(Debug, Clone)]
-pub struct ParticleEmitterMetadata {
-    material_id: ParticleMaterialID,
-    log2_particle_count: u32,
-}
-
 /// A particle. These live exclusively in the particle GPU buffer and are only
 /// updated and read on the GPU.
+///
+/// If you add fields, remember that the total size must be a multiple of the
+/// alignment on the GPU, which is 16 bytes (due to vec3f and vec4f fields).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct Particle {
@@ -109,6 +70,87 @@ pub struct ParticleEmitterManager {
 pub struct ParticleConfig {
     /// If [`None`], the particle system will be disabled.
     pub materials: Option<ParticleMaterialConfig>,
+}
+
+/// A generic particle emitter.
+#[derive(Clone, Debug)]
+pub struct ParticleEmitter<S> {
+    pub material_id: ParticleMaterialID,
+    pub log2_particle_count: u32,
+    pub anchoring: EmitterAnchoring,
+    pub simulation: S,
+}
+
+/// ID for a generic particle emitter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ParticleEmitterID {
+    entity_id: EntityID,
+    simulation_type: ParticleSimulationType,
+}
+
+/// Metadata for a generic particle emitter.
+#[derive(Clone, Debug)]
+pub struct ParticleEmitterMetadata {
+    pub material_id: ParticleMaterialID,
+    pub log2_particle_count: u32,
+    pub anchoring: EmitterAnchoring,
+}
+
+/// How a particle emitter is anchored, either directly to world space or to a
+/// rigid body.
+#[derive(Clone, Copy, Debug)]
+pub enum EmitterAnchoring {
+    World(WorldEmitterAnchoring),
+    RigidBody(RigidBodyEmitterAnchoring),
+}
+
+/// The world space position and emission direction of a particle emitter.
+#[derive(Clone, Copy, Debug)]
+pub struct WorldEmitterAnchoring {
+    pub position: Point3C,
+    pub direction: UnitVector3C,
+}
+
+/// The anchor tying a particle emitter to a rigid body and the emission
+/// direction in body space.
+#[derive(Clone, Copy, Debug)]
+pub struct RigidBodyEmitterAnchoring {
+    pub anchor_id: TypedRigidBodyAnchorID,
+    pub direction: UnitVector3C,
+}
+
+/// The world space position, velocity and orientation (encoded only in an
+/// emission direction) of a particle emitter. Ultimately derived from an
+/// [`EmitterAnchoring`].
+#[derive(Clone, Debug)]
+pub struct EmitterFrame {
+    pub position: Point3C,
+    pub velocity: Vector3C,
+    pub direction: UnitVector3C,
+}
+
+/// The type of particle simulation used by a particle emitter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ParticleSimulationType {
+    Basic,
+}
+
+define_entity_id_newtype! {
+    /// Identifier for a particle emitter in the [`ParticleEmitterManager`]
+    /// using a [`BasicParticleSimulation`].
+    [pub] BasicParticleEmitterID
+}
+
+define_component_type! {
+    /// Marks that an entity has a particle emitter using a
+    /// [`BasicParticleSimulation`], identified by a [`BasicParticleEmitterID`].
+    ///
+    /// Use [`BasicParticleEmitterID::from_entity_id`] to obtain the particle
+    /// emitter ID from the entity ID.
+    #[roc(parents = "Comp")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct HasBasicParticleEmitter;
 }
 
 /// Parameters for a basic particle simulation.
@@ -202,30 +244,6 @@ pub struct SpawnDistribution {
     pub max_value: f32,
 }
 
-impl<S> ParticleEmitter<S> {
-    pub fn metadata(&self) -> ParticleEmitterMetadata {
-        ParticleEmitterMetadata {
-            log2_particle_count: self.log2_particle_count,
-            material_id: self.material_id,
-        }
-    }
-}
-
-impl From<BasicParticleEmitterID> for ParticleEmitterID {
-    fn from(id: BasicParticleEmitterID) -> Self {
-        Self {
-            entity_id: id.as_entity_id(),
-            simulation_type: ParticleSimulationType::Basic,
-        }
-    }
-}
-
-impl ParticleEmitterMetadata {
-    pub fn particle_count(&self) -> usize {
-        1 << self.log2_particle_count
-    }
-}
-
 impl ParticleEmitterManager {
     /// By creating simulation uniform buffers with a small initial capacity, we
     /// avoid excessive buffer reallocation when the first few emitters are
@@ -281,11 +299,63 @@ impl ParticleEmitterManager {
 
     /// Removes the basic particle emitter with the given ID from the manager.
     ///
+    /// # Returns
+    /// The metadata of the removed emitter.
+    ///
     /// # Panics
     /// If no emitter with the given ID exists.
-    pub fn remove_basic_emitter(&mut self, id: BasicParticleEmitterID) {
+    pub fn remove_basic_emitter(&mut self, id: BasicParticleEmitterID) -> ParticleEmitterMetadata {
         self.basic_particle_emitters.remove_uniform(id);
-        self.emitter_metadata.remove(&ParticleEmitterID::from(id));
+        self.emitter_metadata
+            .remove(&ParticleEmitterID::from(id))
+            .unwrap()
+    }
+
+    /// Synchronizes all particle emitters with the current state of the physics
+    /// simulation.
+    pub fn sync_dynamic_emitter_state(
+        &mut self,
+        rigid_body_manager: &RigidBodyManager,
+        anchor_manager: &AnchorManager,
+    ) {
+        let arena = ArenaPool::get_arena();
+        let mut emitter_ids_to_remove = AVec::new_in(&arena);
+
+        for (emitter_id, metadata) in &self.emitter_metadata {
+            if let EmitterAnchoring::RigidBody(anchoring) = &metadata.anchoring {
+                let Some(emitter_frame) =
+                    anchoring.obtain_current_emitter_frame(rigid_body_manager, anchor_manager)
+                else {
+                    // The anchor or associated rigid body no longer exists, so
+                    // we remove the emitter
+                    emitter_ids_to_remove.push(*emitter_id);
+                    continue;
+                };
+
+                match emitter_id.simulation_type {
+                    ParticleSimulationType::Basic => {
+                        let simulation = self
+                            .basic_particle_emitters
+                            .get_uniform_mut(BasicParticleEmitterID::from_entity_id(
+                                emitter_id.entity_id,
+                            ))
+                            .unwrap();
+
+                        simulation.set_emitter_frame(emitter_frame);
+                    }
+                }
+            }
+        }
+
+        for emitter_id in emitter_ids_to_remove {
+            match emitter_id.simulation_type {
+                ParticleSimulationType::Basic => {
+                    self.remove_basic_emitter(BasicParticleEmitterID::from_entity_id(
+                        emitter_id.entity_id,
+                    ));
+                }
+            }
+        }
     }
 
     /// Removes all state in the manager and frees up all allocated memory.
@@ -334,6 +404,123 @@ impl ParticleConfig {
         if let Some(materials) = &mut self.materials {
             materials.resolve_paths(root_path);
         }
+    }
+}
+
+impl<S> ParticleEmitter<S> {
+    fn metadata(&self) -> ParticleEmitterMetadata {
+        ParticleEmitterMetadata {
+            log2_particle_count: self.log2_particle_count,
+            material_id: self.material_id,
+            anchoring: self.anchoring,
+        }
+    }
+}
+
+impl From<BasicParticleEmitterID> for ParticleEmitterID {
+    fn from(id: BasicParticleEmitterID) -> Self {
+        Self {
+            entity_id: id.as_entity_id(),
+            simulation_type: ParticleSimulationType::Basic,
+        }
+    }
+}
+
+impl ParticleEmitterMetadata {
+    pub fn particle_count(&self) -> usize {
+        1 << self.log2_particle_count
+    }
+}
+
+impl RigidBodyEmitterAnchoring {
+    fn obtain_current_emitter_frame(
+        &self,
+        rigid_body_manager: &RigidBodyManager,
+        anchor_manager: &AnchorManager,
+    ) -> Option<EmitterFrame> {
+        match self.anchor_id {
+            TypedRigidBodyAnchorID::Dynamic(id) => {
+                let anchor = anchor_manager.dynamic().get(id)?;
+                let rigid_body = rigid_body_manager.get_dynamic_rigid_body(anchor.rigid_body_id)?;
+
+                Some(EmitterFrame::anchored_to_dynamic_rigid_body(
+                    rigid_body,
+                    &anchor.point,
+                    &self.direction,
+                ))
+            }
+            TypedRigidBodyAnchorID::Kinematic(id) => {
+                let anchor = anchor_manager.kinematic().get(id)?;
+                let rigid_body =
+                    rigid_body_manager.get_kinematic_rigid_body(anchor.rigid_body_id)?;
+
+                Some(EmitterFrame::anchored_to_kinematic_rigid_body(
+                    rigid_body,
+                    &anchor.point,
+                    &self.direction,
+                ))
+            }
+        }
+    }
+}
+
+impl EmitterFrame {
+    pub fn world(anchoring: &WorldEmitterAnchoring) -> Self {
+        Self {
+            position: anchoring.position,
+            velocity: Vector3C::zeros(),
+            direction: anchoring.direction,
+        }
+    }
+
+    pub fn anchored_to_dynamic_rigid_body(
+        rigid_body: &DynamicRigidBody,
+        anchor_point: &Point3C,
+        direction: &UnitVector3C,
+    ) -> Self {
+        let world_position =
+            rigid_body.transform_point_from_body_to_world_space(&anchor_point.aligned());
+
+        let world_direction =
+            rigid_body.transform_direction_from_body_to_world_space(&direction.aligned());
+
+        let world_velocity =
+            rigid_body.compute_velocity_of_attached_world_space_point(&world_position);
+
+        Self {
+            position: world_position.compact(),
+            velocity: world_velocity.compact(),
+            direction: world_direction.compact(),
+        }
+    }
+
+    pub fn anchored_to_kinematic_rigid_body(
+        rigid_body: &KinematicRigidBody,
+        anchor_point: &Point3C,
+        direction: &UnitVector3C,
+    ) -> Self {
+        let world_position =
+            rigid_body.transform_point_from_body_to_world_space(&anchor_point.aligned());
+
+        let world_direction =
+            rigid_body.transform_direction_from_body_to_world_space(&direction.aligned());
+
+        let world_velocity =
+            rigid_body.compute_velocity_of_attached_world_space_point(&world_position);
+
+        Self {
+            position: world_position.compact(),
+            velocity: world_velocity.compact(),
+            direction: world_direction.compact(),
+        }
+    }
+}
+
+impl BasicParticleSimulation {
+    fn set_emitter_frame(&mut self, emitter_frame: EmitterFrame) {
+        self.spawn_position = emitter_frame.position;
+        self.spawn_velocity = emitter_frame.velocity;
+        self.spawn_direction = emitter_frame.direction;
     }
 }
 

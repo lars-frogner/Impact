@@ -958,6 +958,35 @@ define_task!(
 );
 
 // =============================================================================
+// PARTICLE PROCESSING (for current frame)
+// =============================================================================
+
+define_task!(
+    /// Synchronizes all particle emitters with the current state of the
+    /// physics simulation.
+    [pub] SyncDynamicParticleEmitterState,
+    depends_on = [
+        // We need the physics state for the current frame
+        AdvanceSimulation
+    ],
+    execute_on = [PhysicsTag],
+    |ctx: &RuntimeContext| {
+        let engine = ctx.engine();
+        instrument_task!("Synchronizing dynamic particle emitter state", engine.task_timer(), {
+            let scene = engine.scene().oread();
+            let mut particle_emitter_manager = scene.particle_emitter_manager().owrite();
+            let simulator = engine.simulator().oread();
+            let rigid_body_manager = simulator.rigid_body_manager().oread();
+            let anchor_manager = simulator.anchor_manager().oread();
+
+            particle_emitter_manager.sync_dynamic_emitter_state(&rigid_body_manager, &anchor_manager);
+
+            Ok(())
+        })
+    }
+);
+
+// =============================================================================
 // GPU RESOURCE SYNCHRONIZATION (of updates from current frame, rendered next frame)
 // =============================================================================
 
@@ -1047,6 +1076,9 @@ define_task!(
         // counterparts.
         BufferModelInstancesAndBoundLights,
         BufferGizmoInstances,
+        // We need the updated particle simulation uniforms before we sync them
+        // to the GPU.
+        SyncDynamicParticleEmitterState,
         // We need to have the up-to-date configuration at this point.
         ApplyEngineCommands,
         ApplyRenderingCommands
@@ -1080,6 +1112,9 @@ define_task!(
         // rigid body states for the current frame, which is after the
         // simulation step.
         SyncRigidBodyComponents,
+        // Absorption may modify anchors, so particle emitters must be done
+        // synching with them first.
+        SyncDynamicParticleEmitterState,
         // For voxel absorbers that have a parent group node in the scene graph,
         // we need the group-to-world transform to get their full model-to-world
         // transform.
@@ -1143,6 +1178,9 @@ define_task!(
         // body states for the current frame, which is after the simulation
         // step.
         SyncRigidBodyComponents,
+        // Fracturing may modify anchors, so particle emitters must be done
+        // synching with them first.
+        SyncDynamicParticleEmitterState,
         // Newly added or removed voxel object entities should be included.
         // (This is in practice covered by the other dependencies).
         HandleStagedEntities
@@ -1260,6 +1298,9 @@ pub fn register_all_tasks(task_scheduler: &mut RuntimeTaskScheduler) -> Result<(
     // GIZMO PROCESSING (for current frame)
     task_scheduler.register_task(UpdateVisibilityFlagsForGizmos)?;
     task_scheduler.register_task(BufferGizmoInstances)?;
+
+    // PARTICLE PROCESSING (for current frame)
+    task_scheduler.register_task(SyncDynamicParticleEmitterState)?;
 
     // GPU RESOURCE SYNCHRONIZATION (of updates from current frame, rendered next frame)
     task_scheduler.register_task(SyncTextureGPUResources)?;
