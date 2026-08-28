@@ -30,7 +30,7 @@ import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
 import pf.Comp.CanBeParent
 import pf.Setup.UniformColor
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Physics.ContactResponseParameters
 import pf.Setup.LocalForce
 import pf.Setup.CapsularCollidable
@@ -120,7 +120,7 @@ launch_projectile! = |_|
 
     (head_position, head_orientation) = get_head_pose!({})?
 
-    player_motion = Comp.Motion.get_for_entity!(entity_ids.player)?
+    player_motion = Comp.RigidMotion.get_for_entity!(entity_ids.player)?
 
     launch_speed = Lookup.LauncherLaunchSpeed.get!({})?.speed
 
@@ -169,7 +169,7 @@ construct_entities = |position, orientation, velocity|
             position,
             orientation,
         )
-        |> Comp.Motion.add_linear(velocity)
+        |> Comp.RigidMotion.add_linear(velocity)
         |> Comp.AngularVelocityControl.add_new(
             Control.AngularVelocityControlDirections.horizontal,
             Control.AngularVelocityControlFlags.preserve_existing_for_horizontal,
@@ -235,7 +235,7 @@ construct_entities = |position, orientation, velocity|
             ),
             UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
         )
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Comp.AngularVelocityControl.add_new(
             Control.AngularVelocityControlDirections.vertical,
             Control.AngularVelocityControlFlags.empty,

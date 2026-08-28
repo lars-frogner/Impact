@@ -6,8 +6,8 @@ use crate::{
     inertia::InertiaTensorC,
     quantities::{
         self, AngularImpulse, AngularMomentumC, AngularVelocity, AngularVelocityC, Direction,
-        Force, ForceC, Impulse, MomentumC, Motion, Orientation, OrientationC, Position, PositionC,
-        Torque, TorqueC, Velocity, VelocityC,
+        Force, ForceC, Impulse, MomentumC, Orientation, OrientationC, Position, PositionC,
+        RigidMotion, Torque, TorqueC, Velocity, VelocityC,
     },
 };
 use anyhow::{Result, bail};
@@ -569,10 +569,10 @@ impl DynamicRigidBody {
         }
     }
 
-    /// Computes the body's [`Motion`].
+    /// Computes the body's [`RigidMotion`].
     #[inline]
-    pub fn compute_motion(&self) -> Motion {
-        Motion {
+    pub fn compute_motion(&self) -> RigidMotion {
+        RigidMotion {
             linear_velocity: self.compute_velocity().compact(),
             angular_velocity: self.compute_angular_velocity().compact(),
         }

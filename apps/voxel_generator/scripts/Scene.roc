@@ -15,7 +15,7 @@ import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
 import pf.Comp.ShadowableOmnidirectionalEmission
 import pf.Comp.ShadowableUnidirectionalEmission
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 
 entity_ids = {
     camera: Entity.id("camera"),
@@ -37,7 +37,7 @@ camera =
         (0.0, 15.0, 30.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_x, -0.4),
     )
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)

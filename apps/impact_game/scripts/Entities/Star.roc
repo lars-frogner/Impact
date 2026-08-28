@@ -16,7 +16,7 @@ import pf.Setup.UniformColor
 import pf.Setup.UniformEmissiveLuminance
 import pf.Comp.ModelTransform
 import pf.Comp.ReferenceFrame
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Physics.ContactResponseParameters
 import pf.Setup.SphericalCollidable
@@ -61,7 +61,7 @@ construct_entities = |{ radius, mass_density, luminous_intensity, emissive_lumin
         |> Setup.UniformEmissiveLuminance.add(emissive_luminance)
         |> Comp.ModelTransform.add_with_scale(radius)
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Setup.DynamicRigidBodySubstance.add_new(mass_density)
         |> Setup.SphericalCollidable.add_new(
             Dynamic,

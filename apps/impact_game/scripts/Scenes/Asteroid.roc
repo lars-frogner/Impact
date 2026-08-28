@@ -19,7 +19,7 @@ import pf.Skybox
 import pf.Texture.TextureID
 import pf.Comp.DistanceTriggeredRules
 import pf.Comp.ReferenceFrame
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Setup.GeneratedVoxelObject
 # import pf.Setup.SameVoxelType
@@ -122,7 +122,7 @@ asteroid_ent =
     |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 1.0, 0)
     # |> Setup.SameVoxelType.add_new("Default")
     |> Setup.GradientNoiseVoxelTypes.add_new(["Rock"], 2e-2, 1, 0)
-    |> Comp.Motion.add_new((-3.5, -1, 0), AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(-20)))
+    |> Comp.RigidMotion.add_new((-3.5, -1, 0), AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(-20)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(Dynamic, response_params)
     |> Comp.FracturingProperties.add(fracturing_props)
@@ -135,7 +135,7 @@ asteroid2_ent =
     |> Setup.GeneratedVoxelObject.add_new("asteroid", 0.25, 0.5, 2)
     # |> Setup.SameVoxelType.add_new("Default")
     |> Setup.GradientNoiseVoxelTypes.add_new(["Rock"], 2e-2, 1, 1)
-    |> Comp.Motion.add_new(
+    |> Comp.RigidMotion.add_new(
         (35.5, 3, 10),
         AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(-35)),
     )

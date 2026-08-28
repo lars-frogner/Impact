@@ -34,7 +34,7 @@ import pf.Physics.ContactResponseParameters
 import pf.Setup.ConstantAcceleration
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Entity
 import pf.Physics.AngularVelocity as AngularVelocity
 import pf.Texture.TextureID as TextureID
@@ -79,7 +79,7 @@ player =
         (0, 0, -16),
         UnitQuaternion.from_axis_angle(unit_y, Num.pi),
     )
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
@@ -123,7 +123,7 @@ create_capsules! = |radius, segment_length, (nx, ny, nz), center, texture_ids|
         |> Comp.ReferenceFrame.add_multiple_unoriented(
             All(positions),
         )?
-        |> Comp.Motion.add_multiple_stationary
+        |> Comp.RigidMotion.add_multiple_stationary
         |> Setup.DynamicRigidBodySubstance.add_multiple(
             Same({ mass_density: 1.0 }),
         )?
@@ -186,7 +186,7 @@ create_room! = |extent, angular_speed, texture_ids|
             Same(Point3.origin),
             All(wall_orientations),
         )?
-        |> Comp.Motion.add_multiple_angular(
+        |> Comp.RigidMotion.add_multiple_angular(
             Same(angular_velocity),
         )?
         |> Setup.ConstantRotation.add_multiple_new(

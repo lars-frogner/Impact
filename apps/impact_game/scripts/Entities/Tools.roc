@@ -31,7 +31,7 @@ import pf.Setup.UniformMetalness
 import pf.Setup.UniformSpecularReflectance
 import pf.Setup.UniformEmissiveLuminance
 import pf.Comp.ModelTransform
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Comp.ReferenceFrame
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.SphericalCollidable
@@ -170,7 +170,7 @@ spawn_projectile! = |parent, position, start_velocity, direction, launch_speed|
         )
         |> Comp.ModelTransform.add_with_scale(projectile.radius)
         |> Comp.ReferenceFrame.add_unoriented(launch_position)
-        |> Comp.Motion.add_linear(launch_velocity)
+        |> Comp.RigidMotion.add_linear(launch_velocity)
         |> Setup.DynamicRigidBodySubstance.add_new(
             Util.compute_sphere_mass_density(projectile.radius, projectile.mass),
         )

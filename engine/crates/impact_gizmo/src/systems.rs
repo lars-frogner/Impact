@@ -48,7 +48,7 @@ use impact_physics::{
     anchor::AnchorManager,
     collision::{CollidableID, CollidableKind, HasCollidable},
     constraint::contact,
-    quantities::Motion,
+    quantities::RigidMotion,
     rigid_body::{
         DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, RigidBodyManager,
         RigidBodyType, TypedRigidBodyID,
@@ -270,7 +270,7 @@ pub fn buffer_gizmo_instances(
 
     query!(ecs_world, |gizmos: &Gizmos,
                        frame: &ReferenceFrame,
-                       motion: &Motion,
+                       motion: &RigidMotion,
                        flags: &SceneEntityFlags| {
         if !gizmos
             .visible_gizmos
@@ -756,7 +756,7 @@ fn buffer_instance_features_for_kinematics_gizmos(
     camera: &Camera,
     camera_position: &Point3,
     frame: &ReferenceFrame,
-    motion: &Motion,
+    motion: &RigidMotion,
     visible_gizmos: GizmoSet,
 ) {
     if visible_gizmos.contains(GizmoType::LinearVelocity.as_set()) {

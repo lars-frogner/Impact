@@ -21,7 +21,7 @@ import pf.Comp.ShadowableUnidirectionalEmission
 import pf.Setup.UniformColor
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Physics.ContactResponseParameters
 
 entity_ids = {
@@ -46,7 +46,7 @@ player =
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
@@ -56,7 +56,7 @@ ground =
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(1000)
     |> Comp.ReferenceFrame.add_unoriented((0, -1, 0))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Setup.UniformColor.add((0.9, 0.9, 0.9))
     |> Setup.UniformSpecularReflectance.add(0.01)
     |> Setup.UniformRoughness.add(0.5)

@@ -1,7 +1,7 @@
 //! ECS systems for physics.
 
 use crate::{
-    quantities::Motion,
+    quantities::RigidMotion,
     rigid_body::{
         DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, KinematicRigidBodyID,
         RigidBodyManager,
@@ -11,16 +11,16 @@ use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 
-/// Updates the [`ReferenceFrame`] and [`Motion`] components of entities with
-/// the [`DynamicRigidBodyID`] or [`KinematicRigidBodyID`] component to match
-/// the current state of the rigid body.
+/// Updates the [`ReferenceFrame`] and [`RigidMotion`] components of entities
+/// with the [`DynamicRigidBodyID`] or [`KinematicRigidBodyID`] component to
+/// match the current state of the rigid body.
 pub fn synchronize_rigid_body_components(
     ecs_world: &ECSWorld,
     rigid_body_manager: &RigidBodyManager,
 ) {
     query!(
         ecs_world,
-        |entity_id: EntityID, frame: &mut ReferenceFrame, motion: &mut Motion| {
+        |entity_id: EntityID, frame: &mut ReferenceFrame, motion: &mut RigidMotion| {
             let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
             let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) else {
                 return;
@@ -38,7 +38,7 @@ pub fn synchronize_rigid_body_components(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, frame: &mut ReferenceFrame, motion: &mut Motion| {
+        |entity_id: EntityID, frame: &mut ReferenceFrame, motion: &mut RigidMotion| {
             let rigid_body_id = KinematicRigidBodyID::from_entity_id(entity_id);
             let Some(rigid_body) = rigid_body_manager.get_kinematic_rigid_body(rigid_body_id)
             else {

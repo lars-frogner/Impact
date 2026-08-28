@@ -15,7 +15,7 @@ use impact_physics::{
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     inertia::InertialProperties,
     material::ContactResponseParameters,
-    quantities::{Motion, PositionC, VelocityC},
+    quantities::{RigidMotion, PositionC, VelocityC},
     rigid_body::{self, RigidBodyManager, RigidBodyType},
 };
 use impact_profiling::benchmark::Benchmarker;
@@ -251,7 +251,7 @@ fn setup_sphere_bodies(
     } in bodies
     {
         let frame = ReferenceFrame::unoriented(*sphere.center());
-        let motion = Motion::linear(velocity);
+        let motion = RigidMotion::linear(velocity);
 
         let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 

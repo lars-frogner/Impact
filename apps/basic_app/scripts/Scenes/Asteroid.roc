@@ -30,7 +30,7 @@ import pf.Setup.UniformColor
 import pf.Setup.UniformEmissiveLuminance
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Setup.VoxelAbsorbingCapsule
 import pf.Setup.VoxelAbsorbingSphere
 import pf.Setup.GeneratedVoxelObject
@@ -98,7 +98,7 @@ player =
         (0.0, 0.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Comp.CanBeParent.add
@@ -143,7 +143,7 @@ ground =
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(500)
     |> Comp.ReferenceFrame.add_unoriented((0, -20, 0))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformSpecularReflectance.add(0.01)
     |> Setup.UniformRoughness.add(0.5)
@@ -162,7 +162,7 @@ asteroid =
     |> Setup.GradientNoiseVoxelTypes.add_new(["Ground", "Rock", "Metal"], 6e-2, 1, 1)
     # |> Setup.SameVoxelType.add_new("Default")
     # |> Setup.MultifractalNoiseSDFModification.add_new(8, 0.02, 2.0, 0.6, 4.0, 0)
-    |> Comp.Motion.add_angular(AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(0)))
+    |> Comp.RigidMotion.add_angular(AngularVelocity.new(UnitVector3.unit_y, Radians.from_degrees(0)))
     |> Setup.DynamicVoxels.add
     |> Setup.VoxelCollidable.add_new(
         Dynamic,

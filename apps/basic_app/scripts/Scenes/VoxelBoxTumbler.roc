@@ -34,7 +34,7 @@ import pf.Setup.UniformEmissiveLuminance
 import pf.Physics.ContactResponseParameters
 import pf.Setup.ConstantAcceleration
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Setup.VoxelAbsorbingCapsule
 import pf.Setup.VoxelAbsorbingSphere
 import pf.Comp.SceneEntityFlags
@@ -104,7 +104,7 @@ handle_mouse_button_event! = |{ button, state }|
 player =
     Entity.new_component_data
     |> Comp.ReferenceFrame.add_unoriented((0, 0, 20))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Comp.CanBeParent.add
@@ -182,7 +182,7 @@ create_voxel_boxes! = |voxel_extent, box_size, (nx, ny, nz), center|
         |> Comp.ReferenceFrame.add_multiple_unoriented(
             All(positions),
         )?
-        |> Comp.Motion.add_multiple_stationary
+        |> Comp.RigidMotion.add_multiple_stationary
         |> Setup.VoxelCollidable.add_multiple_new(
             Same(Dynamic),
             Same(Physics.ContactResponseParameters.new(0.2, 0.7, 0.5)),
@@ -224,7 +224,7 @@ create_room! = |extent, angular_speed|
             Same(Point3.origin),
             All(wall_orientations),
         )?
-        |> Comp.Motion.add_multiple_angular(
+        |> Comp.RigidMotion.add_multiple_angular(
             Same(angular_velocity),
         )?
         |> Setup.ConstantRotation.add_multiple_new(

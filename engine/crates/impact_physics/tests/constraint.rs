@@ -20,7 +20,7 @@ use impact_physics::{
     constraint::{ConstraintManager, solver::ConstraintSolverConfig},
     inertia::InertialProperties,
     material::ContactResponseParameters,
-    quantities::{Motion, OrientationC, PositionC, Velocity, VelocityC},
+    quantities::{RigidMotion, OrientationC, PositionC, Velocity, VelocityC},
     rigid_body::{self, DynamicRigidBodyID, RigidBodyManager, RigidBodyType},
 };
 
@@ -94,7 +94,7 @@ fn setup_sphere_bodies(
     } in bodies
     {
         let frame = ReferenceFrame::unoriented(*sphere.center());
-        let motion = Motion::linear(velocity);
+        let motion = RigidMotion::linear(velocity);
 
         let inertial_properties = InertialProperties::of_uniform_sphere(0.5, mass_density);
 
@@ -162,7 +162,7 @@ fn setup_plane_bodies(
     } in bodies
     {
         let frame = ReferenceFrame::new(origin, orientation);
-        let motion = Motion::stationary();
+        let motion = RigidMotion::stationary();
 
         rigid_body::setup::setup_kinematic_rigid_body(rigid_body_manager, entity_id, frame, motion)
             .unwrap();

@@ -2,7 +2,7 @@
 
 use crate::{
     inertia::InertialProperties,
-    quantities::Motion,
+    quantities::RigidMotion,
     rigid_body::{
         DynamicRigidBody, DynamicRigidBodyID, KinematicRigidBody, KinematicRigidBodyID,
         RigidBodyManager,
@@ -66,7 +66,7 @@ pub fn setup_kinematic_rigid_body(
     rigid_body_manager: &mut RigidBodyManager,
     entity_id: EntityID,
     frame: ReferenceFrame,
-    motion: Motion,
+    motion: RigidMotion,
 ) -> Result<()> {
     let rigid_body = KinematicRigidBody::new(
         frame.position,
@@ -84,7 +84,7 @@ pub fn setup_dynamic_rigid_body(
     entity_id: EntityID,
     inertial_properties: InertialProperties,
     frame: ReferenceFrame,
-    motion: Motion,
+    motion: RigidMotion,
 ) -> Result<()> {
     let rigid_body = DynamicRigidBody::new(
         inertial_properties.mass(),

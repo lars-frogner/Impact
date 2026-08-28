@@ -15,7 +15,7 @@ import pf.Setup.UniformSpecularReflectance
 import pf.Setup.UniformRoughness
 import pf.Comp.ModelTransform
 import pf.Comp.ReferenceFrame
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Physics.ContactResponseParameters
 import pf.Setup.SphericalCollidable
@@ -67,7 +67,7 @@ construct_entities = |bodies|
     |> Comp.ReferenceFrame.add_multiple_unoriented(
         All(positions),
     )?
-    |> Comp.Motion.add_multiple_linear(
+    |> Comp.RigidMotion.add_multiple_linear(
         All(velocities),
     )?
     |> Setup.DynamicRigidBodySubstance.add_multiple_new(

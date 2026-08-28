@@ -33,7 +33,7 @@ import pf.Setup.UniformEmissiveLuminance
 import pf.Setup.UniformMetalness
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Comp.TriangleMeshID
 import pf.Physics.AngularVelocity
 import pf.Texture.TextureID
@@ -86,7 +86,7 @@ player =
         (0.0, 2.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Setup.PerspectiveCamera.add_new(Radians.from_degrees(70), 0.01, 1000)
@@ -120,7 +120,7 @@ abstract_object =
     |> Comp.TriangleMeshID.add_from_name("abstract_object")
     |> Comp.ModelTransform.add_with_scale(0.02)
     |> Comp.ReferenceFrame.add_unoriented((7.0, 9.7, 5.0))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0,
         UnitQuaternion.from_axis_angle(UnitVector3.unit_y, 0),
@@ -136,7 +136,7 @@ abstract_pyramid =
     |> Comp.TriangleMeshID.add_from_name("abstract_pyramid")
     |> Comp.ModelTransform.add_with_scale(0.035)
     |> Comp.ReferenceFrame.add_unoriented((-1.0, 11.0, 9.0))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0,
         UnitQuaternion.from_axis_angle(UnitVector3.unit_x, 0.4),
@@ -174,7 +174,7 @@ abstract_cube =
     |> Comp.TriangleMeshID.add_from_name("abstract_cube")
     |> Comp.ModelTransform.add_with_scale(0.016)
     |> Comp.ReferenceFrame.add_unoriented((-9.0, 7.8, 5.0))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Setup.ConstantRotation.add_new(
         0.0,
         UnitQuaternion.from_axis_angle(UnitVector3.unit_y, 0.7),

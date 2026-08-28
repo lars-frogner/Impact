@@ -561,9 +561,11 @@ define_task!(
 
 define_task!(
     /// Updates the [`ReferenceFrame`](impact_geometry::ReferenceFrame) and
-    /// [`Motion`](impact_physics::quantities::Motion) components of entities
-    /// with the [`DynamicRigidBodyID`](impact_physics::rigid_body::DynamicRigidBodyID)
-    /// or [`KinematicRigidBodyID`](impact_physics::rigid_body::KinematicRigidBodyID)
+    /// [`RigidMotion`](impact_physics::quantities::RigidMotion) components of
+    /// entities with the
+    /// [`DynamicRigidBodyID`](impact_physics::rigid_body::DynamicRigidBodyID)
+    /// or
+    /// [`KinematicRigidBodyID`](impact_physics::rigid_body::KinematicRigidBodyID)
     /// component to match the current state of the rigid body.
     [pub] SyncRigidBodyComponents,
     depends_on = [AdvanceSimulation],

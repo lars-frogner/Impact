@@ -11,7 +11,7 @@ import pf.Comp.ReferenceFrame
 import pf.Setup.UniformColor
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Physics.AngularVelocity as AngularVelocity
 import Scenes.Blank
 
@@ -45,7 +45,7 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
     major_axis_body =
         body_base
         |> Comp.ReferenceFrame.add_unoriented(major_axis_body_position)
-        |> Comp.Motion.add_angular(
+        |> Comp.RigidMotion.add_angular(
             AngularVelocity.from_vector(
                 (
                     angular_velocity_perturbation,
@@ -58,7 +58,7 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
     intermediate_axis_body =
         body_base
         |> Comp.ReferenceFrame.add_unoriented(intermediate_axis_body_position)
-        |> Comp.Motion.add_angular(
+        |> Comp.RigidMotion.add_angular(
             AngularVelocity.from_vector(
                 (
                     angular_velocity_perturbation,
@@ -71,7 +71,7 @@ create_entities! = |position, angular_speed, angular_velocity_perturbation_fract
     minor_axis_body =
         body_base
         |> Comp.ReferenceFrame.add_unoriented(minor_axis_body_position)
-        |> Comp.Motion.add_angular(
+        |> Comp.RigidMotion.add_angular(
             AngularVelocity.from_vector(
                 (
                     angular_speed,

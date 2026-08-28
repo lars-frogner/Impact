@@ -11,7 +11,7 @@ use impact_geometry::{ModelTransform, ReferenceFrame};
 use impact_id::EntityID;
 use impact_model::HasModel;
 use impact_physics::{
-    quantities::Motion,
+    quantities::RigidMotion,
     rigid_body::{HasDynamicRigidBody, HasKinematicRigidBody},
 };
 use impact_scene::{ParentEntity, SceneEntityFlags};
@@ -616,8 +616,13 @@ pub fn setup_voxel_objects_for_new_entities(
         |entity_id: EntityID,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> Result<(HasDynamicRigidBody, ModelTransform, ReferenceFrame, Motion)> {
+         motion: Option<&RigidMotion>|
+         -> Result<(
+            HasDynamicRigidBody,
+            ModelTransform,
+            ReferenceFrame,
+            RigidMotion
+        )> {
             let (model_transform, reference_frame, motion) =
                 setup::setup_dynamic_rigid_body_for_voxel_object(
                     &mut rigid_body_manager,

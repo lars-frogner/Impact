@@ -16,7 +16,7 @@ import pf.Setup.UniformColor
 import pf.Setup.DynamicKinematicSpringForceProperties
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Physics.Spring
 import Scenes.Blank
 
@@ -45,7 +45,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         |> Setup.SphereMesh.add_new(15)
         |> Comp.ModelTransform.add_with_scale(0.1)
         |> Comp.ReferenceFrame.add_unoriented(attachment_position)
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Setup.UniformColor.add((0.8, 0.1, 0.1))
 
     dynamic_body =
@@ -53,7 +53,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         |> Setup.BoxMesh.add_unit_cube
         |> Setup.DynamicRigidBodySubstance.add({ mass_density: mass })
         |> Comp.ReferenceFrame.add_unoriented(mass_position)
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Setup.UniformColor.add((0.1, 0.1, 0.7))
         |> Setup.UniformSpecularReflectance.add_in_range_of(
             Setup.UniformSpecularReflectance.plastic,
@@ -64,7 +64,7 @@ create_entities! = |position, mass, spring_constant, amplitude|
         Entity.new_component_data
         |> Setup.BoxMesh.add_unit_cube
         |> Comp.ReferenceFrame.add_unoriented(Point3.origin)
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Setup.HarmonicOscillatorTrajectory.add_new(
             0.25 * period,
             reference_position,

@@ -14,7 +14,7 @@ use impact_mesh::{
 };
 use impact_physics::{
     inertia::{InertiaTensor, InertialProperties},
-    quantities::Motion,
+    quantities::RigidMotion,
     rigid_body::{
         self, DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, KinematicRigidBodyID,
         setup::{DynamicRigidBodyInertialProperties, DynamicRigidBodySubstance},
@@ -32,7 +32,7 @@ pub fn setup_rigid_bodies_for_new_entities(
     entities: &mut PrototypeEntities,
 ) -> Result<()> {
     // Make sure entities with a manually created dynamic rigid body get the
-    // correct [`ReferenceFrame`] and [`Motion`] components.
+    // correct [`ReferenceFrame`] and [`RigidMotion`] components.
     setup!(
         {
             let simulator = simulator.oread();
@@ -41,9 +41,9 @@ pub fn setup_rigid_bodies_for_new_entities(
         entities,
         |entity_id: EntityID,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          parent: Option<&ParentEntity>|
-         -> Result<(ReferenceFrame, Motion)> {
+         -> Result<(ReferenceFrame, RigidMotion)> {
             if parent.is_some() {
                 bail!("Parents are not supported for rigid bodies");
             }
@@ -71,14 +71,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -126,14 +126,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -180,14 +180,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -233,14 +233,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -288,14 +288,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -344,14 +344,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -397,14 +397,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          inertial_properties: &DynamicRigidBodyInertialProperties,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -457,14 +457,14 @@ pub fn setup_rigid_bodies_for_new_entities(
          substance: &DynamicRigidBodySubstance,
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>,
+         motion: Option<&RigidMotion>,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
             ReferenceFrame,
-            Motion,
+            RigidMotion,
             SceneEntityFlags
         )> {
             if parent.is_some() {
@@ -513,7 +513,7 @@ pub fn setup_rigid_bodies_for_new_entities(
         entities,
         |entity_id: EntityID,
          frame: Option<&ReferenceFrame>,
-         motion: &Motion,
+         motion: &RigidMotion,
          flags: Option<&SceneEntityFlags>,
          parent: Option<&ParentEntity>|
          -> Result<(HasKinematicRigidBody, SceneEntityFlags)> {

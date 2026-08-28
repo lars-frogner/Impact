@@ -25,7 +25,7 @@ use impact_model::{
 };
 use impact_physics::{
     inertia::InertialProperties,
-    quantities::Motion,
+    quantities::RigidMotion,
     rigid_body::{self, RigidBodyManager},
 };
 use impact_scene::{
@@ -640,8 +640,8 @@ pub fn setup_dynamic_rigid_body_for_voxel_object(
     entity_id: EntityID,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-) -> Result<(ModelTransform, ReferenceFrame, Motion)> {
+    motion: Option<&RigidMotion>,
+) -> Result<(ModelTransform, ReferenceFrame, RigidMotion)> {
     let voxel_object_id = VoxelObjectID::from_entity_id(entity_id);
     let voxel_object = voxel_object_manager
         .get_voxel_object(voxel_object_id)
@@ -762,8 +762,8 @@ pub fn setup_rigid_body_for_new_voxel_object(
     inertial_properties: InertialProperties,
     model_transform: Option<&ModelTransform>,
     frame: Option<&ReferenceFrame>,
-    motion: Option<&Motion>,
-) -> Result<(ModelTransform, ReferenceFrame, Motion)> {
+    motion: Option<&RigidMotion>,
+) -> Result<(ModelTransform, ReferenceFrame, RigidMotion)> {
     let mut model_transform = model_transform.copied().unwrap_or_default();
     let frame = frame.copied().unwrap_or_default();
     let motion = motion.copied().unwrap_or_default();

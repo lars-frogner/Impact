@@ -17,7 +17,7 @@ import pf.Comp.VelocityControl
 import pf.Setup.PerspectiveCamera
 import pf.Comp.ReferenceFrame
 import pf.Comp.CanBeParent
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Lookup.LauncherLaunchSpeed
 
 import Entities.Tools as Tools
@@ -54,7 +54,7 @@ spawn! = |position, orientation|
 
 launch_projectile! = |_|
     frame = Comp.ReferenceFrame.get_for_entity!(entity_ids.camera)?
-    motion = Comp.Motion.get_for_entity!(entity_ids.camera)?
+    motion = Comp.RigidMotion.get_for_entity!(entity_ids.camera)?
 
     launch_speed = Lookup.LauncherLaunchSpeed.get!({})?.speed
 
@@ -80,7 +80,7 @@ construct_entities = |position, orientation|
                 UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
             ),
         )
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Comp.VelocityControl.add
         |> Comp.AngularVelocityControl.add_all_directions
         |> Setup.PerspectiveCamera.add_new(

@@ -10,7 +10,7 @@ use impact_ecs::{query, world::World as ECSWorld};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 use impact_physics::{
-    quantities::{AngularVelocity, Motion},
+    quantities::{AngularVelocity, RigidMotion},
     rigid_body::{
         DynamicRigidBodyID, HasDynamicRigidBody, HasKinematicRigidBody, KinematicRigidBodyID,
         RigidBodyManager,
@@ -26,7 +26,7 @@ pub fn update_controlled_entity_velocities(
 ) {
     query!(
         ecs_world,
-        |entity_id: EntityID, motion: &mut Motion, frame: &ReferenceFrame| {
+        |entity_id: EntityID, motion: &mut RigidMotion, frame: &ReferenceFrame| {
             let orientation = frame.orientation.aligned();
 
             let new_velocity = motion_controller.compute_controlled_velocity(&orientation);
@@ -44,7 +44,7 @@ pub fn update_controlled_entity_velocities(
 
     query!(
         ecs_world,
-        |entity_id: EntityID, motion: &mut Motion, frame: &ReferenceFrame| {
+        |entity_id: EntityID, motion: &mut RigidMotion, frame: &ReferenceFrame| {
             let orientation = frame.orientation.aligned();
 
             let new_velocity = motion_controller.compute_controlled_velocity(&orientation);
@@ -75,7 +75,7 @@ pub fn update_controlled_entity_angular_velocities(
         |entity_id: EntityID,
          control: &AngularVelocityControl,
          frame: &ReferenceFrame,
-         motion: &mut Motion| {
+         motion: &mut RigidMotion| {
             let mut new_angular_velocity = motion.angular_velocity.aligned();
 
             if orientation_controller.orientation_has_changed() {
@@ -116,7 +116,7 @@ pub fn update_controlled_entity_angular_velocities(
         |entity_id: EntityID,
          control: &AngularVelocityControl,
          frame: &ReferenceFrame,
-         motion: &mut Motion| {
+         motion: &mut RigidMotion| {
             let mut new_angular_velocity = motion.angular_velocity.aligned();
 
             if orientation_controller.orientation_has_changed() {

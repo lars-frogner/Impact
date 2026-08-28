@@ -71,14 +71,14 @@ pub type AngularImpulse = Vector3;
 pub type AngularImpulseC = Vector3C;
 
 define_component_type! {
-    /// A linear and angular velocity.
+    /// Rigid motion defined by a linear and angular velocity.
     ///
-    /// Any entity with a `Motion` is considered a rigid body (either dynamic or
-    /// kinematic).
+    /// Any entity with a `RigidMotion` is considered a rigid body (either
+    /// dynamic or kinematic).
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
-    pub struct Motion {
+    pub struct RigidMotion {
         pub linear_velocity: VelocityC,
         pub angular_velocity: AngularVelocityC,
     }
@@ -113,7 +113,7 @@ pub struct AngularVelocityC {
 }
 
 #[roc]
-impl Motion {
+impl RigidMotion {
     #[roc(body = r#"
     {
         linear_velocity,

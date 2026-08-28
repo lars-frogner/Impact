@@ -11,7 +11,7 @@ use impact_id::EntityID;
 use impact_physics::{
     constraint::solver::ConstraintSolverConfig,
     force::alignment_torque::{AlignmentDirection, AlignmentTorqueGeneratorID},
-    quantities::{ForceC, ImpulseC, Motion, PositionC},
+    quantities::{ForceC, ImpulseC, RigidMotion, PositionC},
     rigid_body::DynamicRigidBodyID,
 };
 use roc_integration::roc;
@@ -158,7 +158,7 @@ pub fn apply_impulse(
         )
     };
 
-    engine.with_component_mut(entity_id, |motion: &mut Motion| {
+    engine.with_component_mut(entity_id, |motion: &mut RigidMotion| {
         motion.linear_velocity = new_velocity.compact();
         motion.angular_velocity = new_angular_velocity.compact();
         Ok(())

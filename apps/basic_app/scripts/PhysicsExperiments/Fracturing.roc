@@ -33,7 +33,7 @@ import pf.Setup.UniformColor
 import pf.Setup.UniformEmissiveLuminance
 import pf.Setup.UniformRoughness
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Setup.VoxelAbsorbingCapsule
 import pf.Setup.VoxelAbsorbingSphere
 import pf.Setup.VoxelSphere
@@ -153,13 +153,13 @@ setup_colliding_spheres! = |y_offset|
 
     sphere
     |> Comp.ReferenceFrame.add_unoriented((-3, 1 - y_offset / 2, 4))
-    |> Comp.Motion.add_linear((rel_speed / 2, 0, 0))
+    |> Comp.RigidMotion.add_linear((rel_speed / 2, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     sphere
     |> Comp.ReferenceFrame.add_unoriented((3, 1 + y_offset / 2, 4))
-    |> Comp.Motion.add_linear(((-rel_speed) / 2, 0, 0))
+    |> Comp.RigidMotion.add_linear(((-rel_speed) / 2, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})
 
@@ -178,14 +178,14 @@ setup_box_impacting_sphere! = |{}|
     base
     |> Setup.VoxelSphere.add_new(0.04, 30)
     |> Comp.ReferenceFrame.add_unoriented((0, 1 - y_offset / 2, 5))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     base
     |> Setup.VoxelBox.add_new(0.04, 30, 30, 30)
     |> Comp.ReferenceFrame.add_unoriented((-5, 1 + y_offset / 2, 5))
-    |> Comp.Motion.add_linear((speed, 0, 0))
+    |> Comp.RigidMotion.add_linear((speed, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})
 
@@ -204,21 +204,21 @@ setup_simultaneous_side_impacts! = |{}|
     sphere
     |> Setup.VoxelSphere.add_new(0.04, 30)
     |> Comp.ReferenceFrame.add_unoriented((0, 1, 4))
-    |> Comp.Motion.add_linear((0, 0, 0))
+    |> Comp.RigidMotion.add_linear((0, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     sphere
     |> Setup.VoxelSphere.add_new(0.04, 15)
     |> Comp.ReferenceFrame.add_unoriented((-3, 1, 4))
-    |> Comp.Motion.add_linear((rel_speed / 2, 0, 0))
+    |> Comp.RigidMotion.add_linear((rel_speed / 2, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     sphere
     |> Setup.VoxelSphere.add_new(0.04, 15)
     |> Comp.ReferenceFrame.add_unoriented((3, 1, 4))
-    |> Comp.Motion.add_linear(((-rel_speed) / 2, 0, 0))
+    |> Comp.RigidMotion.add_linear(((-rel_speed) / 2, 0, 0))
     |> Entity.create!
     |> Result.map_ok(|_| {})
 
@@ -236,21 +236,21 @@ setup_bullet_impacting_targets! = |{}|
     base
     |> Setup.VoxelBox.add_new(0.04, 50, 50, 50)
     |> Comp.ReferenceFrame.add_unoriented((1.5, 1, 5))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     base
     |> Setup.VoxelSphere.add_new(0.04, 30)
     |> Comp.ReferenceFrame.add_unoriented((-1.5, 1, 5))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     _bullet =
         Entity.new_component_data
         |> Comp.ReferenceFrame.add_unoriented((-5, 1, 5))
-        |> Comp.Motion.add_linear((speed, 0, 0))
+        |> Comp.RigidMotion.add_linear((speed, 0, 0))
         |> Setup.SphereMesh.add_new(32)
         |> Comp.ModelTransform.add_with_scale(0.2)
         |> Setup.UniformColor.add((0.8, 0.2, 0.1))
@@ -282,14 +282,14 @@ setup_rotational_impact! = |{}|
     base
     |> Setup.VoxelSphere.add_new(0.04, 20)
     |> Comp.ReferenceFrame.add_unoriented((0.5, 1, 4))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Entity.create!
     |> Result.map_ok(|_| {})?
 
     base
     |> Setup.VoxelCapsule.add_new(0.04, 60, 10)
     |> Comp.ReferenceFrame.add_unoriented((-0.8, 1.5, 4))
-    |> Comp.Motion.add_new(
+    |> Comp.RigidMotion.add_new(
         (0, 0, 0),
         AngularVelocity.new(UnitVector3.unit_z, Radians.from_degrees(-250.0)),
     )
@@ -362,7 +362,7 @@ player =
         (0.0, 1.0, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_y, Num.pi),
     )
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Comp.VelocityControl.add
     |> Comp.AngularVelocityControl.add_all_directions
     |> Comp.CanBeParent.add
@@ -407,7 +407,7 @@ ground =
     |> Setup.RectangleMesh.add_unit_square
     |> Comp.ModelTransform.add_with_scale(20)
     |> Comp.ReferenceFrame.add_unoriented((0, -1, 0))
-    |> Comp.Motion.add_stationary
+    |> Comp.RigidMotion.add_stationary
     |> Setup.UniformColor.add((1, 1, 1))
     |> Setup.UniformSpecularReflectance.add(0.01)
     |> Setup.UniformRoughness.add(0.5)

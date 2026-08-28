@@ -176,7 +176,7 @@ Entity.new_multi_component_data(List.len(positions))
     |> Comp.ReferenceFrame.add_multiple_unoriented(
         All(positions),
     )?
-    |> Comp.Motion.add_multiple_stationary
+    |> Comp.RigidMotion.add_multiple_stationary
     |> Setup.DynamicRigidBodySubstance.add_multiple(
         Same({ mass_density: 1.0 }),
     )?

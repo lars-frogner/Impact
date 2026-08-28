@@ -17,7 +17,7 @@ import pf.Setup.UniformColor
 import pf.Setup.ConstantAcceleration
 import pf.Setup.DynamicRigidBodySubstance
 import pf.Setup.UniformSpecularReflectance
-import pf.Comp.Motion
+import pf.Comp.RigidMotion
 import pf.Physics.UniformMedium
 import Scenes.Blank
 
@@ -39,7 +39,7 @@ create_entities! = |position|
         Entity.new_component_data
         |> Setup.ConeMesh.add_new(2, 1, 100)
         |> Setup.DynamicRigidBodySubstance.add({ mass_density: 10 })
-        |> Comp.Motion.add_stationary
+        |> Comp.RigidMotion.add_stationary
         |> Setup.UniformSpecularReflectance.add_in_range_of(
             Setup.UniformSpecularReflectance.plastic,
             80.0,
