@@ -1,7 +1,7 @@
 //! Setup of rigid bodies for new entities.
 
 use crate::{lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager};
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use impact_ecs::{
     setup,
     world::{EntityEntry, PrototypeEntities},
@@ -20,7 +20,7 @@ use impact_physics::{
         setup::{DynamicRigidBodyInertialProperties, DynamicRigidBodySubstance},
     },
 };
-use impact_scene::SceneEntityFlags;
+use impact_scene::{ParentEntity, SceneEntityFlags};
 use parking_lot::RwLock;
 
 /// Checks if the given entities have the components representing a dynamic or
@@ -41,20 +41,24 @@ pub fn setup_rigid_bodies_for_new_entities(
         entities,
         |entity_id: EntityID,
          frame: Option<&ReferenceFrame>,
-         motion: Option<&Motion>|
-         -> (ReferenceFrame, Motion) {
+         motion: Option<&Motion>,
+         parent: Option<&ParentEntity>|
+         -> Result<(ReferenceFrame, Motion)> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let rigid_body_id = DynamicRigidBodyID::from_entity_id(entity_id);
             if let Some(rigid_body) = rigid_body_manager.get_dynamic_rigid_body(rigid_body_id) {
-                (rigid_body.reference_frame(), rigid_body.compute_motion())
+                Ok((rigid_body.reference_frame(), rigid_body.compute_motion()))
             } else {
-                (
+                Ok((
                     frame.copied().unwrap_or_default(),
                     motion.copied().unwrap_or_default(),
-                )
+                ))
             }
         },
         [HasDynamicRigidBody]
-    );
+    )?;
 
     setup!(
         {
@@ -68,7 +72,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -76,6 +81,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -119,7 +127,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -127,6 +136,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -169,7 +181,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -177,6 +190,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -218,7 +234,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -226,6 +243,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -269,7 +289,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -277,6 +298,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -321,7 +345,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -329,6 +354,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -370,7 +398,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -378,6 +407,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -426,7 +458,8 @@ pub fn setup_rigid_bodies_for_new_entities(
          model_transform: Option<&ModelTransform>,
          frame: Option<&ReferenceFrame>,
          motion: Option<&Motion>,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(
             HasDynamicRigidBody,
             ModelTransform,
@@ -434,6 +467,9 @@ pub fn setup_rigid_bodies_for_new_entities(
             Motion,
             SceneEntityFlags
         )> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             let mut model_transform = model_transform.copied().unwrap_or_default();
@@ -478,8 +514,12 @@ pub fn setup_rigid_bodies_for_new_entities(
         |entity_id: EntityID,
          frame: Option<&ReferenceFrame>,
          motion: &Motion,
-         flags: Option<&SceneEntityFlags>|
+         flags: Option<&SceneEntityFlags>,
+         parent: Option<&ParentEntity>|
          -> Result<(HasKinematicRigidBody, SceneEntityFlags)> {
+            if parent.is_some() {
+                bail!("Parents are not supported for rigid bodies");
+            }
             let flags = flags.copied().unwrap_or_default();
 
             rigid_body::setup::setup_kinematic_rigid_body(

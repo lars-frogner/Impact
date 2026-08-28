@@ -72,6 +72,9 @@ pub type AngularImpulseC = Vector3C;
 
 define_component_type! {
     /// A linear and angular velocity.
+    ///
+    /// Any entity with a `Motion` is considered a rigid body (either dynamic or
+    /// kinematic).
     #[roc(parents = "Comp")]
     #[repr(C)]
     #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]

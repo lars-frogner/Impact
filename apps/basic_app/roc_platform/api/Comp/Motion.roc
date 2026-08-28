@@ -1,5 +1,5 @@
-# Hash: 3e38520ce9aec6ec
-# Generated: 2026-01-30T21:52:52.962466753
+# Hash: 04b49caf45ce6bad
+# Generated: 2026-08-28T17:41:55.870301102
 # Rust type: impact_physics::quantities::Motion
 # Type category: Component
 module [
@@ -34,6 +34,9 @@ import core.Builtin
 import core.Vector3
 
 ## A linear and angular velocity.
+##
+## Any entity with a `Motion` is considered a rigid body (either dynamic or
+## kinematic).
 Motion : {
     linear_velocity : Vector3.Vector3,
     angular_velocity : Physics.AngularVelocity.AngularVelocity,
