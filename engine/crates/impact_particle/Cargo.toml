@@ -30,6 +30,7 @@ impact_math = { path = "../impact_math" }
 impact_mesh = { path = "../impact_mesh" }
 impact_physics = { path = "../impact_physics" }
 impact_rendering = { path = "../impact_rendering" }
+impact_resource = { path = "../impact_resource" }
 impact_texture = { path = "../impact_texture" }
 inventory = { workspace = true, optional = true }
 log = { workspace = true }

@@ -3,16 +3,16 @@
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 use impact_math::vector::UnitVector3;
 use impact_particle::{
-    effect::BasicParticleEffect,
+    effect::{BasicParticleEffect, ParticleEffect, ParticleEffectID},
     emitter::{
-        BasicParticleEmitterID, HasBasicParticleEmitter, ParticleEmitterAnchoring,
-        ParticleEmitterFrame, RigidBodyParticleEmitterAnchoring, WorldParticleEmitterAnchoring,
+        HasParticleEmitter, ParticleEmitterAnchoring, ParticleEmitterFrame, ParticleEmitterID,
+        RigidBodyParticleEmitterAnchoring, WorldParticleEmitterAnchoring,
     },
 };
 use impact_physics::{
@@ -41,11 +41,59 @@ pub fn setup_particle_emitters_for_new_entities(
         },
         entities,
         |entity_id: EntityID,
+         effect_id: &ParticleEffectID,
+         frame: Option<&ReferenceFrame>,
+         parent: Option<&ParentEntity>|
+         -> Result<HasParticleEmitter> {
+            let emitter_id = ParticleEmitterID::from_entity_id(entity_id);
+
+            let effect = resource_manager
+                .particle_effects
+                .get(*effect_id)
+                .ok_or_else(|| anyhow!("Got unknown `ParticleEffectID`"))?;
+
+            if !resource_manager
+                .particle_materials
+                .has_particle_material(effect.material_id())
+            {
+                bail!("Particle effect has unknown material");
+            }
+
+            let (anchoring, emitter_frame) = determine_emitter_anchoring_and_frame(
+                &rigid_body_manager,
+                &mut anchor_manager,
+                frame,
+                parent,
+            );
+
+            particle_emitter_manager.add_emitter(
+                emitter_id,
+                effect.clone(),
+                anchoring,
+                emitter_frame,
+            )?;
+
+            Ok(HasParticleEmitter)
+        },
+        ![HasParticleEmitter]
+    )?;
+
+    setup!(
+        {
+            let resource_manager = resource_manager.oread();
+            let scene = scene.oread();
+            let particle_emitter_manager = &mut **scene.particle_emitter_manager().owrite();
+            let simulator = simulator.oread();
+            let rigid_body_manager = simulator.rigid_body_manager().oread();
+            let mut anchor_manager = simulator.anchor_manager().owrite();
+        },
+        entities,
+        |entity_id: EntityID,
          effect: &BasicParticleEffect,
          frame: Option<&ReferenceFrame>,
          parent: Option<&ParentEntity>|
-         -> Result<HasBasicParticleEmitter> {
-            let emitter_id = BasicParticleEmitterID::from_entity_id(entity_id);
+         -> Result<HasParticleEmitter> {
+            let emitter_id = ParticleEmitterID::from_entity_id(entity_id);
 
             if !resource_manager
                 .particle_materials
@@ -61,16 +109,16 @@ pub fn setup_particle_emitters_for_new_entities(
                 parent,
             );
 
-            particle_emitter_manager.add_basic_emitter(
+            particle_emitter_manager.add_emitter(
                 emitter_id,
-                *effect,
+                ParticleEffect::Basic(*effect),
                 anchoring,
                 emitter_frame,
             )?;
 
-            Ok(HasBasicParticleEmitter)
+            Ok(HasParticleEmitter)
         },
-        ![HasBasicParticleEmitter]
+        ![HasParticleEmitter]
     )?;
 
     Ok(())
@@ -154,15 +202,17 @@ pub fn cleanup_particle_emitter_for_removed_entity(
     entity_id: EntityID,
     entity: &impact_ecs::world::EntityEntry<'_>,
 ) {
-    if entity.has_component::<HasBasicParticleEmitter>() {
+    if entity.has_component::<HasParticleEmitter>() {
         let scene = scene.oread();
         let mut particle_emitter_manager = scene.particle_emitter_manager().owrite();
-        let emitter_id = BasicParticleEmitterID::from_entity_id(entity_id);
-        let metadata = particle_emitter_manager.remove_basic_emitter(emitter_id);
+        let emitter_id = ParticleEmitterID::from_entity_id(entity_id);
+        let metadata = particle_emitter_manager.remove_emitter(emitter_id);
         drop(particle_emitter_manager);
         drop(scene);
 
-        if let ParticleEmitterAnchoring::RigidBody(anchoring) = metadata.anchoring {
+        if let Some(ParticleEmitterAnchoring::RigidBody(anchoring)) =
+            metadata.map(|meta| meta.anchoring)
+        {
             let simulator = simulator.oread();
             let mut anchor_manager = simulator.anchor_manager().owrite();
             match anchoring.anchor_id {

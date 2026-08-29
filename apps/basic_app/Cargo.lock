@@ -1545,6 +1545,7 @@ dependencies = [
  "impact_mesh",
  "impact_physics",
  "impact_rendering",
+ "impact_resource",
  "impact_texture",
  "inventory",
  "log",

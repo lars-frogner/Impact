@@ -3,6 +3,7 @@
 use anyhow::Result;
 use impact_material::import::MaterialDeclaration;
 use impact_mesh::import::TriangleMeshDeclaration;
+use impact_particle::effect::import::ParticleEffectDeclaration;
 use impact_texture::import::ImageTextureDeclaration;
 use impact_voxel::generation::import::VoxelGeneratorDeclaration;
 use serde::{Deserialize, Serialize};
@@ -14,6 +15,7 @@ pub struct ResourceDeclarations {
     pub triangle_meshes: Vec<TriangleMeshDeclaration>,
     pub textures: Vec<ImageTextureDeclaration>,
     pub materials: Vec<MaterialDeclaration>,
+    pub particle_effects: Vec<ParticleEffectDeclaration>,
     pub voxel_generators: Vec<VoxelGeneratorDeclaration>,
 }
 
@@ -36,6 +38,9 @@ impl ResourceDeclarations {
             declaration.resolve_paths(root_path);
         }
         for declaration in &mut self.textures {
+            declaration.resolve_paths(root_path);
+        }
+        for declaration in &mut self.particle_effects {
             declaration.resolve_paths(root_path);
         }
         for declaration in &mut self.voxel_generators {

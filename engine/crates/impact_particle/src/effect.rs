@@ -1,5 +1,7 @@
 //! Particle effects.
 
+pub mod import;
+
 use crate::{
     emitter::{ParticleEmitterAnchoring, ParticleEmitterFrame, ParticleEmitterMetadata},
     material::ParticleMaterialID,
@@ -8,16 +10,36 @@ use bytemuck::{Pod, Zeroable};
 use impact_math::{
     angle::{Angle, Radians},
     consts::f32::PI,
+    hash::StringHash64,
+    hash64,
     point::Point3C,
     vector::{UnitVector3C, Vector3C, Vector4C},
 };
+use impact_resource::{Resource, ResourceID, registry::ImmutableResourceRegistry};
 use roc_integration::roc;
+use std::fmt;
+
+pub type ParticleEffectRegistry = ImmutableResourceRegistry<ParticleEffect>;
+
+define_setup_type! {
+    /// Identifier for a particle effect.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroable, Pod)]
+    pub struct ParticleEffectID(StringHash64);
+}
 
 /// A particle effect governed by a specific simulation type.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ParticleEffect {
     Basic(BasicParticleEffect),
+}
+
+/// The type of a particle simulation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ParticleSimulationType {
+    Basic,
 }
 
 define_setup_type! {
@@ -136,6 +158,14 @@ pub struct SpawnDistribution {
     pub max_value: f32,
 }
 
+impl ParticleEffect {
+    pub fn material_id(&self) -> ParticleMaterialID {
+        match self {
+            Self::Basic(effect) => effect.material_id,
+        }
+    }
+}
+
 impl BasicParticleEffect {
     pub(crate) fn emitter_metadata(
         &self,
@@ -145,6 +175,7 @@ impl BasicParticleEffect {
             log2_particle_count: self.log2_particle_count,
             material_id: self.material_id,
             anchoring,
+            simulation_type: ParticleSimulationType::Basic,
         }
     }
 
@@ -339,4 +370,46 @@ impl SpawnDistribution {
             max_value: min_angle.radians().clamp(0.0, PI).cos(),
         }
     }
+}
+
+impl ResourceID for ParticleEffectID {}
+
+#[roc(dependencies = [impact_math::hash::Hash64])]
+impl ParticleEffectID {
+    #[roc(body = "Hashing.hash_str_64(name)")]
+    /// Creates a particle effect ID hashed from the given name.
+    pub fn from_name(name: &str) -> Self {
+        Self(hash64!(name))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for ParticleEffectID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for ParticleEffectID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self::from_name(&s))
+    }
+}
+
+impl fmt::Display for ParticleEffectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Resource for ParticleEffect {
+    type ID = ParticleEffectID;
 }

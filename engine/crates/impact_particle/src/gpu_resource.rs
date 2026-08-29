@@ -429,7 +429,7 @@ impl ParticleSimulationGPUResources {
         // Remove cached metadata and free the particle buffer space for all
         // emitters that have been removed from the manager
         self.emitter_metadata.retain(|emitter_id, metadata| {
-            let exists = emitter_manager.has_emitter(emitter_id);
+            let exists = emitter_manager.has_emitter(*emitter_id);
             if !exists {
                 particle_buffer.free_particle_range(
                     staging_belt,
