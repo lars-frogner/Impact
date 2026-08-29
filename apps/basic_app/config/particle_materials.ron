@@ -1,0 +1,22 @@
+[
+    (
+        name: "Default",
+        specular_reflectance: 0.02,
+        roughness: 0.5,
+        metalness: 0.0,
+        emissive_luminance: 0.0,
+        normal_and_alpha_texture: (
+            path: "../resources/particle_materials/test/normal_and_alpha.png",
+        ),
+    ),
+    // (
+    //     name: "Smoke",
+    //     specular_reflectance: 0.02,
+    //     roughness: 0.5,
+    //     metalness: 0.0,
+    //     emissive_luminance: 0.0,
+    //     normal_and_alpha_texture: (
+    //         path: "../resources/particle_materials/particle_smoke_normal_and_alpha.png",
+    //     ),
+    // ),
+]

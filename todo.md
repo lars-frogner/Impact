@@ -46,6 +46,8 @@
 
 ## Performance
 
+- Pool per-object voxel GPU buffers into shared arenas to enable one culling dispatch and one multi-draw per view (see `docs/voxel_gpu_buffer_pooling.md`).
+
 - Use single bind group for G-buffer attachments.
 
 - Investigate ways to improve shadow map update performance (check out multiview render passes).

@@ -92,6 +92,15 @@
             velocity: (0.0, 0.0, 0.0),
         ),
     ),
+    particle: (
+        materials: Some((
+            particle_materials_path: "particle_materials.ron",
+            noise_texture_array: (
+                base_path: "../resources/particle_materials/STBN/stbn_scalar_2Dx1Dx1D_128x128x64x1.png",
+                count: 64,
+            ),
+        )),
+    ),
     voxel: (
         types: (
             texture_resolution: 4096,
