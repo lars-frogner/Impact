@@ -1,6 +1,6 @@
-# Hash: aaef24ee6dd8f834
-# Generated: 2026-08-26T10:07:46.893830377
-# Rust type: impact_particle::SpawnDistribution
+# Hash: ee7910a96b6afcde
+# Generated: 2026-08-29T19:43:35.235435899
+# Rust type: impact_particle::effect::SpawnDistribution
 # Type category: POD
 module [
     SpawnDistribution,
@@ -14,6 +14,7 @@ module [
 import core.Builtin
 import core.Radians
 
+## A distribution of initial values to sample from when a particle is spawned.
 SpawnDistribution : {
     min_value : F32,
     max_value : F32,

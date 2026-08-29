@@ -1,7 +1,8 @@
 //! Physics simulation GPU commands for particles.
 
 use crate::{
-    BasicParticleSimulation, ParticleEmitterManager,
+    effect::BasicParticleSimulation,
+    emitter::ParticleEmitterManager,
     gpu_resource::{
         GPUParticleSimulation, ParticleGPUResources, ParticleImmediate, ParticleImmediateGroup,
         ParticleResourceRegistries, ParticleSimulationGPUResources, SimulationGPUBuffer,

@@ -93,7 +93,7 @@ pub fn cleanup_scene_data_for_removed_entity(
 
     camera::remove_camera_from_scene_for_removed_entity(scene, entity_id, entity);
 
-    particle::cleanup_particle_emission_for_removed_entity(scene, simulator, entity_id, entity);
+    particle::cleanup_particle_emitter_for_removed_entity(scene, simulator, entity_id, entity);
 
     voxel::cleanup_voxel_state_for_removed_entity(scene, entity_id, entity);
 

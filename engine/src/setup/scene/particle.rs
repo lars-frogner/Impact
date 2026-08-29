@@ -9,8 +9,11 @@ use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 use impact_math::vector::UnitVector3;
 use impact_particle::{
-    BasicParticleEmission, BasicParticleEmitterID, EmitterAnchoring, EmitterFrame,
-    HasBasicParticleEmitter, RigidBodyEmitterAnchoring, WorldEmitterAnchoring,
+    effect::BasicParticleEffect,
+    emitter::{
+        BasicParticleEmitterID, HasBasicParticleEmitter, ParticleEmitterAnchoring,
+        ParticleEmitterFrame, RigidBodyParticleEmitterAnchoring, WorldParticleEmitterAnchoring,
+    },
 };
 use impact_physics::{
     anchor::{
@@ -38,7 +41,7 @@ pub fn setup_particle_emitters_for_new_entities(
         },
         entities,
         |entity_id: EntityID,
-         particle_emission: &BasicParticleEmission,
+         effect: &BasicParticleEffect,
          frame: Option<&ReferenceFrame>,
          parent: Option<&ParentEntity>|
          -> Result<HasBasicParticleEmitter> {
@@ -46,7 +49,7 @@ pub fn setup_particle_emitters_for_new_entities(
 
             if !resource_manager
                 .particle_materials
-                .has_particle_material(particle_emission.material_id)
+                .has_particle_material(effect.material_id)
             {
                 bail!("Got unknown material in `BasicParticleEmission`");
             }
@@ -60,7 +63,7 @@ pub fn setup_particle_emitters_for_new_entities(
 
             particle_emitter_manager.add_basic_emitter(
                 emitter_id,
-                *particle_emission,
+                *effect,
                 anchoring,
                 emitter_frame,
             )?;
@@ -78,7 +81,7 @@ fn determine_emitter_anchoring_and_frame(
     anchor_manager: &mut AnchorManager,
     frame: Option<&ReferenceFrame>,
     parent: Option<&ParentEntity>,
-) -> (EmitterAnchoring, EmitterFrame) {
+) -> (ParticleEmitterAnchoring, ParticleEmitterFrame) {
     let reference_frame = frame.copied().unwrap_or_default();
 
     let position = reference_frame.position;
@@ -91,11 +94,11 @@ fn determine_emitter_anchoring_and_frame(
         .rotate_unit_vector(&UnitVector3::unit_z())
         .compact();
 
-    let world_anchoring = WorldEmitterAnchoring {
+    let world_anchoring = WorldParticleEmitterAnchoring {
         position,
         direction,
     };
-    let mut anchoring = EmitterAnchoring::World(world_anchoring);
+    let mut anchoring = ParticleEmitterAnchoring::World(world_anchoring);
 
     // If the emitter has a parent entity, check if it is a rigid body,
     // and if so, create an anchor and update `anchoring`. Also compute
@@ -113,11 +116,11 @@ fn determine_emitter_anchoring_and_frame(
                     point: position,
                 },
             ));
-            anchoring = EmitterAnchoring::RigidBody(RigidBodyEmitterAnchoring {
+            anchoring = ParticleEmitterAnchoring::RigidBody(RigidBodyParticleEmitterAnchoring {
                 anchor_id,
                 direction,
             });
-            EmitterFrame::anchored_to_dynamic_rigid_body(rigid_body, &position, &direction)
+            ParticleEmitterFrame::anchored_to_dynamic_rigid_body(rigid_body, &position, &direction)
         } else if let Some(rigid_body) =
             rigid_body_manager.get_kinematic_rigid_body(parent_kinematic_rigid_body_id)
         {
@@ -128,22 +131,24 @@ fn determine_emitter_anchoring_and_frame(
                         point: reference_frame.position,
                     },
                 ));
-            anchoring = EmitterAnchoring::RigidBody(RigidBodyEmitterAnchoring {
+            anchoring = ParticleEmitterAnchoring::RigidBody(RigidBodyParticleEmitterAnchoring {
                 anchor_id,
                 direction,
             });
-            EmitterFrame::anchored_to_kinematic_rigid_body(rigid_body, &position, &direction)
+            ParticleEmitterFrame::anchored_to_kinematic_rigid_body(
+                rigid_body, &position, &direction,
+            )
         } else {
-            EmitterFrame::world(&world_anchoring)
+            ParticleEmitterFrame::world(&world_anchoring)
         }
     } else {
-        EmitterFrame::world(&world_anchoring)
+        ParticleEmitterFrame::world(&world_anchoring)
     };
 
     (anchoring, emitter_frame)
 }
 
-pub fn cleanup_particle_emission_for_removed_entity(
+pub fn cleanup_particle_emitter_for_removed_entity(
     scene: &RwLock<Scene>,
     simulator: &RwLock<PhysicsSimulator>,
     entity_id: EntityID,
@@ -157,7 +162,7 @@ pub fn cleanup_particle_emission_for_removed_entity(
         drop(particle_emitter_manager);
         drop(scene);
 
-        if let EmitterAnchoring::RigidBody(anchoring) = metadata.anchoring {
+        if let ParticleEmitterAnchoring::RigidBody(anchoring) = metadata.anchoring {
             let simulator = simulator.oread();
             let mut anchor_manager = simulator.anchor_manager().owrite();
             match anchoring.anchor_id {

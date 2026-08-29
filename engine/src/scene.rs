@@ -6,7 +6,7 @@ use impact_camera::{CameraContext, CameraManager};
 use impact_id::EntityIDManager;
 use impact_intersection::IntersectionManager;
 use impact_light::{LightConfig, LightManager};
-use impact_particle::ParticleEmitterManager;
+use impact_particle::emitter::ParticleEmitterManager;
 use impact_scene::{
     graph::{SceneGraph, SceneGroupID},
     model::{ModelInstanceManager, ModelInstanceManagerState},

@@ -30,7 +30,7 @@ import pf.Setup.UniformSpecularReflectance
 import pf.Comp.RigidMotion
 import pf.Physics.ContactResponseParameters
 import pf.Physics.AngularVelocity as AngularVelocity
-import pf.Setup.BasicParticleEmission
+import pf.Setup.BasicParticleEffect
 import pf.Setup.SphereMesh
 import pf.Setup.UniformEmissiveLuminance
 import pf.Comp.ShadowableOmnidirectionalEmission
@@ -102,7 +102,7 @@ emitter1 =
         (0.0, 0.5, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
-    |> Setup.BasicParticleEmission.add(
+    |> Setup.BasicParticleEffect.add(
         {
             material_id: ParticleMaterialID.from_name("Default"),
             log2_particle_count: 8,
@@ -122,7 +122,7 @@ emitter1 =
 #    (0.0, 2.0, 2.0),
 #    UnitQuaternion.from_axis_angle(UnitVector3.unit_x, -Num.pi),
 # )
-# |> Setup.BasicParticleEmission.add(
+# |> Setup.BasicParticleEffect.add(
 #    {
 #        material_id: ParticleMaterialID.from_name("Default"),
 #        log2_particle_count: 0,

@@ -1,8 +1,8 @@
 //! Rendering resources for particles.
 
 use crate::{
-    BasicParticleEmitterID, BasicParticleSimulation, Particle, ParticleEmitterID,
-    ParticleEmitterManager,
+    effect::BasicParticleSimulation,
+    emitter::{BasicParticleEmitterID, ParticleEmitterID, ParticleEmitterManager},
     material::{FixedParticleMaterialProperties, ParticleMaterialRegistry},
     shader_templates::{
         ParticleSimulationShaderTemplate, basic_simulation::BasicParticleSimulationShaderTemplate,
@@ -27,7 +27,10 @@ use impact_gpu::{
     },
     wgpu,
 };
-use impact_math::{hash::ConstStringHash64, vector::Vector2};
+use impact_math::{
+    hash::ConstStringHash64,
+    vector::{Vector2, Vector3C, Vector4C},
+};
 use impact_mesh::gpu_resource::{
     IndexBufferable, VertexBufferable, create_vertex_buffer_layout_for_vertex,
 };
@@ -82,6 +85,25 @@ pub struct ParticleGPUBuffer {
     render_bind_group: wgpu::BindGroup,
     /// For keeping track of when the buffer has been reallocated.
     version: u64,
+}
+
+/// A particle. These live exclusively in the particle GPU buffer and are only
+/// updated and read on the GPU.
+///
+/// If you add fields, remember that the total size must be a multiple of the
+/// alignment on the GPU, which is 16 bytes (due to vec3f and vec4f fields).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+struct Particle {
+    color: Vector4C,
+    position: Vector3C,
+    age: f32,
+    velocity: Vector3C,
+    lifetime: f32,
+    extent: f32,
+    scale: f32,
+    angle: f32,
+    angular_velocity: f32,
 }
 
 /// GPU buffer containing all uniforms with simulation-specific data for a

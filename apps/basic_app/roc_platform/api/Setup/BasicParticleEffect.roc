@@ -1,9 +1,9 @@
-# Hash: 0b327523537d7908
-# Generated: 2026-08-29T16:32:37.526040712
-# Rust type: impact_particle::BasicParticleEmission
+# Hash: 47ff03d4ad2fbdf7
+# Generated: 2026-08-29T19:43:35.235435899
+# Rust type: impact_particle::effect::BasicParticleEffect
 # Type category: Component
 module [
-    BasicParticleEmission,
+    BasicParticleEffect,
     add,
     add_multiple,
     write_bytes,
@@ -19,8 +19,8 @@ import Particle.ScaleOverLifetime
 import Particle.SpawnDistribution
 import core.Builtin
 
-## Emission of particles governed by the basic particle simulation.
-BasicParticleEmission : {
+## A particle effect governed by the basic particle simulation.
+BasicParticleEffect : {
     material_id : Particle.ParticleMaterialID.ParticleMaterialID,
     log2_particle_count : U32,
     rate_over_time : Particle.RateOverTime.RateOverTime,
@@ -35,30 +35,30 @@ BasicParticleEmission : {
     scale_over_lifetime : Particle.ScaleOverLifetime.ScaleOverLifetime,
 }
 
-## Adds a value of the [BasicParticleEmission] component to an entity's data.
+## Adds a value of the [BasicParticleEffect] component to an entity's data.
 ## Note that an entity never should have more than a single value of
 ## the same component type.
-add : Entity.ComponentData, BasicParticleEmission -> Entity.ComponentData
+add : Entity.ComponentData, BasicParticleEffect -> Entity.ComponentData
 add = |entity_data, comp_value|
     entity_data |> Entity.append_component(write_packet, comp_value)
 
-## Adds multiple values of the [BasicParticleEmission] component to the data of
+## Adds multiple values of the [BasicParticleEffect] component to the data of
 ## a set of entities of the same archetype's data.
 ## Note that the number of values should match the number of entities
 ## in the set and that an entity never should have more than a single
 ## value of the same component type.
-add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (BasicParticleEmission) -> Result Entity.MultiComponentData Str
+add_multiple : Entity.MultiComponentData, Entity.Arg.Broadcasted (BasicParticleEffect) -> Result Entity.MultiComponentData Str
 add_multiple = |entity_data, comp_values|
     entity_data
     |> Entity.append_components(write_multi_packet, Entity.Arg.broadcast(comp_values, Entity.multi_count(entity_data)))
     |> Result.map_err(
         |CountMismatch(new_count, orig_count)|
-            "Got ${Inspect.to_str(new_count)} values in BasicParticleEmission.add_multiple, expected ${Inspect.to_str(orig_count)}",
+            "Got ${Inspect.to_str(new_count)} values in BasicParticleEffect.add_multiple, expected ${Inspect.to_str(orig_count)}",
     )
 
-write_packet : List U8, BasicParticleEmission -> List U8
+write_packet : List U8, BasicParticleEffect -> List U8
 write_packet = |bytes, val|
-    type_id = 9914355303790145293
+    type_id = 10859609024718526404
     size = 208
     alignment = 4
     bytes
@@ -68,9 +68,9 @@ write_packet = |bytes, val|
     |> Builtin.write_bytes_u64(alignment)
     |> write_bytes(val)
 
-write_multi_packet : List U8, List BasicParticleEmission -> List U8
+write_multi_packet : List U8, List BasicParticleEffect -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 9914355303790145293
+    type_id = 10859609024718526404
     size = 208
     alignment = 4
     count = List.len(vals)
@@ -87,9 +87,9 @@ write_multi_packet = |bytes, vals|
         |bts, value| bts |> write_bytes(value),
     )
 
-## Serializes a value of [BasicParticleEmission] into the binary representation
+## Serializes a value of [BasicParticleEffect] into the binary representation
 ## expected by the engine and appends the bytes to the list.
-write_bytes : List U8, BasicParticleEmission -> List U8
+write_bytes : List U8, BasicParticleEffect -> List U8
 write_bytes = |bytes, value|
     bytes
     |> List.reserve(208)
@@ -106,9 +106,9 @@ write_bytes = |bytes, value|
     |> Particle.ColorOverLifetime.write_bytes(value.color_over_lifetime)
     |> Particle.ScaleOverLifetime.write_bytes(value.scale_over_lifetime)
 
-## Deserializes a value of [BasicParticleEmission] from its bytes in the
+## Deserializes a value of [BasicParticleEffect] from its bytes in the
 ## representation used by the engine.
-from_bytes : List U8 -> Result BasicParticleEmission _
+from_bytes : List U8 -> Result BasicParticleEffect _
 from_bytes = |bytes|
     Ok(
         {

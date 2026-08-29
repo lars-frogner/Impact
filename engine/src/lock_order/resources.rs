@@ -38,7 +38,7 @@ declare_lockable_resource!(crate::scene::Scene, 200);
 declare_lockable_resource!(Option<impact_scene::skybox::Skybox>, 210);
 declare_lockable_resource!(impact_camera::CameraManager, 220);
 declare_lockable_resource!(impact_light::LightManager, 230);
-declare_lockable_resource!(impact_particle::ParticleEmitterManager, 240);
+declare_lockable_resource!(impact_particle::emitter::ParticleEmitterManager, 240);
 declare_lockable_resource!(impact_voxel::VoxelManager, 250);
 declare_lockable_resource!(impact_scene::model::ModelInstanceManager, 260);
 declare_lockable_resource!(impact_intersection::IntersectionManager, 270);

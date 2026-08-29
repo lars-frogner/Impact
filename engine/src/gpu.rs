@@ -20,7 +20,7 @@ use impact_gpu::{
     vertex_attribute_ranges, wgpu,
 };
 use impact_light::LightManager;
-use impact_particle::{ParticleEmitterManager, material::ParticleMaterialRegistry};
+use impact_particle::{emitter::ParticleEmitterManager, material::ParticleMaterialRegistry};
 use impact_rendering::surface::RenderingSurface;
 use impact_scene::model::ModelInstanceManager;
 use impact_voxel::VoxelObjectManager;

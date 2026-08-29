@@ -1,6 +1,6 @@
-# Hash: cbbc7eb8c2349f59
-# Generated: 2026-08-20T14:21:16.099701099
-# Rust type: impact_particle::HasBasicParticleEmitter
+# Hash: 08f7ccc929bb3a11
+# Generated: 2026-08-29T19:44:58.814868129
+# Rust type: impact_particle::emitter::HasBasicParticleEmitter
 # Type category: Component
 module [
     HasBasicParticleEmitter,
@@ -38,7 +38,7 @@ add_multiple = |entity_data|
         Err(err) -> crash "unexpected error in HasBasicParticleEmitter.add_multiple: ${Inspect.to_str(err)}"
 
 ## The ID of the [HasBasicParticleEmitter] component.
-component_id = 9014460477800250916
+component_id = 4663218086698353870
 
 ## Adds the ID of the [HasBasicParticleEmitter] component to the component list.
 add_component_id : Entity.ComponentIds -> Entity.ComponentIds
@@ -47,7 +47,7 @@ add_component_id = |component_ids|
 
 write_packet : List U8, HasBasicParticleEmitter -> List U8
 write_packet = |bytes, val|
-    type_id = 9014460477800250916
+    type_id = 4663218086698353870
     size = 0
     alignment = 1
     bytes
@@ -59,7 +59,7 @@ write_packet = |bytes, val|
 
 write_multi_packet : List U8, List HasBasicParticleEmitter -> List U8
 write_multi_packet = |bytes, vals|
-    type_id = 9014460477800250916
+    type_id = 4663218086698353870
     size = 0
     alignment = 1
     count = List.len(vals)
