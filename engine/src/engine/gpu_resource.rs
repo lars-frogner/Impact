@@ -146,6 +146,7 @@ impl Engine {
     /// Records and submits commands for synchronizing dynamic GPU resources
     /// (resources that benefit from a staging belt).
     pub(crate) fn sync_dynamic_gpu_resources(&self) -> Result<()> {
+        let resource_manager = self.resource_manager().oread();
         let scene = self.scene().oread();
         let camera_manager = scene.camera_manager().oread();
         let light_manager = scene.light_manager().oread();
@@ -160,6 +161,7 @@ impl Engine {
         graphics_system.sync_dynamic_gpu_resources(
             &camera_manager,
             &light_manager,
+            &resource_manager.particle_materials,
             &particle_emitter_manager,
             voxel_manager.object_manager_mut(),
             &mut model_instance_manager,

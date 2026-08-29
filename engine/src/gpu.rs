@@ -20,7 +20,7 @@ use impact_gpu::{
     vertex_attribute_ranges, wgpu,
 };
 use impact_light::LightManager;
-use impact_particle::ParticleEmitterManager;
+use impact_particle::{ParticleEmitterManager, material::ParticleMaterialRegistry};
 use impact_rendering::surface::RenderingSurface;
 use impact_scene::model::ModelInstanceManager;
 use impact_voxel::VoxelObjectManager;
@@ -157,6 +157,7 @@ impl GraphicsSystem {
         &self,
         camera_manager: &CameraManager,
         light_manager: &LightManager,
+        particle_material_registry: &ParticleMaterialRegistry,
         particle_emitter_manager: &ParticleEmitterManager,
         voxel_object_manager: &mut VoxelObjectManager,
         model_instance_manager: &mut ModelInstanceManager,
@@ -188,6 +189,7 @@ impl GraphicsSystem {
         );
 
         particle_emitter_manager.sync_simulation_gpu_resources(
+            particle_material_registry,
             &self.graphics_device,
             &mut gpu_resource_manager.staging_belt,
             &mut command_encoder,

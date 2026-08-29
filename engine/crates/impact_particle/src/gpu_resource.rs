@@ -3,7 +3,7 @@
 use crate::{
     BasicParticleEmitterID, BasicParticleSimulation, Particle, ParticleEmitterID,
     ParticleEmitterManager,
-    material::{FixedParticleMaterialProperties, ParticleMaterialID, ParticleMaterialRegistry},
+    material::{FixedParticleMaterialProperties, ParticleMaterialRegistry},
     shader_templates::{
         ParticleSimulationShaderTemplate, basic_simulation::BasicParticleSimulationShaderTemplate,
     },
@@ -70,7 +70,7 @@ pub struct ParticleSimulationGPUResources {
 #[derive(Debug, Clone)]
 pub struct ParticleEmitterGPUMetadata {
     pub particle_range: Range<usize>,
-    pub material_id: ParticleMaterialID,
+    pub material_idx: u32,
 }
 
 /// The GPU buffer containing all particles.
@@ -390,6 +390,7 @@ impl ParticleSimulationGPUResources {
         command_encoder: &mut wgpu::CommandEncoder,
         bind_group_layout_registry: &BindGroupLayoutRegistry,
         effective_time_step_duration: f32,
+        material_registry: &ParticleMaterialRegistry,
         emitter_manager: &ParticleEmitterManager,
     ) {
         // Cache the current time step duration so it can be accessed when
@@ -425,6 +426,8 @@ impl ParticleSimulationGPUResources {
         // Add metadata for new emitters and update existing metadata, making
         // sure the emitters get their required space in the particle buffer
         for (emitter_id, metadata) in emitter_manager.emitter_metadata() {
+            let material_idx = material_registry.particle_material_idx(metadata.material_id);
+
             self.emitter_metadata
                 .entry(*emitter_id)
                 .and_modify(|old_metadata| {
@@ -439,7 +442,7 @@ impl ParticleSimulationGPUResources {
                                 metadata.log2_particle_count,
                             );
                     }
-                    old_metadata.material_id = metadata.material_id;
+                    old_metadata.material_idx = material_idx;
                 })
                 .or_insert_with(|| {
                     let particle_range = particle_buffer.allocate_range_for_particles(
@@ -450,7 +453,7 @@ impl ParticleSimulationGPUResources {
                     );
                     ParticleEmitterGPUMetadata {
                         particle_range,
-                        material_id: metadata.material_id,
+                        material_idx,
                     }
                 });
         }

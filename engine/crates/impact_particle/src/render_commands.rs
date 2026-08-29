@@ -5,7 +5,6 @@ use crate::{
         ParticleGPUResources, ParticleImmediate, ParticleImmediateGroup,
         ParticleMaterialGPUResources, ParticleResourceRegistries, ParticleSimulationGPUResources,
     },
-    material::ParticleMaterialID,
     shader_templates::particle_geometry::ParticleGeometryShaderTemplate,
 };
 use anyhow::{Result, anyhow};
@@ -280,11 +279,9 @@ impl ParticleGeometryPipeline {
 
     fn stage_per_emitter_immediates(
         stager: &mut ImmediateStager<'_, ParticleImmediate>,
-        material_id: ParticleMaterialID,
+        material_idx: u32,
     ) {
-        stager.stage_immediate_data_if_present(ParticleImmediate::MaterialIdx, || {
-            material_id.idx_immediate()
-        });
+        stager.stage_immediate_data_if_present(ParticleImmediate::MaterialIdx, || material_idx);
     }
 
     fn draw<GR>(
@@ -350,7 +347,7 @@ impl ParticleGeometryPipeline {
         );
 
         for metadata in simulation_resources.all_emitter_metadata() {
-            Self::stage_per_emitter_immediates(&mut immediate_stager, metadata.material_id);
+            Self::stage_per_emitter_immediates(&mut immediate_stager, metadata.material_idx);
             immediate_stager.set_staged_immediate_data(render_pass);
 
             render_pass.draw_indexed(0..6, 0, metadata.particle_range_u32());

@@ -20,16 +20,19 @@ use impact_texture::{
     gpu_resource::{SamplerMap, TextureMap},
     processing::{FormatConversion, ImageProcessing, NormalMapFormat},
 };
+use roc_integration::roc;
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
 };
 
 /// Identifier for a material that determines the visual properties of a
-/// particle.
+/// particle. Hashed from a material name.
+#[roc(parents = "Particle")]
 #[repr(transparent)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Zeroable, Pod)]
-pub struct ParticleMaterialID(u32);
+pub struct ParticleMaterialID(Hash32);
 
 #[derive(Clone, Debug)]
 pub struct ParticleMaterialSpecifications(pub Vec<ParticleMaterialSpecification>);
@@ -61,12 +64,17 @@ pub struct NormalAndAlphaTexture {
 /// handle to the normal and alpha texture array used by the materials.
 #[derive(Clone, Debug)]
 pub struct ParticleMaterialRegistry {
-    name_lookup_table: NoHashMap<u32, ParticleMaterialID>,
-    names: Vec<Cow<'static, str>>,
+    material_info_by_id: NoHashMap<Hash32, MaterialInfo>,
     fixed_material_properties: Vec<FixedParticleMaterialProperties>,
     normal_and_alpha_texture_array_id: Option<TextureID>,
     noise_texture_array_id: Option<TextureID>,
     noise_texture_size: [u32; 3],
+}
+
+#[derive(Clone, Debug)]
+struct MaterialInfo {
+    name: Cow<'static, str>,
+    idx: u32,
 }
 
 /// Specific properties of a particle material that do not change across the
@@ -110,20 +118,18 @@ pub struct NoiseTextureArray {
     pub count: u32,
 }
 
+#[roc]
 impl ParticleMaterialID {
-    /// Converts the given index into a [`ParticleMaterialID`].
-    pub fn from_idx(idx: usize) -> Self {
-        Self(u32::try_from(idx).unwrap())
+    /// Converts the given material name into a [`ParticleMaterialID`].
+    #[roc(body = "Hashing.hash_str_32(name)")]
+    pub fn from_name(name: &str) -> Self {
+        Self(Hash32::from_str(name))
     }
+}
 
-    /// Returns the index of the particle material.
-    pub const fn idx(&self) -> usize {
-        self.0 as usize
-    }
-
-    /// Returns the index of the particle material as a GPU immediate value.
-    pub const fn idx_immediate(&self) -> u32 {
-        self.idx() as u32
+impl From<ParticleMaterialID> for Hash32 {
+    fn from(id: ParticleMaterialID) -> Self {
+        id.0
     }
 }
 
@@ -152,8 +158,7 @@ impl ParticleMaterialRegistry {
     /// Creates a registry with no particle materials.
     pub fn empty() -> Self {
         Self {
-            name_lookup_table: NoHashMap::default(),
-            names: Vec::new(),
+            material_info_by_id: NoHashMap::default(),
             fixed_material_properties: Vec::new(),
             normal_and_alpha_texture_array_id: None,
             noise_texture_array_id: None,
@@ -186,18 +191,23 @@ impl ParticleMaterialRegistry {
         let (names, fixed_material_properties, normal_and_alpha_texture_sources, normal_map_format) =
             particle_materials.resolve()?;
 
-        let name_lookup_table: NoHashMap<_, _> = names
-            .iter()
+        let n_names = names.len();
+
+        let material_info_by_id: NoHashMap<_, _> = names
+            .into_iter()
             .enumerate()
             .map(|(idx, name)| {
                 (
-                    Hash32::from_str(name).into(),
-                    ParticleMaterialID::from_idx(idx),
+                    ParticleMaterialID::from_name(&name).into(),
+                    MaterialInfo {
+                        name,
+                        idx: idx as u32,
+                    },
                 )
             })
             .collect();
 
-        if name_lookup_table.len() != names.len() {
+        if material_info_by_id.len() != n_names {
             bail!("Duplicate particle material names in registry");
         }
 
@@ -261,8 +271,7 @@ impl ParticleMaterialRegistry {
         ];
 
         Ok(Self {
-            name_lookup_table,
-            names,
+            material_info_by_id,
             fixed_material_properties,
             normal_and_alpha_texture_array_id: Some(normal_and_alpha_texture_array_id),
             noise_texture_array_id: Some(noise_texture_array_id),
@@ -272,36 +281,28 @@ impl ParticleMaterialRegistry {
 
     /// Returns the number of registered particle materials.
     pub fn n_particle_materials(&self) -> u32 {
-        self.names.len() as u32
+        self.material_info_by_id.len() as u32
     }
 
-    /// Returns the particle material with the given name, or [`None`] if no
-    /// particle material with the given name has been registered.
-    pub fn particle_material_for_name(&self, name: &str) -> Option<ParticleMaterialID> {
-        self.particle_material_for_name_hash(Hash32::from_str(name))
+    /// Whether a particle material with the given ID is registered.
+    pub fn has_particle_material(&self, id: ParticleMaterialID) -> bool {
+        self.material_info_by_id.contains_key(&Hash32::from(id))
     }
 
-    /// Returns the particle material with the given name hash, or [`None`] if
-    /// no particle material with the given name has been registered.
-    pub fn particle_material_for_name_hash(&self, name_hash: Hash32) -> Option<ParticleMaterialID> {
-        self.name_lookup_table.get(&u32::from(name_hash)).copied()
+    /// Returns the name of the particle material with the given ID, or [`None`]
+    /// if no particle material with the given ID has been registered.
+    pub fn get_particle_material_name(&self, id: ParticleMaterialID) -> Option<&str> {
+        self.material_info_by_id
+            .get(&Hash32::from(id))
+            .map(|info| info.name.as_ref())
     }
 
-    /// Returns the name of the given particle material.
+    /// Returns the index of the particle material with the given ID.
     ///
     /// # Panics
-    /// If the particle material is not present in the registry.
-    pub fn name(&self, particle_material: ParticleMaterialID) -> &str {
-        self.get_name(particle_material)
-            .expect("Particle material not present in registry")
-    }
-
-    /// Returns the name of the given particle material, or [`None`] if the
-    /// particle material is not present in the registry.
-    pub fn get_name(&self, particle_material: ParticleMaterialID) -> Option<&str> {
-        self.names
-            .get(particle_material.idx())
-            .map(|name| name.as_ref())
+    /// If no particle material with the given ID has been registered.
+    pub fn particle_material_idx(&self, id: ParticleMaterialID) -> u32 {
+        self.material_info_by_id.get(&Hash32::from(id)).unwrap().idx
     }
 
     /// Returns the slice of fixed properties for all registered particle

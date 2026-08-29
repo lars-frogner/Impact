@@ -6,7 +6,6 @@ mod macros;
 pub mod gpu_resource;
 pub mod material;
 pub mod render_commands;
-pub mod setup;
 pub mod shader_templates;
 pub mod simulation_commands;
 
@@ -30,7 +29,7 @@ use impact_physics::{
     anchor::{AnchorManager, TypedRigidBodyAnchorID},
     rigid_body::{DynamicRigidBody, KinematicRigidBody, RigidBodyManager},
 };
-use material::{ParticleMaterialConfig, ParticleMaterialID};
+use material::{ParticleMaterialConfig, ParticleMaterialID, ParticleMaterialRegistry};
 use roc_integration::roc;
 use std::path::Path;
 
@@ -70,15 +69,6 @@ pub struct ParticleEmitterManager {
 pub struct ParticleConfig {
     /// If [`None`], the particle system will be disabled.
     pub materials: Option<ParticleMaterialConfig>,
-}
-
-/// A generic particle emitter.
-#[derive(Clone, Debug)]
-pub struct ParticleEmitter<S> {
-    pub material_id: ParticleMaterialID,
-    pub log2_particle_count: u32,
-    pub anchoring: EmitterAnchoring,
-    pub simulation: S,
 }
 
 /// ID for a generic particle emitter.
@@ -124,9 +114,16 @@ pub struct RigidBodyEmitterAnchoring {
 /// [`EmitterAnchoring`].
 #[derive(Clone, Debug)]
 pub struct EmitterFrame {
-    pub position: Point3C,
-    pub velocity: Vector3C,
-    pub direction: UnitVector3C,
+    position: Point3C,
+    velocity: Vector3C,
+    direction: UnitVector3C,
+}
+
+/// Emission of particles governed by a specific simulation type.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ParticleEmission {
+    Basic(BasicParticleEmission),
 }
 
 /// The type of particle simulation used by a particle emitter.
@@ -153,6 +150,28 @@ define_component_type! {
     pub struct HasBasicParticleEmitter;
 }
 
+define_setup_type! {
+    /// Emission of particles governed by the basic particle simulation.
+    #[roc(parents = "Setup")]
+    #[repr(C)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Copy, Clone, Debug, Zeroable, Pod)]
+    pub struct BasicParticleEmission {
+        pub material_id: ParticleMaterialID,
+        pub log2_particle_count: u32,
+        pub rate_over_time: RateOverTime,
+        pub cos_polar_spawn_angle: SpawnDistribution,
+        pub spawn_extent: SpawnDistribution,
+        pub spawn_distance: SpawnDistribution,
+        pub spawn_speed: SpawnDistribution,
+        pub spawn_angle: SpawnDistribution,
+        pub spawn_angular_velocity: SpawnDistribution,
+        pub lifetime: SpawnDistribution,
+        pub color_over_lifetime: ColorOverLifetime,
+        pub scale_over_lifetime: ScaleOverLifetime,
+    }
+}
+
 /// Parameters for a basic particle simulation.
 ///
 /// This struct is intended to be stored in a [`ParticleEmitterManager`]
@@ -163,21 +182,21 @@ define_component_type! {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct BasicParticleSimulation {
-    pub rate_over_time: RateOverTime,
-    pub color_over_lifetime: ColorOverLifetime,
-    pub scale_over_lifetime: ScaleOverLifetime,
-    pub spawn_position: Point3C,
+    rate_over_time: RateOverTime,
+    color_over_lifetime: ColorOverLifetime,
+    scale_over_lifetime: ScaleOverLifetime,
+    spawn_position: Point3C,
     _padding_0: [u8; 4],
-    pub spawn_velocity: Vector3C, // Aligned to 16 bytes
+    spawn_velocity: Vector3C, // Aligned to 16 bytes
     _padding_1: [u8; 4],
-    pub spawn_direction: UnitVector3C, // Aligned to 16 bytes
-    pub cos_polar_spawn_angle: SpawnDistribution,
-    pub spawn_extent: SpawnDistribution,
-    pub spawn_distance: SpawnDistribution,
-    pub spawn_speed: SpawnDistribution,
-    pub spawn_angle: SpawnDistribution,
-    pub spawn_angular_velocity: SpawnDistribution,
-    pub lifetime: SpawnDistribution,
+    spawn_direction: UnitVector3C, // Aligned to 16 bytes
+    cos_polar_spawn_angle: SpawnDistribution,
+    spawn_extent: SpawnDistribution,
+    spawn_distance: SpawnDistribution,
+    spawn_speed: SpawnDistribution,
+    spawn_angle: SpawnDistribution,
+    spawn_angular_velocity: SpawnDistribution,
+    lifetime: SpawnDistribution,
     _padding_end: [u8; 12],
 }
 
@@ -188,6 +207,7 @@ type BasicSimulationUniformBuffer = UniformBuffer<BasicParticleEmitterID, BasicP
 /// monotonic.
 #[roc(parents = "Particle")]
 #[repr(C)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct RateOverTime {
     pub t0: f32,
@@ -206,6 +226,7 @@ pub struct RateOverTime {
 /// fractional times are assumed non-negative and monotonic.
 #[roc(parents = "Particle")]
 #[repr(C)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct ColorOverLifetime {
     pub t0: f32,
@@ -224,6 +245,7 @@ pub struct ColorOverLifetime {
 /// times are assumed non-negative and monotonic.
 #[roc(parents = "Particle")]
 #[repr(C)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct ScaleOverLifetime {
     pub t0: f32,
@@ -238,6 +260,7 @@ pub struct ScaleOverLifetime {
 
 #[roc(parents = "Particle")]
 #[repr(C)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct SpawnDistribution {
     pub min_value: f32,
@@ -276,23 +299,26 @@ impl ParticleEmitterManager {
         &self.basic_particle_emitters
     }
 
-    /// Adds the given [`ParticleEmitter`] with a [`BasicParticleSimulation`] to
-    /// the manager under the given ID.
+    /// Adds a particle emitter with the given [`BasicParticleEmission`],
+    /// anchoring and current frame (derived from the anchoring) to the manager
+    /// under the given ID.
     ///
     /// # Errors
     /// Returns an error if the ID is already present.
     pub fn add_basic_emitter(
         &mut self,
         id: BasicParticleEmitterID,
-        emitter: ParticleEmitter<BasicParticleSimulation>,
+        emission: BasicParticleEmission,
+        anchoring: EmitterAnchoring,
+        frame: EmitterFrame,
     ) -> Result<()> {
         if self.basic_particle_emitters.has_uniform(id) {
             bail!("A basic particle emitter with ID {id} already exists");
         }
         self.basic_particle_emitters
-            .add_uniform(id, emitter.simulation);
+            .add_uniform(id, emission.simulation(frame));
         self.emitter_metadata
-            .insert(ParticleEmitterID::from(id), emitter.metadata());
+            .insert(ParticleEmitterID::from(id), emission.metadata(anchoring));
 
         Ok(())
     }
@@ -373,6 +399,7 @@ impl ParticleEmitterManager {
     /// missing GPU resources for new source data will be created.
     pub fn sync_simulation_gpu_resources(
         &self,
+        material_registry: &ParticleMaterialRegistry,
         graphics_device: &GraphicsDevice,
         staging_belt: &mut wgpu::util::StagingBelt,
         command_encoder: &mut wgpu::CommandEncoder,
@@ -386,6 +413,7 @@ impl ParticleEmitterManager {
             command_encoder,
             bind_group_layout_registry,
             effective_time_step_duration,
+            material_registry,
             self,
         );
     }
@@ -403,16 +431,6 @@ impl ParticleConfig {
     pub fn resolve_paths(&mut self, root_path: &Path) {
         if let Some(materials) = &mut self.materials {
             materials.resolve_paths(root_path);
-        }
-    }
-}
-
-impl<S> ParticleEmitter<S> {
-    fn metadata(&self) -> ParticleEmitterMetadata {
-        ParticleEmitterMetadata {
-            log2_particle_count: self.log2_particle_count,
-            material_id: self.material_id,
-            anchoring: self.anchoring,
         }
     }
 }
@@ -512,6 +530,37 @@ impl EmitterFrame {
             position: world_position.compact(),
             velocity: world_velocity.compact(),
             direction: world_direction.compact(),
+        }
+    }
+}
+
+impl BasicParticleEmission {
+    fn metadata(&self, anchoring: EmitterAnchoring) -> ParticleEmitterMetadata {
+        ParticleEmitterMetadata {
+            log2_particle_count: self.log2_particle_count,
+            material_id: self.material_id,
+            anchoring,
+        }
+    }
+
+    fn simulation(&self, frame: EmitterFrame) -> BasicParticleSimulation {
+        BasicParticleSimulation {
+            rate_over_time: self.rate_over_time,
+            color_over_lifetime: self.color_over_lifetime,
+            scale_over_lifetime: self.scale_over_lifetime,
+            spawn_position: frame.position,
+            spawn_velocity: frame.velocity,
+            spawn_direction: frame.direction,
+            cos_polar_spawn_angle: self.cos_polar_spawn_angle,
+            spawn_extent: self.spawn_extent,
+            spawn_distance: self.spawn_distance,
+            spawn_speed: self.spawn_speed,
+            spawn_angle: self.spawn_angle,
+            spawn_angular_velocity: self.spawn_angular_velocity,
+            lifetime: self.lifetime,
+            _padding_0: Default::default(),
+            _padding_1: Default::default(),
+            _padding_end: Default::default(),
         }
     }
 }

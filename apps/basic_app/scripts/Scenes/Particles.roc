@@ -14,6 +14,7 @@ import pf.Particle.ColorOverLifetime
 import pf.Particle.ScaleOverLifetime
 import pf.Particle.RateOverTime
 import pf.Particle.SpawnDistribution
+import pf.Particle.ParticleMaterialID as ParticleMaterialID
 import pf.Comp.AmbientEmission
 import pf.Comp.VelocityControl
 import pf.Comp.AngularVelocityControl
@@ -101,37 +102,41 @@ emitter1 =
         (0.0, 0.5, 0.0),
         UnitQuaternion.from_axis_angle(UnitVector3.unit_x, (-Num.pi) / 2),
     )
-    |> Setup.BasicParticleEmission.add_new(
-        "Default",
-        8,
-        Particle.RateOverTime.constant(Num.pow_int(2, 8), 0.0, 5.0),
-        Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(30)),
-        Particle.SpawnDistribution.uniform(0.2, 0.4),
-        Particle.SpawnDistribution.uniform(0.0, 1.0),
-        Particle.SpawnDistribution.uniform(1.0, 2.0),
-        Particle.SpawnDistribution.uniform(0.0, 2 * Num.pi),
-        Particle.SpawnDistribution.uniform(-5.0, 5.0),
-        Particle.SpawnDistribution.uniform(5.0, 5.0),
-        Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
-        Particle.ScaleOverLifetime.linear_shrink({}),
+    |> Setup.BasicParticleEmission.add(
+        {
+            material_id: ParticleMaterialID.from_name("Default"),
+            log2_particle_count: 8,
+            rate_over_time: Particle.RateOverTime.constant(Num.pow_int(2, 8), 0.0, 5.0),
+            cos_polar_spawn_angle: Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(30)),
+            spawn_extent: Particle.SpawnDistribution.uniform(0.2, 0.4),
+            spawn_distance: Particle.SpawnDistribution.uniform(0.0, 1.0),
+            spawn_speed: Particle.SpawnDistribution.uniform(1.0, 2.0),
+            spawn_angle: Particle.SpawnDistribution.uniform(0.0, 2 * Num.pi),
+            spawn_angular_velocity: Particle.SpawnDistribution.uniform(-5.0, 5.0),
+            lifetime: Particle.SpawnDistribution.uniform(5.0, 5.0),
+            color_over_lifetime: Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
+            scale_over_lifetime: Particle.ScaleOverLifetime.linear_shrink({}),
+        },
     )
 # |> Comp.ReferenceFrame.add_new(
 #    (0.0, 2.0, 2.0),
 #    UnitQuaternion.from_axis_angle(UnitVector3.unit_x, -Num.pi),
 # )
-# |> Setup.BasicParticleEmission.add_new(
-#    "Default",
-#    0,
-#    Particle.RateOverTime.burst(1, 0),
-#    Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(90)),
-#    Particle.SpawnDistribution.uniform(1.0, 1.0),
-#    Particle.SpawnDistribution.uniform(0.0, 0.4),
-#    Particle.SpawnDistribution.uniform(0.0, 0.0),
-#    Particle.SpawnDistribution.same(0.0),
-#    Particle.SpawnDistribution.same(2.0),
-#    Particle.SpawnDistribution.same(10.0),
-#    Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
-#    Particle.ScaleOverLifetime.linear_shrink({}),
+# |> Setup.BasicParticleEmission.add(
+#    {
+#        material_id: ParticleMaterialID.from_name("Default"),
+#        log2_particle_count: 0,
+#        rate_over_time: Particle.RateOverTime.burst(1, 0),
+#        cos_polar_spawn_angle: Particle.SpawnDistribution.uniform_in_cos(Radians.from_degrees(0), Radians.from_degrees(90)),
+#        spawn_extent: Particle.SpawnDistribution.uniform(1.0, 1.0),
+#        spawn_distance: Particle.SpawnDistribution.uniform(0.0, 0.4),
+#        spawn_speed: Particle.SpawnDistribution.uniform(0.0, 0.0),
+#        spawn_angle: Particle.SpawnDistribution.same(0.0),
+#        spawn_angular_velocity: Particle.SpawnDistribution.same(2.0),
+#        lifetime: Particle.SpawnDistribution.same(10.0),
+#        color_over_lifetime: Particle.ColorOverLifetime.linear_fade((1.0, 0.2, 0.5)),
+#        scale_over_lifetime: Particle.ScaleOverLifetime.linear_shrink({}),
+#    },
 # )
 
 ambient_light =

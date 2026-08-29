@@ -3,15 +3,14 @@
 use crate::{
     lock_order::OrderedRwLock, physics::PhysicsSimulator, resource::ResourceManager, scene::Scene,
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use impact_ecs::{setup, world::PrototypeEntities};
 use impact_geometry::ReferenceFrame;
 use impact_id::EntityID;
 use impact_math::vector::UnitVector3;
 use impact_particle::{
-    BasicParticleEmitterID, EmitterAnchoring, EmitterFrame, HasBasicParticleEmitter,
-    ParticleEmitter, RigidBodyEmitterAnchoring, WorldEmitterAnchoring,
-    setup::BasicParticleEmission,
+    BasicParticleEmission, BasicParticleEmitterID, EmitterAnchoring, EmitterFrame,
+    HasBasicParticleEmitter, RigidBodyEmitterAnchoring, WorldEmitterAnchoring,
 };
 use impact_physics::{
     anchor::{
@@ -45,6 +44,13 @@ pub fn setup_particle_emitters_for_new_entities(
          -> Result<HasBasicParticleEmitter> {
             let emitter_id = BasicParticleEmitterID::from_entity_id(entity_id);
 
+            if !resource_manager
+                .particle_materials
+                .has_particle_material(particle_emission.material_id)
+            {
+                bail!("Got unknown material in `BasicParticleEmission`");
+            }
+
             let (anchoring, emitter_frame) = determine_emitter_anchoring_and_frame(
                 &rigid_body_manager,
                 &mut anchor_manager,
@@ -52,14 +58,12 @@ pub fn setup_particle_emitters_for_new_entities(
                 parent,
             );
 
-            let emitter = ParticleEmitter {
-                material_id: particle_emission.material_id(&resource_manager.particle_materials)?,
-                log2_particle_count: particle_emission.log2_particle_count,
+            particle_emitter_manager.add_basic_emitter(
+                emitter_id,
+                *particle_emission,
                 anchoring,
-                simulation: particle_emission.simulation(emitter_frame),
-            };
-
-            particle_emitter_manager.add_basic_emitter(emitter_id, emitter)?;
+                emitter_frame,
+            )?;
 
             Ok(HasBasicParticleEmitter)
         },
